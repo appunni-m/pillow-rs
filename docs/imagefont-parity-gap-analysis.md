@@ -607,29 +607,28 @@ explicit exclusion instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 371-row Font fixture corpus.
+The current implementation is good enough to trust the active 375-row Font fixture corpus.
 
-It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because broader stroke-border/destroy/general glyph support is still incomplete even though the active public extent behavior is now explained by `_imagingft.c` clipping.
+It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
+12.2.0 because successful libraqm shaping remains intentionally unsupported and
+some broader lower FreeType stroker lifecycle/configuration rows are still
+pending. The active public Pillow Font stroke rows are no longer blocked by the
+previous lower `FT_Glyph_Stroke`, `FT_Glyph_StrokeBorder`, or
+`FT_Glyph_To_Bitmap` rows; the remaining stroker pending rows are lower
+FreeType coverage/parity work unless a new live Pillow Font row proves public
+visibility.
 
 Latest focused ftstroke evidence after the outside-border route update:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`: 59/59 runnable rows pass, 9 rows remain pending. The parsed `FT_Stroker.lifecycle_contract` row now validates New, Set, BeginSubPath, two LineTo calls, EndSubPath, GetCounts, Export, and Done status/count behavior through pinned C, Rust FFI, C ABI, and WASM ABI.
-- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`: 4/4 runnable rows pass, 4 rows remain pending.
+- Current recheck: `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` passes `8/8` runnable rows with `0` pending. The formerly tracked `ftstroke.FT_Glyph_Stroke.destroy_original_option` row also passes when forced through `make -C pillow-rs-freetype test-pending-case CASE=ftstroke.FT_Glyph_Stroke.destroy_original_option`.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: the maintained runnable rows pass. The maintained `inside_border_success` route compares orientation-selected inside border, replacement outline points/tags/contours, and owner flags against pinned C, Rust FFI, C ABI, and WASM ABI. The maintained `destroy_original_option` route compares replacement glyph nullness and original-glyph destruction against pinned C, Rust FFI, C ABI, and WASM ABI.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`: 7/7 runnable rows pass, 0 pending. This now includes `append_to_existing_outline` with sentinel-prefix preservation and contour-index offset comparison against the pinned C oracle.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ExportBorder`: 4/4 runnable rows pass, 0 pending. This now includes selected-border append-to-existing-outline parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit `99f7e415d` ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route. Public `stroke_filled=true` now reaches the maintained outside-border glyph row, but general closed round-path stroker geometry remains guarded for broader glyph shapes.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
-- `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`: 9/9 runnable rows pass, 2 rows remain pending. The pending row `pending_stroked_mono_target_outline_to_bitmap` names the exact lower sequence blocking public `mode="1"` stroked ImageFont parity: `FT_LOAD_TARGET_MONO` outline, `FT_Glyph_Stroke`, then `FT_Glyph_To_Bitmap` with `FT_RENDER_MODE_NORMAL`, comparing bitmap placement and coverage bytes against pinned C. The native C oracle command and Rust/C/WASM runner branches now execute this exact sequence; temporarily promoting the row to real parity exposes a `/bitmap/buffer_hex` mismatch, while bitmap shape/placement has advanced past the previous wrong-oracle `/advance/x` artifact.
-- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` must be refreshed after the destroy-option promotion. The project still cannot claim complete FreeType-backed ImageFont parity yet because the normal `FT_Glyph_Stroke.destroy_original_option` row and broader glyph stroke geometry remain incomplete.
-- Refreshed focused check at doc commit `9f4211154`:
-  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`
-  passes 9/9 runnable rows with the same 2 explicit pending rows. The generated
-  route audit still reports `pending-route=180` and `real-parity=4842`. This
-  confirms the public ImageFont blocker is still not an `_imagingft.rs`
-  coverage-input problem; it remains the lower closed round/conic stroker
-  geometry/export route described below.
+- Current recheck: `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap` passes `11/11` runnable rows with `0` pending. The live public rows `font.getmask.dejavusans24_a_stroke_1_5_mode_1` and `font.getmask2.dejavusans24_a_stroke_1_5_mode_1` are active and pass exact Pillow 12.2.0 oracle comparison, so the previous mono-target stroked ImageFont blocker is cleared.
 
 Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and height-side stroked clipping rows:
 
