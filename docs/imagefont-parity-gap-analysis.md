@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `69b9b0579cb992e173273caf24ee51ef2637fc7d`
+Rust commit reviewed: `71e191b50dd59dd752024bccefe02a91819a0809`
 
-Coverage MCP run: `1b409a3e-cf8c-4285-8b25-3aa159875f61`
+Coverage MCP run: `e5d5a1c8-7070-4260-9fcb-f22f832f1c32`
 
-Coverage MCP snapshot: `bd507111-1ee2-480f-8934-4bf65ade4646`
+Coverage MCP snapshot: `3f959b1c-cb26-4af4-92e3-c6c0c736163e`
 
 Suite: `font-with-freetype`
 
@@ -31,7 +31,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `bd507111-1ee2-480f-8934-4bf65ade4646`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `3f959b1c-cb26-4af4-92e3-c6c0c736163e`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
@@ -109,32 +109,31 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `bd507111-1ee2-480f-8934-4bf65ade4646`.
+Coverage snapshot: `3f959b1c-cb26-4af4-92e3-c6c0c736163e`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 372/372 100.00% | n/a | 80/80 100.00% | 494/494 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | mostly covered; reported line gap is rustdoc on `from_pilfont_data`, but function/region gaps mean additional bitmap-font variants remain untrusted |
-| `pillow-rs/src/font/imagingft.rs` | 1624/1649 98.48% | 240/248 96.77% | 163/174 93.68% | 2523/2621 96.26% | real partial branch gaps remain |
+| `pillow-rs/src/font/imagingft.rs` | 1642/1666 98.56% | 246/254 96.85% | 163/174 93.68% | 2547/2645 96.29% | real partial branch gaps remain |
 
 Overall snapshot totals for this suite:
 
-- Lines: 15483/50617, 30.59%
-- Branches: 2634/10716, 24.58%
+- Lines: 15501/50634, 30.61%
+- Branches: 2640/10722, 24.62%
 - Functions: 1182/3603, 32.81%
-- Regions: 22288/78390, 28.43%
+- Regions: 22312/78414, 28.45%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
 ## Uncovered/partial line logic analysis for `imagingft.rs`
 
-Coverage MCP reports 14 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 6 uncovered lines and 8 partial-branch lines.
+Coverage MCP reports 13 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 5 uncovered lines and 8 partial-branch lines. The previous `FT_Set_Named_Instance` success-propagation gap was resolved by making the returned FreeType status explicit before `check_ft_error(status)?`; the existing public named-instance fixture rows now cover that flow.
 
 | Rust line(s) | Rust logic | Pillow 12.2.0 reference | Analysis | Required action |
 |---:|---|---|---|---|
 | `91`, `92`, `253`, `271` | Complete FreeType 2.14.3 error message table data / table declaration. | `_imagingft.c::geterror` builds the table from FreeType `FT_ERRORS_H` and raises `OSError`; unknown table misses use `"unknown freetype error"`. | Rust is source-aligned and data-driven, but these rare rows are not reached by public ImageFont fixtures. Do not add private table unit tests as proof. | Add public fixture rows only for FreeType failures reachable through `PIL.ImageFont` inputs. |
-| `515` | Successful `FT_Set_Named_Instance` return path after variation-name lookup. | `FreeTypeFont.set_variation_by_name` delegates named instance selection into `_imagingft`. | Existing rows exercise variation APIs, but this exact successful named-instance propagation is not covered. | Add one fixture using a font with a named instance that Pillow and Rust both select exactly. |
 | `796` | Constant/section instrumentation around FFI helper declarations. | Not a Pillow behavior. | Coverage marks a partial branch here due LLVM segment normalization, not a meaningful behavior gap. | No product action. |
 | `826`, `829` | `floor26` / `ceil26` 26.6 conversion helper branch instrumentation. | Pillow BASIC layout converts 26.6 values through `PIXEL(...)`-style rounding in `_imagingft.c`. | Partial markers mean current inputs do not hit every conversion-region shape. This is not an independent feature but can hide bbox/offset rounding differences. | Add targeted bbox/mask rows with negative bearings, fractional starts, ascenders/descenders, and kerning pairs. |
 | `928` | Branch in BASIC glyph run construction around previous-glyph kerning. | `_imagingft.c::text_layout_fallback` only adds kerning when a previous glyph exists. | One kerning path remains partially unproven after the shared glyph-run refactor. | Add minimal `"AV"` / non-kerning / first-glyph rows that prove both kerning and no-kerning transitions in length, bbox, mask, and stroke. |
@@ -229,7 +228,6 @@ Decision: add ImageFont oracle rows with fonts that exercise embedded bitmap gly
    - stroked mode `"1"`;
    - height-side stroked clipping;
    - kerning and no-kerning transitions across `getlength`, `getbbox`, `getmask`, and stroke;
-   - successful named-instance `set_variation_by_name`;
    - embedded bitmap glyph path;
    - reachable FreeType table errors.
 3. Re-run `make -C pillow-rs font-tests`.
