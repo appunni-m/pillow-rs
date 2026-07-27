@@ -5642,10 +5642,15 @@ pub fn FT_Stroker_GetBorderCounts(
                 return FT_Err_Invalid_Argument;
             };
             if !entry.state.border_counts_valid {
+                // FreeType 2.14.3 stores `FT_STROKER_BORDER_LEFT` at
+                // `borders[0]`, initialized from `center + normal` in
+                // `src/base/ftstroke.c:1232-1263`.  The generic Rust state
+                // historically named that same border `right_border`; map the
+                // public border constants to the stored C-equivalent slots.
                 let border_state = if border == FT_STROKER_BORDER_LEFT as FT_Int {
-                    &mut entry.state.left_border
-                } else {
                     &mut entry.state.right_border
+                } else {
+                    &mut entry.state.left_border
                 };
                 match border_state.counts() {
                     Ok((counted_points, counted_contours)) => {
@@ -5737,10 +5742,13 @@ pub fn FT_Stroker_ExportBorder(
     STROKER_REGISTRY.with(|registry| {
         if let Some(entry) = registry.borrow().get(&(stroker as usize)) {
             if !entry.state.border_counts_valid {
+                // See `FT_Stroker_GetBorderCounts`: the live generic border
+                // slots are named opposite to FreeType's public left/right
+                // indices.  Export through the public C-equivalent mapping.
                 let source = if border == FT_STROKER_BORDER_LEFT as FT_Int {
-                    &entry.state.left_border
-                } else {
                     &entry.state.right_border
+                } else {
+                    &entry.state.left_border
                 };
                 source.export_to_outline(outline);
                 return;
