@@ -276,6 +276,12 @@ public outline tags/contours from the accumulated stroke tags. This is required
 plumbing for real border export; the success rows still stay pending until
 corner joins, caps, curves, and close behavior are ported.
 
+`FT_Stroker_LineTo` no longer has the Rust-only two-segment limit. It now follows
+FreeType 2.14.3 `src/base/ftstroke.c:1303-1337` by appending candidate border
+state for every later line segment. This moves the next real blocker to
+`FT_Stroker_EndSubPath`/corner processing rather than failing early during
+outline parsing.
+
 Decision: complete the lower stroker segment geometry and border-export behavior
 needed by real outline glyphs, then add successful `stroke_filled=true` fixture
 rows. `FT_Stroker_ParseOutline` now follows the C-shaped contour/tag walk, so
