@@ -1042,11 +1042,6 @@ fn stroked_mask_from_run_with_start(
     stroke_width: f32,
     stroke_filled: bool,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    if stroke_filled {
-        return Err(PilError::NotImplementedError(
-            "stroke_filled requires FT_Glyph_StrokeBorder support".into(),
-        ));
-    }
     if text.is_empty() {
         let side = (stroke_width * 2.0).ceil() as i32;
         if side < 0 {
@@ -1068,7 +1063,7 @@ fn stroked_mask_from_run_with_start(
         let layout_slot =
             ffi::FT_Load_Glyph(face, glyph.glyph_index, load_flags).map_err(ft_error_to_pil)?;
 
-        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width)?;
+        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width, stroke_filled)?;
         let px = round26(glyph.pen_before);
         x_min = x_min.min(px + bitmap_glyph.left as i32);
         x_max = x_max.max(px + bitmap_glyph.left as i32 + bitmap_glyph.bitmap.width as i32);
@@ -1183,6 +1178,7 @@ fn paste_rendered_bitmaps(
 fn stroked_bitmap_glyph(
     slot: &ffi::FT_GlyphSlot,
     stroke_width: f32,
+    stroke_filled: bool,
 ) -> Result<ffi::FT_BitmapGlyphOwned, PilError> {
     let outline = ffi::FT_Get_Outline_Glyph(Some(slot)).map_err(ft_error_to_pil)?;
     let library = ffi::FT_Init_FreeType();
@@ -1195,7 +1191,11 @@ fn stroked_bitmap_glyph(
         ffi::FT_STROKER_LINEJOIN_ROUND as ffi::FT_Int,
         0,
     );
-    let stroked = ffi::FT_Outline_Glyph_Stroke(Some(&outline), stroker).map_err(ft_error_to_pil);
+    let stroked = if stroke_filled {
+        ffi::FT_Outline_Glyph_StrokeBorder(Some(&outline), stroker, 0).map_err(ft_error_to_pil)
+    } else {
+        ffi::FT_Outline_Glyph_Stroke(Some(&outline), stroker).map_err(ft_error_to_pil)
+    };
     ffi::FT_Stroker_Done(stroker);
     let stroked = stroked?;
     // Pillow 12.2.0 `_imagingft.c::font_render_impl` always renders stroked

@@ -2253,6 +2253,65 @@ pub fn FT_Outline_Glyph_Stroke(
     })
 }
 
+pub fn FT_Outline_Glyph_StrokeBorder(
+    glyph: Option<&FT_OutlineGlyphOwned>,
+    stroker: FT_Stroker,
+    inside: FT_Bool,
+) -> Result<FT_OutlineGlyphOwned, FT_Error> {
+    let Some(glyph) = glyph else {
+        return Err(FT_Err_Invalid_Argument);
+    };
+    if stroker.is_null() {
+        return Err(FT_Err_Invalid_Argument);
+    }
+
+    // FreeType 2.14.3 `src/base/ftstroke.c:2330-2398` copies the source
+    // outline glyph, parses it through the active stroker, chooses the
+    // inside/outside border from outline orientation, and exports only that
+    // border into the replacement glyph.  General border geometry depends on
+    // the lower `FT_Stroker_ParseOutline`/`ExportBorder` implementation; this
+    // wrapper preserves C ownership/error semantics without adding
+    // ImageFont-specific shortcuts.
+    let border = if inside != 0 {
+        FT_Outline_GetInsideBorder(Some(&glyph.outline))
+    } else {
+        FT_Outline_GetOutsideBorder(Some(&glyph.outline))
+    };
+    let parse_status = FT_Stroker_ParseOutline(stroker, Some(&glyph.outline), 0);
+    if parse_status != FT_Err_Ok {
+        return Err(parse_status);
+    }
+
+    let mut n_points = 0;
+    let mut n_contours = 0;
+    let count_status = FT_Stroker_GetBorderCounts(
+        stroker,
+        border,
+        Some(&mut n_points),
+        Some(&mut n_contours),
+    );
+    if count_status != FT_Err_Ok {
+        return Err(count_status);
+    }
+
+    let mut outline = FT_OutlineSnapshot {
+        points: Vec::with_capacity(n_points as usize),
+        tags: Vec::with_capacity(n_points as usize),
+        contours: Vec::with_capacity(n_contours as usize),
+        flags: glyph.outline.flags,
+    };
+    FT_Stroker_ExportBorder(stroker, border, Some(&mut outline));
+    Ok(FT_OutlineGlyphOwned {
+        root: FT_GlyphRec {
+            library: glyph.root.library,
+            clazz: glyph.root.clazz,
+            format: glyph.root.format,
+            advance: glyph.root.advance,
+        },
+        outline,
+    })
+}
+
 pub fn FT_Outline_Glyph_CBox(
     glyph: Option<&FT_OutlineGlyphOwned>,
     bbox_mode: FT_UInt,
