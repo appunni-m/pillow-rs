@@ -1315,3 +1315,16 @@ Current request classification for `imagingft.rs` region coverage:
   `pending-route=168`. Remaining line-join pending rows are now the wide
   round-curve restoration row and the broad
   `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.
+- `FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration` re-check: forced
+  pending execution with `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration` still
+  runs `0` parity rows and stays pending as
+  `ftstroke.stroke_wide_curve:pending-route cases require an explicit
+  maintained runtime route; generic fallback is not parity evidence`. The input
+  still references future-only `outlines/stroker/wide-curve-joins.json` and
+  named path `wide_curve_negative_sector`. Promotion requires a maintained
+  wide-curve path fixture and a `ftstroke.stroke_wide_curve` route that proves
+  FreeType's temporary round-join path restores the saved non-round join state
+  after curve subdivision, comparing exact status sequence,
+  `line_join_after_curve`, and exported outline across pinned C, Rust FFI,
+  C ABI, and WASM ABI.
