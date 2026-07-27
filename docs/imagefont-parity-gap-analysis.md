@@ -242,6 +242,12 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   layout, while text method `direction`/`features`/`language` still route to
   the dedicated Rust `PilError::UnsupportedLibraqm` path. The focused
   `make test-imagefont-facade` target now covers this behavior against Pillow.
+- Follow-up module-function facade coverage: `make test-imagefont-facade` now
+  covers `ImageFont.load`, `load_path`, `load_default`,
+  `load_default_imagefont`, and `truetype` against Pillow 12.2.0 using existing
+  `.pil`/bitmap and TrueType fixture assets. These are Python facade parity
+  checks; core Rust still correctly accepts bytes/options rather than owning
+  filesystem or `sys.path` behavior.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
 - Commit `3558b7762` hardens the libraqm source guard: `PilError::UnsupportedLibraqm` must remain a unit variant with the one core hard-coded message, and `imagingft.rs` must use the dedicated constructor instead of encoding `KeyError` text directly.
@@ -383,7 +389,7 @@ The live Pillow oracle exposes the following ImageFont surfaces:
 
 | Pillow surface | Pillow public methods/functions | Rust status |
 |---|---|---|
-| module functions | `load`, `load_default`, `load_default_imagefont`, `load_path`, `truetype` | Partially modeled. Core Rust intentionally accepts bytes, not filesystem paths. Python/JS binding I/O must stay thin and delegate after byte loading. |
+| module functions | `load`, `load_default`, `load_default_imagefont`, `load_path`, `truetype` | Modeled at the Python facade with focused Pillow-oracle tests. Core Rust intentionally accepts bytes/options, not filesystem paths; Python binding I/O remains thin and delegates after path/search/file-like loading. JS ABI does not implement host filesystem search and requires caller-supplied bytes. |
 | `ImageFont.ImageFont` bitmap font | `getbbox`, `getlength`, `getmask`, `info` on loaded bitmap fonts | Exposed at the Rust root as `ImageFont`, aliasing the internal `PilFont` implementation. Fixture rows exist for bitmap `ImageFont.*`. |
 | `ImageFont.FreeTypeFont` | `getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `getmask2`, `font_variant`, `get_variation_names`, `set_variation_by_name`, `get_variation_axes`, `set_variation_by_axes` | Modeled through explicit Rust root `FreeTypeFont`. BASIC layout paths are oracle-tested. Successful libraqm shaping is out of scope. The public `getmask2(..., stroke_width=1.5, stroke_filled=True)` route is proven for the maintained DejaVuSans glyph-36 outside-border path; lower `FT_Glyph_StrokeBorder` outside/inside/destroy wrapper rows now have exact maintained routes. Broader stroke geometry remains incomplete. |
 | `ImageFont.TransposedFont` | `getmask`, `getbbox`, `getlength` | Not modeled as a Rust class; exposed as helper operations (`get_transposed_mask`, `transposed_bbox`, `validate_transposed_length`) and tested through fixtures. |
