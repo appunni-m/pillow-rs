@@ -335,7 +335,13 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   matching `font.getmask.*jq_stroke_1_5_l` and
   `font.getmask2.*jq_stroke_1_5_l` rows.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
-- Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
+- Commit `b71ca868e` adds a live-corpus guard that fails if any active Font
+  input tries to claim `stroke_filled=true` branch coverage with
+  `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is
+  implemented. That guard now allows only the exact lower-proven public row
+  `font.getmask2.dejavusans24_a_stroke_1_5_filled_l`; any additional
+  `stroke_filled=true` row with positive stroke width must first be backed by
+  a maintained lower `FT_Glyph_StrokeBorder` C-oracle route.
 - Commit `3558b7762` hardens the libraqm source guard: `PilError::UnsupportedLibraqm` must remain a unit variant with the one core hard-coded message, and `imagingft.rs` must use the dedicated constructor instead of encoding `KeyError` text directly.
 - Current audit at `275d941f` confirms the libraqm contract is enforced in `pillow-rs/tests/font_public_api.rs`: direction/features/language rows must return the dedicated core `PilError::UnsupportedLibraqm`, core must contain the hard-coded no-libraqm message exactly once, `imagingft.rs` must call `PilError::unsupported_libraqm()` exactly once, and host bindings must map the variant to Pillow-compatible `KeyError`. `layout_engine="RAQM"` remains separate because Pillow 12.2.0 without libraqm accepts that constructor option and falls back to BASIC; it is not a successful libraqm shaping path.
 - Coverage MCP run `ea51012f-1da6-4e2e-b60a-1768e7fa6f87` at commit `275d941fcb5a73319022986069a09b3fb6e1e58b` passed and ingested snapshot `facad7de-822e-45d5-961b-7534bbdc3b3b`. Direct `imagingft.rs` coverage remains 1664/1686 lines, 249/254 branches, 162/173 functions, and 2608/2700 regions; the lower fallback cleanup intentionally does not claim new active ImageFont coverage.
