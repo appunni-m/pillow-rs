@@ -16,9 +16,9 @@ This document combines two views:
 ## Evidence boundary
 
 - Coverage MCP suite: `font-with-freetype`
-- Latest trusted run: `974f35c7-e61d-4dec-bc8a-16ba4e91978e`
-- Latest trusted snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`
-- Measured commit: `13c410dc64fa93576f87377e2c8dde8f671f7ca9`
+- Latest trusted run: `828c2d47-1a0f-4742-b5d9-8a9f49641ad3`
+- Latest trusted snapshot: `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`
+- Measured commit: `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7`
 - Oracle: repo-local `.oracle-venv`, Pillow `12.2.0`,
   `PIL.ImageFont`, native `PIL._imagingft`
 - Rust public entry points: `pillow-rs/src/lib.rs`,
@@ -30,11 +30,10 @@ This document combines two views:
 - Manifest: `pillow-rs/tests/fixtures/font/font_manifest.yaml`
 - Harness gate: `pillow-rs/tests/font_public_api.rs`
 
-The trusted snapshot has 348 passing active input-only rows. The working tree
-currently contains two additional uncommitted fixture rows, making 350 local
-rows. Those two rows are not part of the trusted snapshot yet. One of them is a
-known real mismatch: Pillow reports `OSError("too many instruction definitions")`
-while Rust currently reports `OSError("invalid outline")`.
+The trusted snapshot has 350 passing active input-only rows. The previous
+pending IDEF overflow mismatch is now fixed and committed: Pillow and Rust both
+return `OSError("too many instruction definitions")` for
+`font.getlength.hinter_too_many_instruction_defs`.
 
 ## Current defensible status
 
@@ -69,7 +68,7 @@ glyph paths.
 
 ### Direct Rust Font implementation coverage
 
-Coverage snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` reports:
+Coverage snapshot `4e04ba48-488e-4798-87f6-7fc34d4ad4ab` reports:
 
 | File | Lines | Branches | Functions | Regions | Decision |
 |---|---:|---:|---:|---:|---|
@@ -87,7 +86,7 @@ partial-branch lines.
 |---:|---|---|---|---|
 | `91` | partial branch | FreeType error-table miss handling. | Pillow `_imagingft.c::geterror` returns `unknown freetype error` for table misses. Rust has the behavior, but the miss branch is not reached by active public ImageFont rows. | Do not add private table unit tests as parity proof. Add only public rows if a real Pillow input can trigger this. |
 | `92` | uncovered | `unknown freetype error` payload. | Same as above. | Same as above. |
-| `253` | uncovered | `FT_Err_Too_Many_Instruction_Defs -> "too many instruction definitions"`. | A local pending fixture row already found a real mismatch: Rust currently collapses this path to `invalid outline`. | Fix lower `fontdone` error propagation/mapping so public ImageFont matches Pillow, then rerun Font coverage. |
+| `253` | uncovered | `FT_Err_Too_Many_Instruction_Defs -> "too many instruction definitions"`. | Public behavior is now proven by `font.getlength.hinter_too_many_instruction_defs`, but LLVM still reports the static table row as uncovered because the table data line itself is not attributed as executed. | Keep the public row. Treat this as behaviorally proven but still LLVM-uncovered; do not add private table tests as parity proof. |
 | `271` | uncovered | `FT_Err_Invalid_Horiz_Metrics -> "invalid horizontal metrics"`. | Horizontal metrics errors can affect `truetype`, layout, metrics, bbox, and masks. Existing missing-`hmtx` coverage is a different error. | Add a real malformed public ImageFont row only if Pillow naturally reaches this exact error. |
 | `796` | partial branch | Constant/declaration area around kerning defaults. | LLVM segment normalization artifact; not meaningful product behavior by itself. | No product change unless later source context proves a real missing branch. |
 | `826`, `829` | partial branches | `floor26` / `ceil26` fixed-point conversion. | Can hide bbox and mask-size off-by-one differences for negative bearings, fractional starts, and descenders. | Add independent public rows that naturally cross floor/ceil boundaries. Avoid duplicate BASIC rows. |
@@ -114,7 +113,7 @@ files must be covered through public `PIL.ImageFont` rows before the ImageFont
 claim is trustworthy.
 
 Current high-risk lower coverage from snapshot
-`06e0a61c-a56e-43e5-bfe7-a8b821be22f1`:
+`4e04ba48-488e-4798-87f6-7fc34d4ad4ab`:
 
 | File | Lines | Branches | Functions | Regions | ImageFont risk |
 |---|---:|---:|---:|---:|---|
@@ -265,7 +264,7 @@ Decision:
 - Current coverage executes the width condition but not the height body; that
   lack of coverage is useful because it points at unproven stroke geometry.
 
-### C. TrueType bytecode error mapping is incomplete
+### C. TrueType bytecode error mapping was fixed for IDEF overflow
 
 Files:
 
@@ -274,18 +273,21 @@ Files:
 - `pillow-rs-freetype/src/tt/hinter/exec.rs`
 
 Rust has table entries for FreeType bytecode errors, including
-`FT_Err_Too_Many_Instruction_Defs`. The pending local fixture
-`font.getlength.hinter_too_many_instruction_defs` proves a current mismatch:
+`FT_Err_Too_Many_Instruction_Defs`. Commit
+`2e45e4e4dec60bdfca5df2a7a17640f67a0037c7` fixes the public mismatch found by
+`font.getlength.hinter_too_many_instruction_defs`:
 
 - Pillow: `OSError("too many instruction definitions")`
-- Rust: `OSError("invalid outline")`
+- Rust before the fix: `OSError("invalid outline")`
+- Rust after the fix: `OSError("too many instruction definitions")`
 
 Decision:
 
-- This is a real parity bug.
-- Fix lower `fontdone` error propagation/mapping so the public Rust Font result
-  reaches the same FreeType status as Pillow.
-- Keep the fixture row after the fix; it should cover `imagingft.rs:253`.
+- Keep the fixture row as a public regression guard.
+- Coverage MCP confirms lower `pillow-rs-freetype/src/tt/hinter/exec.rs` IDEF
+  overflow handling is exercised. Direct `imagingft.rs:253` remains
+  LLVM-uncovered because it is static table data, not because public behavior is
+  unproven.
 
 ### D. Successful libraqm shaping is not implemented
 
@@ -390,9 +392,9 @@ Decision:
 
 ## 4. Active fixture files and case counts
 
-Trusted snapshot case count: 348.
+Trusted snapshot case count: 350.
 
-Working-tree count including uncommitted pending rows: 350.
+Working-tree count: 350.
 
 | Input file | Working-tree cases |
 |---|---:|
@@ -428,36 +430,30 @@ Working-tree count including uncommitted pending rows: 350.
 | `font.variations.json` | 36 |
 | Total | 350 |
 
-Pending rows not included in the trusted snapshot:
+New rows included in the trusted snapshot:
 
 - `font.getbbox.hhea_descender_only_av`
 - `font.getlength.hinter_too_many_instruction_defs`
 
-The second row is intentionally failing until the bytecode error mapping is
-fixed. Keep it as a real bug detector.
-
 ## 5. Action list for decision
 
-1. Fix the bytecode error mismatch so
-   `font.getlength.hinter_too_many_instruction_defs` matches Pillow and covers
-   `imagingft.rs:253`.
-2. Complete general stroked outline support in
+1. Complete general stroked outline support in
    `pillow-rs-freetype/src/ffi/handles.rs`; remove fixture-specific stroker
    shortcuts instead of adding more.
-3. Re-evaluate and either remove or prove the `imagingft.rs` stroked extent
+2. Re-evaluate and either remove or prove the `imagingft.rs` stroked extent
    clamp with a C/Pillow trace.
-4. Add public ImageFont rows for successful stroke, `stroke_filled=true`,
+3. Add public ImageFont rows for successful stroke, `stroke_filled=true`,
    stroked descenders/ascenders, mono stroke, and side clipping after lower
    stroker support works.
-5. Add targeted public rows for `floor26`/`ceil26` rounding via negative
+4. Add targeted public rows for `floor26`/`ceil26` rounding via negative
    bearings, fractional `start`, descenders, and glyphs crossing pixel
    boundaries.
-6. Add public rows for embedded bitmap/sbit behavior and supported cmap/CFF
+5. Add public rows for embedded bitmap/sbit behavior and supported cmap/CFF
    shapes. Use live Pillow output only.
-7. Decide whether Python/Rust API-shape parity includes
+6. Decide whether Python/Rust API-shape parity includes
    `FreeTypeFont.__getstate__` / `__setstate__` and distinct public type shapes
    for bitmap `ImageFont`, `FreeTypeFont`, and `TransposedFont`.
-8. Keep RAQM/libraqm success excluded unless the product decision changes.
+7. Keep RAQM/libraqm success excluded unless the product decision changes.
    Current no-libraqm rows are not proof of successful shaping parity.
 
 ## Final conclusion
@@ -465,9 +461,7 @@ fixed. Keep it as a real bug detector.
 The branch has a trustworthy runtime-oracle fixture harness for current active
 rows, but it does not yet have complete `PIL.ImageFont` parity.
 
-The biggest real implementation blocker is general stroked outline behavior
-under `pillow-rs-freetype/src/ffi/handles.rs`. The next concrete bug is the
-pending TrueType bytecode error mapping mismatch for
-`too many instruction definitions`. Coverage is useful here because it shows
-which Rust paths are merely present versus actually proven through public
-Pillow ImageFont behavior.
+The biggest remaining implementation blocker is general stroked outline
+behavior under `pillow-rs-freetype/src/ffi/handles.rs`. The previous concrete
+TrueType bytecode error mapping mismatch for `too many instruction definitions`
+is fixed and covered by public Pillow ImageFont parity.

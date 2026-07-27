@@ -15,10 +15,10 @@ review. It combines:
 
 Important evidence boundary:
 
-- Coverage run: `974f35c7-e61d-4dec-bc8a-16ba4e91978e`
-- Coverage snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`
+- Coverage run: `828c2d47-1a0f-4742-b5d9-8a9f49641ad3`
+- Coverage snapshot: `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`
 - Suite: `font-with-freetype`
-- Measured commit: `13c410dc64fa93576f87377e2c8dde8f671f7ca9`
+- Measured commit: `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7`
 - Oracle: repo-local `.oracle-venv`, Pillow `12.2.0`, native
   `PIL._imagingft`
 - Stroker parser note: commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
@@ -33,7 +33,7 @@ Important evidence boundary:
 The active input-only Font fixture corpus has exact live-oracle parity for the
 rows it exercises.
 
-- Active rows: 348.
+- Active rows: 350.
 - Oracle outputs are generated at runtime by Pillow 12.2.0.
 - Input JSON files do not contain expected output hashes, pixel data, or
   expected errors.
@@ -41,7 +41,7 @@ rows it exercises.
   success/error payload semantics.
 - `make -C pillow-rs font-tests` passed before this document.
 - Coverage MCP managed run passed and ingested snapshot
-  `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
+  `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`.
 
 The correct product claim is:
 
@@ -57,7 +57,7 @@ That is not true yet.
 
 ### Direct Font implementation coverage
 
-Coverage snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` reports:
+Coverage snapshot `4e04ba48-488e-4798-87f6-7fc34d4ad4ab` reports:
 
 | File | Lines | Branches | Functions | Regions | Decision |
 |---|---:|---:|---:|---:|---|
@@ -71,7 +71,7 @@ Coverage snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` reports:
 | Line(s) | Logic | Why it matters | Decision |
 |---:|---|---|---|
 | 91, 92 | `FT_ERROR_MESSAGES` table miss comment/table start. | Pillow `_imagingft.c::geterror` uses FreeType error tables and reports `unknown freetype error` for misses. The Rust table exists, but the table-miss route is not reached through current public ImageFont rows. | Do not add private table unit tests as parity proof. Add only public ImageFont inputs that naturally trigger the same Pillow error behavior. |
-| 253 | `FT_Err_Too_Many_Instruction_Defs` mapping. | Rare TrueType instruction error is mapped but not reached by active public rows. | Needs a real malformed-font row if Pillow can trigger it through `ImageFont.truetype`. |
+| 253 | `FT_Err_Too_Many_Instruction_Defs` mapping. | Public behavior is now proven by `font.getlength.hinter_too_many_instruction_defs`; Pillow and Rust both return `OSError("too many instruction definitions")`. LLVM still reports the static table line uncovered. | Keep the public row as a regression guard. Do not add private table tests as parity proof. |
 | 271 | `FT_Err_Invalid_Horiz_Metrics` mapping. | Horizontal metrics failures affect `truetype`, metrics, layout, and mask creation. | Needs a real malformed-font row distinct from the existing missing-`hmtx` row. |
 | 796 | `KERN_DEFAULT` declaration segment. | LLVM line attribution marks this partial, but this is a constant declaration rather than product behavior. | Treat as coverage artifact unless source-context evidence later proves a real missing branch. |
 | 826, 829 | `floor26` / `ceil26` 26.6 fixed-point helpers. | These determine bbox and mask edge rounding. Partial branch coverage can hide off-by-one parity bugs. | Add public rows with negative bearings, fractional start offsets, descenders, ascenders, and glyphs that cross floor/ceil boundaries. |
@@ -356,7 +356,7 @@ Recommended order:
 
 ## Final decision summary
 
-The implementation is currently trustworthy for the active 348 runtime-oracle
+The implementation is currently trustworthy for the active 350 runtime-oracle
 fixture rows.
 
 It is not yet trustworthy for the full Pillow 12.2.0 `PIL.ImageFont` surface.

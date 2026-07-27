@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `13c410dc64fa93576f87377e2c8dde8f671f7ca9`
+Rust commit reviewed: `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7`
 
-Coverage MCP run: `974f35c7-e61d-4dec-bc8a-16ba4e91978e`
+Coverage MCP run: `828c2d47-1a0f-4742-b5d9-8a9f49641ad3`
 
-Coverage MCP snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`
+Coverage MCP snapshot: `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`
 
 Suite: `font-with-freetype`
 
@@ -26,18 +26,19 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 348 input-only rows execute.
-- 348 rows match live Pillow 12.2.0 exactly.
+- 350 input-only rows execute.
+- 350 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
 - Additional mono BASIC rows for `AV` and `jQ` now prove live-oracle parity for normal-vs-mono load-flag behavior across `getlength`, `getbbox`, `getmask`, and `getmask2`. Coverage MCP shows these rows are semantically useful but do not reduce the remaining LLVM-reported `imagingft.rs` region gaps; the next coverage-moving gap is still lower stroker/stroke-border implementation.
 - Commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0` moves `FT_Stroker_ParseOutline` from a two-point-line-only parser to the FreeType 2.14.3 contour/tag control flow that delegates line, conic, and cubic segments to the existing segment routes. This is architectural progress for the stroke blocker, but it does not yet move public ImageFont coverage because the mixed-outline route and general segment stroker/export behavior remain pending.
 - Commit `13c410dc64fa93576f87377e2c8dde8f671f7ca9` adds three public ImageFont rows for lower metric-table paths: `hdmx_observable` through `getlength`, `mvar_vertical_metrics` through `getmetrics`, and `vertical_vhea_only` through `getmetrics`. These rows move lower `hdmx`, `mvar`, `vhea`, and `vmtx` from 0% to live Pillow-backed coverage without changing `imagingft.rs` region gaps.
+- Commit `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7` adds two public ImageFont rows: `font.getbbox.hhea_descender_only_av` and `font.getlength.hinter_too_many_instruction_defs`. It also fixes lower TrueType IDEF opcode-overflow classification so Pillow's public `OSError("too many instruction definitions")` matches Rust. Coverage moved lower `tt/hinter/exec.rs` but did not change direct `imagingft.rs` region totals because LLVM still attributes the static `FT_ERROR_MESSAGES` table line as uncovered.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -89,9 +90,9 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.TransposedFont.getmask.json` | 6 |
 | `font.constructor.json` | 9 |
 | `font.get_transposed_mask.json` | 10 |
-| `font.getbbox.json` | 31 |
+| `font.getbbox.json` | 32 |
 | `font.getbbox_binary.json` | 9 |
-| `font.getlength.json` | 21 |
+| `font.getlength.json` | 22 |
 | `font.getmask.json` | 36 |
 | `font.getmask2.json` | 43 |
 | `font.getmask2_with_start.json` | 23 |
@@ -110,11 +111,11 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 348 |
+| total | 350 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
+Coverage snapshot: `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -125,10 +126,10 @@ Coverage snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
 
 Overall snapshot totals for this suite:
 
-- Lines: 15509/50636, 30.63%
-- Branches: 2647/10724, 24.68%
-- Functions: 1183/3603, 32.83%
-- Regions: 22328/78418, 28.47%
+- Lines: 15709/50733, 30.96%
+- Branches: 2671/10758, 24.83%
+- Functions: 1203/3608, 33.34%
+- Regions: 22636/78553, 28.82%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -138,7 +139,7 @@ Coverage MCP reports 13 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 5 un
 
 | Rust line(s) | Rust logic | Pillow 12.2.0 reference | Analysis | Required action |
 |---:|---|---|---|---|
-| `91`, `92`, `253`, `271` | Complete FreeType 2.14.3 error message table data / table declaration. | `_imagingft.c::geterror` builds the table from FreeType `FT_ERRORS_H` and raises `OSError`; unknown table misses use `"unknown freetype error"`. | Rust is source-aligned and data-driven, but these rare rows are not reached by public ImageFont fixtures. Do not add private table unit tests as proof. | Add public fixture rows only for FreeType failures reachable through `PIL.ImageFont` inputs. |
+| `91`, `92`, `253`, `271` | Complete FreeType 2.14.3 error message table data / table declaration. | `_imagingft.c::geterror` builds the table from FreeType `FT_ERRORS_H` and raises `OSError`; unknown table misses use `"unknown freetype error"`. | Rust is source-aligned and data-driven. The new `font.getlength.hinter_too_many_instruction_defs` row proves the public Pillow/Rust error payload for `FT_Err_Too_Many_Instruction_Defs`, but LLVM still reports static table line `253` as uncovered because the table data itself is not attributed as executed. | Treat line `253` as behaviorally proven through public `ImageFont` error parity but still LLVM-uncovered. Add future rows only for real remaining public errors such as `Invalid_Horiz_Metrics` or table-miss behavior. |
 | `796` | Constant/section instrumentation around FFI helper declarations. | Not a Pillow behavior. | Coverage marks a partial branch here due LLVM segment normalization, not a meaningful behavior gap. | No product action. |
 | `826`, `829` | `floor26` / `ceil26` 26.6 conversion helper branch instrumentation. | Pillow BASIC layout converts 26.6 values through `PIXEL(...)`-style rounding in `_imagingft.c`. | Partial markers mean current inputs do not hit every conversion-region shape. This is not an independent feature but can hide bbox/offset rounding differences. | Add targeted bbox/mask rows with negative bearings, fractional starts, ascenders/descenders, and kerning pairs. |
 | `928` | Branch in BASIC glyph run construction around previous-glyph kerning. | `_imagingft.c::text_layout_fallback` only adds kerning when a previous glyph exists. | Additional `mode="1"` rows for `AV` and `jQ` now prove public mono load-flag parity across length, bbox, mask, and mask2, but Coverage MCP still reports this line as partial. The remaining marker is therefore not removable by duplicate mono fixture expansion. | Keep this as a coverage artifact/branch-marker gap unless source-context evidence identifies a distinct public input. Do not add more duplicate BASIC rows only to chase this line. |
@@ -205,7 +206,7 @@ Remaining risk: fixtures need more independent kerning/no-kerning and missing-gl
 
 Rust maps FreeType 2.14.3 errors through a full table and returns `PilError::OsError`, matching Pillow's broad `OSError` behavior.
 
-Remaining risk: rare FreeType errors are present as table data but not reachable through current public ImageFont fixtures. They should only be added if a real Pillow input can trigger them.
+Remaining risk: rare FreeType errors are present as table data but not all are reachable through current public ImageFont fixtures. They should only be added if a real Pillow input can trigger them.
 
 Resolved during the latest pass: the new `font.load_failure.missing_hmtx_table` row imports the maintained FreeType `missing-hmtx.ttf` fixture into the Font corpus. Pillow returns `OSError("horizontal metrics (hmtx) table missing")`; Rust previously returned `OSError("broken file")` because `fontdone::ffi::error_to_ft` mapped every `FontError::InvalidFont(_)` to `FT_Err_Invalid_File_Format`. The fix adds the specific `FT_Err_Hmtx_Table_Missing` mapping before the generic fallback. Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` branch is executed.
 
@@ -221,6 +222,10 @@ Resolved during the mono BASIC pass: six input-only rows now prove public `mode=
 - `font.getmask2.dejavusans20_jq_mode_1`
 
 These rows passed exact live Pillow 12.2.0 parity in `make -C pillow-rs font-tests` and Coverage MCP run `974f35c7-e61d-4dec-bc8a-16ba4e91978e`. Snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` confirms `imagingft.rs` stayed at 1642/1666 lines, 246/254 branches, 163/174 functions, and 2547/2645 regions. The rows increased behavioral proof to 348 cases, but they do not move direct `imagingft.rs` region coverage; the remaining direct coverage-moving work is still stroker/stroke-border and rare reachable error paths.
+
+Resolved during the IDEF overflow pass: `font.getlength.hinter_too_many_instruction_defs` imports the maintained FreeType `hinter-fpgm-idef-opcode-overflow.ttf` fixture into the Font corpus and proves public Pillow/Rust error parity for `OSError("too many instruction definitions")`. Rust previously classified positive IDEF opcode overflow as `InvalidOutline("bytecode: IDEF opcode out of range")`, which surfaced as Pillow-incompatible `OSError("invalid outline")`. Commit `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7` now matches FreeType/Pillow's `Too_Many_Instruction_Defs` classification. Coverage snapshot `4e04ba48-488e-4798-87f6-7fc34d4ad4ab` shows lower `pillow-rs-freetype/src/tt/hinter/exec.rs` IDEF overflow handling is exercised; direct `imagingft.rs` table line `253` remains LLVM-uncovered because static table data is not attributed as executed.
+
+Resolved during the hhea descender pass: `font.getbbox.hhea_descender_only_av` imports the maintained FreeType `hhea-descender-only.ttf` fixture into the Font corpus and proves public bbox parity for another metrics-table fallback shape.
 
 Resolved during the lower metrics-table pass: three input-only rows now prove public ImageFont access to table paths that were previously 0% covered:
 
@@ -264,6 +269,6 @@ Decision: add ImageFont oracle rows with fonts that exercise embedded bitmap gly
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 348-row Font fixture corpus.
+The current implementation is good enough to trust the active 350-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
