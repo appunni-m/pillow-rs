@@ -20111,6 +20111,139 @@ static int emit_stroker_open_line_geometry(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_append_output(FT_Outline* outline) {
+    int sentinel_prefix =
+        outline->n_points >= 2 &&
+        outline->n_contours >= 1 &&
+        outline->points[0].x == -11 &&
+        outline->points[0].y == -22 &&
+        outline->points[1].x == -33 &&
+        outline->points[1].y == -44 &&
+        (unsigned char)outline->tags[0] == FT_CURVE_TAG_ON &&
+        (unsigned char)outline->tags[1] == FT_CURVE_TAG_ON &&
+        outline->contours[0] == 1;
+    printf("{\"sentinel_prefix\":\"%s\",", sentinel_prefix ? "unchanged" : "changed");
+    printf("\"appended_outline\":{\"points\":[");
+    for (int i = 2; i < outline->n_points; i++) {
+        if (i > 2) printf(",");
+        printf("{\"x\":%ld,\"y\":%ld}",
+               (long)outline->points[i].x,
+               (long)outline->points[i].y);
+    }
+    printf("],\"tags\":[");
+    for (int i = 2; i < outline->n_points; i++) {
+        if (i > 2) printf(",");
+        printf("%u", (unsigned char)outline->tags[i]);
+    }
+    printf("],\"contours\":[");
+    for (int i = 1; i < outline->n_contours; i++) {
+        if (i > 1) printf(",");
+        printf("%u", (unsigned)outline->contours[i]);
+    }
+    printf("],\"flags\":%d},", outline->flags);
+    printf("\"n_points\":%d,\"n_contours\":%d}", outline->n_points, outline->n_contours);
+}
+
+static int emit_stroker_export_append(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error status = FT_Stroker_New(library, &stroker);
+    if (!status) {
+        FT_Stroker_Set(stroker, 96, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 65536);
+        FT_Vector start = { 0, 0 };
+        FT_Vector to = { 640, 0 };
+        status = FT_Stroker_BeginSubPath(stroker, &start, 1);
+        if (!status) status = FT_Stroker_LineTo(stroker, &to);
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+        if (!status) {
+            FT_UInt points_count = 0;
+            FT_UInt contours_count = 0;
+            status = FT_Stroker_GetCounts(stroker, &points_count, &contours_count);
+        }
+    }
+    FT_Vector points[128] = {0};
+    unsigned char tags[128] = {0};
+    unsigned short contours[16] = {0};
+    points[0].x = -11;
+    points[0].y = -22;
+    points[1].x = -33;
+    points[1].y = -44;
+    tags[0] = FT_CURVE_TAG_ON;
+    tags[1] = FT_CURVE_TAG_ON;
+    contours[0] = 1;
+    FT_Outline outline = { 1, 2, points, tags, contours, 0 };
+    if (!status) {
+        FT_Stroker_Export(stroker, &outline);
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":");
+    print_stroker_append_output(&outline);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
+static int emit_stroker_export_border_append(int argc, char** argv) {
+    (void)argv;
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error status = FT_Stroker_New(library, &stroker);
+    if (!status) {
+        FT_Stroker_Set(stroker, 96, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 65536);
+        FT_Vector start = { 0, 0 };
+        FT_Vector to = { 640, 0 };
+        status = FT_Stroker_BeginSubPath(stroker, &start, 1);
+        if (!status) status = FT_Stroker_LineTo(stroker, &to);
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+        if (!status) {
+            FT_UInt points_count = 0;
+            FT_UInt contours_count = 0;
+            status = FT_Stroker_GetCounts(stroker, &points_count, &contours_count);
+        }
+    }
+    FT_Vector points[128] = {0};
+    unsigned char tags[128] = {0};
+    unsigned short contours[16] = {0};
+    points[0].x = -11;
+    points[0].y = -22;
+    points[1].x = -33;
+    points[1].y = -44;
+    tags[0] = FT_CURVE_TAG_ON;
+    tags[1] = FT_CURVE_TAG_ON;
+    contours[0] = 1;
+    FT_Outline outline = { 1, 2, points, tags, contours, 0 };
+    if (!status) {
+        FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(status);
+    printf(",\"output\":");
+    print_stroker_append_output(&outline);
+    printf("}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_finalized_counts(int argc, char** argv) {
     if (argc != 4) return 2;
     int combined_counts = streq(argv[2], "counts");
@@ -26853,6 +26986,12 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 4 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-export-append")) {
+        return emit_stroker_export_append(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-export-border-append")) {
+        return emit_stroker_export_border_append(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {
         return emit_stroker_finalized_counts(argc, argv);
