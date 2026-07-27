@@ -22,9 +22,9 @@ Post stroke-blocker cleanup Coverage MCP run: `eab645c4-3f6c-477d-bd95-f72f83fce
 
 Post stroke-blocker cleanup Coverage MCP snapshot: `9dc9cb42-54a6-4aa8-b217-43ff0d0b351b`
 
-Post stroked-AV fixture Coverage MCP run: `22461340-64a7-4379-9b41-cb220c949786`
+Post stroked-AV fixture Coverage MCP run: `584c5815-17b0-44cf-89bf-e3831f9f353d`
 
-Post stroked-AV fixture Coverage MCP snapshot: `0805fd91-4e06-46a3-8c1e-00691ca79994`
+Post stroked-AV fixture Coverage MCP snapshot: `26f88533-a211-49cd-8775-23b64d8ab218`
 
 Suite: `font-with-freetype`
 
@@ -655,9 +655,9 @@ Latest focused ftstroke evidence after the outside-border route update:
 - Stroked kerning rows `font.getmask.dejavusans24_av_stroke_1_5_l` and
   `font.getmask2.dejavusans24_av_stroke_1_5_l` are active input-only rows and
   pass exact live Pillow 12.2.0 oracle comparison. They independently exercise
-  BASIC layout kerning before stroked multi-glyph mask rendering. Coverage MCP
-  run `22461340-64a7-4379-9b41-cb220c949786` ingested snapshot
-  `0805fd91-4e06-46a3-8c1e-00691ca79994`; direct `imagingft.rs` coverage
+  BASIC layout kerning before stroked multi-glyph mask rendering. Committed
+  Coverage MCP run `584c5815-17b0-44cf-89bf-e3831f9f353d` ingested snapshot
+  `26f88533-a211-49cd-8775-23b64d8ab218`; direct `imagingft.rs` coverage
   remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions with the same eight ranges.
 - Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
