@@ -164,7 +164,9 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `a65df3af-cbf8-4f58-beb3-ea38e7b757b8`.
+Coverage snapshot: `23fab2f2-78d7-4910-9a32-14d72c712804`
+from Coverage MCP run `7376f5b8-9f4f-4a83-aa15-7a94efc926d2`
+at commit `8a6cd50ef6631b2e90d8d703bbdc1179b0435e8e`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -182,10 +184,10 @@ refactor.
 
 Overall snapshot totals for this suite:
 
-- Lines: 17077/51964, 32.86%
-- Branches: 2899/10932, 26.52%
-- Functions: 1302/3652, 35.65%
-- Regions: 24471/79903, 30.63%
+- Lines: 17092/51970, 32.89%
+- Branches: 2900/10934, 26.52%
+- Functions: 1302/3651, 35.66%
+- Regions: 24483/79905, 30.64%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -622,3 +624,16 @@ Current request classification for `imagingft.rs` region coverage:
   before rasterization at `/cbox/xMax` (`expected=1139`, `actual=1125`). The
   next real fix is therefore lower stroked outline geometry/export, not
   `imagingft.rs` allocation, offset, or mode handling.
+- Current commit coverage confirmation: Coverage MCP run
+  `7376f5b8-9f4f-4a83-aa15-7a94efc926d2` passed and ingested snapshot
+  `23fab2f2-78d7-4910-9a32-14d72c712804` for commit `8a6cd50ef`. Direct
+  `imagingft.rs` coverage remains `1664/1686` lines, `249/254` branches,
+  `162/173` functions, and `2608/2700` regions. The remaining reported source
+  lines are still `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
+  Re-inspection against FreeType 2.14.3 `ftstroke.c` confirms the only real
+  behavior blocker is lower `FT_Stroker_EndSubPath`/border export for closed
+  round/conic paths; the Rust lower layer intentionally guards that path with
+  `closed_round_path_unverified`/`conic_path_unverified`. This is a valid
+  implementation gap if it is fixed by porting the exact lower stroker
+  geometry/export behavior, but it is not a reason to chase 100%
+  `pillow-rs-freetype` coverage or to move stroke math into `imagingft.rs`.
