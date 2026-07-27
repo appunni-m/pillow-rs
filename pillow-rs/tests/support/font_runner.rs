@@ -521,9 +521,7 @@ fn text_options(params: &Value) -> Result<ImageFontTextOptions, PilError> {
             .get("ink")
             .map(|value| {
                 value.as_i64().ok_or_else(|| {
-                    PilError::TypeError(
-                        "'list' object cannot be interpreted as an integer".into(),
-                    )
+                    PilError::TypeError("'list' object cannot be interpreted as an integer".into())
                 })
             })
             .transpose()?,
@@ -926,7 +924,7 @@ fn error_kind(error: &PilError) -> &'static str {
         PilError::OsError(_) => "OSError",
         PilError::AssertionError(_) => "AssertionError",
         PilError::IndexError(_) => "IndexError",
-        PilError::KeyError(_) => "KeyError",
+        PilError::KeyError(_) | PilError::UnsupportedLibraqm(_) => "KeyError",
         PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
         PilError::ValueError(_) | PilError::DimensionError(_) => "ValueError",
         PilError::SyntaxError(_) => "SyntaxError",

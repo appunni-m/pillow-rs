@@ -46,6 +46,14 @@ pub enum PilError {
     #[error("{0}")]
     KeyError(String),
 
+    /// Libraqm-dependent text layout options are unsupported in this build.
+    ///
+    /// Bindings expose this as Pillow's no-libraqm `KeyError` category for
+    /// parity, while core code keeps a distinct variant so unsupported RAQM
+    /// paths are explicit and auditable.
+    #[error("{0}")]
+    UnsupportedLibraqm(String),
+
     /// Input bytes could not be identified as a supported image format.
     #[error("cannot identify image file '{0}'")]
     UnidentifiedImageError(String),

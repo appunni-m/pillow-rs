@@ -448,7 +448,7 @@ pub(crate) fn render_text_binary(
 
 fn validate_basic_layout_options(options: &ImageFontTextOptions) -> Result<(), PilError> {
     if options.direction.is_some() || options.features.is_some() || options.language.is_some() {
-        return Err(PilError::KeyError(
+        return Err(PilError::UnsupportedLibraqm(
             "'setting text direction, language or font features is not supported without libraqm'"
                 .into(),
         ));
@@ -828,7 +828,7 @@ fn stroked_mask_from_run_with_start(
             pen = pen.saturating_add(basic_layout_kern(face, p, g));
         }
 
-        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, load_flags, stroke_width)?;
+        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width)?;
         let px = round26(pen);
         x_min = x_min.min(px + bitmap_glyph.left as i32);
         x_max = x_max.max(px + bitmap_glyph.left as i32 + bitmap_glyph.bitmap.width as i32);
@@ -939,7 +939,6 @@ fn paste_rendered_bitmaps(
 
 fn stroked_bitmap_glyph(
     slot: &ffi::FT_GlyphSlot,
-    load_flags: i32,
     stroke_width: f32,
 ) -> Result<ffi::FT_BitmapGlyphOwned, PilError> {
     let outline = ffi::FT_Get_Outline_Glyph(Some(slot)).map_err(ft_error_to_pil)?;
@@ -951,17 +950,15 @@ fn stroked_bitmap_glyph(
         radius,
         ffi::FT_STROKER_LINECAP_ROUND as ffi::FT_Int,
         ffi::FT_STROKER_LINEJOIN_ROUND as ffi::FT_Int,
-        65_536,
+        0,
     );
     let stroked = ffi::FT_Outline_Glyph_Stroke(Some(&outline), stroker).map_err(ft_error_to_pil);
     ffi::FT_Stroker_Done(stroker);
     let stroked = stroked?;
-    let render_mode = if load_flags & TGT_MONO != 0 {
-        ffi::FT_RENDER_MODE_MONO
-    } else {
-        ffi::FT_RENDER_MODE_NORMAL
-    };
-    ffi::FT_Outline_Glyph_To_Bitmap(&stroked, render_mode).map_err(ft_error_to_pil)
+    // Pillow 12.2.0 `_imagingft.c::font_render_impl` always renders stroked
+    // outline glyphs with `FT_RENDER_MODE_NORMAL`, even when the public
+    // `mode="1"` path set `FT_LOAD_TARGET_MONO` for glyph loading.
+    ffi::FT_Outline_Glyph_To_Bitmap(&stroked, ffi::FT_RENDER_MODE_NORMAL).map_err(ft_error_to_pil)
 }
 
 fn new_stroker(library: &ffi::FT_Library) -> ffi::FT_Stroker {
