@@ -113,6 +113,15 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The remaining reported direct markers are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`.
+- Commit `ab66808a2` completes the Rust root class-shape correction by making
+  `ImageFont` alias the bitmap/base `PilFont` implementation and keeping
+  `FreeTypeFont` for the FreeType-backed implementation. This mirrors Pillow's
+  `ImageFont.ImageFont` / `ImageFont.FreeTypeFont` naming at the Rust root
+  without changing public Python/JS facade behavior or Font oracle data.
+  Coverage MCP run `184ed959-fe4b-4ed9-ad97-4a54b58f8171` passed and ingested
+  snapshot `0e79f59b-31ea-4705-b2fb-3f543080dda7`; direct `imagingft.rs`
+  remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
+  `2612/2696` regions with the same seven direct markers.
 - Commits `121702b10` and `2b34fb4ac` close the Python binding option-forwarding leak for ImageFont: the thin wrapper now forwards `direction`, `features`, `language`, `stroke_width`, `stroke_filled`, `anchor`, `ink`, `mode`, and `start` into the Rust core, raises the Rust `PilError::UnsupportedLibraqm` path for no-libraqm options, and preserves Pillow-visible integral bbox value types.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
