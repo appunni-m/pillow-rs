@@ -21,16 +21,16 @@ Coverage work must therefore be tied back to one of these:
 - a documented lower-level blocker that prevents a specific public
   `PIL.ImageFont` row from passing.
 
-Do not use `_imagingft` or `pillow-rs-freetype` coverage alone to claim Font
+Do not use `_imagingft` or `pillow-rs-freetype` coverage alone to claim ImageFont
 completion. Those measurements are useful only when they explain or unlock the
 public `PIL.ImageFont` behavior.
 
 ## Current measured checkpoint: 2026-07-27
 
 - Command: `font-tests-coverage-with-freetype`
-- Run: `025caed9-308c-4cfa-86d4-680f2916fb3a`
-- Snapshot: `42a114c8-2be7-41e8-9ae9-9a87ab098305`
-- Commit: `264257bebed406ccf8539ff7432740b6f29d4c60`
+- Run: `61a3cbd1-a6f9-42b2-b24b-592a7dec1cd4`
+- Snapshot: `d388dbd8-9809-47c2-b9b9-aa09c12d6bed`
+- Commit: `451de154a7f50a69a2df0c88c65edb734b8ac4f2` plus local ImageFont root-API rename worktree
 - Result: passed, ingested
 - `pillow-rs/src/font/default_aileron.rs`: regions `24/24` (`100.00%`)
 - `pillow-rs/src/font/mod.rs`: regions `487/487` (`100.00%`)
@@ -159,7 +159,7 @@ Still required for completion:
 
 Latest added cases/fixes:
 
-- Routed the Font parity runner through explicit root `pillow_rs::font_*`
+- Routed the ImageFont parity runner through explicit root `pillow_rs::imagefont_*`
   functions where available, matching the single-root-public-API boundary.
 - Added anchor rows for `lt`, `la`, `ls`, and `lb`.
 - Added `getmask2` option-path `start` row.

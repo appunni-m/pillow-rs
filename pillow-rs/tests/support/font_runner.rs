@@ -66,11 +66,13 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 Some(bytes) => font.getmask(&bytes)?,
                 None => font.getmask(text(params)?.as_bytes())?,
             };
+            let image = mask.to_image()?;
+            let (width, height) = image.size()?;
             return Ok(image_value(
-                mask.width,
-                mask.height,
-                mask.mode.as_str(),
-                &mask.pixels,
+                width,
+                height,
+                image.mode()?.as_str(),
+                &image.tobytes_unpacked()?,
             ));
         }
         "TransposedFont.getbbox" => {
@@ -120,12 +122,12 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         "load_default" | "truetype" => font_descriptor(&font),
         "font_size" => Ok(json!({
             "type": "size",
-            "value": pillow_rs::font_size(&font),
+            "value": pillow_rs::imagefont_size(&font),
         })),
         "text_bbox" => {
             let (width, height) = match text_bytes(params)? {
-                Some(bytes) => pillow_rs::font_text_bbox_bytes(&font, &bytes)?,
-                None => pillow_rs::font_text_bbox(&font, text(params)?.as_ref())?,
+                Some(bytes) => pillow_rs::imagefont_text_bbox_bytes(&font, &bytes)?,
+                None => pillow_rs::imagefont_text_bbox(&font, text(params)?.as_ref())?,
             };
             Ok(json!({
                 "type": "size",
@@ -133,11 +135,11 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             }))
         }
         "getname" => {
-            let (family, style) = pillow_rs::font_getname_optional(&font);
+            let (family, style) = pillow_rs::imagefont_getname_optional(&font);
             Ok(json!({"type": "name", "value": [family, style]}))
         }
         "getmetrics" => {
-            let (ascent, descent) = pillow_rs::font_getmetrics(&font);
+            let (ascent, descent) = pillow_rs::imagefont_getmetrics(&font);
             Ok(json!({"type": "metrics", "value": [ascent, descent]}))
         }
         "getlength" => Ok(json!({
@@ -146,14 +148,14 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         })),
         "has_variations" => Ok(json!({
             "type": "bool",
-            "value": pillow_rs::font_has_variations(&font),
+            "value": pillow_rs::imagefont_has_variations(&font),
         })),
-        "get_variation_axes" => Ok(variation_axes_value(pillow_rs::font_get_variation_axes(
-            &font,
-        )?)),
+        "get_variation_axes" => Ok(variation_axes_value(
+            pillow_rs::imagefont_get_variation_axes(&font)?,
+        )),
         "get_variation_names" => Ok(json!({
             "type": "variation_names",
-            "value": pillow_rs::font_get_variation_names(&font)?
+            "value": pillow_rs::imagefont_get_variation_names(&font)?
                 .into_iter()
                 .map(|name| hex(&name))
                 .collect::<Vec<_>>(),
@@ -161,11 +163,11 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         "set_variation_by_name" => {
             let name = variation_name(params)?;
             for _ in 0..repeat_count(params)? {
-                pillow_rs::font_set_variation_by_name(&mut font, &name)?;
+                pillow_rs::imagefont_set_variation_by_name(&mut font, &name)?;
             }
             Ok(json!({
                 "type": "font_after_variation",
-                "name": pillow_rs::font_getname(&font),
+                "name": pillow_rs::imagefont_getname(&font),
                 "length": getlength(&font, params)?,
             }))
         }
@@ -181,25 +183,25 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                         .ok_or_else(|| PilError::TypeError("axis must be a number".into()))
                 })
                 .collect::<Result<Vec<_>, _>>()?;
-            pillow_rs::font_set_variation_by_axes(&mut font, &axes)?;
+            pillow_rs::imagefont_set_variation_by_axes(&mut font, &axes)?;
             Ok(json!({
                 "type": "font_after_variation",
-                "name": pillow_rs::font_getname(&font),
+                "name": pillow_rs::imagefont_getname(&font),
                 "length": getlength(&font, params)?,
             }))
         }
         "font_variant" => {
             let options = font_variant_options(case, fixture_root, params)?;
             if uses_font_variant_options(params, case) {
-                font_descriptor(&pillow_rs::font_variant_with_options(&font, &options)?)
+                font_descriptor(&pillow_rs::imagefont_variant_with_options(&font, &options)?)
             } else {
-                font_descriptor(&pillow_rs::font_variant(&font, options.size)?)
+                font_descriptor(&pillow_rs::imagefont_variant(&font, options.size)?)
             }
         }
         "getbbox" => Ok(getbbox(&font, params)?),
         "getbbox_binary" => Ok(bbox_value(match text_bytes(params)? {
-            Some(bytes) => pillow_rs::font_getbbox_binary_bytes(&font, &bytes)?,
-            None => pillow_rs::font_getbbox_binary(&font, text(params)?.as_ref())?,
+            Some(bytes) => pillow_rs::imagefont_getbbox_binary_bytes(&font, &bytes)?,
+            None => pillow_rs::imagefont_getbbox_binary(&font, text(params)?.as_ref())?,
         })),
         "getmask" => {
             let (width, height, pixels) = getmask(&font, params)?;
@@ -212,13 +214,17 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         "getmask2_with_start" => {
             let start = pair_f64(required(params, "start")?, "start")?;
             let (width, height, pixels, offset) = match text_bytes(params)? {
-                Some(bytes) => pillow_rs::font_getmask2_bytes_with_start(&font, &bytes, start)?,
-                None => pillow_rs::font_getmask2_with_start(&font, text(params)?.as_ref(), start)?,
+                Some(bytes) => {
+                    pillow_rs::imagefont_getmask2_bytes_with_start(&font, &bytes, start)?
+                }
+                None => {
+                    pillow_rs::imagefont_getmask2_with_start(&font, text(params)?.as_ref(), start)?
+                }
             };
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
-            let (width, height, pixels) = pillow_rs::font_get_transposed_mask(
+            let (width, height, pixels) = pillow_rs::imagefont_get_transposed_mask(
                 &font,
                 text(params)?.as_ref(),
                 orientation(params)?,
@@ -226,7 +232,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(pillow_rs::transposed_bbox(
-            pillow_rs::font_getbbox(&font, text(params)?.as_ref())?,
+            pillow_rs::imagefont_getbbox(&font, text(params)?.as_ref())?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
@@ -243,8 +249,12 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .as_f64()
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
-            let (width, height, pixels) =
-                pillow_rs::font_render_text_binary(&font, text(params)?.as_ref(), fill, spacing)?;
+            let (width, height, pixels) = pillow_rs::imagefont_render_text_binary(
+                &font,
+                text(params)?.as_ref(),
+                fill,
+                spacing,
+            )?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(
@@ -362,30 +372,32 @@ fn hex_digit(value: u8) -> Result<u8, PilError> {
 fn getlength(font: &ImageFont, params: &Value) -> Result<f32, PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => {
-            pillow_rs::font_getlength_bytes_with_options(font, &bytes, &text_options(params)?)
+            pillow_rs::imagefont_getlength_bytes_with_options(font, &bytes, &text_options(params)?)
         }
-        (Some(bytes), false) => pillow_rs::font_getlength_bytes(font, &bytes),
-        (None, true) => pillow_rs::font_getlength_with_options(
+        (Some(bytes), false) => pillow_rs::imagefont_getlength_bytes(font, &bytes),
+        (None, true) => pillow_rs::imagefont_getlength_with_options(
             font,
             text(params)?.as_ref(),
             &text_options(params)?,
         ),
-        (None, false) => pillow_rs::font_getlength(font, text(params)?.as_ref()),
+        (None, false) => pillow_rs::imagefont_getlength(font, text(params)?.as_ref()),
     }
 }
 
 fn getbbox(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => Ok(bbox_float_value(
-            pillow_rs::font_getbbox_bytes_with_options(font, &bytes, &text_options(params)?)?,
+            pillow_rs::imagefont_getbbox_bytes_with_options(font, &bytes, &text_options(params)?)?,
         )),
-        (Some(bytes), false) => Ok(bbox_value(pillow_rs::font_getbbox_bytes(font, &bytes)?)),
-        (None, true) => Ok(bbox_float_value(pillow_rs::font_getbbox_with_options(
+        (Some(bytes), false) => Ok(bbox_value(pillow_rs::imagefont_getbbox_bytes(
+            font, &bytes,
+        )?)),
+        (None, true) => Ok(bbox_float_value(pillow_rs::imagefont_getbbox_with_options(
             font,
             text(params)?.as_ref(),
             &text_options(params)?,
         )?)),
-        (None, false) => Ok(bbox_value(pillow_rs::font_getbbox(
+        (None, false) => Ok(bbox_value(pillow_rs::imagefont_getbbox(
             font,
             text(params)?.as_ref(),
         )?)),
@@ -395,30 +407,30 @@ fn getbbox(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
 fn getmask(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>), PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => {
-            pillow_rs::font_getmask_bytes_with_options(font, &bytes, &text_options(params)?)
+            pillow_rs::imagefont_getmask_bytes_with_options(font, &bytes, &text_options(params)?)
         }
-        (Some(bytes), false) => pillow_rs::font_getmask_bytes(font, &bytes),
-        (None, true) => pillow_rs::font_getmask_with_options(
+        (Some(bytes), false) => pillow_rs::imagefont_getmask_bytes(font, &bytes),
+        (None, true) => pillow_rs::imagefont_getmask_with_options(
             font,
             text(params)?.as_ref(),
             &text_options(params)?,
         ),
-        (None, false) => pillow_rs::font_getmask(font, text(params)?.as_ref()),
+        (None, false) => pillow_rs::imagefont_getmask(font, text(params)?.as_ref()),
     }
 }
 
 fn getmask2(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => {
-            pillow_rs::font_getmask2_bytes_with_options(font, &bytes, &text_options(params)?)
+            pillow_rs::imagefont_getmask2_bytes_with_options(font, &bytes, &text_options(params)?)
         }
-        (Some(bytes), false) => pillow_rs::font_getmask2_bytes(font, &bytes),
-        (None, true) => pillow_rs::font_getmask2_with_options(
+        (Some(bytes), false) => pillow_rs::imagefont_getmask2_bytes(font, &bytes),
+        (None, true) => pillow_rs::imagefont_getmask2_with_options(
             font,
             text(params)?.as_ref(),
             &text_options(params)?,
         ),
-        (None, false) => pillow_rs::font_getmask2(font, text(params)?.as_ref()),
+        (None, false) => pillow_rs::imagefont_getmask2(font, text(params)?.as_ref()),
     }
 }
 
@@ -651,7 +663,7 @@ fn load_font(case: &Value, fixture_root: &Path) -> Result<ImageFont, PilError> {
         .as_str()
         .ok_or_else(|| PilError::TypeError("font kind must be a string".into()))?
     {
-        "load_default" => pillow_rs::font_load_default(size),
+        "load_default" => pillow_rs::imagefont_load_default(size),
         "ref" => {
             let id = required(font, "id")?
                 .as_str()
@@ -659,9 +671,13 @@ fn load_font(case: &Value, fixture_root: &Path) -> Result<ImageFont, PilError> {
             let data = fs::read(fixture_root.join(id))
                 .map_err(|_| PilError::OsError("cannot open resource".into()))?;
             if uses_font_load_options(params) {
-                pillow_rs::font_from_bytes_with_options(data, size, &font_load_options(params)?)
+                pillow_rs::imagefont_from_bytes_with_options(
+                    data,
+                    size,
+                    &font_load_options(params)?,
+                )
             } else {
-                pillow_rs::font_from_bytes(data, size)
+                pillow_rs::imagefont_from_bytes(data, size)
             }
         }
         kind => Err(PilError::ValueError(format!(
@@ -805,14 +821,14 @@ fn draw_text(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
 }
 
 fn font_descriptor(font: &ImageFont) -> Result<Value, PilError> {
-    let (family, style) = pillow_rs::font_getname_optional(font);
-    let (ascent, descent) = pillow_rs::font_getmetrics(font);
+    let (family, style) = pillow_rs::imagefont_getname_optional(font);
+    let (ascent, descent) = pillow_rs::imagefont_getmetrics(font);
     Ok(json!({
         "type": "font",
-        "size": pillow_rs::font_size(font),
+        "size": pillow_rs::imagefont_size(font),
         "name": [family, style],
         "metrics": [ascent, descent],
-        "has_variations": pillow_rs::font_has_variations(font),
+        "has_variations": pillow_rs::imagefont_has_variations(font),
     }))
 }
 
