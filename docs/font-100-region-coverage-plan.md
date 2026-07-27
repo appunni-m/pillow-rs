@@ -25,6 +25,25 @@ Do not use `_imagingft` or `pillow-rs-freetype` coverage alone to claim Font
 completion. Those measurements are useful only when they explain or unlock the
 public `PIL.ImageFont` behavior.
 
+## Current measured checkpoint: 2026-07-27
+
+- Command: `font-tests-coverage-with-freetype`
+- Run: `3a9da952-c399-4849-8554-f017c4b566d8`
+- Snapshot: `35e2223d-2787-47eb-87c4-2d5b3d75490f`
+- Commit: `9128326478b3f914664b48a71f8ad83c5483b172`
+- Result: passed, ingested
+- `pillow-rs/src/font/default_aileron.rs`: regions `24/24` (`100.00%`)
+- `pillow-rs/src/font/mod.rs`: regions `252/252` (`100.00%`)
+- `pillow-rs/src/font/pilfont.rs`: regions `504/542` (`92.99%`), with no
+  uncovered executable lines or partial branches reported by Coverage MCP.
+- `pillow-rs/src/font/imagingft.rs`: regions `1303/1349` (`96.59%`).
+
+The remaining region gap is not manifest drift: the active manifest/test
+contract already targets `PIL.ImageFont` and verifies the public operation and
+parameter map. The remaining measured regions are adapter/lower-level FreeType
+paths that need either a real public `PIL.ImageFont` oracle row or a lower-level
+implementation fix before they can be honestly covered.
+
 ## Execution status update: 2026-07-26
 
 Latest measured checkpoint after public-signature edge sweep and private
