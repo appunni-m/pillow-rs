@@ -49,6 +49,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
 	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
 	@printf "  $(CYAN)make test-imagefont-getmask2$(NC) Run independent ImageFont.getmask2 Pillow fixtures\n"
+	@printf "  $(CYAN)make test-imagefont-facade$(NC) Run Pillow-oracle ImageFont Python facade tests\n"
 	@printf "  $(CYAN)make test-point$(NC)     Run Image.point Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-eval$(NC)      Run Image.eval Pillow-oracle fixture parity\n"
 	@printf "  $(CYAN)make test-palette-save$(NC) Run ImagePalette.save Pillow-oracle parity\n"
@@ -180,7 +181,7 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-imagefont-getmask2 test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
+.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-imagefont-getmask2 test-imagefont-facade test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
 .PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle rust-tobytes-oracle js-oracle-contract js-color3dlut-oracle
 .PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle drawing-oracle imagefont-getmask2-oracle transposed-font-oracle fromarray-descriptor-oracle
 .PHONY: backend-support-matrix
@@ -209,6 +210,10 @@ test-putdata: putdata-fixtures ## Run Image.putdata public and fixture parity
 test-imagefont-getmask2: imagefont-getmask2-fixtures ## Run independent ImageFont.getmask2 Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
 		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImageFont and getmask2"
+
+test-imagefont-facade: ## Run Pillow-oracle ImageFont Python facade parity
+	$(PYTHON) -m pytest tests/test_imagefont_facade_oracle.py \
+		-q --tb=short --timeout=$(TIMEOUT) --strict-covers
 
 test-point: point-fixtures ## Run exact Image.point Pillow parity
 	$(PYTHON) -m pytest tests/test_parity.py \
