@@ -582,18 +582,18 @@ pub(crate) fn native_setvarname(
     check_ft_error(status)?;
     refresh_engine_metadata(font);
     if instance_index != 0 {
-        if let Some(name) = names.get(instance_index as usize - 1) {
-            if name.is_empty() {
-                // Pillow 12.2.0 `_imagingft.c::font_setvarname` accepts the
-                // FreeType named instance first. If the selected instance has
-                // no usable subfamily name, public `getname()` preserves
-                // `None` rather than FreeType's refreshed empty style string.
-                font.engine.style_name = None;
-            } else {
-                font.engine.style_name = Some(String::from_utf8_lossy(name).into_owned());
-            }
-        } else {
+        // `FT_Set_Named_Instance` succeeds only for a 1-based index within the
+        // same fvar instance table used by `get_variation_names`, so this index
+        // is in-bounds whenever the FreeType status above is OK.
+        let name = &names[instance_index as usize - 1];
+        if name.is_empty() {
+            // Pillow 12.2.0 `_imagingft.c::font_setvarname` accepts the
+            // FreeType named instance first. If the selected instance has
+            // no usable subfamily name, public `getname()` preserves
+            // `None` rather than FreeType's refreshed empty style string.
             font.engine.style_name = None;
+        } else {
+            font.engine.style_name = Some(String::from_utf8_lossy(name).into_owned());
         }
     }
     Ok(())
