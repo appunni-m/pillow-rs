@@ -6,6 +6,9 @@ from enum import IntEnum
 from . import _core
 
 
+MAX_STRING_LENGTH = 1_000_000
+
+
 class Layout(IntEnum):
     BASIC = 0
     RAQM = 1

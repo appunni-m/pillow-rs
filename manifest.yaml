@@ -2323,6 +2323,11 @@ modules:
       - P
       - RGB
   ImageFont:
+    properties:
+    - name: MAX_STRING_LENGTH
+      status: implemented
+      supported_targets:
+      - cpu
     functions:
     - name: load
       signature: 'load(filename: str) -> ImageFont'

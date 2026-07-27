@@ -119,6 +119,11 @@ def _font_pairs_for_transpose(RSPIL):
     )
 
 
+@pytest.mark.covers("ImageFont.MAX_STRING_LENGTH")
+def test_imagefont_max_string_length_constant_matches_pillow(RSPIL):
+    assert RSPIL.ImageFont.MAX_STRING_LENGTH == PILImageFont.MAX_STRING_LENGTH
+
+
 @pytest.mark.covers("ImageFont.truetype")
 def test_imagefont_layout_enum_and_no_raqm_fallback_match_pillow(RSPIL):
     assert int(RSPIL.ImageFont.Layout.BASIC) == int(PILImageFont.Layout.BASIC)
