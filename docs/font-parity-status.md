@@ -297,7 +297,8 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 - Constructor/load paths: `load_default`, `truetype`, missing asset, invalid
   font, invalid size.
 - Text input variants: `str`, Python `bytes`, empty text, space-only text,
-  ASCII kerning pairs, descenders, CFF font, embedded strike/sbit fixtures.
+  ASCII kerning pairs, descenders, over-`MAX_STRING_LENGTH` public errors,
+  CFF font, embedded strike/sbit fixtures.
 - Layout options: default mode, `"1"` binary mode, `"RGBA"` error mode, bad
   mode, direction/features/language no-raqm errors.
 - Anchor options: left/top/ascender, middle/middle, right/descender, bad anchor.
@@ -314,20 +315,20 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `ae3f06a2-17c9-4e66-b2e4-1cf47ed820d2`
-- Snapshot: `8e308451-b1c8-4fc5-8eda-97ad50ebd2b1`
+- Run: `9264cb97-1f0b-4ffa-bb72-bc57a37c2db5`
+- Snapshot: `3dc2db95-1480-468f-bcc8-a168e44feee2`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `ce9ef82178eaa55c699c9f8bef9a8fefa3e8ebc9`
+- Commit measured: `f495b80873e599a3605ac684c6c08017d804a139`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/default_aileron.rs` | `17/17` (`100.00%`) | n/a | `3/3` (`100.00%`) | `24/24` (`100.00%`) |
-| `pillow-rs/src/font/imagingft.rs` | `823/836` (`98.44%`) | `133/138` (`96.38%`) | `82/88` (`93.18%`) | `1303/1349` (`96.59%`) |
+| `pillow-rs/src/font/imagingft.rs` | `1658/1684` (`98.46%`) | `268/278` (`96.40%`) | `164/176` (`93.18%`) | `2627/2727` (`96.33%`) |
 | `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/252` (`100.00%`) |
-| `pillow-rs/src/font/pilfont.rs` | `355/365` (`97.26%`) | `70/70` (`100.00%`) | `29/39` (`74.36%`) | `504/542` (`92.99%`) |
+| `pillow-rs/src/font/pilfont.rs` | `715/737` (`97.01%`) | `142/142` (`100.00%`) | `58/78` (`74.36%`) | `1014/1094` (`92.69%`) |
 
 Current full-module scope note:
 
@@ -338,12 +339,12 @@ Current full-module scope note:
   `imagingft.rs` still has public-reachable FreeType/variation/stroke gaps.
   The shared bitmap compositor refactor removed duplicate normal/stroked paste
   branches, but it did not make unsupported stroke/variation routes complete.
-- `pilfont.rs` now has no uncovered executable lines and no partial branches in
-  the active Font coverage snapshot. Its branch coverage is `70/70`
-  (`100.00%`). The remaining function/region deltas are LLVM function/region
-  accounting with no line-level gaps reported by Coverage MCP. Additional
-  byte-text `PIL.ImageFont.ImageFont.getbbox` and `getmask` rows pass exact live
-  Pillow parity, but they do not change this LLVM function/region accounting.
+- `pilfont.rs` branch coverage remains complete (`142/142`, `100.00%`). The
+  current LLVM source map reports one uncovered relevant line on a doc-comment
+  line for `from_pilfont_data`; no uncovered executable branch was reported.
+  Additional byte-text and over-`MAX_STRING_LENGTH`
+  `PIL.ImageFont.ImageFont.getlength` rows pass exact live Pillow parity, but
+  they do not close the remaining LLVM function/region accounting.
 - `default_aileron.rs` now embeds the decoded Aileron TTF bytes directly instead
   of validating a checked-in base64 payload at runtime. Corrupt repo data is not
   a public `PIL.ImageFont` input, so the user-facing `Result` boundary remains
@@ -423,7 +424,7 @@ Latest Font wrapper movement:
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`8e308451-b1c8-4fc5-8eda-97ad50ebd2b1`:
+`3dc2db95-1480-468f-bcc8-a168e44feee2`:
 
 - `91-92`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
@@ -449,7 +450,7 @@ Remaining targeted gaps in `imagingft.rs` from snapshot
   finite coordinate arrays in the Pillow oracle. The 62-font isolated sweep
   likewise found no structured Pillow axes-setter errors; crash-only malformed
   rows remain excluded from the active corpus.
-- `796`, `826`, `829`, `831`, `928`, and `929`: general visible non-zero
+- `815`, `845`, `848`, `831`, `947`, and `948`: general visible non-zero
   `stroke_width`; partially routed through real pure-Rust `FT_Glyph_Stroke` for
   maintained DejaVuSans `"A"` single-glyph and multi-glyph rows plus the
   Pillow-compatible empty-text allocation path, with broader visible glyph
