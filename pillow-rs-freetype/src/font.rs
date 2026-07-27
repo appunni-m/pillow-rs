@@ -3266,6 +3266,24 @@ impl Font {
         self.data.name.lang_tags.get(index)
     }
 
+    pub(crate) fn has_selected_sfnt_family_name(&self) -> bool {
+        let is_wws_only = self
+            .data
+            .os2
+            .as_ref()
+            .is_some_and(tt::os2::Os2Table::is_wws_only);
+        tt::name::has_family_name(&self.data.name, false, is_wws_only)
+    }
+
+    pub(crate) fn has_selected_sfnt_subfamily_name(&self) -> bool {
+        let is_wws_only = self
+            .data
+            .os2
+            .as_ref()
+            .is_some_and(tt::os2::Os2Table::is_wws_only);
+        tt::name::has_subfamily_name(&self.data.name, false, is_wws_only)
+    }
+
     /// Approximate `FT_FaceRec::face_flags` for supported SFNT outline faces.
     pub fn face_flags(&self) -> u32 {
         const FT_FACE_FLAG_SCALABLE: u32 = 1 << 0;

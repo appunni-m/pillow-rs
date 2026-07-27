@@ -10583,9 +10583,9 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
     let num_fixed_sizes = FT_Int::try_from(available_sizes.len()).unwrap_or(FT_Int::MAX);
     let (charmaps, charmap_metadata) = charmaps_to_ffi(&inner);
     let glyph_to_script_map = inner.font().autohint_glyph_style_map().into_boxed_slice();
-    let has_usable_sfnt_names = info.face_flags & u32::try_from(FT_FACE_FLAG_SFNT).unwrap_or(0)
-        == 0
-        || font.sfnt_name_count() != 0;
+    let is_sfnt_face = info.face_flags & u32::try_from(FT_FACE_FLAG_SFNT).unwrap_or(0) != 0;
+    let has_usable_sfnt_family_name = !is_sfnt_face || font.has_selected_sfnt_family_name();
+    let has_usable_sfnt_style_name = !is_sfnt_face || font.has_selected_sfnt_subfamily_name();
     let inner = Rc::new(RefCell::new(inner));
     // FreeType `FT_Open_Face`/`FT_New_Memory_Face` negative face-index probes
     // start with `face->size == NULL`; `FT_New_Size` may allocate one later.
@@ -10608,8 +10608,8 @@ fn face_to_ffi(inner: api::Face, probe_only: bool) -> FT_Face {
         // C FreeType leaves `face->family_name` and `face->style_name` null
         // for SFNT faces with no usable name records; Pillow exposes that as
         // `(None, None)` from `_imagingft.c`/`FreeTypeFont.getname()`.
-        family_name: has_usable_sfnt_names.then_some(info.family_name),
-        style_name: has_usable_sfnt_names.then_some(info.style_name),
+        family_name: has_usable_sfnt_family_name.then_some(info.family_name),
+        style_name: has_usable_sfnt_style_name.then_some(info.style_name),
         num_glyphs: FT_Long::from(info.num_glyphs),
         bbox: FT_BBox {
             xMin: FT_Long::from(info.bbox.x_min),
