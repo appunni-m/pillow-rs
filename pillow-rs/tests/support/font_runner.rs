@@ -728,9 +728,7 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
                 PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
             })?;
             match load_pilfont_glyph_image(&metrics_path)? {
-                GlyphImageCandidate::Valid(image) => {
-                    PilFont::from_pilfont_glyph_data(&metrics, image)
-                }
+                GlyphImageCandidate::Valid(image) => pilfont_from_glyph_image(&metrics, image),
                 GlyphImageCandidate::InvalidMode(image) => PilFont::from_pilfont_glyph_data(
                     &metrics,
                     pillow_rs::PilFontGlyphImage::Image(image),
@@ -746,6 +744,18 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
         other => Err(PilError::ValueError(format!(
             "unsupported bitmap ImageFont asset kind: {other}"
         ))),
+    }
+}
+
+fn pilfont_from_glyph_image(
+    metrics: &[u8],
+    image: pillow_rs::PilFontGlyphImage,
+) -> Result<PilFont, PilError> {
+    match image {
+        pillow_rs::PilFontGlyphImage::Image(image) => PilFont::from_pilfont_data(metrics, image),
+        deferred @ pillow_rs::PilFontGlyphImage::DeferredRenderError { .. } => {
+            PilFont::from_pilfont_glyph_data(metrics, deferred)
+        }
     }
 }
 
