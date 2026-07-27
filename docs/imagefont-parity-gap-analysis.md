@@ -56,6 +56,12 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   therefore keep the explicit C-referenced maintained route until the lower
   stroker export is proven exact. This is a lower FreeType blocker, not an
   `imagingft.rs` adapter behavior gap.
+- Harness trust update: forced `test-pending-case` promotion now refuses the
+  generic `FT_Err_Unimplemented_Feature` fallback for `pending-route` rows.
+  Before this guard, a pending stroke ownership row could appear green without
+  using an explicit maintained Rust/C/WASM runtime route. The row now remains
+  pending with the reason `pending-route cases require an explicit maintained
+  runtime route; generic fallback is not parity evidence`.
 - Coverage MCP command `imagingft-tests-coverage-fixed` passes and ingests snapshot `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba` at runtime commit `12d434ca`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
