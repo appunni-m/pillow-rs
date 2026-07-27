@@ -3445,6 +3445,17 @@ struct StrokeBorderState {
     valid: bool,
 }
 
+#[derive(Clone, Copy)]
+struct CubicOffsetArc {
+    control1: FT_Vector,
+    control2: FT_Vector,
+    to: FT_Vector,
+    from: FT_Vector,
+    angle_in: FT_Angle,
+    angle_mid: FT_Angle,
+    angle_out: FT_Angle,
+}
+
 impl StrokeBorderState {
     fn new() -> Self {
         Self {
@@ -3842,28 +3853,86 @@ impl StrokerState {
         border.lineto(delta, false);
     }
 
-    fn process_outside_corner(&mut self, side: FT_Int, _line_length: FT_Fixed) {
-        // FreeType 2.14.3 `src/base/ftstroke.c:1032-1215`.  The fully
-        // general miter paths remain unimplemented here.  Fixed bevel joins
-        // append the outgoing offset corner; round joins emit an arc.
-        if self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int {
-            if self.line_join == FT_STROKER_LINEJOIN_BEVEL as FT_Int {
-                let rotate = Self::side_to_rotate(side);
-                let mut delta = FT_Vector::default();
-                FT_Vector_From_Polar(Some(&mut delta), self.radius, self.angle_out + rotate);
-                delta.x += self.center.x;
-                delta.y += self.center.y;
-                let border = if side == 0 {
-                    &mut self.right_border
-                } else {
-                    &mut self.left_border
-                };
-                border.movable = false;
-                border.lineto(delta, false);
-            }
+    fn process_outside_corner(&mut self, side: FT_Int, line_length: FT_Fixed) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1032-1215`: round joins emit
+        // an arc; bevel/fixed-miter/variable-miter joins share the miter-limit
+        // branch below. This is lower FreeType-owned behavior, not a Pillow
+        // adapter shortcut.
+        if self.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int {
+            self.stroker_arcto(side);
             return;
         }
-        self.stroker_arcto(side);
+
+        let radius = self.radius;
+        let rotate = Self::side_to_rotate(side);
+        let mut bevel = self.line_join == FT_STROKER_LINEJOIN_BEVEL as FT_Int;
+        let fixed_bevel = self.line_join != FT_STROKER_LINEJOIN_MITER_VARIABLE as FT_Int;
+        let mut sigma = FT_Vector::default();
+        let mut phi = 0;
+
+        if !bevel {
+            let mut theta = FT_Angle_Diff(self.angle_in, self.angle_out) / 2;
+            if theta == FT_ANGLE_PI2 as FT_Angle {
+                theta = -rotate;
+            }
+            phi = self.angle_in + theta + rotate;
+            FT_Vector_From_Polar(Some(&mut sigma), self.miter_limit, theta);
+            if sigma.x < 65_536 && (fixed_bevel || theta.abs() > 57) {
+                bevel = true;
+            }
+        }
+
+        let border = if side == 0 {
+            &mut self.right_border
+        } else {
+            &mut self.left_border
+        };
+
+        if bevel {
+            if fixed_bevel {
+                let mut delta = FT_Vector::default();
+                FT_Vector_From_Polar(Some(&mut delta), radius, self.angle_out + rotate);
+                delta.x += self.center.x;
+                delta.y += self.center.y;
+                border.movable = false;
+                border.lineto(delta, false);
+            } else {
+                let mut middle = FT_Vector::default();
+                FT_Vector_From_Polar(Some(&mut middle), FT_MulFix(radius, self.miter_limit), phi);
+                let coef = FT_DivFix(65_536 - sigma.x, sigma.y);
+                let mut delta = FT_Vector {
+                    x: FT_MulFix(middle.y, coef),
+                    y: FT_MulFix(-middle.x, coef),
+                };
+                middle.x += self.center.x;
+                middle.y += self.center.y;
+                delta.x += middle.x;
+                delta.y += middle.y;
+                border.lineto(delta, false);
+                delta.x = middle.x - delta.x + middle.x;
+                delta.y = middle.y - delta.y + middle.y;
+                border.lineto(delta, false);
+                if line_length == 0 {
+                    FT_Vector_From_Polar(Some(&mut delta), radius, self.angle_out + rotate);
+                    delta.x += self.center.x;
+                    delta.y += self.center.y;
+                    border.lineto(delta, false);
+                }
+            }
+        } else {
+            let length = FT_MulDiv(radius, self.miter_limit, sigma.x);
+            let mut delta = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut delta), length, phi);
+            delta.x += self.center.x;
+            delta.y += self.center.y;
+            border.lineto(delta, false);
+            if line_length == 0 {
+                FT_Vector_From_Polar(Some(&mut delta), radius, self.angle_out + rotate);
+                delta.x += self.center.x;
+                delta.y += self.center.y;
+                border.lineto(delta, false);
+            }
+        }
     }
 
     fn stroker_arcto(&mut self, side: FT_Int) {
@@ -4256,27 +4325,18 @@ impl StrokerState {
         true
     }
 
-    fn append_cubic_offset_arc(
-        &mut self,
-        control1: FT_Vector,
-        control2: FT_Vector,
-        to: FT_Vector,
-        from: FT_Vector,
-        angle_in: FT_Angle,
-        angle_mid: FT_Angle,
-        angle_out: FT_Angle,
-    ) {
+    fn append_cubic_offset_arc(&mut self, arc: CubicOffsetArc) {
         // FreeType 2.14.3 `src/base/ftstroke.c:1636-1745` adds a small cubic
         // arc directly to both stroke borders, including the wide-stroke
         // negative-sector branch used for non-round joins.
-        let theta1 = FT_Angle_Diff(angle_in, angle_mid) / 2;
-        let theta2 = FT_Angle_Diff(angle_mid, angle_out) / 2;
-        let phi1 = Self::angle_mean(angle_in, angle_mid);
-        let phi2 = Self::angle_mean(angle_mid, angle_out);
+        let theta1 = FT_Angle_Diff(arc.angle_in, arc.angle_mid) / 2;
+        let theta2 = FT_Angle_Diff(arc.angle_mid, arc.angle_out) / 2;
+        let phi1 = Self::angle_mean(arc.angle_in, arc.angle_mid);
+        let phi2 = Self::angle_mean(arc.angle_mid, arc.angle_out);
         let length1 = FT_DivFix(self.radius, FT_Cos(theta1));
         let length2 = FT_DivFix(self.radius, FT_Cos(theta2));
         let alpha0 = if self.handle_wide_strokes {
-            FT_Atan2(to.x - from.x, to.y - from.y)
+            FT_Atan2(arc.to.x - arc.from.x, arc.to.y - arc.from.y)
         } else {
             0
         };
@@ -4286,18 +4346,18 @@ impl StrokerState {
 
             let mut ctrl1 = FT_Vector::default();
             FT_Vector_From_Polar(Some(&mut ctrl1), length1, phi1 + rotate);
-            ctrl1.x += control1.x;
-            ctrl1.y += control1.y;
+            ctrl1.x += arc.control1.x;
+            ctrl1.y += arc.control1.y;
 
             let mut ctrl2 = FT_Vector::default();
             FT_Vector_From_Polar(Some(&mut ctrl2), length2, phi2 + rotate);
-            ctrl2.x += control2.x;
-            ctrl2.y += control2.y;
+            ctrl2.x += arc.control2.x;
+            ctrl2.y += arc.control2.y;
 
             let mut end = FT_Vector::default();
-            FT_Vector_From_Polar(Some(&mut end), self.radius, angle_out + rotate);
-            end.x += to.x;
-            end.y += to.y;
+            FT_Vector_From_Polar(Some(&mut end), self.radius, arc.angle_out + rotate);
+            end.x += arc.to.x;
+            end.y += arc.to.y;
 
             let border = if side == 0 {
                 &mut self.right_border
@@ -4306,7 +4366,7 @@ impl StrokerState {
             };
             if self.handle_wide_strokes
                 && Self::append_wide_cubic_negative_sector(
-                    border, from, to, ctrl1, ctrl2, end, alpha0,
+                    border, arc.from, arc.to, ctrl1, ctrl2, end, alpha0,
                 )
             {
                 continue;
@@ -4416,15 +4476,15 @@ impl StrokerState {
                 self.line_join = saved_line_join;
             }
 
-            self.append_cubic_offset_arc(
-                stack[arc + 2],
-                stack[arc + 1],
-                stack[arc],
-                stack[arc + 3],
+            self.append_cubic_offset_arc(CubicOffsetArc {
+                control1: stack[arc + 2],
+                control2: stack[arc + 1],
+                to: stack[arc],
+                from: stack[arc + 3],
                 angle_in,
                 angle_mid,
                 angle_out,
-            );
+            });
             self.angle_in = angle_out;
 
             if arc == 0 {

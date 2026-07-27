@@ -3773,6 +3773,87 @@ pub fn abi_support_stroker_reset_counts(action: i32) -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_rewind_attributes() -> bool {
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+        return false;
+    }
+    if stroker.is_null() {
+        return false;
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        224,
+        rust_ffi::FT_STROKER_LINECAP_SQUARE as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int,
+        131_072,
+    );
+    let first_start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let first_p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let first_p2 = rust_ffi::FT_Vector { x: 640, y: 640 };
+    let first_begin = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&first_start), 0);
+    let first_line1 = if first_begin == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&first_p1))
+    } else {
+        first_begin
+    };
+    let first_line2 = if first_line1 == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&first_p2))
+    } else {
+        first_line1
+    };
+    let first_end = if first_line2 == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        first_line2
+    };
+    if first_end == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_Rewind(stroker);
+    }
+    let second_start = rust_ffi::FT_Vector { x: 0, y: 0 };
+    let second_p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+    let second_p2 = rust_ffi::FT_Vector { x: 160, y: 224 };
+    let second_begin = if first_end == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&second_start), 0)
+    } else {
+        first_end
+    };
+    let second_line1 = if second_begin == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&second_p1))
+    } else {
+        second_begin
+    };
+    let second_line2 = if second_line1 == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_LineTo(stroker, Some(&second_p2))
+    } else {
+        second_line1
+    };
+    let second_end = if second_line2 == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        second_line2
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_status = if second_end == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+    } else {
+        second_end
+    };
+    let mut exported = rust_ffi::FT_OutlineSnapshot::default();
+    if counts_status == rust_ffi::FT_Err_Ok {
+        rust_ffi::FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    rust_ffi::FT_Stroker_Done(stroker);
+    counts_status == rust_ffi::FT_Err_Ok
+        && points == 10
+        && contours == 2
+        && exported.points.len() == 10
+        && exported.contours.len() == 2
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_parse_degenerate() -> bool {
     let library = rust_ffi::FT_Init_FreeType();
     let mut stroker = ptr::null_mut();

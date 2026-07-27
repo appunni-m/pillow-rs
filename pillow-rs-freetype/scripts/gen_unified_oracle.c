@@ -20709,6 +20709,98 @@ static int emit_stroker_reset_counts(int argc, char** argv) {
     return 0;
 }
 
+static void print_stroker_outline_value(FT_Outline* outline) {
+    printf("{\"n_points\":%d,\"n_contours\":%d,", outline->n_points, outline->n_contours);
+    printf("\"points\":[");
+    for (short i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("{\"x\":%ld,\"y\":%ld}", outline->points[i].x, outline->points[i].y);
+    }
+    printf("],\"tags\":[");
+    for (short i = 0; i < outline->n_points; i++) {
+        if (i) printf(",");
+        printf("%u", (unsigned char)outline->tags[i]);
+    }
+    printf("],\"contours\":[");
+    for (short i = 0; i < outline->n_contours; i++) {
+        if (i) printf(",");
+        printf("%d", outline->contours[i]);
+    }
+    printf("],\"flags\":%d}", outline->flags);
+}
+
+static int emit_stroker_rewind_attributes(int argc, char** argv) {
+    if (argc != 2) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = FT_Stroker_New(library, &stroker);
+    if (new_error || !stroker) {
+        printf("{");
+        print_status(new_error ? new_error : FT_Err_Invalid_Handle);
+        printf(",\"output\":null}\n");
+        FT_Done_FreeType(library);
+        return 0;
+    }
+    FT_Stroker_Set(stroker,
+                   224,
+                   FT_STROKER_LINECAP_SQUARE,
+                   FT_STROKER_LINEJOIN_MITER_FIXED,
+                   131072);
+    FT_Vector first_start = { 0, 0 };
+    FT_Vector first_p1 = { 640, 0 };
+    FT_Vector first_p2 = { 640, 640 };
+    FT_Error first_begin = FT_Stroker_BeginSubPath(stroker, &first_start, 0);
+    FT_Error first_line1 = first_begin ? first_begin : FT_Stroker_LineTo(stroker, &first_p1);
+    FT_Error first_line2 = first_line1 ? first_line1 : FT_Stroker_LineTo(stroker, &first_p2);
+    FT_Error first_end = first_line2 ? first_line2 : FT_Stroker_EndSubPath(stroker);
+    if (!first_end) {
+        FT_Stroker_Rewind(stroker);
+    }
+    FT_Vector second_start = { 0, 0 };
+    FT_Vector second_p1 = { 640, 0 };
+    FT_Vector second_p2 = { 160, 224 };
+    FT_Error second_begin = first_end ? first_end : FT_Stroker_BeginSubPath(stroker, &second_start, 0);
+    FT_Error second_line1 = second_begin ? second_begin : FT_Stroker_LineTo(stroker, &second_p1);
+    FT_Error second_line2 = second_line1 ? second_line1 : FT_Stroker_LineTo(stroker, &second_p2);
+    FT_Error second_end = second_line2 ? second_line2 : FT_Stroker_EndSubPath(stroker);
+    FT_UInt points = 99;
+    FT_UInt contours = 99;
+    FT_Error counts_status = second_end ? second_end : FT_Stroker_GetCounts(stroker, &points, &contours);
+    FT_Vector exported_points[256] = {0};
+    unsigned char exported_tags[256] = {0};
+    unsigned short exported_contours[64] = {0};
+    FT_Outline exported = {
+        .n_contours = 0,
+        .n_points = 0,
+        .points = exported_points,
+        .tags = exported_tags,
+        .contours = exported_contours,
+        .flags = 0
+    };
+    if (!counts_status) {
+        FT_Stroker_Export(stroker, &exported);
+    }
+    FT_Stroker_Done(stroker);
+    printf("{");
+    print_status(counts_status);
+    if (counts_status) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",\"output\":{\"second_export_outline\":");
+        print_stroker_outline_value(&exported);
+        printf(",\"counts_after_second_path\":{\"points\":%u,\"contours\":%u}}}\n", points, contours);
+    }
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -27338,6 +27430,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--stroker-reset-counts")) {
         return emit_stroker_reset_counts(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-rewind-attributes")) {
+        return emit_stroker_rewind_attributes(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);

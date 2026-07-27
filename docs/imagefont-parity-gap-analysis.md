@@ -1192,3 +1192,21 @@ Current request classification for `imagingft.rs` region coverage:
   `2/2` runnable rows with `2` pending attribute/geometry rows, and
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Rewind`
   passes `3/3` runnable rows with `1` pending attribute-preservation row.
+- `FT_Stroker_Rewind.attributes_preserved` promotion: adding a maintained
+  route exposed a real first divergence. Pinned C FreeType 2.14.3 returned
+  `counts_after_second_path.points = 10` and exported a 10-point/2-contour
+  fixed-miter outline after `FT_Stroker_Rewind`; Rust returned only `6` points
+  because `StrokerState::process_outside_corner` returned early for
+  non-round joins unless the join was bevel. The fix ports the non-round
+  outside-corner miter-limit branch from `freetype/src/base/ftstroke.c:1032-1215`
+  into `pillow-rs-freetype/src/ffi/handles.rs`, preserving the source boundary:
+  this is FreeType-owned stroker geometry, not Pillow `_imagingft.c` adapter
+  behavior. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_Rewind.attributes_preserved` passes `1/1`;
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Rewind`
+  now passes `4/4` runnable rows with `0` pending. Route audit moves to
+  `real-parity=4848` and `pending-route=174`. Adjacent checks
+  `FT_Stroker_Set`, `FT_STROKER_LINEJOIN_MITER_FIXED`, and
+  `FT_STROKER_LINEJOIN_MITER_VARIABLE` still pass their runnable rows and keep
+  their broader geometry rows pending until maintained same-input routes exist.
