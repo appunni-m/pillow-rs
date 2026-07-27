@@ -1143,3 +1143,16 @@ Current request classification for `imagingft.rs` region coverage:
   signatures or debug-overflow/source-map spans, while the static table misses
   are tuple-open lines for FreeType error constants. No additional public
   ImageFont behavior gap was identified from those markers.
+- Lower `FT_Glyph_To_Bitmap` recheck after the stroker border-order fix:
+  the previously tracked ImageFont blocker
+  `ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`
+  now passes exactly when included through
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`.
+  The normal lane `make -C pillow-rs-freetype test-case
+  CASE=ftglyph.FT_Glyph_To_Bitmap` passes `10/10` runnable rows and leaves
+  `1` pending row for a separate render-failure preservation route. The active
+  stroked mono-target Pillow/ImageFont blocker is therefore cleared by the lower
+  stroker fixes; the remaining pending `FT_Glyph_To_Bitmap` work is not an
+  `imagingft.rs` adapter gap unless a public Font row proves it affects
+  Pillow-visible behavior.
