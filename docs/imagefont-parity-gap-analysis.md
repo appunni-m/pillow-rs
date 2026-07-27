@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `ff224c455`
+Rust/source fixture commit reviewed: `7ab81d804`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -66,6 +66,10 @@ Post SBIX scope triage Coverage MCP snapshot: `4eece08b-8058-4fd4-b709-0b5a73977
 Post load-failure error-row Coverage MCP run: `bccd8d3c-a47f-45e6-abaf-31ce3989f074`
 
 Post load-failure error-row Coverage MCP snapshot: `3c8d6600-5f52-4f6b-8f85-25e30bfd43b8`
+
+Post-commit load-failure error-row Coverage MCP run: `526978dd-e204-48d1-83ec-32d755f47c14`
+
+Post-commit load-failure error-row Coverage MCP snapshot: `8dd555b5-b581-421a-8c4e-6aecbe405702`
 
 Suite: `font-with-freetype`
 
@@ -223,9 +227,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `font.load_failure.hinter_nested_defs`,
   `font.load_failure.too_many_function_defs`, and
   `font.load_failure.too_many_instruction_defs`. `make -C pillow-rs
-  font-tests` passes `407/407` live-oracle rows. Coverage MCP run
-  `bccd8d3c-a47f-45e6-abaf-31ce3989f074` passed and ingested snapshot
-  `3c8d6600-5f52-4f6b-8f85-25e30bfd43b8`. Direct
+  font-tests` passes `407/407` live-oracle rows. Post-commit Coverage MCP run
+  `526978dd-e204-48d1-83ec-32d755f47c14` passed at commit `7ab81d804` and
+  ingested snapshot `8dd555b5-b581-421a-8c4e-6aecbe405702`. Direct
   `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
   branches, `162/173` functions, and `2612/2696` regions with the same seven
   broad-suite markers. The rows are still useful parity coverage because they
