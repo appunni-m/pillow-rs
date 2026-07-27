@@ -2224,6 +2224,18 @@ fn stroker_is_dejavu_glyph36_fixture(stroker: FT_Stroker) -> bool {
     })
 }
 
+fn stroker_used_unverified_closed_round_path(stroker: FT_Stroker) -> bool {
+    if stroker.is_null() {
+        return false;
+    }
+    STROKER_REGISTRY.with(|registry| {
+        registry
+            .borrow()
+            .get(&(stroker as usize))
+            .is_some_and(|entry| entry.state.closed_round_path_unverified)
+    })
+}
+
 pub fn FT_Outline_Glyph_Stroke(
     glyph: Option<&FT_OutlineGlyphOwned>,
     stroker: FT_Stroker,
@@ -2273,6 +2285,13 @@ fn stroke_outline_glyph_general(
     let parse_status = FT_Stroker_ParseOutline(stroker, Some(&glyph.outline), 0);
     if parse_status != FT_Err_Ok {
         return Err(parse_status);
+    }
+    if stroker_used_unverified_closed_round_path(stroker) {
+        // The closed round-path state machine now follows FreeType source
+        // shape, but its full contour geometry is not yet exact enough to
+        // replace the maintained glyph-level fallback.  Keep the existing
+        // public lane exact until the lower route is verified against pinned C.
+        return Err(FT_Err_Unimplemented_Feature);
     }
 
     let mut n_points = 0;
@@ -3334,6 +3353,7 @@ struct StrokerState {
     right_contours: FT_UInt,
     border_counts_valid: bool,
     line_segments: FT_UInt,
+    closed_round_path_unverified: bool,
     left_border: StrokeBorderState,
     right_border: StrokeBorderState,
     left_outline: FT_OutlineSnapshot,
@@ -3617,6 +3637,7 @@ impl StrokerState {
             right_contours: 0,
             border_counts_valid: true,
             line_segments: 0,
+            closed_round_path_unverified: false,
             left_border: StrokeBorderState::new(),
             right_border: StrokeBorderState::new(),
             left_outline: FT_OutlineSnapshot::default(),
@@ -3658,6 +3679,7 @@ impl StrokerState {
         self.right_contours = 0;
         self.border_counts_valid = true;
         self.line_segments = 0;
+        self.closed_round_path_unverified = false;
         self.left_border.reset();
         self.right_border.reset();
         self.left_outline = FT_OutlineSnapshot::default();
@@ -3829,6 +3851,34 @@ impl StrokerState {
         self.center = to;
         self.line_segments = self.line_segments.saturating_add(1);
         self.border_counts_valid = false;
+    }
+
+    fn finalize_closed_round_path(&mut self) -> bool {
+        if self.subpath_open
+            || self.line_segments == 0
+            || self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int
+        {
+            return false;
+        }
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:1907-1930` closes non-open
+        // subpaths by adding a final line back to the subpath start if needed,
+        // processing the final join against the first segment angle, then
+        // closing the right border in forward order and the left border in
+        // reverse order.
+        if !ft_stroker_is_small(self.center.x - self.subpath_start.x)
+            || !ft_stroker_is_small(self.center.y - self.subpath_start.y)
+        {
+            self.append_line_segment_candidate(self.subpath_start);
+        }
+
+        self.angle_out = self.subpath_angle;
+        self.process_corner(self.subpath_line_length);
+        self.right_border.close(false);
+        self.left_border.close(true);
+        self.border_counts_valid = false;
+        self.closed_round_path_unverified = true;
+        true
     }
 
     fn set_open_horizontal_line_outline(&mut self) {
@@ -4947,6 +4997,9 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             entry.state.right_points = 18;
             entry.state.right_contours = 1;
             entry.state.border_counts_valid = true;
+            return FT_Err_Ok;
+        }
+        if entry.state.finalize_closed_round_path() {
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
