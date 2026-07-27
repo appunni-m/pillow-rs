@@ -28,9 +28,9 @@ public `PIL.ImageFont` behavior.
 ## Current measured checkpoint: 2026-07-27
 
 - Command: `font-tests-coverage-with-freetype`
-- Run: `9d1b2e91-2166-4988-8798-e6fd69060482`
-- Snapshot: `56f9fc44-93cf-400c-aa70-3449c4adce1b`
-- Commit: `1352ed73c8a0e3301fa8a0bf9ce693b06729783b` plus local bitmap variadic public-parameter rows
+- Run: `ddef8738-2d9f-46af-ba59-fee5f0d830df`
+- Snapshot: `0f7fd2d1-4fee-4927-b8ee-08cad4257343`
+- Commit: `e53ce226dffaaf5b67b679d76db5c11ebb6c9448`
 - Result: passed, ingested
 - `pillow-rs/src/font/default_aileron.rs`: regions `24/24` (`100.00%`)
 - `pillow-rs/src/font/mod.rs`: regions `487/487` (`100.00%`)

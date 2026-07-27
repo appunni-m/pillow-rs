@@ -306,11 +306,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `9d1b2e91-2166-4988-8798-e6fd69060482`
-- Snapshot: `56f9fc44-93cf-400c-aa70-3449c4adce1b`
+- Run: `ddef8738-2d9f-46af-ba59-fee5f0d830df`
+- Snapshot: `0f7fd2d1-4fee-4927-b8ee-08cad4257343`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `1352ed73c8a0e3301fa8a0bf9ce693b06729783b` plus local bitmap variadic public-parameter rows
+- Commit measured: `e53ce226dffaaf5b67b679d76db5c11ebb6c9448`
 
 Target file metrics:
 
@@ -415,7 +415,7 @@ Latest Font wrapper movement:
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`56f9fc44-93cf-400c-aa70-3449c4adce1b`:
+`0f7fd2d1-4fee-4927-b8ee-08cad4257343`:
 
 - `91`, `105`: generic and rare mapped FreeType error branches. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
