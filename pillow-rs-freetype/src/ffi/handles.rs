@@ -4473,15 +4473,12 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             entry.state.start_first_line_segment(*to);
             return FT_Err_Ok;
         }
-        if entry.state.line_segments == 1 {
-            // FreeType 2.14.3 continues accumulating unfinalized border state
-            // here; finalized public counts become observable only after
-            // `FT_Stroker_EndSubPath`.  Corner processing/export is still
-            // guarded by the maintained routes below.
-            entry.state.append_line_segment_candidate(*to);
-            return FT_Err_Ok;
-        }
-        FT_Err_Unimplemented_Feature
+        // FreeType 2.14.3 `src/base/ftstroke.c:1303-1337` has no
+        // segment-count limit.  Keep appending candidate border endpoints for
+        // every later line segment; public geometry remains guarded by
+        // `FT_Stroker_EndSubPath` until corner processing is ported.
+        entry.state.append_line_segment_candidate(*to);
+        FT_Err_Ok
     })
 }
 
