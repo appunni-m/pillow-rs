@@ -25241,6 +25241,7 @@ fn stroker_lifecycle_action(case: &InputCase) -> Result<(&'static str, i32), Str
             Ok(("export-border", 3))
         }
         "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c" => Ok(("unparsed", 5)),
+        "ftstroke.FT_Stroker.lifecycle_contract" => Ok(("parsed", 6)),
         _ => Err(format!(
             "{} is not an exact stroker lifecycle/no-op parity route",
             case.case_id
@@ -25272,6 +25273,12 @@ fn stroker_lifecycle_output(action: &str) -> Value {
             "export_unparsed_noop": true,
             "rewind_called": true,
             "done_called": true
+        }),
+        "parsed" => json!({
+            "lifecycle_status_sequence": [0, 0, 0, 0, 0, 0, 0],
+            "handle_pointer_class": "non-null until done",
+            "point_count": 21,
+            "contour_count": 2
         }),
         _ => unreachable!(),
     }
@@ -25313,6 +25320,63 @@ fn rust_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 Some(&mut outline),
             );
             FT_Stroker_Rewind(stroker);
+        }
+        "parsed" => {
+            let set_status = {
+                FT_Stroker_Set(
+                    stroker,
+                    96,
+                    FT_STROKER_LINECAP_ROUND as FT_Int,
+                    FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                    65_536,
+                );
+                FT_Err_Ok
+            };
+            let start = FT_Vector { x: 0, y: 0 };
+            let p1 = FT_Vector { x: 640, y: 0 };
+            let p2 = FT_Vector { x: 640, y: 640 };
+            let begin_status = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+            let line1_status = if begin_status == FT_Err_Ok {
+                FT_Stroker_LineTo(stroker, Some(&p1))
+            } else {
+                begin_status
+            };
+            let line2_status = if line1_status == FT_Err_Ok {
+                FT_Stroker_LineTo(stroker, Some(&p2))
+            } else {
+                line1_status
+            };
+            let end_status = if line2_status == FT_Err_Ok {
+                FT_Stroker_EndSubPath(stroker)
+            } else {
+                line2_status
+            };
+            let mut point_count = 0;
+            let mut contour_count = 0;
+            let counts_status = if end_status == FT_Err_Ok {
+                FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+            } else {
+                end_status
+            };
+            let mut exported = FT_OutlineSnapshot::default();
+            if counts_status == FT_Err_Ok {
+                FT_Stroker_Export(stroker, Some(&mut exported));
+            }
+            FT_Stroker_Done(stroker);
+            return Ok(ok(json!({
+                "lifecycle_status_sequence": [
+                    err,
+                    set_status,
+                    begin_status,
+                    line1_status,
+                    line2_status,
+                    end_status,
+                    counts_status
+                ],
+                "handle_pointer_class": "non-null until done",
+                "point_count": point_count,
+                "contour_count": contour_count
+            })));
         }
         _ => unreachable!(),
     }
@@ -25362,6 +25426,65 @@ fn c_stroker_lifecycle(case: &InputCase) -> Result<RunOutput, String> {
                 ptr::null_mut(),
             );
             c_abi::FT_Stroker_Rewind(stroker);
+        }
+        "parsed" => {
+            c_abi::FT_Stroker_Set(
+                stroker,
+                96,
+                FT_STROKER_LINECAP_ROUND as FT_Int,
+                FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            let set_status = FT_Err_Ok;
+            let start = c_abi::FT_Vector { x: 0, y: 0 };
+            let p1 = c_abi::FT_Vector { x: 640, y: 0 };
+            let p2 = c_abi::FT_Vector { x: 640, y: 640 };
+            let begin_status = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+            let line1_status = if begin_status == FT_Err_Ok {
+                c_abi::FT_Stroker_LineTo(stroker, &p1)
+            } else {
+                begin_status
+            };
+            let line2_status = if line1_status == FT_Err_Ok {
+                c_abi::FT_Stroker_LineTo(stroker, &p2)
+            } else {
+                line1_status
+            };
+            let end_status = if line2_status == FT_Err_Ok {
+                c_abi::FT_Stroker_EndSubPath(stroker)
+            } else {
+                line2_status
+            };
+            let mut point_count = 0;
+            let mut contour_count = 0;
+            let counts_status = if end_status == FT_Err_Ok {
+                c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+            } else {
+                end_status
+            };
+            let mut points = [c_abi::FT_Vector::default(); 128];
+            let mut tags = [0u8; 128];
+            let mut contours = [0u16; 16];
+            let mut exported = c_empty_outline(&mut points, &mut tags, &mut contours);
+            if counts_status == FT_Err_Ok {
+                c_abi::FT_Stroker_Export(stroker, &mut exported);
+            }
+            c_abi::FT_Stroker_Done(stroker);
+            c_done_library(library);
+            return Ok(ok(json!({
+                "lifecycle_status_sequence": [
+                    err,
+                    set_status,
+                    begin_status,
+                    line1_status,
+                    line2_status,
+                    end_status,
+                    counts_status
+                ],
+                "handle_pointer_class": "non-null until done",
+                "point_count": point_count,
+                "contour_count": contour_count
+            })));
         }
         _ => unreachable!(),
     }

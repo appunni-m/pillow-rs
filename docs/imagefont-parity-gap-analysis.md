@@ -373,6 +373,7 @@ It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 1
 
 Latest focused ftstroke evidence after the export-append runner update:
 
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`: 59/59 runnable rows pass, 9 rows remain pending. The parsed `FT_Stroker.lifecycle_contract` row now validates New, Set, BeginSubPath, two LineTo calls, EndSubPath, GetCounts, Export, and Done status/count behavior through pinned C, Rust FFI, C ABI, and WASM ABI.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`: 4/4 runnable rows pass, 4 rows remain pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: 1/1 runnable row passes, 3 rows remain pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`: 7/7 runnable rows pass, 0 pending. This now includes `append_to_existing_outline` with sentinel-prefix preservation and contour-index offset comparison against the pinned C oracle.
@@ -380,4 +381,4 @@ Latest focused ftstroke evidence after the export-append runner update:
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
-- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 181 `pending-route` cases overall, down from 183 after promoting the two export append rows to real runtime parity. The project still cannot claim complete FreeType-backed ImageFont parity yet.
+- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 180 `pending-route` cases overall, down from 183 after promoting the two export append rows and the parsed stroker lifecycle row to real runtime parity. The project still cannot claim complete FreeType-backed ImageFont parity yet.

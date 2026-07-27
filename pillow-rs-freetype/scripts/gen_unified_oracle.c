@@ -19360,6 +19360,8 @@ static void print_stroker_lifecycle_output(const char* action) {
         printf("]}");
     } else if (streq(action, "unparsed")) {
         printf("{\"error\":0,\"stroker_nonnull\":true,\"set_called\":true,\"export_unparsed_noop\":true,\"rewind_called\":true,\"done_called\":true}");
+    } else if (streq(action, "parsed")) {
+        printf("{\"lifecycle_status_sequence\":[0,0,0,0,0,0,0],\"handle_pointer_class\":\"non-null until done\",\"point_count\":21,\"contour_count\":2}");
     }
 }
 
@@ -19405,6 +19407,40 @@ static int emit_stroker_lifecycle(int argc, char** argv) {
         FT_Stroker_Export(stroker, &outline);
         FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT, &outline);
         FT_Stroker_Rewind(stroker);
+    } else if (streq(action, "parsed")) {
+        FT_Stroker_Set(stroker, 96, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 65536);
+        FT_Vector start = { 0, 0 };
+        FT_Vector p1 = { 640, 0 };
+        FT_Vector p2 = { 640, 640 };
+        FT_Error begin_status = FT_Stroker_BeginSubPath(stroker, &start, 0);
+        FT_Error line1_status = begin_status ? begin_status : FT_Stroker_LineTo(stroker, &p1);
+        FT_Error line2_status = line1_status ? line1_status : FT_Stroker_LineTo(stroker, &p2);
+        FT_Error end_status = line2_status ? line2_status : FT_Stroker_EndSubPath(stroker);
+        FT_UInt point_count = 0;
+        FT_UInt contour_count = 0;
+        FT_Error counts_status = end_status ? end_status : FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+        if (!counts_status) {
+            FT_Vector points[128] = {0};
+            unsigned char tags[128] = {0};
+            unsigned short contours[16] = {0};
+            FT_Outline exported = {0, 0, points, tags, contours, 0};
+            FT_Stroker_Export(stroker, &exported);
+        }
+        FT_Stroker_Done(stroker);
+        printf("{");
+        print_status(FT_Err_Ok);
+        printf(",\"output\":{\"lifecycle_status_sequence\":[%d,%d,%d,%d,%d,%d,%d],\"handle_pointer_class\":\"non-null until done\",\"point_count\":%u,\"contour_count\":%u}}\n",
+               new_error,
+               0,
+               begin_status,
+               line1_status,
+               line2_status,
+               end_status,
+               counts_status,
+               point_count,
+               contour_count);
+        FT_Done_FreeType(library);
+        return 0;
     } else if (!streq(action, "new") && !streq(action, "done")) {
         FT_Stroker_Done(stroker);
         FT_Done_FreeType(library);

@@ -1603,10 +1603,7 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
     if glyph_stroke_pending:
         return glyph_stroke_pending
     pending_case_groups = {
-        (
-            "ftstroke.FT_Stroker_New.valid_library_allocates_stroker",
-            "ftstroke.FT_Stroker.lifecycle_contract",
-        ): (
+        ("ftstroke.FT_Stroker_New.valid_library_allocates_stroker",): (
             "FT_Stroker allocation/lifecycle parity needs a maintained "
             "non-null stroker object route proving library allocation, "
             "attribute storage, owned border buffers, and final cleanup across "
@@ -5095,6 +5092,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftstroke.FT_Stroker_New.valid_library_allocates_stroker": "FT_Stroker_New non-null allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers": "FT_Stroker_Done non-null release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c": "FT_Stroker unparsed non-null handle lifecycle validates New, Set, unparsed Export/ExportBorder no-op, Rewind, and Done through pinned C oracle, Rust FFI, C ABI, and WASM ABI; path geometry/count lifecycle remains pending",
+        "ftstroke.FT_Stroker.lifecycle_contract": "FT_Stroker parsed lifecycle validates New, Set, BeginSubPath, two LineTo calls, EndSubPath, GetCounts, Export, and Done status/count behavior through pinned C oracle, Rust FFI, C ABI, and WASM ABI; exported join geometry remains pending elsewhere",
         "ftstroke.FT_Stroker_Export.invalid_inputs_noop": "FT_Stroker_Export null/invalid-input no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_Export.append_to_existing_outline": "FT_Stroker_Export append-to-existing-outline behavior validates sentinel preservation plus point/tag/contour offset appends through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop": "FT_Stroker_ExportBorder null/invalid-border/unparsed-stroker no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

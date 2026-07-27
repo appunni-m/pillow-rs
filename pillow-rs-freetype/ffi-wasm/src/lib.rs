@@ -2797,6 +2797,49 @@ pub fn abi_support_stroker_lifecycle(action: i32) -> bool {
             );
             rust_ffi::FT_Stroker_Rewind(stroker);
         }
+        6 => {
+            rust_ffi::FT_Stroker_Set(
+                stroker,
+                96,
+                rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+                rust_ffi::FT_STROKER_LINEJOIN_ROUND as FT_Int,
+                65_536,
+            );
+            let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+            let p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+            let p2 = rust_ffi::FT_Vector { x: 640, y: 640 };
+            let begin_status = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+            let line1_status = if begin_status == rust_ffi::FT_Err_Ok {
+                rust_ffi::FT_Stroker_LineTo(stroker, Some(&p1))
+            } else {
+                begin_status
+            };
+            let line2_status = if line1_status == rust_ffi::FT_Err_Ok {
+                rust_ffi::FT_Stroker_LineTo(stroker, Some(&p2))
+            } else {
+                line1_status
+            };
+            let end_status = if line2_status == rust_ffi::FT_Err_Ok {
+                rust_ffi::FT_Stroker_EndSubPath(stroker)
+            } else {
+                line2_status
+            };
+            let mut point_count = 0;
+            let mut contour_count = 0;
+            let counts_status = if end_status == rust_ffi::FT_Err_Ok {
+                rust_ffi::FT_Stroker_GetCounts(
+                    stroker,
+                    Some(&mut point_count),
+                    Some(&mut contour_count),
+                )
+            } else {
+                end_status
+            };
+            if counts_status != rust_ffi::FT_Err_Ok || point_count == 0 || contour_count == 0 {
+                rust_ffi::FT_Stroker_Done(stroker);
+                return false;
+            }
+        }
         _ => return false,
     }
     rust_ffi::FT_Stroker_Done(stroker);
