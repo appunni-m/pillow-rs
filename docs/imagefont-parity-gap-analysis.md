@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `26a439e20`
+Rust/source fixture commit reviewed: `5286c6c45`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
