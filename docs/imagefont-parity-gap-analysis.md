@@ -63,6 +63,10 @@ Post SBIX scope triage Coverage MCP run: `bb843016-9bd5-4368-88b5-2dd06f6e2944`
 
 Post SBIX scope triage Coverage MCP snapshot: `4eece08b-8058-4fd4-b709-0b5a739773da`
 
+Post load-failure error-row Coverage MCP run: `bccd8d3c-a47f-45e6-abaf-31ce3989f074`
+
+Post load-failure error-row Coverage MCP snapshot: `3c8d6600-5f52-4f6b-8f85-25e30bfd43b8`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -81,8 +85,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 403 input-only rows execute.
-- 403 rows match live Pillow 12.2.0 exactly.
+- 407 input-only rows execute.
+- 407 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -212,6 +216,23 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   for `FT_Err_Name_Table_Missing` would be false coverage. Keep this as lower
   FreeType fixture discovery work until pinned C exposes the exact error through
   a real same-input public route.
+- Load-failure error-row expansion: four input-only constructor rows now cover
+  distinct Pillow 12.2.0 `ImageFont.truetype` errors from maintained lower
+  assets without storing expected output in JSON:
+  `font.load_failure.hinter_code_overflow`,
+  `font.load_failure.hinter_nested_defs`,
+  `font.load_failure.too_many_function_defs`, and
+  `font.load_failure.too_many_instruction_defs`. `make -C pillow-rs
+  font-tests` passes `407/407` live-oracle rows. Coverage MCP run
+  `bccd8d3c-a47f-45e6-abaf-31ce3989f074` passed and ingested snapshot
+  `3c8d6600-5f52-4f6b-8f85-25e30bfd43b8`. Direct
+  `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
+  branches, `162/173` functions, and `2612/2696` regions with the same seven
+  broad-suite markers. The rows are still useful parity coverage because they
+  prove real public constructor error mapping for `code overflow`, `nested
+  DEFS`, `too many function definitions`, and `too many instruction
+  definitions`; they are not a claimed fix for the static tuple-start markers
+  at lines `253` and `271`.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -314,7 +335,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.layout_failure.json` | 1 |
 | `font.load.json` | 25 |
 | `font.load_default_imagefont.json` | 1 |
-| `font.load_failure.json` | 8 |
+| `font.load_failure.json` | 12 |
 | `font.load_path.json` | 1 |
 | `font.render_text.json` | 7 |
 | `font.render_text_binary.json` | 10 |
@@ -323,7 +344,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 403 |
+| total | 407 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -740,7 +761,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 403-row Font fixture corpus.
+The current implementation is good enough to trust the active 407-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and

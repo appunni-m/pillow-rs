@@ -123,6 +123,66 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.load_failure.hinter_code_overflow",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-fdef-index-overflow.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.hinter_nested_defs",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-nested-fdef.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.too_many_function_defs",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/maxp-v1-header-only.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.too_many_instruction_defs",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }
