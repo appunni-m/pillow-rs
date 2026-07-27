@@ -288,6 +288,15 @@ pub fn imagefont_native_getsize(
     font.native_getsize(text)
 }
 
+/// Return Pillow native `_imagingft.Font.render()` mask and offset.
+pub fn imagefont_native_render(
+    font: &FreeTypeFont,
+    text: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.native_render(text, options)
+}
+
 /// Return Pillow native `_imagingft.Font` public face attributes.
 pub fn imagefont_native_face_attrs(
     font: &FreeTypeFont,

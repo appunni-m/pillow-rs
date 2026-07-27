@@ -178,6 +178,16 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 "offset": [x, y],
             }))
         }
+        "native_render" => {
+            let mut options = text_options(params)?;
+            options.stroke_filled = params
+                .get("stroke_filled")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let (width, height, pixels, offset) =
+                pillow_rs::imagefont_native_render(&font, text(params)?.as_ref(), &options)?;
+            Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
+        }
         "native_getvaraxes" => Ok(variation_axes_value(
             pillow_rs::imagefont_native_getvaraxes(&font)?,
         )),

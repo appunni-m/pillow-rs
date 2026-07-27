@@ -627,6 +627,14 @@ pub(crate) fn native_getsize(
     Ok(((right - left, bottom - top), (left, top)))
 }
 
+pub(crate) fn native_render(
+    font: &FreeTypeFont,
+    text: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    getmask2_with_options(font, text, options)
+}
+
 pub(crate) fn native_face_attrs(
     font: &FreeTypeFont,
 ) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {

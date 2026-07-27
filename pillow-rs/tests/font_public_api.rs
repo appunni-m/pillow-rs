@@ -41,7 +41,7 @@ struct ParameterCoverage {
     covered: BTreeSet<String>,
 }
 
-const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 40] = [
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 41] = [
     "ImageFont.getbbox",
     "ImageFont.info",
     "ImageFont.getlength",
@@ -71,6 +71,7 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 40] = [
     "native_face_attrs",
     "native_getlength_26dot6",
     "native_getsize",
+    "native_render",
     "native_getvaraxes",
     "native_getvarnames",
     "native_setvaraxes",
@@ -84,7 +85,7 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 40] = [
     "validate_transposed_length",
 ];
 
-const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 17] = [
+const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 18] = [
     "draw_text",
     "font_size",
     "get_transposed_mask",
@@ -94,6 +95,7 @@ const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 17] = [
     "native_face_attrs",
     "native_getlength_26dot6",
     "native_getsize",
+    "native_render",
     "native_getvaraxes",
     "native_getvarnames",
     "native_setvaraxes",
@@ -280,7 +282,7 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
     ("truetype", "layout_engine", "RAQM"),
 ];
 
-const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 45] = [
+const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 46] = [
     ("imagefont_from_bytes", "truetype"),
     ("imagefont_from_bytes_with_options", "truetype"),
     ("imagefont_get_variation_axes", "get_variation_axes"),
@@ -317,6 +319,7 @@ const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 45] = [
         "native_getlength_26dot6",
     ),
     ("imagefont_native_getsize", "native_getsize"),
+    ("imagefont_native_render", "native_render"),
     ("imagefont_native_getvaraxes", "native_getvaraxes"),
     ("imagefont_native_getvarnames", "native_getvarnames"),
     ("imagefont_native_setvaraxes", "native_setvaraxes"),

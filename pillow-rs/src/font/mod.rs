@@ -220,6 +220,15 @@ impl FreeTypeFont {
         imagingft::native_getsize(self, text)
     }
 
+    /// Return Pillow native `_imagingft.Font.render()` mask and offset.
+    pub fn native_render(
+        &self,
+        text: &str,
+        options: &ImageFontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        imagingft::native_render(self, text, options)
+    }
+
     /// Return Pillow native `_imagingft.Font` public face attributes.
     pub fn native_face_attrs(&self) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
         imagingft::native_face_attrs(self)
