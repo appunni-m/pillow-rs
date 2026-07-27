@@ -1180,3 +1180,15 @@ Current request classification for `imagingft.rs` region coverage:
   mixed-geometry rows, then fixing any exact C/Rust divergence they expose. Do
   not promote them or add public Font rows until the same-input lower route
   exists and passes exact oracle comparison.
+- Set/Rewind reset-count correction after that audit: the generated harness
+  already had maintained C/Rust/C-ABI/WASM routes for
+  `ftstroke.FT_Stroker_Set.clears_existing_path`,
+  `ftstroke.FT_Stroker_Rewind.clears_previous_path`, and
+  `ftstroke.FT_Stroker_Rewind.set_calls_rewind`. Running those rows through
+  `test-pending-case` passed `1/1` each, and the generated route audit now
+  classifies all three as `real-parity` with public count outputs before and
+  after reset. The normal lanes verify this split:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Set` passes
+  `2/2` runnable rows with `2` pending attribute/geometry rows, and
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Rewind`
+  passes `3/3` runnable rows with `1` pending attribute-preservation row.
