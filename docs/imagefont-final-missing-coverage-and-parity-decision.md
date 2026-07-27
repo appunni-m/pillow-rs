@@ -18,16 +18,16 @@ row and that row compares Rust output/error payloads against the live Pillow
 
 - Repo: `/Users/lazytrot/work/pillow-rs`
 - Branch: `main`
-- Current HEAD when this document was written:
-  `5e6071cf5eb9af959e7e340f6ff7fa598e311e1d`
+- Current implementation commit reviewed:
+  `21086af6f5fff5921b554e3b6fe76d6613b5874d`
 - Last trusted Coverage MCP command:
   `font-tests-coverage-with-freetype-pillow-12-2`
 - Last trusted Coverage MCP run:
-  `828c2d47-1a0f-4742-b5d9-8a9f49641ad3`
+  `126a382e-f67f-4f04-9422-6033145acceb`
 - Last trusted Coverage MCP snapshot:
-  `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`
+  `e67116f1-f510-46ba-80a0-23768d214d3a`
 - Last trusted measured commit:
-  `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7`
+  `21086af6f5fff5921b554e3b6fe76d6613b5874d`
 - Oracle: repo-local `.oracle-venv/bin/python`
 - Oracle Pillow version: `12.2.0`
 - Oracle RAQM status: unavailable (`features.check_feature("raqm") == false`)
@@ -40,17 +40,10 @@ row and that row compares Rust output/error payloads against the live Pillow
 
 Trusted status from the last Coverage MCP run:
 
-- 350 active input-only Font rows passed.
+- 352 active input-only Font rows passed.
 - Expected output/errors were generated at runtime from live Pillow 12.2.0.
 - Input JSON did not contain stored expected pixels, hashes, or error payloads.
-
-Current working-tree status at this document:
-
-- Working tree has 352 active input rows after the embedded-bitmap/SBIT sweep.
-- The new SBIT rows are intentionally not yet trusted: they expose a real Rust
-  mismatch against live Pillow instead of passing.
-- Do not claim the working tree has complete ImageFont parity until the SBIT
-  mismatch is fixed and Coverage MCP has produced a new passing snapshot.
+- The embedded-bitmap/SBIT sweep is now trusted for the active public rows.
 
 ## Pillow 12.2.0 public `ImageFont` surface
 
@@ -70,13 +63,13 @@ metrics, rasterization, and error semantics must stay in Rust core.
 
 ## Direct Rust Font coverage status
 
-Last trusted snapshot: `4e04ba48-488e-4798-87f6-7fc34d4ad4ab`.
+Last trusted snapshot: `e67116f1-f510-46ba-80a0-23768d214d3a`.
 
 | File | Lines | Branches | Functions | Regions | Decision |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs/src/font/mod.rs` | 372/372 100.00% | n/a | 80/80 100.00% | 494/494 100.00% | Adapter methods are fully reached by active public rows. |
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | Default Aileron path is covered. |
-| `pillow-rs/src/font/imagingft.rs` | 1642/1666 98.56% | 246/254 96.85% | 163/174 93.68% | 2547/2645 96.29% | FreeType-backed Font still has real gaps. |
+| `pillow-rs/src/font/imagingft.rs` | 1686/1712 98.48% | 252/262 96.18% | 165/176 93.75% | 2618/2718 96.32% | FreeType-backed Font still has real gaps. |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | Bitmap ImageFont behavior passes active rows but is not complete by function/region coverage. |
 
 The overall workspace coverage from that suite is not the ImageFont decision
@@ -129,10 +122,10 @@ High-risk lower coverage from the trusted snapshot:
 | File | Lines | Branches | Functions | Regions | ImageFont risk |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs-freetype/src/ffi/handles.rs` | 1107/8186 13.52% | 77/2075 3.71% | 94/586 16.04% | 1442/11495 12.54% | Very high: handles, face/glyph wrappers, stroker, variation and color/bitmap routes. |
-| `pillow-rs-freetype/src/api.rs` | 208/1186 17.54% | 35/294 11.90% | 25/105 23.81% | 275/1737 15.83% | High: lower public font API under ImageFont. |
-| `pillow-rs-freetype/src/font.rs` | 1286/4747 27.09% | 162/702 23.08% | 126/392 32.14% | 1777/6728 26.41% | High: load, names, metrics, charmap, glyph selection. |
+| `pillow-rs-freetype/src/api.rs` | 263/1186 22.18% | 37/294 12.59% | 28/105 26.67% | 327/1737 18.83% | High: lower public font API under ImageFont. |
+| `pillow-rs-freetype/src/font.rs` | 1298/4747 27.34% | 166/702 23.65% | 127/392 32.40% | 1794/6728 26.66% | High: load, names, metrics, charmap, glyph selection. |
 | `pillow-rs-freetype/src/render.rs` | 965/2459 39.24% | 157/486 32.30% | 76/158 48.10% | 1343/3432 39.13% | High: rendered mask byte parity. |
-| `pillow-rs-freetype/src/tt/sbit.rs` | 100/814 12.29% | 13/72 18.06% | 13/108 12.04% | 186/1269 14.66% | Very high: embedded bitmap/color glyph behavior is weak. |
+| `pillow-rs-freetype/src/tt/sbit.rs` | 254/814 31.20% | 21/72 29.17% | 19/108 17.59% | 375/1269 29.55% | Still high-risk, but active mono/gray/gray2/gray4/BGRA SBIT rows now execute real decoder paths. |
 | `pillow-rs-freetype/src/tt/cmap.rs` | 271/809 33.50% | 39/174 22.41% | 10/58 17.24% | 395/1089 36.27% | High: Unicode, private-use, symbol, and encoding behavior. |
 | `pillow-rs-freetype/src/tt/glyf.rs` | 174/545 31.93% | 34/96 35.42% | 8/20 40.00% | 219/694 31.56% | High: TrueType outline behavior. |
 | `pillow-rs-freetype/src/tt/cff.rs` | 355/735 48.30% | 37/112 33.04% | 29/81 35.80% | 507/1087 46.64% | High: CFF/OpenType outlines. |
@@ -170,7 +163,7 @@ lower FreeType paths remain uncovered by public Pillow rows.
 | `Layout.RAQM`, `direction`, `features`, `language` | `ImageFontTextOptions`, `PilError::UnsupportedLibraqm` | No-libraqm error parity is covered. | Successful libraqm shaping is not implemented. Complete `PIL.ImageFont` parity cannot be claimed while this is excluded. |
 | `FreeTypeFont.__getstate__` / `__setstate__` | none | Not implemented. | Missing if Python class-shape/state parity is in scope. Exclude explicitly if the product target is metrics/rendering only. |
 
-## 3. Current concrete mismatch found by the SBIT sweep
+## 3. SBIT sweep result
 
 Existing SBIT rows used text `"A"` with generated SBIT fonts. Inspection showed
 the bitmap strike glyphs are actually mapped to private-use codepoints such as
@@ -185,7 +178,7 @@ The working tree now changes/adds public rows in:
 These use private-use inputs such as `"\ue000"` and `"\ue001"` to force real
 embedded bitmap behavior.
 
-Current failing example:
+Original failing example before commit `21086af6f5fff5921b554e3b6fe76d6613b5874d`:
 
 - Case: `font.getmask.sbit_mono_private_base`
 - Pillow 12.2.0: status `ok`, mode `L`, size `[10, 2]`, non-empty pixels.
@@ -202,14 +195,25 @@ First-divergence analysis:
 - For bitmap-only glyphs, the cbox is zero, so Rust allocates a zero-height
   public mask even though the later render pass has bitmap pixels available.
 
-Decision:
+Fix:
 
-- This is a real Rust implementation bug exposed by a live Pillow public input.
-- Fix the adapter to use an effective layout cbox for bitmap glyph slots:
-  bitmap bounds should come from `bitmap_left`, `bitmap_top`, `bitmap.width`,
-  and `bitmap.rows`.
-- After the fix, run `make -C pillow-rs font-tests`, then a Coverage MCP run.
-- Only then update the trusted row count and SBIT coverage numbers.
+- `pillow-rs/src/font/imagingft.rs` now uses an effective `layout_cbox` for
+  glyph-run bbox calculation.
+- Outline glyphs continue using `slot.outline_cbox`.
+- Bitmap glyphs use `bitmap_left`, `bitmap_top`, `bitmap.width`, and
+  `bitmap.rows`.
+- `bitmap_coverage` now handles `FT_PIXEL_MODE_GRAY2`,
+  `FT_PIXEL_MODE_GRAY4`, and `FT_PIXEL_MODE_BGRA`; GRAY2/GRAY4 samples are
+  expanded to Pillow-compatible 8-bit coverage bytes.
+
+Verification:
+
+- `make -C pillow-rs font-tests` passed.
+- Coverage MCP run `126a382e-f67f-4f04-9422-6033145acceb` passed.
+- Snapshot `e67116f1-f510-46ba-80a0-23768d214d3a` was ingested for commit
+  `21086af6f5fff5921b554e3b6fe76d6613b5874d`.
+- `pillow-rs-freetype/src/tt/sbit.rs` moved from 100/814 lines and 186/1269
+  regions to 254/814 lines and 375/1269 regions.
 
 ## 4. Wrong or suspect Rust implementation that needs a decision
 
@@ -226,7 +230,7 @@ generally proven for real glyph outlines.
 
 Decision:
 
-- Highest-priority implementation gap after the current SBIT bbox bug.
+- Highest-priority implementation gap after the SBIT bbox fix.
 - Remove fixture-specific stroker shortcuts over time; do not add more.
 - Implement general `FT_Stroker_ParseOutline`, segment routes, border export,
   and render-to-bitmap behavior.
@@ -324,16 +328,17 @@ Files:
 - `pillow-rs-freetype/src/render.rs`
 - `pillow-rs/src/font/imagingft.rs`
 
-The SBIT sweep proves current fixture design was insufficient: rows using
+The SBIT sweep proved current fixture design was insufficient: rows using
 `"A"` did not necessarily hit embedded bitmap glyph images. Private-use mapped
-glyphs now expose a real mismatch.
+glyphs exposed and then fixed a real layout-bbox mismatch.
 
 Decision:
 
-- Fix effective bitmap glyph bbox in public Font layout.
-- Then keep minimal SBIT rows covering mono, gray, gray2, gray4, BGRA/color, and
-  multi-glyph bitmap cases.
-- Use Coverage MCP to confirm `sbit.rs` decoder regions actually move.
+- Keep the new minimal SBIT rows covering mono, gray, gray2, gray4, BGRA/color,
+  and a second gray glyph.
+- Continue adding only independent public rows for still-uncovered SBIT formats,
+  strikes, compound glyphs, and malformed-table errors.
+- Use Coverage MCP to confirm additional `sbit.rs` decoder regions move.
 
 ### G. Charmap and encoding
 
@@ -355,47 +360,39 @@ Decision:
 
 ## 5. Action order
 
-1. Fix SBIT bitmap glyph layout bbox in `imagingft.rs`.
-2. Re-run `make -C pillow-rs font-tests`.
-3. Run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
-4. Update this document with the new run ID, snapshot ID, row count, and
-   `imagingft.rs` / `sbit.rs` metrics.
-5. Then address general stroker and `stroke_filled=true`.
-6. Re-evaluate and remove/prove stroked extent clamp.
-7. Add only minimal, independent public Pillow rows for:
+1. Address general stroker and `stroke_filled=true`.
+2. Re-evaluate and remove/prove stroked extent clamp.
+3. Add only minimal, independent public Pillow rows for:
    - stroke and stroke-border;
    - fixed-point rounding;
    - bitmap PILfont edge behavior;
    - charmap/encoding;
    - reachable FreeType error classifications;
    - variation rows that alter metrics/rendering.
-8. Decide separately whether API class-shape parity includes Rust-level
+4. Add further SBIT rows only for still-uncovered independent decoder/error
+   paths.
+5. Decide separately whether API class-shape parity includes Rust-level
    `BitmapImageFont`, `FreeTypeFont`, `TransposedFont`, and state roundtrips.
 
 ## Final decision statement
 
 Trusted now:
 
-- The last Coverage MCP snapshot proves exact runtime parity for the previous
-  350-row input-only `PIL.ImageFont` corpus.
+- The last Coverage MCP snapshot proves exact runtime parity for the current
+  352-row input-only `PIL.ImageFont` corpus.
 - The harness compares against live Pillow 12.2.0 and does not use stored output
   payloads in input JSON.
 
 Not trusted now:
 
 - Complete `PIL.ImageFont` parity.
-- The current 352-row working tree, because the new SBIT rows expose a real
-  failing mismatch.
 - General stroke/stroke-border behavior.
 - Successful RAQM shaping.
 - Full bitmap PILfont function/region coverage.
-- Embedded bitmap/color glyph behavior until the SBIT mismatch is fixed and
-  Coverage MCP confirms real decoder coverage.
+- Complete embedded bitmap/color glyph behavior beyond the active SBIT rows.
 - Full charmap/encoding behavior.
 - Exhaustive rare FreeType error behavior through public inputs.
 
-The immediate next engineering action should be the SBIT bitmap glyph bbox fix,
-because it is a concrete public Pillow parity failure found by uncovered-path
-analysis. The next major design action should be the general stroker and
-stroke-border implementation, because that is the largest remaining known
-public `FreeTypeFont` behavior gap.
+The immediate next major engineering action should be the general stroker and
+stroke-border implementation, because that is the largest remaining known public
+`FreeTypeFont` behavior gap.
