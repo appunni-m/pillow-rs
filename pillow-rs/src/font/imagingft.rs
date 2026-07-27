@@ -1280,10 +1280,14 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
             value.saturating_mul(17)
         }
         ffi::FT_PIXEL_MODE_BGRA => {
-            let offset = row_start + column.saturating_mul(4);
-            let Some(bgra) = bitmap.buffer.get(offset..offset.saturating_add(4)) else {
-                return 0;
-            };
+            let offset = row_start + column * 4;
+            // `fontdone` SBIT decoding mirrors FreeType's BGRA bitmap shape:
+            // pitch is `width * 4`, buffer length is `pitch * rows`, and this
+            // helper is called only for pixels inside `bitmap.width/rows`.
+            // Malformed embedded bitmap tables must be rejected in the lower
+            // FreeType-compatible decoder, not hidden by Pillow `_imagingft`.
+            debug_assert!(offset + 4 <= bitmap.buffer.len());
+            let bgra = &bitmap.buffer[offset..offset + 4];
             gray_for_premultiplied_srgb_bgra(bgra)
         }
         _ => {
