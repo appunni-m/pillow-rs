@@ -28,15 +28,16 @@ public `PIL.ImageFont` behavior.
 ## Current measured checkpoint: 2026-07-27
 
 - Command: `font-tests-coverage-with-freetype`
-- Run: `ae3f06a2-17c9-4e66-b2e4-1cf47ed820d2`
-- Snapshot: `8e308451-b1c8-4fc5-8eda-97ad50ebd2b1`
-- Commit: `ce9ef82178eaa55c699c9f8bef9a8fefa3e8ebc9`
+- Run: `9264cb97-1f0b-4ffa-bb72-bc57a37c2db5`
+- Snapshot: `3dc2db95-1480-468f-bcc8-a168e44feee2`
+- Commit: `f495b80873e599a3605ac684c6c08017d804a139`
 - Result: passed, ingested
 - `pillow-rs/src/font/default_aileron.rs`: regions `24/24` (`100.00%`)
 - `pillow-rs/src/font/mod.rs`: regions `252/252` (`100.00%`)
-- `pillow-rs/src/font/pilfont.rs`: regions `504/542` (`92.99%`), with no
-  uncovered executable lines or partial branches reported by Coverage MCP.
-- `pillow-rs/src/font/imagingft.rs`: regions `1303/1349` (`96.59%`).
+- `pillow-rs/src/font/pilfont.rs`: regions `1014/1094` (`92.69%`), with
+  complete branch coverage and one reported doc-comment line gap in the current
+  LLVM source map.
+- `pillow-rs/src/font/imagingft.rs`: regions `2627/2727` (`96.33%`).
 
 The remaining region gap is not manifest drift: the active manifest/test
 contract already targets `PIL.ImageFont` and verifies the public operation and
@@ -279,11 +280,14 @@ Coverage snapshots:
 Current blocker to literal 100% region coverage:
 
 - The previous `Font::Bitmap`/`shift_bitmap_mask` blocker has been removed.
-- Remaining gaps are now FreeType-only: load/request-size error mapping,
+- Remaining gaps are lower-level FreeType-backed implementation routes inside
+  the public `PIL.ImageFont` target: load/request-size error mapping,
   glyph-load/render fallback, uncommon bitmap coverage modes, clipping guard
-  branches, and source-map wrapper lines. These require real Pillow oracle
-  inputs or implementation simplification; they must not be covered with
-  mocks or Rust self-comparison.
+  branches, and source-map wrapper lines. They are not a separate FreeType-only
+  target for completion. Each one still requires a real public Pillow
+  `PIL.ImageFont` oracle input, a documented public ImageFont blocker, or
+  implementation simplification; they must not be covered with mocks or Rust
+  self-comparison.
 
 Rejected during execution:
 
@@ -303,8 +307,10 @@ truth-level Pillow parity.
 The rule for every added case is strict:
 
 - input JSON remains input-only;
-- output and error expectations come from the repo-local live Pillow
-  `_imagingft` oracle at runtime;
+- output and error expectations come from the repo-local live
+  `PIL.ImageFont` oracle at runtime; `_imagingft` is asserted only for
+  `FreeTypeFont`-backed rows where Pillow itself routes through that native
+  extension;
 - no Rust test may compare Rust to itself;
 - no expected pixel hex, hashes, status, or error text may be stored in the
   input corpus;
@@ -745,9 +751,12 @@ Risk:
 ## Acceptance checklist for eventual 100%
 
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP `imagingft-tests-coverage-fixed compatibility registration` passes and ingests a snapshot.
-- `coverage_query(view="file", file_path="pillow-rs/src/font/imagingft.rs")`
-  reports:
+- Coverage MCP `font-tests-coverage-with-freetype` passes and ingests a
+  snapshot.
+- `coverage_query(view="file", file_path=...)` reports 100% region coverage
+  for every active `pillow-rs/src/font/` file participating in
+  `PIL.ImageFont` parity, including `pilfont.rs`, `mod.rs`,
+  `default_aileron.rs`, and the FreeType-backed `imagingft.rs` route:
   - `covered_regions == total_regions`;
   - no remaining uncovered or partial branch ranges.
 - Every new fixture row is input-only and live-oracle-generated.
