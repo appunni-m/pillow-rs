@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `ca7f028efe80465bc17111457d36a7950fe88afb`
+Rust commit reviewed: `69b9b0579cb992e173273caf24ee51ef2637fc7d`
 
-Coverage MCP run: `290687f0-e29e-461a-a781-377f662f9173`
+Coverage MCP run: `1b409a3e-cf8c-4285-8b25-3aa159875f61`
 
-Coverage MCP snapshot: `c671fbf6-109d-42db-8a9e-57b0a57dcc25`
+Coverage MCP snapshot: `bd507111-1ee2-480f-8934-4bf65ade4646`
 
 Suite: `font-with-freetype`
 
@@ -31,7 +31,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `c671fbf6-109d-42db-8a9e-57b0a57dcc25`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `bd507111-1ee2-480f-8934-4bf65ade4646`.
+- Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -108,7 +109,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `c671fbf6-109d-42db-8a9e-57b0a57dcc25`.
+Coverage snapshot: `bd507111-1ee2-480f-8934-4bf65ade4646`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -170,7 +171,7 @@ These lower-level `pillow-rs-freetype` files sit underneath `ImageFont` FreeType
 
 Pillow exposes `direction`, `features`, and `language` on `FreeTypeFont.getlength`, `getbbox`, `getmask`, and `getmask2`. Those successful shaping paths require libraqm.
 
-Rust currently treats successful libraqm shaping as out of scope and uses a dedicated `PilError::UnsupportedLibraqm` internally. The parity harness maps this to Pillow's no-libraqm error category/message. This is correct only for the no-libraqm environment.
+Rust currently treats successful libraqm shaping as out of scope and uses a dedicated `PilError::UnsupportedLibraqm` internally. The parity harness now asserts every active `direction`/`features`/`language` row uses that exact internal variant before mapping the public payload to Pillow's no-libraqm `KeyError` category/message. This is correct only for the no-libraqm environment.
 
 Decision: do not claim complete `PIL.ImageFont` parity while successful RAQM shaping is excluded.
 
