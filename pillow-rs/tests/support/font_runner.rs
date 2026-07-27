@@ -148,6 +148,36 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             let (ascent, descent) = pillow_rs::imagefont_getmetrics(&font);
             Ok(json!({"type": "metrics", "value": [ascent, descent]}))
         }
+        "native_face_attrs" => {
+            let (family, style, ascent, descent, height, x_ppem, y_ppem, glyphs) =
+                pillow_rs::imagefont_native_face_attrs(&font);
+            Ok(json!({
+                "type": "native_face_attrs",
+                "value": {
+                    "family": family,
+                    "style": style,
+                    "ascent": ascent,
+                    "descent": descent,
+                    "height": height,
+                    "x_ppem": x_ppem,
+                    "y_ppem": y_ppem,
+                    "glyphs": glyphs,
+                },
+            }))
+        }
+        "native_getlength_26dot6" => Ok(json!({
+            "type": "native_length_26dot6",
+            "value": pillow_rs::imagefont_native_getlength_26dot6(&font, text(params)?.as_ref())?,
+        })),
+        "native_getsize" => {
+            let ((width, height), (x, y)) =
+                pillow_rs::imagefont_native_getsize(&font, text(params)?.as_ref())?;
+            Ok(json!({
+                "type": "native_size",
+                "size": [width, height],
+                "offset": [x, y],
+            }))
+        }
         "getlength" => Ok(json!({
             "type": "length",
             "value": getlength(&font, params)?,

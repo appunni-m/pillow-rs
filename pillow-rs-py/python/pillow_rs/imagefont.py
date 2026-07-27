@@ -128,6 +128,7 @@ class FreeTypeFont:
         self.index = index
         self.encoding = encoding
         self.layout_engine = layout_engine
+        self.font = self._rust_font
         # Note: PIL fallback for pixel-identical font rendering was removed.
         # Font rendering uses pillow-rs-freetype. Font rendering may differ
         # slightly from PIL's FreeType output in edge cases.
@@ -146,6 +147,7 @@ class FreeTypeFont:
         font.index = index
         font.encoding = encoding
         font.layout_engine = layout_engine
+        font.font = font._rust_font
         font._pil_font = None
         return font
 
@@ -372,6 +374,7 @@ def load_default(size=None):
     font._rust_font = _core.ImageFont.load_default(float(size))
     font.size = float(size)
     font.layout_engine = Layout.BASIC
+    font.font = font._rust_font
     font._is_default = True
     font._pil_font = None
     return font

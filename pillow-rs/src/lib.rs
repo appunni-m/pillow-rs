@@ -275,6 +275,26 @@ pub fn imagefont_getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilEr
     font.getlength(text)
 }
 
+/// Return Pillow native `_imagingft.Font.getlength()` 26.6 advance.
+pub fn imagefont_native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Result<i32, PilError> {
+    font.native_getlength_26dot6(text)
+}
+
+/// Return Pillow native `_imagingft.Font.getsize()` size and offset tuple.
+pub fn imagefont_native_getsize(
+    font: &FreeTypeFont,
+    text: &str,
+) -> Result<((i32, i32), (i32, i32)), PilError> {
+    font.native_getsize(text)
+}
+
+/// Return Pillow native `_imagingft.Font` public face attributes.
+pub fn imagefont_native_face_attrs(
+    font: &FreeTypeFont,
+) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
+    font.native_face_attrs()
+}
+
 /// Return Pillow's public text length for byte text.
 pub fn imagefont_getlength_bytes(font: &FreeTypeFont, text: &[u8]) -> Result<f32, PilError> {
     font.getlength_bytes(text)

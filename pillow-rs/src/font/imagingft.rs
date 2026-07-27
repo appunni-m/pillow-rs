@@ -563,6 +563,36 @@ pub(crate) fn getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError
     Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
+pub(crate) fn native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Result<i32, PilError> {
+    validate_text_length(text)?;
+    length_from_basic_layout(font, text)
+}
+
+pub(crate) fn native_getsize(
+    font: &FreeTypeFont,
+    text: &str,
+) -> Result<((i32, i32), (i32, i32)), PilError> {
+    let (left, top, right, bottom) = getbbox(font, text)?;
+    Ok(((right - left, bottom - top), (left, top)))
+}
+
+pub(crate) fn native_face_attrs(
+    font: &FreeTypeFont,
+) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
+    let (family, style) = getname_optional(font);
+    let metrics = font.engine.metrics;
+    (
+        family,
+        style,
+        pixel(metrics.ascender as i64) as u32,
+        (-pixel(metrics.descender as i64)) as u32,
+        pixel(metrics.height as i64) as u32,
+        u32::from(metrics.x_ppem),
+        u32::from(metrics.y_ppem),
+        font.engine.face.num_glyphs,
+    )
+}
+
 pub(crate) fn getlength_with_options(
     font: &FreeTypeFont,
     text: &str,

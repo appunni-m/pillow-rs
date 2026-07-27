@@ -1747,8 +1747,56 @@ impl PyFont {
         Ok((PyImage { inner }, offset))
     }
 
-    fn getlength(&self, text: &str) -> PyResult<f32> {
-        pillow_rs::imagefont_getlength(&self.inner, text).map_err(map_error)
+    fn getlength(&self, text: &str) -> PyResult<i32> {
+        pillow_rs::imagefont_native_getlength_26dot6(&self.inner, text).map_err(map_error)
+    }
+
+    fn getsize(&self, text: &str) -> PyResult<((i32, i32), (i32, i32))> {
+        pillow_rs::imagefont_native_getsize(&self.inner, text).map_err(map_error)
+    }
+
+    #[getter]
+    fn family(&self) -> Option<String> {
+        pillow_rs::imagefont_native_face_attrs(&self.inner)
+            .0
+            .map(str::to_owned)
+    }
+
+    #[getter]
+    fn style(&self) -> Option<String> {
+        pillow_rs::imagefont_native_face_attrs(&self.inner)
+            .1
+            .map(str::to_owned)
+    }
+
+    #[getter]
+    fn ascent(&self) -> u32 {
+        pillow_rs::imagefont_native_face_attrs(&self.inner).2
+    }
+
+    #[getter]
+    fn descent(&self) -> u32 {
+        pillow_rs::imagefont_native_face_attrs(&self.inner).3
+    }
+
+    #[getter]
+    fn height(&self) -> u32 {
+        pillow_rs::imagefont_native_face_attrs(&self.inner).4
+    }
+
+    #[getter]
+    fn x_ppem(&self) -> u32 {
+        pillow_rs::imagefont_native_face_attrs(&self.inner).5
+    }
+
+    #[getter]
+    fn y_ppem(&self) -> u32 {
+        pillow_rs::imagefont_native_face_attrs(&self.inner).6
+    }
+
+    #[getter]
+    fn glyphs(&self) -> i64 {
+        pillow_rs::imagefont_native_face_attrs(&self.inner).7
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None))]
