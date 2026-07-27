@@ -749,3 +749,18 @@ Current request classification for `imagingft.rs` region coverage:
   yet, and fixing it belongs in `pillow-rs-freetype` only if a real public
   ImageFont/imagingft path needs cubic stroked-outline behavior. It is not a
   current `imagingft.rs` region-coverage closure.
+- Coverage MCP run `d66dc67c-9dd9-475e-8199-6714399508b5` passed and ingested
+  snapshot `2767a61f-652e-4883-bd40-1f0b17b86e39` for commit `8c5f6e60f`.
+  Current `imagingft.rs` coverage remains `1664/1686` lines, `249/254`
+  branches, `162/173` functions, and `2608/2700` regions. The reported gaps
+  are still lines `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
+  Source-context review classifies them as follows: line `91` is the successful
+  `ImageFont` constructor return with one unhit compiler branch; lines `253`
+  and `271` are entries inside the static Pillow/FreeType error-message table;
+  line `796` is a section/comment boundary mapped with branch metadata by
+  llvm-cov; lines `826` and `829` are helper/function-boundary mappings around
+  `floor26`; line `928` is the `bbox_from_run_with_flags` function signature.
+  None of these seven ranges currently identifies a missing Pillow
+  `_imagingft.c` public behavior by itself. The remaining non-100% region
+  count is therefore coverage-mapping noise plus static table data unless a
+  new Pillow/ImageFont behavior gap is found by reverse API comparison.
