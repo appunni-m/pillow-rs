@@ -1112,3 +1112,14 @@ Current request classification for `imagingft.rs` region coverage:
   `0` pending. `FT_Glyph_StrokeBorder` remains `4/4` passing. This affects
   Pillow only through `ImageFont` stroked text paths (`stroke_width != 0`);
   non-stroked Font metrics/masks are unchanged.
+- Coverage MCP after committing the border mapping fix:
+  `font-tests-coverage-with-freetype-pillow-12-2` run
+  `c2f4cec6-f16e-49c7-bf84-51422d5c14a6` passed and ingested snapshot
+  `0ffd8b0a-c1cf-4018-9dd3-f81e028f3764` for commit `f096a6d92`.
+  `pillow-rs/src/font/imagingft.rs` remains `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions
+  (`96.88%`). The remaining reported ranges are unchanged: `91`, `253`,
+  `271`, `796`, `826`, `829`, `831`, and `928`. This run proves the live
+  Pillow Font oracle suite still passes and the promoted lower stroker row does
+  not regress active ImageFont coverage, but it does not close the remaining
+  `imagingft.rs` region gaps.
