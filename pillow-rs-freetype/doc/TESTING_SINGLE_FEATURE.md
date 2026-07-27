@@ -14,6 +14,7 @@ single operation or case.
 | `make test-op OP=load_glyph` | explicit `load_glyph` cases only | <5 s |
 | `make test-op OP=render_glyph` | explicit `render_glyph` cases only | <5 s |
 | `make test-case CASE=...` | matching case/subject IDs only | <5 s |
+| `make test-pending-case CASE=...` | one exact pending `case_id` promoted into comparison | <5 s |
 | `make test-list` | selection diagnostic, no comparison | <1 s |
 
 The oracle cache lives under `tests/fixtures/outputs/unified_oracle_cache/`. Its
@@ -31,6 +32,11 @@ make -C pillow-rs-freetype test-op OP=load_glyph
 
 # Run only cases whose case_id/subject/case matches a substring
 make -C pillow-rs-freetype test-case CASE=freetype.set_transform
+
+# Diagnostic: promote exactly one pending route into the runtime comparison.
+# This is expected to fail until the implementation is fixed; use it instead
+# of editing route-audit classification by hand.
+make -C pillow-rs-freetype test-pending-case CASE=ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap
 
 # Diagnostic: print selection summary without executing
 make -C pillow-rs-freetype test-list
@@ -83,6 +89,7 @@ All env vars are read at runtime by `tests/unified_fixture_parity.rs`.
 |--------------------------------------|------------------------------------------------------|
 | `FONTDONE_UNIFIED_OPERATION_FILTER`  | Substring match on `case.operation`                  |
 | `FONTDONE_UNIFIED_CASE_FILTER`       | Substring match on `case_id`, `subject`, or `case`   |
+| `FONTDONE_UNIFIED_INCLUDE_PENDING_CASE` | Exact `case_id` of one pending route to compare anyway |
 | `FONTDONE_UNIFIED_CASE_LIMIT`        | Stop after N selected concrete cases                  |
 | `FONTDONE_UNIFIED_ORACLE_REFRESH`    | If set, skip oracle cache; re-run C oracle           |
 | `FONTDONE_UNIFIED_SELECTION_ONLY`    | Print case selection summary, don't run comparisons  |
@@ -103,10 +110,16 @@ All env vars are read at runtime by `tests/unified_fixture_parity.rs`.
    make test-case CASE=recursive-composite
    ```
 
-4. **Select one explicit case.** Use `make test-case CASE=...` rather than
+4. **Promote one pending route only when tracing a known blocker.** Use
+   `make test-pending-case CASE=<exact-case-id>` when a route is intentionally
+   pending but the oracle and runner can execute it. This keeps the normal
+   route audit truthful while producing a real C-vs-Rust failure without
+   editing `scripts/check_public_api_inputs.py`.
+
+5. **Select one explicit case.** Use `make test-case CASE=...` rather than
    changing the input set or applying a hidden cardinality limit.
 
-5. **Profile slow cases.** Enable profiling to find bottlenecks:
+6. **Profile slow cases.** Enable profiling to find bottlenecks:
    ```bash
    FONTDONE_UNIFIED_PROFILE=1 \
    make test-op OP=render_glyph
