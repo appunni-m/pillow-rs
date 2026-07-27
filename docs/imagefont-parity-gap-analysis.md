@@ -19,6 +19,10 @@ Latest harness-guard Coverage MCP run: `35b97347-c509-4e62-b260-4ce480a07c06`
 
 Latest harness-guard Coverage MCP snapshot: `e6e22c8d-e3f6-4270-828a-41dc982a6d43`
 
+Post BeginSubPath route Coverage MCP run: `a7b8db54-c778-46ac-9b32-783fc79ca657`
+
+Post BeginSubPath route Coverage MCP snapshot: `02cb206b-f8ca-4473-87b6-d2880ae61e23`
+
 Post wide-curve Coverage MCP run: `c766c267-e09f-4196-b204-736a8b44d8bd`
 
 Post wide-curve Coverage MCP snapshot: `27ad41d7-ae88-40cb-b286-224f227a4e5e`
@@ -1508,3 +1512,9 @@ current blockers.
   Route audit moves to `real-parity=4858` and `pending-route=164`. This is a
   lower FreeType stroker-route coverage/parity improvement; it does not by
   itself claim a new direct `imagingft.rs` region or public Pillow Font behavior.
+  Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passed
+  after this commit as run `a7b8db54-c778-46ac-9b32-783fc79ca657` and ingested
+  snapshot `02cb206b-f8ca-4473-87b6-d2880ae61e23` for commit `42cdfb2df`.
+  Direct `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions with the
+  same seven markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
