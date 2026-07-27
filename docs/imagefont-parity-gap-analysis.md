@@ -195,6 +195,12 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   caller touches those entries; do not add that crashy native row to the active
   oracle corpus unless the harness first gains an explicit, isolated
   crash-status contract for Pillow itself.
+- Python facade follow-up: `make test-imagefont-facade` now compares the same
+  safe native variation fallback fonts through `FreeTypeFont.font.getvarnames`
+  and `getvaraxes`, and compares native `setvaraxes([])` plus the non-variable
+  `OSError("invalid argument")` case against Pillow 12.2.0. The crashy
+  missing-subfamily `getvarnames()` case remains excluded from the focused
+  Python facade suite for the same oracle-safety reason.
 - Commit `ccecf6682` removes the zero-flag `length_from_basic_layout` wrapper
   and routes the two BASIC length callers directly into
   `length_from_basic_layout_with_flags(..., 0)`. This is behavior-neutral and

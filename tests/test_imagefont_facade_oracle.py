@@ -12,6 +12,8 @@ FONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/font
 PILFONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/font/input/pilfont"
 DEJAVU = FONT_ROOT / "DejaVuSans.ttf"
 VARIABLE = FONT_ROOT / "variable-named-instances.ttf"
+VARIABLE_WINDOWS_FALLBACK = FONT_ROOT / "variable-name-windows-fallback.ttf"
+VARIABLE_PLATFORM1_FALLBACK = FONT_ROOT / "variable-name-platform1-fallback.ttf"
 VARIABLE_MISSING_SUBFAMILY = FONT_ROOT / "variable-name-missing-subfamily.ttf"
 COURB08 = PILFONT_ROOT / "courb08.pil"
 NON_BEHAVIORAL_PILLOW_IMAGEFONT_NAMES = {
@@ -316,12 +318,27 @@ def test_imagefont_freetype_native_variation_subset_matches_pillow(RSPIL):
     pil_factory = lambda: PILImageFont.truetype(VARIABLE, 20)
 
     assert _native_variation_observation(rs_factory) == _native_variation_observation(pil_factory)
+    for font_path in (VARIABLE_WINDOWS_FALLBACK, VARIABLE_PLATFORM1_FALLBACK):
+        rs_fallback_factory = lambda font_path=font_path: RSPIL.ImageFont.truetype(font_path, 20)
+        pil_fallback_factory = lambda font_path=font_path: PILImageFont.truetype(font_path, 20)
+        assert _native_variation_observation(rs_fallback_factory) == (
+            _native_variation_observation(pil_fallback_factory)
+        )
     for instance_index in (0, 1, 3, 13, -1):
         assert _native_variation_after_setvarname(rs_factory, instance_index) == (
             _native_variation_after_setvarname(pil_factory, instance_index)
         )
     assert _native_variation_after_setvaraxes(rs_factory, [100, 400]) == (
         _native_variation_after_setvaraxes(pil_factory, [100, 400])
+    )
+    assert _native_variation_after_setvaraxes(rs_factory, []) == (
+        _native_variation_after_setvaraxes(pil_factory, [])
+    )
+
+    rs_non_variable_factory = lambda: RSPIL.ImageFont.truetype(DEJAVU, 20)
+    pil_non_variable_factory = lambda: PILImageFont.truetype(DEJAVU, 20)
+    assert _native_variation_after_setvaraxes(rs_non_variable_factory, [100, 400]) == (
+        _native_variation_after_setvaraxes(pil_non_variable_factory, [100, 400])
     )
 
     rs_missing_factory = lambda: RSPIL.ImageFont.truetype(VARIABLE_MISSING_SUBFAMILY, 20)
