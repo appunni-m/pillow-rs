@@ -38708,27 +38708,67 @@ fn rust_stroked_outline_glyph_to_bitmap(case: &InputCase) -> Result<RunOutput, S
         glyph_to_bitmap_stroker_miter_limit(params)?,
     );
     let render_mode = render_mode_param(params)?;
-    let output = match FT_Load_Glyph(&face, glyph_index_param(params)?, load_flags_param(params)?)
-        .and_then(|slot| FT_Get_Outline_Glyph(Some(&slot)))
-        .and_then(|glyph| FT_Outline_Glyph_Stroke(Some(&glyph), stroker))
-        .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
-    {
-        Ok(glyph) => ok(rust_owned_bitmap_glyph_json(
-            glyph.root.format,
-            glyph.root.advance.x,
-            glyph.root.advance.y,
-            glyph.left,
-            glyph.top,
-            &glyph.bitmap,
-            bool_param(params, "destroy", false)?,
-        )),
-        Err(err) => {
-            maybe_print_pending_stroked_outline_diagnostic(case, stroker, err);
-            error(err)
-        }
+    let output = match FT_Load_Glyph(&face, glyph_index_param(params)?, load_flags_param(params)?) {
+        Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
+            Ok(glyph) => {
+                maybe_print_pending_source_outline_diagnostic(case, &glyph);
+                match FT_Outline_Glyph_Stroke(Some(&glyph), stroker)
+                    .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
+                {
+                    Ok(glyph) => ok(rust_owned_bitmap_glyph_json(
+                        glyph.root.format,
+                        glyph.root.advance.x,
+                        glyph.root.advance.y,
+                        glyph.left,
+                        glyph.top,
+                        &glyph.bitmap,
+                        bool_param(params, "destroy", false)?,
+                    )),
+                    Err(err) => {
+                        maybe_print_pending_stroked_outline_diagnostic(case, stroker, err);
+                        error(err)
+                    }
+                }
+            }
+            Err(err) => error(err),
+        },
+        Err(err) => error(err),
     };
     FT_Stroker_Done(stroker);
     Ok(output)
+}
+
+fn maybe_print_pending_source_outline_diagnostic(case: &InputCase, glyph: &FT_OutlineGlyphOwned) {
+    if !pending_case_is_included(case) {
+        return;
+    }
+
+    let points = glyph
+        .outline
+        .points
+        .iter()
+        .map(|point| format!("({}, {})", point.x, point.y))
+        .collect::<Vec<_>>()
+        .join(",");
+    let tags = glyph
+        .outline
+        .tags
+        .iter()
+        .map(|tag| tag.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let contours = glyph
+        .outline
+        .contours
+        .iter()
+        .map(|contour| contour.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+
+    eprintln!(
+        "pending_stroked_source_outline case_id={} points=[{}] tags=[{}] contours=[{}]",
+        case.case_id, points, tags, contours
+    );
 }
 
 fn maybe_print_pending_stroked_outline_diagnostic(

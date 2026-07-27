@@ -873,14 +873,19 @@ Current request classification for `imagingft.rs` region coverage:
 - The maintained pending-case diagnostic now prints Rust lower stroker state for
   `ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`.
   Current output is `status=7`, left border `24` points / `2` contours, right
-  border `34` points / `2` contours, total `58` points / `4` contours. Pinned C
-  for the same real ImageFont route returns success and reaches left/right
-  border counts `35/37` before exporting a `72`-point stroked outline. This
-  confirms the actionable blocker is lower FreeType stroker geometry/export
-  (`FT_Stroker_ParseOutline` through closed round/conic border export), not the
-  `imagingft.rs` adapter. Do not refactor `pillow-rs-freetype` broadly for this;
-  the next valid implementation edit must be a narrow first-divergence fix
-  inside the stroker segment/corner path, proven against pinned C.
+  border `34` points / `2` contours, total `58` points / `4` contours. The
+  source outline for this exact promoted row is line-only: points
+  `[(512,1014),(279,384),(746,384),(427,1152),(598,1152),(1024,0),(887,0),(793,256),(231,256),(137,0),(0,0)]`,
+  public tags `[61,25,9,25,9,25,9,25,9,25,9]`, and contours `[2,10]`; every
+  tag has on-curve low bits. Pinned C for the same real ImageFont route returns
+  success and reaches left/right border counts `35/37` before exporting a
+  `72`-point stroked outline. This confirms the actionable blocker for this row
+  is lower FreeType round-corner arc/close geometry over line contours, not
+  `imagingft.rs` adapter logic and not `FT_Stroker_ConicTo` input handling. Do
+  not refactor `pillow-rs-freetype` broadly for this; the next valid
+  implementation edit must be a narrow first-divergence fix inside
+  `FT_Stroker_LineTo` / `ft_stroker_process_corner` / `FT_Stroker_EndSubPath`,
+  proven against pinned C.
 - Coverage MCP run `cba2b019-bae9-48cc-9f01-431eaedfdd55` passed and ingested
   snapshot `ab195986-22c9-46e6-9130-e51fb20460ac` for commit `c3593860e`.
   Direct `imagingft.rs` coverage remains unchanged at `1660/1682` lines,
