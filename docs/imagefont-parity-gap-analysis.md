@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `62d94bbdd`
+Rust/source fixture commit reviewed: `ff224c455`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -55,6 +55,10 @@ Post Stroker_Set attribute route Coverage MCP run: `ec803b30-9fde-4a68-8ad0-e192
 
 Post Stroker_Set attribute route Coverage MCP snapshot: `062c2ec9-22f6-4a83-830f-d69db8fe87d3`
 
+Post opened ParseOutline audit Coverage MCP run: `ad315ecf-ce83-43cd-9d3d-0e45a63a2e06`
+
+Post opened ParseOutline audit Coverage MCP snapshot: `a0c5fe67-c988-4690-ad69-d53b97b3b766`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -80,8 +84,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `062c2ec9-22f6-4a83-830f-d69db8fe87d3` from run
-  `ec803b30-9fde-4a68-8ad0-e192ab6e60a0` at commit `62d94bbdd`. Direct
+  `a0c5fe67-c988-4690-ad69-d53b97b3b766` from run
+  `ad315ecf-ce83-43cd-9d3d-0e45a63a2e06` at commit `ff224c455`. Direct
   `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
@@ -1637,3 +1641,16 @@ current blockers.
   Direct `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines,
   `249/254` branches, `162/173` functions, and `2612/2696` regions with the
   same seven markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
+- `FT_Stroker_ParseOutline.opened_outline_success` audit promotion: the row
+  already had a maintained runtime route and normal `make -C
+  pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ParseOutline` passes
+  `6/6` with `0` pending. Commit `ff224c455` corrects the route audit
+  classification from the last `generic-fallback` placeholder to `real-parity`
+  with no runtime code or fixture-output change. Route audit now reports no
+  `generic-fallback` bucket, `real-parity=4863`, and `pending-route=160`.
+  Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passed
+  after this audit correction as run `ad315ecf-ce83-43cd-9d3d-0e45a63a2e06`
+  and ingested snapshot `a0c5fe67-c988-4690-ad69-d53b97b3b766` for commit
+  `ff224c455`. Direct `pillow-rs/src/font/imagingft.rs` remains `1666/1688`
+  lines, `249/254` branches, `162/173` functions, and `2612/2696` regions
+  with the same seven markers.
