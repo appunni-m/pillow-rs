@@ -2340,18 +2340,39 @@ impl PyDraw {
             .map_err(map_error)
     }
 
+    #[pyo3(signature = (xy, text, fill=None, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn text(
         &mut self,
         xy: (f64, f64),
         text: String,
         fill: Option<&Bound<'_, PyAny>>,
         font: Option<&Bound<'_, PyFont>>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
         if let Some(pyfont) = font {
             let borrowed = pyfont.borrow();
+            let options = pillow_rs::ImageFontTextOptions {
+                direction,
+                features,
+                language,
+                stroke_width,
+                anchor,
+                ..pillow_rs::ImageFontTextOptions::default()
+            };
             self.draw
-                .text(xy.0 as i32, xy.1 as i32, &text, &borrowed.inner, color)
+                .text_with_options(
+                    xy.0 as i32,
+                    xy.1 as i32,
+                    &text,
+                    &borrowed.inner,
+                    color,
+                    &options,
+                )
                 .map_err(map_error)
         } else {
             Err(pyo3::exceptions::PyNotImplementedError::new_err(
@@ -2360,6 +2381,7 @@ impl PyDraw {
         }
     }
 
+    #[pyo3(signature = (xy, text, fill=None, font=None, spacing=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn multiline_text(
         &mut self,
         xy: (f64, f64),
@@ -2367,10 +2389,23 @@ impl PyDraw {
         fill: Option<&Bound<'_, PyAny>>,
         font: Option<&Bound<'_, PyFont>>,
         spacing: Option<i32>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
         let sp = spacing.unwrap_or(4) as f64;
         let mut y = xy.1;
+        let options = pillow_rs::ImageFontTextOptions {
+            direction,
+            features,
+            language,
+            stroke_width,
+            anchor,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
         for line in text.split('\n') {
             if line.is_empty() {
                 y += sp + 10.0;
@@ -2379,7 +2414,14 @@ impl PyDraw {
             if let Some(pyfont) = font {
                 let borrowed = pyfont.borrow();
                 self.draw
-                    .text(xy.0 as i32, y as i32, line, &borrowed.inner, color)
+                    .text_with_options(
+                        xy.0 as i32,
+                        y as i32,
+                        line,
+                        &borrowed.inner,
+                        color,
+                        &options,
+                    )
                     .map_err(map_error)?;
                 let (_, h) =
                     pillow_rs::imagefont_text_bbox(&borrowed.inner, line).map_err(map_error)?;
@@ -2395,40 +2437,75 @@ impl PyDraw {
 
     /// Compute text bounding box. Loads default FreeType font if font is None.
     /// Returns (left, top, right, bottom).
-    #[pyo3(signature = (xy, text, font=None))]
+    #[pyo3(signature = (xy, text, font=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn textbbox(
         &mut self,
         xy: (i32, i32),
         text: &str,
         font: Option<&Bound<'_, PyFont>>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
     ) -> PyResult<(i32, i32, i32, i32)> {
+        let options = pillow_rs::ImageFontTextOptions {
+            direction,
+            features,
+            language,
+            stroke_width,
+            anchor,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
         let bbox = match font {
-            Some(f) => pillow_rs::imagefont_getbbox(&f.borrow().inner, text).map_err(map_error)?,
+            Some(f) => {
+                let bbox =
+                    pillow_rs::imagefont_getbbox_with_options(&f.borrow().inner, text, &options)
+                        .map_err(map_error)?;
+                (bbox.0 as i32, bbox.1 as i32, bbox.2 as i32, bbox.3 as i32)
+            }
             None => {
                 let font = pillow_rs::imagefont_load_default(10.0).map_err(map_error)?;
-                pillow_rs::imagefont_getbbox(&font, text).map_err(map_error)?
+                let bbox = pillow_rs::imagefont_getbbox_with_options(&font, text, &options)
+                    .map_err(map_error)?;
+                (bbox.0 as i32, bbox.1 as i32, bbox.2 as i32, bbox.3 as i32)
             }
         };
         Ok((xy.0 + bbox.0, xy.1 + bbox.1, xy.0 + bbox.2, xy.1 + bbox.3))
     }
 
     /// Compute text length in pixels. Loads default FreeType font if font is None.
-    #[pyo3(signature = (text, font=None))]
-    fn textlength(&mut self, text: &str, font: Option<&Bound<'_, PyFont>>) -> PyResult<f64> {
+    #[pyo3(signature = (text, font=None, direction=None, features=None, language=None))]
+    fn textlength(
+        &mut self,
+        text: &str,
+        font: Option<&Bound<'_, PyFont>>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+    ) -> PyResult<f64> {
+        let options = pillow_rs::ImageFontTextOptions {
+            direction,
+            features,
+            language,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
         let w = match font {
             Some(f) => {
-                pillow_rs::imagefont_getlength(&f.borrow().inner, text).map_err(map_error)?
+                pillow_rs::imagefont_getlength_with_options(&f.borrow().inner, text, &options)
+                    .map_err(map_error)?
             }
             None => {
                 let font = pillow_rs::imagefont_load_default(10.0).map_err(map_error)?;
-                pillow_rs::imagefont_getlength(&font, text).map_err(map_error)?
+                pillow_rs::imagefont_getlength_with_options(&font, text, &options)
+                    .map_err(map_error)?
             }
         };
         Ok(w as f64)
     }
 
     /// Compute bounding box for multiline text. Matches PIL's exact algorithm.
-    #[pyo3(signature = (xy, text, font=None, spacing=4, align="left"))]
+    #[pyo3(signature = (xy, text, font=None, spacing=4, align="left", direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn multiline_textbbox(
         &mut self,
         xy: (i32, i32),
@@ -2436,6 +2513,11 @@ impl PyDraw {
         font: Option<&Bound<'_, PyFont>>,
         spacing: i32,
         align: &str,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
     ) -> PyResult<(i32, i32, i32, i32)> {
         let default_font;
         let f: &pillow_rs::ImageFont = if let Some(f) = font {
@@ -2444,21 +2526,38 @@ impl PyDraw {
             default_font = pillow_rs::imagefont_load_default(10.0).map_err(map_error)?;
             &default_font
         };
+        let options = pillow_rs::ImageFontTextOptions {
+            direction,
+            features,
+            language,
+            stroke_width,
+            anchor,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
         let lines: Vec<&str> = text.split('\n').collect();
         if lines.is_empty() {
             return Ok((xy.0, xy.1, xy.0, xy.1));
         }
         if lines.len() == 1 {
-            let bbox = pillow_rs::imagefont_getbbox(f, text).map_err(map_error)?;
-            return Ok((xy.0 + bbox.0, xy.1 + bbox.1, xy.0 + bbox.2, xy.1 + bbox.3));
+            let bbox =
+                pillow_rs::imagefont_getbbox_with_options(f, text, &options).map_err(map_error)?;
+            return Ok((
+                xy.0 + bbox.0 as i32,
+                xy.1 + bbox.1 as i32,
+                xy.0 + bbox.2 as i32,
+                xy.1 + bbox.3 as i32,
+            ));
         }
         // Pillow ImageText.Text::_split advances by the bottom of "A"'s
         // FreeType bbox, then unions each line's full bbox. Using only mask
         // width/height here loses the ascender bearing (and italic overhang).
-        let line_height = spacing + pillow_rs::imagefont_getbbox(f, "A").map_err(map_error)?.3;
+        let line_height = spacing
+            + pillow_rs::imagefont_getbbox_with_options(f, "A", &options)
+                .map_err(map_error)?
+                .3 as i32;
         let widths: Vec<f32> = lines
             .iter()
-            .map(|line| pillow_rs::imagefont_getlength(f, line))
+            .map(|line| pillow_rs::imagefont_getlength_with_options(f, line, &options))
             .collect::<Result<Vec<_>, _>>()
             .map_err(map_error)?;
         let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
@@ -2475,7 +2574,8 @@ impl PyDraw {
                 "right" => x0 + max_width as f64 - widths[i] as f64,
                 _ => x0,
             };
-            let bbox = pillow_rs::imagefont_getbbox(f, line).map_err(map_error)?;
+            let bbox =
+                pillow_rs::imagefont_getbbox_with_options(f, line, &options).map_err(map_error)?;
             left = left.min(line_x + bbox.0 as f64);
             top = top.min(line_y + bbox.1 as f64);
             right = right.max(line_x + bbox.2 as f64);
