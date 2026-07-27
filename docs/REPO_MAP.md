@@ -273,11 +273,10 @@ generated reports, build outputs, and package installs.
 |       |   `-- mod.rs
 |       |-- error.rs
 |       |-- font/
-|       |   |-- courb08.pil.b64
-|       |   |-- courb08.png.b64
+|       |   |-- courb08.pil
 |       |   |-- default_aileron.LICENSE.txt
-|       |   |-- default_aileron.b64
 |       |   |-- default_aileron.rs
+|       |   |-- default_aileron.ttf
 |       |   |-- imagingft.rs
 |       |   |-- mod.rs
 |       |   `-- pilfont.rs
