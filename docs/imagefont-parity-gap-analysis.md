@@ -1098,3 +1098,17 @@ Current request classification for `imagingft.rs` region coverage:
   This makes the next actionable divergence border close/export ordering or
   contour start normalization, not the wide-stroke negative-sector math and not
   `_imagingft.rs`.
+- Border mapping fix after that diagnostic: FreeType 2.14.3 public border
+  index `FT_STROKER_BORDER_LEFT` is `borders[0]`, and
+  `src/base/ftstroke.c:1232-1263` initializes that slot from
+  `center + normal`. The generic Rust border builder stored that same slot in a
+  field named `right_border`, so `FT_Stroker_Export` was exporting the two
+  generated border contours in the opposite public order for real parsed
+  outlines. Mapping the live generic border slots back to FreeType's public
+  constants makes the focused row exact: `make -C pillow-rs-freetype
+  test-pending-case CASE=ftstroke.FT_Glyph_Stroke.destroy_original_option`
+  passes `1/1`, and the normal `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_Glyph_Stroke` lane now passes `8/8` runnable rows with
+  `0` pending. `FT_Glyph_StrokeBorder` remains `4/4` passing. This affects
+  Pillow only through `ImageFont` stroked text paths (`stroke_width != 0`);
+  non-stroked Font metrics/masks are unchanged.

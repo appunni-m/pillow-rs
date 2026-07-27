@@ -1527,13 +1527,7 @@ def ftstroke_glyph_stroke_pending_reason(row: ConcreteInput) -> str | None:
     """Case-specific FT_Glyph_Stroke/StrokeBorder rows needing real routing."""
     if not row.operation.startswith("ftstroke."):
         return None
-    exact_cases = {
-        "ftstroke.FT_Glyph_Stroke.destroy_original_option": (
-            "FT_Glyph_Stroke destroy-option parity needs a maintained "
-            "glyph-object route proving destroy=0 preserves the input glyph "
-            "and destroy=1 releases or replaces it exactly like pinned C"
-        ),
-    }
+    exact_cases = {}
     return exact_cases.get(row.case_id)
 
 
@@ -6592,6 +6586,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "FT_Glyph_Stroke outline glyph route validates exact replacement "
             "outline points, tags, contours, CBox, status sequence, and "
             "preserve-original ownership through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftstroke.glyph_stroke"
+        and row.case_id == "ftstroke.FT_Glyph_Stroke.destroy_original_option"
+    ):
+        return (
+            "FT_Glyph_Stroke destroy-option route validates exact replacement "
+            "outline points, tags, contours, CBox, status sequence, and "
+            "destroy-original ownership through pinned C oracle, Rust FFI, "
             "C ABI, and WASM ABI"
         )
     if (
