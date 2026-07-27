@@ -3320,6 +3320,10 @@ struct StrokerState {
     center: FT_Vector,
     subpath_start: FT_Vector,
     subpath_corner: FT_Vector,
+    angle_in: FT_Angle,
+    subpath_angle: FT_Angle,
+    line_length: FT_Fixed,
+    subpath_line_length: FT_Fixed,
     subpath_open: bool,
     conic_success_pending: bool,
     handle_wide_strokes: bool,
@@ -3329,6 +3333,8 @@ struct StrokerState {
     right_contours: FT_UInt,
     border_counts_valid: bool,
     line_segments: FT_UInt,
+    left_border: StrokeBorderState,
+    right_border: StrokeBorderState,
     left_outline: FT_OutlineSnapshot,
     right_outline: FT_OutlineSnapshot,
 }
@@ -3349,6 +3355,95 @@ fn ft_stroker_is_small(value: FT_Pos) -> bool {
     // FreeType `src/base/ftstroke.c:69-71` defines `FT_EPSILON` as 2 and uses
     // strict bounds for `FT_IS_SMALL`.
     value > -2 && value < 2
+}
+
+const FT_STROKE_TAG_ON: FT_Byte = 1;
+const FT_STROKE_TAG_BEGIN: FT_Byte = 4;
+const FT_STROKE_TAG_END: FT_Byte = 8;
+
+#[derive(Debug, Clone)]
+struct StrokeBorderState {
+    points: Vec<FT_Vector>,
+    tags: Vec<FT_Byte>,
+    start: Option<usize>,
+    movable: bool,
+    valid: bool,
+}
+
+impl StrokeBorderState {
+    fn new() -> Self {
+        Self {
+            points: Vec::new(),
+            tags: Vec::new(),
+            start: None,
+            movable: false,
+            valid: false,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.points.clear();
+        self.tags.clear();
+        self.start = None;
+        self.movable = false;
+        self.valid = false;
+    }
+
+    fn moveto(&mut self, to: FT_Vector) {
+        if self.start.is_some() {
+            self.close(false);
+        }
+        self.start = Some(self.points.len());
+        self.movable = false;
+        self.lineto(to, false);
+    }
+
+    fn lineto(&mut self, to: FT_Vector, movable: bool) {
+        if self.movable {
+            if let Some(point) = self.points.last_mut() {
+                *point = to;
+            }
+        } else {
+            let duplicate = self.start.is_some_and(|start| self.points.len() > start)
+                && self.points.last().is_some_and(|point| {
+                    ft_stroker_is_small(point.x - to.x) && ft_stroker_is_small(point.y - to.y)
+                });
+            if !duplicate {
+                self.points.push(to);
+                self.tags.push(FT_STROKE_TAG_ON);
+            }
+        }
+        self.movable = movable;
+        self.valid = false;
+    }
+
+    fn close(&mut self, reverse: bool) {
+        let Some(start) = self.start else {
+            return;
+        };
+        let count = self.points.len();
+        if count <= start + 1 {
+            self.points.truncate(start);
+            self.tags.truncate(start);
+        } else {
+            let last = count - 1;
+            self.points[start] = self.points[last];
+            self.tags[start] = self.tags[last];
+            self.points.truncate(last);
+            self.tags.truncate(last);
+            let end = self.points.len() - 1;
+
+            if reverse && start + 1 < end {
+                self.points[start + 1..end].reverse();
+                self.tags[start + 1..end].reverse();
+            }
+
+            self.tags[start] |= FT_STROKE_TAG_BEGIN;
+            self.tags[end] |= FT_STROKE_TAG_END;
+        }
+        self.start = None;
+        self.movable = false;
+    }
 }
 
 impl StrokerEntry {
@@ -3378,6 +3473,10 @@ impl StrokerState {
             center: FT_Vector::default(),
             subpath_start: FT_Vector::default(),
             subpath_corner: FT_Vector::default(),
+            angle_in: 0,
+            subpath_angle: 0,
+            line_length: 0,
+            subpath_line_length: 0,
             subpath_open: false,
             conic_success_pending: false,
             handle_wide_strokes: false,
@@ -3387,6 +3486,8 @@ impl StrokerState {
             right_contours: 0,
             border_counts_valid: true,
             line_segments: 0,
+            left_border: StrokeBorderState::new(),
+            right_border: StrokeBorderState::new(),
             left_outline: FT_OutlineSnapshot::default(),
             right_outline: FT_OutlineSnapshot::default(),
         }
@@ -3412,6 +3513,10 @@ impl StrokerState {
         self.center = FT_Vector::default();
         self.subpath_start = FT_Vector::default();
         self.subpath_corner = FT_Vector::default();
+        self.angle_in = 0;
+        self.subpath_angle = 0;
+        self.line_length = 0;
+        self.subpath_line_length = 0;
         self.subpath_open = false;
         self.conic_success_pending = false;
         self.handle_wide_strokes = false;
@@ -3421,8 +3526,60 @@ impl StrokerState {
         self.right_contours = 0;
         self.border_counts_valid = true;
         self.line_segments = 0;
+        self.left_border.reset();
+        self.right_border.reset();
         self.left_outline = FT_OutlineSnapshot::default();
         self.right_outline = FT_OutlineSnapshot::default();
+    }
+
+    fn start_first_line_segment(&mut self, to: FT_Vector) {
+        let mut delta = FT_Vector {
+            x: to.x - self.center.x,
+            y: to.y - self.center.y,
+        };
+        let angle = FT_Atan2(delta.x, delta.y);
+        let line_length = FT_Vector_Length(Some(&delta));
+        FT_Vector_From_Polar(
+            Some(&mut delta),
+            self.radius,
+            angle + FT_ANGLE_PI2 as FT_Angle,
+        );
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:1232-1263` initializes the
+        // right border from center + normal and the left border from center -
+        // normal before the first `LineTo` appends each segment endpoint.
+        let right_start = FT_Vector {
+            x: self.center.x + delta.x,
+            y: self.center.y + delta.y,
+        };
+        let left_start = FT_Vector {
+            x: self.center.x - delta.x,
+            y: self.center.y - delta.y,
+        };
+        self.right_border.moveto(right_start);
+        self.left_border.moveto(left_start);
+
+        let right_to = FT_Vector {
+            x: to.x + delta.x,
+            y: to.y + delta.y,
+        };
+        let left_to = FT_Vector {
+            x: to.x - delta.x,
+            y: to.y - delta.y,
+        };
+        self.right_border.lineto(right_to, true);
+        self.left_border.lineto(left_to, true);
+
+        self.subpath_corner = to;
+        self.subpath_start = self.center;
+        self.angle_in = angle;
+        self.subpath_angle = angle;
+        self.line_length = line_length;
+        self.subpath_line_length = line_length;
+        self.first_point = false;
+        self.center = to;
+        self.line_segments = 1;
+        self.border_counts_valid = false;
     }
 
     fn set_open_horizontal_line_outline(&mut self) {
@@ -4206,11 +4363,7 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             entry.state.left_contours = 1;
             entry.state.right_points = 2;
             entry.state.right_contours = 1;
-            entry.state.border_counts_valid = false;
-            entry.state.line_segments = 1;
-            entry.state.first_point = false;
-            entry.state.subpath_corner = *to;
-            entry.state.center = *to;
+            entry.state.start_first_line_segment(*to);
             return FT_Err_Ok;
         }
         if entry.state.line_segments == 1 {
