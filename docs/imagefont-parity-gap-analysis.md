@@ -228,6 +228,11 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   bbox/length/mask behavior. This is facade parity evidence; the Rust
   core/public Font corpus remains the source of truth for `imagingft.rs` region
   coverage.
+- The same focused facade suite also has a public-surface audit guard: every
+  public `PIL.ImageFont` module name missing from `pillow_rs.ImageFont` must be
+  explicitly classified as a non-behavioral typing/import/internal helper. This
+  caught `MAX_STRING_LENGTH` before it was added to the facade and now prevents
+  silent drift in the behavioral module surface.
 - Coverage MCP ledger run `f3667517-e046-4bc5-ac69-43e87c218b61` executed the
   full Python fixture command at commit `1707c013b`. The overall command failed
   with existing non-ImageFont failures (`Image.effect_spread`, `Image.getim`,
