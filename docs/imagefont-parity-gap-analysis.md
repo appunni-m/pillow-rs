@@ -676,3 +676,12 @@ Current request classification for `imagingft.rs` region coverage:
   lower mono-target route has advanced past status/oracle plumbing but still
   needs exact lower stroked-outline geometry/export before any new public
   `imagingft.rs` row can honestly improve region coverage.
+- Coverage MCP run `976d18fd-5c20-42d6-912f-61470f9a7f37` passed and ingested
+  snapshot `e0784711-576a-4d48-a0cf-77475f6d452c` for commit `e952de545`.
+  Direct `imagingft.rs` coverage is unchanged at `1664/1686` lines,
+  `249/254` branches, `162/173` functions, and `2608/2700` regions. The
+  remaining reported lines are still `91`, `253`, `271`, `796`, `826`, `829`,
+  and `928`; source context classifies them as constructor return
+  instrumentation, static FreeType error-table data, comment/helper boundary
+  markers, and function-signature instrumentation rather than a currently known
+  adapter-owned Pillow `_imagingft.c` behavior gap.
