@@ -588,6 +588,50 @@
       }
     },
     {
+      "case_id": "font.getmask2.hinter_code_overflow_stroked",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-fdef-index-overflow.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.hinter_nested_defs_stroked",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-nested-fdef.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.anchor_middle_middle",
       "operation": "getmask2",
       "inputs": {
