@@ -59,6 +59,10 @@ Post opened ParseOutline audit Coverage MCP run: `ad315ecf-ce83-43cd-9d3d-0e45a6
 
 Post opened ParseOutline audit Coverage MCP snapshot: `a0c5fe67-c988-4690-ad69-d53b97b3b766`
 
+Post SBIX scope triage Coverage MCP run: `bb843016-9bd5-4368-88b5-2dd06f6e2944`
+
+Post SBIX scope triage Coverage MCP snapshot: `4eece08b-8058-4fd4-b709-0b5a739773da`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -178,6 +182,23 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   of requiring temporary edits to `scripts/check_public_api_inputs.py`.
   Historical runs used it to expose the mono-target stroked bitmap blocker; the
   current normal `FT_Glyph_To_Bitmap` lane now passes `11/11` with `0` pending.
+- SBIX route triage after the opened ParseOutline audit: the remaining
+  `ftparams.FT_PARAM_TAG_IGNORE_SBIX.open_face_ignores_sbix` and
+  `ftparams.FT_PARAM_TAG_IGNORE_SBIX.bitmap_only_requires_real_sbix_fixture`
+  rows are lower FreeType `FT_Open_Face` parameter routes, not active
+  `PIL.ImageFont` public-surface gaps. The active ImageFont corpus already
+  covers embedded bitmap/SBIT behavior through live Pillow rows. The SBIX
+  parameter rows should stay in `pillow-rs-freetype` pending-route status until
+  they have maintained C-openable same-input SBIX fixtures and C/Rust/C-ABI/WASM
+  comparison. They must not be imported into `imagingft.rs` or counted toward
+  ImageFont coverage unless a Pillow 12.2.0 `ImageFont` public method exposes a
+  distinct SBIX-ignore behavior. Verification after this triage: route audit
+  remains `real-parity=4863`, `pending-route=160`, with no generic fallback;
+  Coverage MCP run `bb843016-9bd5-4368-88b5-2dd06f6e2944` passed and ingested
+  snapshot `4eece08b-8058-4fd4-b709-0b5a739773da`. Direct
+  `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
+  branches, `162/173` functions, and `2612/2696` regions with the same seven
+  markers.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
