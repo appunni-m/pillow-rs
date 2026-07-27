@@ -83,9 +83,9 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Current-head Coverage MCP run: `ac760bd8-2a7d-4c46-bca6-39e8179b1d7f`
+Current-head Coverage MCP run: `dae8f2a1-7bd5-4460-b97c-0c4550ab5088`
 
-Current-head Coverage MCP snapshot: `93af008f-33b6-4ccd-a98a-bf7dcce5b75e`
+Current-head Coverage MCP snapshot: `a23d0334-82c7-4221-a080-4bda0fc26d11`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -115,9 +115,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `82854a5973855a14c160c48cbc989d9000823d6c` and ingested
-  snapshot `93af008f-33b6-4ccd-a98a-bf7dcce5b75e` from run
-  `ac760bd8-2a7d-4c46-bca6-39e8179b1d7f`. Direct `imagingft.rs` coverage
+  passed at commit `5effb81f31fe26083bf9cff055046ec089149e18` and ingested
+  snapshot `a23d0334-82c7-4221-a080-4bda0fc26d11` from run
+  `dae8f2a1-7bd5-4460-b97c-0c4550ab5088`. Direct `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
   `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
@@ -218,12 +218,13 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   inputs, then verified file-like variation-font reconstruction and variation
   setters still reach Rust.
 - Python ABI oracle coverage now includes
-  `tests/test_imagefont_facade_oracle.py`: six strict-cover tests compare
-  `pillow-rs-py` against Pillow 12.2.0 for `truetype` path-like and byte-path
-  inputs, file-like variation names/axes, both variation setters, and
-  file-like `font_variant(size=...)`. This is facade parity evidence; the
-  Rust core/public Font corpus remains the source of truth for `imagingft.rs`
-  region coverage.
+  `tests/test_imagefont_facade_oracle.py`: fourteen strict-cover tests compare
+  `pillow-rs-py` against Pillow 12.2.0 for module load functions, `Layout`,
+  `truetype` path-like and byte-path inputs, file-like variation names/axes,
+  both variation setters, file-like `font_variant(size=...)`, and
+  `TransposedFont` bbox/length/mask behavior. This is facade parity evidence;
+  the Rust core/public Font corpus remains the source of truth for
+  `imagingft.rs` region coverage.
 - Coverage MCP ledger run `f3667517-e046-4bc5-ac69-43e87c218b61` executed the
   full Python fixture command at commit `1707c013b`. The overall command failed
   with existing non-ImageFont failures (`Image.effect_spread`, `Image.getim`,
