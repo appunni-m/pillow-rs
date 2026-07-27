@@ -1079,3 +1079,14 @@ Current request classification for `imagingft.rs` region coverage:
   passes `4/4`, `make -C pillow-rs-freetype test-ffi-compat` passes, and
   `make -C pillow-rs font-tests` passes. The next divergence is border export
   geometry/order, not `_imagingft.rs` adapter behavior.
+- Coverage MCP after committing that lower-stroker slice:
+  `font-tests-coverage-with-freetype-pillow-12-2` run
+  `0896cf95-afbd-470b-a4b2-cc82e48cf581` passed and ingested snapshot
+  `7f9b63b7-91d8-4b3d-9cda-10d0492d3030` for commit `5f0001e13`.
+  `pillow-rs/src/font/imagingft.rs` remains `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions
+  (`96.88%`). The remaining reported ranges are unchanged: `91`, `253`,
+  `271`, `796`, `826`, `829`, `831`, and `928`. This confirms the committed
+  lower fix improves the pending stroker failure from unsupported status to
+  geometry mismatch, but it does not claim active ImageFont region closure until
+  the exact glyph outline row is promoted.
