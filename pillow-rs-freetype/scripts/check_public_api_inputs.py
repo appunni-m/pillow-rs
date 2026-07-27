@@ -1398,11 +1398,6 @@ def ftstroke_line_join_pending_reason(row: ConcreteInput) -> str | None:
             "bevel join points, tags, contours, and cutover behavior match "
             "pinned C"
         ),
-        "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry": (
-            "FT_STROKER_LINEJOIN_MITER alias parity needs a maintained route "
-            "proving the public alias selects variable-miter geometry exactly "
-            "like pinned C"
-        ),
         "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry": (
             "FT_STROKER_LINEJOIN_ROUND parity needs a maintained route proving "
             "round join arc subdivision, emitted points, tags, and contours "
@@ -1747,6 +1742,12 @@ def ftstroke_set_miter_limit_real_parity_reason(row: ConcreteInput) -> str | Non
 def ftstroke_miter_join_real_parity_reason(row: ConcreteInput) -> str | None:
     """Exact fixed/variable miter join geometry routes."""
     exact_cases = {
+        "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry": (
+            "FT_STROKER_LINEJOIN_MITER alias geometry validates that the public "
+            "alias selects the same exported outline as "
+            "FT_STROKER_LINEJOIN_MITER_VARIABLE through pinned C oracle, Rust "
+            "FFI, C ABI, and WASM ABI"
+        ),
         "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry": (
             "FT_STROKER_LINEJOIN_MITER_FIXED exported geometry validates "
             "fixed-miter fallback and longer-miter output for limits 65536 "
@@ -1758,7 +1759,7 @@ def ftstroke_miter_join_real_parity_reason(row: ConcreteInput) -> str | None:
             "and 131072 through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         ),
     }
-    if row.operation == "ftstroke.join_geometry":
+    if row.operation in {"ftstroke.join_geometry", "ftstroke.join_geometry_alias"}:
         return exact_cases.get(row.case_id)
     return None
 
