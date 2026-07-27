@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `9c032e55436b337436dcdab163b969b20fcffa8a`
+Rust commit reviewed: `2aac0e6b50b4577adbf9269250bc4001a6787eb0`
 
-Coverage MCP run: `c4f7d07a-bc82-46c7-b2bc-614cb32e2f1a`
+Coverage MCP run: `649787d0-4488-4d12-9cef-d610bf8cc124`
 
-Coverage MCP snapshot: `b4872772-06c0-4585-acfd-e5917f1b91da`
+Coverage MCP snapshot: `33772692-59a3-46aa-9471-0c48db9437c0`
 
 Suite: `font-with-freetype`
 
@@ -26,14 +26,15 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 337 input-only rows execute.
-- 337 rows match live Pillow 12.2.0 exactly.
+- 339 input-only rows execute.
+- 339 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `b4872772-06c0-4585-acfd-e5917f1b91da`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `33772692-59a3-46aa-9471-0c48db9437c0`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
+- Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -91,7 +92,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.getmask.json` | 35 |
 | `font.getmask2.json` | 42 |
 | `font.getmask2_with_start.json` | 23 |
-| `font.getmetrics.json` | 4 |
+| `font.getmetrics.json` | 6 |
 | `font.getname.json` | 5 |
 | `font.has_variations.json` | 4 |
 | `font.layout_failure.json` | 1 |
@@ -106,11 +107,11 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 337 |
+| total | 339 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `b4872772-06c0-4585-acfd-e5917f1b91da`.
+Coverage snapshot: `33772692-59a3-46aa-9471-0c48db9437c0`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -121,10 +122,10 @@ Coverage snapshot: `b4872772-06c0-4585-acfd-e5917f1b91da`.
 
 Overall snapshot totals for this suite:
 
-- Lines: 15504/50636, 30.62%
-- Branches: 2643/10724, 24.65%
+- Lines: 15509/50636, 30.63%
+- Branches: 2647/10724, 24.68%
 - Functions: 1183/3603, 32.83%
-- Regions: 22321/78418, 28.46%
+- Regions: 22328/78418, 28.47%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -149,7 +150,7 @@ These lower-level `pillow-rs-freetype` files sit underneath `ImageFont` FreeType
 |---|---:|---:|---:|---:|---|
 | `pillow-rs-freetype/src/ffi/handles.rs` | 1056/8093 13.05% | 74/2045 3.62% | 90/581 15.49% | 1375/11364 12.10% | high; includes public FreeType object/lifetime/stroker wrappers under ImageFont |
 | `pillow-rs-freetype/src/api.rs` | 208/1186 17.54% | 35/294 11.90% | 25/105 23.81% | 275/1737 15.83% | high |
-| `pillow-rs-freetype/src/font.rs` | 1260/4747 26.54% | 153/702 21.79% | 118/392 30.10% | 1725/6728 25.64% | high; font load/face/glyph machinery |
+| `pillow-rs-freetype/src/font.rs` | 1266/4747 26.67% | 157/702 22.36% | 119/392 30.36% | 1735/6728 25.79% | high; font load/face/glyph machinery |
 | `pillow-rs-freetype/src/render.rs` | 965/2459 39.24% | 157/486 32.30% | 76/158 48.10% | 1343/3432 39.13% | high; raster output parity |
 | `pillow-rs-freetype/src/scaler.rs` | 806/1342 60.06% | 114/186 61.29% | 40/66 60.61% | 918/1436 63.93% | medium/high; scaling and hinted metrics |
 | `pillow-rs-freetype/src/grays.rs` | 571/827 69.04% | 122/190 64.21% | 25/35 71.43% | 854/1106 77.22% | medium; antialias rasterizer |
@@ -205,6 +206,8 @@ Remaining risk: rare FreeType errors are present as table data but not reachable
 
 Resolved during the latest pass: the new `font.load_failure.missing_hmtx_table` row imports the maintained FreeType `missing-hmtx.ttf` fixture into the Font corpus. Pillow returns `OSError("horizontal metrics (hmtx) table missing")`; Rust previously returned `OSError("broken file")` because `fontdone::ffi::error_to_ft` mapped every `FontError::InvalidFont(_)` to `FT_Err_Invalid_File_Format`. The fix adds the specific `FT_Err_Hmtx_Table_Missing` mapping before the generic fallback. Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` branch is executed.
 
+Also resolved during the latest pass: `font.getmetrics.fixed_width` and `font.getmetrics.hhea_zero_no_os2_fallback` import maintained FreeType metric fixtures into the Font corpus and verify Pillow/Rust exact `getmetrics()` payloads. Snapshot `33772692-59a3-46aa-9471-0c48db9437c0` shows this moved lower `pillow-rs-freetype/src/font.rs` coverage from 1260 to 1266 covered lines and from 1725 to 1735 covered regions.
+
 ### 6. Bitmap and FreeType class shape is not 1:1
 
 Pillow has `ImageFont.ImageFont` for bitmap fonts and `ImageFont.FreeTypeFont` for FreeType fonts. Rust currently uses `PilFont` for bitmap and `ImageFont` for FreeType.
@@ -239,6 +242,6 @@ Decision: add ImageFont oracle rows with fonts that exercise embedded bitmap gly
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 337-row Font fixture corpus.
+The current implementation is good enough to trust the active 339-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.

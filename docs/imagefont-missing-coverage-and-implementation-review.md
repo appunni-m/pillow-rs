@@ -12,19 +12,20 @@ Scope reviewed:
 Coverage evidence:
 
 - Coverage MCP suite: `font-with-freetype`
-- Run: `c4f7d07a-bc82-46c7-b2bc-614cb32e2f1a`
-- Snapshot: `b4872772-06c0-4585-acfd-e5917f1b91da`
-- Measured commit: `9c032e55436b337436dcdab163b969b20fcffa8a`
+- Run: `649787d0-4488-4d12-9cef-d610bf8cc124`
+- Snapshot: `33772692-59a3-46aa-9471-0c48db9437c0`
+- Measured commit: `2aac0e6b50b4577adbf9269250bc4001a6787eb0`
 
 ## Current defensible status
 
 The active ImageFont fixture corpus is exact live-oracle parity for the rows it covers.
 
-- 337 input-only fixture rows are active.
+- 339 input-only fixture rows are active.
 - Expected output is generated at runtime by Pillow 12.2.0, not stored in the input JSON.
 - The Rust test compares Rust `Result` status/payload to live Pillow status/payload.
 - RAQM rows are only no-libraqm error parity rows.
 - The new `font.load_failure.missing_hmtx_table` row proves the lower FreeType hmtx table error mapping through public `PIL.ImageFont.truetype`.
+- The new `font.getmetrics.fixed_width` and `font.getmetrics.hhea_zero_no_os2_fallback` rows prove two additional lower metrics-table shapes through public `PIL.ImageFont.FreeTypeFont.getmetrics`.
 
 The correct claim is:
 
@@ -87,6 +88,7 @@ Latest lower-level fix:
 - This fixes the public ImageFont mismatch where Pillow returned `OSError("horizontal metrics (hmtx) table missing")` but Rust returned `OSError("broken file")`.
 - Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` arm is executed by the Font suite.
 - This did not change `pillow-rs/src/font/imagingft.rs` region coverage; it fixes an ImageFont-dependent lower FreeType conversion branch.
+- Coverage snapshot `33772692-59a3-46aa-9471-0c48db9437c0` adds fixed-width and hhea-zero/no-OS2 fallback `getmetrics()` rows. This raises lower `pillow-rs-freetype/src/font.rs` coverage from 1260 to 1266 covered lines, branches from 153 to 157, functions from 118 to 119, and regions from 1725 to 1735 compared with the earlier `3f959b1c-cb26-4af4-92e3-c6c0c736163e` baseline.
 
 ## 2. Pillow `ImageFont` public surface vs Rust implementation
 
@@ -267,7 +269,7 @@ Active input files and case counts:
 | `font.getmask.json` | 35 |
 | `font.getmask2.json` | 42 |
 | `font.getmask2_with_start.json` | 23 |
-| `font.getmetrics.json` | 4 |
+| `font.getmetrics.json` | 6 |
 | `font.getname.json` | 5 |
 | `font.has_variations.json` | 4 |
 | `font.layout_failure.json` | 1 |
@@ -282,7 +284,7 @@ Active input files and case counts:
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 337 |
+| total | 339 |
 
 ## 5. Action list for decision
 
@@ -300,6 +302,6 @@ Recommended next actions, in order:
 
 ## Final decision point
 
-The branch currently has trustworthy parity for the active 337-row live Pillow corpus.
+The branch currently has trustworthy parity for the active 339-row live Pillow corpus.
 
 The branch does not yet have complete `PIL.ImageFont` parity. The main blocker is not more fixture JSON; it is incomplete general stroke geometry under `pillow-rs-freetype/src/ffi/handles.rs`. More fixture rows should be added after that implementation becomes real, otherwise the new rows will correctly fail against Pillow.
