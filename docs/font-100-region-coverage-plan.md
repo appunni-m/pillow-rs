@@ -28,9 +28,9 @@ public `PIL.ImageFont` behavior.
 ## Current measured checkpoint: 2026-07-27
 
 - Command: `font-tests-coverage-with-freetype`
-- Run: `b5d409dd-a9ed-479f-9fc3-140fa87fc668`
-- Snapshot: `660d6993-1912-44e8-b37e-590e29121114`
-- Commit: `2d7499e0cc7f0d91de01cf6a5db9aa6326c6bdbe`
+- Run: `9d1b2e91-2166-4988-8798-e6fd69060482`
+- Snapshot: `56f9fc44-93cf-400c-aa70-3449c4adce1b`
+- Commit: `1352ed73c8a0e3301fa8a0bf9ce693b06729783b` plus local bitmap variadic public-parameter rows
 - Result: passed, ingested
 - `pillow-rs/src/font/default_aileron.rs`: regions `24/24` (`100.00%`)
 - `pillow-rs/src/font/mod.rs`: regions `487/487` (`100.00%`)
@@ -44,6 +44,12 @@ contract already targets `PIL.ImageFont` and verifies the public operation and
 parameter map. The remaining measured regions are adapter/lower-level FreeType
 paths that need either a real public `PIL.ImageFont` oracle row or a lower-level
 implementation fix before they can be honestly covered.
+
+Current manifest status: every live `PIL.ImageFont` public method parameter is
+classified and covered. The last public-parameter blockers were bitmap
+`ImageFont`/`TransposedFont` `*args` and `**kwargs`; active input-only rows now
+pass those extras into the live Pillow oracle and verify Rust's ignored-extra
+behavior exactly.
 
 ## Execution status update: 2026-07-26
 

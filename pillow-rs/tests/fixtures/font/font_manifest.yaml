@@ -50,44 +50,44 @@ public_method_parameters:
   ImageFont.getbbox:
     covered:
       - text
-    blocked:
       - args
       - kwargs
+    blocked: []
   ImageFont.info:
     covered: []
     blocked: []
   ImageFont.getlength:
     covered:
       - text
-    blocked:
       - args
       - kwargs
+    blocked: []
   ImageFont.getmask:
     covered:
       - text
       - mode
-    blocked:
       - args
       - kwargs
+    blocked: []
   TransposedFont.getbbox:
     covered:
       - text
-    blocked:
       - args
       - kwargs
+    blocked: []
   TransposedFont.getlength:
     covered:
       - text
-    blocked:
       - args
       - kwargs
+    blocked: []
   TransposedFont.getmask:
     covered:
       - text
       - mode
-    blocked:
       - args
       - kwargs
+    blocked: []
   font_variant:
     covered:
       - font
