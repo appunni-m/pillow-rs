@@ -3545,10 +3545,12 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     ftglyph_rows_without_maintained_route = {
         "ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap": (
             "FT_Glyph_To_Bitmap stroked mono-target bitmap parity needs a "
-            "maintained route for the exact Pillow ImageFont sequence: "
-            "FT_LOAD_TARGET_MONO outline, FT_Glyph_Stroke, then "
-            "FT_Glyph_To_Bitmap with FT_RENDER_MODE_NORMAL, comparing bitmap "
-            "placement and coverage bytes against pinned C"
+            "maintained lower stroker route for the exact Pillow ImageFont "
+            "sequence: FT_LOAD_TARGET_MONO outline, FT_Glyph_Stroke, then "
+            "FT_Glyph_To_Bitmap with FT_RENDER_MODE_NORMAL. The native C "
+            "oracle and Rust/C/WASM runners can execute the sequence, but "
+            "current lower closed round-path stroke geometry still differs in "
+            "bitmap coverage bytes."
         ),
         "ftglyph.FT_Glyph.caller_owned_lifetime": (
             "FT_Glyph caller-owned lifetime parity needs a maintained "

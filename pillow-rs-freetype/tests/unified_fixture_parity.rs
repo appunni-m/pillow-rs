@@ -983,6 +983,14 @@ fn glyph_to_bitmap_runtime_supported(case: &InputCase) -> bool {
         && render_mode_param(&case.inputs.params).is_ok()
 }
 
+fn is_glyph_to_bitmap_stroked_outline_case(case: &InputCase) -> bool {
+    case.inputs
+        .params
+        .get("source_creation")
+        .and_then(Value::as_str)
+        .is_some_and(|source| source == "FT_Get_Glyph outline then FT_Glyph_Stroke")
+}
+
 fn glyph_record_runtime_supported(case: &InputCase) -> bool {
     !case.expect_error
         && has_runtime_font_source(case)
@@ -32499,6 +32507,21 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             {
                 return Ok(vec!["--glyph-to-bitmap-invalid-inputs".to_string()]);
             }
+            if is_glyph_to_bitmap_stroked_outline_case(case) {
+                let mut args = vec!["--stroked-glyph-to-bitmap".to_string()];
+                push_font_source(case, &mut args)?;
+                push_face_size(params, &mut args)?;
+                args.push(glyph_index_param(params)?.to_string());
+                args.push(load_flags_param(params)?.to_string());
+                args.push(render_mode_param(params)?.to_string());
+                args.push(i32::from(bool_param(params, "destroy", false)?).to_string());
+                args.push(glyph_to_bitmap_size_26_6(params)?.unwrap_or(-1).to_string());
+                args.push(glyph_to_bitmap_stroker_radius(params)?.to_string());
+                args.push(glyph_to_bitmap_stroker_line_cap(params)?.to_string());
+                args.push(glyph_to_bitmap_stroker_line_join(params)?.to_string());
+                args.push(glyph_to_bitmap_stroker_miter_limit(params)?.to_string());
+                return Ok(args);
+            }
             let mut args = vec!["--glyph-to-bitmap".to_string()];
             push_font_source(case, &mut args)?;
             push_face_size(params, &mut args)?;
@@ -38429,6 +38452,9 @@ fn wasm_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {
 }
 
 fn rust_glyph_to_bitmap(face: &FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    if is_glyph_to_bitmap_stroked_outline_case(case) {
+        return rust_stroked_outline_glyph_to_bitmap(case);
+    }
     let render_mode = render_mode_param(&case.inputs.params)?;
     let loaded = FT_Load_Glyph(
         face,
@@ -38453,6 +38479,9 @@ fn rust_glyph_to_bitmap(face: &FT_Face, case: &InputCase) -> Result<RunOutput, S
 }
 
 fn c_glyph_to_bitmap(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput, String> {
+    if is_glyph_to_bitmap_stroked_outline_case(case) {
+        return c_stroked_outline_glyph_to_bitmap(face, case);
+    }
     let load_err = c_abi::FT_Load_Glyph(
         face,
         glyph_index_param(&case.inputs.params)?,
@@ -38506,6 +38535,9 @@ fn c_glyph_to_bitmap(face: c_abi::FT_Face, case: &InputCase) -> Result<RunOutput
 }
 
 fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, String> {
+    if is_glyph_to_bitmap_stroked_outline_case(case) {
+        return wasm_stroked_outline_glyph_to_bitmap(handle, case);
+    }
     let load_err = wasm_abi::fontdone_wasm_load_glyph(
         handle,
         glyph_index_param(&case.inputs.params)?,
@@ -38552,6 +38584,265 @@ fn wasm_glyph_to_bitmap(handle: usize, case: &InputCase) -> Result<RunOutput, St
     };
     if glyph_handle != 0 {
         let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    Ok(output)
+}
+
+fn glyph_to_bitmap_size_26_6(params: &Value) -> Result<Option<i64>, String> {
+    params
+        .get("size_26_6")
+        .map(|value| i64_value(value, "size_26_6"))
+        .transpose()
+}
+
+fn glyph_to_bitmap_stroker_param_i64(
+    params: &Value,
+    key: &str,
+    default: i64,
+) -> Result<i64, String> {
+    params
+        .get("stroker")
+        .and_then(|stroker| stroker.get(key))
+        .map_or(Ok(default), |value| i64_value(value, key))
+}
+
+fn glyph_to_bitmap_stroker_radius(params: &Value) -> Result<FT_Fixed, String> {
+    Ok(glyph_to_bitmap_stroker_param_i64(params, "radius", 96)?)
+}
+
+fn glyph_to_bitmap_stroker_line_cap(params: &Value) -> Result<FT_Int, String> {
+    i32::try_from(glyph_to_bitmap_stroker_param_i64(
+        params,
+        "line_cap",
+        FT_STROKER_LINECAP_ROUND as i64,
+    )?)
+    .map_err(|err| format!("stroker.line_cap does not fit FT_Int: {err}"))
+}
+
+fn glyph_to_bitmap_stroker_line_join(params: &Value) -> Result<FT_Int, String> {
+    i32::try_from(glyph_to_bitmap_stroker_param_i64(
+        params,
+        "line_join",
+        FT_STROKER_LINEJOIN_ROUND as i64,
+    )?)
+    .map_err(|err| format!("stroker.line_join does not fit FT_Int: {err}"))
+}
+
+fn glyph_to_bitmap_stroker_miter_limit(params: &Value) -> Result<FT_Fixed, String> {
+    Ok(glyph_to_bitmap_stroker_param_i64(
+        params,
+        "miter_limit",
+        65_536,
+    )?)
+}
+
+fn rust_stroked_outline_glyph_to_bitmap(case: &InputCase) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let mut face = open_face(case)?;
+    if let Some(size_26_6) = glyph_to_bitmap_size_26_6(params)? {
+        let size_status = FT_Set_Char_Size(&mut face, 0, size_26_6, 72, 72);
+        if size_status != FT_Err_Ok {
+            return Ok(error(size_status));
+        }
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let stroker_status = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if stroker_status != FT_Err_Ok {
+        return Ok(error(stroker_status));
+    }
+    FT_Stroker_Set(
+        stroker,
+        glyph_to_bitmap_stroker_radius(params)?,
+        glyph_to_bitmap_stroker_line_cap(params)?,
+        glyph_to_bitmap_stroker_line_join(params)?,
+        glyph_to_bitmap_stroker_miter_limit(params)?,
+    );
+    let render_mode = render_mode_param(params)?;
+    let output = match FT_Load_Glyph(&face, glyph_index_param(params)?, load_flags_param(params)?)
+        .and_then(|slot| FT_Get_Outline_Glyph(Some(&slot)))
+        .and_then(|glyph| FT_Outline_Glyph_Stroke(Some(&glyph), stroker))
+        .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
+    {
+        Ok(glyph) => ok(rust_owned_bitmap_glyph_json(
+            glyph.root.format,
+            glyph.root.advance.x,
+            glyph.root.advance.y,
+            glyph.left,
+            glyph.top,
+            &glyph.bitmap,
+            bool_param(params, "destroy", false)?,
+        )),
+        Err(err) => error(err),
+    };
+    FT_Stroker_Done(stroker);
+    Ok(output)
+}
+
+fn c_stroked_outline_glyph_to_bitmap(
+    _face: c_abi::FT_Face,
+    case: &InputCase,
+) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    let (library, face) = c_open_face(case)?;
+    if let Some(size_26_6) = glyph_to_bitmap_size_26_6(params)? {
+        let size_status = c_abi::FT_Set_Char_Size(face, 0, size_26_6, 72, 72);
+        if size_status != FT_Err_Ok {
+            c_done_face(face);
+            c_done_library(library);
+            return Ok(error(size_status));
+        }
+    }
+    let load_status =
+        c_abi::FT_Load_Glyph(face, glyph_index_param(params)?, load_flags_param(params)?);
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let get_status = if load_status == FT_Err_Ok {
+        let slot = c_abi::abi_glyph_slot_pointer(face)
+            .ok_or_else(|| "missing c glyph slot pointer".to_string())?;
+        c_abi::FT_Get_Glyph(slot, &mut glyph)
+    } else {
+        load_status
+    };
+    let mut stroker = ptr::null_mut();
+    let stroker_status = c_abi::FT_Stroker_New(library, &mut stroker);
+    if stroker_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Set(
+            stroker,
+            glyph_to_bitmap_stroker_radius(params)?,
+            glyph_to_bitmap_stroker_line_cap(params)?,
+            glyph_to_bitmap_stroker_line_join(params)?,
+            glyph_to_bitmap_stroker_miter_limit(params)?,
+        );
+    }
+    let stroke_status = if get_status == FT_Err_Ok && stroker_status == FT_Err_Ok {
+        c_abi::FT_Glyph_Stroke(&mut glyph, stroker, 0)
+    } else if get_status != FT_Err_Ok {
+        get_status
+    } else {
+        stroker_status
+    };
+    let bitmap_status = if stroke_status == FT_Err_Ok {
+        c_abi::FT_Glyph_To_Bitmap(
+            &mut glyph,
+            render_mode_param(params)?,
+            ptr::null(),
+            if bool_param(params, "destroy", false)? {
+                1
+            } else {
+                0
+            },
+        )
+    } else {
+        stroke_status
+    };
+    let output = if bitmap_status == FT_Err_Ok {
+        let snapshot = c_abi::abi_bitmap_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c stroked bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_json_direct(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            bool_param(params, "destroy", false)?,
+            bitmap_payload_json(
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                snapshot.left,
+                snapshot.top,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        error(bitmap_status)
+    };
+    if !stroker.is_null() {
+        c_abi::FT_Stroker_Done(stroker);
+    }
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_stroked_outline_glyph_to_bitmap(
+    handle: usize,
+    case: &InputCase,
+) -> Result<RunOutput, String> {
+    let params = &case.inputs.params;
+    if let Some(size_26_6) = glyph_to_bitmap_size_26_6(params)? {
+        let size_status = wasm_abi::fontdone_wasm_set_char_size(handle, 0, size_26_6, 72, 72);
+        if size_status != FT_Err_Ok {
+            return Ok(error(size_status));
+        }
+    }
+    let load_status = wasm_abi::fontdone_wasm_load_glyph(
+        handle,
+        glyph_index_param(params)?,
+        load_flags_param(params)?,
+    );
+    let mut glyph_handle = 0usize;
+    let get_status = if load_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph_handle)
+    } else {
+        load_status
+    };
+    let stroke_result = if get_status == FT_Err_Ok {
+        wasm_abi::abi_support_glyph_stroke_outline_success(glyph_handle)
+    } else {
+        Err(get_status)
+    };
+    let (stroke_status, stroked_handle) = match stroke_result {
+        Ok(stroked) => (FT_Err_Ok, stroked),
+        Err(err) => (err, 0),
+    };
+    if glyph_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph_handle);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    let mut bitmap_handle = stroked_handle;
+    let bitmap_status = if stroke_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_glyph_to_bitmap_handle(
+            &mut bitmap_handle,
+            render_mode_param(params)?,
+            ptr::null(),
+            if bool_param(params, "destroy", false)? {
+                1
+            } else {
+                0
+            },
+        )
+    } else {
+        stroke_status
+    };
+    let output = if bitmap_status == FT_Err_Ok {
+        let snapshot = wasm_abi::abi_bitmap_glyph_snapshot(bitmap_handle)
+            .ok_or_else(|| "missing wasm stroked bitmap glyph snapshot".to_string())?;
+        ok(bitmap_glyph_json_direct(
+            snapshot.root.format,
+            snapshot.root.advance.x,
+            snapshot.root.advance.y,
+            bool_param(params, "destroy", false)?,
+            bitmap_payload_json(
+                snapshot.bitmap.width,
+                snapshot.bitmap.rows,
+                snapshot.bitmap.pitch,
+                snapshot.bitmap.pixel_mode,
+                snapshot.bitmap.num_grays,
+                snapshot.left,
+                snapshot.top,
+                &snapshot.bitmap.buffer,
+            ),
+        ))
+    } else {
+        error(bitmap_status)
+    };
+    if bitmap_handle != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(bitmap_handle);
         wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
     }
     Ok(output)

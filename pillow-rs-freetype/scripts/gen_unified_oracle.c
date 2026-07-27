@@ -6205,6 +6205,57 @@ static void print_glyph_to_bitmap_payload(FT_GlyphSlot slot, FT_Render_Mode rend
     }
 }
 
+static void print_stroked_glyph_to_bitmap_payload(
+    FT_Library library,
+    FT_Face face,
+    FT_UInt glyph_index,
+    FT_Int32 load_flags,
+    FT_Render_Mode render_mode,
+    int destroy,
+    FT_F26Dot6 size_26_6,
+    FT_Fixed radius,
+    FT_Stroker_LineCap line_cap,
+    FT_Stroker_LineJoin line_join,
+    FT_Fixed miter_limit
+) {
+    FT_Glyph glyph = NULL;
+    FT_Stroker stroker = NULL;
+    FT_Error err = FT_Err_Ok;
+    if (size_26_6 >= 0) {
+        err = FT_Set_Char_Size(face, 0, size_26_6, 72, 72);
+    }
+    if (!err) {
+        err = FT_Load_Glyph(face, glyph_index, load_flags);
+    }
+    if (!err) {
+        err = FT_Get_Glyph(face->glyph, &glyph);
+    }
+    if (!err) {
+        err = FT_Stroker_New(library, &stroker);
+    }
+    if (!err) {
+        FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+        err = FT_Glyph_Stroke(&glyph, stroker, 0);
+    }
+    if (!err) {
+        err = FT_Glyph_To_Bitmap(&glyph, render_mode, NULL, destroy);
+    }
+    print_status(err);
+    if (err) {
+        printf(",\"output\":null}\n");
+    } else {
+        printf(",");
+        print_bitmap_glyph_payload((FT_BitmapGlyph)glyph, destroy);
+        printf("}\n");
+    }
+    if (stroker) {
+        FT_Stroker_Done(stroker);
+    }
+    if (glyph) {
+        FT_Done_Glyph(glyph);
+    }
+}
+
 static void print_glyph_to_bitmap_error_row(const char* probe, FT_Error error, FT_Glyph glyph) {
     printf("{\"probe\":\"%s\",\"error\":%d,\"caller_handle_class\":\"%s\"}",
            probe,
@@ -24444,6 +24495,34 @@ static int emit_face_or_slot(int argc, char** argv) {
         free(data);
         return result ? 2 : 0;
     }
+    if (streq(command, "--stroked-glyph-to-bitmap")) {
+        FT_UInt glyph_index = (FT_UInt)strtoul(argv[7], NULL, 10);
+        FT_Int32 load_flags = (FT_Int32)strtol(argv[8], NULL, 10);
+        FT_Render_Mode render_mode = (FT_Render_Mode)strtol(argv[9], NULL, 10);
+        int destroy = atoi(argv[10]);
+        FT_F26Dot6 size_26_6 = (FT_F26Dot6)strtol(argv[11], NULL, 10);
+        FT_Fixed radius = (FT_Fixed)strtol(argv[12], NULL, 10);
+        FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[13], NULL, 10);
+        FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)strtol(argv[14], NULL, 10);
+        FT_Fixed miter_limit = (FT_Fixed)strtol(argv[15], NULL, 10);
+        print_stroked_glyph_to_bitmap_payload(
+            library,
+            face,
+            glyph_index,
+            load_flags,
+            render_mode,
+            destroy,
+            size_26_6,
+            radius,
+            line_cap,
+            line_join,
+            miter_limit
+        );
+        FT_Done_Face(face);
+        FT_Done_FreeType(library);
+        free(data);
+        return 0;
+    }
 
     FT_UInt glyph_index = 0;
     FT_Int32 load_flags = 0;
@@ -27461,6 +27540,9 @@ static int dispatch(int argc, char** argv) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 11 && streq(argv[1], "--glyph-to-bitmap")) {
+        return emit_face_or_slot(argc, argv);
+    }
+    if (argc == 16 && streq(argv[1], "--stroked-glyph-to-bitmap")) {
         return emit_face_or_slot(argc, argv);
     }
     if (argc == 10 && streq(argv[1], "--glyph-record")) {
