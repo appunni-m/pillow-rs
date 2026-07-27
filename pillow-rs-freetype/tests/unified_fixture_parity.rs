@@ -25637,6 +25637,10 @@ fn is_stroker_reset_counts_case(case: &InputCase) -> bool {
     )
 }
 
+fn is_stroker_rewind_attributes_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_Rewind.attributes_preserved"
+}
+
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
@@ -27746,6 +27750,227 @@ fn wasm_stroker_reset_counts(case: &InputCase) -> Result<RunOutput, String> {
         Ok(stroker_reset_counts_output(21, 2, 0, 0))
     } else {
         Err("unsupported stroker reset-count route".to_string())
+    }
+}
+
+fn stroker_rewind_attributes_output(
+    status: FT_Error,
+    counts_points: FT_UInt,
+    counts_contours: FT_UInt,
+    outline: Value,
+) -> RunOutput {
+    if status != FT_Err_Ok {
+        return error(status);
+    }
+    ok(json!({
+        "second_export_outline": outline,
+        "counts_after_second_path": {
+            "points": counts_points,
+            "contours": counts_contours
+        }
+    }))
+}
+
+fn rust_stroker_rewind_attributes(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_rewind_attributes_case(case) {
+        return Err(format!(
+            "{} is not a stroker rewind-attributes route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        224,
+        FT_STROKER_LINECAP_SQUARE as FT_Int,
+        FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int,
+        131_072,
+    );
+    let first_start = FT_Vector { x: 0, y: 0 };
+    let first_p1 = FT_Vector { x: 640, y: 0 };
+    let first_p2 = FT_Vector { x: 640, y: 640 };
+    let first_begin = FT_Stroker_BeginSubPath(stroker, Some(&first_start), 0);
+    let first_line1 = if first_begin == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&first_p1))
+    } else {
+        first_begin
+    };
+    let first_line2 = if first_line1 == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&first_p2))
+    } else {
+        first_line1
+    };
+    let first_end = if first_line2 == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        first_line2
+    };
+    if first_end == FT_Err_Ok {
+        FT_Stroker_Rewind(stroker);
+    }
+    let second_start = FT_Vector { x: 0, y: 0 };
+    let second_p1 = FT_Vector { x: 640, y: 0 };
+    let second_p2 = FT_Vector { x: 160, y: 224 };
+    let second_begin = if first_end == FT_Err_Ok {
+        FT_Stroker_BeginSubPath(stroker, Some(&second_start), 0)
+    } else {
+        first_end
+    };
+    let second_line1 = if second_begin == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&second_p1))
+    } else {
+        second_begin
+    };
+    let second_line2 = if second_line1 == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&second_p2))
+    } else {
+        second_line1
+    };
+    let second_end = if second_line2 == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        second_line2
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_status = if second_end == FT_Err_Ok {
+        FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+    } else {
+        second_end
+    };
+    let mut exported = FT_OutlineSnapshot::default();
+    if counts_status == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_rewind_attributes_output(
+        counts_status,
+        points,
+        contours,
+        outline_snapshot_json(&exported),
+    ))
+}
+
+fn c_stroker_rewind_attributes(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_rewind_attributes_case(case) {
+        return Err(format!(
+            "{} is not a stroker rewind-attributes route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        224,
+        FT_STROKER_LINECAP_SQUARE as FT_Int,
+        FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int,
+        131_072,
+    );
+    let first_start = c_abi::FT_Vector { x: 0, y: 0 };
+    let first_p1 = c_abi::FT_Vector { x: 640, y: 0 };
+    let first_p2 = c_abi::FT_Vector { x: 640, y: 640 };
+    let first_begin = c_abi::FT_Stroker_BeginSubPath(stroker, &first_start, 0);
+    let first_line1 = if first_begin == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &first_p1)
+    } else {
+        first_begin
+    };
+    let first_line2 = if first_line1 == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &first_p2)
+    } else {
+        first_line1
+    };
+    let first_end = if first_line2 == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        first_line2
+    };
+    if first_end == FT_Err_Ok {
+        c_abi::FT_Stroker_Rewind(stroker);
+    }
+    let second_start = c_abi::FT_Vector { x: 0, y: 0 };
+    let second_p1 = c_abi::FT_Vector { x: 640, y: 0 };
+    let second_p2 = c_abi::FT_Vector { x: 160, y: 224 };
+    let second_begin = if first_end == FT_Err_Ok {
+        c_abi::FT_Stroker_BeginSubPath(stroker, &second_start, 0)
+    } else {
+        first_end
+    };
+    let second_line1 = if second_begin == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &second_p1)
+    } else {
+        second_begin
+    };
+    let second_line2 = if second_line1 == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &second_p2)
+    } else {
+        second_line1
+    };
+    let second_end = if second_line2 == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        second_line2
+    };
+    let mut points = 99;
+    let mut contours = 99;
+    let counts_status = if second_end == FT_Err_Ok {
+        c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours)
+    } else {
+        second_end
+    };
+    let mut exported_points = [c_abi::FT_Vector::default(); 256];
+    let mut exported_tags = [0u8; 256];
+    let mut exported_contours = [0u16; 64];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    if counts_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+    }
+    let outline = c_outline_arrays_json(
+        &exported,
+        &exported_points,
+        &exported_tags,
+        &exported_contours,
+    );
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_rewind_attributes_output(
+        counts_status,
+        points,
+        contours,
+        outline,
+    ))
+}
+
+fn wasm_stroker_rewind_attributes(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_rewind_attributes_case(case) {
+        return Err(format!(
+            "{} is not a stroker rewind-attributes route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_rewind_attributes() {
+        rust_stroker_rewind_attributes(case)
+    } else {
+        Err("unsupported stroker rewind-attributes route".to_string())
     }
 }
 
@@ -32337,6 +32562,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 .to_string(),
             ])
         }
+        "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
+            Ok(vec!["--stroker-rewind-attributes".to_string()])
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -33942,6 +34170,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         {
             rust_stroker_reset_counts(case)
         }
+        "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
+            rust_stroker_rewind_attributes(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -35149,6 +35380,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         {
             c_stroker_reset_counts(case)
         }
+        "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
+            c_stroker_rewind_attributes(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -36252,6 +36486,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
             if is_stroker_reset_counts_case(case) =>
         {
             wasm_stroker_reset_counts(case)
+        }
+        "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
+            wasm_stroker_rewind_attributes(case)
         }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
@@ -39503,7 +39740,7 @@ fn glyph_to_bitmap_stroker_param_i64(
 }
 
 fn glyph_to_bitmap_stroker_radius(params: &Value) -> Result<FT_Fixed, String> {
-    Ok(glyph_to_bitmap_stroker_param_i64(params, "radius", 96)?)
+    glyph_to_bitmap_stroker_param_i64(params, "radius", 96)
 }
 
 fn glyph_to_bitmap_stroker_line_cap(params: &Value) -> Result<FT_Int, String> {
@@ -39525,11 +39762,7 @@ fn glyph_to_bitmap_stroker_line_join(params: &Value) -> Result<FT_Int, String> {
 }
 
 fn glyph_to_bitmap_stroker_miter_limit(params: &Value) -> Result<FT_Fixed, String> {
-    Ok(glyph_to_bitmap_stroker_param_i64(
-        params,
-        "miter_limit",
-        65_536,
-    )?)
+    glyph_to_bitmap_stroker_param_i64(params, "miter_limit", 65_536)
 }
 
 fn rust_stroked_outline_glyph_to_bitmap(case: &InputCase) -> Result<RunOutput, String> {
