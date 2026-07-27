@@ -262,6 +262,13 @@ segment endpoints. This is foundational state only; it does not yet prove
 general border export, joins, caps, curves, or `FT_Glyph_StrokeBorder` success
 rows.
 
+The next lower-stroker pass records the subsequent `LineTo` candidate state
+from FreeType 2.14.3 `src/base/ftstroke.c:1303-1337`: outgoing angle,
+line length, offset endpoints for both borders, updated incoming angle, and
+current center. Public export/count behavior remains guarded until
+`ft_stroker_process_corner` is ported, so this does not claim border geometry
+parity prematurely.
+
 Decision: complete the lower stroker segment geometry and border-export behavior
 needed by real outline glyphs, then add successful `stroke_filled=true` fixture
 rows. `FT_Stroker_ParseOutline` now follows the C-shaped contour/tag walk, so
