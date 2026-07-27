@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Rust/source fixture commit reviewed: `7194ae04c`
+Rust/source fixture commit reviewed: `0f92ed6c0`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -56,8 +56,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `aa5a2fd6-512a-4a5b-873b-6bf1df588c2e` from run
-  `936ddeef-c331-4694-93a3-7bb7c9c3c0f4` at commit `7194ae04c`. Direct
+  `fb2aa994-a1d3-460b-82f5-6bc3ef571ecc` from run
+  `59774e5d-8527-4b61-9331-749838154755` at commit `0f92ed6c0`. Direct
   `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
