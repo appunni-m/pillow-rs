@@ -1814,6 +1814,42 @@ fn assert_raqm_rows_use_dedicated_core_error(cases: &[Value], fixture_root: &Pat
     );
 }
 
+fn assert_stroke_filled_rows_do_not_fake_branch_coverage(cases: &[Value]) {
+    let false_coverage_rows = cases
+        .iter()
+        .filter_map(|case| {
+            let operation = font_runner::operation(case).ok()?;
+            if operation != "getmask2" {
+                return None;
+            }
+            let params = case.get("inputs").and_then(|inputs| inputs.get("params"))?;
+            let stroke_filled = params
+                .get("kwargs")
+                .and_then(|kwargs| kwargs.get("stroke_filled"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            if !stroke_filled {
+                return None;
+            }
+            let stroke_width = params
+                .get("stroke_width")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            (stroke_width > 0.0).then(|| {
+                case.get("case_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or("<missing case_id>")
+                    .to_owned()
+            })
+        })
+        .collect::<Vec<_>>();
+
+    assert!(
+        false_coverage_rows.is_empty(),
+        "active Font rows must not claim stroke_filled=true branch coverage until lower FT_Glyph_StrokeBorder success parity is implemented; rows with stroke_width > 0: {false_coverage_rows:?}"
+    );
+}
+
 fn assert_libraqm_error_contract_is_hard_coded() {
     assert_eq!(
         pillow_rs::PilError::UnsupportedLibraqm.to_string(),
@@ -1886,6 +1922,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_blocked_public_parameters_have_active_dependency_blockers();
     assert_libraqm_error_contract_is_hard_coded();
     assert_raqm_rows_use_dedicated_core_error(&cases, &root);
+    assert_stroke_filled_rows_do_not_fake_branch_coverage(&cases);
 
     let observed = cases
         .iter()
