@@ -55,17 +55,15 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `77084db9-9ab3-4cdd-b85e-860236566009` from run
-  `d1bf5fc6-f0ca-4f69-9f73-f7c2bfd4abba` at commit `846e5df3`. Direct
+  `0e79f59b-31ea-4705-b2fb-3f543080dda7` from run
+  `184ed959-fe4b-4ed9-ad97-4a54b58f8171` at commit `ab66808a2`. Direct
   `imagingft.rs` coverage
-  remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
-  `2612/2696` regions. The eight remaining gap lines are still `91`, `253`,
-  `271`, `796`, `826`, `829`, `831`, and `928`; Coverage MCP line selection
-  shows `91`, `796`, `826`, `829`, and `928` are executed source lines with
-  partial branch markers, while `253` and `271` are static FreeType error-table
-  tuple-start mappings and `831` is a source-mapped helper boundary/separator
-  line. No current gap identifies an adapter-owned Pillow `_imagingft.c`
-  behavior miss.
+  remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
+  `2612/2696` regions. The seven remaining direct marker lines are `91`,
+  `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
+  and `928` are partial-branch/source-map markers, while `253` and `271` are
+  static FreeType error-table tuple-start mappings. No current gap identifies
+  an adapter-owned Pillow `_imagingft.c` behavior miss.
 - Historical lower-stroker guard checks kept the maintained DejaVuSans glyph-36
   `FT_Glyph_Stroke.outline_glyph_stroked_success` path ahead of the newer
   general closed round-path stroker. The general path can now return a stroked
@@ -231,14 +229,14 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.TransposedFont.getbbox.json` | 3 |
 | `font.TransposedFont.getlength.json` | 3 |
 | `font.TransposedFont.getmask.json` | 6 |
-| `font.constructor.json` | 10 |
-| `font.get_transposed_mask.json` | 10 |
+| `font.constructor.json` | 11 |
+| `font.get_transposed_mask.json` | 11 |
 | `font.getbbox.json` | 36 |
 | `font.getbbox_binary.json` | 10 |
 | `font.getlength.json` | 26 |
-| `font.getmask.json` | 39 |
-| `font.getmask2.json` | 47 |
-| `font.getmask2_with_start.json` | 23 |
+| `font.getmask.json` | 51 |
+| `font.getmask2.json` | 63 |
+| `font.getmask2_with_start.json` | 24 |
 | `font.getmetrics.json` | 8 |
 | `font.getname.json` | 6 |
 | `font.has_variations.json` | 4 |
@@ -248,13 +246,13 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.load_failure.json` | 8 |
 | `font.load_path.json` | 1 |
 | `font.render_text.json` | 7 |
-| `font.render_text_binary.json` | 9 |
+| `font.render_text_binary.json` | 10 |
 | `font.text_bbox.json` | 6 |
 | `font.transposed_bbox.json` | 7 |
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 369 |
+| total | 401 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -266,9 +264,9 @@ Current Font-with-FreeType snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
 from Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e`
 at runtime commit `072af0fbb8e309f936b68f566e6e133cca6a0c29`.
 
-Latest Font-with-FreeType snapshot: `77084db9-9ab3-4cdd-b85e-860236566009`
-from Coverage MCP run `d1bf5fc6-f0ca-4f69-9f73-f7c2bfd4abba`
-at runtime commit `846e5df3ae17614f8c4ffa4d8ad9da34bc41e7c9`.
+Latest Font-with-FreeType snapshot: `0e79f59b-31ea-4705-b2fb-3f543080dda7`
+from Coverage MCP run `184ed959-fe4b-4ed9-ad97-4a54b58f8171`
+at runtime commit `ab66808a26ec8e5a0cbf805abccbc033a157d61b`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -280,16 +278,16 @@ refactor.
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
-| `pillow-rs/src/font/mod.rs` | 372/372 100.00% | n/a | 80/80 100.00% | 494/494 100.00% | covered |
+| `pillow-rs/src/font/mod.rs` | 366/366 100.00% | n/a | 77/77 100.00% | 476/476 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | mostly covered; reported line gap is rustdoc on `from_pilfont_data`, but function/region gaps mean additional bitmap-font variants remain untrusted |
-| `pillow-rs/src/font/imagingft.rs` | 1247/1295 96.29% | 204/226 90.27% | 121/132 91.67% | 2012/2129 94.50% | direct `imagingft` suite; oversized binary bbox parity fixed; remaining markers are rare FreeType error statuses, variation setter error statuses, option wrapper `?` instrumentation, static data, or LLVM region artifacts |
+| `pillow-rs/src/font/imagingft.rs` | 1666/1688 98.70% | 249/254 98.03% | 162/173 93.64% | 2612/2696 96.88% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
 
 Overall snapshot totals for this suite:
 
-- Lines: 17552/52835, 33.22%
+- Lines: 17588/52862, 33.27%
 - Branches: 2980/11156, 26.71%
-- Functions: 1335/3683, 36.25%
-- Regions: 25186/81424, 30.93%
+- Functions: 1340/3686, 36.35%
+- Regions: 25203/81432, 30.95%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -305,7 +303,7 @@ Coverage MCP reports 31 relevant ranges in `pillow-rs/src/font/imagingft.rs` for
 | `453`, `511`, `519`, `537`, `541` | Variation `font_variant`, `set_variation_by_name`, and `set_variation_by_axes` option/error propagation. | `ImageFont.py` forwards to `_imagingft` variation APIs. | Existing rows cover normal variation names/axes and public errors, including malformed fvar axis-size setter parity. Coverage line data for snapshot `eb41f17c-7e76-453d-90ba-ab996a041dbf` shows `set_variation_by_axes` pre-validation and normal/error outcomes are hit, but lines `537` and `541` remain uncovered because the malformed lower fixture returns before the adapter observes a nonzero `FT_Set_Var_Design_Coordinates` status. | Add rows only with real variable-font assets that trigger nonzero statuses from `FT_Set_Named_Instance` or `FT_Set_Var_Design_Coordinates` after preliminary validation passes. If the lower implementation lacks the exact status, add it in `pillow-rs-freetype` minimally. |
 | `563`, `568`, `575`, `584`, `593`, `596`, `600`, `602`, `603`, `619` | Text wrapper entrypoints, `MAX_STRING_LENGTH` validation, binary bbox, mask, and mask2 paths. | `_imagingft.c` applies max-length guards to public text methods, but Pillow's native binary `font.font.getsize(text, "1", ...)` helper does not reject the oversized string. | Oversized public rows now prove the public guards and found the binary bbox exception. Remaining markers are mostly LLVM branch markers on `?` propagation despite both success and error statuses being observed through the live oracle. | Keep the rows. Do not add duplicate oversized rows unless they cover a new public path. |
 
-For the current broader Font-with-FreeType suite, the remaining eight reported
+For the current broader Font-with-FreeType suite, the remaining seven reported
 `imagingft.rs` ranges have this narrower classification:
 
 | Rust line | Coverage reason | Current classification | Action |
@@ -316,7 +314,6 @@ For the current broader Font-with-FreeType suite, the remaining eight reported
 | `796` | partial branch on `gid` helper | `FT_Get_Char_Index` helper is hit millions of times; marker is helper call/source-map accounting. | No duplicate text rows. |
 | `826` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. | No duplicate bbox/mask rows. |
 | `829` | partial branch on `length_from_basic_layout` wrapper | Wrapper is hit thousands of times; marker is `?`/wrapper propagation accounting. | No duplicate length rows unless new public behavior appears. |
-| `831` | uncovered empty/source-map line | Empty line before `length_from_basic_layout_with_flags`, not behavior. | No action. |
 | `928` | partial branch between bbox helpers | Both empty and non-empty glyph-run branches are covered below this line; marker is helper-boundary/source-map accounting. | No duplicate bbox rows. |
 Exploratory note: Coverage MCP run `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c`
 temporarily added valid live-oracle rows for DejaVuSans `"À"` negative-top
