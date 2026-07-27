@@ -652,3 +652,12 @@ Current request classification for `imagingft.rs` region coverage:
   actual bytes changed materially compared with the prior bypass run. Keep the
   pending row and guard: the inclusive reversal is a real lower C-alignment fix,
   not complete mono-target stroked bitmap parity.
+- Coverage MCP run `0621f8e2-0ff7-431c-a546-4d6e70c564c6` passed and ingested
+  snapshot `8cacca94-080d-4491-98d3-2e35cd9882fd` for commit `e67a98ec`.
+  Direct `imagingft.rs` coverage remains `1664/1686` lines, `249/254`
+  branches, `162/173` functions, and `2608/2700` regions. The touched lower
+  reverse-close branch is exercised in `pillow-rs-freetype/src/ffi/handles.rs`
+  (`3584`, `3587`, and `3588` each hit 11 times in the Font-with-FreeType
+  suite), but this lower progress cannot move `imagingft.rs` until the
+  mono-target stroked bitmap row is promotable without bypassing the
+  `closed_round_path_unverified`/`conic_path_unverified` guard.
