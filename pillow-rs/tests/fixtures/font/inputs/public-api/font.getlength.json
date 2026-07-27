@@ -366,6 +366,22 @@
       }
     },
     {
+      "case_id": "font.getlength.dejavusans20_missing_glyph_breaks_kerning",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A\uffffV"
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.dejavusans20_too_many_characters_error",
       "operation": "getlength",
       "inputs": {
