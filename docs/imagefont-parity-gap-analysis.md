@@ -2,17 +2,17 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `072af0fbb`
+Rust/source fixture commit reviewed: `d14e88631`
 
-Latest audit commit: `30551a97b`
+Latest audit note commit: documentation-only update on top of the reviewed source state
 
 Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
 Coverage MCP snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
 
-Latest Coverage MCP run: `64ae0b30-1d33-4f97-abee-50818bdd67f4`
+Latest Coverage MCP run: `517c1937-eba5-4cea-bc55-d25f267438cb`
 
-Latest Coverage MCP snapshot: `fcb80e1b-dd82-4f58-b36b-e84e671737b4`
+Latest Coverage MCP snapshot: `772ae59f-c6d5-49d0-95e5-b3af2d99599f`
 
 Suite: `font-with-freetype`
 
@@ -32,11 +32,22 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 369 input-only rows execute.
-- 369 rows match live Pillow 12.2.0 exactly.
+- 371 input-only rows execute.
+- 371 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
+  passes for the current Rust/fixture source state and ingests snapshot
+  `772ae59f-c6d5-49d0-95e5-b3af2d99599f`. Direct `imagingft.rs`
+  coverage remains `1660/1682` lines, `249/254` branches,
+  `162/173` functions, and `2610/2696` regions. The eight remaining gap
+  lines are still `91`, `253`, `271`, `796`, `826`, `829`, `831`, and
+  `928`; Coverage MCP line selection shows `91`, `796`, `826`, `829`,
+  and `928` are executed source lines with partial branch markers, while
+  `253` and `271` are static FreeType error-table tuple-start mappings and
+  `831` is a source-mapped helper boundary/separator line. No current gap
+  identifies an adapter-owned Pillow `_imagingft.c` behavior miss.
 - Coverage MCP command `imagingft-tests-coverage-fixed` passes and ingests snapshot `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba` at runtime commit `12d434ca`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
