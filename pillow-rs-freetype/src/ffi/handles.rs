@@ -2284,12 +2284,8 @@ pub fn FT_Outline_Glyph_StrokeBorder(
 
     let mut n_points = 0;
     let mut n_contours = 0;
-    let count_status = FT_Stroker_GetBorderCounts(
-        stroker,
-        border,
-        Some(&mut n_points),
-        Some(&mut n_contours),
-    );
+    let count_status =
+        FT_Stroker_GetBorderCounts(stroker, border, Some(&mut n_points), Some(&mut n_contours));
     if count_status != FT_Err_Ok {
         return Err(count_status);
     }
@@ -4019,6 +4015,24 @@ fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSn
     target.flags = source.flags;
 }
 
+fn stroker_exists(stroker: FT_Stroker) -> bool {
+    STROKER_REGISTRY.with(|registry| registry.borrow().contains_key(&(stroker as usize)))
+}
+
+fn stroker_first_point(stroker: FT_Stroker) -> Result<bool, FT_Error> {
+    STROKER_REGISTRY.with(|registry| {
+        let registry = registry.borrow();
+        let Some(entry) = registry.get(&(stroker as usize)) else {
+            return Err(FT_Err_Invalid_Argument);
+        };
+        Ok(entry.state.first_point)
+    })
+}
+
+fn ft_curve_tag(tag: FT_Byte) -> FT_Byte {
+    tag & 3
+}
+
 pub fn FT_Stroker_New(library: Option<&FT_Library>, astroker: Option<&mut FT_Stroker>) -> FT_Error {
     if library.is_none() {
         return FT_Err_Invalid_Library_Handle as FT_Error;
@@ -4288,62 +4302,154 @@ pub fn FT_Stroker_CubicTo(
 pub fn FT_Stroker_ParseOutline(
     stroker: FT_Stroker,
     outline: Option<&FT_OutlineSnapshot>,
-    _opened: FT_Bool,
+    opened: FT_Bool,
 ) -> FT_Error {
     let Some(outline) = outline else {
         return FT_Err_Invalid_Outline;
     };
-    if stroker.is_null() {
+    if stroker.is_null() || !stroker_exists(stroker) {
         return FT_Err_Invalid_Argument;
     }
-    STROKER_REGISTRY.with(|registry| {
-        let mut registry = registry.borrow_mut();
-        let Some(entry) = registry.get_mut(&(stroker as usize)) else {
-            return FT_Err_Invalid_Argument;
-        };
-        // FreeType 2.14.3 `src/base/ftstroke.c:2067-2088` rewinds before
-        // parsing and skips contours whose `last <= first`; later
-        // `src/base/ftstroke.c:2229-2237` avoids EndSubPath if no segment was
-        // generated.  The maintained non-degenerate route below is limited to
-        // an opened two-point on-curve line, which is the same shape already
-        // proven by the direct `BeginSubPath`/`LineTo`/`EndSubPath` fixtures.
-        // Real conic/cubic/closed glyph segment parsing/export remains pending.
-        entry.state.rewind_path();
-        let mut first = 0usize;
-        for &last_raw in &outline.contours {
-            let last = usize::from(last_raw);
-            if last >= outline.points.len() {
-                return FT_Err_Invalid_Outline;
-            }
-            if last <= first {
-                first = last.saturating_add(1);
-                continue;
-            }
-            if last == first + 1
-                && outline.tags.get(first).copied().unwrap_or(1) & 1 != 0
-                && outline.tags.get(last).copied().unwrap_or(1) & 1 != 0
-                && entry.state.left_points == 0
-                && entry.state.right_points == 0
-            {
-                entry.state.first_point = false;
-                entry.state.subpath_start = outline.points[first];
-                entry.state.center = outline.points[last];
-                entry.state.subpath_open = _opened != 0;
-                entry.state.line_segments = 1;
-                let finalized = if _opened != 0 {
-                    entry.state.finalize_open_single_line()
-                } else {
-                    entry.state.finalize_closed_single_horizontal_line()
+
+    // FreeType 2.14.3 `src/base/ftstroke.c:2067-2242` rewinds before parsing,
+    // walks contours by public outline tags, handles implied conic starts and
+    // midpoints, and delegates actual segment stroking to LineTo/ConicTo/
+    // CubicTo before conditionally ending the subpath.
+    FT_Stroker_Rewind(stroker);
+    let mut previous_last: Option<usize> = None;
+    for &last_raw in &outline.contours {
+        let first = previous_last.map_or(0usize, |last| last.saturating_add(1));
+        let last = usize::from(last_raw);
+        previous_last = Some(last);
+        if last >= outline.points.len() || last >= outline.tags.len() {
+            return FT_Err_Invalid_Outline;
+        }
+        if last <= first {
+            continue;
+        }
+
+        let mut limit = last;
+        let mut v_start = outline.points[first];
+        let v_last = outline.points[last];
+        let mut point_index = first as isize;
+        let mut tag = ft_curve_tag(outline.tags[first]);
+
+        if tag == FT_CURVE_TAG_CUBIC as FT_Byte {
+            return FT_Err_Invalid_Outline;
+        }
+        if tag == FT_CURVE_TAG_CONIC as FT_Byte {
+            if ft_curve_tag(outline.tags[last]) == FT_CURVE_TAG_ON as FT_Byte {
+                v_start = v_last;
+                limit = limit.saturating_sub(1);
+            } else {
+                v_start = FT_Vector {
+                    x: (v_start.x + v_last.x) / 2,
+                    y: (v_start.y + v_last.y) / 2,
                 };
-                if finalized {
-                    first = last.saturating_add(1);
-                    continue;
+            }
+            point_index -= 1;
+        }
+
+        let begin_status = FT_Stroker_BeginSubPath(stroker, Some(&v_start), opened);
+        if begin_status != FT_Err_Ok {
+            return begin_status;
+        }
+
+        let mut close_status = FT_Err_Ok;
+        while point_index < limit as isize {
+            point_index += 1;
+            let index = point_index as usize;
+            tag = ft_curve_tag(outline.tags[index]);
+            match tag {
+                tag if tag == FT_CURVE_TAG_ON as FT_Byte => {
+                    let status = FT_Stroker_LineTo(stroker, Some(&outline.points[index]));
+                    if status != FT_Err_Ok {
+                        return status;
+                    }
+                }
+                tag if tag == FT_CURVE_TAG_CONIC as FT_Byte => {
+                    let mut control = outline.points[index];
+                    loop {
+                        if point_index < limit as isize {
+                            point_index += 1;
+                            let next_index = point_index as usize;
+                            let next_tag = ft_curve_tag(outline.tags[next_index]);
+                            let vec = outline.points[next_index];
+                            if next_tag == FT_CURVE_TAG_ON as FT_Byte {
+                                let status =
+                                    FT_Stroker_ConicTo(stroker, Some(&control), Some(&vec));
+                                if status != FT_Err_Ok {
+                                    return status;
+                                }
+                                break;
+                            }
+                            if next_tag != FT_CURVE_TAG_CONIC as FT_Byte {
+                                return FT_Err_Invalid_Outline;
+                            }
+                            let middle = FT_Vector {
+                                x: (control.x + vec.x) / 2,
+                                y: (control.y + vec.y) / 2,
+                            };
+                            let status = FT_Stroker_ConicTo(stroker, Some(&control), Some(&middle));
+                            if status != FT_Err_Ok {
+                                return status;
+                            }
+                            control = vec;
+                        } else {
+                            close_status =
+                                FT_Stroker_ConicTo(stroker, Some(&control), Some(&v_start));
+                            break;
+                        }
+                    }
+                }
+                _ => {
+                    if point_index + 1 > limit as isize
+                        || ft_curve_tag(outline.tags[(point_index + 1) as usize])
+                            != FT_CURVE_TAG_CUBIC as FT_Byte
+                    {
+                        return FT_Err_Invalid_Outline;
+                    }
+                    point_index += 2;
+                    let control1 = outline.points[(point_index - 2) as usize];
+                    let control2 = outline.points[(point_index - 1) as usize];
+                    if point_index <= limit as isize {
+                        let to = outline.points[point_index as usize];
+                        let status = FT_Stroker_CubicTo(
+                            stroker,
+                            Some(&control1),
+                            Some(&control2),
+                            Some(&to),
+                        );
+                        if status != FT_Err_Ok {
+                            return status;
+                        }
+                    } else {
+                        close_status = FT_Stroker_CubicTo(
+                            stroker,
+                            Some(&control1),
+                            Some(&control2),
+                            Some(&v_start),
+                        );
+                    }
                 }
             }
-            return FT_Err_Unimplemented_Feature;
+            if close_status != FT_Err_Ok {
+                return close_status;
+            }
         }
-        FT_Err_Ok
-    })
+
+        let first_point = match stroker_first_point(stroker) {
+            Ok(first_point) => first_point,
+            Err(error) => return error,
+        };
+        if !first_point {
+            let end_status = FT_Stroker_EndSubPath(stroker);
+            if end_status != FT_Err_Ok {
+                return end_status;
+            }
+        }
+    }
+    FT_Err_Ok
 }
 
 pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
