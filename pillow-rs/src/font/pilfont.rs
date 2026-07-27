@@ -12,6 +12,7 @@ use crate::image::Image;
 const GLYPH_COUNT: usize = 256;
 const GLYPH_RECORD_LEN: usize = 20;
 const METRICS_LEN: usize = GLYPH_COUNT * GLYPH_RECORD_LEN;
+const MAX_STRING_LENGTH: usize = 1_000_000;
 
 const DEFAULT_METRICS: &[u8] = include_bytes!("courb08.pil");
 const DEFAULT_BITMAP: &[u8] = include_bytes!("courb08.png");
@@ -275,11 +276,13 @@ impl PilFont {
 
     /// Returns `(advance width, fixed font height)` for Latin-1 bytes.
     pub fn getsize(&self, text: &[u8]) -> Result<(i32, i32), PilError> {
+        validate_text_length(text)?;
         Ok((self.textwidth(text)?, self.ysize))
     }
 
     /// Renders Latin-1 bytes using Pillow's PILfont placement rules.
     pub fn getmask(&self, text: &[u8]) -> Result<PilFontMask, PilError> {
+        validate_text_length(text)?;
         let width_i32 = self.textwidth(text)?;
         let width = u32::try_from(width_i32)
             .map_err(|_| PilError::ValueError("PILfont text width is negative".into()))?;
@@ -381,6 +384,13 @@ impl PilFont {
         }
         Ok(())
     }
+}
+
+fn validate_text_length(text: &[u8]) -> Result<(), PilError> {
+    if text.len() > MAX_STRING_LENGTH {
+        return Err(PilError::ValueError("too many characters in string".into()));
+    }
+    Ok(())
 }
 
 fn parse_metrics_file(data: &[u8]) -> Result<(Vec<Vec<u8>>, &[u8]), PilError> {

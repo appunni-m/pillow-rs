@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::{borrow::Cow, fs, path::Path};
 
 use pillow_rs::{
     Draw, Image, ImageFont, ImageFontTextOptions, ImageFontVariantOptions, ImageFontVariationAxis,
@@ -125,7 +125,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         "text_bbox" => {
             let (width, height) = match text_bytes(params)? {
                 Some(bytes) => pillow_rs::font_text_bbox_bytes(&font, &bytes)?,
-                None => pillow_rs::font_text_bbox(&font, text(params)?)?,
+                None => pillow_rs::font_text_bbox(&font, text(params)?.as_ref())?,
             };
             Ok(json!({
                 "type": "size",
@@ -199,7 +199,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
         "getbbox" => Ok(getbbox(&font, params)?),
         "getbbox_binary" => Ok(bbox_value(match text_bytes(params)? {
             Some(bytes) => pillow_rs::font_getbbox_binary_bytes(&font, &bytes)?,
-            None => pillow_rs::font_getbbox_binary(&font, text(params)?)?,
+            None => pillow_rs::font_getbbox_binary(&font, text(params)?.as_ref())?,
         })),
         "getmask" => {
             let (width, height, pixels) = getmask(&font, params)?;
@@ -213,17 +213,20 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
             let start = pair_f64(required(params, "start")?, "start")?;
             let (width, height, pixels, offset) = match text_bytes(params)? {
                 Some(bytes) => pillow_rs::font_getmask2_bytes_with_start(&font, &bytes, start)?,
-                None => pillow_rs::font_getmask2_with_start(&font, text(params)?, start)?,
+                None => pillow_rs::font_getmask2_with_start(&font, text(params)?.as_ref(), start)?,
             };
             Ok(mask_with_offset_value(width, height, "L", &pixels, offset))
         }
         "get_transposed_mask" => {
-            let (width, height, pixels) =
-                pillow_rs::font_get_transposed_mask(&font, text(params)?, orientation(params)?)?;
+            let (width, height, pixels) = pillow_rs::font_get_transposed_mask(
+                &font,
+                text(params)?.as_ref(),
+                orientation(params)?,
+            )?;
             Ok(image_value(width, height, "L", &pixels))
         }
         "transposed_bbox" => Ok(bbox_value(pillow_rs::transposed_bbox(
-            pillow_rs::font_getbbox(&font, text(params)?)?,
+            pillow_rs::font_getbbox(&font, text(params)?.as_ref())?,
             orientation(params)?,
         ))),
         "validate_transposed_length" => {
@@ -241,7 +244,7 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 .ok_or_else(|| PilError::ValueError("spacing must be a number".into()))?
                 as f32;
             let (width, height, pixels) =
-                pillow_rs::font_render_text_binary(&font, text(params)?, fill, spacing)?;
+                pillow_rs::font_render_text_binary(&font, text(params)?.as_ref(), fill, spacing)?;
             Ok(image_value(width, height, "RGBA", &pixels))
         }
         other => Err(PilError::NotImplementedError(format!(
@@ -261,22 +264,32 @@ fn required<'a>(object: &'a Value, field: &str) -> Result<&'a Value, PilError> {
         .ok_or_else(|| PilError::ValueError(format!("missing field: {field}")))
 }
 
-fn text(params: &Value) -> Result<&str, PilError> {
-    required(params, "text")?
+fn text(params: &Value) -> Result<Cow<'_, str>, PilError> {
+    let text = required(params, "text")?
         .as_str()
-        .ok_or_else(|| PilError::TypeError("text must be a string".into()))
+        .ok_or_else(|| PilError::TypeError("text must be a string".into()))?;
+    let repeat = text_repeat(params)?;
+    if repeat == 1 {
+        Ok(Cow::Borrowed(text))
+    } else {
+        Ok(Cow::Owned(text.repeat(repeat)))
+    }
 }
 
 fn text_bytes(params: &Value) -> Result<Option<Vec<u8>>, PilError> {
-    params
-        .get("text_bytes_hex")
-        .map(|value| {
-            value
-                .as_str()
-                .ok_or_else(|| PilError::TypeError("text_bytes_hex must be a string".into()))
-                .and_then(hex_to_bytes)
-        })
-        .transpose()
+    let Some(value) = params.get("text_bytes_hex") else {
+        return Ok(None);
+    };
+    let bytes = value
+        .as_str()
+        .ok_or_else(|| PilError::TypeError("text_bytes_hex must be a string".into()))
+        .and_then(hex_to_bytes)?;
+    let repeat = text_repeat(params)?;
+    if repeat == 1 {
+        Ok(Some(bytes))
+    } else {
+        Ok(Some(bytes.repeat(repeat)))
+    }
 }
 
 fn variation_name(params: &Value) -> Result<Vec<u8>, PilError> {
@@ -300,6 +313,19 @@ fn repeat_count(params: &Value) -> Result<usize, PilError> {
                 .as_u64()
                 .and_then(|value| usize::try_from(value).ok())
                 .ok_or_else(|| PilError::TypeError("repeat_count must be an integer".into()))
+        })
+        .transpose()
+        .map(|value| value.unwrap_or(1))
+}
+
+fn text_repeat(params: &Value) -> Result<usize, PilError> {
+    params
+        .get("text_repeat")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| PilError::TypeError("text_repeat must be an integer".into()))
         })
         .transpose()
         .map(|value| value.unwrap_or(1))
@@ -339,10 +365,12 @@ fn getlength(font: &ImageFont, params: &Value) -> Result<f32, PilError> {
             pillow_rs::font_getlength_bytes_with_options(font, &bytes, &text_options(params)?)
         }
         (Some(bytes), false) => pillow_rs::font_getlength_bytes(font, &bytes),
-        (None, true) => {
-            pillow_rs::font_getlength_with_options(font, text(params)?, &text_options(params)?)
-        }
-        (None, false) => pillow_rs::font_getlength(font, text(params)?),
+        (None, true) => pillow_rs::font_getlength_with_options(
+            font,
+            text(params)?.as_ref(),
+            &text_options(params)?,
+        ),
+        (None, false) => pillow_rs::font_getlength(font, text(params)?.as_ref()),
     }
 }
 
@@ -354,10 +382,13 @@ fn getbbox(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
         (Some(bytes), false) => Ok(bbox_value(pillow_rs::font_getbbox_bytes(font, &bytes)?)),
         (None, true) => Ok(bbox_float_value(pillow_rs::font_getbbox_with_options(
             font,
-            text(params)?,
+            text(params)?.as_ref(),
             &text_options(params)?,
         )?)),
-        (None, false) => Ok(bbox_value(pillow_rs::font_getbbox(font, text(params)?)?)),
+        (None, false) => Ok(bbox_value(pillow_rs::font_getbbox(
+            font,
+            text(params)?.as_ref(),
+        )?)),
     }
 }
 
@@ -367,10 +398,12 @@ fn getmask(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>), PilE
             pillow_rs::font_getmask_bytes_with_options(font, &bytes, &text_options(params)?)
         }
         (Some(bytes), false) => pillow_rs::font_getmask_bytes(font, &bytes),
-        (None, true) => {
-            pillow_rs::font_getmask_with_options(font, text(params)?, &text_options(params)?)
-        }
-        (None, false) => pillow_rs::font_getmask(font, text(params)?),
+        (None, true) => pillow_rs::font_getmask_with_options(
+            font,
+            text(params)?.as_ref(),
+            &text_options(params)?,
+        ),
+        (None, false) => pillow_rs::font_getmask(font, text(params)?.as_ref()),
     }
 }
 
@@ -380,10 +413,12 @@ fn getmask2(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>, (i32
             pillow_rs::font_getmask2_bytes_with_options(font, &bytes, &text_options(params)?)
         }
         (Some(bytes), false) => pillow_rs::font_getmask2_bytes(font, &bytes),
-        (None, true) => {
-            pillow_rs::font_getmask2_with_options(font, text(params)?, &text_options(params)?)
-        }
-        (None, false) => pillow_rs::font_getmask2(font, text(params)?),
+        (None, true) => pillow_rs::font_getmask2_with_options(
+            font,
+            text(params)?.as_ref(),
+            &text_options(params)?,
+        ),
+        (None, false) => pillow_rs::font_getmask2(font, text(params)?.as_ref()),
     }
 }
 
@@ -737,7 +772,7 @@ fn draw_text(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
         Image::new(width, height, mode, (0, 0, 0, 0))?,
         Some(mode.to_string()),
     );
-    draw.text(x, y, text(params)?, font, fill(params)?)?;
+    draw.text(x, y, text(params)?.as_ref(), font, fill(params)?)?;
     let pixels = draw.image_clone()?.tobytes()?;
     Ok(image_value(width, height, mode, &pixels))
 }

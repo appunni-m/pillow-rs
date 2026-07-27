@@ -1294,7 +1294,7 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
 
 fn canonical_pillow_parameter(operation: &str, fixture_key: &str) -> Option<String> {
     let parameter = match fixture_key {
-        "loader" | "orientation" => return None,
+        "loader" | "orientation" | "text_repeat" => return None,
         "size" if matches!(operation, "load_default" | "truetype") => "size",
         "size" => return None,
         "text" | "text_bytes_hex"

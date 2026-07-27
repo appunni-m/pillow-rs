@@ -9,6 +9,8 @@ use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
 
+const MAX_STRING_LENGTH: usize = 1_000_000;
+
 pub(super) struct TrueTypeEngine {
     face: ffi::FT_Face,
     font_bytes: Vec<u8>,
@@ -290,6 +292,7 @@ fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
 }
 
 pub(crate) fn getlength(font: &ImageFont, text: &str) -> Result<f32, PilError> {
+    validate_text_length(text)?;
     Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
 }
 
@@ -298,11 +301,13 @@ pub(crate) fn getlength_with_options(
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<f32, PilError> {
+    validate_text_length(text)?;
     validate_basic_layout_options(options)?;
     Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
 }
 
 pub(crate) fn getbbox(font: &ImageFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+    validate_text_length(text)?;
     bbox_from_run(font, text)
 }
 
@@ -311,6 +316,7 @@ pub(crate) fn getbbox_with_options(
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
+    validate_text_length(text)?;
     validate_basic_layout_options(options)?;
     let bbox = bbox_from_run_with_flags(font, text, text_load_flags(options))?;
     let (left, top, right, bottom) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
@@ -322,10 +328,12 @@ pub(crate) fn getbbox_binary(
     font: &ImageFont,
     text: &str,
 ) -> Result<(i32, i32, i32, i32), PilError> {
+    validate_text_length(text)?;
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
 pub(crate) fn getmask(font: &ImageFont, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+    validate_text_length(text)?;
     mask_from_run_with_start(font, text, TGT_NORM, (0.0, 0.0))
 }
 
@@ -343,6 +351,7 @@ pub(crate) fn getmask2(
     font: &ImageFont,
     text: &str,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    validate_text_length(text)?;
     getmask2_with_start(font, text, (0.0, 0.0))
 }
 
@@ -355,6 +364,7 @@ pub(crate) fn getmask2_with_start(
     text: &str,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    validate_text_length(text)?;
     let (width, height, pixels) = mask_from_run_with_start(font, text, TGT_NORM, start)?;
     let bbox = getbbox(font, text)?;
     Ok((width, height, pixels, (bbox.0, bbox.1)))
@@ -365,6 +375,7 @@ pub(crate) fn getmask2_with_options(
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    validate_text_length(text)?;
     validate_basic_layout_options(options)?;
     if options.mode.as_deref() == Some("RGBA") {
         return Err(PilError::TypeError(
@@ -415,6 +426,7 @@ pub(crate) fn render_text_binary(
     fill: (u8, u8, u8, u8),
     spacing: f32,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
+    validate_text_length(text)?;
     let _ = spacing;
     pack_rgba(
         mask_from_run_with_start(font, text, TGT_MONO, (0.0, 0.0))?,
@@ -428,6 +440,13 @@ fn validate_basic_layout_options(options: &ImageFontTextOptions) -> Result<(), P
             "'setting text direction, language or font features is not supported without libraqm'"
                 .into(),
         ));
+    }
+    Ok(())
+}
+
+fn validate_text_length(text: &str) -> Result<(), PilError> {
+    if text.chars().count() > MAX_STRING_LENGTH {
+        return Err(PilError::ValueError("too many characters in string".into()));
     }
     Ok(())
 }

@@ -267,8 +267,11 @@ def getmask2_call_args(params: dict[str, Any]) -> tuple[list[Any], dict[str, Any
 
 def text_value(params: dict[str, Any]) -> str | bytes | None:
     if "text_bytes_hex" in params:
-        return bytes.fromhex(params["text_bytes_hex"])
-    return params.get("text")
+        return bytes.fromhex(params["text_bytes_hex"]) * params.get("text_repeat", 1)
+    text = params.get("text")
+    if isinstance(text, str):
+        return text * params.get("text_repeat", 1)
+    return text
 
 
 def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) -> dict[str, Any]:
