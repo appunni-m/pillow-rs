@@ -1001,3 +1001,18 @@ Current request classification for `imagingft.rs` region coverage:
   no lower FreeType refactor is justified from this coverage evidence alone;
   lower FreeType changes should be limited to proven public ImageFont blockers
   such as broader stroked glyph geometry, not coverage-only denominator work.
+- The remaining normal `FT_Glyph_Stroke.destroy_original_option` row now has an
+  explicit maintained diagnostic route instead of falling through the generic
+  fallback. Focused normal verification with
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` passes
+  `7/7` runnable rows and leaves that single row pending. Focused
+  include-pending verification with
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Glyph_Stroke.destroy_original_option` exposes the real
+  blocker: pinned C returns `FT_Err_Ok`, while Rust FFI returns error code `7`
+  for the DejaVuSans glyph-50/radius-128 replacement-outline route. Source
+  review points this at the intentionally guarded general
+  `FT_Outline_Glyph_Stroke` geometry path in `pillow-rs-freetype`, not at
+  ImageFont adapter ownership logic. Keep the row pending until the lower
+  stroker can export the exact outline points/tags/contours for that geometry;
+  do not reduce it to ownership-only parity.

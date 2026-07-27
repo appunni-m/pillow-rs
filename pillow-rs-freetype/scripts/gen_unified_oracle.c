@@ -20126,6 +20126,57 @@ static int emit_glyph_stroke_outline_success(int argc, char** argv) {
     return 0;
 }
 
+static int emit_glyph_stroke_destroy_option(int argc, char** argv) {
+    if (argc != 9) return 2;
+    const char* path = argv[2];
+    FT_UInt glyph_index = (FT_UInt)strtoul(argv[3], NULL, 10);
+    FT_Fixed radius = (FT_Fixed)strtol(argv[4], NULL, 10);
+    FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[5], NULL, 10);
+    FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)strtol(argv[6], NULL, 10);
+    FT_Fixed miter_limit = (FT_Fixed)strtol(argv[7], NULL, 10);
+    FT_Bool destroy = (FT_Bool)strtol(argv[8], NULL, 10);
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    FT_Error face_error = init_error ? init_error : FT_New_Face(library, path, 0, &face);
+    FT_Error size_error = face_error ? face_error : FT_Set_Char_Size(face, 0, 1536, 72, 72);
+    FT_Error load_error = size_error ? size_error : FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP);
+    FT_Glyph glyph = NULL;
+    FT_Error get_error = load_error ? load_error : FT_Get_Glyph(face->glyph, &glyph);
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = get_error ? get_error : FT_Stroker_New(library, &stroker);
+    if (!new_error && stroker) {
+        FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+    }
+    FT_Glyph original = glyph;
+    FT_Error stroke_error = new_error ? new_error : FT_Glyph_Stroke(&glyph, stroker, destroy);
+    printf("{");
+    print_status(stroke_error);
+    printf(",\"output\":");
+    if (stroke_error) {
+        printf("null");
+    } else {
+        printf("{\"status\":%d,\"pglyph_after\":{\"nullness\":\"%s\"},\"original_destroyed\":%s,",
+               stroke_error,
+               glyph ? "non_null" : "null",
+               (!stroke_error && destroy && original && glyph != original) ? "true" : "false");
+        if (glyph && glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+            FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+            print_outline(&outline_glyph->outline);
+        } else {
+            printf("\"outline\":null");
+        }
+        printf("}");
+    }
+    printf("}\n");
+    if (stroker) FT_Stroker_Done(stroker);
+    if (glyph) FT_Done_Glyph(glyph);
+    if (!destroy && original && original != glyph) FT_Done_Glyph(original);
+    if (face) FT_Done_Face(face);
+    if (library) FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_glyph_stroke_border_outside_success(int argc, char** argv) {
     if (argc != 3) return 2;
     FT_Library library = NULL;
@@ -27260,6 +27311,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--glyph-stroke-outline-success")) {
         return emit_glyph_stroke_outline_success(argc, argv);
+    }
+    if (argc == 9 && streq(argv[1], "--glyph-stroke-destroy-option")) {
+        return emit_glyph_stroke_destroy_option(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--glyph-stroke-border-outside-success")) {
         return emit_glyph_stroke_border_outside_success(argc, argv);
