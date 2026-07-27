@@ -1,7 +1,7 @@
 use std::{borrow::Cow, fs, path::Path};
 
 use pillow_rs::{
-    Draw, Image, ImageFont, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
+    Draw, FreeTypeFont, Image, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
     ImageFontVariationAxis, PilError, PilFont,
 };
 use serde_json::{Value, json};
@@ -375,7 +375,7 @@ fn hex_digit(value: u8) -> Result<u8, PilError> {
     }
 }
 
-fn getlength(font: &ImageFont, params: &Value) -> Result<f32, PilError> {
+fn getlength(font: &FreeTypeFont, params: &Value) -> Result<f32, PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => {
             pillow_rs::imagefont_getlength_bytes_with_options(font, &bytes, &text_options(params)?)
@@ -390,7 +390,7 @@ fn getlength(font: &ImageFont, params: &Value) -> Result<f32, PilError> {
     }
 }
 
-fn getbbox(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
+fn getbbox(font: &FreeTypeFont, params: &Value) -> Result<Value, PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => Ok(bbox_float_value(
             pillow_rs::imagefont_getbbox_bytes_with_options(font, &bytes, &text_options(params)?)?,
@@ -410,7 +410,7 @@ fn getbbox(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
     }
 }
 
-fn getmask(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>), PilError> {
+fn getmask(font: &FreeTypeFont, params: &Value) -> Result<(u32, u32, Vec<u8>), PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => {
             pillow_rs::imagefont_getmask_bytes_with_options(font, &bytes, &text_options(params)?)
@@ -425,7 +425,10 @@ fn getmask(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>), PilE
     }
 }
 
-fn getmask2(font: &ImageFont, params: &Value) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+fn getmask2(
+    font: &FreeTypeFont,
+    params: &Value,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     match (text_bytes(params)?, has_text_options(params)) {
         (Some(bytes), true) => {
             pillow_rs::imagefont_getmask2_bytes_with_options(font, &bytes, &text_options(params)?)
@@ -660,7 +663,7 @@ fn fill(params: &Value) -> Result<(u8, u8, u8, u8), PilError> {
     ))
 }
 
-fn load_font(case: &Value, fixture_root: &Path) -> Result<ImageFont, PilError> {
+fn load_font(case: &Value, fixture_root: &Path) -> Result<FreeTypeFont, PilError> {
     let inputs = inputs(case)?;
     let params = required(inputs, "params")?;
     let size = params.get("size").map_or(Ok(10.0), |value| {
@@ -825,7 +828,7 @@ fn cannot_find_glyph_data_error(metrics_path: &Path) -> PilError {
     ))
 }
 
-fn draw_text(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
+fn draw_text(font: &FreeTypeFont, params: &Value) -> Result<Value, PilError> {
     let width = u32_field(params, "canvas_width")?;
     let height = u32_field(params, "canvas_height")?;
     let (x, y) = pair_i32(required(params, "xy")?, "xy")?;
@@ -841,7 +844,7 @@ fn draw_text(font: &ImageFont, params: &Value) -> Result<Value, PilError> {
     Ok(image_value(width, height, mode, &pixels))
 }
 
-fn font_descriptor(font: &ImageFont) -> Result<Value, PilError> {
+fn font_descriptor(font: &FreeTypeFont) -> Result<Value, PilError> {
     let (family, style) = pillow_rs::imagefont_getname_optional(font);
     let (ascent, descent) = pillow_rs::imagefont_getmetrics(font);
     Ok(json!({
