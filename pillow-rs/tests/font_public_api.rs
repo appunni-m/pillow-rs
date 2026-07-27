@@ -1803,12 +1803,14 @@ fn assert_gap_analysis_live_corpus_matches_inputs(input_dir: &Path, manifest: &F
     let actual_total = actual_counts.values().sum::<usize>();
 
     assert_eq!(
-        documented_counts, actual_counts,
+        documented_counts,
+        actual_counts,
         "{} Live fixture corpus table must exactly match manifest input JSON case counts",
         analysis_path.display()
     );
     assert_eq!(
-        documented_total, actual_total,
+        documented_total,
+        actual_total,
         "{} Live fixture corpus total must match active input JSON case count",
         analysis_path.display()
     );
@@ -1869,7 +1871,12 @@ fn markdown_backtick_value(line: &str) -> Option<String> {
 fn markdown_table_second_cell_usize(line: &str, path: &Path) -> usize {
     line.split('|')
         .nth(2)
-        .unwrap_or_else(|| panic!("{} has malformed markdown table row: {line}", path.display()))
+        .unwrap_or_else(|| {
+            panic!(
+                "{} has malformed markdown table row: {line}",
+                path.display()
+            )
+        })
         .trim()
         .parse::<usize>()
         .unwrap_or_else(|error| {
@@ -1880,10 +1887,7 @@ fn markdown_table_second_cell_usize(line: &str, path: &Path) -> usize {
         })
 }
 
-fn actual_live_corpus_counts(
-    input_dir: &Path,
-    manifest: &FontManifest,
-) -> BTreeMap<String, usize> {
+fn actual_live_corpus_counts(input_dir: &Path, manifest: &FontManifest) -> BTreeMap<String, usize> {
     manifest
         .input_files
         .iter()
@@ -2099,6 +2103,33 @@ fn assert_libraqm_error_contract_is_hard_coded() {
     );
 }
 
+fn assert_python_imagefont_facade_delegates_variation_apis() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let py_imagefont =
+        fs::read_to_string(repo_root.join("pillow-rs-py/python/pillow_rs/imagefont.py"))
+            .expect("Python ImageFont facade source must be readable");
+
+    for expected in [
+        "self._rust_font.get_variation_names()",
+        "self._rust_font.set_variation_by_name(name)",
+        "self._rust_font.get_variation_axes()",
+        "self._rust_font.set_variation_by_axes(axes)",
+    ] {
+        assert!(
+            py_imagefont.contains(expected),
+            "Python ImageFont facade must delegate variation public API to Rust core: missing {expected}"
+        );
+    }
+    assert!(
+        !py_imagefont.contains("variable-font metadata and mutation are not implemented")
+            && !py_imagefont.contains("def _require_variation_font"),
+        "Python ImageFont facade must not replace Rust/Pillow variation behavior with local NotImplementedError gating"
+    );
+}
+
 #[test]
 fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let root = fixture_root();
@@ -2115,6 +2146,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_covers_root_font_api(&manifest);
     assert_runner_exercises_root_font_api();
     assert_manifest_operations_have_runner_arms(&manifest);
+    assert_python_imagefont_facade_delegates_variation_apis();
 
     let pillow_methods = pillow_imagefont_public_methods();
     assert_pillow_imagefont_public_names_are_classified();

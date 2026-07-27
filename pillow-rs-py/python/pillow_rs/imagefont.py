@@ -88,11 +88,16 @@ class FreeTypeFont:
         if isinstance(font, str):
             self._font_path = font
             self._rust_font = _core.ImageFont.truetype(font, float(size))
+        elif isinstance(font, (bytes, bytearray, memoryview)):
+            self._font_data = bytes(font)
+            self._rust_font = _core.ImageFont.truetype_from_bytes(
+                self._font_data, float(size)
+            )
         elif hasattr(font, 'read'):
             self._font_data = font.read()
             self._rust_font = _core.ImageFont.truetype_from_bytes(self._font_data, float(size))
         else:
-            raise TypeError("font must be a file path or file-like object")
+            raise TypeError("font must be a file path, bytes, or file-like object")
         self.size = float(size)
         self.index = index
         self.encoding = encoding
@@ -211,7 +216,7 @@ class FreeTypeFont:
         :return: A list of named styles (bytes).
         :raises OSError: If the font is not a variation font.
         """
-        self._require_variation_font()
+        return self._rust_font.get_variation_names()
 
     def set_variation_by_name(self, name):
         """Set variation by name.
@@ -219,7 +224,9 @@ class FreeTypeFont:
         :param name: The name of the style.
         :raises OSError: If the font is not a variation font.
         """
-        self._require_variation_font()
+        if not isinstance(name, bytes):
+            name = name.encode()
+        return self._rust_font.set_variation_by_name(name)
 
     def get_variation_axes(self):
         """Get variation axes.
@@ -227,7 +234,15 @@ class FreeTypeFont:
         :return: A list of axis dictionaries.
         :raises OSError: If the font is not a variation font.
         """
-        self._require_variation_font()
+        return [
+            {
+                "minimum": minimum,
+                "default": default,
+                "maximum": maximum,
+                "name": name,
+            }
+            for minimum, default, maximum, name in self._rust_font.get_variation_axes()
+        ]
 
     def set_variation_by_axes(self, axes):
         """Set variation by axes values.
@@ -235,14 +250,7 @@ class FreeTypeFont:
         :param axes: A list of values for each axis.
         :raises OSError: If the font is not a variation font.
         """
-        self._require_variation_font()
-
-    def _require_variation_font(self):
-        if not self._rust_font.has_variations():
-            raise OSError("invalid argument")
-        raise NotImplementedError(
-            "variable-font metadata and mutation are not implemented"
-        )
+        return self._rust_font.set_variation_by_axes(axes)
 
 
 class TransposedFont:
