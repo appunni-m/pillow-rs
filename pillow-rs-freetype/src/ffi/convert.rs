@@ -197,6 +197,12 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
         {
             FT_Err_Invalid_Argument
         }
+        // FreeType 2.14.3 `src/sfnt/sfobjs.c` maps a missing horizontal
+        // metrics table to the dedicated SFNT error, which Pillow exposes as
+        // `OSError("horizontal metrics (hmtx) table missing")`.
+        FontError::InvalidFont(message) if message == "missing 'hmtx' table" => {
+            FT_Err_Hmtx_Table_Missing as FT_Error
+        }
         FontError::InvalidFont(_) => FT_Err_Invalid_File_Format,
         FontError::InvalidTable(_) => FT_Err_Invalid_Table,
         FontError::ArrayTooLarge => FT_Err_Array_Too_Large as FT_Error,

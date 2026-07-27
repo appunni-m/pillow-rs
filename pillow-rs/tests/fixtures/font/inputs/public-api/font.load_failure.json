@@ -108,6 +108,21 @@
           "size": 0.0001
         }
       }
+    },
+    {
+      "case_id": "font.load_failure.missing_hmtx_table",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/missing-hmtx.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }
