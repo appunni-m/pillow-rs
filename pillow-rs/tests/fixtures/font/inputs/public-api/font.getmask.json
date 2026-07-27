@@ -604,6 +604,66 @@
       }
     },
     {
+      "case_id": "font.getmask.sbit_unsupported_bit_depth_error",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-unsupported-bit-depth-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.sbit_unsupported_image_format_error",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-unsupported-image-format.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.sbit_missing_small_metrics_width_error",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-missing-small-metrics-width.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.invalid_maxp_too_many_instruction_defs",
       "operation": "getmask",
       "inputs": {
