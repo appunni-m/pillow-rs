@@ -11,8 +11,8 @@ Current evidence base:
 - Lower Rust FreeType implementation used by ImageFont: `pillow-rs-freetype/src/**`.
 - Active tests: `pillow-rs/tests/font_public_api.rs` plus input-only rows under `pillow-rs/tests/fixtures/font/inputs/public-api`.
 - Coverage MCP suite: `font-with-freetype`.
-- Coverage MCP run: `649787d0-4488-4d12-9cef-d610bf8cc124`.
-- Coverage MCP snapshot: `33772692-59a3-46aa-9471-0c48db9437c0`.
+- Coverage MCP run: `01bdeaea-2730-4fb7-af76-f7ec384d53d6`.
+- Coverage MCP snapshot: `300395c8-6699-444d-a4e2-2b5dae0f24c4`.
 
 The defensible current claim is:
 
@@ -28,7 +28,7 @@ That second claim is not true yet. Coverage and implementation review both show 
 
 ### Direct Font files
 
-Coverage for direct `pillow-rs/src/font` files in snapshot `33772692-59a3-46aa-9471-0c48db9437c0`:
+Coverage for direct `pillow-rs/src/font` files in snapshot `300395c8-6699-444d-a4e2-2b5dae0f24c4`:
 
 | File | Lines | Branches | Functions | Regions | Decision status |
 |---|---:|---:|---:|---:|---|
@@ -44,7 +44,7 @@ Coverage for direct `pillow-rs/src/font` files in snapshot `33772692-59a3-46aa-9
 | `91`, `92`, `253`, `271` | FreeType error table entries and table-miss behavior. | Pillow `_imagingft.c::geterror` maps FreeType errors into public `OSError` messages. Rust has the table, but not every rare status is reached by a public `PIL.ImageFont` input. | Do not add private table unit tests as parity proof. Add only public ImageFont rows that naturally trigger these errors. |
 | `796` | LLVM/source mapping around FFI constants/helper declarations. | This does not represent product behavior. | Treat as coverage artifact unless Coverage MCP source context later proves otherwise. |
 | `826`, `829` | `floor26` / `ceil26` 26.6 fixed-point conversion. | Pillow C uses pixel rounding/floor/ceil behavior for bbox and mask placement. Partial coverage can hide off-by-one bbox/mask errors. | Add public rows with negative bearings, fractional starts, descenders, ascenders, and glyphs/fonts that cross floor/ceil boundaries. |
-| `928` | BASIC bbox/glyph-run path with load flags. | BASIC layout is shared by `getlength`, `getbbox`, `getmask`, and `getmask2`. Partial coverage means not every load-flag path is independently proven. | Add minimal normal-vs-mono rows across bbox/mask endpoints. Avoid duplicates; each row should prove an independent branch. |
+| `928` | BASIC bbox/glyph-run path with load flags. | BASIC layout is shared by `getlength`, `getbbox`, `getmask`, and `getmask2`. Additional `mode="1"` rows for `AV`/`jQ` now prove public mono load-flag parity, but Coverage MCP still reports this marker as partial. | Do not add duplicate BASIC rows only to chase this line. Keep it as a branch-marker gap unless source-context evidence identifies a distinct public input. |
 | `1094`, `1097`, `1099` | Stroked bitmap extent clamp. | This is Rust-only compatibility logic. Pillow allocates from `_imagingft.c::bounding_box_and_anchors` and clips during render; it does not obviously mutate extents this way. | Suspect implementation. Keep visible until lower stroker/bbox parity is fixed, then remove or prove by C/Pillow trace. |
 | `1193`, `1194` | `stroke_filled=true` path to `FT_Outline_Glyph_StrokeBorder`. | Pillow supports `stroke_filled` through `getmask2(..., stroke_filled=True)`. Rust routes the option, but successful real-glyph stroke-border output is not proven. | Blocked by incomplete lower stroker implementation. Add success rows only after general stroker support works. |
 

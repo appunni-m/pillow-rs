@@ -12,20 +12,21 @@ Scope reviewed:
 Coverage evidence:
 
 - Coverage MCP suite: `font-with-freetype`
-- Run: `649787d0-4488-4d12-9cef-d610bf8cc124`
-- Snapshot: `33772692-59a3-46aa-9471-0c48db9437c0`
-- Measured commit: `2aac0e6b50b4577adbf9269250bc4001a6787eb0`
+- Run: `01bdeaea-2730-4fb7-af76-f7ec384d53d6`
+- Snapshot: `300395c8-6699-444d-a4e2-2b5dae0f24c4`
+- Measured commit: `3d432999415f4366d0f62816107b9ddd227b34d5`
 
 ## Current defensible status
 
 The active ImageFont fixture corpus is exact live-oracle parity for the rows it covers.
 
-- 339 input-only fixture rows are active.
+- 345 input-only fixture rows are active.
 - Expected output is generated at runtime by Pillow 12.2.0, not stored in the input JSON.
 - The Rust test compares Rust `Result` status/payload to live Pillow status/payload.
 - RAQM rows are only no-libraqm error parity rows.
 - The new `font.load_failure.missing_hmtx_table` row proves the lower FreeType hmtx table error mapping through public `PIL.ImageFont.truetype`.
 - The new `font.getmetrics.fixed_width` and `font.getmetrics.hhea_zero_no_os2_fallback` rows prove two additional lower metrics-table shapes through public `PIL.ImageFont.FreeTypeFont.getmetrics`.
+- The new mono BASIC rows prove `mode="1"` load-flag parity for `AV` and `jQ` across `getlength`, `getbbox`, `getmask`, and `getmask2`, but Coverage MCP confirms they do not reduce the remaining `imagingft.rs` region gaps.
 
 The correct claim is:
 
@@ -55,7 +56,7 @@ Relevant remaining line gaps:
 | 91, 92, 253, 271 | partial/uncovered | FreeType error message table and table miss handling | The table is source-aligned with Pillow `_imagingft.c::geterror`, but rare FreeType status values are not reachable through current public ImageFont fixtures. | Do not add private table unit tests as proof. Add only public `PIL.ImageFont` inputs that naturally trigger these errors. |
 | 796 | partial branch | `KERN_DEFAULT` constant declaration area | Coverage artifact marks this from LLVM segment normalization. It is not meaningful product behavior. | No product change. Keep recorded as coverage artifact noise unless future MCP source context proves otherwise. |
 | 826, 829 | partial branches | `floor26` / `ceil26` 26.6 conversion helpers | Current rows do not cover all rounding-region shapes. This can hide bbox, offset, and mask-size edge differences. | Add public rows with negative bearings, fractional starts, descenders, ascenders, and fonts/glyphs that cross floor/ceil boundaries. |
-| 928 | partial branch | `bbox_from_run_with_flags(..., load_flags)` path | This line is part of BASIC bbox flow; the remaining partial branch indicates not all load-flag/bbox paths are independently proven. | Add minimal rows that exercise normal and mono load flags across `getbbox`, `getbbox_binary`, `getmask`, `getmask2`, and byte text. |
+| 928 | partial branch | `bbox_from_run_with_flags(..., load_flags)` path | Additional mono `AV`/`jQ` rows now prove public `mode="1"` load-flag behavior, but this line remains partial in Coverage MCP. | Do not add duplicate BASIC rows only to chase this marker. Focus next on stroker/stroke-border and rare public error paths. |
 | 1094, 1097, 1099 | partial/uncovered | stroked width/height extent clamps | This is Rust-only compatibility logic around stroked bitmap extents. Width path executes; height clamp body remains unproven. | Treat as suspect until lower stroker/bbox parity is fixed. Do not preserve this permanently unless C/Pillow trace proves equivalent behavior. |
 | 1193, 1194 | partial/uncovered | `stroke_filled=true` routes to `FT_Outline_Glyph_StrokeBorder` | The public option is wired, but no active successful ImageFont row proves real `stroke_filled=true` output. | Blocked by lower general stroker support. Add public success rows only after real outline stroke-border works. |
 
@@ -88,7 +89,8 @@ Latest lower-level fix:
 - This fixes the public ImageFont mismatch where Pillow returned `OSError("horizontal metrics (hmtx) table missing")` but Rust returned `OSError("broken file")`.
 - Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` arm is executed by the Font suite.
 - This did not change `pillow-rs/src/font/imagingft.rs` region coverage; it fixes an ImageFont-dependent lower FreeType conversion branch.
-- Coverage snapshot `33772692-59a3-46aa-9471-0c48db9437c0` adds fixed-width and hhea-zero/no-OS2 fallback `getmetrics()` rows. This raises lower `pillow-rs-freetype/src/font.rs` coverage from 1260 to 1266 covered lines, branches from 153 to 157, functions from 118 to 119, and regions from 1725 to 1735 compared with the earlier `3f959b1c-cb26-4af4-92e3-c6c0c736163e` baseline.
+- Coverage snapshot `33772692-59a3-46aa-9471-0c48db9437c0` added fixed-width and hhea-zero/no-OS2 fallback `getmetrics()` rows. This raised lower `pillow-rs-freetype/src/font.rs` coverage from 1260 to 1266 covered lines, branches from 153 to 157, functions from 118 to 119, and regions from 1725 to 1735 compared with the earlier `3f959b1c-cb26-4af4-92e3-c6c0c736163e` baseline.
+- Coverage snapshot `300395c8-6699-444d-a4e2-2b5dae0f24c4` added six mono BASIC public rows and confirmed exact Pillow parity with no change to the remaining `imagingft.rs` region gap set.
 
 ## 2. Pillow `ImageFont` public surface vs Rust implementation
 
@@ -263,11 +265,11 @@ Active input files and case counts:
 | `font.TransposedFont.getmask.json` | 6 |
 | `font.constructor.json` | 9 |
 | `font.get_transposed_mask.json` | 10 |
-| `font.getbbox.json` | 29 |
+| `font.getbbox.json` | 31 |
 | `font.getbbox_binary.json` | 9 |
-| `font.getlength.json` | 18 |
-| `font.getmask.json` | 35 |
-| `font.getmask2.json` | 42 |
+| `font.getlength.json` | 20 |
+| `font.getmask.json` | 36 |
+| `font.getmask2.json` | 43 |
 | `font.getmask2_with_start.json` | 23 |
 | `font.getmetrics.json` | 6 |
 | `font.getname.json` | 5 |
@@ -284,7 +286,7 @@ Active input files and case counts:
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 339 |
+| total | 345 |
 
 ## 5. Action list for decision
 
@@ -302,6 +304,6 @@ Recommended next actions, in order:
 
 ## Final decision point
 
-The branch currently has trustworthy parity for the active 339-row live Pillow corpus.
+The branch currently has trustworthy parity for the active 345-row live Pillow corpus.
 
 The branch does not yet have complete `PIL.ImageFont` parity. The main blocker is not more fixture JSON; it is incomplete general stroke geometry under `pillow-rs-freetype/src/ffi/handles.rs`. More fixture rows should be added after that implementation becomes real, otherwise the new rows will correctly fail against Pillow.
