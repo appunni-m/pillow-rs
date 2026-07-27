@@ -51,6 +51,26 @@ The unsafe claim is:
 
 That second claim is not defensible until the gaps below are either implemented with oracle fixtures or explicitly excluded from scope.
 
+## Source ownership boundary
+
+Implementation ownership must follow the original C/Python source boundary:
+
+- FreeType-original behavior belongs in `pillow-rs-freetype`: font tables,
+  glyph loading, SBIT, cmap, metrics, hinting, rasterization, stroker geometry,
+  FreeType object ownership, and FreeType error-code classification.
+- Pillow `_imagingft.c` behavior belongs in `pillow-rs/src/font/imagingft.rs`:
+  `FreeTypeFont` adapter arguments, calls into the FreeType-shaped lower API,
+  Pillow-visible bbox/mask/getmask2 result shape, offsets, mode conversion, and
+  Pillow exception mapping.
+- Pillow `ImageFont.py` behavior belongs in the Rust public Font facade, the
+  live-oracle tests, and thin host bindings: defaults, wrapper method shape,
+  path/stream-to-bytes conversion, and delegation into Rust core.
+
+Any implementation that moves FreeType table/glyph/stroker logic into
+`imagingft.rs`, or moves Pillow `_imagingft.c` public adapter behavior into
+`pillow-rs-freetype`, should be treated as a design bug unless the code is only
+bridging a FreeType-like lower slot into the Pillow public result shape.
+
 ## Pillow 12.2.0 public ImageFont surface vs Rust surface
 
 The live Pillow oracle exposes the following ImageFont surfaces:
