@@ -1,4 +1,6 @@
 """ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
+import os
+
 from . import _core
 
 
@@ -85,19 +87,20 @@ class FreeTypeFont:
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
-        if isinstance(font, str):
+        self.path = font
+        if isinstance(font, (str, bytes, os.PathLike)):
+            font_path = os.fspath(font)
             self._font_path = font
-            self._rust_font = _core.ImageFont.truetype(font, float(size))
-        elif isinstance(font, (bytes, bytearray, memoryview)):
-            self._font_data = bytes(font)
-            self._rust_font = _core.ImageFont.truetype_from_bytes(
-                self._font_data, float(size)
+            self._rust_font = _core.ImageFont.truetype(
+                os.fsdecode(font_path), float(size)
             )
         elif hasattr(font, 'read'):
             self._font_data = font.read()
-            self._rust_font = _core.ImageFont.truetype_from_bytes(self._font_data, float(size))
+            self._rust_font = _core.ImageFont.truetype_from_bytes(
+                self._font_data, float(size)
+            )
         else:
-            raise TypeError("font must be a file path, bytes, or file-like object")
+            raise TypeError("font must be a file path or file-like object")
         self.size = float(size)
         self.index = index
         self.encoding = encoding
@@ -106,6 +109,21 @@ class FreeTypeFont:
         # Font rendering uses pillow-rs-freetype. Font rendering may differ
         # slightly from PIL's FreeType output in edge cases.
         self._pil_font = None
+
+    @classmethod
+    def _from_font_data(cls, data, size=10, index=0, encoding="", layout_engine=None):
+        font = object.__new__(cls)
+        font.path = None
+        font._font_data = bytes(data)
+        font._rust_font = _core.ImageFont.truetype_from_bytes(
+            font._font_data, float(size)
+        )
+        font.size = float(size)
+        font.index = index
+        font.encoding = encoding
+        font.layout_engine = layout_engine
+        font._pil_font = None
+        return font
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
@@ -194,6 +212,14 @@ class FreeTypeFont:
         if getattr(self, '_is_default', False):
             new_size = self.size if size is None else float(size)
             return load_default(size=new_size)
+        if font is None and hasattr(self, '_font_data'):
+            return FreeTypeFont._from_font_data(
+                self._font_data,
+                size=self.size if size is None else float(size),
+                index=self.index if index is None else index,
+                encoding=self.encoding if encoding is None else encoding,
+                layout_engine=layout_engine if layout_engine is not None else self.layout_engine,
+            )
         return FreeTypeFont(
             font=font if font is not None else self._font_source(),
             size=self.size if size is None else float(size),
