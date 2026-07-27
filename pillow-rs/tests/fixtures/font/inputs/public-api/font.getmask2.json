@@ -98,6 +98,28 @@
       }
     },
     {
+      "case_id": "font.getmask2.dejavusans24_a_stroke_start_negative_y_clips",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 24,
+          "text": "A",
+          "mode": "L",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            -1.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.dejavusans24_a_stroke_1_5_filled_l",
       "operation": "getmask2",
       "inputs": {
