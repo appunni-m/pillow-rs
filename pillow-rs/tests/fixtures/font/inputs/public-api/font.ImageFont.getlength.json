@@ -29,6 +29,21 @@
           "text_bytes_hex": "410042"
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.getlength.too_many_characters_default_bitmap_error",
+      "operation": "ImageFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "A",
+          "text_repeat": 1000001
+        }
+      }
     }
   ]
 }
