@@ -1123,3 +1123,11 @@ Current request classification for `imagingft.rs` region coverage:
   Pillow Font oracle suite still passes and the promoted lower stroker row does
   not regress active ImageFont coverage, but it does not close the remaining
   `imagingft.rs` region gaps.
+- Follow-up public constructor input review: direct `ImageFont.truetype`
+  construction covered valid `index=0`, while the independent out-of-range
+  constructor path was only represented indirectly through `font_variant`.
+  Added input-only row
+  `font.constructor.truetype_dejavusans_index_out_of_range_error` so the live
+  Pillow 12.2.0 oracle directly proves `truetype(index=1)` error behavior for a
+  single-face font. `make -C pillow-rs font-tests` passes with this row; no
+  oracle output or error expectation is embedded in the JSON.
