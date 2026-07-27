@@ -83,9 +83,9 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Current-head Coverage MCP run: `28716015-9499-4f9c-a764-bddd2493edb1`
+Current-head Coverage MCP run: `ac760bd8-2a7d-4c46-bca6-39e8179b1d7f`
 
-Current-head Coverage MCP snapshot: `0a1549cf-dd6d-4253-9ec0-a27bf65b3ee2`
+Current-head Coverage MCP snapshot: `93af008f-33b6-4ccd-a98a-bf7dcce5b75e`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -115,9 +115,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `c5d48cae7cbb6b7885ba1d6395c31ae7b53b3616` and ingested
-  snapshot `0a1549cf-dd6d-4253-9ec0-a27bf65b3ee2` from run
-  `28716015-9499-4f9c-a764-bddd2493edb1`. Direct `imagingft.rs` coverage
+  passed at commit `82854a5973855a14c160c48cbc989d9000823d6c` and ingested
+  snapshot `93af008f-33b6-4ccd-a98a-bf7dcce5b75e` from run
+  `ac760bd8-2a7d-4c46-bca6-39e8179b1d7f`. Direct `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
   `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
