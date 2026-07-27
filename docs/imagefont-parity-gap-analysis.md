@@ -1131,3 +1131,15 @@ Current request classification for `imagingft.rs` region coverage:
   Pillow 12.2.0 oracle directly proves `truetype(index=1)` error behavior for a
   single-face font. `make -C pillow-rs font-tests` passes with this row; no
   oracle output or error expectation is embedded in the JSON.
+- Coverage MCP after committing that constructor row:
+  `font-tests-coverage-with-freetype-pillow-12-2` run
+  `3782007a-cb2b-4193-bd41-ee4b24946360` passed and ingested snapshot
+  `046f5af0-6b6f-44cc-9724-bfb98b50fd01` for commit `03c56d02`.
+  `pillow-rs/src/font/imagingft.rs` remains `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions
+  (`96.88%`), with unchanged reported ranges `91`, `253`, `271`, `796`,
+  `826`, `829`, `831`, and `928`. Direct LLVM segment inspection of the current
+  report shows the remaining branch markers sit on constructor/helper
+  signatures or debug-overflow/source-map spans, while the static table misses
+  are tuple-open lines for FreeType error constants. No additional public
+  ImageFont behavior gap was identified from those markers.
