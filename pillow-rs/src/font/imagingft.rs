@@ -1,8 +1,14 @@
 //! Adapter for PIL's `_imagingft.c` connector surface.
 //!
-//! All glyph loading, rendering, advance, and kerning go through
-//! `fontdone::ffi` — proven pixel-identical with C FreeType 2.14.3
-//! (4,097/4,097 unified parity).
+//! This module mirrors Pillow's `_imagingft.c` adapter layer: public
+//! `FreeTypeFont` argument handling, calls into the FreeType-shaped lower API,
+//! Pillow-visible result shaping, and Pillow exception mapping.
+//!
+//! FreeType-original behavior stays below this layer in `fontdone` /
+//! `pillow-rs-freetype` (font tables, glyph loading, SBIT, hinting,
+//! rasterization, stroker geometry, FreeType ownership, and FreeType error-code
+//! classification).  Do not add lower FreeType shortcuts here to make Pillow
+//! ImageFont rows pass; fix the real lower implementation instead.
 
 use super::{
     ImageFont, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
