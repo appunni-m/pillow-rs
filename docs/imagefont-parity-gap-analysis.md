@@ -83,9 +83,9 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Current-head Coverage MCP run: `dae8f2a1-7bd5-4460-b97c-0c4550ab5088`
+Current-head Coverage MCP run: `593b3236-4936-4938-a506-4ff4b1f6e9ef`
 
-Current-head Coverage MCP snapshot: `a23d0334-82c7-4221-a080-4bda0fc26d11`
+Current-head Coverage MCP snapshot: `846c4057-f658-4cdf-90a4-100e534dbe31`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -115,11 +115,11 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `5effb81f31fe26083bf9cff055046ec089149e18` and ingested
-  snapshot `a23d0334-82c7-4221-a080-4bda0fc26d11` from run
-  `dae8f2a1-7bd5-4460-b97c-0c4550ab5088`. Direct `imagingft.rs` coverage
-  remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
-  `2612/2696` regions. The seven remaining direct marker lines are `91`,
+  passed at commit `e3a92c610f90e3b1849be085f7be3abccaa68c01` and ingested
+  snapshot `846c4057-f658-4cdf-90a4-100e534dbe31` from run
+  `593b3236-4936-4938-a506-4ff4b1f6e9ef`. Direct `imagingft.rs` coverage
+  is `1667/1689` lines, `249/254` branches, `162/173` functions, and
+  `2611/2695` regions. The seven remaining direct marker lines are `91`,
   `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
   and `928` are partial-branch/source-map markers, while `253` and `271` are
   static FreeType error-table tuple-start mappings. No current gap identifies
@@ -255,6 +255,13 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   against Pillow 12.2.0 for both FreeType-backed and bitmap fonts across all
   supported transpose orientations. The check compares successful outputs and
   Pillow-shaped errors directly; no expected output is stored in the test data.
+- Follow-up stroked-mask parity fix: adding `jQ` with `stroke_width=1.5` to
+  `FreeTypeFont.getmask`/`getmask2` facade checks exposed a real allocation
+  mismatch. Pillow allocates stroked masks from
+  `_imagingft.c::bounding_box_and_anchors`; Rust now uses the bbox-derived
+  stroked left edge for the canvas origin and the active input-only corpus has
+  matching `font.getmask.*jq_stroke_1_5_l` and
+  `font.getmask2.*jq_stroke_1_5_l` rows.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
 - Commit `3558b7762` hardens the libraqm source guard: `PilError::UnsupportedLibraqm` must remain a unit variant with the one core hard-coded message, and `imagingft.rs` must use the dedicated constructor instead of encoding `KeyError` text directly.
@@ -468,9 +475,9 @@ from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
 at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
 Current-head Font-with-FreeType snapshot:
-`286cfb3e-f78e-4cb5-b2b7-b3ae820b687f` from Coverage MCP run
-`d0dc76e2-aab5-4dc1-8110-a6f627388485` at runtime commit
-`5286c6c4536321bda67071f1849029fe3fd3a185`.
+`846c4057-f658-4cdf-90a4-100e534dbe31` from Coverage MCP run
+`593b3236-4936-4938-a506-4ff4b1f6e9ef` at runtime commit
+`e3a92c610f90e3b1849be085f7be3abccaa68c01`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -484,14 +491,14 @@ refactor.
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 366/366 100.00% | n/a | 77/77 100.00% | 476/476 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | source-line gap is rustdoc line 140 on `from_pilfont_data`; branch coverage is 100%. No current source-line gap identifies a missing bitmap `ImageFont.ImageFont` behavior. Add bitmap rows only when they exercise a distinct public Pillow behavior, not to chase LLVM function/region artifacts. |
-| `pillow-rs/src/font/imagingft.rs` | 1666/1688 98.70% | 249/254 98.03% | 162/173 93.64% | 2612/2696 96.88% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
+| `pillow-rs/src/font/imagingft.rs` | 1667/1689 98.70% | 249/254 98.03% | 162/173 93.64% | 2611/2695 96.88% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
 
 Overall snapshot totals for this suite:
 
-- Lines: 17736/52954, 33.49%
-- Branches: 2999/11188, 26.81%
-- Functions: 1353/3691, 36.66%
-- Regions: 25360/81562, 31.09%
+- Lines: 17913/52955, 33.83%
+- Branches: 3039/11188, 27.16%
+- Functions: 1362/3691, 36.90%
+- Regions: 25604/81561, 31.39%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
