@@ -12,6 +12,25 @@ PILFONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/f
 DEJAVU = FONT_ROOT / "DejaVuSans.ttf"
 VARIABLE = FONT_ROOT / "variable-named-instances.ttf"
 COURB08 = PILFONT_ROOT / "courb08.pil"
+NON_BEHAVIORAL_PILLOW_IMAGEFONT_NAMES = {
+    "Any",
+    "Axis",
+    "BinaryIO",
+    "BytesIO",
+    "DeferredError",
+    "IO",
+    "Image",
+    "ModuleType",
+    "StrOrBytesPath",
+    "TYPE_CHECKING",
+    "TypedDict",
+    "annotations",
+    "base64",
+    "cast",
+    "core",
+    "is_path",
+    "sys",
+}
 
 
 def _font_observation(font):
@@ -117,6 +136,16 @@ def _font_pairs_for_transpose(RSPIL):
             PILImageFont.load(COURB08),
         ),
     )
+
+
+@pytest.mark.coverage_meta
+def test_imagefont_public_surface_has_no_missing_behavioral_names(RSPIL):
+    pil_names = {name for name in dir(PILImageFont) if not name.startswith("_")}
+    rs_names = {name for name in dir(RSPIL.ImageFont) if not name.startswith("_")}
+    missing = pil_names - rs_names
+
+    assert "MAX_STRING_LENGTH" in rs_names
+    assert missing <= NON_BEHAVIORAL_PILLOW_IMAGEFONT_NAMES
 
 
 @pytest.mark.covers("ImageFont.MAX_STRING_LENGTH")
