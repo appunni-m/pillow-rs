@@ -65,6 +65,10 @@ Pillow _imagingft.c     -> pillow-rs/src/font/imagingft.rs
 Pillow ImageFont.py API -> Rust ImageFont facade, fixtures, and thin bindings
 ```
 
+Ownership is assigned by the real upstream implementation source, not by the
+crate where a workaround would be easiest. A passing public fixture is not
+trusted if it is achieved by moving behavior across this boundary.
+
 That means each layer should be a 1:1 reflection of the real upstream layer it
 implements. If a behavior is FreeType-original, it is not allowed to migrate up
 into `imagingft.rs` as a workaround. If a behavior is Pillow `_imagingft.c`
