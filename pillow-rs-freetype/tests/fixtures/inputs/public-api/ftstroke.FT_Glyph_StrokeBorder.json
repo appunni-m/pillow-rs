@@ -162,10 +162,16 @@
           }
         },
         "params": {
-          "glyph_index": 50,
+          "glyph_index": 36,
           "inside": false,
           "destroy": true,
-          "ownership_probe": "counting glyph finalizer"
+          "ownership_probe": "counting glyph finalizer",
+          "stroker": {
+            "radius": 96,
+            "line_cap": "FT_STROKER_LINECAP_ROUND",
+            "line_join": "FT_STROKER_LINEJOIN_ROUND",
+            "miter_limit": 65536
+          }
         }
       },
       "classifiers": [

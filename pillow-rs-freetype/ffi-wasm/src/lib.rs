@@ -2466,6 +2466,45 @@ pub fn abi_support_glyph_stroke_border_inside_success(
     }
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_glyph_stroke_border_destroy_option(
+    glyph_handle: &mut usize,
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+    inside: FT_Bool,
+    destroy: FT_Bool,
+) -> FT_Error {
+    let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(*glyph_handle);
+    let Some(owned) = wasm_owned_outline_glyph_from_root(glyph) else {
+        return rust_ffi::FT_Err_Invalid_Argument;
+    };
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != rust_ffi::FT_Err_Ok {
+        return new_error;
+    }
+    rust_ffi::FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+    let result = rust_ffi::FT_Outline_Glyph_StrokeBorder(Some(&owned.core), stroker, inside);
+    rust_ffi::FT_Stroker_Done(stroker);
+    match result {
+        Ok(stroked) => {
+            let original = ptr::with_exposed_provenance_mut::<FontdoneWasmGlyph>(*glyph_handle);
+            *glyph_handle = Box::into_raw(Box::new(WasmOwnedOutlineGlyph::new(stroked))).addr();
+            if destroy != 0 {
+                // SAFETY: the private class marker proves this pointer came
+                // from `Box<WasmOwnedOutlineGlyph>` in
+                // `fontdone_wasm_get_glyph_from_face`.
+                unsafe { drop(Box::from_raw(original.cast::<WasmOwnedOutlineGlyph>())) };
+            }
+            rust_ffi::FT_Err_Ok
+        }
+        Err(error) => error,
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bbox(
     outline: *const FontdoneWasmOutline,

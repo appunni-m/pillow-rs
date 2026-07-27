@@ -25568,6 +25568,10 @@ fn is_glyph_stroke_border_inside_success_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Glyph_StrokeBorder.inside_border_success"
 }
 
+fn is_glyph_stroke_border_destroy_option_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option"
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -32240,6 +32244,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 required_asset_pathname(case, "ps_orientation_font")?,
             ])
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_destroy_option_case(case) => {
+            let params = &case.inputs.params;
+            Ok(vec![
+                "--glyph-stroke-border-destroy-option".to_string(),
+                font_pathname(case)?,
+                glyph_index_param(params)?.to_string(),
+                glyph_to_bitmap_stroker_radius(params)?.to_string(),
+                glyph_to_bitmap_stroker_line_cap(params)?.to_string(),
+                glyph_to_bitmap_stroker_line_join(params)?.to_string(),
+                glyph_to_bitmap_stroker_miter_limit(params)?.to_string(),
+                i32::from(bool_param(params, "inside", false)?).to_string(),
+                i32::from(bool_param(params, "destroy", false)?).to_string(),
+            ])
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             Ok(vec![
                 if case.operation == "ftstroke.export" {
@@ -33876,6 +33894,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
             rust_glyph_stroke_border_inside_success(case)
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_destroy_option_case(case) => {
+            rust_glyph_stroke_border_destroy_option(case)
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             rust_stroker_export_append(case)
         }
@@ -35077,6 +35098,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
             c_glyph_stroke_border_inside_success(case)
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_destroy_option_case(case) => {
+            c_glyph_stroke_border_destroy_option(case)
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             c_stroker_export_append(case)
         }
@@ -36174,6 +36198,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
             wasm_glyph_stroke_border_inside_success(case)
+        }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_destroy_option_case(case) => {
+            wasm_glyph_stroke_border_destroy_option(case)
         }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             wasm_stroker_export_append(case)
@@ -38611,6 +38638,236 @@ fn wasm_glyph_stroke_border_inside_success(case: &InputCase) -> Result<RunOutput
         )?,
     ];
     Ok(glyph_stroke_border_inside_output(rows))
+}
+
+fn glyph_stroke_border_destroy_output(
+    status: FT_Error,
+    glyph_present: bool,
+    original_destroyed: bool,
+) -> RunOutput {
+    let output = if status == FT_Err_Ok {
+        json!({
+            "status": status,
+            "pglyph_after": {
+                "nullness": if glyph_present { "non_null" } else { "null" }
+            },
+            "original_destroyed": original_destroyed
+        })
+    } else {
+        Value::Null
+    };
+    RunOutput {
+        status: Status {
+            kind: if status == FT_Err_Ok {
+                StatusKind::Ok
+            } else {
+                StatusKind::Error
+            },
+            error_code: i64::from(status),
+        },
+        output,
+    }
+}
+
+fn rust_glyph_stroke_border_destroy_option(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_destroy_option_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border destroy route",
+            case.case_id
+        ));
+    }
+    let params = &case.inputs.params;
+    let mut face = open_face_from_bytes_with_size_or_char_size(
+        font_bytes(case)?.as_ref(),
+        0,
+        (20, 20),
+        params,
+    )?;
+    let size_status = FT_Set_Char_Size(&mut face, 0, 1536, 72, 72);
+    let load_result = if size_status == FT_Err_Ok {
+        FT_Load_Glyph(&face, glyph_index_param(params)?, FT_LOAD_NO_BITMAP)
+    } else {
+        Err(size_status)
+    };
+    let glyph_result = match load_result {
+        Ok(slot) => FT_Get_Outline_Glyph(Some(&slot)),
+        Err(error) => Err(error),
+    };
+    let Ok(glyph) = glyph_result else {
+        return Ok(glyph_stroke_border_destroy_output(
+            glyph_result.err().unwrap_or(FT_Err_Invalid_Argument),
+            false,
+            false,
+        ));
+    };
+    let original = Box::new(glyph);
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let stroker_new_status = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if stroker_new_status == FT_Err_Ok {
+        FT_Stroker_Set(
+            stroker,
+            glyph_to_bitmap_stroker_radius(params)?,
+            glyph_to_bitmap_stroker_line_cap(params)?,
+            glyph_to_bitmap_stroker_line_join(params)?,
+            glyph_to_bitmap_stroker_miter_limit(params)?,
+        );
+    }
+    let stroke_result = if stroker_new_status == FT_Err_Ok {
+        FT_Outline_Glyph_StrokeBorder(
+            Some(original.as_ref()),
+            stroker,
+            FT_Bool::from(bool_param(params, "inside", false)?),
+        )
+    } else {
+        Err(stroker_new_status)
+    };
+    if !stroker.is_null() {
+        FT_Stroker_Done(stroker);
+    }
+    match stroke_result {
+        Ok(stroked) => {
+            let destroy = bool_param(params, "destroy", false)?;
+            if destroy {
+                drop(original);
+            }
+            let replacement = Box::new(stroked);
+            let output = glyph_stroke_border_destroy_output(FT_Err_Ok, true, destroy);
+            drop(replacement);
+            Ok(output)
+        }
+        Err(error) => Ok(glyph_stroke_border_destroy_output(error, false, false)),
+    }
+}
+
+fn c_glyph_stroke_border_destroy_option(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_destroy_option_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border destroy route",
+            case.case_id
+        ));
+    }
+    let params = &case.inputs.params;
+    let (library, face) = c_open_face_from_bytes_with_size_or_char_size(
+        font_bytes(case)?.as_ref(),
+        0,
+        (20, 20),
+        params,
+    )?;
+    let size_status = c_abi::FT_Set_Char_Size(face, 0, 1536, 72, 72);
+    let load_status = if size_status == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, glyph_index_param(params)?, FT_LOAD_NO_BITMAP)
+    } else {
+        size_status
+    };
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let get_status = if load_status == FT_Err_Ok {
+        match c_abi::abi_get_outline_glyph_from_face(face) {
+            Ok(created) => {
+                glyph = created;
+                FT_Err_Ok
+            }
+            Err(error) => error,
+        }
+    } else {
+        load_status
+    };
+    let original = glyph;
+    let mut stroker = ptr::null_mut();
+    let stroker_new_status = c_abi::FT_Stroker_New(library, &mut stroker);
+    if stroker_new_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Set(
+            stroker,
+            glyph_to_bitmap_stroker_radius(params)?,
+            glyph_to_bitmap_stroker_line_cap(params)?,
+            glyph_to_bitmap_stroker_line_join(params)?,
+            glyph_to_bitmap_stroker_miter_limit(params)?,
+        );
+    }
+    let status = if get_status == FT_Err_Ok && stroker_new_status == FT_Err_Ok {
+        c_abi::FT_Glyph_StrokeBorder(
+            &mut glyph,
+            stroker,
+            FT_Bool::from(bool_param(params, "inside", false)?),
+            FT_Bool::from(bool_param(params, "destroy", false)?),
+        )
+    } else if get_status != FT_Err_Ok {
+        get_status
+    } else {
+        stroker_new_status
+    };
+    let destroy = bool_param(params, "destroy", false)?;
+    let original_destroyed =
+        status == FT_Err_Ok && destroy && !original.is_null() && glyph != original;
+    let output = glyph_stroke_border_destroy_output(status, !glyph.is_null(), original_destroyed);
+    if !stroker.is_null() {
+        c_abi::FT_Stroker_Done(stroker);
+    }
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    if !destroy && !original.is_null() && original != glyph {
+        c_abi::FT_Done_Glyph(original);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_glyph_stroke_border_destroy_option(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_destroy_option_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border destroy route",
+            case.case_id
+        ));
+    }
+    let params = &case.inputs.params;
+    let handle = wasm_open_face_from_bytes_with_size_or_char_size(
+        font_bytes(case)?.as_ref(),
+        0,
+        (20, 20),
+        params,
+    )?;
+    let size_status = wasm_abi::fontdone_wasm_set_char_size(handle, 0, 1536, 72, 72);
+    let load_status = if size_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index_param(params)?, FT_LOAD_NO_BITMAP)
+    } else {
+        size_status
+    };
+    let mut glyph = 0usize;
+    let get_status = if load_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph)
+    } else {
+        load_status
+    };
+    let original = glyph;
+    let destroy = bool_param(params, "destroy", false)?;
+    let status = if get_status == FT_Err_Ok {
+        wasm_abi::abi_support_glyph_stroke_border_destroy_option(
+            &mut glyph,
+            glyph_to_bitmap_stroker_radius(params)?,
+            glyph_to_bitmap_stroker_line_cap(params)?,
+            glyph_to_bitmap_stroker_line_join(params)?,
+            glyph_to_bitmap_stroker_miter_limit(params)?,
+            FT_Bool::from(bool_param(params, "inside", false)?),
+            FT_Bool::from(destroy),
+        )
+    } else {
+        get_status
+    };
+    let original_destroyed = status == FT_Err_Ok && destroy && original != 0 && glyph != original;
+    let output = glyph_stroke_border_destroy_output(status, glyph != 0, original_destroyed);
+    if glyph != 0 {
+        let glyph_ptr = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph_ptr);
+    }
+    if !destroy && original != 0 && original != glyph {
+        let original_ptr =
+            ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(original);
+        wasm_abi::fontdone_wasm_done_glyph_handle(original_ptr);
+    }
+    wasm_done_face(handle);
+    Ok(output)
 }
 
 fn rust_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {
