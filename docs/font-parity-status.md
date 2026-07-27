@@ -175,6 +175,10 @@ blockers: `FT_Glyph_Stroke.destroy_original_option`,
 Forced pending-case runs no longer accept the shared generic fallback for these
 rows. A pending stroke row must have an explicit maintained runtime route before
 it can be promoted to C/Rust/WASM parity evidence.
+The inside-border row now points at the existing
+`input/fonts/cff/fontinfo-populated.otf` CFF fixture instead of an unresolved
+future PostScript-orientation asset; the remaining blocker is runtime route and
+geometry parity, not fixture availability.
 
 Additional lower-level blocker reduction:
 
