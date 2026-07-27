@@ -956,20 +956,20 @@ Current request classification for `imagingft.rs` region coverage:
   branches, `162/173` functions, and `2610/2696` regions with the same eight
   gap lines. This is a real parity improvement and lower-route coverage
   improvement, but not an LLVM-attributed `imagingft.rs` region movement.
-- Coverage MCP run `316bb0b7-be25-4c8c-80a8-9f2296950a35` passed and ingested
-  snapshot `eeab1264-1871-4a3d-a19a-f11391348f15` for the current uncommitted
-  inside-border promotion worktree state. Direct `imagingft.rs` coverage in
-  that snapshot is `1247/1295` lines, `204/226` branches, `121/132`
-  functions, and `2012/2129` regions (`94.50%` region coverage). The current
-  uncovered/partial ranges are lines `49`, `51`, `74-75`, `77`, `80`, `84`,
-  `88`, `193-195`, `201-203`, `211-213`, `265`, `271-272`, `297`, `360`,
-  `375`, `453`, `511`, `519`, `537`, `541`, `563`, `568`, `575`, `584`,
-  `593`, `596`, `600`, `602-603`, and `619`.
-  Source review classifies these as ImageFont adapter coverage gaps, not
-  `pillow-rs-freetype` region gaps: font-size/index/error formatting branches,
-  rare FreeType error-table message tuples, optional-name/default-variant
-  wrappers, variation failure/saturation paths, and empty-text/simple-wrapper
-  branches for `getlength`, `getbbox`, `getbbox_binary`, `getmask`, and
-  `getmask2`. Reaching 100% region coverage in `imagingft.rs` requires adding
-  active Pillow-oracle ImageFont fixture rows for these adapter branches; it
-  should not be pursued by broad FreeType refactors.
+- Coverage MCP run `505a3ae3-2f0c-4860-9690-836d3df0b37c` passed and ingested
+  snapshot `8f188dfe-809e-4059-847f-b6335142e0ba` for the authoritative
+  `font-with-freetype` suite after promoting the inside-border route. Direct
+  `imagingft.rs` coverage remains `1660/1682` lines, `249/254` branches,
+  `162/173` functions, and `2610/2696` regions (`96.81%` region coverage).
+  The exact remaining relevant ranges are lines `91`, `253`, `271`, `796`,
+  `826`, `829`, `831`, and `928`. Source review classifies these as
+  LLVM-attributed adapter/helper mapping gaps, not lower `pillow-rs-freetype`
+  region gaps: successful constructor return, static FreeType error-table tuple
+  starts, one-line glyph/layout helpers, and the `bbox_from_glyph_run` function
+  boundary. A sweeping trial added integer zero-size constructor and plain
+  empty-`getmask2` rows; they passed Pillow oracle parity but did not move these
+  coverage gaps, so they were intentionally not kept as active duplicate
+  inputs. Reaching 100% region coverage now requires either fixture rows that
+  exercise currently unobserved public behavior, or accepting that some
+  remaining LLVM regions are source-mapping artifacts rather than meaningful
+  missing Pillow/ImageFont branches.
