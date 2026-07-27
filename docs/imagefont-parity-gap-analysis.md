@@ -881,3 +881,10 @@ Current request classification for `imagingft.rs` region coverage:
   `imagingft.rs` adapter. Do not refactor `pillow-rs-freetype` broadly for this;
   the next valid implementation edit must be a narrow first-divergence fix
   inside the stroker segment/corner path, proven against pinned C.
+- Coverage MCP run `cba2b019-bae9-48cc-9f01-431eaedfdd55` passed and ingested
+  snapshot `ab195986-22c9-46e6-9130-e51fb20460ac` for commit `c3593860e`.
+  Direct `imagingft.rs` coverage remains unchanged at `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2610/2696` regions with the
+  same ranges `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`. This
+  confirms the harness diagnostic does not alter active public parity behavior
+  and that the remaining region gap is not closed by adding FreeType diagnostics.
