@@ -390,6 +390,27 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
             "size": list(size),
             "offset": list(offset),
         }
+    if operation == "native_render":
+        mode = params.get("mode", "")
+
+        def fill(width: int, height: int) -> Any:
+            size = (width, height)
+            return Image.core.fill("RGBA" if mode == "RGBA" else "L", size)
+
+        mask, offset = font.font.render(
+            text,
+            fill,
+            mode,
+            params.get("direction"),
+            params.get("features"),
+            params.get("language"),
+            params.get("stroke_width", 0),
+            params.get("stroke_filled", False),
+            params.get("anchor"),
+            params.get("ink", 0),
+            tuple(params.get("start", (0, 0))),
+        )
+        return image_with_offset_value(mask.size, "L", bytes(mask), offset)
     if operation == "native_getvaraxes":
         return native_variation_axes_value(font)
     if operation == "native_getvarnames":

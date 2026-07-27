@@ -29,31 +29,137 @@ def _normalize_layout_engine(layout_engine):
 class ImagingCore:
     """Stable Python facade for Pillow's internal mask storage contract."""
 
-    __slots__ = ("_image",)
+    __slots__ = ("_image", "_mode", "_size", "_bytes")
 
-    def __init__(self, image):
+    def __init__(self, image=None, mode=None, size=None, data=None):
         self._image = image
+        self._mode = mode
+        self._size = size
+        self._bytes = data
 
     @property
     def _rust_image(self):
+        if self._image is None:
+            raise ValueError("zero-sized mask has no Rust image storage")
         return self._image._rust_image
 
     @property
     def mode(self):
+        if self._image is None:
+            return self._mode
         return self._image.mode
 
     @property
     def size(self):
+        if self._image is None:
+            return self._size
         return self._image.size
 
     def tobytes(self):
+        if self._image is None:
+            return self._bytes
         return self._rust_image.tobytes_unpacked()
 
     def __bytes__(self):
         return self.tobytes()
 
     def transpose(self, method):
+        if self._image is None:
+            return ImagingCore(None, self._mode, self._size, self._bytes)
         return ImagingCore(self._image.transpose(method))
+
+
+class _NativeFont:
+    """Thin Python shape wrapper for Pillow's native ``_imagingft.Font`` object."""
+
+    __slots__ = ("_rust_font",)
+
+    def __init__(self, rust_font):
+        self._rust_font = rust_font
+
+    @property
+    def family(self):
+        return self._rust_font.family
+
+    @property
+    def style(self):
+        return self._rust_font.style
+
+    @property
+    def ascent(self):
+        return self._rust_font.ascent
+
+    @property
+    def descent(self):
+        return self._rust_font.descent
+
+    @property
+    def height(self):
+        return self._rust_font.height
+
+    @property
+    def x_ppem(self):
+        return self._rust_font.x_ppem
+
+    @property
+    def y_ppem(self):
+        return self._rust_font.y_ppem
+
+    @property
+    def glyphs(self):
+        return self._rust_font.glyphs
+
+    def getlength(self, text):
+        return self._rust_font.getlength(text)
+
+    def getsize(self, text):
+        return self._rust_font.getsize(text)
+
+    def getvarnames(self):
+        return self._rust_font.getvarnames()
+
+    def getvaraxes(self):
+        return self._rust_font.getvaraxes()
+
+    def setvarname(self, instance_index):
+        return self._rust_font.setvarname(instance_index)
+
+    def setvaraxes(self, axes):
+        return self._rust_font.setvaraxes(axes)
+
+    def render(
+        self,
+        text,
+        fill,
+        mode,
+        direction,
+        features,
+        language,
+        stroke_width,
+        stroke_filled,
+        anchor,
+        ink,
+        start,
+    ):
+        from .image import Image as PILImage
+
+        width, height, pixels, offset = self._rust_font.render_with_options(
+            str(text),
+            _none_if_empty(mode),
+            direction,
+            features,
+            language,
+            float(stroke_width),
+            bool(stroke_filled),
+            anchor,
+            ink,
+            start,
+        )
+        size = (width, height)
+        fill(*size)
+        if width == 0 or height == 0:
+            return ImagingCore(None, "L", size, bytes(pixels)), offset
+        return ImagingCore(PILImage.frombytes("L", size, bytes(pixels))), offset
 
 
 class ImageFont:
@@ -128,7 +234,7 @@ class FreeTypeFont:
         self.index = index
         self.encoding = encoding
         self.layout_engine = layout_engine
-        self.font = self._rust_font
+        self.font = _NativeFont(self._rust_font)
         # Note: PIL fallback for pixel-identical font rendering was removed.
         # Font rendering uses pillow-rs-freetype. Font rendering may differ
         # slightly from PIL's FreeType output in edge cases.
@@ -147,7 +253,7 @@ class FreeTypeFont:
         font.index = index
         font.encoding = encoding
         font.layout_engine = layout_engine
-        font.font = font._rust_font
+        font.font = _NativeFont(font._rust_font)
         font._pil_font = None
         return font
 
@@ -374,7 +480,7 @@ def load_default(size=None):
     font._rust_font = _core.ImageFont.load_default(float(size))
     font.size = float(size)
     font.layout_engine = Layout.BASIC
-    font.font = font._rust_font
+    font.font = _NativeFont(font._rust_font)
     font._is_default = True
     font._pil_font = None
     return font

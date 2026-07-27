@@ -1756,6 +1756,37 @@ impl PyFont {
         pillow_rs::imagefont_native_getsize(&self.inner, text).map_err(map_error)
     }
 
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, stroke_filled=false, anchor=None, ink=None, start=None))]
+    fn render_with_options(
+        &self,
+        text: &str,
+        mode: Option<String>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        stroke_filled: bool,
+        anchor: Option<String>,
+        ink: Option<i64>,
+        start: Option<(f64, f64)>,
+    ) -> PyResult<(u32, u32, Vec<u8>, (i32, i32))> {
+        let options = pillow_rs::ImageFontTextOptions {
+            mode,
+            direction,
+            features,
+            language,
+            stroke_width,
+            stroke_filled,
+            anchor,
+            ink,
+            start,
+            has_args: false,
+            has_kwargs: false,
+        };
+        pillow_rs::imagefont_native_render(&self.inner, text, &options).map_err(map_error)
+    }
+
     #[getter]
     fn family(&self) -> Option<String> {
         pillow_rs::imagefont_native_face_attrs(&self.inner)

@@ -114,6 +114,45 @@ def _native_font_observation(native_font):
     }
 
 
+def _native_render_observation(native_font, text, mode="", **kwargs):
+    calls = []
+
+    def fill(width, height):
+        calls.append((width, height))
+        return Image.core.fill("RGBA" if mode == "RGBA" else "L", (width, height))
+
+    try:
+        mask, offset = native_font.render(
+            text,
+            fill,
+            mode,
+            kwargs.get("direction"),
+            kwargs.get("features"),
+            kwargs.get("language"),
+            kwargs.get("stroke_width", 0),
+            kwargs.get("stroke_filled", False),
+            kwargs.get("anchor"),
+            kwargs.get("ink", 0),
+            kwargs.get("start", (0, 0)),
+        )
+        return {
+            "status": "ok",
+            "calls": calls,
+            "mode": mask.mode,
+            "size": mask.size,
+            "bytes": bytes(mask),
+            "offset": offset,
+        }
+    except Exception as exc:
+        return {
+            "status": "err",
+            "calls": calls,
+            "class": type(exc).__name__,
+            "args": exc.args,
+            "message": str(exc),
+        }
+
+
 def _native_variation_observation(font_factory):
     font = font_factory()
     return {
@@ -215,6 +254,24 @@ def test_imagefont_freetype_native_font_subset_matches_pillow(RSPIL):
     for source in (DEJAVU, VARIABLE):
         assert _native_font_observation(RSPIL.ImageFont.truetype(source, 20).font) == (
             _native_font_observation(PILImageFont.truetype(source, 20).font)
+        )
+
+
+@pytest.mark.coverage_meta
+def test_imagefont_freetype_native_render_subset_matches_pillow(RSPIL):
+    rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20).font
+    pil_font = PILImageFont.truetype(DEJAVU, 20).font
+    for text, kwargs in (
+        ("AV", {}),
+        ("AV", {"mode": "1"}),
+        (" ", {}),
+        ("AV", {"stroke_width": 1.5}),
+        ("AV", {"start": (1.25, 2.5)}),
+        ("AV", {"direction": "rtl"}),
+        ("AV", {"anchor": "lx"}),
+    ):
+        assert _native_render_observation(rs_font, text, **kwargs) == (
+            _native_render_observation(pil_font, text, **kwargs)
         )
 
 
