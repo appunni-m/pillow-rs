@@ -123,6 +123,10 @@ Post stroke-filled guard correction Coverage MCP run: `600170b9-8345-4b5d-9302-d
 
 Post stroke-filled guard correction Coverage MCP snapshot: `3270bbe8-a2f7-4e60-b17e-624520e77e73`
 
+Post coverage target policy correction Coverage MCP run: `6a6de48a-f14c-475d-a80a-43e512d36206`
+
+Post coverage target policy correction Coverage MCP snapshot: `12232546-8324-4731-b6ba-a2c855b62f5e`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -147,9 +151,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `2f24caae607da672c75bf5c41e72ce15cb769ef0` and ingested
-  snapshot `3270bbe8-a2f7-4e60-b17e-624520e77e73` from run
-  `600170b9-8345-4b5d-9302-dffa4e0ac5f4`. Direct `imagingft.rs` coverage
+  passed at commit `32f24049be6f3abea42785d164815b476ef16770` and ingested
+  snapshot `12232546-8324-4731-b6ba-a2c855b62f5e` from run
+  `6a6de48a-f14c-475d-a80a-43e512d36206`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
@@ -562,9 +566,9 @@ from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
 at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
 Latest measured Font-with-FreeType snapshot:
-`3270bbe8-a2f7-4e60-b17e-624520e77e73` from Coverage MCP run
-`600170b9-8345-4b5d-9302-dffa4e0ac5f4` at runtime commit
-`2f24caae607da672c75bf5c41e72ce15cb769ef0`. Direct
+`12232546-8324-4731-b6ba-a2c855b62f5e` from Coverage MCP run
+`6a6de48a-f14c-475d-a80a-43e512d36206` at runtime commit
+`32f24049be6f3abea42785d164815b476ef16770`. Direct
 `pillow-rs/src/font/imagingft.rs` coverage in that snapshot is `1739/1760`
 lines, `251/256` branches, `173/184` functions, and `2712/2797` regions.
 
