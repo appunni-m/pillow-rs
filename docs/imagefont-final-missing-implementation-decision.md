@@ -15,14 +15,18 @@ review. It combines:
 
 Important evidence boundary:
 
-- Coverage run: `01bdeaea-2730-4fb7-af76-f7ec384d53d6`
-- Coverage snapshot: `300395c8-6699-444d-a4e2-2b5dae0f24c4`
+- Coverage run: `a6721cc4-bd8e-4049-8846-a913fb52f71e`
+- Coverage snapshot: `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`
 - Suite: `font-with-freetype`
-- Measured commit: `3d432999415f4366d0f62816107b9ddd227b34d5`
+- Measured commit: `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
 - Oracle: repo-local `.oracle-venv`, Pillow `12.2.0`, native
   `PIL._imagingft`
-- Current working tree note: this coverage snapshot does not include the
-  uncommitted `pillow-rs-freetype/src/ffi/handles.rs` stroker parser edit.
+- Stroker parser note: commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
+  makes `FT_Stroker_ParseOutline` follow FreeType 2.14.3 contour/tag parser
+  control flow and delegate to existing line/conic/cubic segment routes. This
+  does not yet prove successful ImageFont stroke parity because the maintained
+  mixed-outline route, general segment stroker geometry, and border export are
+  still pending.
 
 ## Current defensible status
 
@@ -37,7 +41,7 @@ rows it exercises.
   success/error payload semantics.
 - `make -C pillow-rs font-tests` passed before this document.
 - Coverage MCP managed run passed and ingested snapshot
-  `300395c8-6699-444d-a4e2-2b5dae0f24c4`.
+  `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`.
 
 The correct product claim is:
 
@@ -53,7 +57,7 @@ That is not true yet.
 
 ### Direct Font implementation coverage
 
-Coverage snapshot `300395c8-6699-444d-a4e2-2b5dae0f24c4` reports:
+Coverage snapshot `2c1810bd-489d-49aa-96d5-bbaa5de7c71d` reports:
 
 | File | Lines | Branches | Functions | Regions | Decision |
 |---|---:|---:|---:|---:|---|
@@ -186,12 +190,18 @@ Current issue:
   incomplete for real glyph outlines.
 - Existing lower code has had fixture-specific successful paths for selected
   glyph/stroker cases.
+- `FT_Stroker_ParseOutline` now follows FreeType 2.14.3
+  `src/base/ftstroke.c:2067-2242` contour/tag control flow, including implied
+  conic starts and conic/cubic close handling. This removes the parser-level
+  two-point-line-only limitation, but it deliberately propagates errors from
+  the delegated segment routes instead of hard-coding output geometry.
 
 Decision:
 
 - This is the highest-priority real implementation gap.
 - Do not add more glyph-specific shortcuts.
-- Implement general outline stroker parsing/export in `pillow-rs-freetype`.
+- Finish general outline segment stroker geometry and export in
+  `pillow-rs-freetype`.
 - Then add public Pillow ImageFont rows for:
   - successful `stroke_width`;
   - successful `stroke_filled=true`;
