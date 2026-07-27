@@ -51,8 +51,8 @@ pub enum PilError {
     /// Bindings expose this as Pillow's no-libraqm `KeyError` category for
     /// parity, while core code keeps a distinct variant so unsupported RAQM
     /// paths are explicit and auditable.
-    #[error("{0}")]
-    UnsupportedLibraqm(String),
+    #[error("'setting text direction, language or font features is not supported without libraqm'")]
+    UnsupportedLibraqm,
 
     /// Input bytes could not be identified as a supported image format.
     #[error("cannot identify image file '{0}'")]
@@ -113,10 +113,7 @@ pub enum PilError {
 
 impl PilError {
     pub(crate) fn unsupported_libraqm() -> Self {
-        Self::UnsupportedLibraqm(
-            "'setting text direction, language or font features is not supported without libraqm'"
-                .into(),
-        )
+        Self::UnsupportedLibraqm
     }
 }
 
