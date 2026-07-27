@@ -459,13 +459,19 @@ Latest blocker verification:
 
 ```bash
 make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke
+make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder
 ```
 
 Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
-runnable rows pass (`4/4`), and the four remaining glyph-stroke success rows
-remain pending. The active Font corpus now promotes only this maintained
-DejaVuSans `"A"` stroke route; additional visible stroke rows must wait for the
-remaining lower-level routes to become real parity.
+`FT_Glyph_Stroke` runnable rows pass (`4/4`) with four route-pending blocker
+rows still reported, and `FT_Glyph_StrokeBorder` runnable rows pass (`1/1`)
+with three route-pending blocker rows still reported. The route audit remains
+`real-parity=4838`, `pending-route=183`.
+
+The active Font corpus now promotes only the maintained DejaVuSans `"A"` stroke
+route and the Pillow-compatible empty stroked-text behavior. Additional visible
+stroke rows must wait for the remaining lower-level routes to become real
+parity.
 
 ## Required next implementation sequence
 
