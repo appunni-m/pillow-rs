@@ -327,6 +327,17 @@ Status:
 - `GRAY2`, `GRAY4`, and `BGRA` coverage conversion is now implemented.
 - Large SBIT regions remain untested.
 
+Boundary:
+
+- `pillow-rs-freetype/src/tt/sbit.rs` owns EBLC/EBDT and CBLC/CBDT parsing,
+  strike selection, glyph bitmap decoding, compound bitmap composition, and
+  malformed SBIT error classification.
+- `pillow-rs/src/font/imagingft.rs` owns only the Pillow `_imagingft` adapter
+  behavior after a FreeType-like glyph slot exists: layout bbox from bitmap
+  glyph bounds, offsets, public mode conversion, and final mask coverage bytes.
+- Any future fix that needs SBIT table-format knowledge in `imagingft.rs` should
+  be rejected as a layering bug and moved into `pillow-rs-freetype`.
+
 Decision:
 
 - Add only independent SBIT/color bitmap rows that move lower `sbit.rs` or
