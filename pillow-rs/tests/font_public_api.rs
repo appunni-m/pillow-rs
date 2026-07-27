@@ -159,6 +159,26 @@ const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
     "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
 ];
 
+const EXPECTED_PARTIAL_STROKER_SYMBOLS: [&str; 17] = [
+    "FT_Outline_GetInsideBorder",
+    "FT_Outline_GetOutsideBorder",
+    "FT_Stroker_New",
+    "FT_Stroker_Set",
+    "FT_Stroker_Rewind",
+    "FT_Stroker_ParseOutline",
+    "FT_Stroker_BeginSubPath",
+    "FT_Stroker_EndSubPath",
+    "FT_Stroker_LineTo",
+    "FT_Stroker_ConicTo",
+    "FT_Stroker_CubicTo",
+    "FT_Stroker_GetBorderCounts",
+    "FT_Stroker_ExportBorder",
+    "FT_Stroker_GetCounts",
+    "FT_Stroker_Export",
+    "FT_Stroker_Done",
+    "FT_Glyph_StrokeBorder",
+];
+
 const DEFAULT_PARAMETER_VALUE: &str = "<default>";
 
 const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
@@ -1463,6 +1483,24 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
             interface_map_path.display()
         )
     });
+
+    for symbol in EXPECTED_PARTIAL_STROKER_SYMBOLS {
+        let entry = freetype_interface_symbol(&interface_map, symbol).unwrap_or_else(|| {
+            panic!(
+                "{} must classify {symbol}; Pillow ImageFont stroke rendering depends on the lower FreeType stroker path",
+                interface_map_path.display()
+            )
+        });
+        assert_eq!(
+            entry.get("status").and_then(Value::as_str),
+            Some("partial"),
+            "{symbol} must stay marked partial until its maintained and pending stroker rows all have exact parity"
+        );
+        assert!(
+            entry.get("rust").is_some_and(|rust| !rust.is_null()),
+            "{symbol} must name its Rust endpoint while it is a partial ImageFont stroke dependency"
+        );
+    }
 
     let glyph_stroke = freetype_interface_symbol(&interface_map, "FT_Glyph_Stroke")
         .unwrap_or_else(|| {

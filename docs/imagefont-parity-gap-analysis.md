@@ -242,7 +242,7 @@ Pillow `FreeTypeFont.getmask2` accepts `stroke_filled` through keyword arguments
 
 Rust now carries `stroke_filled` in `ImageFontTextOptions` and routes to `fontdone::ffi::FT_Outline_Glyph_StrokeBorder`. That removed the old explicit unsupported guard, but the lower `fontdone` stroke-border geometry for real glyph outlines is still incomplete. Commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0` makes `FT_Stroker_ParseOutline` follow the C contour/tag parser, and the latest implementation pass makes `FT_Outline_Glyph_Stroke` attempt the same parse/count/export shape used by FreeType before using the old pinned DejaVu glyph-36 fallback. The maintained mixed-outline route remains pending because the delegated segment routes and border export are not yet general enough.
 
-The interface map now classifies `FT_Glyph_StrokeBorder` as partial, not out of scope: Rust has the wrapper, but the successful outside/inside border and destroy-option rows are not runnable exact parity yet.
+The interface map now classifies the lower FreeType stroker group as partial, not out of scope: Rust has the lifecycle, segment, export, glyph-stroke, and glyph-stroke-border wrappers, but successful outside/inside border and destroy-option rows are not runnable exact parity yet.
 
 Decision: complete `FT_Stroker_ParseOutline`/border-export for real glyphs, then add successful `stroke_filled=true` fixture rows. Until then, this is a known parity gap. Do not add more glyph-specific shortcuts; the current normal-stroke path still has a DejaVu glyph-36 `A` fallback for the existing passing route, and a stroked `jQ` sweep row proved that Pillow succeeds while Rust fails before rendering.
 

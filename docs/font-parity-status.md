@@ -81,9 +81,10 @@ surface. This prevents hidden manifest drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
 public-surface exclusion is successful libraqm shaping; `direction`,
 `features`, and `language` no-libraqm error rows remain active parity rows.
-Lower `FT_Glyph_StrokeBorder` is not out of scope for ImageFont anymore: the
-Rust wrapper exists and is classified as partial until the successful
-inside/outside border and destroy-option rows are exact.
+The lower FreeType stroker group is not out of scope for ImageFont anymore:
+the Rust/C-ABI routes exist and are classified as partial until the maintained
+and pending `FT_Stroker_*`, `FT_Glyph_Stroke`, and
+`FT_Glyph_StrokeBorder` rows are exact.
 For covered public parameters, the verifier now requires 76 concrete values
 from the active corpus. This includes no-libraqm values
 (`direction="rtl"`, `language="en"`, `features=[]`, and
@@ -481,9 +482,9 @@ make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder
 Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
 `FT_Glyph_Stroke` runnable rows pass (`4/4`) with four route-pending blocker
 rows still reported, and `FT_Glyph_StrokeBorder` runnable rows pass (`1/1`)
-with three route-pending blocker rows still reported. The latest route audit
-classifies both glyph-stroke symbols as implemented only partially; successful
-stroke-border geometry remains pending rather than out of scope.
+with three route-pending blocker rows still reported. The interface map now
+classifies the lower stroker group as partial rather than out of scope;
+successful stroke-border geometry remains pending rather than excluded.
 
 The active Font corpus now promotes only the maintained DejaVuSans `"A"` stroke
 route and the Pillow-compatible empty stroked-text behavior. Additional visible
