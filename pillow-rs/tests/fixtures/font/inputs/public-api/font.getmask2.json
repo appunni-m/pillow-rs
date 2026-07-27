@@ -388,7 +388,7 @@
       }
     },
     {
-      "case_id": "font.getmask2.sbit_mono_a",
+      "case_id": "font.getmask2.sbit_mono_private_base",
       "operation": "getmask2",
       "inputs": {
         "assets": {
@@ -399,7 +399,7 @@
         },
         "params": {
           "size": 20,
-          "text": "A",
+          "text": "\ue000",
           "start": [
             0.0,
             0.0
@@ -408,7 +408,7 @@
       }
     },
     {
-      "case_id": "font.getmask2.sbit_gray_a",
+      "case_id": "font.getmask2.sbit_gray_private_base",
       "operation": "getmask2",
       "inputs": {
         "assets": {
@@ -419,7 +419,7 @@
         },
         "params": {
           "size": 20,
-          "text": "A",
+          "text": "\ue000",
           "start": [
             0.0,
             0.0
@@ -428,7 +428,27 @@
       }
     },
     {
-      "case_id": "font.getmask2.sbit_gray2_a",
+      "case_id": "font.getmask2.sbit_gray_private_opaque_neighborhood",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_gray2_private_base",
       "operation": "getmask2",
       "inputs": {
         "assets": {
@@ -439,7 +459,7 @@
         },
         "params": {
           "size": 20,
-          "text": "A",
+          "text": "\ue000",
           "start": [
             0.0,
             0.0
@@ -448,7 +468,7 @@
       }
     },
     {
-      "case_id": "font.getmask2.sbit_gray4_a",
+      "case_id": "font.getmask2.sbit_gray4_private_base",
       "operation": "getmask2",
       "inputs": {
         "assets": {
@@ -459,7 +479,7 @@
         },
         "params": {
           "size": 20,
-          "text": "A",
+          "text": "\ue000",
           "start": [
             0.0,
             0.0
@@ -468,7 +488,7 @@
       }
     },
     {
-      "case_id": "font.getmask2.sbit_bgra_a",
+      "case_id": "font.getmask2.sbit_bgra_private_base",
       "operation": "getmask2",
       "inputs": {
         "assets": {
@@ -479,7 +499,7 @@
         },
         "params": {
           "size": 20,
-          "text": "A",
+          "text": "\ue000",
           "start": [
             0.0,
             0.0
