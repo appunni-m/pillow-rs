@@ -197,7 +197,9 @@ Decision needed: make Rust error mapping generated/table-driven and make exact `
 
 The current manifest says successful libraqm shaping is out of scope. Direction/features/language rows are only trusted for no-libraqm error behavior.
 
-Decision needed: keep this explicit if libraqm remains out of scope. Do not claim full `PIL.ImageFont` parity while successful libraqm shaping is excluded.
+Current action: keep this explicit. Rust core now uses a dedicated `PilError::UnsupportedLibraqm` for direction/features/language paths. Python/JS/test parity mapping still exposes this as Pillow's no-libraqm `KeyError` category with the same message, so the unsupported path is explicit internally without weakening oracle parity.
+
+Decision needed: do not claim full `PIL.ImageFont` parity while successful libraqm shaping is excluded.
 
 ### 8. Bitmap `ImageFont` and FreeType `FreeTypeFont` are split into different Rust types
 
