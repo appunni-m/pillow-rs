@@ -91,10 +91,11 @@ class Draw:
                   stroke_fill=stroke_fill, embedded_color=embedded_color)
 
     def textbbox(self, xy, text, font=None, **kwargs):
+        font = self._get_font(font)
         return self._draw.textbbox(
             xy,
             str(text),
-            font,
+            font._rust_font if hasattr(font, "_rust_font") else font,
             kwargs.get("direction"),
             kwargs.get("features"),
             kwargs.get("language"),
@@ -103,9 +104,10 @@ class Draw:
         )
 
     def textlength(self, text, font=None, **kwargs):
+        font = self._get_font(font)
         return self._draw.textlength(
             str(text),
-            font,
+            font._rust_font if hasattr(font, "_rust_font") else font,
             kwargs.get("direction"),
             kwargs.get("features"),
             kwargs.get("language"),
@@ -119,10 +121,11 @@ class Draw:
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
+        font = self._get_font(font)
         return self._draw.multiline_textbbox(
             xy,
             str(text),
-            font,
+            font._rust_font if hasattr(font, "_rust_font") else font,
             spacing,
             align,
             direction,
