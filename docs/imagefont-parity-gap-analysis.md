@@ -4,7 +4,8 @@ Date: 2026-07-27
 
 Rust/source fixture commit reviewed: `7194ae04c`
 
-Latest audit note commit: `7194ae04c`
+Latest audit note: this document is the maintained audit record; use `git log`
+for the exact latest doc-only commit.
 
 Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
