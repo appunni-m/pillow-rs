@@ -2,7 +2,7 @@
 
 Date: 2026-07-27
 
-Rust/source fixture commit reviewed: `0f92ed6c0`
+Rust/source fixture commit reviewed: `49d45d736`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -14,6 +14,10 @@ Coverage MCP snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
 Latest Coverage MCP run: `517c1937-eba5-4cea-bc55-d25f267438cb`
 
 Latest Coverage MCP snapshot: `772ae59f-c6d5-49d0-95e5-b3af2d99599f`
+
+Latest harness-guard Coverage MCP run: `35b97347-c509-4e62-b260-4ce480a07c06`
+
+Latest harness-guard Coverage MCP snapshot: `e6e22c8d-e3f6-4270-828a-41dc982a6d43`
 
 Post wide-curve Coverage MCP run: `c766c267-e09f-4196-b204-736a8b44d8bd`
 
@@ -56,8 +60,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `fb2aa994-a1d3-460b-82f5-6bc3ef571ecc` from run
-  `59774e5d-8527-4b61-9331-749838154755` at commit `0f92ed6c0`. Direct
+  `e6e22c8d-e3f6-4270-828a-41dc982a6d43` from run
+  `35b97347-c509-4e62-b260-4ce480a07c06` at commit `49d45d736`. Direct
   `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
@@ -93,6 +97,10 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   shortcuts, subprocesses, fixture paths, and repo-local oracle paths inside
   `pillow-rs/src/font/imagingft.rs`. This prevents satisfying the region target
   by hiding code or comparing against anything other than the live Pillow oracle.
+- Commit `49d45d736` adds a live-corpus drift guard: the `Live fixture corpus`
+  table in this document must exactly match the manifest input files and each
+  input JSON case count. This prevents the parity plan from claiming a different
+  active corpus than the runtime-oracle suite actually executes.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
@@ -269,9 +277,9 @@ Current Font-with-FreeType snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
 from Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e`
 at runtime commit `072af0fbb8e309f936b68f566e6e133cca6a0c29`.
 
-Latest Font-with-FreeType snapshot: `0e79f59b-31ea-4705-b2fb-3f543080dda7`
-from Coverage MCP run `184ed959-fe4b-4ed9-ad97-4a54b58f8171`
-at runtime commit `ab66808a26ec8e5a0cbf805abccbc033a157d61b`.
+Latest Font-with-FreeType snapshot: `e6e22c8d-e3f6-4270-828a-41dc982a6d43`
+from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
+at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -289,10 +297,10 @@ refactor.
 
 Overall snapshot totals for this suite:
 
-- Lines: 17588/52862, 33.27%
-- Branches: 2980/11156, 26.71%
-- Functions: 1340/3686, 36.35%
-- Regions: 25203/81432, 30.95%
+- Lines: 17719/52862, 33.52%
+- Branches: 2991/11156, 26.81%
+- Functions: 1352/3686, 36.68%
+- Regions: 25340/81432, 31.12%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
