@@ -1470,6 +1470,33 @@ fn assert_documented_blocked_public_parameters() {
     );
 }
 
+fn assert_gap_analysis_tracks_stroke_filled_status() {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let analysis_path = repo_root.join("docs/imagefont-parity-gap-analysis.md");
+    let analysis = fs::read_to_string(&analysis_path)
+        .expect("ImageFont parity gap analysis document must be readable");
+
+    assert!(
+        !analysis
+            .contains("`stroke_filled=true` is wired but not proven by successful fixture rows"),
+        "{} must not regress to the pre-outside-border blocker status for stroke_filled=true",
+        analysis_path.display()
+    );
+    assert!(
+        analysis.contains("font.getmask2.dejavusans24_a_stroke_1_5_filled_l"),
+        "{} must name the live Pillow oracle row that proves the maintained stroke_filled=true route",
+        analysis_path.display()
+    );
+    assert!(
+        analysis.contains("FT_Glyph_StrokeBorder.outside_border_success"),
+        "{} must tie the Font stroke_filled=true row to the exact lower FreeType outside-border proof",
+        analysis_path.display()
+    );
+}
+
 fn assert_blocked_public_parameters_have_active_dependency_blockers() {
     let interface_map_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../pillow-rs-freetype/tests/data/interface_map.json");
@@ -1957,6 +1984,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_covers_pillow_public_signatures(&manifest, &cases, &pillow_signatures);
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
     assert_documented_blocked_public_parameters();
+    assert_gap_analysis_tracks_stroke_filled_status();
     assert_blocked_public_parameters_have_active_dependency_blockers();
     assert_libraqm_error_contract_is_hard_coded();
     assert_raqm_rows_use_dedicated_core_error(&cases, &root);
