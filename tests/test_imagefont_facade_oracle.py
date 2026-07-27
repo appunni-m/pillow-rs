@@ -96,6 +96,24 @@ def _freetype_value_observation(font, method, text, **kwargs):
         }
 
 
+def _native_font_observation(native_font):
+    attrs = {
+        name: getattr(native_font, name)
+        for name in ("family", "style", "ascent", "descent", "height", "x_ppem", "y_ppem", "glyphs")
+    }
+    text_values = {
+        text: {
+            "getsize": native_font.getsize(text),
+            "getlength": native_font.getlength(text),
+        }
+        for text in ("AV", "jQ", "")
+    }
+    return {
+        "attrs": attrs,
+        "text": text_values,
+    }
+
+
 def _transposed_observation(font, text, method):
     try:
         value = getattr(font, method)(text)
@@ -146,6 +164,14 @@ def test_imagefont_public_surface_has_no_missing_behavioral_names(RSPIL):
 
     assert "MAX_STRING_LENGTH" in rs_names
     assert missing <= NON_BEHAVIORAL_PILLOW_IMAGEFONT_NAMES
+
+
+@pytest.mark.coverage_meta
+def test_imagefont_freetype_native_font_subset_matches_pillow(RSPIL):
+    for source in (DEJAVU, VARIABLE):
+        assert _native_font_observation(RSPIL.ImageFont.truetype(source, 20).font) == (
+            _native_font_observation(PILImageFont.truetype(source, 20).font)
+        )
 
 
 @pytest.mark.covers("ImageFont.MAX_STRING_LENGTH")

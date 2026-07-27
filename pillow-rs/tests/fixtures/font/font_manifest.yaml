@@ -22,6 +22,9 @@ required_operations:
   - load_default_imagefont
   - load
   - load_path
+  - native_face_attrs
+  - native_getlength_26dot6
+  - native_getsize
   - truetype
   - font_size
   - text_bbox
@@ -208,6 +211,9 @@ input_files:
   - font.load_default_imagefont.json
   - font.load_failure.json
   - font.load_path.json
+  - font.native_face_attrs.json
+  - font.native_getlength_26dot6.json
+  - font.native_getsize.json
   - font.render_text.json
   - font.render_text_binary.json
   - font.text_bbox.json

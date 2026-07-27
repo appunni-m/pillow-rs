@@ -41,7 +41,7 @@ struct ParameterCoverage {
     covered: BTreeSet<String>,
 }
 
-const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 33] = [
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 36] = [
     "ImageFont.getbbox",
     "ImageFont.info",
     "ImageFont.getlength",
@@ -68,6 +68,9 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 33] = [
     "load_default",
     "load_default_imagefont",
     "load_path",
+    "native_face_attrs",
+    "native_getlength_26dot6",
+    "native_getsize",
     "render_text_binary",
     "set_variation_by_axes",
     "set_variation_by_name",
@@ -77,13 +80,16 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 33] = [
     "validate_transposed_length",
 ];
 
-const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 10] = [
+const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 13] = [
     "draw_text",
     "font_size",
     "get_transposed_mask",
     "getbbox_binary",
     "getmask2_with_start",
     "has_variations",
+    "native_face_attrs",
+    "native_getlength_26dot6",
+    "native_getsize",
     "render_text_binary",
     "text_bbox",
     "transposed_bbox",
@@ -266,7 +272,7 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
     ("truetype", "layout_engine", "RAQM"),
 ];
 
-const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 38] = [
+const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 41] = [
     ("imagefont_from_bytes", "truetype"),
     ("imagefont_from_bytes_with_options", "truetype"),
     ("imagefont_get_variation_axes", "get_variation_axes"),
@@ -297,6 +303,12 @@ const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 38] = [
     ("imagefont_getname_optional", "getname"),
     ("imagefont_has_variations", "has_variations"),
     ("imagefont_load_default", "load_default"),
+    ("imagefont_native_face_attrs", "native_face_attrs"),
+    (
+        "imagefont_native_getlength_26dot6",
+        "native_getlength_26dot6",
+    ),
+    ("imagefont_native_getsize", "native_getsize"),
     ("imagefont_render_text_binary", "render_text_binary"),
     ("imagefont_set_variation_by_axes", "set_variation_by_axes"),
     ("imagefont_set_variation_by_name", "set_variation_by_name"),

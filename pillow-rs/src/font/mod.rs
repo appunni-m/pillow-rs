@@ -210,6 +210,21 @@ impl FreeTypeFont {
         imagingft::getlength(self, text)
     }
 
+    /// Return Pillow native `_imagingft.Font.getlength()` 26.6 advance.
+    pub fn native_getlength_26dot6(&self, text: &str) -> Result<i32, PilError> {
+        imagingft::native_getlength_26dot6(self, text)
+    }
+
+    /// Return Pillow native `_imagingft.Font.getsize()` size and offset tuple.
+    pub fn native_getsize(&self, text: &str) -> Result<((i32, i32), (i32, i32)), PilError> {
+        imagingft::native_getsize(self, text)
+    }
+
+    /// Return Pillow native `_imagingft.Font` public face attributes.
+    pub fn native_face_attrs(&self) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
+        imagingft::native_face_attrs(self)
+    }
+
     /// Return Pillow's public text length for a Python `bytes` text argument.
     pub fn getlength_bytes(&self, text: &[u8]) -> Result<f32, PilError> {
         let text = pillow_bytes_to_text(text);

@@ -212,6 +212,22 @@ def font_descriptor(font: Any) -> dict[str, Any]:
     }
 
 
+def native_face_attrs_value(font: Any) -> dict[str, Any]:
+    return {
+        "type": "native_face_attrs",
+        "value": {
+            "family": font.font.family,
+            "style": font.font.style,
+            "ascent": font.font.ascent,
+            "descent": font.font.descent,
+            "height": font.font.height,
+            "x_ppem": font.font.x_ppem,
+            "y_ppem": font.font.y_ppem,
+            "glyphs": font.font.glyphs,
+        },
+    }
+
+
 def bytes_hex(value: bytes) -> str:
     return value.replace(b"\x00", b"").hex()
 
@@ -341,6 +357,17 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         return {"type": "name", "value": list(font.getname())}
     if operation == "getmetrics":
         return {"type": "metrics", "value": list(font.getmetrics())}
+    if operation == "native_face_attrs":
+        return native_face_attrs_value(font)
+    if operation == "native_getlength_26dot6":
+        return {"type": "native_length_26dot6", "value": font.font.getlength(text)}
+    if operation == "native_getsize":
+        size, offset = font.font.getsize(text)
+        return {
+            "type": "native_size",
+            "size": list(size),
+            "offset": list(offset),
+        }
     if operation == "getlength":
         return {"type": "length", "value": font.getlength(text, **text_kwargs(params))}
     if operation == "has_variations":
