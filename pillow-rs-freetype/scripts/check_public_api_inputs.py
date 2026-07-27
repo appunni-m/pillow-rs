@@ -1513,10 +1513,7 @@ def ftstroke_stroker_pending_reason(row: ConcreteInput) -> str | None:
             "attribute storage, owned border buffers, and final cleanup across "
             "pinned C, Rust FFI, C ABI, and WASM ABI"
         ),
-        (
-            "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers",
-            "ftstroke.FT_Stroker_Done.after_export_cleanup",
-        ): (
+        ("ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers",): (
             "FT_Stroker_Done parity needs a maintained non-null stroker route "
             "proving owned buffers are released after normal use and after "
             "export without double-free or leaked observable state"
@@ -5064,6 +5061,7 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftgxval.FT_VALIDATE_feat_INDEX.indexes_feat_output_slot": "FT_TrueTypeGX_Validate feat output index validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_New.valid_library_allocates_stroker": "FT_Stroker_New non-null allocation validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers": "FT_Stroker_Done non-null release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_Done.after_export_cleanup": "FT_Stroker_Done after-export ownership validates caller-owned outline preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c": "FT_Stroker unparsed non-null handle lifecycle validates New, Set, unparsed Export/ExportBorder no-op, Rewind, and Done through pinned C oracle, Rust FFI, C ABI, and WASM ABI; path geometry/count lifecycle remains pending",
         "ftstroke.FT_Stroker.lifecycle_contract": "FT_Stroker parsed lifecycle validates New, Set, BeginSubPath, two LineTo calls, EndSubPath, GetCounts, Export, and Done status/count behavior through pinned C oracle, Rust FFI, C ABI, and WASM ABI; exported join geometry remains pending elsewhere",
         "ftstroke.FT_Stroker_Export.invalid_inputs_noop": "FT_Stroker_Export null/invalid-input no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

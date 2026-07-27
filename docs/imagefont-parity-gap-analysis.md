@@ -1555,3 +1555,19 @@ current blockers.
   `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
   branches, `162/173` functions, and `2612/2696` regions with the same seven
   markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
+- `FT_Stroker_Done.after_export_cleanup` route promotion: the row now uses the
+  existing input-only `manual-paths.json` fixture with
+  `path=closed_subpath_initial_state` and has a maintained same-input runtime
+  route through pinned C FreeType, Rust FFI, C ABI, and WASM ABI. The route
+  builds the declared path, exports into caller-owned outline buffers, calls
+  `FT_Stroker_Done`, and verifies the exported outline remains unchanged after
+  stroker cleanup. This proves the ownership boundary from
+  `freetype/src/base/ftstroke.c:866-881` and the export behavior from
+  `freetype/src/base/ftstroke.c:2011-2038` without storing output in the input
+  JSON. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_Done.after_export_cleanup` passes `1/1`; normal
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Done` passes
+  `3/3` with `0` pending. Route audit moves to `real-parity=4860`,
+  `pending-route=162`. This is lower FreeType ownership/route parity and does
+  not claim a new direct `imagingft.rs` adapter region.
