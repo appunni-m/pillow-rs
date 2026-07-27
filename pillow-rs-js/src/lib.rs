@@ -1008,11 +1008,11 @@ impl ImageDraw {
 }
 
 // ── ImageFont ────────────────────────────────────────────────────
-use pillow_rs::ImageFont;
+use pillow_rs::ImageFont as RsImageFont;
 
 #[wasm_bindgen]
 pub struct ImageFont {
-    font: ImageFont,
+    font: RsImageFont,
 }
 
 #[wasm_bindgen]
@@ -1056,7 +1056,7 @@ impl ImageFontMask {
 impl ImageFont {
     #[wasm_bindgen(constructor)]
     pub fn new(data: Vec<u8>, size: f32) -> Result<ImageFont, JsValue> {
-        ImageFont::from_bytes(data, size)
+        pillow_rs::imagefont_from_bytes(data, size)
             .map(|f| ImageFont { font: f })
             .map_err(err)
     }
@@ -1068,7 +1068,7 @@ impl ImageFont {
         start_x: Option<f64>,
         start_y: Option<f64>,
     ) -> Result<ImageFontMask, JsValue> {
-        let (width, height, pixels, offset) = pillow_rs::font_getmask2_with_start(
+        let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_with_start(
             &self.font,
             text,
             (start_x.unwrap_or(0.0), start_y.unwrap_or(0.0)),
@@ -1085,13 +1085,13 @@ impl ImageFont {
 
     #[wasm_bindgen(js_name = "getname")]
     pub fn getname(&self) -> Vec<String> {
-        let (family, style) = pillow_rs::font_getname(&self.font);
+        let (family, style) = pillow_rs::imagefont_getname(&self.font);
         vec![family.to_owned(), style.to_owned()]
     }
 
     #[wasm_bindgen(js_name = "getVariationAxes")]
     pub fn get_variation_axes(&self) -> Result<js_sys::Array, JsValue> {
-        let axes = pillow_rs::font_get_variation_axes(&self.font).map_err(err)?;
+        let axes = pillow_rs::imagefont_get_variation_axes(&self.font).map_err(err)?;
         let result = js_sys::Array::new();
         for axis in axes {
             let object = js_sys::Object::new();
@@ -1122,7 +1122,7 @@ impl ImageFont {
 
     #[wasm_bindgen(js_name = "getVariationNames")]
     pub fn get_variation_names(&self) -> Result<js_sys::Array, JsValue> {
-        let names = pillow_rs::font_get_variation_names(&self.font).map_err(err)?;
+        let names = pillow_rs::imagefont_get_variation_names(&self.font).map_err(err)?;
         let result = js_sys::Array::new();
         for name in names {
             result.push(&js_sys::Uint8Array::from(name.as_slice()));
@@ -1132,17 +1132,17 @@ impl ImageFont {
 
     #[wasm_bindgen(js_name = "setVariationByName")]
     pub fn set_variation_by_name(&mut self, name: Vec<u8>) -> Result<(), JsValue> {
-        pillow_rs::font_set_variation_by_name(&mut self.font, &name).map_err(err)
+        pillow_rs::imagefont_set_variation_by_name(&mut self.font, &name).map_err(err)
     }
 
     #[wasm_bindgen(js_name = "setVariationByAxes")]
     pub fn set_variation_by_axes(&mut self, axes: Vec<f32>) -> Result<(), JsValue> {
-        pillow_rs::font_set_variation_by_axes(&mut self.font, &axes).map_err(err)
+        pillow_rs::imagefont_set_variation_by_axes(&mut self.font, &axes).map_err(err)
     }
 
     #[wasm_bindgen(js_name = "fontVariant")]
     pub fn font_variant(&self, size: Option<f32>) -> Result<ImageFont, JsValue> {
-        pillow_rs::font_variant(&self.font, size)
+        pillow_rs::imagefont_variant(&self.font, size)
             .map(|font| ImageFont { font })
             .map_err(err)
     }
@@ -1154,7 +1154,7 @@ impl ImageFont {
         orientation: Option<String>,
     ) -> Result<ImageFontMask, JsValue> {
         let (width, height, pixels) =
-            pillow_rs::font_get_transposed_mask(&self.font, text, orientation.as_deref())
+            pillow_rs::imagefont_get_transposed_mask(&self.font, text, orientation.as_deref())
                 .map_err(err)?;
         Ok(ImageFontMask {
             width,
@@ -1172,7 +1172,7 @@ impl ImageFont {
         orientation: Option<String>,
     ) -> Result<Vec<i32>, JsValue> {
         let bbox = pillow_rs::transposed_bbox(
-            pillow_rs::font_getbbox(&self.font, text).map_err(err)?,
+            pillow_rs::imagefont_getbbox(&self.font, text).map_err(err)?,
             orientation.as_deref(),
         );
         Ok(vec![bbox.0, bbox.1, bbox.2, bbox.3])
@@ -1185,17 +1185,17 @@ impl ImageFont {
         orientation: Option<String>,
     ) -> Result<f32, JsValue> {
         pillow_rs::validate_transposed_length(orientation.as_deref()).map_err(err)?;
-        pillow_rs::font_getlength(&self.font, text).map_err(err)
+        pillow_rs::imagefont_getlength(&self.font, text).map_err(err)
     }
 
     #[wasm_bindgen(js_name = "getbbox")]
     pub fn getbbox(&self, text: &str) -> Result<Vec<u32>, JsValue> {
-        let (w, h) = self.font.text_bbox(text).map_err(err)?;
+        let (w, h) = pillow_rs::imagefont_text_bbox(&self.font, text).map_err(err)?;
         Ok(vec![w, h])
     }
     #[wasm_bindgen(js_name = "getmask")]
     pub fn getmask(&self, text: &str) -> Result<Vec<u8>, JsValue> {
-        let (w, h, data) = self.font.getmask(text).map_err(err)?;
+        let (w, h, data) = pillow_rs::imagefont_getmask(&self.font, text).map_err(err)?;
         let mut result = vec![
             w as u8,
             (w >> 8) as u8,
@@ -1386,7 +1386,7 @@ impl ImageFont {
     }
     #[wasm_bindgen(js_name = "loadDefault")]
     pub fn load_default() -> Result<ImageFont, JsValue> {
-        ImageFont::load_default(10.0)
+        pillow_rs::imagefont_load_default(10.0)
             .map(|font| ImageFont { font })
             .map_err(err)
     }

@@ -263,44 +263,44 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
 ];
 
 const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 38] = [
-    ("font_from_bytes", "truetype"),
-    ("font_from_bytes_with_options", "truetype"),
-    ("font_get_variation_axes", "get_variation_axes"),
-    ("font_get_variation_names", "get_variation_names"),
-    ("font_get_transposed_mask", "get_transposed_mask"),
-    ("font_getbbox", "getbbox"),
-    ("font_getbbox_binary", "getbbox_binary"),
-    ("font_getbbox_binary_bytes", "getbbox_binary"),
-    ("font_getbbox_bytes", "getbbox"),
-    ("font_getbbox_bytes_with_options", "getbbox"),
-    ("font_getbbox_with_options", "getbbox"),
-    ("font_getlength", "getlength"),
-    ("font_getlength_bytes", "getlength"),
-    ("font_getlength_bytes_with_options", "getlength"),
-    ("font_getlength_with_options", "getlength"),
-    ("font_getmask", "getmask"),
-    ("font_getmask2", "getmask2"),
-    ("font_getmask2_bytes", "getmask2"),
-    ("font_getmask2_bytes_with_options", "getmask2"),
-    ("font_getmask2_bytes_with_start", "getmask2_with_start"),
-    ("font_getmask2_with_options", "getmask2"),
-    ("font_getmask2_with_start", "getmask2_with_start"),
-    ("font_getmask_bytes", "getmask"),
-    ("font_getmask_bytes_with_options", "getmask"),
-    ("font_getmask_with_options", "getmask"),
-    ("font_getmetrics", "getmetrics"),
-    ("font_getname", "getname"),
-    ("font_getname_optional", "getname"),
-    ("font_has_variations", "has_variations"),
-    ("font_load_default", "load_default"),
-    ("font_render_text_binary", "render_text_binary"),
-    ("font_set_variation_by_axes", "set_variation_by_axes"),
-    ("font_set_variation_by_name", "set_variation_by_name"),
-    ("font_size", "font_size"),
-    ("font_text_bbox", "text_bbox"),
-    ("font_text_bbox_bytes", "text_bbox"),
-    ("font_variant", "font_variant"),
-    ("font_variant_with_options", "font_variant"),
+    ("imagefont_from_bytes", "truetype"),
+    ("imagefont_from_bytes_with_options", "truetype"),
+    ("imagefont_get_variation_axes", "get_variation_axes"),
+    ("imagefont_get_variation_names", "get_variation_names"),
+    ("imagefont_get_transposed_mask", "get_transposed_mask"),
+    ("imagefont_getbbox", "getbbox"),
+    ("imagefont_getbbox_binary", "getbbox_binary"),
+    ("imagefont_getbbox_binary_bytes", "getbbox_binary"),
+    ("imagefont_getbbox_bytes", "getbbox"),
+    ("imagefont_getbbox_bytes_with_options", "getbbox"),
+    ("imagefont_getbbox_with_options", "getbbox"),
+    ("imagefont_getlength", "getlength"),
+    ("imagefont_getlength_bytes", "getlength"),
+    ("imagefont_getlength_bytes_with_options", "getlength"),
+    ("imagefont_getlength_with_options", "getlength"),
+    ("imagefont_getmask", "getmask"),
+    ("imagefont_getmask2", "getmask2"),
+    ("imagefont_getmask2_bytes", "getmask2"),
+    ("imagefont_getmask2_bytes_with_options", "getmask2"),
+    ("imagefont_getmask2_bytes_with_start", "getmask2_with_start"),
+    ("imagefont_getmask2_with_options", "getmask2"),
+    ("imagefont_getmask2_with_start", "getmask2_with_start"),
+    ("imagefont_getmask_bytes", "getmask"),
+    ("imagefont_getmask_bytes_with_options", "getmask"),
+    ("imagefont_getmask_with_options", "getmask"),
+    ("imagefont_getmetrics", "getmetrics"),
+    ("imagefont_getname", "getname"),
+    ("imagefont_getname_optional", "getname"),
+    ("imagefont_has_variations", "has_variations"),
+    ("imagefont_load_default", "load_default"),
+    ("imagefont_render_text_binary", "render_text_binary"),
+    ("imagefont_set_variation_by_axes", "set_variation_by_axes"),
+    ("imagefont_set_variation_by_name", "set_variation_by_name"),
+    ("imagefont_size", "font_size"),
+    ("imagefont_text_bbox", "text_bbox"),
+    ("imagefont_text_bbox_bytes", "text_bbox"),
+    ("imagefont_variant", "font_variant"),
+    ("imagefont_variant_with_options", "font_variant"),
 ];
 
 fn fixture_root() -> PathBuf {
@@ -849,7 +849,7 @@ fn root_font_public_functions() -> BTreeSet<String> {
     let lib_rs = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/lib.rs");
     let text = fs::read_to_string(&lib_rs).expect("src/lib.rs must be readable");
     text.lines()
-        .filter_map(|line| line.trim_start().strip_prefix("pub fn font_"))
+        .filter_map(|line| line.trim_start().strip_prefix("pub fn imagefont_"))
         .map(|suffix| {
             let name = suffix
                 .split_once('(')
@@ -857,7 +857,7 @@ fn root_font_public_functions() -> BTreeSet<String> {
                 .unwrap_or_else(|| {
                     panic!("malformed root ImageFont API line in {}", lib_rs.display())
                 });
-            format!("font_{name}")
+            format!("imagefont_{name}")
         })
         .collect()
 }
@@ -870,7 +870,7 @@ fn assert_manifest_covers_root_font_api(manifest: &FontManifest) {
         .collect::<BTreeSet<_>>();
     assert_eq!(
         observed, expected,
-        "ImageFont manifest test must explicitly map every root pillow_rs::font_* public function to a manifest operation"
+        "ImageFont manifest test must explicitly map every root pillow_rs::imagefont_* public function to a manifest operation"
     );
 
     let missing_operations = ROOT_FONT_API_TO_OPERATION
@@ -879,14 +879,14 @@ fn assert_manifest_covers_root_font_api(manifest: &FontManifest) {
         .collect::<Vec<_>>();
     assert!(
         missing_operations.is_empty(),
-        "root pillow_rs::font_* functions map to operations missing from font_manifest.yaml required_operations: {missing_operations:?}"
+        "root pillow_rs::imagefont_* functions map to operations missing from font_manifest.yaml required_operations: {missing_operations:?}"
     );
 }
 
 fn runner_root_font_api_references() -> BTreeSet<String> {
     let runner = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/support/font_runner.rs");
     let text = fs::read_to_string(&runner).expect("font runner must be readable");
-    let marker = "pillow_rs::font_";
+    let marker = "pillow_rs::imagefont_";
     let mut references = BTreeSet::new();
 
     for line in text.lines() {
@@ -904,7 +904,7 @@ fn runner_root_font_api_references() -> BTreeSet<String> {
 
     assert!(
         !references.is_empty(),
-        "font runner must call root pillow_rs::font_* APIs directly"
+        "font runner must call root pillow_rs::imagefont_* APIs directly"
     );
     references
 }
@@ -914,7 +914,7 @@ fn assert_runner_exercises_root_font_api() {
     let runner_references = runner_root_font_api_references();
     assert_eq!(
         runner_references, root_functions,
-        "font_public_api runner must reference every root pillow_rs::font_* function exactly; otherwise the manifest may map an API that no fixture can execute"
+        "font_public_api runner must reference every root pillow_rs::imagefont_* function exactly; otherwise the manifest may map an API that no fixture can execute"
     );
 }
 
