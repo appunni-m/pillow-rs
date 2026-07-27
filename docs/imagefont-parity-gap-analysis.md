@@ -194,7 +194,7 @@ Coverage MCP reports 9 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 3 unc
 | `796` | Constant/section instrumentation around FFI helper declarations. | Not a Pillow behavior. | Coverage marks a partial branch here due LLVM segment normalization, not a meaningful behavior gap. | No product action. |
 | `826`, `829` | `floor26` / `ceil26` 26.6 conversion helper branch instrumentation. | Pillow BASIC layout converts 26.6 values through `PIXEL(...)`-style rounding in `_imagingft.c`. | Partial markers mean current inputs do not hit every conversion-region shape. This is not an independent feature but can hide bbox/offset rounding differences. | Add targeted bbox/mask rows with negative bearings, fractional starts, ascenders/descenders, and kerning pairs only if they are independent public ImageFont behavior, not duplicates. |
 | `928` | Branch in BASIC glyph run construction around previous-glyph kerning. | `_imagingft.c::text_layout_fallback` only adds kerning when a previous glyph exists. | Additional `mode="1"` rows for `AV` and `jQ` now prove public mono load-flag parity across length, bbox, mask, and mask2, but Coverage MCP still reports this line as partial. The remaining marker is therefore not removable by duplicate mono fixture expansion. | Keep this as a coverage artifact/branch-marker gap unless source-context evidence identifies a distinct public input. Do not add more duplicate BASIC rows only to chase this line. |
-| `1211`, `1212` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. A live-oracle probe using `font.getmask2` with DejaVuSans size 24, text `"A"`, `stroke_width=1.5`, and `kwargs.stroke_filled=true` proved Pillow 12.2.0 succeeds with a 20×21 L mask and offset `[-2, 4]`; Rust currently returns `OSError("unimplemented feature")`. This confirms the missing `imagingft.rs` branch is blocked by lower `FT_Glyph_StrokeBorder`, not by missing adapter wiring. The lower FreeType parity lane currently has 1 runnable invalid-argument row and 3 pending success/ownership rows for `FT_Glyph_StrokeBorder`. | Add only the minimal lower `FT_Glyph_StrokeBorder` behavior needed for the existing Pillow public row, without a broad `pillow-rs-freetype` refactor. Then add the input-only Font row and rerun live Pillow parity plus Coverage MCP. |
+| `1211`, `1212` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. A live-oracle probe using `font.getmask2` with DejaVuSans size 24, text `"A"`, `stroke_width=1.5`, and `kwargs.stroke_filled=true` proved Pillow 12.2.0 succeeds with a 20×21 L mask and offset `[-2, 4]`; Rust currently returns `OSError("unimplemented feature")`. This confirms the missing `imagingft.rs` branch is blocked by lower `FT_Glyph_StrokeBorder`, not by missing adapter wiring. The lower FreeType parity lane currently has 1 runnable invalid-argument row and 3 pending success/ownership rows for `FT_Glyph_StrokeBorder`. | Add only the lower stroker segment-geometry and border-export behavior required to make a real `FT_Glyph_StrokeBorder` public row pass. Do not chase 100% `pillow-rs-freetype` coverage and do not add glyph-specific shortcuts. Then add the input-only Font row and rerun live Pillow parity plus Coverage MCP. |
 Exploratory note: Coverage MCP run `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c`
 temporarily added valid live-oracle rows for DejaVuSans `"À"` negative-top
 bbox/mask and an `A\uFFFFV` missing-glyph kerning guard. The run passed and
@@ -244,7 +244,15 @@ Rust now carries `stroke_filled` in `ImageFontTextOptions` and routes to `fontdo
 
 The interface map now classifies the lower FreeType stroker group as partial, not out of scope: Rust has the lifecycle, segment, export, glyph-stroke, and glyph-stroke-border wrappers, but successful outside/inside border and destroy-option rows are not runnable exact parity yet.
 
-Decision: complete `FT_Stroker_ParseOutline`/border-export for real glyphs, then add successful `stroke_filled=true` fixture rows. Until then, this is a known parity gap. Do not add more glyph-specific shortcuts; the current normal-stroke path still has a DejaVu glyph-36 `A` fallback for the existing passing route, and a stroked `jQ` sweep row proved that Pillow succeeds while Rust fails before rendering.
+Decision: complete the lower stroker segment geometry and border-export behavior
+needed by real outline glyphs, then add successful `stroke_filled=true` fixture
+rows. `FT_Stroker_ParseOutline` now follows the C-shaped contour/tag walk, so
+the remaining blocker is not an `imagingft.rs` wrapper problem and not a reason
+to pursue 100% `pillow-rs-freetype` coverage. Until then, this is a known
+parity gap. Do not add more glyph-specific shortcuts; the current normal-stroke
+path still has a DejaVu glyph-36 `A` fallback for the existing passing route,
+and a stroked `jQ` sweep row proved that Pillow succeeds while Rust fails before
+rendering.
 
 Current lower-stroker verification:
 
@@ -371,9 +379,10 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 ## Recommended action order
 
-1. Add the smallest lower `FT_Glyph_StrokeBorder`/border-export behavior needed
-   for a real public `ImageFont.getmask2(stroke_filled=true)` Pillow row. This
-   is dependency work only; do not chase 100% `pillow-rs-freetype` coverage.
+1. Add the smallest lower stroker segment-geometry and border-export behavior
+   needed for a real public `ImageFont.getmask2(stroke_filled=true)` Pillow
+   row. This is dependency work only; do not chase 100%
+   `pillow-rs-freetype` coverage and do not add glyph-specific shortcuts.
 2. Add minimal, independent oracle fixtures for:
    - successful `stroke_width + stroke_filled=true`;
    - stroked mode `"1"`;
