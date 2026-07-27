@@ -83,6 +83,10 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
+Current-head Coverage MCP run: `d0dc76e2-aab5-4dc1-8110-a6f627388485`
+
+Current-head Coverage MCP snapshot: `286cfb3e-f78e-4cb5-b2b7-b3ae820b687f`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -106,11 +110,10 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passes for the current Rust/fixture source state and ingests snapshot
-  `a0c5fe67-c988-4690-ad69-d53b97b3b766` from run
-  `ad315ecf-ce83-43cd-9d3d-0e45a63a2e06` at commit `ff224c455`. Direct
-  `imagingft.rs` coverage
+- Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
+  passed at commit `5286c6c4536321bda67071f1849029fe3fd3a185` and ingested
+  snapshot `286cfb3e-f78e-4cb5-b2b7-b3ae820b687f` from run
+  `d0dc76e2-aab5-4dc1-8110-a6f627388485`. Direct `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
   `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
@@ -394,6 +397,11 @@ Latest Font-with-FreeType snapshot: `e6e22c8d-e3f6-4270-828a-41dc982a6d43`
 from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
 at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
+Current-head Font-with-FreeType snapshot:
+`286cfb3e-f78e-4cb5-b2b7-b3ae820b687f` from Coverage MCP run
+`d0dc76e2-aab5-4dc1-8110-a6f627388485` at runtime commit
+`5286c6c4536321bda67071f1849029fe3fd3a185`.
+
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
 coverage is not itself a 100% target for this work; it is only dependency
@@ -410,10 +418,10 @@ refactor.
 
 Overall snapshot totals for this suite:
 
-- Lines: 17719/52862, 33.52%
-- Branches: 2991/11156, 26.81%
-- Functions: 1352/3686, 36.68%
-- Regions: 25340/81432, 31.12%
+- Lines: 17736/52954, 33.49%
+- Branches: 2999/11188, 26.81%
+- Functions: 1353/3691, 36.66%
+- Regions: 25360/81562, 31.09%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
