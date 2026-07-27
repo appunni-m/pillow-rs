@@ -11,9 +11,17 @@ pub(crate) mod imagingft;
 pub(crate) mod pilfont;
 
 /// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
-pub struct ImageFont {
+pub struct FreeTypeFont {
     engine: imagingft::TrueTypeEngine,
 }
+
+/// Backwards-compatible alias for the FreeType-backed font handle.
+///
+/// Pillow names this public class `ImageFont.FreeTypeFont`; new Rust root API
+/// call sites should prefer [`FreeTypeFont`]. The alias remains while binding
+/// and test surfaces complete the migration away from treating FreeType fonts
+/// as the bitmap `ImageFont.ImageFont` class.
+pub type ImageFont = FreeTypeFont;
 
 /// Optional Pillow `ImageFont.truetype()` constructor arguments.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -95,7 +103,7 @@ pub struct ImageFontVariantOptions {
     pub layout_engine: Option<String>,
 }
 
-impl ImageFont {
+impl FreeTypeFont {
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
         imagingft::load_truetype(data, size)

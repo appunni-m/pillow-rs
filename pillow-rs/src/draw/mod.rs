@@ -1029,7 +1029,7 @@ impl Draw {
         x: i32,
         y: i32,
         text: &str,
-        font: &crate::font::ImageFont,
+        font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
         self.text_with_options(
@@ -1057,7 +1057,7 @@ impl Draw {
         x: i32,
         y: i32,
         text: &str,
-        font: &crate::font::ImageFont,
+        font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {

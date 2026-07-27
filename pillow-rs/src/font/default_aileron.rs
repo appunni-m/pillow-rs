@@ -2,7 +2,7 @@
 //!
 //! The payload is byte-for-byte identical to the font embedded in
 //! Pillow 12.2.0 `src/PIL/ImageFont.py::load_default`. Pillow opens it with
-//! `layout_engine=Layout.BASIC`; `ImageFont::load_default` does the same through the
+//! `layout_engine=Layout.BASIC`; `FreeTypeFont::load_default` does the same through the
 //! pure-Rust `fontdone` path.
 //!
 //! Length: 12,676 bytes.

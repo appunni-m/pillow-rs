@@ -1008,7 +1008,7 @@ impl ImageDraw {
 }
 
 // ── ImageFont ────────────────────────────────────────────────────
-use pillow_rs::ImageFont as RsImageFont;
+use pillow_rs::FreeTypeFont as RsImageFont;
 
 #[wasm_bindgen]
 pub struct ImageFont {

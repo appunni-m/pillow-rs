@@ -101,7 +101,7 @@ const EXPECTED_ORACLE_SCOPE: [(&str, &str); 5] = [
         "native_core",
         "PIL.ImageFont public module; PIL._imagingft is asserted only for FreeTypeFont-backed rows",
     ),
-    ("rust_runtime", "pillow_rs::ImageFont"),
+    ("rust_runtime", "pillow_rs::FreeTypeFont"),
     ("rust_contract", "Result-style status payload"),
 ];
 

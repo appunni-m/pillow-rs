@@ -1590,7 +1590,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
 #[pyclass(name = "ImageFont", unsendable)]
 pub struct PyFont {
-    inner: pillow_rs::ImageFont,
+    inner: pillow_rs::FreeTypeFont,
 }
 
 #[pymethods]
@@ -2520,7 +2520,7 @@ impl PyDraw {
         anchor: Option<String>,
     ) -> PyResult<(i32, i32, i32, i32)> {
         let default_font;
-        let f: &pillow_rs::ImageFont = if let Some(f) = font {
+        let f: &pillow_rs::FreeTypeFont = if let Some(f) = font {
             &f.borrow().inner
         } else {
             default_font = pillow_rs::imagefont_load_default(10.0).map_err(map_error)?;

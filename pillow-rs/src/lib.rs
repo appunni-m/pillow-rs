@@ -11,7 +11,7 @@
 //! Core modules do not depend on Python or JavaScript runtime types. Public
 //! functions model Pillow behavior where practical, but their contracts are
 //! expressed in Rust terms: [`Image`] values, [`image_slash_star::DynamicImage`]
-//! buffers, [`ImageFont`] values, and [`PilError`] failures.
+//! buffers, [`FreeTypeFont`] values, and [`PilError`] failures.
 //!
 //! # Allocation Safety
 //!
@@ -42,7 +42,7 @@
 //! `pillow-rs/src/lib.rs` is the single public API definition for this crate.
 //! Implementation modules are private crate internals; downstream callers,
 //! including the Python and WebAssembly bindings, must use the exact root
-//! symbols re-exported below such as [`Image`], [`ImageFont`], [`Draw`],
+//! symbols re-exported below such as [`Image`], [`FreeTypeFont`], [`Draw`],
 //! [`imageops_grayscale`], and [`imagefont_getbbox`].
 //!
 //! # Quick Start
@@ -144,6 +144,7 @@ pub use crate::compute::enable_backend;
 pub use crate::draw::Draw;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
+pub use crate::font::FreeTypeFont;
 pub use crate::font::ImageFont;
 pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontTextOptions;
@@ -220,8 +221,8 @@ pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
 
 /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
-pub fn imagefont_from_bytes(data: Vec<u8>, size: f32) -> Result<ImageFont, PilError> {
-    ImageFont::from_bytes(data, size)
+pub fn imagefont_from_bytes(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
+    FreeTypeFont::from_bytes(data, size)
 }
 
 /// Load a TrueType/OpenType face from bytes with Pillow constructor options.
@@ -229,59 +230,59 @@ pub fn imagefont_from_bytes_with_options(
     data: Vec<u8>,
     size: f32,
     options: &ImageFontLoadOptions,
-) -> Result<ImageFont, PilError> {
-    ImageFont::from_bytes_with_options(data, size, options)
+) -> Result<FreeTypeFont, PilError> {
+    FreeTypeFont::from_bytes_with_options(data, size, options)
 }
 
 /// Loads the same embedded default font subset as Pillow.
-pub fn imagefont_load_default(size: f32) -> Result<ImageFont, PilError> {
-    ImageFont::load_default(size)
+pub fn imagefont_load_default(size: f32) -> Result<FreeTypeFont, PilError> {
+    FreeTypeFont::load_default(size)
 }
 
 /// Return the requested Pillow point size for this FreeType font.
-pub fn imagefont_size(font: &ImageFont) -> f32 {
+pub fn imagefont_size(font: &FreeTypeFont) -> f32 {
     font.font_size()
 }
 
 /// Return the non-negative text mask extent for Pillow-style text layout.
-pub fn imagefont_text_bbox(font: &ImageFont, text: &str) -> Result<(u32, u32), PilError> {
+pub fn imagefont_text_bbox(font: &FreeTypeFont, text: &str) -> Result<(u32, u32), PilError> {
     font.text_bbox(text)
 }
 
 /// Return the non-negative text mask extent for Pillow byte text.
-pub fn imagefont_text_bbox_bytes(font: &ImageFont, text: &[u8]) -> Result<(u32, u32), PilError> {
+pub fn imagefont_text_bbox_bytes(font: &FreeTypeFont, text: &[u8]) -> Result<(u32, u32), PilError> {
     font.text_bbox_bytes(text)
 }
 
 /// Return Pillow's public `(family, style)` font name tuple.
-pub fn imagefont_getname(font: &ImageFont) -> (&str, &str) {
+pub fn imagefont_getname(font: &FreeTypeFont) -> (&str, &str) {
     font.getname()
 }
 
 /// Return Pillow's raw public name tuple, preserving missing face names.
 #[cfg(feature = "test-api")]
-pub fn imagefont_getname_optional(font: &ImageFont) -> (Option<&str>, Option<&str>) {
+pub fn imagefont_getname_optional(font: &FreeTypeFont) -> (Option<&str>, Option<&str>) {
     font.getname_optional()
 }
 
 /// Return Pillow's public ascent/descent metrics.
-pub fn imagefont_getmetrics(font: &ImageFont) -> (u32, u32) {
+pub fn imagefont_getmetrics(font: &FreeTypeFont) -> (u32, u32) {
     font.getmetrics()
 }
 
 /// Return Pillow's public text length in pixels.
-pub fn imagefont_getlength(font: &ImageFont, text: &str) -> Result<f32, PilError> {
+pub fn imagefont_getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError> {
     font.getlength(text)
 }
 
 /// Return Pillow's public text length for byte text.
-pub fn imagefont_getlength_bytes(font: &ImageFont, text: &[u8]) -> Result<f32, PilError> {
+pub fn imagefont_getlength_bytes(font: &FreeTypeFont, text: &[u8]) -> Result<f32, PilError> {
     font.getlength_bytes(text)
 }
 
 /// Return Pillow's public text length with optional layout arguments.
 pub fn imagefont_getlength_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<f32, PilError> {
@@ -290,7 +291,7 @@ pub fn imagefont_getlength_with_options(
 
 /// Return Pillow's public text length for byte text with optional layout arguments.
 pub fn imagefont_getlength_bytes_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
     options: &ImageFontTextOptions,
 ) -> Result<f32, PilError> {
@@ -298,53 +299,62 @@ pub fn imagefont_getlength_bytes_with_options(
 }
 
 /// Return whether the font exposes variation axes.
-pub fn imagefont_has_variations(font: &ImageFont) -> bool {
+pub fn imagefont_has_variations(font: &FreeTypeFont) -> bool {
     font.has_variations()
 }
 
 /// Create a Pillow-compatible variant font.
-pub fn imagefont_variant(font: &ImageFont, size: Option<f32>) -> Result<ImageFont, PilError> {
+pub fn imagefont_variant(font: &FreeTypeFont, size: Option<f32>) -> Result<FreeTypeFont, PilError> {
     font.font_variant(size)
 }
 
 /// Create a Pillow-compatible variant font with public override arguments.
 pub fn imagefont_variant_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     options: &ImageFontVariantOptions,
-) -> Result<ImageFont, PilError> {
+) -> Result<FreeTypeFont, PilError> {
     font.font_variant_with_options(options)
 }
 
 /// Return Pillow's public variation-axis records.
 pub fn imagefont_get_variation_axes(
-    font: &ImageFont,
+    font: &FreeTypeFont,
 ) -> Result<Vec<ImageFontVariationAxis>, PilError> {
     font.get_variation_axes()
 }
 
 /// Return Pillow's public named-variation style names.
-pub fn imagefont_get_variation_names(font: &ImageFont) -> Result<Vec<Vec<u8>>, PilError> {
+pub fn imagefont_get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
     font.get_variation_names()
 }
 
 /// Set a named variation instance by Pillow-style name bytes.
-pub fn imagefont_set_variation_by_name(font: &mut ImageFont, name: &[u8]) -> Result<(), PilError> {
+pub fn imagefont_set_variation_by_name(
+    font: &mut FreeTypeFont,
+    name: &[u8],
+) -> Result<(), PilError> {
     font.set_variation_by_name(name)
 }
 
 /// Set variation design coordinates from Pillow-style user coordinates.
-pub fn imagefont_set_variation_by_axes(font: &mut ImageFont, axes: &[f32]) -> Result<(), PilError> {
+pub fn imagefont_set_variation_by_axes(
+    font: &mut FreeTypeFont,
+    axes: &[f32],
+) -> Result<(), PilError> {
     font.set_variation_by_axes(axes)
 }
 
 /// Return Pillow's public text bounding box.
-pub fn imagefont_getbbox(font: &ImageFont, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
+pub fn imagefont_getbbox(
+    font: &FreeTypeFont,
+    text: &str,
+) -> Result<(i32, i32, i32, i32), PilError> {
     font.getbbox(text)
 }
 
 /// Return Pillow's public text bounding box for byte text.
 pub fn imagefont_getbbox_bytes(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
 ) -> Result<(i32, i32, i32, i32), PilError> {
     font.getbbox_bytes(text)
@@ -353,7 +363,7 @@ pub fn imagefont_getbbox_bytes(
 /// Return Pillow's public binary-mode text bounding box.
 #[cfg(feature = "test-api")]
 pub fn imagefont_getbbox_binary(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
 ) -> Result<(i32, i32, i32, i32), PilError> {
     font.getbbox_binary(text)
@@ -362,7 +372,7 @@ pub fn imagefont_getbbox_binary(
 /// Return Pillow's public binary-mode text bounding box for byte text.
 #[cfg(feature = "test-api")]
 pub fn imagefont_getbbox_binary_bytes(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
 ) -> Result<(i32, i32, i32, i32), PilError> {
     font.getbbox_binary_bytes(text)
@@ -370,7 +380,7 @@ pub fn imagefont_getbbox_binary_bytes(
 
 /// Return Pillow's public text bounding box with optional layout arguments.
 pub fn imagefont_getbbox_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
@@ -379,7 +389,7 @@ pub fn imagefont_getbbox_with_options(
 
 /// Return Pillow's public text bounding box for byte text with optional layout arguments.
 pub fn imagefont_getbbox_bytes_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
     options: &ImageFontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
@@ -387,13 +397,13 @@ pub fn imagefont_getbbox_bytes_with_options(
 }
 
 /// Return the Pillow-compatible grayscale text mask.
-pub fn imagefont_getmask(font: &ImageFont, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
+pub fn imagefont_getmask(font: &FreeTypeFont, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.getmask(text)
 }
 
 /// Return the Pillow-compatible grayscale text mask for byte text.
 pub fn imagefont_getmask_bytes(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.getmask_bytes(text)
@@ -401,7 +411,7 @@ pub fn imagefont_getmask_bytes(
 
 /// Render a Pillow-compatible mask with offset.
 pub fn imagefont_getmask2(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     font.getmask2(text)
@@ -409,7 +419,7 @@ pub fn imagefont_getmask2(
 
 /// Render a Pillow-compatible mask with offset for byte text.
 pub fn imagefont_getmask2_bytes(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     font.getmask2_bytes(text)
@@ -417,7 +427,7 @@ pub fn imagefont_getmask2_bytes(
 
 /// Return the Pillow-compatible grayscale text mask with optional render arguments.
 pub fn imagefont_getmask_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
@@ -426,7 +436,7 @@ pub fn imagefont_getmask_with_options(
 
 /// Return the Pillow-compatible grayscale text mask for byte text with optional render arguments.
 pub fn imagefont_getmask_bytes_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
@@ -435,7 +445,7 @@ pub fn imagefont_getmask_bytes_with_options(
 
 /// Render a Pillow-compatible mask with a fractional raster start.
 pub fn imagefont_getmask2_with_start(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
@@ -444,7 +454,7 @@ pub fn imagefont_getmask2_with_start(
 
 /// Render a Pillow-compatible byte-text mask with a fractional raster start.
 pub fn imagefont_getmask2_bytes_with_start(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
@@ -453,7 +463,7 @@ pub fn imagefont_getmask2_bytes_with_start(
 
 /// Render a Pillow-compatible mask with optional render arguments.
 pub fn imagefont_getmask2_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
@@ -462,7 +472,7 @@ pub fn imagefont_getmask2_with_options(
 
 /// Render a Pillow-compatible byte-text mask with optional render arguments.
 pub fn imagefont_getmask2_bytes_with_options(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &[u8],
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
@@ -471,7 +481,7 @@ pub fn imagefont_getmask2_bytes_with_options(
 
 /// Render a font mask and apply Pillow's optional transpose operation.
 pub fn imagefont_get_transposed_mask(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
@@ -481,7 +491,7 @@ pub fn imagefont_get_transposed_mask(
 /// Return Pillow-compatible binary-mode RGBA text rendering.
 #[cfg(feature = "test-api")]
 pub fn imagefont_render_text_binary(
-    font: &ImageFont,
+    font: &FreeTypeFont,
     text: &str,
     fill: (u8, u8, u8, u8),
     spacing: f32,
