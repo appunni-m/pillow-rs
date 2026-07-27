@@ -1,7 +1,26 @@
 """ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
 import os
+import warnings
+from enum import IntEnum
 
 from . import _core
+
+
+class Layout(IntEnum):
+    BASIC = 0
+    RAQM = 1
+
+
+def _normalize_layout_engine(layout_engine):
+    if layout_engine not in (Layout.BASIC, Layout.RAQM):
+        return Layout.BASIC
+    if layout_engine == Layout.RAQM:
+        warnings.warn(
+            "Raqm layout was requested, but Raqm is not available. "
+            "Falling back to basic layout.",
+            stacklevel=3,
+        )
+    return Layout.BASIC
 
 
 class ImagingCore:
@@ -87,6 +106,7 @@ class FreeTypeFont:
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
+        layout_engine = _normalize_layout_engine(layout_engine)
         self.path = font
         if isinstance(font, (str, bytes, os.PathLike)):
             font_path = os.fspath(font)
@@ -112,6 +132,7 @@ class FreeTypeFont:
 
     @classmethod
     def _from_font_data(cls, data, size=10, index=0, encoding="", layout_engine=None):
+        layout_engine = _normalize_layout_engine(layout_engine)
         font = object.__new__(cls)
         font.path = None
         font._font_data = bytes(data)
@@ -347,6 +368,7 @@ def load_default(size=None):
     font = object.__new__(FreeTypeFont)
     font._rust_font = _core.ImageFont.load_default(float(size))
     font.size = float(size)
+    font.layout_engine = Layout.BASIC
     font._is_default = True
     font._pil_font = None
     return font
