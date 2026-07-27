@@ -161,6 +161,13 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 Coverage snapshot: `0a88b6a1-f2a4-48e7-b802-a742a599e0b6`.
 
+Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
+region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
+coverage is not itself a 100% target for this work; it is only dependency
+evidence when a missing `imagingft.rs` region is blocked by missing lower
+FreeType behavior. Do not broaden this into a `pillow-rs-freetype` coverage
+refactor.
+
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
@@ -188,7 +195,7 @@ Coverage MCP reports 16 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 7 un
 | `826`, `829`, `831` | `floor26` / `ceil26` 26.6 conversion helper branch instrumentation. | Pillow BASIC layout converts 26.6 values through `PIXEL(...)`-style rounding in `_imagingft.c`. | Partial markers mean current inputs do not hit every conversion-region shape. This is not an independent feature but can hide bbox/offset rounding differences. | Add targeted bbox/mask rows with negative bearings, fractional starts, ascenders/descenders, and kerning pairs. |
 | `928` | Branch in BASIC glyph run construction around previous-glyph kerning. | `_imagingft.c::text_layout_fallback` only adds kerning when a previous glyph exists. | Additional `mode="1"` rows for `AV` and `jQ` now prove public mono load-flag parity across length, bbox, mask, and mask2, but Coverage MCP still reports this line as partial. The remaining marker is therefore not removable by duplicate mono fixture expansion. | Keep this as a coverage artifact/branch-marker gap unless source-context evidence identifies a distinct public input. Do not add more duplicate BASIC rows only to chase this line. |
 | `1119`, `1122`, `1124` | Rust stroked bitmap extent clamps width/height when actual stroker output exceeds bbox-derived target dimensions. | `_imagingft.c::font_render_impl` allocates from `bounding_box_and_anchors` and clips during paste; it does not show this Rust-style post-stroke extent mutation. | This is the highest-risk Rust-only compatibility shim. Width clamp executes; height clamp body is still uncovered. The need for the shim indicates lower stroker/bbox mismatch. A sweep row using stroked `jQ` was not committed because Pillow succeeds while Rust fails earlier with `FT_Err_Unimplemented_Feature`; the lower `fontdone` `FT_Outline_Glyph_Stroke` path is not generally implemented yet. | Finish general `FT_Stroker_ParseOutline` segment routes and export support. Then re-add independent stroked descender rows such as `jQ` and prove both width and height clipping against Pillow. |
-| `1218`, `1219` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. FreeType narrow route still has the stroke-border success routes pending. This shares the same lower blocker as normal stroked descender glyphs: real outline stroke geometry/export is not implemented generally. | Complete lower `FT_Stroker_ParseOutline` segment routes and border-export support for real glyph outlines, then add successful `stroke_width + stroke_filled=true` and stroked descender ImageFont fixture rows. |
+| `1218`, `1219` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. A live-oracle probe using `font.getmask2` with DejaVuSans size 24, text `"A"`, `stroke_width=1.5`, and `kwargs.stroke_filled=true` proved Pillow 12.2.0 succeeds with a 20×21 L mask and offset `[-2, 4]`; Rust currently returns `OSError("unimplemented feature")`. This confirms the missing `imagingft.rs` branch is blocked by lower `FT_Glyph_StrokeBorder`, not by missing adapter wiring. | Add only the minimal lower `FT_Glyph_StrokeBorder` behavior needed for the existing Pillow public row, without a broad `pillow-rs-freetype` refactor. Then add the input-only Font row and rerun live Pillow parity plus Coverage MCP. |
 | `1284`, `1285` | Color bitmap mode conversion fallback branch. | `_imagingft.c` only exposes Pillow-supported mask modes from FreeType bitmap glyphs. | Current SBIT rows prove GRAY2, GRAY4, BGRA including transparent alpha, and normal grayscale paths. The remaining LLVM marker is a defensive `unreachable!`/mode-shape branch that should only move with a real FreeType-like bitmap mode observable through Pillow. | Do not fabricate a bitmap mode. Add coverage only if a maintained lower SBIT fixture produces a real Pillow-observable mode that reaches this branch. |
 
 ## Other ImageFont-related files where coverage is missing
@@ -358,7 +365,9 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 ## Recommended action order
 
-1. Finish `FT_Stroker_ParseOutline`/border-export support for real glyph outlines so `stroke_filled=true` can pass against Pillow.
+1. Add the smallest lower `FT_Glyph_StrokeBorder`/border-export behavior needed
+   for a real public `ImageFont.getmask2(stroke_filled=true)` Pillow row. This
+   is dependency work only; do not chase 100% `pillow-rs-freetype` coverage.
 2. Add minimal, independent oracle fixtures for:
    - successful `stroke_width + stroke_filled=true`;
    - stroked mode `"1"`;
