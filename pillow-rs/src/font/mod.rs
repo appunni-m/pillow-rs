@@ -56,6 +56,12 @@ pub struct ImageFontTextOptions {
     pub language: Option<String>,
     /// Pillow text stroke width in pixels.
     pub stroke_width: f32,
+    /// Pillow `getmask2(..., stroke_filled=True)` keyword.
+    ///
+    /// Pillow routes this through `FT_Glyph_StrokeBorder`; the Rust adapter
+    /// keeps it explicit so the path cannot be silently treated as the default
+    /// filled stroke.
+    pub stroke_filled: bool,
     /// Pillow two-character anchor code.
     pub anchor: Option<String>,
     /// Pillow fractional rendering start.

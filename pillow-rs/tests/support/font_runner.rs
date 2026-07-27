@@ -512,6 +512,11 @@ fn text_options(params: &Value) -> Result<ImageFontTextOptions, PilError> {
             })
             .transpose()?
             .unwrap_or(0.0),
+        stroke_filled: params
+            .get("kwargs")
+            .and_then(|value| value.get("stroke_filled"))
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         anchor: optional_string(params, "anchor")?,
         start: params
             .get("start")

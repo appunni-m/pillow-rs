@@ -398,7 +398,14 @@ pub(crate) fn getmask2_with_options(
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
     let start = options.start.unwrap_or((0.0, 0.0));
     let (width, height, pixels) = if options.stroke_width != 0.0 {
-        stroked_mask_from_run_with_start(font, text, load_flags, start, options.stroke_width)?
+        stroked_mask_from_run_with_start(
+            font,
+            text,
+            load_flags,
+            start,
+            options.stroke_width,
+            options.stroke_filled,
+        )?
     } else {
         mask_from_run_with_start(font, text, load_flags, start)?
     };
@@ -785,7 +792,13 @@ fn stroked_mask_from_run_with_start(
     load_flags: i32,
     start: (f64, f64),
     stroke_width: f32,
+    stroke_filled: bool,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
+    if stroke_filled {
+        return Err(PilError::NotImplementedError(
+            "stroke_filled requires FT_Glyph_StrokeBorder support".into(),
+        ));
+    }
     if text.is_empty() {
         let side = (stroke_width * 2.0).ceil() as i32;
         if side < 0 {
