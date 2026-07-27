@@ -702,10 +702,7 @@ pub(crate) fn render_text_binary(
 
 fn validate_basic_layout_options(options: &ImageFontTextOptions) -> Result<(), PilError> {
     if options.direction.is_some() || options.features.is_some() || options.language.is_some() {
-        return Err(PilError::UnsupportedLibraqm(
-            "'setting text direction, language or font features is not supported without libraqm'"
-                .into(),
-        ));
+        return Err(PilError::unsupported_libraqm());
     }
     Ok(())
 }
