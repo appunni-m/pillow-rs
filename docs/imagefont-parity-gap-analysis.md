@@ -1165,3 +1165,18 @@ Current request classification for `imagingft.rs` region coverage:
   `pending-route=175`. This was a classification correction based on exact
   C/Rust/C-ABI/WASM parity evidence; no lower implementation change was needed
   for this row.
+- Remaining ImageFont-adjacent lower stroker audit after `30fca833c`: probing
+  representative pending rows confirms they are true route gaps, not stale
+  classifications. `test-pending-case` leaves `runnable=0,pending=1` for
+  `FT_Stroker_Set.miter_limit_clamped_to_one`,
+  `FT_Stroker_Set.attributes_affect_geometry`,
+  `FT_Stroker_BeginSubPath.open_subpath_initial_state`,
+  `FT_Stroker_BeginSubPath.closed_subpath_initial_state`,
+  `FT_Stroker_Rewind.attributes_preserved`, bevel/round/miter join geometry,
+  `FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration`,
+  `FT_Stroker_Done.after_export_cleanup`, and
+  `FT_Stroker_ParseOutline.line_conic_cubic_success`. The next real work is
+  adding maintained runtime routes for these lower stroker lifecycle/config and
+  mixed-geometry rows, then fixing any exact C/Rust divergence they expose. Do
+  not promote them or add public Font rows until the same-input lower route
+  exists and passes exact oracle comparison.
