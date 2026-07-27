@@ -235,6 +235,13 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   only `tests/test_imagefont_facade_oracle.py` with strict coverage markers,
   avoiding unrelated global Python parity failures while still comparing each
   facade observation to Pillow 12.2.0.
+- Follow-up `ImageFont.Layout` facade fix: `pillow-rs-py` now exposes
+  `ImageFont.Layout.BASIC == 0` and `ImageFont.Layout.RAQM == 1`, matching
+  Pillow 12.2.0. In the no-libraqm environment, constructor-only
+  `layout_engine=Layout.RAQM` follows Pillow by warning and storing BASIC
+  layout, while text method `direction`/`features`/`language` still route to
+  the dedicated Rust `PilError::UnsupportedLibraqm` path. The focused
+  `make test-imagefont-facade` target now covers this behavior against Pillow.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
 - Commit `3558b7762` hardens the libraqm source guard: `PilError::UnsupportedLibraqm` must remain a unit variant with the one core hard-coded message, and `imagingft.rs` must use the dedicated constructor instead of encoding `KeyError` text directly.

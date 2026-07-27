@@ -20,6 +20,20 @@ def _font_observation(font):
 
 
 @pytest.mark.covers("ImageFont.truetype")
+def test_imagefont_layout_enum_and_no_raqm_fallback_match_pillow(RSPIL):
+    assert int(RSPIL.ImageFont.Layout.BASIC) == int(PILImageFont.Layout.BASIC)
+    assert int(RSPIL.ImageFont.Layout.RAQM) == int(PILImageFont.Layout.RAQM)
+
+    with pytest.warns(UserWarning, match="Raqm layout was requested"):
+        rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20, layout_engine=RSPIL.ImageFont.Layout.RAQM)
+    with pytest.warns(UserWarning, match="Raqm layout was requested"):
+        pil_font = PILImageFont.truetype(DEJAVU, 20, layout_engine=PILImageFont.Layout.RAQM)
+
+    assert int(rs_font.layout_engine) == int(pil_font.layout_engine) == int(PILImageFont.Layout.BASIC)
+    assert _font_observation(rs_font) == _font_observation(pil_font)
+
+
+@pytest.mark.covers("ImageFont.truetype")
 def test_imagefont_truetype_pathlike_and_bytes_path_match_pillow(RSPIL):
     for source in (DEJAVU, bytes(str(DEJAVU), "utf-8")):
         assert _font_observation(RSPIL.ImageFont.truetype(source, 20)) == _font_observation(
