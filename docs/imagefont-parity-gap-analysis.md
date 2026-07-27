@@ -1037,3 +1037,27 @@ Current request classification for `imagingft.rs` region coverage:
   `249/254` branches, `162/173` functions, and `2610/2696` regions
   (`96.81%`). The remaining ranges are unchanged: `91`, `253`, `271`, `796`,
   `826`, `829`, `831`, and `928`.
+- Current focused region-coverage pass after `808fa7ec`: added three
+  input-only public Font rows for independent helper validation paths:
+  `font.getmask2_with_start.dejavusans20_too_many_characters_error`,
+  `font.get_transposed_mask.dejavusans20_too_many_characters_error`, and
+  `font.render_text_binary.dejavusans20_too_many_characters_error`. These rows
+  are not embedded expectations; they are evaluated through the live Pillow
+  12.2.0 oracle at test runtime and compare Rust `Result` payloads exactly.
+  `make -C pillow-rs font-tests` passes with the expanded corpus. Coverage MCP
+  run `5f8a7988-53bd-45db-a9a9-ed58db47b712` passed and ingested snapshot
+  `86171995-9afb-4b8c-a31e-fb3e6e269b6c` for commit `808fa7ec`.
+  `pillow-rs/src/font/imagingft.rs` moved from `2610/2696` to `2612/2696`
+  regions (`96.81%` to `96.88%`) while line/branch/function totals remain
+  `1660/1682`, `249/254`, and `162/173`. The remaining source ranges are still
+  `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`.
+- Region-gap source review for the current snapshot shows the remaining
+  uncovered regions are concentrated in lower-propagated `?` error edges,
+  static FreeType error-table/source-map entries, optional name/fvar fallback
+  branches, and stroked-outline helper paths. The only known public ImageFont
+  behavior blocker that justifies a `pillow-rs-freetype` implementation change
+  is still the lower `FT_Glyph_Stroke.destroy_original_option` wide-stroke
+  non-round curve path: Pillow `_imagingft.c` only calls FreeType's stroker and
+  bitmap conversion there, so the fix belongs in the lower FreeType-compatible
+  stroker. Do not move stroker geometry into `imagingft.rs`, do not add a
+  glyph-specific shortcut, and do not chase 100% `pillow-rs-freetype` coverage.

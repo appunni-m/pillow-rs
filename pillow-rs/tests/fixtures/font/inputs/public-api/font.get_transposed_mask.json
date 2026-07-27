@@ -166,6 +166,24 @@
           "orientation": null
         }
       }
+    },
+    {
+      "case_id": "font.get_transposed_mask.dejavusans20_too_many_characters_error",
+      "operation": "get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "text_repeat": 1000001,
+          "orientation": null
+        }
+      }
     }
   ]
 }

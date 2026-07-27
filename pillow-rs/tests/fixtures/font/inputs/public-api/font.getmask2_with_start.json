@@ -461,6 +461,27 @@
           ]
         }
       }
+    },
+    {
+      "case_id": "font.getmask2_with_start.dejavusans20_too_many_characters_error",
+      "operation": "getmask2_with_start",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "text_repeat": 1000001,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
     }
   ]
 }
