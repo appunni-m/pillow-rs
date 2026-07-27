@@ -661,3 +661,18 @@ Current request classification for `imagingft.rs` region coverage:
   suite), but this lower progress cannot move `imagingft.rs` until the
   mono-target stroked bitmap row is promotable without bypassing the
   `closed_round_path_unverified`/`conic_path_unverified` guard.
+- Lower stroker progress after `acc8040f1`: `FT_Stroker_BeginSubPath` now
+  mirrors FreeType 2.14.3 `src/base/ftstroke.c:1765-1795` by resetting
+  `angle_in` to zero at every new subpath. Rust previously preserved the prior
+  contour's exit angle, which can leak into the first conic/line corner of the
+  next contour. Maintained verification passes:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`,
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`, and
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`.
+  A temporary diagnostic that promoted only
+  `pending_stroked_mono_target_outline_to_bitmap` and bypassed only the
+  unverified closed/conic guard still fails exactly one row on
+  `/bitmap/buffer_hex`: 10 rows compared, 9 passed, 1 failed. This confirms the
+  lower mono-target route has advanced past status/oracle plumbing but still
+  needs exact lower stroked-outline geometry/export before any new public
+  `imagingft.rs` row can honestly improve region coverage.

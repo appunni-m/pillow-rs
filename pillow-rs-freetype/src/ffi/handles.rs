@@ -4898,6 +4898,11 @@ pub fn FT_Stroker_BeginSubPath(
         entry.state.center = *to;
         entry.state.subpath_start = *to;
         entry.state.subpath_open = open != 0;
+        // FreeType 2.14.3 `src/base/ftstroke.c:1765-1795` resets the incoming
+        // angle at every new subpath.  Without this, a previous contour's
+        // final direction leaks into the first conic/line corner of the next
+        // contour.
+        entry.state.angle_in = 0;
         entry.state.handle_wide_strokes = entry.state.line_join
             != FT_STROKER_LINEJOIN_ROUND as FT_Int
             || (entry.state.subpath_open
