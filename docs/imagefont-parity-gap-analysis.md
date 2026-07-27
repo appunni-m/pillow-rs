@@ -1,8 +1,8 @@
 # ImageFont parity gap analysis against Pillow 12.2.0
 
-Date: 2026-07-27
+Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `49d45d736`
+Rust/source fixture commit reviewed: `1cf6d7259`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -47,6 +47,10 @@ Post Stroker_Done after-export Coverage MCP run: `5c77afff-e542-4f7b-9085-2d0e59
 
 Post Stroker_Done after-export Coverage MCP snapshot: `cc33788c-0fe4-4e5b-9240-117edc98d574`
 
+Post ParseOutline mixed route Coverage MCP run: `1ac54123-5a3d-4178-8918-9a1c477e30e5`
+
+Post ParseOutline mixed route Coverage MCP snapshot: `fb1c0612-44e5-4fbe-b405-2ad541c91cc5`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -72,8 +76,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `e6e22c8d-e3f6-4270-828a-41dc982a6d43` from run
-  `35b97347-c509-4e62-b260-4ce480a07c06` at commit `49d45d736`. Direct
+  `fb1c0612-44e5-4fbe-b405-2ad541c91cc5` from run
+  `1ac54123-5a3d-4178-8918-9a1c477e30e5` at commit `1cf6d7259`. Direct
   `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
@@ -1578,6 +1582,30 @@ current blockers.
   `font-tests-coverage-with-freetype-pillow-12-2` passed after this route as
   run `5c77afff-e542-4f7b-9085-2d0e59df55de` and ingested snapshot
   `cc33788c-0fe4-4e5b-9240-117edc98d574` for commit `70af09b91`. Direct
+  `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
+  branches, `162/173` functions, and `2612/2696` regions with the same seven
+  markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
+- `FT_Stroker_ParseOutline.line_conic_cubic_success` route promotion: the row
+  now uses the input-only
+  `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/parse-line-conic-cubic.json`
+  asset and has a maintained same-input runtime route through pinned C
+  FreeType, Rust FFI, C ABI, and WASM ABI. The route reads the fixture-declared
+  `outline_rows`, `opened`, and stroker parameters, feeds line, implied-conic
+  start, implied-conic midpoint, cubic, and font-like contour rows into
+  `FT_Stroker_ParseOutline`, then compares exact `parse_status`,
+  `parse_event_order`, `point_count`, `contour_count`, exported
+  `points/tags/contours`, and `cbox`. No expected output, hash, or error
+  payload is stored in the input JSON. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success` passes
+  `1/1`, and normal `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_Stroker_ParseOutline` passes `6/6` with `0` pending. Route
+  audit moves to `real-parity=4861`, `pending-route=161`. This is lower
+  FreeType outline-parser/stroker-route parity and does not claim a new direct
+  `imagingft.rs` adapter region. Coverage MCP command
+  `font-tests-coverage-with-freetype-pillow-12-2` passed after this route as
+  run `1ac54123-5a3d-4178-8918-9a1c477e30e5` and ingested snapshot
+  `fb1c0612-44e5-4fbe-b405-2ad541c91cc5` for commit `1cf6d7259`. Direct
   `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
   branches, `162/173` functions, and `2612/2696` regions with the same seven
   markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
