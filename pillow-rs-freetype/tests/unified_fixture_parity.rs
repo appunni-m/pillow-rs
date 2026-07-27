@@ -39558,7 +39558,6 @@ fn rust_stroked_outline_glyph_to_bitmap(case: &InputCase) -> Result<RunOutput, S
     let output = match FT_Load_Glyph(&face, glyph_index_param(params)?, load_flags_param(params)?) {
         Ok(slot) => match FT_Get_Outline_Glyph(Some(&slot)) {
             Ok(glyph) => {
-                maybe_print_pending_source_outline_diagnostic(case, &glyph);
                 match FT_Outline_Glyph_Stroke(Some(&glyph), stroker)
                     .and_then(|glyph| FT_Outline_Glyph_To_Bitmap(&glyph, render_mode))
                 {
@@ -39571,10 +39570,7 @@ fn rust_stroked_outline_glyph_to_bitmap(case: &InputCase) -> Result<RunOutput, S
                         &glyph.bitmap,
                         bool_param(params, "destroy", false)?,
                     )),
-                    Err(err) => {
-                        maybe_print_pending_stroked_outline_diagnostic(case, stroker, err);
-                        error(err)
-                    }
+                    Err(err) => error(err),
                 }
             }
             Err(err) => error(err),
@@ -39583,87 +39579,6 @@ fn rust_stroked_outline_glyph_to_bitmap(case: &InputCase) -> Result<RunOutput, S
     };
     FT_Stroker_Done(stroker);
     Ok(output)
-}
-
-fn maybe_print_pending_source_outline_diagnostic(case: &InputCase, glyph: &FT_OutlineGlyphOwned) {
-    if !pending_case_is_included(case) {
-        return;
-    }
-
-    let points = glyph
-        .outline
-        .points
-        .iter()
-        .map(|point| format!("({}, {})", point.x, point.y))
-        .collect::<Vec<_>>()
-        .join(",");
-    let tags = glyph
-        .outline
-        .tags
-        .iter()
-        .map(|tag| tag.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    let contours = glyph
-        .outline
-        .contours
-        .iter()
-        .map(|contour| contour.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-
-    eprintln!(
-        "pending_stroked_source_outline case_id={} points=[{}] tags=[{}] contours=[{}]",
-        case.case_id, points, tags, contours
-    );
-}
-
-fn maybe_print_pending_stroked_outline_diagnostic(
-    case: &InputCase,
-    stroker: FT_Stroker,
-    status: FT_Error,
-) {
-    if !pending_case_is_included(case) {
-        return;
-    }
-
-    let mut left_points = 0;
-    let mut left_contours = 0;
-    let left_status = FT_Stroker_GetBorderCounts(
-        stroker,
-        FT_STROKER_BORDER_LEFT as FT_Int,
-        Some(&mut left_points),
-        Some(&mut left_contours),
-    );
-
-    let mut right_points = 0;
-    let mut right_contours = 0;
-    let right_status = FT_Stroker_GetBorderCounts(
-        stroker,
-        FT_STROKER_BORDER_RIGHT as FT_Int,
-        Some(&mut right_points),
-        Some(&mut right_contours),
-    );
-
-    let mut total_points = 0;
-    let mut total_contours = 0;
-    let counts_status =
-        FT_Stroker_GetCounts(stroker, Some(&mut total_points), Some(&mut total_contours));
-
-    eprintln!(
-        "pending_stroked_outline_diagnostic case_id={} status={} left_status={} left_points={} left_contours={} right_status={} right_points={} right_contours={} counts_status={} total_points={} total_contours={}",
-        case.case_id,
-        status,
-        left_status,
-        left_points,
-        left_contours,
-        right_status,
-        right_points,
-        right_contours,
-        counts_status,
-        total_points,
-        total_contours
-    );
 }
 
 fn c_stroked_outline_glyph_to_bitmap(
