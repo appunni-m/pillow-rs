@@ -561,10 +561,12 @@ Latest Font-with-FreeType snapshot: `e6e22c8d-e3f6-4270-828a-41dc982a6d43`
 from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
 at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
-Current-head Font-with-FreeType snapshot:
-`da0600ad-8a8d-4387-bce0-c5bbfd36d163` from Coverage MCP run
-`fe35229b-781f-4fe3-8913-590c5a6839a8` at runtime commit
-`cf42ae0c4506ae6530dbe2c011826ec1042670f1`.
+Latest measured Font-with-FreeType snapshot:
+`3270bbe8-a2f7-4e60-b17e-624520e77e73` from Coverage MCP run
+`600170b9-8345-4b5d-9302-dffa4e0ac5f4` at runtime commit
+`2f24caae607da672c75bf5c41e72ce15cb769ef0`. Direct
+`pillow-rs/src/font/imagingft.rs` coverage in that snapshot is `1739/1760`
+lines, `251/256` branches, `173/184` functions, and `2712/2797` regions.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
