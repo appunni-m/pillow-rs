@@ -119,6 +119,10 @@ Post getmask stroke_filled scope audit Coverage MCP run: `5a180e08-7ee5-40d3-8a4
 
 Post getmask stroke_filled scope audit Coverage MCP snapshot: `1e58fb03-1cec-4c6d-8b0a-09489310e413`
 
+Post stroke-filled guard correction Coverage MCP run: `600170b9-8345-4b5d-9302-dffa4e0ac5f4`
+
+Post stroke-filled guard correction Coverage MCP snapshot: `3270bbe8-a2f7-4e60-b17e-624520e77e73`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -143,9 +147,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `e87d3334040920417ff2a50adef7470caa40f698` and ingested
-  snapshot `1e58fb03-1cec-4c6d-8b0a-09489310e413` from run
-  `5a180e08-7ee5-40d3-8a4b-b9e90b4ab7f2`. Direct `imagingft.rs` coverage
+  passed at commit `2f24caae607da672c75bf5c41e72ce15cb769ef0` and ingested
+  snapshot `3270bbe8-a2f7-4e60-b17e-624520e77e73` from run
+  `600170b9-8345-4b5d-9302-dffa4e0ac5f4`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
