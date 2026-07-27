@@ -585,24 +585,7 @@ fn length_from_basic_layout_with_flags(
     text: &str,
     load_flags: i32,
 ) -> Result<i32, PilError> {
-    let face = &ttf.engine.face;
-    let mut total = 0i32;
-    let mut prev: Option<u32> = None;
-
-    for ch in text.chars() {
-        let g = gid(face, ch);
-        // Pillow 12.2.0 `text_layout_fallback` uses the requested target mode.
-        // Its hinted `horiAdvance` values are integral pixels for BASIC layout.
-        let slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
-        validate_advance_26_6(slot.advance.x)?;
-        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
-            total = total.saturating_add(basic_layout_kern(face, p, g));
-        }
-        total = total.saturating_add(slot.metrics.horiAdvance as i32);
-        prev = Some(g);
-    }
-
-    Ok(total)
+    Ok(glyph_run(ttf, text, load_flags)?.final_pen)
 }
 
 fn validate_advance_26_6(advance: i64) -> Result<(), PilError> {
@@ -617,10 +600,12 @@ fn validate_advance_26_6(advance: i64) -> Result<(), PilError> {
 
 struct GlyphRun {
     glyphs: Vec<RunGlyph>,
-    max_pen: i32, // maximum pen position in 26.6
+    final_pen: i32, // final pen position in 26.6
+    max_pen: i32,   // maximum pen position in 26.6
 }
 
 struct RunGlyph {
+    glyph_index: u32,
     pen_before: i32,
     advance: i32,
     outline_cbox: ffi::FT_BBox,
@@ -638,6 +623,7 @@ fn glyph_run(ttf: &ImageFont, text: &str, load_flags: i32) -> Result<GlyphRun, P
     if text.is_empty() {
         return Ok(GlyphRun {
             glyphs: vec![],
+            final_pen: 0,
             max_pen: 0,
         });
     }
@@ -661,6 +647,7 @@ fn glyph_run(ttf: &ImageFont, text: &str, load_flags: i32) -> Result<GlyphRun, P
         let adv = slot.metrics.horiAdvance as i32;
 
         out.push(RunGlyph {
+            glyph_index: g,
             pen_before,
             advance: adv,
             outline_cbox: slot.outline_cbox,
@@ -672,6 +659,7 @@ fn glyph_run(ttf: &ImageFont, text: &str, load_flags: i32) -> Result<GlyphRun, P
     }
     Ok(GlyphRun {
         glyphs: out,
+        final_pen: pen,
         max_pen,
     })
 }
@@ -686,6 +674,10 @@ fn bbox_from_run_with_flags(
     load_flags: i32,
 ) -> Result<(i32, i32, i32, i32), PilError> {
     let run = glyph_run(ttf, text, load_flags)?;
+    bbox_from_glyph_run(ttf, &run)
+}
+
+fn bbox_from_glyph_run(ttf: &ImageFont, run: &GlyphRun) -> Result<(i32, i32, i32, i32), PilError> {
     if run.glyphs.is_empty() {
         return Ok((0, 0, 0, 0));
     }
@@ -725,14 +717,15 @@ fn mask_from_run_with_start(
     load_flags: i32,
     start: (f64, f64),
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
-    if text.is_empty() {
+    let run = glyph_run(ttf, text, load_flags)?;
+    if run.glyphs.is_empty() {
         return Ok((0, 0, vec![]));
     }
     // Pillow 12.2.0 `_imagingft.c` uses FT_LOAD_TARGET_MONO consistently
     // during BASIC layout, bbox calculation, and both render passes for
     // `fontmode="1"`. Thresholding the normal grayscale mask is not
     // equivalent: monochrome hinting changes advances and glyph geometry.
-    let bbox = bbox_from_run_with_flags(ttf, text, load_flags)?;
+    let bbox = bbox_from_glyph_run(ttf, &run)?;
     // Pillow 12.2.0 `_imagingft.c::font_render_impl` expands the allocated
     // mask by ceil(start), then rounds the shifted 26.6 pen origin.
     let start_width = start.0.ceil() as i32;
@@ -759,35 +752,25 @@ fn mask_from_run_with_start(
     }
 
     let face = &ttf.engine.face;
-    let mut pen = 0i32;
-    let mut prev: Option<u32> = None;
     let mut rendered = Vec::new();
     let mut x_min = 0;
     let mut y_max = 0;
 
-    for ch in text.chars() {
-        let g = gid(face, ch);
-        // Pillow's layout pass obtains the hinted advance before rendering.
-        let layout_slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
-        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
-            pen = pen.saturating_add(basic_layout_kern(face, p, g));
-        }
+    for glyph in &run.glyphs {
+        let slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, RDR | load_flags)
+            .map_err(ft_error_to_pil)?;
 
-        let slot = ffi::FT_Load_Glyph(face, g, RDR | load_flags).map_err(ft_error_to_pil)?;
-
-        let px = round26(pen);
+        let px = round26(glyph.pen_before);
         x_min = x_min.min(px + slot.bitmap_left as i32);
         y_max = y_max.max(slot.bitmap_top as i32);
         if let Some(bitmap) = slot.bitmap {
             rendered.push(RenderedBitmap {
-                pen_before: pen,
+                pen_before: glyph.pen_before,
                 bitmap_left: slot.bitmap_left as i32,
                 bitmap_top: slot.bitmap_top as i32,
                 bitmap,
             });
         }
-        pen = pen.saturating_add(layout_slot.metrics.horiAdvance as i32);
-        prev = Some(g);
     }
 
     let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
@@ -812,40 +795,33 @@ fn stroked_mask_from_run_with_start(
         return Ok((side, side, vec![0; side.saturating_mul(side) as usize]));
     }
 
+    let run = glyph_run(ttf, text, load_flags)?;
     let face = &ttf.engine.face;
-    let mut pen = 0i32;
-    let mut prev: Option<u32> = None;
     let mut rendered = Vec::new();
     let mut x_min = 0;
     let mut x_max = 0;
     let mut y_min = 0;
     let mut y_max = 0;
 
-    for ch in text.chars() {
-        let g = gid(face, ch);
-        let layout_slot = ffi::FT_Load_Glyph(face, g, load_flags).map_err(ft_error_to_pil)?;
-        if let Some(p) = prev.filter(|p| *p != 0 && g != 0) {
-            pen = pen.saturating_add(basic_layout_kern(face, p, g));
-        }
+    for glyph in &run.glyphs {
+        let layout_slot =
+            ffi::FT_Load_Glyph(face, glyph.glyph_index, load_flags).map_err(ft_error_to_pil)?;
 
         let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width)?;
-        let px = round26(pen);
+        let px = round26(glyph.pen_before);
         x_min = x_min.min(px + bitmap_glyph.left as i32);
         x_max = x_max.max(px + bitmap_glyph.left as i32 + bitmap_glyph.bitmap.width as i32);
         y_min = y_min.min(bitmap_glyph.top as i32 - bitmap_glyph.bitmap.rows as i32);
         y_max = y_max.max(bitmap_glyph.top as i32);
         rendered.push(RenderedBitmap {
-            pen_before: pen,
+            pen_before: glyph.pen_before,
             bitmap_left: bitmap_glyph.left as i32,
             bitmap_top: bitmap_glyph.top as i32,
             bitmap: bitmap_glyph.bitmap,
         });
-
-        pen = pen.saturating_add(layout_slot.metrics.horiAdvance as i32);
-        prev = Some(g);
     }
 
-    let bbox = bbox_from_run_with_flags(ttf, text, load_flags)?;
+    let bbox = bbox_from_glyph_run(ttf, &run)?;
     let expected_w = ((bbox.2 - bbox.0) as f32 + stroke_width * 2.0)
         .ceil()
         .max(0.0) as i32;
