@@ -1484,3 +1484,27 @@ current blockers.
   exported outline. Only after that lower route passes should a public
   `PIL.ImageFont` row be added, and only if it exposes distinct Pillow-visible
   stroked text behavior not already covered by the active Font corpus.
+- `FT_Stroker_BeginSubPath` initial-state route promotion: the missing
+  path-record assets now exist at
+  `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/manual-paths.json`
+  and
+  `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/open-line-caps.json`.
+  The two rows
+  `ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state` and
+  `ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state` now have a
+  maintained same-input runtime route through pinned C FreeType, Rust FFI, C
+  ABI, and WASM ABI. The route uses the fixture-declared `start`, `open`,
+  `after_begin_commands`, and stroker settings, then compares exact
+  `begin_status`, status sequence, left/right border counts, and exported
+  outline. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state`,
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state`, and
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_BeginSubPath`
+  pass. The normal lane is now `3/3` runnable rows passing with one explicit
+  pending row left:
+  `ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join`.
+  Route audit moves to `real-parity=4858` and `pending-route=164`. This is a
+  lower FreeType stroker-route coverage/parity improvement; it does not by
+  itself claim a new direct `imagingft.rs` region or public Pillow Font behavior.
