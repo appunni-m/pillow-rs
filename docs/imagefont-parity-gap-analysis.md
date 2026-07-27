@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `1cf6d7259`
+Rust/source fixture commit reviewed: `62d94bbdd`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -51,6 +51,10 @@ Post ParseOutline mixed route Coverage MCP run: `1ac54123-5a3d-4178-8918-9a1c477
 
 Post ParseOutline mixed route Coverage MCP snapshot: `fb1c0612-44e5-4fbe-b405-2ad541c91cc5`
 
+Post Stroker_Set attribute route Coverage MCP run: `ec803b30-9fde-4a68-8ad0-e192ab6e60a0`
+
+Post Stroker_Set attribute route Coverage MCP snapshot: `062c2ec9-22f6-4a83-830f-d69db8fe87d3`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -76,8 +80,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `fb1c0612-44e5-4fbe-b405-2ad541c91cc5` from run
-  `1ac54123-5a3d-4178-8918-9a1c477e30e5` at commit `1cf6d7259`. Direct
+  `062c2ec9-22f6-4a83-830f-d69db8fe87d3` from run
+  `ec803b30-9fde-4a68-8ad0-e192ab6e60a0` at commit `62d94bbdd`. Direct
   `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
@@ -1609,3 +1613,27 @@ current blockers.
   `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
   branches, `162/173` functions, and `2612/2696` regions with the same seven
   markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
+- `FT_Stroker_Set.attributes_affect_geometry` route promotion: the row now
+  uses the input-only
+  `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/set-attribute-matrix.json`
+  asset and has a maintained same-input runtime route through pinned C
+  FreeType, Rust FFI, C ABI, and WASM ABI. The route keeps the matrix bounded
+  while covering all declared families at least once: radius values `32`,
+  `128`, and `384`; cap families `BUTT`, `ROUND`, and `SQUARE`; join families
+  `ROUND`, `BEVEL`, `MITER_VARIABLE`, and `MITER_FIXED`; and path shapes
+  `open_line`, `acute_corner`, `conic_curve`, and `cubic_curve`. It compares
+  exact `status_sequence`, `point_count`, `contour_count`, exported
+  `points/tags/contours`, and `cbox`, with no expected output stored in the
+  input JSON. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_Set.attributes_affect_geometry` passes `1/1`, and
+  normal `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Set`
+  passes `4/4` with `0` pending. Route audit moves to `real-parity=4862`,
+  `pending-route=160`. This is lower FreeType stroker attribute/geometry
+  route parity and does not claim a new direct `imagingft.rs` adapter region.
+  Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passed
+  after this route as run `ec803b30-9fde-4a68-8ad0-e192ab6e60a0` and ingested
+  snapshot `062c2ec9-22f6-4a83-830f-d69db8fe87d3` for commit `62d94bbdd`.
+  Direct `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions with the
+  same seven markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
