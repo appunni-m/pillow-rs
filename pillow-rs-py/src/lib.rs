@@ -1801,7 +1801,7 @@ fn load_pilfont_from_path(
         let Ok(image) = pillow_rs::PilFont::open_pilfont_glyph_image(bitmap) else {
             continue;
         };
-        match pillow_rs::PilFont::from_pilfont_glyph_data(&metrics, image) {
+        match pilfont_from_glyph_image(&metrics, image) {
             Ok(font) => return Ok((font, candidate.to_string_lossy().into_owned())),
             Err(PilError::TypeError(message)) if message == "invalid font image mode" => continue,
             Err(error) => return Err(error),
@@ -1812,6 +1812,20 @@ fn load_pilfont_from_path(
         "cannot find glyph data file {}.{{gif|pbm|png}}",
         root.display()
     )))
+}
+
+fn pilfont_from_glyph_image(
+    metrics: &[u8],
+    image: pillow_rs::PilFontGlyphImage,
+) -> Result<pillow_rs::PilFont, PilError> {
+    match image {
+        pillow_rs::PilFontGlyphImage::Image(image) => {
+            pillow_rs::PilFont::from_pilfont_data(metrics, image)
+        }
+        deferred @ pillow_rs::PilFontGlyphImage::DeferredRenderError { .. } => {
+            pillow_rs::PilFont::from_pilfont_glyph_data(metrics, deferred)
+        }
+    }
 }
 
 fn pilfont_load_path_catches(error: &PilError) -> bool {
