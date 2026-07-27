@@ -1295,7 +1295,14 @@ fn map_error(e: PilError) -> PyErr {
         PilError::IndexError(msg) => pyo3::exceptions::PyIndexError::new_err(msg),
         PilError::KeyError(msg) => pyo3::exceptions::PyKeyError::new_err(msg),
         PilError::UnsupportedLibraqm => {
-            pyo3::exceptions::PyKeyError::new_err(PilError::UnsupportedLibraqm.to_string())
+            let message = PilError::UnsupportedLibraqm.to_string();
+            pyo3::exceptions::PyKeyError::new_err(
+                message
+                    .strip_prefix('\'')
+                    .and_then(|inner| inner.strip_suffix('\''))
+                    .unwrap_or(&message)
+                    .to_owned(),
+            )
         }
         PilError::UnidentifiedImageError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
