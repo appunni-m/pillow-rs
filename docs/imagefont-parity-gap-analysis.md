@@ -83,13 +83,13 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Latest measured code Coverage MCP run: `d0132f79-3bb0-42e8-bf50-5e22b091b19d`
+Latest measured code Coverage MCP run: `866edd68-0b81-4b41-bcdc-941ffd985e1a`
 
-Latest measured code Coverage MCP snapshot: `f0e57660-bb40-418e-ac55-2788b7c4cf14`
+Latest measured code Coverage MCP snapshot: `afe952f5-7908-4c89-824a-159aa116d5a8`
 
-Latest direct imagingft Coverage MCP run: `5df681fa-be65-43af-b99b-683bb7887f85`
+Latest direct imagingft Coverage MCP run: `483456d5-fb96-451a-b7bc-4b3a7272768a`
 
-Latest direct imagingft Coverage MCP snapshot: `8c59b014-0d64-467a-ba5c-80fae53637ef`
+Latest direct imagingft Coverage MCP snapshot: `9dab45ce-31ba-4e95-b5c8-63f86d0d1b3b`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -156,9 +156,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest measured code Coverage MCP command
   `font-tests-coverage-with-freetype-pillow-12-2` passed at commit
-  `cb56633d7bf9a43d57e4804dcee6cbb19c294318` and ingested
-  snapshot `f0e57660-bb40-418e-ac55-2788b7c4cf14` from run
-  `d0132f79-3bb0-42e8-bf50-5e22b091b19d`. Direct `imagingft.rs` coverage
+  `c9c141856d3fd4c6a6e9bcbc6d1289555edead77` and ingested
+  snapshot `afe952f5-7908-4c89-824a-159aa116d5a8` from run
+  `866edd68-0b81-4b41-bcdc-941ffd985e1a`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
@@ -167,9 +167,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   with adjacent behavior lines already hit. No current gap identifies an
   adapter-owned Pillow `_imagingft.c` behavior miss.
 - Direct compatibility command `imagingft-tests-coverage-fixed` passed at
-  commit `cb56633d7bf9a43d57e4804dcee6cbb19c294318` and ingested snapshot
-  `8c59b014-0d64-467a-ba5c-80fae53637ef` from run
-  `5df681fa-be65-43af-b99b-683bb7887f85`. In the direct `imagingft` suite,
+  commit `c9c141856d3fd4c6a6e9bcbc6d1289555edead77` and ingested snapshot
+  `9dab45ce-31ba-4e95-b5c8-63f86d0d1b3b` from run
+  `483456d5-fb96-451a-b7bc-4b3a7272768a`. In the direct `imagingft` suite,
   `imagingft.rs` coverage is `1347/1394` lines, `210/232` branches,
   `135/146` functions, and `2140/2256` regions. This narrower suite excludes
   lower `pillow-rs-freetype` coverage and is retained as a compatibility view;
@@ -183,6 +183,18 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   font. The rows pass live-oracle parity and increase the active corpus from
   439 to 441 rows, but Coverage MCP confirms they do not change the remaining
   LLVM-reported `imagingft.rs` region markers.
+- Commit `c9c141856` adds four input-only native variation fallback rows for
+  `_imagingft.Font.getvarnames/getvaraxes` using the maintained
+  `variable-name-windows-fallback.ttf` and
+  `variable-name-platform1-fallback.ttf` fixtures. These rows prove the raw
+  native name-record fallback path separately from the higher-level
+  `FreeTypeFont.get_variation_*` decoded/filtered API and increase the active
+  corpus from 441 to 445 rows. A probe of
+  `variable-name-missing-subfamily.ttf` showed Pillow 12.2.0 native
+  `font.font.getvarnames()` can return NULL list entries and segfault when the
+  caller touches those entries; do not add that crashy native row to the active
+  oracle corpus unless the harness first gains an explicit, isolated
+  crash-status contract for Pillow itself.
 - Commit `ccecf6682` removes the zero-flag `length_from_basic_layout` wrapper
   and routes the two BASIC length callers directly into
   `length_from_basic_layout_with_flags(..., 0)`. This is behavior-neutral and
@@ -1310,14 +1322,14 @@ current blockers.
   `ImageDraw.text`, `multiline_text`, `textbbox`, `textlength`, and
   `multiline_textbbox` with `direction="rtl"` and verifies exact no-libraqm
   `KeyError` parity.
-- Latest measured code Coverage MCP audit after `cb56633d7`: managed command
+- Latest measured code Coverage MCP audit after `c9c141856`: managed command
   `font-tests-coverage-with-freetype-pillow-12-2` passed as run
-  `d0132f79-3bb0-42e8-bf50-5e22b091b19d` and ingested snapshot
-  `f0e57660-bb40-418e-ac55-2788b7c4cf14`. Direct `imagingft.rs` remains
+  `866edd68-0b81-4b41-bcdc-941ffd985e1a` and ingested snapshot
+  `afe952f5-7908-4c89-824a-159aa116d5a8`. Direct `imagingft.rs` remains
   `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining markers are still `91`, `253`, `271`,
-  `796`, `826`, `829`, and `928`, so the added native `setvaraxes` rows did
-  not regress the core Font/ImageFont parity corpus or create a new
+  `796`, `826`, `829`, and `928`, so the added native variation fallback rows
+  did not regress the core Font/ImageFont parity corpus or create a new
   adapter-owned coverage gap.
 - Follow-up audit after `022ead7d1`: Coverage MCP snapshot
   `fcb80e1b-dd82-4f58-b36b-e84e671737b4` reports direct `imagingft.rs`
