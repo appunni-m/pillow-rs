@@ -166,9 +166,12 @@ C/Rust/WASM parity for the explicit DejaVuSans glyph 36 fixture at 24px with
 radius-96 round stroke. The route compares the replacement outline points,
 tags, contours, CBox, status sequence, and preserve-original ownership against
 the pinned C oracle. It is not the general glyph stroker implementation.
-Current runnable rows pass (`4/4`), and the four success rows above remain
-pending lower-level routes. Route audit movement is `real-parity=4838`,
-`pending-route=183`.
+Current focused stroker rows pass. The broader `ftstroke.FT_Glyph_Stroke`
+filter now compares 5 runnable rows, all exact, with three explicit pending
+blockers: `FT_Glyph_Stroke.destroy_original_option`,
+`FT_Glyph_StrokeBorder.inside_border_success`, and
+`FT_Glyph_StrokeBorder.destroy_original_option`. The route audit is
+`real-parity=4843`, `pending-route=179`.
 
 Additional lower-level blocker reduction:
 
@@ -480,9 +483,9 @@ make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder
 ```
 
 Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
-`FT_Glyph_Stroke` runnable rows pass (`4/4`) with four route-pending blocker
-rows still reported, and `FT_Glyph_StrokeBorder` runnable rows pass (`1/1`)
-with three route-pending blocker rows still reported. The interface map now
+`FT_Glyph_Stroke` filtered rows pass (`5/5`) with three route-pending blocker
+rows still reported, and `FT_Glyph_StrokeBorder` runnable rows pass (`2/2`)
+with two route-pending blocker rows still reported. The interface map now
 classifies the lower stroker group as partial rather than out of scope;
 successful stroke-border geometry remains pending rather than excluded.
 

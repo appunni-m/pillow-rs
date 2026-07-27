@@ -48,6 +48,14 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `253` and `271` are static FreeType error-table tuple-start mappings and
   `831` is a source-mapped helper boundary/separator line. No current gap
   identifies an adapter-owned Pillow `_imagingft.c` behavior miss.
+- Latest lower-stroker guard check keeps the maintained DejaVuSans glyph-36
+  `FT_Glyph_Stroke.outline_glyph_stroked_success` path ahead of the newer
+  general closed round-path stroker. The general path can now return a stroked
+  outline for this row, but its contour order is still not pinned-C exact
+  (`/outline/contours/0` diverges as `20` instead of `2`). The wrapper must
+  therefore keep the explicit C-referenced maintained route until the lower
+  stroker export is proven exact. This is a lower FreeType blocker, not an
+  `imagingft.rs` adapter behavior gap.
 - Coverage MCP command `imagingft-tests-coverage-fixed` passes and ingests snapshot `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba` at runtime commit `12d434ca`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
@@ -585,7 +593,7 @@ explicit exclusion instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 369-row Font fixture corpus.
+The current implementation is good enough to trust the active 371-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because broader stroke-border/destroy/general glyph support is still incomplete even though the active public extent behavior is now explained by `_imagingft.c` clipping.
 
