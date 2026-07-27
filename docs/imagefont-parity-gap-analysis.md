@@ -734,3 +734,18 @@ Current request classification for `imagingft.rs` region coverage:
   active public ImageFont row depends on a cubic stroked outline. Treat the cubic
   port as lower implementation progress proven by focused pinned-C FreeType
   lanes, not as public ImageFont coverage closure.
+- Diagnostic attempt after `8b6381bfe`: adding a non-canonical
+  `FT_Stroker_CubicTo` row with start `(0,0)`, controls `(128,512)` and
+  `(512,704)`, destination `(704,64)`, radius `96`, and round join exposed a
+  real lower FreeType gap. Before any closure experiment, Rust returned
+  `status_sequence=[0,0,7]` at `EndSubPath` and exported no outline while C
+  returned `52` points, `2` contours, and cbox `(-100,-96,740,576)`. A minimal
+  local experiment that recorded curve subpath start and allowed the existing
+  round-path closer to run changed Rust to `status_sequence=[0,0,0]`, `52`
+  points, and `2` contours, but the outline geometry/order still differed
+  materially (`xMax=804` vs C `740`, contour split `[20,51]` vs C `[30,51]`).
+  This row was not kept active because it would create a failing lower
+  FreeType lane. The finding is: generic cubic stroker export is not C-exact
+  yet, and fixing it belongs in `pillow-rs-freetype` only if a real public
+  ImageFont/imagingft path needs cubic stroked-outline behavior. It is not a
+  current `imagingft.rs` region-coverage closure.

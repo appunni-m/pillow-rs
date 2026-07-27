@@ -27053,6 +27053,29 @@ fn stroker_cubic_success_output(
     }))
 }
 
+fn stroker_vector_param(
+    params: &Value,
+    key: &str,
+    default: FT_Vector,
+) -> Result<FT_Vector, String> {
+    params.get(key).map_or(Ok(default), |value| {
+        let vector = vector_value_from_value(value)?;
+        Ok(FT_Vector {
+            x: vector.x,
+            y: vector.y,
+        })
+    })
+}
+
+fn stroker_line_join_param(params: &Value) -> Result<FT_Int, String> {
+    let value = params
+        .get("line_join")
+        .map_or(Ok(FT_STROKER_LINEJOIN_ROUND as i64), |value| {
+            i64_value(value, "line_join")
+        })?;
+    i32::try_from(value).map_err(|err| format!("line_join does not fit FT_Int: {err}"))
+}
+
 fn rust_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
     if !is_stroker_maintained_cubic_case(case) {
         return Err(format!(
@@ -27060,23 +27083,26 @@ fn rust_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
             case.case_id
         ));
     }
+    let params = &case.inputs.params;
     let library = FT_Init_FreeType();
     let mut stroker = ptr::null_mut();
     let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
     if new_error != FT_Err_Ok || stroker.is_null() {
         return Ok(error(new_error));
     }
+    let start = stroker_vector_param(params, "start", FT_Vector { x: 0, y: 0 })?;
+    let control1 = stroker_vector_param(params, "control1", FT_Vector { x: 160, y: 640 })?;
+    let control2 = stroker_vector_param(params, "control2", FT_Vector { x: 480, y: 640 })?;
+    let to = stroker_vector_param(params, "to", FT_Vector { x: 640, y: 0 })?;
+    let radius = i64_param(params, "radius").unwrap_or(96);
+    let line_join = stroker_line_join_param(params)?;
     FT_Stroker_Set(
         stroker,
-        96,
+        radius,
         FT_STROKER_LINECAP_ROUND as FT_Int,
-        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        line_join,
         65_536,
     );
-    let start = FT_Vector { x: 0, y: 0 };
-    let control1 = FT_Vector { x: 160, y: 640 };
-    let control2 = FT_Vector { x: 480, y: 640 };
-    let to = FT_Vector { x: 640, y: 0 };
     let open = if is_stroker_cubic_first_segment_case(case) {
         1
     } else {
@@ -27124,6 +27150,7 @@ fn c_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
             case.case_id
         ));
     }
+    let params = &case.inputs.params;
     let mut library = ptr::null_mut();
     let init_error = c_abi::FT_Init_FreeType(&mut library);
     if init_error != FT_Err_Ok {
@@ -27135,17 +27162,32 @@ fn c_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
         c_done_library(library);
         return Ok(error(new_error));
     }
+    let start = stroker_vector_param(params, "start", FT_Vector { x: 0, y: 0 })?;
+    let control1 = stroker_vector_param(params, "control1", FT_Vector { x: 160, y: 640 })?;
+    let control2 = stroker_vector_param(params, "control2", FT_Vector { x: 480, y: 640 })?;
+    let to = stroker_vector_param(params, "to", FT_Vector { x: 640, y: 0 })?;
+    let radius = i64_param(params, "radius").unwrap_or(96);
+    let line_join = stroker_line_join_param(params)?;
     c_abi::FT_Stroker_Set(
         stroker,
-        96,
+        radius,
         FT_STROKER_LINECAP_ROUND as FT_Int,
-        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        line_join,
         65_536,
     );
-    let start = c_abi::FT_Vector { x: 0, y: 0 };
-    let control1 = c_abi::FT_Vector { x: 160, y: 640 };
-    let control2 = c_abi::FT_Vector { x: 480, y: 640 };
-    let to = c_abi::FT_Vector { x: 640, y: 0 };
+    let start = c_abi::FT_Vector {
+        x: start.x,
+        y: start.y,
+    };
+    let control1 = c_abi::FT_Vector {
+        x: control1.x,
+        y: control1.y,
+    };
+    let control2 = c_abi::FT_Vector {
+        x: control2.x,
+        y: control2.y,
+    };
+    let to = c_abi::FT_Vector { x: to.x, y: to.y };
     let open = if is_stroker_cubic_first_segment_case(case) {
         1
     } else {
