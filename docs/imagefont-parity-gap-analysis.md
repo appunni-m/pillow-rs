@@ -490,7 +490,7 @@ Latest focused ftstroke evidence after the export-append runner update:
 
 Latest Coverage MCP evidence after the conic-subdivision and lint pass:
 
-- Run `14116d4f-256e-4dff-b4ca-347945cff567`, snapshot `348fa42c-e2fe-47dd-9646-3a2cff24e4bf`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
+- Run `d58a4ca9-137b-4fb4-8598-a748291e4d9f`, snapshot `6577461e-2c33-40c4-9f1a-9330404c39c4`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, commit `99f7e415d6583400f58e3c95c566aca48bbcb382`, status `passed`, ingested.
 - `pillow-rs/src/font/imagingft.rs` remains 1663/1686 lines, 248/254 branches, 162/173 functions, and 2604/2700 regions.
 - Remaining `imagingft.rs` direct gaps are unchanged: line 91 partial branch; table-data lines 253 and 271; rounding/helper branch lines 796, 826, 829, and 928; and the real public blocker at lines 1211-1212 where `stroke_filled=true` must call `FT_Outline_Glyph_StrokeBorder`.
 - Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. The next coverage-moving ImageFont task is still to make lower `FT_Glyph_StrokeBorder` inside/outside success geometry real enough for a live Pillow oracle `ImageFont.getmask2(..., stroke_width>0, stroke_filled=true)` row.
