@@ -198,6 +198,13 @@ Coverage MCP reports 16 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 7 un
 | `1218`, `1219` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. A live-oracle probe using `font.getmask2` with DejaVuSans size 24, text `"A"`, `stroke_width=1.5`, and `kwargs.stroke_filled=true` proved Pillow 12.2.0 succeeds with a 20×21 L mask and offset `[-2, 4]`; Rust currently returns `OSError("unimplemented feature")`. This confirms the missing `imagingft.rs` branch is blocked by lower `FT_Glyph_StrokeBorder`, not by missing adapter wiring. | Add only the minimal lower `FT_Glyph_StrokeBorder` behavior needed for the existing Pillow public row, without a broad `pillow-rs-freetype` refactor. Then add the input-only Font row and rerun live Pillow parity plus Coverage MCP. |
 | `1284`, `1285` | Color bitmap mode conversion fallback branch. | `_imagingft.c` only exposes Pillow-supported mask modes from FreeType bitmap glyphs. | Current SBIT rows prove GRAY2, GRAY4, BGRA including transparent alpha, and normal grayscale paths. The remaining LLVM marker is a defensive `unreachable!`/mode-shape branch that should only move with a real FreeType-like bitmap mode observable through Pillow. | Do not fabricate a bitmap mode. Add coverage only if a maintained lower SBIT fixture produces a real Pillow-observable mode that reaches this branch. |
 
+Exploratory note: Coverage MCP run `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c`
+temporarily added valid live-oracle rows for DejaVuSans `"À"` negative-top
+bbox/mask and an `A\uFFFFV` missing-glyph kerning guard. The run passed and
+ingested snapshot `cb8a44e6-cdc2-4faa-8c75-ab75a1b8ff1d`, but
+`imagingft.rs` stayed at `2621/2720` regions with the same 16 gap lines. Those
+temporary rows were not kept because they do not advance the 100% region target.
+
 ## Other ImageFont-related files where coverage is missing
 
 These lower-level `pillow-rs-freetype` files sit underneath `ImageFont` FreeType loading, layout, metrics, glyph loading, hinting, rasterization, and embedded bitmap handling. Full ImageFont parity must either cover these through `PIL.ImageFont` fixtures or explicitly prove they are irrelevant to the supported public surface.
