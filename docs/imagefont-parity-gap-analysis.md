@@ -48,8 +48,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 397 input-only rows execute.
-- 397 rows match live Pillow 12.2.0 exactly.
+- 401 input-only rows execute.
+- 401 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -102,6 +102,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Commit `0ac52bb92` adds public `getmask`/`getmask2` rows for the maintained lower `sbit_composite_success_format8.ttf` fixture. These rows use private-use glyph `U+E001` to reach glyph 2, a compound image-format-8 embedded bitmap assembled from glyph 1, and pass exact live Pillow 12.2.0 oracle comparison without storing expected output in input JSON. Coverage MCP snapshot `05099530-d3be-4b9c-b18b-c3d76f027c47` shows this moved lower `pillow-rs-freetype/src/tt/sbit.rs` to `366/814` lines, `29/72` branches, `25/108` functions, and `567/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commit `5e6621e50` adds public `getmask`/`getmask2` rows for maintained format-9, mono-carry, GRAY2, GRAY4, and BGRA compound bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle. Coverage MCP snapshot `64bcb3dc-bf56-408d-870b-efbba07f51b6` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved again to `468/814` lines, `43/72` branches, `29/108` functions, and `700/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commit `76eca2cce` adds public `getmask`/`getmask2` rows for maintained unsupported bit-depth, unsupported image-format, and truncated small-metrics embedded-bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle. Coverage MCP snapshot `0a30f450-bb93-4dde-bad3-2bbbf8e1c126` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved to `476/814` lines, `45/72` branches, `30/108` functions, and `708/1269` regions while direct `imagingft.rs` stayed unchanged.
+- Current invalid compound-placement SBIT pass adds public `getmask2` rows for maintained negative/out-of-bounds x/y compound bitmap fixtures. The rows are input-only and pass live Pillow 12.2.0 oracle comparison; coverage evidence is pending the committed MCP run.
 - Commits `121702b10` and `2b34fb4ac` close the Python binding option-forwarding leak for ImageFont: the thin wrapper now forwards `direction`, `features`, `language`, `stroke_width`, `stroke_filled`, `anchor`, `ink`, `mode`, and `start` into the Rust core, raises the Rust `PilError::UnsupportedLibraqm` path for no-libraqm options, and preserves Pillow-visible integral bbox value types.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
@@ -646,7 +647,7 @@ exclusion instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 397-row Font fixture corpus.
+The current implementation is good enough to trust the active 401-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
