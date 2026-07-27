@@ -814,87 +814,87 @@
     {
       "path": "stroker",
       "owner": "outline",
-      "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only.",
+      "reason": "FreeType stroker objects are now implemented as a partial lower dependency for Pillow ImageFont stroke rendering; maintained API/ABI rows cover selected lifecycle, segment, export, and glyph-stroke routes while general border geometry remains pending.",
       "symbols": {
         "FT_Outline_GetInsideBorder": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Outline_GetInsideBorder",
+          "status": "partial",
+          "reason": "Implemented for the outline orientation routes used by stroke-border selection; broader orientation fixture coverage remains tied to stroker parity."
         },
         "FT_Outline_GetOutsideBorder": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Outline_GetOutsideBorder",
+          "status": "partial",
+          "reason": "Implemented for the outline orientation routes used by stroke-border selection; broader orientation fixture coverage remains tied to stroker parity."
         },
         "FT_Stroker_New": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_New; fontdone-ffi-c::FT_Stroker_New",
+          "status": "partial",
+          "reason": "Implemented and covered through maintained Rust FFI, C ABI, and WASM lifecycle rows; allocator-failure and full object-lifetime matrix remain pending."
         },
         "FT_Stroker_Set": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_Set; fontdone-ffi-c::FT_Stroker_Set",
+          "status": "partial",
+          "reason": "Implemented for maintained radius/cap/join routes used by current stroke fixtures; full cap/join/miter behavior remains pending."
         },
         "FT_Stroker_Rewind": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_Rewind; fontdone-ffi-c::FT_Stroker_Rewind",
+          "status": "partial",
+          "reason": "Implemented and covered for maintained state-reset routes; exhaustive state lifecycle parity remains pending."
         },
         "FT_Stroker_ParseOutline": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_ParseOutline; fontdone-ffi-c::FT_Stroker_ParseOutline",
+          "status": "partial",
+          "reason": "Implemented with FreeType-shaped contour/tag traversal for maintained line/conic/cubic routes; general segment stroking and export parity remain pending."
         },
         "FT_Stroker_BeginSubPath": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_BeginSubPath; fontdone-ffi-c::FT_Stroker_BeginSubPath",
+          "status": "partial",
+          "reason": "Implemented for maintained open/closed subpath state routes; full stroker state-machine parity remains pending."
         },
         "FT_Stroker_EndSubPath": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_EndSubPath; fontdone-ffi-c::FT_Stroker_EndSubPath",
+          "status": "partial",
+          "reason": "Implemented for maintained no-segment, open-line, closed-line, conic, and cubic routes; general joins/caps remain pending."
         },
         "FT_Stroker_LineTo": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_LineTo; fontdone-ffi-c::FT_Stroker_LineTo",
+          "status": "partial",
+          "reason": "Implemented for maintained zero-length, first-segment, and simple-line routes; general polyline stroke geometry remains pending."
         },
         "FT_Stroker_ConicTo": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_ConicTo; fontdone-ffi-c::FT_Stroker_ConicTo",
+          "status": "partial",
+          "reason": "Implemented for maintained conic fixture routes with exact public output; general conic subdivision remains pending."
         },
         "FT_Stroker_CubicTo": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_CubicTo; fontdone-ffi-c::FT_Stroker_CubicTo",
+          "status": "partial",
+          "reason": "Implemented for maintained cubic fixture routes with exact public output; general cubic subdivision remains pending."
         },
         "FT_Stroker_GetBorderCounts": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_GetBorderCounts; fontdone-ffi-c::FT_Stroker_GetBorderCounts",
+          "status": "partial",
+          "reason": "Implemented for maintained finalized border states and invalid-input rows; full border-count parity follows the pending general stroker state machine."
         },
         "FT_Stroker_ExportBorder": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_ExportBorder; fontdone-ffi-c::FT_Stroker_ExportBorder",
+          "status": "partial",
+          "reason": "Implemented for maintained selected-border export and append routes; general border outline export remains pending."
         },
         "FT_Stroker_GetCounts": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_GetCounts; fontdone-ffi-c::FT_Stroker_GetCounts",
+          "status": "partial",
+          "reason": "Implemented for maintained finalized combined counts and invalid-input rows; full count parity follows the pending general stroker state machine."
         },
         "FT_Stroker_Export": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_Export; fontdone-ffi-c::FT_Stroker_Export",
+          "status": "partial",
+          "reason": "Implemented for maintained left-then-right export and append routes; general combined outline export remains pending."
         },
         "FT_Stroker_Done": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Stroker_Done; fontdone-ffi-c::FT_Stroker_Done",
+          "status": "partial",
+          "reason": "Implemented and covered for maintained lifecycle cleanup rows; exhaustive lifetime and allocator cases remain pending."
         },
         "FT_Glyph_Stroke": {
           "rust": "fontdone::ffi::FT_Outline_Glyph_Stroke; fontdone-ffi-c::FT_Glyph_Stroke",
