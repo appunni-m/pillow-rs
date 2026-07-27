@@ -77,6 +77,22 @@
       }
     },
     {
+      "case_id": "font.constructor.truetype_dejavusans_index_out_of_range_error",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "index": 1
+        }
+      }
+    },
+    {
       "case_id": "font.constructor.truetype_dejavusans_encoding_empty",
       "operation": "truetype",
       "inputs": {
