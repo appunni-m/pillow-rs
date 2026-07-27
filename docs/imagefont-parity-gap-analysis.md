@@ -40,30 +40,33 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 371 input-only rows execute.
-- 371 rows match live Pillow 12.2.0 exactly.
+- 375 input-only rows execute.
+- 375 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
+- Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `772ae59f-c6d5-49d0-95e5-b3af2d99599f`. Direct `imagingft.rs`
-  coverage remains `1660/1682` lines, `249/254` branches,
-  `162/173` functions, and `2610/2696` regions. The eight remaining gap
-  lines are still `91`, `253`, `271`, `796`, `826`, `829`, `831`, and
-  `928`; Coverage MCP line selection shows `91`, `796`, `826`, `829`,
-  and `928` are executed source lines with partial branch markers, while
-  `253` and `271` are static FreeType error-table tuple-start mappings and
-  `831` is a source-mapped helper boundary/separator line. No current gap
-  identifies an adapter-owned Pillow `_imagingft.c` behavior miss.
-- Latest lower-stroker guard check keeps the maintained DejaVuSans glyph-36
+  `9dc9cb42-54a6-4aa8-b217-43ff0d0b351b`. Direct `imagingft.rs` coverage
+  remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
+  `2612/2696` regions. The eight remaining gap lines are still `91`, `253`,
+  `271`, `796`, `826`, `829`, `831`, and `928`; Coverage MCP line selection
+  shows `91`, `796`, `826`, `829`, and `928` are executed source lines with
+  partial branch markers, while `253` and `271` are static FreeType error-table
+  tuple-start mappings and `831` is a source-mapped helper boundary/separator
+  line. No current gap identifies an adapter-owned Pillow `_imagingft.c`
+  behavior miss.
+- Historical lower-stroker guard checks kept the maintained DejaVuSans glyph-36
   `FT_Glyph_Stroke.outline_glyph_stroked_success` path ahead of the newer
   general closed round-path stroker. The general path can now return a stroked
   outline for this row, but its contour order is still not pinned-C exact
   (`/outline/contours/0` diverges as `20` instead of `2`). The wrapper must
-  therefore keep the explicit C-referenced maintained route until the lower
-  stroker export is proven exact. This is a lower FreeType blocker, not an
-  `imagingft.rs` adapter behavior gap.
+  therefore kept the explicit C-referenced maintained route until the lower
+  stroker export was proven exact. Current focused checks now show
+  `FT_Glyph_Stroke` passes `8/8`, `FT_Glyph_To_Bitmap` passes `11/11`, and the
+  active Pillow `mode="1"` stroked Font rows pass exact live-oracle parity.
+  Remaining stroker pending rows are lower FreeType parity work unless a new
+  public Font row proves Pillow-visible impact.
 - Harness trust update: forced `test-pending-case` promotion now refuses the
   generic `FT_Err_Unimplemented_Feature` fallback for `pending-route` rows.
   Before this guard, a pending stroke ownership row could appear green without
@@ -102,7 +105,11 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Commit `072af0fbb` adds two input-only public rows, `font.getbbox.sbit_mono_private_base` and `font.getlength.sbit_bgra_private_base`, for private-use SBIT glyphs that already have live-oracle mask coverage. These rows independently prove Pillow/Rust parity for embedded-bitmap layout bbox and BGRA strike advance through the public `FreeTypeFont` surface. `make -C pillow-rs font-tests` passes 369/369 live-oracle rows. Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e` ingests snapshot `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`; `imagingft.rs` remains `1660/1682` lines, `249/254` branches, `162/173` functions, and `2610/2696` regions in the Font-with-FreeType suite. The unchanged coverage confirms these SBIT rows are truthful parity coverage but do not target the remaining LLVM/static-data markers.
 - Audit at `30551a97b` re-checked the remaining Font-with-FreeType `imagingft.rs` gap ranges from snapshot `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`: `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`. Coverage MCP line selection shows `91`, `796`, `826`, `829`, and `928` are hit but carry partial-branch markers on constructor/helper/wrapper source lines; `253` and `271` are static FreeType error-table tuple-start lines; `831` is an empty separator line inside helper source mapping. No new public ImageFont fixture should be added only to satisfy those markers unless it naturally exercises a real Pillow 12.2.0 behavior. A diagnostic `pillow-rs-freetype` border-side swap was rejected: FreeType 2.14.3 public enum values name `FT_STROKER_BORDER_LEFT = 0`, but `src/base/ftstroke.c` internally treats `stroker->borders + 0` as `right` and `+ 1` as `left` in the closed-outline path. The swap left the pending stroked mono-target `FT_Glyph_To_Bitmap` row failing exact `/bitmap/buffer_hex`, so it was reverted.
 - Coverage MCP run `64ae0b30-1d33-4f97-abee-50818bdd67f4` at current commit `67c542009a0d16cd944aecc9959cf9284aa3c6d5` passed and ingested snapshot `fcb80e1b-dd82-4f58-b36b-e84e671737b4`. The current-commit `imagingft.rs` metrics are unchanged: `1660/1682` lines, `249/254` branches, `162/173` functions, and `2610/2696` regions, with the same eight ranges `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`. Focused lower verification at the same tree confirms `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap` still passes `9/9` runnable rows with the two explicit pending routes, so current state remains: no known adapter-owned `imagingft.rs` branch is missing; the honest implementation blocker is the lower stroked mono-target outline-to-bitmap sequence.
-- The lower pending-route diagnostic is now maintained as `make -C pillow-rs-freetype test-pending-case CASE=<exact-case-id>` instead of requiring temporary edits to `scripts/check_public_api_inputs.py`. Normal parity classification is unchanged unless `FONTDONE_UNIFIED_INCLUDE_PENDING_CASE` exactly matches one pending `case_id`. Running `make -C pillow-rs-freetype test-pending-case CASE=ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap` promotes only that blocker row and fails honestly on `rust ffi:status`: pinned C returns `FT_Err_Ok`, current Rust returns `FT_Err_Unimplemented_Feature (7)` because the unverified closed/curve path guard still protects the non-exact lower stroker output.
+- The lower pending-route diagnostic remains available as
+  `make -C pillow-rs-freetype test-pending-case CASE=<exact-case-id>` instead
+  of requiring temporary edits to `scripts/check_public_api_inputs.py`.
+  Historical runs used it to expose the mono-target stroked bitmap blocker; the
+  current normal `FT_Glyph_To_Bitmap` lane now passes `11/11` with `0` pending.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -665,43 +672,28 @@ Current request classification for `imagingft.rs` region coverage:
   the public BASIC load flags, call `FT_Get_Glyph`, call `FT_Glyph_Stroke` or
   `FT_Glyph_StrokeBorder`, convert the stroked outline to a normal gray bitmap,
   then clip/paste into the Pillow-sized mask.
-- The rejected public `stroke_width=1.5, mode="1"` rows are valid missing
-  behavior, but the first divergence is lower than `imagingft.rs`. A focused
-  diagnostic temporarily added
-  `font.getmask.dejavusans24_a_stroke_1_5_mode_1_probe`; the live Pillow oracle
-  and Rust both returned a `19x21` L mask, but coverage bytes differed from the
-  first non-zero pixel. That rules out the `_imagingft` allocation/offset path
-  for this case.
-- The Font runner and root API plumbing are not the cause: the row contains
-  both `mode` and `stroke_width`, so it routes through
-  `ImageFontTextOptions` and `imagefont_getmask_with_options`, and
-  `imagingft.rs::text_load_flags` maps `mode="1"` to `FT_LOAD_TARGET_MONO`.
-- Lower `FT_Glyph_Stroke` outline/cbox parity is also not enough to close this
-  row. A temporary diagnostic changed the maintained
-  `ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success` row to
-  `FT_LOAD_TARGET_MONO`; it still passed. A second temporary diagnostic made the
-  lower harness request `_imagingft`-style char width and height
-  (`size_26_6, size_26_6`) instead of width `0`; it still passed. Therefore the
-  next first-divergence target is the combined lower sequence:
-  `FT_LOAD_TARGET_MONO` outline -> `FT_Glyph_Stroke` ->
-  `FT_Glyph_To_Bitmap`/`FT_Outline_Glyph_To_Bitmap` normal gray render.
-  Adding a mono-target shortcut in `imagingft.rs` would be false parity; the fix
-  belongs at the lower stroke-to-bitmap/rasterization boundary.
-- Therefore the next legitimate way to move `imagingft.rs` region coverage is
-  to first make the lower stroked mono-target bitmap render exact, then add the
-  public Font input-only rows back and let the live Pillow 12.2.0 oracle drive
-  expected output. Do not add duplicate rows for the static error-table or LLVM
-  source-map markers.
-- This lower route is now tracked directly in
-  `pillow-rs-freetype/tests/fixtures/inputs/public-api/ftglyph.FT_Glyph_To_Bitmap.json`
-  as `pending_stroked_mono_target_outline_to_bitmap`; it is intentionally a
-  pending route, not a mocked pass, until the C/Rust bitmap bytes can be made
-  exact. The route is no longer blocked by oracle plumbing: local diagnostics
-  show the remaining mismatch is lower closed round-path stroke geometry/export
-  for the mono-target outline. Temporarily bypassing the
-  `stroker_used_unverified_closed_round_path` guard makes the general stroker
-  output share the C prefix and suffix but still diverge through the middle
-  coverage bytes, so promoting that path would be false parity.
+- The previous public `stroke_width=1.5, mode="1"` blocker is now cleared. The
+  active rows `font.getmask.dejavusans24_a_stroke_1_5_mode_1` and
+  `font.getmask2.dejavusans24_a_stroke_1_5_mode_1` execute through
+  `ImageFontTextOptions`, map `mode="1"` to `FT_LOAD_TARGET_MONO`, call the
+  lower `FT_Glyph_Stroke -> FT_Glyph_To_Bitmap` route, and match live Pillow
+  12.2.0 exactly.
+- Current lower focused checks prove the formerly blocking lower route:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`
+  passes `11/11` with `0` pending and
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` passes
+  `8/8` with `0` pending. Do not re-add the old mono-target diagnostic as a
+  task; it is retained below only as historical first-divergence context.
+- The remaining legitimate ways to improve `imagingft.rs` coverage are now:
+  find a new Pillow 12.2.0 public ImageFont behavior not already represented in
+  the input-only corpus, or prove that one of the eight remaining LLVM-reported
+  ranges maps to real public behavior. Do not add duplicate rows for static
+  error-table or LLVM source-map markers.
+
+Historical mono-target stroke diagnostics below are retained for audit trail
+only. They describe the first-divergence path before the lower stroker fixes and
+before the active public `mode="1"` stroked rows started passing. They are not
+current blockers.
 - Current promoted-route diagnostic at `02c6dc0c7`: temporarily removing only
   the pending-route classification makes
   `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`
