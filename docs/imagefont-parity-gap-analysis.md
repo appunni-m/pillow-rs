@@ -531,6 +531,7 @@ Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and
 
 - Run `b4d8d9bc-4468-4127-bf57-f635104ac5ee`, snapshot `ad94bdb5-c232-4f4a-9d8f-5f2172f15f65`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
 - Refreshed run after this blocker classification: `b728484a-5ef8-4a5e-bff6-0ced6f559172`, snapshot `3c27125a-5b8c-4406-b19e-0a640f80d7d5`, commit `4d44a5ace53c32d054ae7d6f11b13cc216d68893`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
+- Refreshed run after adding the explicit lower pending `FT_Glyph_To_Bitmap` blocker route: `bbc5c38e-ddf1-4908-9669-b7aed2ed69b5`, snapshot `e7264a1c-7c4a-4c35-8a11-dd700af601ef`, commit `162de125d1e36cb88b5c50006513d028db9df6c6`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
 - The new input-only Font row `font.getmask2.dejavusans24_a_stroke_1_5_filled_l` passes exact live Pillow 12.2.0 oracle parity and reaches `imagingft.rs:1212`.
 - The new input-only Font rows `font.getmask.dejavusans24_a_stroke_start_negative_y_clips` and `font.getmask2.dejavusans24_a_stroke_start_negative_y_clips` pass exact live Pillow 12.2.0 oracle parity. They increase active corpus proof but do not move direct `imagingft.rs` coverage metrics.
 - `pillow-rs/src/font/imagingft.rs` is now 1664/1686 lines, 249/254 branches, 162/173 functions, and 2608/2700 regions.
