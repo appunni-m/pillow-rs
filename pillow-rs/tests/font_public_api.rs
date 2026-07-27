@@ -1748,7 +1748,7 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
 
     assert_eq!(
         expected_status, actual_status,
-        "{case_id}: status mismatch between rust and live oracle"
+        "{case_id}: status mismatch between rust and live oracle\nexpected={expected:#}\nactual={actual:#}"
     );
 
     assert_eq!(

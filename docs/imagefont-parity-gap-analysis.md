@@ -254,6 +254,16 @@ Coverage still shows weak coverage for `sbit`, `vhea`, `vmtx`, `hdmx`, and `mvar
 
 Resolved during the SBIT pass: previous SBIT rows used `"A"` and did not hit the embedded bitmap strikes in the generated fixtures. Commit `21086af6f5fff5921b554e3b6fe76d6613b5874d` changes those rows to private-use glyphs (`U+E000`, `U+E001`), fixes bitmap glyph layout cbox calculation in `imagingft.rs`, and expands SBIT `GRAY2`, `GRAY4`, and `BGRA` pixels to Pillow-compatible mask coverage. `make -C pillow-rs font-tests` passes with 352 rows. Coverage MCP snapshot `e67116f1-f510-46ba-80a0-23768d214d3a` confirms `tt/sbit.rs` moved to 254/814 lines and 375/1269 regions.
 
+Boundary decision: SBIT table parsing, strike selection, glyph bitmap decoding,
+compound bitmap composition, and malformed embedded-bitmap classification must
+stay in `pillow-rs-freetype/src/tt/sbit.rs` and the lower FreeType-compatible
+API. `pillow-rs/src/font/imagingft.rs` may only consume the resulting
+FreeType-like glyph slot and apply Pillow `_imagingft` public adapter semantics:
+layout bbox from bitmap glyph bounds, mask offsets, mode conversion, and final
+coverage bytes. If future SBIT failures require table-format knowledge in
+`imagingft.rs`, that is a layering bug; fix the lower `pillow-rs-freetype`
+implementation instead.
+
 Decision: keep the active SBIT rows as trusted public parity proof, then add further ImageFont oracle rows only for still-independent embedded bitmap formats, compound glyphs, malformed SBIT errors, vertical/TTB metrics if/when libraqm enters scope, horizontal device metrics, and variation metric deltas. If a feature is not in supported scope, record the explicit exclusion instead of leaving it ambiguous.
 
 ## Recommended action order
