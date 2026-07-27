@@ -1298,3 +1298,20 @@ Current request classification for `imagingft.rs` region coverage:
   Rust FFI, C ABI, and WASM ABI, then compares exact status sequence,
   point/contour counts, exported outline, and cbox. It should not be promoted by
   route reclassification alone.
+- `FT_STROKER_LINEJOIN_ROUND.round_join_geometry` promotion: the missing
+  path-record asset now exists at
+  `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/round-join-line-conic-cubic.json`
+  with maintained `acute_line_join`, `conic_join`, and `cubic_join` records.
+  The `ftstroke.stroke_manual_path` route reads those named records from the
+  fixture, encodes the same records for pinned C, and compares the combined
+  stroker output across Rust FFI, C ABI, and WASM ABI. Exact output includes
+  ordered `status_sequence`, `point_count`, `contour_count`,
+  `exported_outline.points/tags/contours`, and `cbox`. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry` passes `1/1`,
+  and `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_ROUND` passes with `2` runnable rows and
+  `1` explicit pending row. Route audit moves to `real-parity=4854` and
+  `pending-route=168`. Remaining line-join pending rows are now the wide
+  round-curve restoration row and the broad
+  `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.

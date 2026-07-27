@@ -21040,6 +21040,104 @@ static int emit_stroker_bevel_join_geometry(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_manual_path(int argc, char** argv) {
+    if (argc != 7) return 2;
+    FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
+    FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[3], NULL, 10);
+    FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)strtol(argv[4], NULL, 10);
+    FT_Fixed miter_limit = (FT_Fixed)strtol(argv[5], NULL, 10);
+    char encoded[8192];
+    snprintf(encoded, sizeof(encoded), "%s", argv[6]);
+
+    FT_Library library = NULL;
+    FT_Error status = FT_Init_FreeType(&library);
+    FT_Stroker stroker = NULL;
+    if (!status) status = FT_Stroker_New(library, &stroker);
+    FT_Error status_sequence[256] = {0};
+    int status_count = 0;
+    FT_Vector exported_points[512] = {0};
+    unsigned char exported_tags[512] = {0};
+    unsigned short exported_contours[64] = {0};
+    FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+    FT_UInt point_count = 0;
+    FT_UInt contour_count = 0;
+    FT_BBox cbox = {0, 0, 0, 0};
+
+    if (!status && stroker) {
+        FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+        char* path_save = NULL;
+        char* path = strtok_r(encoded, ";", &path_save);
+        while (path && !status) {
+            char* records = strchr(path, ':');
+            if (!records) return 2;
+            records++;
+            char* record_save = NULL;
+            char* record = strtok_r(records, "|", &record_save);
+            int began = 0;
+            FT_Error segment_status = FT_Err_Ok;
+            while (record && !segment_status) {
+                char op = record[0];
+                long x0 = 0, y0 = 0, x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                if (op == 'M') {
+                    if (sscanf(record, "M,%ld,%ld", &x0, &y0) != 2) return 2;
+                    FT_Vector to = { x0, y0 };
+                    segment_status = FT_Stroker_BeginSubPath(stroker, &to, 0);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                    began = 1;
+                } else if (op == 'L') {
+                    if (!began || sscanf(record, "L,%ld,%ld", &x0, &y0) != 2) return 2;
+                    FT_Vector to = { x0, y0 };
+                    segment_status = FT_Stroker_LineTo(stroker, &to);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                } else if (op == 'Q') {
+                    if (!began || sscanf(record, "Q,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1) != 4) return 2;
+                    FT_Vector control = { x0, y0 };
+                    FT_Vector to = { x1, y1 };
+                    segment_status = FT_Stroker_ConicTo(stroker, &control, &to);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                } else if (op == 'C') {
+                    if (!began || sscanf(record, "C,%ld,%ld,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1, &x2, &y2) != 6) return 2;
+                    FT_Vector control1 = { x0, y0 };
+                    FT_Vector control2 = { x1, y1 };
+                    FT_Vector to = { x2, y2 };
+                    segment_status = FT_Stroker_CubicTo(stroker, &control1, &control2, &to);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                } else {
+                    return 2;
+                }
+                record = strtok_r(NULL, "|", &record_save);
+            }
+            FT_Error end_status = segment_status ? segment_status : FT_Stroker_EndSubPath(stroker);
+            if (status_count < 256) status_sequence[status_count++] = end_status;
+            status = end_status;
+            path = strtok_r(NULL, ";", &path_save);
+        }
+        if (!status) status = FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+        if (!status) {
+            FT_Stroker_Export(stroker, &exported);
+            FT_Outline_Get_CBox(&exported, &cbox);
+        }
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    if (library) FT_Done_FreeType(library);
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"status_sequence\":[");
+    for (int i = 0; i < status_count; i++) {
+        if (i) printf(",");
+        printf("%d", status_sequence[i]);
+    }
+    printf("],\"point_count\":%u,\"contour_count\":%u,\"exported_outline\":",
+           point_count,
+           contour_count);
+    print_stroker_outline_value(&exported);
+    printf(",\"cbox\":");
+    print_stroker_bbox_json(cbox);
+    printf("}}\n");
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -27681,6 +27779,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--stroker-bevel-join-geometry")) {
         return emit_stroker_bevel_join_geometry(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--stroker-manual-path")) {
+        return emit_stroker_manual_path(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-miter-join-alias")) {
         return emit_stroker_miter_join_alias(argc, argv);
