@@ -15,13 +15,12 @@ pub struct FreeTypeFont {
     engine: imagingft::TrueTypeEngine,
 }
 
-/// Backwards-compatible alias for the FreeType-backed font handle.
+/// Pillow `ImageFont.ImageFont`-compatible bitmap font handle.
 ///
-/// Pillow names this public class `ImageFont.FreeTypeFont`; new Rust root API
-/// call sites should prefer [`FreeTypeFont`]. The alias remains while binding
-/// and test surfaces complete the migration away from treating FreeType fonts
-/// as the bitmap `ImageFont.ImageFont` class.
-pub type ImageFont = FreeTypeFont;
+/// The implementation type remains [`pilfont::PilFont`] internally because a
+/// Pillow bitmap font is loaded from `.pil` metrics plus a sibling glyph image.
+/// The root public alias uses Pillow's base class name.
+pub type ImageFont = pilfont::PilFont;
 
 /// Optional Pillow `ImageFont.truetype()` constructor arguments.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
