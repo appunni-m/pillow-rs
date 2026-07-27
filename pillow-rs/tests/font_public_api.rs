@@ -1449,28 +1449,6 @@ fn assert_documented_blocked_public_parameters() {
 }
 
 fn assert_blocked_public_parameters_have_active_dependency_blockers() {
-    let expected = EXPECTED_BLOCKED_PUBLIC_PARAMETERS
-        .into_iter()
-        .filter(|(method, parameter)| {
-            matches!(
-                (*method, *parameter),
-                ("getmask", "stroke_width") | ("getmask2", "stroke_width")
-            )
-        })
-        .map(|(method, parameter)| (method.to_owned(), parameter.to_owned()))
-        .collect::<BTreeSet<_>>();
-    if expected.is_empty() {
-        return;
-    }
-    assert_eq!(
-        expected,
-        BTreeSet::from([
-            ("getmask".to_owned(), "stroke_width".to_owned()),
-            ("getmask2".to_owned(), "stroke_width".to_owned()),
-        ]),
-        "this dependency check is specific to Pillow ImageFont stroke_width rendering"
-    );
-
     let interface_map_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../pillow-rs-freetype/tests/data/interface_map.json");
     let interface_map_text = fs::read_to_string(&interface_map_path).unwrap_or_else(|err| {
@@ -1496,11 +1474,11 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
     assert_eq!(
         glyph_stroke.get("status").and_then(Value::as_str),
         Some("partial"),
-        "FT_Glyph_Stroke is now partially implemented; keep ImageFont stroke_width blocked until the remaining lower-level success cases pass"
+        "FT_Glyph_Stroke must stay partial until every lower-level glyph-stroke success case passes"
     );
     assert!(
         glyph_stroke.get("rust").is_some_and(|rust| !rust.is_null()),
-        "FT_Glyph_Stroke must name its partial Rust endpoint while ImageFont stroke_width remains blocked"
+        "FT_Glyph_Stroke must name its partial Rust endpoint while ImageFont stroke parity is incomplete"
     );
 
     let stroke_border = freetype_interface_symbol(&interface_map, "FT_Glyph_StrokeBorder")
@@ -1509,15 +1487,17 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
                 "{} must classify FT_Glyph_StrokeBorder; Pillow ImageFont stroke_width uses it through _imagingft.c",
                 interface_map_path.display()
             )
-        });
+    });
     assert_eq!(
         stroke_border.get("status").and_then(Value::as_str),
-        Some("out_of_scope"),
-        "FT_Glyph_StrokeBorder is no longer marked out_of_scope; implement Pillow ImageFont stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+        Some("partial"),
+        "FT_Glyph_StrokeBorder must stay marked partial while successful border geometry and destroy-option parity remain pending"
     );
     assert!(
-        stroke_border.get("rust").is_none_or(Value::is_null),
-        "FT_Glyph_StrokeBorder now has a Rust endpoint; implement Pillow ImageFont stroke_width parity and remove it from EXPECTED_BLOCKED_PUBLIC_PARAMETERS"
+        stroke_border
+            .get("rust")
+            .is_some_and(|rust| !rust.is_null()),
+        "FT_Glyph_StrokeBorder must name its partial Rust endpoint while ImageFont stroke_filled parity is incomplete"
     );
 
     assert_freetype_stroke_fixture_has_success_case(

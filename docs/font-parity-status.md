@@ -79,8 +79,11 @@ exact union of live `PIL.ImageFont` public operations reported by the pinned
 oracle and the explicit repo helper/consumer operations maintained around that
 surface. This prevents hidden manifest drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
-exclusion is successful libraqm shaping; `direction`, `features`, and
-`language` no-libraqm error rows remain active parity rows.
+public-surface exclusion is successful libraqm shaping; `direction`,
+`features`, and `language` no-libraqm error rows remain active parity rows.
+Lower `FT_Glyph_StrokeBorder` is not out of scope for ImageFont anymore: the
+Rust wrapper exists and is classified as partial until the successful
+inside/outside border and destroy-option rows are exact.
 For covered public parameters, the verifier now requires 76 concrete values
 from the active corpus. This includes no-libraqm values
 (`direction="rtl"`, `language="en"`, `features=[]`, and
@@ -478,8 +481,9 @@ make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder
 Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
 `FT_Glyph_Stroke` runnable rows pass (`4/4`) with four route-pending blocker
 rows still reported, and `FT_Glyph_StrokeBorder` runnable rows pass (`1/1`)
-with three route-pending blocker rows still reported. The route audit remains
-`real-parity=4838`, `pending-route=183`.
+with three route-pending blocker rows still reported. The latest route audit
+classifies both glyph-stroke symbols as implemented only partially; successful
+stroke-border geometry remains pending rather than out of scope.
 
 The active Font corpus now promotes only the maintained DejaVuSans `"A"` stroke
 route and the Pillow-compatible empty stroked-text behavior. Additional visible

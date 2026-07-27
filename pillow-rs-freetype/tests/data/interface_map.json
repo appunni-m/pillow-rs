@@ -902,9 +902,9 @@
           "reason": "The maintained DejaVuSans glyph 36 full-stroke route is implemented and verified through Rust FFI, C ABI, and WASM ABI. Destroy-option coverage and general glyph stroking remain pending."
         },
         "FT_Glyph_StrokeBorder": {
-          "rust": null,
-          "status": "out_of_scope",
-          "reason": "FreeType stroker objects are a separate outline construction API; this crate currently rasterizes loaded glyph outlines only."
+          "rust": "fontdone::ffi::FT_Outline_Glyph_StrokeBorder; fontdone-ffi-c::FT_Glyph_StrokeBorder",
+          "status": "partial",
+          "reason": "The Pillow ImageFont stroke_filled=true path is wired through the Rust outline-glyph stroke-border wrapper, but successful outside/inside border geometry and destroy-option parity remain pending."
         }
       }
     },
