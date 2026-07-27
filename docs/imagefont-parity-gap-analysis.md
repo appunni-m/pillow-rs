@@ -107,6 +107,10 @@ Post anchor error helper Coverage MCP run: `fe35229b-781f-4fe3-8913-590c5a6839a8
 
 Post anchor error helper Coverage MCP snapshot: `da0600ad-8a8d-4387-bce0-c5bbfd36d163`
 
+Post binary render cleanup audit Coverage MCP run: `2fda1cb9-c908-4ee7-a8d4-eb822602e5d3`
+
+Post binary render cleanup audit Coverage MCP snapshot: `4965e8ba-c2d6-4423-a952-c30e1f3130ae`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -131,9 +135,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `cf42ae0c4506ae6530dbe2c011826ec1042670f1` and ingested
-  snapshot `da0600ad-8a8d-4387-bce0-c5bbfd36d163` from run
-  `fe35229b-781f-4fe3-8913-590c5a6839a8`. Direct `imagingft.rs` coverage
+  passed at commit `9896080d700901e9c14cd643e7bf64949c9c4506` and ingested
+  snapshot `4965e8ba-c2d6-4423-a952-c30e1f3130ae` from run
+  `2fda1cb9-c908-4ee7-a8d4-eb822602e5d3`. Direct `imagingft.rs` coverage
   is `1747/1768` lines, `251/256` branches, `175/186` functions, and
   `2723/2808` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
@@ -141,6 +145,12 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   other markers are source-map, defensive fallback, or partial-branch markers
   with adjacent behavior lines already hit. No current gap identifies an
   adapter-owned Pillow `_imagingft.c` behavior miss.
+- Commit `9896080d7` records and reverts a measured source-shape cleanup for
+  `render_text_binary`: splitting `mask_from_run_with_start(...)?` into a
+  named local did not improve line `796` branch attribution and introduced a
+  new uncovered source line in `length_from_basic_layout`. The compact form is
+  therefore kept until a fixture-backed Pillow-visible behavior gap justifies a
+  real implementation change.
 - Historical lower-stroker guard checks kept the maintained DejaVuSans glyph-36
   `FT_Glyph_Stroke.outline_glyph_stroked_success` path ahead of the newer
   general closed round-path stroker. The general path can now return a stroked
