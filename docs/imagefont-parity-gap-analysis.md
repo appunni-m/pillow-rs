@@ -2,9 +2,9 @@
 
 Date: 2026-07-27
 
-Rust/source fixture commit reviewed: `ea5367f75`
+Rust/source fixture commit reviewed: `1fbd6a338`
 
-Latest audit note commit: `ea5367f75`
+Latest audit note commit: `1fbd6a338`
 
 Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
@@ -55,8 +55,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `3ce9480d-ef4f-4476-a975-fccc15551087` from run
-  `f099ee5c-cafd-4db4-948a-423b31651a20` at commit `ea5367f75`. Direct
+  `b7048488-08b8-45ed-9459-70786625cb76` from run
+  `dd6e46f5-015c-4aed-aab9-937465d15b54` at commit `1fbd6a338`. Direct
   `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
@@ -88,6 +88,10 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   caller outline flags while appending geometry.
 - Coverage MCP command `imagingft-tests-coverage-fixed` passes and ingests snapshot `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba` at runtime commit `12d434ca`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
+- The Font public API test now also rejects coverage exclusions, `#[cfg(test)]`
+  shortcuts, subprocesses, fixture paths, and repo-local oracle paths inside
+  `pillow-rs/src/font/imagingft.rs`. This prevents satisfying the region target
+  by hiding code or comparing against anything other than the live Pillow oracle.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
