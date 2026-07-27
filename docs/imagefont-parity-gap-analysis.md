@@ -14,6 +14,10 @@ Latest Coverage MCP run: `517c1937-eba5-4cea-bc55-d25f267438cb`
 
 Latest Coverage MCP snapshot: `772ae59f-c6d5-49d0-95e5-b3af2d99599f`
 
+Post wide-curve Coverage MCP run: `c766c267-e09f-4196-b204-736a8b44d8bd`
+
+Post wide-curve Coverage MCP snapshot: `27ad41d7-ae88-40cb-b286-224f227a4e5e`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -1361,4 +1365,13 @@ Current request classification for `imagingft.rs` region coverage:
   `real-parity=4856` and `pending-route=166`. This clears the currently named
   line-join pending rows; remaining ImageFont-adjacent lower blockers should be
   selected from the next pending-route audit rather than by adding duplicate
-  public Font rows.
+  public Font rows. Coverage MCP command
+  `font-tests-coverage-with-freetype-pillow-12-2` passed after this commit as
+  run `c766c267-e09f-4196-b204-736a8b44d8bd` and ingested snapshot
+  `27ad41d7-ae88-40cb-b286-224f227a4e5e` for commit `2e790b47f`.
+  `pillow-rs/src/font/imagingft.rs` remains unchanged at `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions
+  (`96.88%`), with the same eight reported ranges `91`, `253`, `271`, `796`,
+  `826`, `829`, `831`, and `928`. This confirms the lower route promotion did
+  not close a direct Pillow `_imagingft.c` adapter region; it removes a lower
+  stroker route blocker from the audit ledger.
