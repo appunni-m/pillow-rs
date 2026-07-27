@@ -26,6 +26,10 @@ Post stroked-AV fixture Coverage MCP run: `584c5815-17b0-44cf-89bf-e3831f9f353d`
 
 Post stroked-AV fixture Coverage MCP snapshot: `26f88533-a211-49cd-8775-23b64d8ab218`
 
+Post stroked missing-glyph fixture Coverage MCP run: `68075bd9-fce0-43ed-a276-661e6edf616d`
+
+Post stroked missing-glyph fixture Coverage MCP snapshot: `c46dcc15-676c-4cba-b1bc-44bdeab17507`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -670,7 +674,11 @@ Latest focused ftstroke evidence after the outside-border route update:
   `font.getmask2.dejavusans24_missing_glyph_breaks_kerning_stroke_1_5_l` are
   active input-only rows and pass exact live Pillow 12.2.0 oracle comparison.
   They independently prove the BASIC layout rule that a zero glyph index breaks
-  pair kerning before the stroked multi-glyph render path.
+  pair kerning before the stroked multi-glyph render path. Committed Coverage
+  MCP run `68075bd9-fce0-43ed-a276-661e6edf616d` ingested snapshot
+  `c46dcc15-676c-4cba-b1bc-44bdeab17507`; direct `imagingft.rs` coverage
+  remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
+  `2612/2696` regions with the same eight ranges.
 - Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passed after clearing the stale stroke blocker guard as run
   `eab645c4-3f6c-477d-bd95-f72f83fce2cf` and ingested snapshot
