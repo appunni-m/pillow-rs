@@ -3359,6 +3359,7 @@ fn ft_stroker_is_small(value: FT_Pos) -> bool {
 }
 
 const FT_STROKE_TAG_ON: FT_Byte = 1;
+const FT_STROKE_TAG_CUBIC: FT_Byte = 2;
 const FT_STROKE_TAG_BEGIN: FT_Byte = 4;
 const FT_STROKE_TAG_END: FT_Byte = 8;
 
@@ -3444,6 +3445,69 @@ impl StrokeBorderState {
         }
         self.start = None;
         self.movable = false;
+        self.valid = false;
+    }
+
+    fn counts(&mut self) -> Result<(FT_UInt, FT_UInt), FT_Error> {
+        // FreeType 2.14.3 `src/base/ftstroke.c:647-694` validates BEGIN/END
+        // tag balance every time public count queries ask for a border.  Only
+        // a successful count marks the border valid for later export.
+        let mut contours: FT_UInt = 0;
+        let mut in_contour = false;
+        for tag in &self.tags {
+            if tag & FT_STROKE_TAG_BEGIN != 0 {
+                if in_contour {
+                    self.valid = false;
+                    return Err(FT_Err_Invalid_Outline);
+                }
+                in_contour = true;
+            } else if !in_contour {
+                self.valid = false;
+                return Err(FT_Err_Invalid_Outline);
+            }
+
+            if tag & FT_STROKE_TAG_END != 0 {
+                in_contour = false;
+                contours = contours.saturating_add(1);
+            }
+        }
+        if in_contour {
+            self.valid = false;
+            return Err(FT_Err_Invalid_Outline);
+        }
+        self.valid = true;
+        Ok((
+            FT_UInt::try_from(self.points.len()).unwrap_or(FT_UInt::MAX),
+            contours,
+        ))
+    }
+
+    fn export_to_outline(&self, outline: &mut FT_OutlineSnapshot) {
+        if !self.valid {
+            return;
+        }
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:702-742` appends points,
+        // translates stroke tags back to public outline curve tags, and emits
+        // contour end indices from END-tagged border points.
+        let point_offset = outline.points.len();
+        outline.points.extend(self.points.iter().copied());
+        outline.tags.extend(self.tags.iter().map(|tag| {
+            if tag & FT_STROKE_TAG_ON != 0 {
+                FT_CURVE_TAG_ON as FT_Byte
+            } else if tag & FT_STROKE_TAG_CUBIC != 0 {
+                FT_CURVE_TAG_CUBIC as FT_Byte
+            } else {
+                FT_CURVE_TAG_CONIC as FT_Byte
+            }
+        }));
+        for (index, tag) in self.tags.iter().enumerate() {
+            if tag & FT_STROKE_TAG_END != 0 {
+                outline
+                    .contours
+                    .push(u16::try_from(point_offset.saturating_add(index)).unwrap_or(u16::MAX));
+            }
+        }
     }
 }
 
@@ -4766,12 +4830,24 @@ pub fn FT_Stroker_GetBorderCounts(
         FT_Err_Invalid_Argument
     } else {
         STROKER_REGISTRY.with(|registry| {
-            let registry = registry.borrow();
-            let Some(entry) = registry.get(&(stroker as usize)) else {
+            let mut registry = registry.borrow_mut();
+            let Some(entry) = registry.get_mut(&(stroker as usize)) else {
                 return FT_Err_Invalid_Argument;
             };
             if !entry.state.border_counts_valid {
-                return FT_Err_Invalid_Outline;
+                let border_state = if border == FT_STROKER_BORDER_LEFT as FT_Int {
+                    &mut entry.state.left_border
+                } else {
+                    &mut entry.state.right_border
+                };
+                match border_state.counts() {
+                    Ok((counted_points, counted_contours)) => {
+                        points = counted_points;
+                        contours = counted_contours;
+                        return FT_Err_Ok;
+                    }
+                    Err(error) => return error,
+                }
             }
             if border == FT_STROKER_BORDER_LEFT as FT_Int {
                 points = entry.state.left_points;
@@ -4803,12 +4879,20 @@ pub fn FT_Stroker_GetCounts(
         FT_Err_Invalid_Argument
     } else {
         STROKER_REGISTRY.with(|registry| {
-            let registry = registry.borrow();
-            let Some(entry) = registry.get(&(stroker as usize)) else {
+            let mut registry = registry.borrow_mut();
+            let Some(entry) = registry.get_mut(&(stroker as usize)) else {
                 return FT_Err_Invalid_Argument;
             };
             if !entry.state.border_counts_valid {
-                return FT_Err_Invalid_Outline;
+                let Ok((left_points, left_contours)) = entry.state.left_border.counts() else {
+                    return FT_Err_Invalid_Outline;
+                };
+                let Ok((right_points, right_contours)) = entry.state.right_border.counts() else {
+                    return FT_Err_Invalid_Outline;
+                };
+                points = left_points.saturating_add(right_points);
+                contours = left_contours.saturating_add(right_contours);
+                return FT_Err_Ok;
             }
             points = entry.state.left_points + entry.state.right_points;
             contours = entry.state.left_contours + entry.state.right_contours;
@@ -4846,6 +4930,12 @@ pub fn FT_Stroker_ExportBorder(
     STROKER_REGISTRY.with(|registry| {
         if let Some(entry) = registry.borrow().get(&(stroker as usize)) {
             if !entry.state.border_counts_valid {
+                let source = if border == FT_STROKER_BORDER_LEFT as FT_Int {
+                    &entry.state.left_border
+                } else {
+                    &entry.state.right_border
+                };
+                source.export_to_outline(outline);
                 return;
             }
             let source = if border == FT_STROKER_BORDER_LEFT as FT_Int {

@@ -269,6 +269,13 @@ current center. Public export/count behavior remains guarded until
 `ft_stroker_process_corner` is ported, so this does not claim border geometry
 parity prematurely.
 
+The border buffers now also have the FreeType-shaped public validation/export
+primitive from `src/base/ftstroke.c:647-742`: count queries validate BEGIN/END
+tag balance, mark the border valid only after successful validation, and export
+public outline tags/contours from the accumulated stroke tags. This is required
+plumbing for real border export; the success rows still stay pending until
+corner joins, caps, curves, and close behavior are ported.
+
 Decision: complete the lower stroker segment geometry and border-export behavior
 needed by real outline glyphs, then add successful `stroke_filled=true` fixture
 rows. `FT_Stroker_ParseOutline` now follows the C-shaped contour/tag walk, so
