@@ -55,8 +55,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `64bcb3dc-bf56-408d-870b-efbba07f51b6` from run
-  `757de775-debd-445e-8eec-7dcb9e3d6069` at commit `5e6621e50`. Direct
+  `0a30f450-bb93-4dde-bad3-2bbbf8e1c126` from run
+  `cf045959-beb9-4bc7-bde3-bc0586cd6d14` at commit `76eca2cce`. Direct
   `imagingft.rs` coverage
   remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The eight remaining gap lines are still `91`, `253`,
@@ -101,7 +101,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Commit `21086af6f5fff5921b554e3b6fe76d6613b5874d` replaces false SBIT `"A"` rows with private-use glyph rows that actually hit embedded bitmap strikes, fixes bitmap glyph layout bbox calculation in `imagingft.rs`, and expands SBIT pixel modes (`GRAY2`, `GRAY4`, `BGRA`) to Pillow-compatible coverage bytes. This moves lower `tt/sbit.rs` coverage from 100/814 lines and 186/1269 regions to 254/814 lines and 375/1269 regions.
 - Commit `0ac52bb92` adds public `getmask`/`getmask2` rows for the maintained lower `sbit_composite_success_format8.ttf` fixture. These rows use private-use glyph `U+E001` to reach glyph 2, a compound image-format-8 embedded bitmap assembled from glyph 1, and pass exact live Pillow 12.2.0 oracle comparison without storing expected output in input JSON. Coverage MCP snapshot `05099530-d3be-4b9c-b18b-c3d76f027c47` shows this moved lower `pillow-rs-freetype/src/tt/sbit.rs` to `366/814` lines, `29/72` branches, `25/108` functions, and `567/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commit `5e6621e50` adds public `getmask`/`getmask2` rows for maintained format-9, mono-carry, GRAY2, GRAY4, and BGRA compound bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle. Coverage MCP snapshot `64bcb3dc-bf56-408d-870b-efbba07f51b6` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved again to `468/814` lines, `43/72` branches, `29/108` functions, and `700/1269` regions while direct `imagingft.rs` stayed unchanged.
-- Current malformed/unsupported SBIT pass adds public `getmask`/`getmask2` rows for maintained unsupported bit-depth, unsupported image-format, and truncated small-metrics embedded-bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle; coverage evidence is pending the committed MCP run.
+- Commit `76eca2cce` adds public `getmask`/`getmask2` rows for maintained unsupported bit-depth, unsupported image-format, and truncated small-metrics embedded-bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle. Coverage MCP snapshot `0a30f450-bb93-4dde-bad3-2bbbf8e1c126` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved to `476/814` lines, `45/72` branches, `30/108` functions, and `708/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commits `121702b10` and `2b34fb4ac` close the Python binding option-forwarding leak for ImageFont: the thin wrapper now forwards `direction`, `features`, `language`, `stroke_width`, `stroke_filled`, `anchor`, `ink`, `mode`, and `start` into the Rust core, raises the Rust `PilError::UnsupportedLibraqm` path for no-libraqm options, and preserves Pillow-visible integral bbox value types.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
@@ -246,9 +246,9 @@ Current Font-with-FreeType snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
 from Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e`
 at runtime commit `072af0fbb8e309f936b68f566e6e133cca6a0c29`.
 
-Latest Font-with-FreeType snapshot: `64bcb3dc-bf56-408d-870b-efbba07f51b6`
-from Coverage MCP run `757de775-debd-445e-8eec-7dcb9e3d6069`
-at runtime commit `5e6621e5084917717c136835d52b3b007564e4d2`.
+Latest Font-with-FreeType snapshot: `0a30f450-bb93-4dde-bad3-2bbbf8e1c126`
+from Coverage MCP run `cf045959-beb9-4bc7-bde3-bc0586cd6d14`
+at runtime commit `76eca2cce9ebaaf0dceaeb50d5ac7cef903446e2`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -266,10 +266,10 @@ refactor.
 
 Overall snapshot totals for this suite:
 
-- Lines: 17538/52835, 33.19%
-- Branches: 2973/11156, 26.65%
-- Functions: 1334/3683, 36.22%
-- Regions: 25175/81424, 30.92%
+- Lines: 17546/52835, 33.21%
+- Branches: 2976/11156, 26.68%
+- Functions: 1335/3683, 36.25%
+- Regions: 25183/81424, 30.93%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -317,7 +317,7 @@ These lower-level `pillow-rs-freetype` files sit underneath `ImageFont` FreeType
 | `pillow-rs-freetype/src/render.rs` | 965/2459 39.24% | 157/486 32.30% | 76/158 48.10% | 1343/3432 39.13% | high; raster output parity |
 | `pillow-rs-freetype/src/scaler.rs` | 806/1342 60.06% | 114/186 61.29% | 40/66 60.61% | 918/1436 63.93% | medium/high; scaling and hinted metrics |
 | `pillow-rs-freetype/src/grays.rs` | 571/827 69.04% | 122/190 64.21% | 25/35 71.43% | 854/1106 77.22% | medium; antialias rasterizer |
-| `pillow-rs-freetype/src/tt/sbit.rs` | 468/814 57.49% | 43/72 59.72% | 29/108 26.85% | 700/1269 55.16% | improved by active simple and compound SBIT public rows; still high for malformed/unsupported SBIT paths |
+| `pillow-rs-freetype/src/tt/sbit.rs` | 476/814 58.48% | 45/72 62.50% | 30/108 27.78% | 708/1269 55.79% | improved by active simple, compound, and malformed/unsupported SBIT public rows; still high for unsupported/malformed SBIT paths not exposed through active Font rows |
 | `pillow-rs-freetype/src/tt/cmap.rs` | 271/809 33.50% | 39/174 22.41% | 10/58 17.24% | 395/1089 36.27% | high for charmap/input encoding |
 | `pillow-rs-freetype/src/tt/glyf.rs` | 322/545 59.08% | 55/96 57.29% | 14/20 70.00% | 416/694 59.94% | high for TrueType outlines |
 | `pillow-rs-freetype/src/tt/cff.rs` | 355/735 48.30% | 37/112 33.04% | 29/81 35.80% | 507/1087 46.64% | high for CFF/OpenType |
