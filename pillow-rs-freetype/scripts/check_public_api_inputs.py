@@ -1382,11 +1382,6 @@ def ftstroke_outline_parse_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success": (
-            "FT_Stroker_ParseOutline mixed-outline parity needs a maintained "
-            "route proving line, conic, and cubic contour decomposition feeds "
-            "the stroker and emits the same output geometry as pinned C"
-        ),
         "ftstroke.FT_Stroker_ParseOutline.degenerate_contours_skipped": (
             "FT_Stroker_ParseOutline degenerate-contour parity needs a "
             "maintained route proving zero-length or malformed contours are "
@@ -1583,6 +1578,21 @@ def ftstroke_degenerate_curve_real_parity_reason(row: ConcreteInput) -> str | No
             "FT_Stroker conic/cubic coincident-control no-op validates through "
             "pinned C oracle, Rust FFI, C ABI, and WASM ABI; full curve "
             "geometry remains pending"
+        )
+    return None
+
+
+def ftstroke_parse_line_conic_cubic_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact mixed line/conic/cubic ParseOutline route verified against ftstroke.c."""
+    if (
+        row.operation == "ftstroke.parse_outline"
+        and row.case_id == "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success"
+    ):
+        return (
+            "FT_Stroker_ParseOutline mixed line, implied-conic, cubic, and "
+            "font-like outline rows validate parse status, operation order, "
+            "counts, exported geometry, and cbox through pinned C oracle, Rust "
+            "FFI, C ABI, and WASM ABI"
         )
     return None
 
@@ -7773,6 +7783,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_degenerate_curve_reason = ftstroke_degenerate_curve_real_parity_reason(row)
     if ftstroke_degenerate_curve_reason:
         return ("real-parity", ftstroke_degenerate_curve_reason)
+    ftstroke_parse_line_conic_cubic_reason = ftstroke_parse_line_conic_cubic_real_parity_reason(row)
+    if ftstroke_parse_line_conic_cubic_reason:
+        return ("real-parity", ftstroke_parse_line_conic_cubic_reason)
     ftstroke_parse_degenerate_reason = ftstroke_parse_degenerate_real_parity_reason(row)
     if ftstroke_parse_degenerate_reason:
         return ("real-parity", ftstroke_parse_degenerate_reason)

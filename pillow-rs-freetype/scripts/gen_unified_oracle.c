@@ -21608,6 +21608,232 @@ static void print_stroker_parse_degenerate_row(const char* label,
     printf("],\"flags\":%d}}", exported->flags);
 }
 
+static int decode_stroker_parse_outline_row(char* row,
+                                            char* label,
+                                            size_t label_size,
+                                            FT_Vector* points,
+                                            unsigned char* tags,
+                                            unsigned short* contours,
+                                            FT_Outline* outline) {
+    char* save = NULL;
+    char* id = strtok_r(row, ":", &save);
+    char* point_count_text = strtok_r(NULL, ":", &save);
+    char* contour_count_text = strtok_r(NULL, ":", &save);
+    char* point_text = strtok_r(NULL, ":", &save);
+    char* contour_text = strtok_r(NULL, ":", &save);
+    if (!id || !point_count_text || !contour_count_text || !point_text || !contour_text) {
+        return 0;
+    }
+    snprintf(label, label_size, "%s", id);
+    int point_count = (int)strtol(point_count_text, NULL, 10);
+    int contour_count = (int)strtol(contour_count_text, NULL, 10);
+    if (point_count < 0 || point_count > 256 || contour_count < 0 || contour_count > 64) {
+        return 0;
+    }
+
+    char* point_save = NULL;
+    char* point_record = strtok_r(point_text, "|", &point_save);
+    int seen_points = 0;
+    while (point_record) {
+        long x = 0;
+        long y = 0;
+        unsigned int tag = 0;
+        if (seen_points >= point_count ||
+            sscanf(point_record, "%ld,%ld,%u", &x, &y, &tag) != 3) {
+            return 0;
+        }
+        points[seen_points].x = (FT_Pos)x;
+        points[seen_points].y = (FT_Pos)y;
+        tags[seen_points] = (unsigned char)tag;
+        seen_points++;
+        point_record = strtok_r(NULL, "|", &point_save);
+    }
+    if (seen_points != point_count) {
+        return 0;
+    }
+
+    char* contour_save = NULL;
+    char* contour_record = strtok_r(contour_text, ",", &contour_save);
+    int seen_contours = 0;
+    while (contour_record) {
+        if (seen_contours >= contour_count) {
+            return 0;
+        }
+        contours[seen_contours] = (unsigned short)strtoul(contour_record, NULL, 10);
+        seen_contours++;
+        contour_record = strtok_r(NULL, ",", &contour_save);
+    }
+    if (seen_contours != contour_count) {
+        return 0;
+    }
+
+    outline->n_contours = (short)contour_count;
+    outline->n_points = (short)point_count;
+    outline->points = points;
+    outline->tags = tags;
+    outline->contours = contours;
+    outline->flags = 0;
+    return 1;
+}
+
+static void print_stroker_parse_event_order(FT_Outline* outline) {
+    const char* events[256];
+    int event_count = 0;
+    int previous_last = -1;
+    for (short contour_index = 0; contour_index < outline->n_contours; contour_index++) {
+        int first = previous_last + 1;
+        int last = outline->contours[contour_index];
+        previous_last = last;
+        if (last >= outline->n_points || last <= first) {
+            continue;
+        }
+
+        int limit = last;
+        int point_index = first;
+        unsigned char tag = outline->tags[first] & 3;
+        if (tag == FT_CURVE_TAG_CUBIC) {
+            continue;
+        }
+        if (tag == FT_CURVE_TAG_CONIC) {
+            if ((outline->tags[last] & 3) == FT_CURVE_TAG_ON) {
+                limit--;
+            }
+            point_index--;
+        }
+
+        int saw_segment = 0;
+        if (event_count < 256) events[event_count++] = "begin";
+        while (point_index < limit) {
+            point_index++;
+            tag = outline->tags[point_index] & 3;
+            if (tag == FT_CURVE_TAG_ON) {
+                if (event_count < 256) events[event_count++] = "line";
+                saw_segment = 1;
+            } else if (tag == FT_CURVE_TAG_CONIC) {
+                for (;;) {
+                    if (point_index < limit) {
+                        point_index++;
+                        unsigned char next_tag = outline->tags[point_index] & 3;
+                        if (event_count < 256) events[event_count++] = "conic";
+                        saw_segment = 1;
+                        if (next_tag == FT_CURVE_TAG_ON) {
+                            break;
+                        }
+                        if (next_tag != FT_CURVE_TAG_CONIC) {
+                            break;
+                        }
+                    } else {
+                        if (event_count < 256) events[event_count++] = "conic";
+                        saw_segment = 1;
+                        break;
+                    }
+                }
+            } else {
+                if (point_index + 1 <= limit &&
+                    (outline->tags[point_index + 1] & 3) == FT_CURVE_TAG_CUBIC) {
+                    point_index += 2;
+                    if (event_count < 256) events[event_count++] = "cubic";
+                    saw_segment = 1;
+                }
+            }
+        }
+        if (saw_segment && event_count < 256) {
+            events[event_count++] = "end";
+        }
+    }
+    printf("[");
+    for (int index = 0; index < event_count; index++) {
+        if (index) printf(",");
+        printf("\"%s\"", events[index]);
+    }
+    printf("]");
+}
+
+static int emit_stroker_parse_line_conic_cubic(int argc, char** argv) {
+    if (argc != 8) return 2;
+    FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
+    FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[3], NULL, 10);
+    FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)strtol(argv[4], NULL, 10);
+    FT_Fixed miter_limit = (FT_Fixed)strtol(argv[5], NULL, 10);
+    FT_Bool opened = (FT_Bool)strtol(argv[6], NULL, 10);
+    char encoded[16384];
+    snprintf(encoded, sizeof(encoded), "%s", argv[7]);
+
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int first_row = 1;
+    char* row_save = NULL;
+    char* row_text = strtok_r(encoded, ";", &row_save);
+    while (row_text) {
+        char label[128];
+        FT_Vector input_points[256] = {0};
+        unsigned char input_tags[256] = {0};
+        unsigned short input_contours[64] = {0};
+        FT_Outline input_outline = {0, 0, input_points, input_tags, input_contours, 0};
+        if (!decode_stroker_parse_outline_row(row_text,
+                                              label,
+                                              sizeof(label),
+                                              input_points,
+                                              input_tags,
+                                              input_contours,
+                                              &input_outline)) {
+            FT_Done_FreeType(library);
+            return 2;
+        }
+
+        FT_Stroker stroker = NULL;
+        FT_Error new_error = FT_Stroker_New(library, &stroker);
+        FT_Error parse_status = new_error;
+        FT_Error counts_status = new_error;
+        FT_UInt point_count = 0;
+        FT_UInt contour_count = 0;
+        FT_Vector exported_points[256] = {0};
+        unsigned char exported_tags[256] = {0};
+        unsigned short exported_contours[64] = {0};
+        FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+        FT_BBox cbox = {0, 0, 0, 0};
+        if (!new_error && stroker) {
+            FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+            parse_status = FT_Stroker_ParseOutline(stroker, &input_outline, opened);
+            counts_status = parse_status ? parse_status :
+                FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+            if (!counts_status) {
+                FT_Stroker_Export(stroker, &exported);
+                FT_Outline_Get_CBox(&exported, &cbox);
+            }
+        }
+        if (stroker) FT_Stroker_Done(stroker);
+
+        if (!first_row) printf(",");
+        first_row = 0;
+        printf("{\"case\":\"%s\",", label);
+        printf("\"parse_status\":%d,\"counts_status\":%d,", parse_status, counts_status);
+        printf("\"parse_event_order\":");
+        print_stroker_parse_event_order(&input_outline);
+        printf(",\"point_count\":%u,\"contour_count\":%u,\"exported_outline\":",
+               point_count,
+               contour_count);
+        print_stroker_outline_json(&exported);
+        printf(",\"cbox\":");
+        print_stroker_bbox_json(cbox);
+        printf("}");
+        row_text = strtok_r(NULL, ";", &row_save);
+    }
+    printf("]}}\n");
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_parse_degenerate(int argc, char** argv) {
     if (argc != 3) return 2;
     const char* mode = argv[2];
@@ -28245,6 +28471,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-parse-opened-outline")) {
         return emit_stroker_parse_opened_outline(argc, argv);
+    }
+    if (argc == 8 && streq(argv[1], "--stroker-parse-line-conic-cubic")) {
+        return emit_stroker_parse_line_conic_cubic(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-end-no-segment")) {
         return emit_stroker_end_no_segment(argc, argv);

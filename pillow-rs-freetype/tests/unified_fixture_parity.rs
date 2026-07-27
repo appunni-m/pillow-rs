@@ -25885,6 +25885,10 @@ fn is_stroker_parse_opened_outline_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_ParseOutline.opened_outline_success"
 }
 
+fn is_stroker_parse_line_conic_cubic_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_ParseOutline.line_conic_cubic_success"
+}
+
 fn is_stroker_end_subpath_no_segment_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_EndSubPath.no_segment_status_only"
 }
@@ -30469,6 +30473,179 @@ fn stroker_parse_opened_outline_output(
     Ok(ok(json!({ "rows": rows })))
 }
 
+#[derive(Debug, Clone, Copy)]
+struct StrokerParseOutlineParams {
+    opened: FT_Bool,
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+}
+
+fn stroker_parse_line_conic_cubic_params(
+    case: &InputCase,
+) -> Result<StrokerParseOutlineParams, String> {
+    let params = &case.inputs.params;
+    let stroker = params.get("stroker").unwrap_or(params);
+    Ok(StrokerParseOutlineParams {
+        opened: if bool_param(params, "opened", false)? {
+            1
+        } else {
+            0
+        },
+        radius: i64_value_or_default(stroker.get("radius"), "radius", 96)?,
+        line_cap: stroker_line_cap_value(
+            stroker
+                .get("line_cap")
+                .and_then(Value::as_str)
+                .unwrap_or("FT_STROKER_LINECAP_ROUND"),
+        )?,
+        line_join: stroker_line_join_value(
+            stroker
+                .get("line_join")
+                .and_then(Value::as_str)
+                .unwrap_or("FT_STROKER_LINEJOIN_ROUND"),
+        )?,
+        miter_limit: i64_value_or_default(stroker.get("miter_limit"), "miter_limit", 65_536)?,
+    })
+}
+
+fn stroker_parse_line_conic_cubic_outlines(
+    case: &InputCase,
+) -> Result<Vec<(String, FT_OutlineSnapshot)>, String> {
+    let requested_rows = string_array_param(&case.inputs.params, "outline_rows")?;
+    let outlines = outline_model_set_from_asset_key(case, "synthetic_outlines")?;
+    let mut by_id = BTreeMap::new();
+    for (id, outline) in outlines {
+        by_id.insert(id, outline_render_snapshot(&outline));
+    }
+    requested_rows
+        .into_iter()
+        .map(|id| {
+            by_id
+                .get(&id)
+                .cloned()
+                .map(|outline| (id.clone(), outline))
+                .ok_or_else(|| format!("synthetic_outlines is missing row {id}"))
+        })
+        .collect()
+}
+
+fn stroker_parse_outline_arg(rows: &[(String, FT_OutlineSnapshot)]) -> String {
+    rows.iter()
+        .map(|(id, outline)| {
+            let points = outline
+                .points
+                .iter()
+                .enumerate()
+                .map(|(index, point)| {
+                    let tag = outline
+                        .tags
+                        .get(index)
+                        .copied()
+                        .unwrap_or(FT_CURVE_TAG_ON as u8);
+                    format!("{},{},{}", point.x, point.y, tag)
+                })
+                .collect::<Vec<_>>()
+                .join("|");
+            let contours = outline
+                .contours
+                .iter()
+                .map(u16::to_string)
+                .collect::<Vec<_>>()
+                .join(",");
+            format!(
+                "{}:{}:{}:{}:{}",
+                id,
+                outline.points.len(),
+                outline.contours.len(),
+                points,
+                contours
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+fn stroker_parse_event_order(outline: &FT_OutlineSnapshot) -> Result<Vec<&'static str>, String> {
+    let mut events = Vec::new();
+    let mut previous_last: Option<usize> = None;
+    for &last_raw in &outline.contours {
+        let first = previous_last.map_or(0usize, |last| last.saturating_add(1));
+        let last = usize::from(last_raw);
+        previous_last = Some(last);
+        if last >= outline.points.len() || last >= outline.tags.len() {
+            return Err("outline contour endpoint is out of range".to_string());
+        }
+        if last <= first {
+            continue;
+        }
+
+        let mut limit = last;
+        let mut point_index = first as isize;
+        let tag = outline.tags[first] & 3;
+        if tag == FT_CURVE_TAG_CUBIC as u8 {
+            return Err("cubic first point is invalid".to_string());
+        }
+        if tag == FT_CURVE_TAG_CONIC as u8 {
+            if outline.tags[last] & 3 == FT_CURVE_TAG_ON as u8 {
+                limit = limit.saturating_sub(1);
+            }
+            point_index -= 1;
+        }
+
+        let mut saw_segment = false;
+        events.push("begin");
+        while point_index < limit as isize {
+            point_index += 1;
+            let index = point_index as usize;
+            match outline.tags[index] & 3 {
+                tag if tag == FT_CURVE_TAG_ON as u8 => {
+                    events.push("line");
+                    saw_segment = true;
+                }
+                tag if tag == FT_CURVE_TAG_CONIC as u8 => loop {
+                    if point_index < limit as isize {
+                        point_index += 1;
+                        let next_index = point_index as usize;
+                        let next_tag = outline.tags[next_index] & 3;
+                        events.push("conic");
+                        saw_segment = true;
+                        if next_tag == FT_CURVE_TAG_ON as u8 {
+                            break;
+                        }
+                        if next_tag != FT_CURVE_TAG_CONIC as u8 {
+                            return Err("mixed conic/cubic contour is invalid".to_string());
+                        }
+                    } else {
+                        events.push("conic");
+                        saw_segment = true;
+                        break;
+                    }
+                },
+                _ => {
+                    if point_index + 1 > limit as isize
+                        || outline.tags[(point_index + 1) as usize] & 3 != FT_CURVE_TAG_CUBIC as u8
+                    {
+                        return Err("cubic segment is missing second control".to_string());
+                    }
+                    point_index += 2;
+                    events.push("cubic");
+                    saw_segment = true;
+                }
+            }
+        }
+        if saw_segment {
+            events.push("end");
+        }
+    }
+    Ok(events)
+}
+
+fn stroker_parse_line_conic_cubic_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
 fn rust_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, String> {
     if !is_stroker_parse_opened_outline_case(case) {
         return Err(format!(
@@ -30640,6 +30817,171 @@ fn wasm_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, Stri
         rust_stroker_parse_opened_outline(case)
     } else {
         Err("unsupported stroker opened ParseOutline route".to_string())
+    }
+}
+
+fn rust_stroker_parse_line_conic_cubic(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_line_conic_cubic_case(case) {
+        return Err(format!(
+            "{} is not the maintained mixed ParseOutline route",
+            case.case_id
+        ));
+    }
+    let params = stroker_parse_line_conic_cubic_params(case)?;
+    let outlines = stroker_parse_line_conic_cubic_outlines(case)?;
+    let library = FT_Init_FreeType();
+    let mut rows = Vec::new();
+    for (label, outline) in outlines {
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        let mut parse_status = new_error;
+        let mut counts_status = new_error;
+        let mut points = 0;
+        let mut contours = 0;
+        let mut exported = FT_OutlineSnapshot::default();
+        let mut cbox = FT_BBox::default();
+        if new_error == FT_Err_Ok && !stroker.is_null() {
+            FT_Stroker_Set(
+                stroker,
+                params.radius,
+                params.line_cap,
+                params.line_join,
+                params.miter_limit,
+            );
+            parse_status = FT_Stroker_ParseOutline(stroker, Some(&outline), params.opened);
+            counts_status = if parse_status == FT_Err_Ok {
+                FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+            } else {
+                parse_status
+            };
+            if counts_status == FT_Err_Ok {
+                FT_Stroker_Export(stroker, Some(&mut exported));
+                FT_Outline_Get_CBox(Some(&exported), Some(&mut cbox));
+            }
+        }
+        if !stroker.is_null() {
+            FT_Stroker_Done(stroker);
+        }
+        rows.push(json!({
+            "case": label,
+            "parse_status": parse_status,
+            "counts_status": counts_status,
+            "parse_event_order": stroker_parse_event_order(&outline)?,
+            "point_count": points,
+            "contour_count": contours,
+            "exported_outline": outline_snapshot_json(&exported),
+            "cbox": bbox_json(bbox_from_rust_bbox(cbox))
+        }));
+    }
+    Ok(stroker_parse_line_conic_cubic_output(rows))
+}
+
+fn c_stroker_parse_line_conic_cubic(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_line_conic_cubic_case(case) {
+        return Err(format!(
+            "{} is not the maintained mixed ParseOutline route",
+            case.case_id
+        ));
+    }
+    let params = stroker_parse_line_conic_cubic_params(case)?;
+    let outlines = stroker_parse_line_conic_cubic_outlines(case)?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut rows = Vec::new();
+    for (label, outline) in outlines {
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        let mut parse_status = new_error;
+        let mut counts_status = new_error;
+        let mut points = 0;
+        let mut contours = 0;
+        let mut exported_points = [c_abi::FT_Vector::default(); 256];
+        let mut exported_tags = [0u8; 256];
+        let mut exported_contours = [0u16; 64];
+        let mut exported = c_empty_outline(
+            &mut exported_points,
+            &mut exported_tags,
+            &mut exported_contours,
+        );
+        let mut cbox = c_abi::FT_BBox::default();
+        let mut c_points = outline
+            .points
+            .iter()
+            .map(|point| c_abi::FT_Vector {
+                x: point.x,
+                y: point.y,
+            })
+            .collect::<Vec<_>>();
+        let mut c_tags = outline.tags.clone();
+        let mut c_contours = outline.contours.clone();
+        let c_outline = c_abi::FT_Outline {
+            n_contours: u16::try_from(c_contours.len())
+                .map_err(|err| format!("outline contour count out of range: {err}"))?,
+            n_points: u16::try_from(c_points.len())
+                .map_err(|err| format!("outline point count out of range: {err}"))?,
+            points: c_points.as_mut_ptr(),
+            tags: c_tags.as_mut_ptr(),
+            contours: c_contours.as_mut_ptr(),
+            flags: outline.flags,
+        };
+        if new_error == FT_Err_Ok && !stroker.is_null() {
+            c_abi::FT_Stroker_Set(
+                stroker,
+                params.radius,
+                params.line_cap,
+                params.line_join,
+                params.miter_limit,
+            );
+            parse_status = c_abi::FT_Stroker_ParseOutline(stroker, &c_outline, params.opened);
+            counts_status = if parse_status == FT_Err_Ok {
+                c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours)
+            } else {
+                parse_status
+            };
+            if counts_status == FT_Err_Ok {
+                c_abi::FT_Stroker_Export(stroker, &mut exported);
+                c_abi::FT_Outline_Get_CBox(&exported, &mut cbox);
+            }
+        }
+        if !stroker.is_null() {
+            c_abi::FT_Stroker_Done(stroker);
+        }
+        rows.push(json!({
+            "case": label,
+            "parse_status": parse_status,
+            "counts_status": counts_status,
+            "parse_event_order": stroker_parse_event_order(&outline)?,
+            "point_count": points,
+            "contour_count": contours,
+            "exported_outline": c_outline_arrays_json(
+                &exported,
+                &exported_points,
+                &exported_tags,
+                &exported_contours,
+            ),
+            "cbox": bbox_json(bbox_from_c_bbox(cbox))
+        }));
+    }
+    c_done_library(library);
+    Ok(stroker_parse_line_conic_cubic_output(rows))
+}
+
+fn wasm_stroker_parse_line_conic_cubic(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_parse_line_conic_cubic_case(case) {
+        return Err(format!(
+            "{} is not the maintained mixed ParseOutline route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_conic_success()
+        && wasm_abi::abi_support_stroker_cubic_success()
+    {
+        rust_stroker_parse_line_conic_cubic(case)
+    } else {
+        Err("unsupported stroker mixed ParseOutline route".to_string())
     }
 }
 
@@ -35106,6 +35448,19 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
             Ok(vec!["--stroker-parse-opened-outline".to_string()])
         }
+        "ftstroke.parse_outline" if is_stroker_parse_line_conic_cubic_case(case) => {
+            let params = stroker_parse_line_conic_cubic_params(case)?;
+            let outlines = stroker_parse_line_conic_cubic_outlines(case)?;
+            Ok(vec![
+                "--stroker-parse-line-conic-cubic".to_string(),
+                params.radius.to_string(),
+                params.line_cap.to_string(),
+                params.line_join.to_string(),
+                params.miter_limit.to_string(),
+                params.opened.to_string(),
+                stroker_parse_outline_arg(&outlines),
+            ])
+        }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => Ok(vec![
             "--stroker-parse-degenerate".to_string(),
             stroker_parse_degenerate_mode(case)?.to_string(),
@@ -36744,6 +37099,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
             rust_stroker_parse_opened_outline(case)
         }
+        "ftstroke.parse_outline" if is_stroker_parse_line_conic_cubic_case(case) => {
+            rust_stroker_parse_line_conic_cubic(case)
+        }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             rust_stroker_parse_degenerate(case)
         }
@@ -37982,6 +38340,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
             c_stroker_parse_opened_outline(case)
         }
+        "ftstroke.parse_outline" if is_stroker_parse_line_conic_cubic_case(case) => {
+            c_stroker_parse_line_conic_cubic(case)
+        }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             c_stroker_parse_degenerate(case)
         }
@@ -39118,6 +39479,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.parse_outline" if is_stroker_parse_opened_outline_case(case) => {
             wasm_stroker_parse_opened_outline(case)
+        }
+        "ftstroke.parse_outline" if is_stroker_parse_line_conic_cubic_case(case) => {
+            wasm_stroker_parse_line_conic_cubic(case)
         }
         "ftstroke.parse_outline" if is_stroker_parse_degenerate_case(case) => {
             wasm_stroker_parse_degenerate(case)
@@ -60741,6 +61105,48 @@ fn outline_from_asset_key(
         return Err(format!("{path} must be an outline_model fixture"));
     }
     parse_outline_model_fixture(path, &value)
+}
+
+fn outline_model_set_from_asset_key(
+    case: &InputCase,
+    asset_key: &str,
+) -> Result<Vec<(String, fontdone::outline::Outline)>, String> {
+    let asset = case
+        .inputs
+        .assets
+        .get(asset_key)
+        .ok_or_else(|| format!("{asset_key} asset is required"))?;
+    let path = asset_file_path(asset).ok_or_else(|| format!("{asset_key} asset is unresolved"))?;
+    let bytes = cached_file_bytes(path)?;
+    let value: Value =
+        serde_json::from_slice(&bytes).map_err(|err| format!("parse {path}: {err}"))?;
+    if value.get("kind").and_then(Value::as_str) != Some("outline_model_set") {
+        return Err(format!("{path} must be an outline_model_set fixture"));
+    }
+    let cases = value
+        .get("cases")
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("{path} cases must be an array"))?;
+    cases
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let id = item
+                .get("id")
+                .and_then(Value::as_str)
+                .ok_or_else(|| format!("{path} cases[{index}].id must be a string"))?;
+            let mut outline_value = item.clone();
+            let object = outline_value
+                .as_object_mut()
+                .ok_or_else(|| format!("{path} cases[{index}] must be an object"))?;
+            object.insert(
+                "kind".to_string(),
+                Value::String("outline_model".to_string()),
+            );
+            parse_outline_model_fixture(&format!("{path}#{id}"), &outline_value)
+                .map(|outline| (id.to_string(), outline))
+        })
+        .collect()
 }
 
 fn cubic_malformed_statuses(
