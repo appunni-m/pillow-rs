@@ -546,16 +546,29 @@ Current request classification for `imagingft.rs` region coverage:
   `FT_Glyph_StrokeBorder`, convert the stroked outline to a normal gray bitmap,
   then clip/paste into the Pillow-sized mask.
 - The rejected public `stroke_width=1.5, mode="1"` rows are valid missing
-  behavior, but the first divergence is lower than `imagingft.rs`: current
-  `pillow-rs-freetype` maintains a DejaVuSans glyph-36 normal-outline
-  `FT_Glyph_Stroke` fallback while the general closed-round stroker remains
-  guarded as unverified. Pillow's mono row succeeds because the source outline
-  after `FT_LOAD_TARGET_MONO` is not the same as the maintained normal-outline
-  fallback. Adding a mono-target shortcut in `imagingft.rs` would be false
-  parity; the fix belongs in the lower `FT_Stroker`/`FT_Glyph_Stroke` geometry
-  route.
+  behavior, but the first divergence is lower than `imagingft.rs`. A focused
+  diagnostic temporarily added
+  `font.getmask.dejavusans24_a_stroke_1_5_mode_1_probe`; the live Pillow oracle
+  and Rust both returned a `19x21` L mask, but coverage bytes differed from the
+  first non-zero pixel. That rules out the `_imagingft` allocation/offset path
+  for this case.
+- The Font runner and root API plumbing are not the cause: the row contains
+  both `mode` and `stroke_width`, so it routes through
+  `ImageFontTextOptions` and `imagefont_getmask_with_options`, and
+  `imagingft.rs::text_load_flags` maps `mode="1"` to `FT_LOAD_TARGET_MONO`.
+- Lower `FT_Glyph_Stroke` outline/cbox parity is also not enough to close this
+  row. A temporary diagnostic changed the maintained
+  `ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success` row to
+  `FT_LOAD_TARGET_MONO`; it still passed. A second temporary diagnostic made the
+  lower harness request `_imagingft`-style char width and height
+  (`size_26_6, size_26_6`) instead of width `0`; it still passed. Therefore the
+  next first-divergence target is the combined lower sequence:
+  `FT_LOAD_TARGET_MONO` outline -> `FT_Glyph_Stroke` ->
+  `FT_Glyph_To_Bitmap`/`FT_Outline_Glyph_To_Bitmap` normal gray render.
+  Adding a mono-target shortcut in `imagingft.rs` would be false parity; the fix
+  belongs at the lower stroke-to-bitmap/rasterization boundary.
 - Therefore the next legitimate way to move `imagingft.rs` region coverage is
-  to first make lower stroker geometry real enough for mono-target stroked
-  outlines, then add the public Font input-only rows back and let the live
-  Pillow 12.2.0 oracle drive expected output. Do not add duplicate rows for the
-  static error-table or LLVM source-map markers.
+  to first make the lower stroked mono-target bitmap render exact, then add the
+  public Font input-only rows back and let the live Pillow 12.2.0 oracle drive
+  expected output. Do not add duplicate rows for the static error-table or LLVM
+  source-map markers.
