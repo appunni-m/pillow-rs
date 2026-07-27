@@ -899,3 +899,25 @@ Current request classification for `imagingft.rs` region coverage:
   `249/254` branches, `162/173` functions, and `2610/2696` regions with the
   same eight ranges. This run is the current-head evidence after adding the
   source-outline diagnostic for the promoted lower stroker blocker.
+- Fix after `1e02c6c86`: the line-only mono-target stroked ImageFont blocker is
+  now a real parity route. The first divergence was the Rust
+  `FT_Stroker_EndSubPath` special case that treated every closed two-line
+  pre-close path as the maintained right-angle fixture and returned synthetic
+  `left=3/right=18` counts before FreeType's close path could add the final
+  segment/corner. In the DejaVuSans glyph-36 mono-target outline, contour `0`
+  has two explicit line segments before close, so native C closes it into a
+  `21`-point right border. Rust now keeps only the exact right-angle fixture
+  fallback and lets other closed round line paths use the FreeType-shaped close
+  path. Promoting
+  `ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`
+  now passes exact pinned-C parity across Rust FFI, C ABI, and WASM ABI; route
+  audit moved from `pending-route=180`/`real-parity=4842` to
+  `pending-route=179`/`real-parity=4843`.
+- Public ImageFont coverage now includes live Pillow 12.2.0 oracle rows for the
+  newly unblocked mode-specific path:
+  `font.getmask.dejavusans24_a_stroke_1_5_mode_1` and
+  `font.getmask2.dejavusans24_a_stroke_1_5_mode_1`. These rows prove the fixed
+  lower `FT_LOAD_TARGET_MONO -> FT_Glyph_Stroke -> FT_Glyph_To_Bitmap` route is
+  observable through Pillow `FreeTypeFont.getmask/getmask2`, not only through
+  lower FreeType harness diagnostics. Curve stroker export remains guarded by
+  `curve_path_unverified`; this fix does not claim conic/cubic stroke parity.
