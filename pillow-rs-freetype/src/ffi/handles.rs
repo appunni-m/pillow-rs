@@ -2232,7 +2232,9 @@ fn stroker_used_unverified_closed_round_path(stroker: FT_Stroker) -> bool {
         registry
             .borrow()
             .get(&(stroker as usize))
-            .is_some_and(|entry| entry.state.closed_round_path_unverified)
+            .is_some_and(|entry| {
+                entry.state.closed_round_path_unverified || entry.state.conic_path_unverified
+            })
     })
 }
 
@@ -3354,6 +3356,7 @@ struct StrokerState {
     border_counts_valid: bool,
     line_segments: FT_UInt,
     closed_round_path_unverified: bool,
+    conic_path_unverified: bool,
     left_border: StrokeBorderState,
     right_border: StrokeBorderState,
     left_outline: FT_OutlineSnapshot,
@@ -3443,6 +3446,13 @@ impl StrokeBorderState {
         self.points.extend([control1, control2, to]);
         self.tags
             .extend([FT_STROKE_TAG_CUBIC, FT_STROKE_TAG_CUBIC, FT_STROKE_TAG_ON]);
+        self.movable = false;
+        self.valid = false;
+    }
+
+    fn conicto(&mut self, control: FT_Vector, to: FT_Vector) {
+        self.points.extend([control, to]);
+        self.tags.extend([0, FT_STROKE_TAG_ON]);
         self.movable = false;
         self.valid = false;
     }
@@ -3638,6 +3648,7 @@ impl StrokerState {
             border_counts_valid: true,
             line_segments: 0,
             closed_round_path_unverified: false,
+            conic_path_unverified: false,
             left_border: StrokeBorderState::new(),
             right_border: StrokeBorderState::new(),
             left_outline: FT_OutlineSnapshot::default(),
@@ -3680,6 +3691,7 @@ impl StrokerState {
         self.border_counts_valid = true;
         self.line_segments = 0;
         self.closed_round_path_unverified = false;
+        self.conic_path_unverified = false;
         self.left_border.reset();
         self.right_border.reset();
         self.left_outline = FT_OutlineSnapshot::default();
@@ -3813,6 +3825,119 @@ impl StrokerState {
         let inside_side = if turn < 0 { 1 } else { 0 };
         self.process_inside_corner(inside_side, line_length);
         self.process_outside_corner(1 - inside_side, line_length);
+    }
+
+    fn conic_is_small_enough(
+        arc: [FT_Vector; 3],
+        angle_in: &mut FT_Angle,
+        angle_out: &mut FT_Angle,
+    ) -> bool {
+        // FreeType 2.14.3 `src/base/ftstroke.c:104-150`.
+        const FT_SMALL_CONIC_THRESHOLD: FT_Angle = FT_ANGLE_PI as FT_Angle / 6;
+
+        let d1 = FT_Vector {
+            x: arc[1].x - arc[2].x,
+            y: arc[1].y - arc[2].y,
+        };
+        let d2 = FT_Vector {
+            x: arc[0].x - arc[1].x,
+            y: arc[0].y - arc[1].y,
+        };
+
+        let close1 = ft_stroker_is_small(d1.x) && ft_stroker_is_small(d1.y);
+        let close2 = ft_stroker_is_small(d2.x) && ft_stroker_is_small(d2.y);
+        match (close1, close2) {
+            (true, true) => {}
+            (true, false) => {
+                *angle_in = FT_Atan2(d2.x, d2.y);
+                *angle_out = *angle_in;
+            }
+            (false, true) => {
+                *angle_in = FT_Atan2(d1.x, d1.y);
+                *angle_out = *angle_in;
+            }
+            (false, false) => {
+                *angle_in = FT_Atan2(d1.x, d1.y);
+                *angle_out = FT_Atan2(d2.x, d2.y);
+            }
+        }
+
+        FT_Angle_Diff(*angle_in, *angle_out).abs() < FT_SMALL_CONIC_THRESHOLD
+    }
+
+    fn start_conic_subpath(&mut self, start_angle: FT_Angle) {
+        let mut delta = FT_Vector::default();
+        FT_Vector_From_Polar(
+            Some(&mut delta),
+            self.radius,
+            start_angle + FT_ANGLE_PI2 as FT_Angle,
+        );
+
+        self.right_border.moveto(FT_Vector {
+            x: self.center.x + delta.x,
+            y: self.center.y + delta.y,
+        });
+        self.left_border.moveto(FT_Vector {
+            x: self.center.x - delta.x,
+            y: self.center.y - delta.y,
+        });
+        self.subpath_angle = start_angle;
+        self.subpath_line_length = 0;
+        self.first_point = false;
+        self.border_counts_valid = false;
+    }
+
+    fn append_small_conic_segment(&mut self, control: FT_Vector, to: FT_Vector) -> bool {
+        if self.handle_wide_strokes {
+            return false;
+        }
+
+        let arc = [to, control, self.center];
+        let mut angle_in = self.angle_in;
+        let mut angle_out = self.angle_in;
+        if !Self::conic_is_small_enough(arc, &mut angle_in, &mut angle_out) {
+            return false;
+        }
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:1395-1522` initializes or
+        // joins the current corner, then appends the offset conic arc to both
+        // borders.  This staged route handles already-small conics only;
+        // subdivision and wide-stroke negative-sector handling remain pending.
+        if self.first_point {
+            self.start_conic_subpath(angle_in);
+        } else {
+            self.angle_out = angle_in;
+            self.process_corner(0);
+        }
+
+        let theta = FT_Angle_Diff(angle_in, angle_out) / 2;
+        let phi = angle_in + theta;
+        let length = FT_DivFix(self.radius, FT_Cos(theta));
+        for side in 0..=1 {
+            let rotate = Self::side_to_rotate(side);
+            let mut ctrl = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut ctrl), length, phi + rotate);
+            ctrl.x += control.x;
+            ctrl.y += control.y;
+
+            let mut end = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut end), self.radius, angle_out + rotate);
+            end.x += to.x;
+            end.y += to.y;
+
+            if side == 0 {
+                self.right_border.conicto(ctrl, end);
+            } else {
+                self.left_border.conicto(ctrl, end);
+            }
+        }
+
+        self.angle_in = angle_out;
+        self.center = to;
+        self.line_length = 0;
+        self.border_counts_valid = false;
+        self.conic_path_unverified = true;
+        true
     }
 
     fn append_line_segment_candidate(&mut self, to: FT_Vector) {
@@ -4726,6 +4851,9 @@ pub fn FT_Stroker_ConicTo(
             entry.state.set_open_conic_first_segment_outline();
             entry.state.first_point = false;
             entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        if entry.state.append_small_conic_segment(*control, *to) {
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
