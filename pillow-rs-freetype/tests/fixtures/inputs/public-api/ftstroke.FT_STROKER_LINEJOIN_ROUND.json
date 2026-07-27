@@ -68,7 +68,7 @@
             "kind": "ref",
             "id": "outlines/stroker/round-join-line-conic-cubic.json",
             "asset_kind": "outline_path_records",
-            "status": "required_future_asset"
+            "status": "required"
           }
         },
         "params": {

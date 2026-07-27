@@ -25704,6 +25704,114 @@ fn stroker_join_geometry_path_arg(params: &Value) -> Result<String, String> {
         .join(";"))
 }
 
+#[derive(Debug, Clone)]
+enum StrokerPathOp {
+    Move(FT_Vector),
+    Line(FT_Vector),
+    Conic {
+        control: FT_Vector,
+        to: FT_Vector,
+    },
+    Cubic {
+        control1: FT_Vector,
+        control2: FT_Vector,
+        to: FT_Vector,
+    },
+}
+
+fn is_stroker_round_manual_path_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry"
+}
+
+fn stroker_manual_path_asset(case: &InputCase) -> Result<Value, String> {
+    let path = required_asset_pathname(case, "paths")?;
+    let text = fs::read_to_string(&path).map_err(|err| format!("read {path}: {err}"))?;
+    serde_json::from_str(&text).map_err(|err| format!("parse {path}: {err}"))
+}
+
+fn stroker_manual_named_paths(
+    case: &InputCase,
+) -> Result<Vec<(String, Vec<StrokerPathOp>)>, String> {
+    let asset = stroker_manual_path_asset(case)?;
+    let path_names = string_array_param(&case.inputs.params, "paths")?;
+    let paths = asset
+        .get("paths")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "manual path asset missing paths object".to_string())?;
+    path_names
+        .into_iter()
+        .map(|name| {
+            let records = paths
+                .get(&name)
+                .and_then(Value::as_array)
+                .ok_or_else(|| format!("manual path asset missing path {name}"))?;
+            let ops = records
+                .iter()
+                .map(stroker_path_op_from_value)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok((name, ops))
+        })
+        .collect()
+}
+
+fn stroker_path_op_from_value(value: &Value) -> Result<StrokerPathOp, String> {
+    let op = value
+        .get("op")
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("manual path record missing op: {value}"))?;
+    match op {
+        "move" => Ok(StrokerPathOp::Move(stroker_vector_param(
+            value,
+            "to",
+            FT_Vector { x: 0, y: 0 },
+        )?)),
+        "line" => Ok(StrokerPathOp::Line(stroker_vector_param(
+            value,
+            "to",
+            FT_Vector { x: 0, y: 0 },
+        )?)),
+        "conic" => Ok(StrokerPathOp::Conic {
+            control: stroker_vector_param(value, "control", FT_Vector { x: 0, y: 0 })?,
+            to: stroker_vector_param(value, "to", FT_Vector { x: 0, y: 0 })?,
+        }),
+        "cubic" => Ok(StrokerPathOp::Cubic {
+            control1: stroker_vector_param(value, "control1", FT_Vector { x: 0, y: 0 })?,
+            control2: stroker_vector_param(value, "control2", FT_Vector { x: 0, y: 0 })?,
+            to: stroker_vector_param(value, "to", FT_Vector { x: 0, y: 0 })?,
+        }),
+        _ => Err(format!("unsupported manual path op {op}")),
+    }
+}
+
+fn stroker_manual_path_arg(case: &InputCase) -> Result<String, String> {
+    Ok(stroker_manual_named_paths(case)?
+        .iter()
+        .map(|(name, ops)| {
+            let records = ops
+                .iter()
+                .map(|op| match op {
+                    StrokerPathOp::Move(to) => format!("M,{},{}", to.x, to.y),
+                    StrokerPathOp::Line(to) => format!("L,{},{}", to.x, to.y),
+                    StrokerPathOp::Conic { control, to } => {
+                        format!("Q,{},{},{},{}", control.x, control.y, to.x, to.y)
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => format!(
+                        "C,{},{},{},{},{},{}",
+                        control1.x, control1.y, control2.x, control2.y, to.x, to.y
+                    ),
+                })
+                .collect::<Vec<_>>()
+                .join("|");
+            format!("{name}:{records}")
+        })
+        .collect::<Vec<_>>()
+        .join(";"))
+}
+
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
@@ -27342,6 +27450,275 @@ fn wasm_stroker_cubic_success(case: &InputCase) -> Result<RunOutput, String> {
         rust_stroker_cubic_success(case)
     } else {
         Err("unsupported stroker cubic route".to_string())
+    }
+}
+
+fn stroker_manual_path_output(
+    status_sequence: Vec<FT_Error>,
+    point_count: FT_UInt,
+    contour_count: FT_UInt,
+    exported_outline: Value,
+    cbox: Value,
+) -> RunOutput {
+    ok(json!({
+        "status_sequence": status_sequence,
+        "point_count": point_count,
+        "contour_count": contour_count,
+        "exported_outline": exported_outline,
+        "cbox": cbox
+    }))
+}
+
+fn rust_stroker_manual_path(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_round_manual_path_case(case) {
+        return Err(format!(
+            "{} is not a manual stroker path route",
+            case.case_id
+        ));
+    }
+    let params = &case.inputs.params;
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_join = i64_param(params, "line_join")?;
+    let miter_limit = i64_param(params, "miter_limit")?;
+    let paths = stroker_manual_named_paths(case)?;
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        radius,
+        line_cap as FT_Int,
+        line_join as FT_Int,
+        miter_limit,
+    );
+    let mut status_sequence = Vec::new();
+    let mut route_status = FT_Err_Ok;
+    for (_, ops) in &paths {
+        let Some(StrokerPathOp::Move(start)) = ops.first() else {
+            FT_Stroker_Done(stroker);
+            return Err("manual stroker path must begin with move".to_string());
+        };
+        let begin_error = FT_Stroker_BeginSubPath(stroker, Some(start), 0);
+        status_sequence.push(begin_error);
+        let mut status = begin_error;
+        if status == FT_Err_Ok {
+            for op in &ops[1..] {
+                status = match op {
+                    StrokerPathOp::Move(_) => {
+                        FT_Stroker_Done(stroker);
+                        return Err("manual stroker path contains nested move".to_string());
+                    }
+                    StrokerPathOp::Line(to) => FT_Stroker_LineTo(stroker, Some(to)),
+                    StrokerPathOp::Conic { control, to } => {
+                        FT_Stroker_ConicTo(stroker, Some(control), Some(to))
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => FT_Stroker_CubicTo(stroker, Some(control1), Some(control2), Some(to)),
+                };
+                status_sequence.push(status);
+                if status != FT_Err_Ok {
+                    break;
+                }
+            }
+        }
+        let end_error = if status == FT_Err_Ok {
+            FT_Stroker_EndSubPath(stroker)
+        } else {
+            status
+        };
+        status_sequence.push(end_error);
+        route_status = status_sequence
+            .iter()
+            .copied()
+            .find(|error| *error != FT_Err_Ok)
+            .unwrap_or(FT_Err_Ok);
+        if route_status != FT_Err_Ok {
+            break;
+        }
+    }
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if route_status == FT_Err_Ok {
+        FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+    } else {
+        route_status
+    };
+    let mut exported = FT_OutlineSnapshot::default();
+    let mut cbox = FT_BBox::default();
+    if counts_error == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+        FT_Outline_Get_CBox(Some(&exported), Some(&mut cbox));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_manual_path_output(
+        status_sequence,
+        point_count,
+        contour_count,
+        outline_snapshot_json(&exported),
+        bbox_json(bbox_from_rust_bbox(cbox)),
+    ))
+}
+
+fn c_stroker_manual_path(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_round_manual_path_case(case) {
+        return Err(format!(
+            "{} is not a manual stroker path route",
+            case.case_id
+        ));
+    }
+    let params = &case.inputs.params;
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_join = i64_param(params, "line_join")?;
+    let miter_limit = i64_param(params, "miter_limit")?;
+    let paths = stroker_manual_named_paths(case)?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        radius,
+        line_cap as FT_Int,
+        line_join as FT_Int,
+        miter_limit,
+    );
+    let mut status_sequence = Vec::new();
+    let mut route_status = FT_Err_Ok;
+    for (_, ops) in &paths {
+        let Some(StrokerPathOp::Move(start)) = ops.first() else {
+            c_abi::FT_Stroker_Done(stroker);
+            c_done_library(library);
+            return Err("manual stroker path must begin with move".to_string());
+        };
+        let c_start = c_abi::FT_Vector {
+            x: start.x,
+            y: start.y,
+        };
+        let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &c_start, 0);
+        status_sequence.push(begin_error);
+        let mut status = begin_error;
+        if status == FT_Err_Ok {
+            for op in &ops[1..] {
+                status = match op {
+                    StrokerPathOp::Move(_) => {
+                        c_abi::FT_Stroker_Done(stroker);
+                        c_done_library(library);
+                        return Err("manual stroker path contains nested move".to_string());
+                    }
+                    StrokerPathOp::Line(to) => {
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_LineTo(stroker, &to)
+                    }
+                    StrokerPathOp::Conic { control, to } => {
+                        let control = c_abi::FT_Vector {
+                            x: control.x,
+                            y: control.y,
+                        };
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_ConicTo(stroker, &control, &to)
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => {
+                        let control1 = c_abi::FT_Vector {
+                            x: control1.x,
+                            y: control1.y,
+                        };
+                        let control2 = c_abi::FT_Vector {
+                            x: control2.x,
+                            y: control2.y,
+                        };
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_CubicTo(stroker, &control1, &control2, &to)
+                    }
+                };
+                status_sequence.push(status);
+                if status != FT_Err_Ok {
+                    break;
+                }
+            }
+        }
+        let end_error = if status == FT_Err_Ok {
+            c_abi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            status
+        };
+        status_sequence.push(end_error);
+        route_status = status_sequence
+            .iter()
+            .copied()
+            .find(|error| *error != FT_Err_Ok)
+            .unwrap_or(FT_Err_Ok);
+        if route_status != FT_Err_Ok {
+            break;
+        }
+    }
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if route_status == FT_Err_Ok {
+        c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+    } else {
+        route_status
+    };
+    let mut exported_points = [c_abi::FT_Vector::default(); 512];
+    let mut exported_tags = [0u8; 512];
+    let mut exported_contours = [0u16; 64];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    let mut cbox = c_abi::FT_BBox::default();
+    if counts_error == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+        c_abi::FT_Outline_Get_CBox(&exported, &mut cbox);
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_manual_path_output(
+        status_sequence,
+        point_count,
+        contour_count,
+        c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        ),
+        bbox_json(bbox_from_c_bbox(cbox)),
+    ))
+}
+
+fn wasm_stroker_manual_path(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_round_manual_path_case(case) {
+        return Err(format!(
+            "{} is not a manual stroker path route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_conic_success()
+        && wasm_abi::abi_support_stroker_cubic_success()
+    {
+        rust_stroker_manual_path(case)
+    } else {
+        Err("unsupported manual stroker path route".to_string())
     }
 }
 
@@ -33299,6 +33676,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 stroker_join_geometry_path_arg(params)?,
             ])
         }
+        "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
+            let params = &case.inputs.params;
+            Ok(vec![
+                "--stroker-manual-path".to_string(),
+                i64_param(params, "radius")?.to_string(),
+                i64_param(params, "line_cap")?.to_string(),
+                i64_param(params, "line_join")?.to_string(),
+                i64_param(params, "miter_limit")?.to_string(),
+                stroker_manual_path_arg(case)?,
+            ])
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             Ok(vec!["--stroker-miter-join-alias".to_string()])
         }
@@ -34945,6 +35333,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
             rust_stroker_bevel_join_geometry(case)
         }
+        "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
+            rust_stroker_manual_path(case)
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             rust_stroker_miter_join_alias(case)
         }
@@ -36167,6 +36558,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
             c_stroker_bevel_join_geometry(case)
         }
+        "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
+            c_stroker_manual_path(case)
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             c_stroker_miter_join_alias(case)
         }
@@ -37283,6 +37677,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
             wasm_stroker_bevel_join_geometry(case)
+        }
+        "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
+            wasm_stroker_manual_path(case)
         }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             wasm_stroker_miter_join_alias(case)
