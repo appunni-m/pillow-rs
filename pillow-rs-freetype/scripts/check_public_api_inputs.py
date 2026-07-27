@@ -1393,11 +1393,6 @@ def ftstroke_line_join_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit": (
-            "FT_Stroker_LineJoin runtime parity needs a maintained route "
-            "proving public join enum values and miter-limit inputs select the "
-            "same output geometry as pinned C"
-        ),
     }
     return exact_cases.get(row.case_id)
 
@@ -1757,6 +1752,11 @@ def ftstroke_miter_join_real_parity_reason(row: ConcreteInput) -> str | None:
             "FT_STROKER_LINEJOIN_ROUND manual path geometry validates line, "
             "conic, and cubic round-join output from maintained path-record "
             "fixtures through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit": (
+            "FT_Stroker_LineJoin matrix validates all public join enum values "
+            "and miter-limit inputs select the same exported geometry through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         ),
     }
     if row.operation in {

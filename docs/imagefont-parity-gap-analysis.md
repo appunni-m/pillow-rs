@@ -1328,3 +1328,16 @@ Current request classification for `imagingft.rs` region coverage:
   after curve subdivision, comparing exact status sequence,
   `line_join_after_curve`, and exported outline across pinned C, Rust FFI,
   C ABI, and WASM ABI.
+- `FT_Stroker_LineJoin.join_geometry_and_miter_limit` promotion: the broad enum
+  matrix row now has a maintained route over the fixture path, all public
+  `line_joins`, and both `miter_limits`. The pinned C oracle, Rust FFI, C ABI,
+  and WASM ABI compare exact `outlines_by_join_and_limit` entries and
+  `alias_geometry_equal`, proving the `FT_STROKER_LINEJOIN_MITER` alias matches
+  `FT_STROKER_LINEJOIN_MITER_VARIABLE` while fixed/variable/bevel/round joins
+  select the same exported geometry as C. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit` passes
+  `1/1`, and `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_Stroker_LineJoin` passes `2/2` with `0` pending. Route audit
+  moves to `real-parity=4855` and `pending-route=167`. The remaining line-join
+  blocker is now only `FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration`.

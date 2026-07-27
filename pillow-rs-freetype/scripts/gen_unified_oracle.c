@@ -21040,6 +21040,99 @@ static int emit_stroker_bevel_join_geometry(int argc, char** argv) {
     return 0;
 }
 
+static int parse_i64_list(const char* text, long* values, int max_values) {
+    int count = 0;
+    const char* cursor = text;
+    while (*cursor) {
+        if (count >= max_values) return -1;
+        char* end = NULL;
+        values[count] = strtol(cursor, &end, 10);
+        if (end == cursor) return -1;
+        count++;
+        if (*end == '\0') return count;
+        if (*end != ',') return -1;
+        cursor = end + 1;
+    }
+    return count;
+}
+
+static int emit_stroker_line_join_matrix(int argc, char** argv) {
+    if (argc != 7) return 2;
+    FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
+    FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[3], NULL, 10);
+    long joins[16] = {0};
+    long limits[16] = {0};
+    int join_count = parse_i64_list(argv[4], joins, 16);
+    int limit_count = parse_i64_list(argv[5], limits, 16);
+    FT_Vector path[32] = {0};
+    int point_count = parse_stroker_join_path(argv[6], path, 32);
+    if (join_count <= 0 || limit_count <= 0 || point_count < 2) return 2;
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"outlines_by_join_and_limit\":{");
+    int first = 1;
+    int alias_equal = 1;
+    FT_Vector alias_points[256] = {0};
+    unsigned char alias_tags[256] = {0};
+    unsigned short alias_contours[64] = {0};
+    FT_Outline alias_outline = {0, 0, alias_points, alias_tags, alias_contours, 0};
+    FT_Vector variable_points[256] = {0};
+    unsigned char variable_tags[256] = {0};
+    unsigned short variable_contours[64] = {0};
+    FT_Outline variable_outline = {0, 0, variable_points, variable_tags, variable_contours, 0};
+
+    for (int i = 0; i < join_count; i++) {
+        for (int j = 0; j < limit_count; j++) {
+            FT_Library library = NULL;
+            FT_Error status = FT_Init_FreeType(&library);
+            FT_Stroker stroker = NULL;
+            if (!status) status = FT_Stroker_New(library, &stroker);
+            FT_Vector exported_points[256] = {0};
+            unsigned char exported_tags[256] = {0};
+            unsigned short exported_contours[64] = {0};
+            FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+            if (!status && stroker) {
+                FT_Stroker_Set(stroker,
+                               radius,
+                               line_cap,
+                               (FT_Stroker_LineJoin)joins[i],
+                               (FT_Fixed)limits[j]);
+                status = FT_Stroker_BeginSubPath(stroker, &path[0], 0);
+                for (int p = 1; !status && p < point_count; p++) {
+                    status = FT_Stroker_LineTo(stroker, &path[p]);
+                }
+                if (!status) status = FT_Stroker_EndSubPath(stroker);
+                FT_UInt points = 0;
+                FT_UInt contours = 0;
+                if (!status) status = FT_Stroker_GetCounts(stroker, &points, &contours);
+                if (!status) FT_Stroker_Export(stroker, &exported);
+            }
+            if (!first) printf(",");
+            first = 0;
+            printf("\"%ld:%ld\":", joins[i], limits[j]);
+            print_stroker_outline_value(&exported);
+            if (joins[i] == FT_STROKER_LINEJOIN_MITER && limits[j] == 65536) {
+                alias_outline = exported;
+                memcpy(alias_points, exported_points, sizeof(alias_points));
+                memcpy(alias_tags, exported_tags, sizeof(alias_tags));
+                memcpy(alias_contours, exported_contours, sizeof(alias_contours));
+            }
+            if (joins[i] == FT_STROKER_LINEJOIN_MITER_VARIABLE && limits[j] == 65536) {
+                variable_outline = exported;
+                memcpy(variable_points, exported_points, sizeof(variable_points));
+                memcpy(variable_tags, exported_tags, sizeof(variable_tags));
+                memcpy(variable_contours, exported_contours, sizeof(variable_contours));
+            }
+            if (stroker) FT_Stroker_Done(stroker);
+            if (library) FT_Done_FreeType(library);
+        }
+    }
+    alias_equal = stroker_outline_equal(&alias_outline, &variable_outline);
+    printf("},\"alias_geometry_equal\":%s}}\n", alias_equal ? "true" : "false");
+    return 0;
+}
+
 static int emit_stroker_manual_path(int argc, char** argv) {
     if (argc != 7) return 2;
     FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
@@ -27779,6 +27872,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 7 && streq(argv[1], "--stroker-bevel-join-geometry")) {
         return emit_stroker_bevel_join_geometry(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--stroker-line-join-matrix")) {
+        return emit_stroker_line_join_matrix(argc, argv);
     }
     if (argc == 7 && streq(argv[1], "--stroker-manual-path")) {
         return emit_stroker_manual_path(argc, argv);
