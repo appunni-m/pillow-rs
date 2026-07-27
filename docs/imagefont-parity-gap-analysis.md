@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `19df430a6a25d39cc1bd325dfe55c1f704bb8214`
+Rust commit reviewed: `162669bf1`
 
-Coverage MCP run: `d28b871e-e1e1-46f2-9add-a3c8d867bde0`
+Coverage MCP run: `a968dd68-1581-4362-a2b6-cc57d66cfa4f`
 
-Coverage MCP snapshot: `4bf7974a-1f89-4146-b2ce-8284c2769a7f`
+Coverage MCP snapshot: `9e05b91d-0328-4d7d-a514-ef27443c4ca7`
 
 Suite: `font-with-freetype`
 
@@ -26,12 +26,12 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 353 input-only rows execute.
-- 353 rows match live Pillow 12.2.0 exactly.
+- 354 input-only rows execute.
+- 354 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes on commit `19df430a6a25d39cc1bd325dfe55c1f704bb8214` and ingests snapshot `4bf7974a-1f89-4146-b2ce-8284c2769a7f`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `9e05b91d-0328-4d7d-a514-ef27443c4ca7`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
@@ -158,7 +158,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 353 |
+| total | 354 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -362,21 +362,38 @@ FreeType-original behavior. They must be implemented in
 `pillow-rs-freetype`; adding glyph-specific or bbox-clamping fixes in
 `imagingft.rs` would be false parity.
 
-### 3. Stroked extent clamping is suspect Rust-only logic
+### 3. Stroked extent clipping is Pillow adapter behavior
 
-Rust clamps stroked `x_max`/`y_max` when actual bitmap extents exceed bbox-derived dimensions.
+Rust bounds stroked `x_max`/`y_max` to Pillow's bbox-derived target when actual bitmap extents exceed those dimensions.
 
-Pillow allocates the target from `bounding_box_and_anchors` and clips while writing pixels. The current evidence does not show Pillow mutating the computed extent the way Rust does.
+Pillow allocates the target from `bounding_box_and_anchors` and clips while writing pixels. This is adapter behavior in `_imagingft.c`, not lower FreeType geometry.
 
-Decision: treat this as a compatibility shim, not trusted lower parity. After
-the outside-border route update, removing the clamp was tested directly against
-the live Pillow Font corpus. `make -C pillow-rs font-tests` failed on
-`font.getmask.dejavusans24_a_stroke_1_5_l`: Pillow returned a `20x21` L mask,
-while unclamped Rust returned `20x22` with an extra top row. The clamp therefore
-remains required for public Pillow parity until lower stroker/bbox parity
-removes the one-row extent mismatch at the source. The next stroke work should
-continue in `pillow-rs-freetype/src/ffi/handles.rs` by replacing the remaining
-glyph-36-specific fallback with general segment geometry and border export.
+Decision: keep the adapter bound because it matches Pillow's public allocation
+contract. After the outside-border route update, removing the bound was tested
+directly against the live Pillow Font corpus. `make -C pillow-rs font-tests`
+failed on `font.getmask.dejavusans24_a_stroke_1_5_l`: Pillow returned a
+`20x21` L mask, while unbounded Rust returned `20x22` with an extra top row.
+
+A direct pinned C FreeType 2.14.3 diagnostic then proved lower FreeType is not
+the source of the one-row public difference. For DejaVuSans glyph 36 at
+`FT_Set_Char_Size(..., 1536, 72, 72)`, `FT_LOAD_NO_BITMAP`, stroker radius 96,
+round cap, round join, and `FT_RENDER_MODE_NORMAL`, C FreeType reports:
+
+- original outline cbox: `xMin=12 yMin=0 xMax=1038 yMax=1152`
+- after `FT_Glyph_Stroke`: cbox `xMin=-89 yMin=-96 xMax=1139 yMax=1248`
+- after `FT_Glyph_Stroke` + `FT_Glyph_To_Bitmap`: bitmap `20x22`, `left=-2`, `top=20`
+- after `FT_Glyph_StrokeBorder(..., inside=0)` + `FT_Glyph_To_Bitmap`: bitmap `20x22`, `left=-2`, `top=20`
+
+That means the lower C oracle and the lower Rust route both naturally produce a
+`20x22` stroked glyph bitmap. Pillow's public `20x21` result comes from
+`_imagingft.c::font_render_impl` allocating from `bounding_box_and_anchors` and
+clipping writes to that target. This bound belongs in `imagingft.rs`; moving it
+down into `pillow-rs-freetype` would make the lower FreeType layer wrong.
+
+The next lower stroke work should still continue in
+`pillow-rs-freetype/src/ffi/handles.rs` by replacing remaining glyph-36-specific
+fallbacks with general segment geometry and border export, but that work is not
+needed to explain the `20x21` vs `20x22` public ImageFont extent.
 
 ### 4. BASIC layout is shared and mostly source-aligned
 
@@ -478,7 +495,7 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 The current implementation is good enough to trust the active 354-row Font fixture corpus.
 
-It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
+It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because broader stroke-border/destroy/general glyph support is still incomplete even though the active public extent behavior is now explained by `_imagingft.c` clipping.
 
 Latest focused ftstroke evidence after the outside-border route update:
 
