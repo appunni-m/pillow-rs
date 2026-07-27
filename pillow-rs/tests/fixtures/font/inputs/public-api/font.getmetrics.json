@@ -61,6 +61,36 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.getmetrics.fixed_width",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/fixed-width.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.hhea_zero_no_os2_fallback",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hhea-zero-no-os2-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }
