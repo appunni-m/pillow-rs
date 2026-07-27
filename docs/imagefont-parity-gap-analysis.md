@@ -71,6 +71,10 @@ Post-commit load-failure error-row Coverage MCP run: `526978dd-e204-48d1-83ec-32
 
 Post-commit load-failure error-row Coverage MCP snapshot: `8dd555b5-b581-421a-8c4e-6aecbe405702`
 
+Post extended load-failure error-row Coverage MCP run: `5bef365a-911d-4116-a326-2c379181f250`
+
+Post extended load-failure error-row Coverage MCP snapshot: `6c110f52-93f8-43c9-9e43-4d8eb5b1a3f7`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -89,8 +93,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 407 input-only rows execute.
-- 407 rows match live Pillow 12.2.0 exactly.
+- 411 input-only rows execute.
+- 411 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -237,6 +241,23 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   DEFS`, `too many function definitions`, and `too many instruction
   definitions`; they are not a claimed fix for the static tuple-start markers
   at lines `253` and `271`.
+- Extended load-failure sweep: four more input-only constructor rows import
+  maintained lower assets for public Pillow 12.2.0 errors not previously active
+  in the Font corpus: `font.load_failure.cff_broken_table`,
+  `font.load_failure.cff_broken_file`,
+  `font.load_failure.loca_invalid_argument`, and
+  `font.load_failure.head_short_unknown_file_format`. The new
+  `head-short-eof.ttf` row exposed a real lower error-classification mismatch:
+  Pillow returns `OSError("unknown file format")`, while Rust previously mapped
+  `FontError::InvalidFont("head table too short ...")` to
+  `FT_Err_Invalid_File_Format`, surfacing `OSError("broken file")`. The lower
+  `pillow-rs-freetype/src/ffi/convert.rs` mapping now classifies that exact
+  head-table-short face-open path as `FT_Err_Unknown_File_Format`. `make -C
+  pillow-rs font-tests` passes `411/411` live-oracle rows. Coverage MCP run
+  `5bef365a-911d-4116-a326-2c379181f250` passed and ingested snapshot
+  `6c110f52-93f8-43c9-9e43-4d8eb5b1a3f7`; direct `imagingft.rs` remains
+  `1666/1688` lines, `249/254` branches, `162/173` functions, and
+  `2612/2696` regions with the same seven broad-suite markers.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -339,7 +360,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.layout_failure.json` | 1 |
 | `font.load.json` | 25 |
 | `font.load_default_imagefont.json` | 1 |
-| `font.load_failure.json` | 12 |
+| `font.load_failure.json` | 16 |
 | `font.load_path.json` | 1 |
 | `font.render_text.json` | 7 |
 | `font.render_text_binary.json` | 10 |
@@ -348,7 +369,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 407 |
+| total | 411 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -765,7 +786,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 407-row Font fixture corpus.
+The current implementation is good enough to trust the active 411-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
