@@ -1061,3 +1061,21 @@ Current request classification for `imagingft.rs` region coverage:
   bitmap conversion there, so the fix belongs in the lower FreeType-compatible
   stroker. Do not move stroker geometry into `imagingft.rs`, do not add a
   glyph-specific shortcut, and do not chase 100% `pillow-rs-freetype` coverage.
+- Lower-stroker progress after `0708ac741`: Rust now ports the FreeType 2.14.3
+  conic/cubic wide-stroke negative-sector branch from
+  `src/base/ftstroke.c:1442-1508` and `1654-1725`, and closed subpath
+  finalization no longer requires a prior line segment. This removes the
+  previous broad `curve_path_unverified` status guard and lets the generic
+  stroked-outline route complete parse/count/export under exact oracle
+  comparison. The include-pending diagnostic for
+  `ftstroke.FT_Glyph_Stroke.destroy_original_option` moved from status mismatch
+  (`oracle OK`, Rust error `7`) to a real geometry mismatch:
+  `/outline/points/0/y expected=896 actual=1152`. The row remains pending and
+  must not be promoted until the exported points/tags/contours match pinned C.
+  Focused active gates remain green:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` passes
+  `7/7` runnable rows with `1` pending,
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
+  passes `4/4`, `make -C pillow-rs-freetype test-ffi-compat` passes, and
+  `make -C pillow-rs font-tests` passes. The next divergence is border export
+  geometry/order, not `_imagingft.rs` adapter behavior.
