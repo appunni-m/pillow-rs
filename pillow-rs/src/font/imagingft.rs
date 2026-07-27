@@ -593,7 +593,6 @@ pub(crate) fn getbbox_binary(
     font: &ImageFont,
     text: &str,
 ) -> Result<(i32, i32, i32, i32), PilError> {
-    validate_text_length(text)?;
     bbox_from_run_with_flags(font, text, TGT_MONO)
 }
 
