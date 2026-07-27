@@ -4,9 +4,9 @@ Date: 2026-07-27
 
 Rust commit reviewed: `162669bf1`
 
-Coverage MCP run: `a968dd68-1581-4362-a2b6-cc57d66cfa4f`
+Coverage MCP run: `b4d8d9bc-4468-4127-bf57-f635104ac5ee`
 
-Coverage MCP snapshot: `9e05b91d-0328-4d7d-a514-ef27443c4ca7`
+Coverage MCP snapshot: `ad94bdb5-c232-4f4a-9d8f-5f2172f15f65`
 
 Suite: `font-with-freetype`
 
@@ -26,12 +26,12 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 354 input-only rows execute.
-- 354 rows match live Pillow 12.2.0 exactly.
+- 356 input-only rows execute.
+- 356 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `9e05b91d-0328-4d7d-a514-ef27443c4ca7`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `ad94bdb5-c232-4f4a-9d8f-5f2172f15f65`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
@@ -139,9 +139,9 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.get_transposed_mask.json` | 10 |
 | `font.getbbox.json` | 32 |
 | `font.getbbox_binary.json` | 9 |
-| `font.getlength.json` | 22 |
-| `font.getmask.json` | 37 |
-| `font.getmask2.json` | 44 |
+| `font.getlength.json` | 23 |
+| `font.getmask.json` | 38 |
+| `font.getmask2.json` | 46 |
 | `font.getmask2_with_start.json` | 23 |
 | `font.getmetrics.json` | 8 |
 | `font.getname.json` | 5 |
@@ -158,7 +158,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 354 |
+| total | 356 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -328,6 +328,21 @@ the current normal-stroke path still has a DejaVu glyph-36 `A` fallback for the
 existing passing route, and a stroked `jQ` sweep row proved that Pillow succeeds
 while Rust fails before rendering.
 
+Latest Font-corpus sweep: two active input-only rows now cover height-side
+stroked clipping through live Pillow 12.2.0 oracle parity:
+
+- `font.getmask.dejavusans24_a_stroke_start_negative_y_clips`
+- `font.getmask2.dejavusans24_a_stroke_start_negative_y_clips`
+
+The attempted independent `stroke_width=1.5, mode="1"` rows were not kept
+active because they exposed a real lower stroke-outline blocker. Direct Pillow
+12.2.0 reports `mode="1"` stroked glyph 36 as a `19x21` L mask with the
+mono-target stroked outline bytes, while current Rust produces the normal
+stroked outline bytes for that row. This must be fixed in the lower
+`pillow-rs-freetype` stroke implementation by making the real stroked outline
+depend on the loaded outline, not by adding a new glyph-specific shortcut or
+weakening the Font oracle comparison.
+
 Current lower-stroker verification:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`
@@ -482,8 +497,10 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 ## Recommended action order
 
 1. Add minimal, independent oracle fixtures for:
-   - stroked mode `"1"`;
-   - height-side stroked clipping;
+   - stroked mode `"1"` after lower stroke-outline parity handles mono-target
+     stroked outlines without glyph-specific shortcuts;
+   - height-side stroked clipping: covered for DejaVuSans glyph 36 by the
+     current negative-Y `getmask` and `getmask2` rows;
    - successful stroked kerning and no-kerning transitions after lower stroker support is generalized;
    - additional embedded bitmap glyph paths not covered by the current SBIT rows;
    - reachable FreeType table errors.
@@ -493,7 +510,7 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 354-row Font fixture corpus.
+The current implementation is good enough to trust the active 356-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because broader stroke-border/destroy/general glyph support is still incomplete even though the active public extent behavior is now explained by `_imagingft.c` clipping.
 
@@ -509,10 +526,11 @@ Latest focused ftstroke evidence after the outside-border route update:
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
 - `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 179 `pending-route` cases overall and 4842 `real-parity` cases after promoting `FT_Glyph_StrokeBorder.outside_border_success`. The project still cannot claim complete FreeType-backed ImageFont parity yet because `inside_border_success`, destroy-option ownership, and general glyph stroke geometry remain incomplete.
 
-Latest Coverage MCP evidence after the outside-border and Font `stroke_filled` pass:
+Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and height-side stroked clipping rows:
 
-- Run `a968dd68-1581-4362-a2b6-cc57d66cfa4f`, snapshot `9e05b91d-0328-4d7d-a514-ef27443c4ca7`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
+- Run `b4d8d9bc-4468-4127-bf57-f635104ac5ee`, snapshot `ad94bdb5-c232-4f4a-9d8f-5f2172f15f65`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
 - The new input-only Font row `font.getmask2.dejavusans24_a_stroke_1_5_filled_l` passes exact live Pillow 12.2.0 oracle parity and reaches `imagingft.rs:1212`.
+- The new input-only Font rows `font.getmask.dejavusans24_a_stroke_start_negative_y_clips` and `font.getmask2.dejavusans24_a_stroke_start_negative_y_clips` pass exact live Pillow 12.2.0 oracle parity. They increase active corpus proof but do not move direct `imagingft.rs` coverage metrics.
 - `pillow-rs/src/font/imagingft.rs` is now 1664/1686 lines, 249/254 branches, 162/173 functions, and 2608/2700 regions.
 - The prior real public blocker at lines 1211-1212 is resolved: line 1211 has both branches covered and line 1212 has one hit.
 - Remaining direct gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, and 928. These are not currently known public ImageFont behavior mismatches.
