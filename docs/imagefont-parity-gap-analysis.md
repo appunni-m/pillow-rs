@@ -1277,6 +1277,17 @@ current blockers.
   forward `direction`/`features`/`language` into core, and the Python facade
   passes those arguments through instead of silently drawing BASIC text.
   `pillow-rs/tests/font_public_api.rs` now guards this source contract.
+- Follow-up Python facade runtime audit after `afae03568`: `ImageDraw.text`
+  already unwrapped the Python `FreeTypeFont` facade to `_rust_font`, but
+  `textbbox`, `textlength`, and `multiline_textbbox` passed the facade object
+  directly to PyO3. Libraqm-dependent metric calls therefore failed with a
+  binding `TypeError` before reaching the dedicated core
+  `PilError::UnsupportedLibraqm` route. The Python facade now resolves the
+  default/current font and unwraps `_rust_font` for those metric methods too.
+  `make test-imagefont-facade` includes a runtime Pillow-oracle check for
+  `ImageDraw.text`, `multiline_text`, `textbbox`, `textlength`, and
+  `multiline_textbbox` with `direction="rtl"` and verifies exact no-libraqm
+  `KeyError` parity.
 - Follow-up audit after `022ead7d1`: Coverage MCP snapshot
   `fcb80e1b-dd82-4f58-b36b-e84e671737b4` reports direct `imagingft.rs`
   coverage at `1660/1682` lines, `249/254` branches, `162/173` functions, and
