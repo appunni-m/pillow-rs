@@ -252,6 +252,38 @@
       }
     },
     {
+      "case_id": "font.getlength.hinter_code_overflow",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-fdef-index-overflow.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.getlength.hinter_nested_defs",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-nested-fdef.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A"
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.dejavusans20_too_many_characters_error",
       "operation": "getlength",
       "inputs": {
