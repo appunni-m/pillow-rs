@@ -350,6 +350,22 @@
       }
     },
     {
+      "case_id": "font.getlength.hinter_execution_too_long",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-execution-too-long-loop.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A"
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.dejavusans20_too_many_characters_error",
       "operation": "getlength",
       "inputs": {
