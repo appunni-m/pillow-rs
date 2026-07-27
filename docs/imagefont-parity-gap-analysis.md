@@ -103,6 +103,16 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Commit `5e6621e50` adds public `getmask`/`getmask2` rows for maintained format-9, mono-carry, GRAY2, GRAY4, and BGRA compound bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle. Coverage MCP snapshot `64bcb3dc-bf56-408d-870b-efbba07f51b6` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved again to `468/814` lines, `43/72` branches, `29/108` functions, and `700/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commit `76eca2cce` adds public `getmask`/`getmask2` rows for maintained unsupported bit-depth, unsupported image-format, and truncated small-metrics embedded-bitmap fixtures. All rows still use input-only JSON and live Pillow 12.2.0 as the oracle. Coverage MCP snapshot `0a30f450-bb93-4dde-bad3-2bbbf8e1c126` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved to `476/814` lines, `45/72` branches, `30/108` functions, and `708/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commit `846e5df3` adds public `getmask2` rows for maintained negative/out-of-bounds x/y compound bitmap fixtures. The rows are input-only and pass live Pillow 12.2.0 oracle comparison. Coverage MCP snapshot `77084db9-9ab3-4cdd-b85e-860236566009` shows lower `pillow-rs-freetype/src/tt/sbit.rs` moved to `482/814` lines, `49/72` branches, `30/108` functions, and `711/1269` regions while direct `imagingft.rs` stayed unchanged.
+- Commit `cbe727d37` exposes an explicit root `FreeTypeFont` for the
+  FreeType-backed Rust API while keeping `ImageFont` as a compatibility alias.
+  This is a class-shape cleanup only: live Pillow oracle parity still passes,
+  Python/JS bindings still delegate through root `pillow_rs::...` APIs, and no
+  Pillow behavior is changed. Coverage MCP run
+  `81383638-3b9c-4c1f-bdb5-07f089cb2a90` passed and ingested snapshot
+  `856fd23d-df12-4b84-996f-b67e1ce38619`; direct `imagingft.rs` is now
+  `1666/1688` lines, `249/254` branches, `162/173` functions, and
+  `2612/2696` regions. The remaining reported direct markers are `91`, `253`,
+  `271`, `796`, `826`, `829`, and `928`.
 - Commits `121702b10` and `2b34fb4ac` close the Python binding option-forwarding leak for ImageFont: the thin wrapper now forwards `direction`, `features`, `language`, `stroke_width`, `stroke_filled`, `anchor`, `ink`, `mode`, and `start` into the Rust core, raises the Rust `PilError::UnsupportedLibraqm` path for no-libraqm options, and preserves Pillow-visible integral bbox value types.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
