@@ -862,7 +862,7 @@ struct RunGlyph {
     glyph_index: u32,
     pen_before: i32,
     advance: i32,
-    outline_cbox: ffi::FT_BBox,
+    layout_cbox: ffi::FT_BBox,
 }
 
 struct RenderedBitmap {
@@ -904,7 +904,7 @@ fn glyph_run(ttf: &ImageFont, text: &str, load_flags: i32) -> Result<GlyphRun, P
             glyph_index: g,
             pen_before,
             advance: adv,
-            outline_cbox: slot.outline_cbox,
+            layout_cbox: glyph_layout_cbox(&slot),
         });
 
         pen = pen.saturating_add(adv);
@@ -946,7 +946,7 @@ fn bbox_from_glyph_run(ttf: &ImageFont, run: &GlyphRun) -> Result<(i32, i32, i32
         let advanced = pixel(i64::from(g.pen_before.saturating_add(g.advance)));
         x_max = x_max.max(px).max(advanced);
 
-        let cbox = g.outline_cbox;
+        let cbox = g.layout_cbox;
         let glyph_x_min = px + floor26(cbox.xMin);
         let glyph_x_max = px + ceil26(cbox.xMax);
         let glyph_y_min = floor26(cbox.yMin);
@@ -961,6 +961,28 @@ fn bbox_from_glyph_run(ttf: &ImageFont, run: &GlyphRun) -> Result<(i32, i32, i32
     x_max = x_max.max(round26(run.max_pen));
     let y_anchor = pixel(ttf.engine.metrics.ascender);
     Ok((x_min, y_anchor - y_max, x_max, y_anchor - y_min))
+}
+
+fn glyph_layout_cbox(slot: &ffi::FT_GlyphSlot) -> ffi::FT_BBox {
+    if let Some(bitmap) = &slot.bitmap {
+        // Pillow 12.2.0 `_imagingft.c::bounding_box_and_anchors` sizes the
+        // public text mask from the loaded glyph's bitmap extents when a glyph
+        // is an embedded bitmap strike. Bitmap-only SBIT glyph slots have no
+        // outline cbox, so using `outline_cbox` here collapses the mask even
+        // though the render pass has pixels.
+        let x_min = i64::from(slot.bitmap_left) * 64;
+        let x_max = (i64::from(slot.bitmap_left) + i64::from(bitmap.width)) * 64;
+        let y_min = (i64::from(slot.bitmap_top) - i64::from(bitmap.rows)) * 64;
+        let y_max = i64::from(slot.bitmap_top) * 64;
+        return ffi::FT_BBox {
+            xMin: x_min,
+            yMin: y_min,
+            xMax: x_max,
+            yMax: y_max,
+        };
+    }
+
+    slot.outline_cbox
 }
 
 // ── Mask render ──────────────────────────────────────────────────────
@@ -1232,6 +1254,35 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
                 0
             }
         }
+        ffi::FT_PIXEL_MODE_GRAY2 => {
+            let byte = bitmap
+                .buffer
+                .get(row_start + column / 4)
+                .copied()
+                .unwrap_or(0);
+            let value = (byte >> (6 - 2 * (column & 3))) & 0x03;
+            value.saturating_mul(85)
+        }
+        ffi::FT_PIXEL_MODE_GRAY4 => {
+            let byte = bitmap
+                .buffer
+                .get(row_start + column / 2)
+                .copied()
+                .unwrap_or(0);
+            let value = if column & 1 == 0 {
+                byte >> 4
+            } else {
+                byte & 0x0F
+            };
+            value.saturating_mul(17)
+        }
+        ffi::FT_PIXEL_MODE_BGRA => {
+            let offset = row_start + column.saturating_mul(4);
+            let Some(bgra) = bitmap.buffer.get(offset..offset.saturating_add(4)) else {
+                return 0;
+            };
+            gray_for_premultiplied_srgb_bgra(bgra)
+        }
         _ => {
             debug_assert_eq!(
                 bitmap.pixel_mode,
@@ -1241,6 +1292,18 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
             bitmap.buffer.get(row_start + column).copied().unwrap_or(0)
         }
     }
+}
+
+fn gray_for_premultiplied_srgb_bgra(bgra: &[u8]) -> u8 {
+    let alpha = u32::from(bgra[3]);
+    if alpha == 0 {
+        return 0;
+    }
+    let luminance = (4731u32 * u32::from(bgra[0]) * u32::from(bgra[0])
+        + 46868u32 * u32::from(bgra[1]) * u32::from(bgra[1])
+        + 13937u32 * u32::from(bgra[2]) * u32::from(bgra[2]))
+        >> 16;
+    alpha.wrapping_sub(luminance / alpha) as u8
 }
 
 fn refresh_engine_metadata(font: &mut ImageFont) {
