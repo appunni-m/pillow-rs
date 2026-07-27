@@ -2261,7 +2261,7 @@ fn stroker_used_unverified_closed_round_path(stroker: FT_Stroker) -> bool {
             .borrow()
             .get(&(stroker as usize))
             .is_some_and(|entry| {
-                entry.state.closed_round_path_unverified || entry.state.conic_path_unverified
+                entry.state.closed_round_path_unverified || entry.state.curve_path_unverified
             })
     })
 }
@@ -3404,7 +3404,7 @@ struct StrokerState {
     border_counts_valid: bool,
     line_segments: FT_UInt,
     closed_round_path_unverified: bool,
-    conic_path_unverified: bool,
+    curve_path_unverified: bool,
     left_border: StrokeBorderState,
     right_border: StrokeBorderState,
     left_outline: FT_OutlineSnapshot,
@@ -3701,7 +3701,7 @@ impl StrokerState {
             border_counts_valid: true,
             line_segments: 0,
             closed_round_path_unverified: false,
-            conic_path_unverified: false,
+            curve_path_unverified: false,
             left_border: StrokeBorderState::new(),
             right_border: StrokeBorderState::new(),
             left_outline: FT_OutlineSnapshot::default(),
@@ -3744,7 +3744,7 @@ impl StrokerState {
         self.border_counts_valid = true;
         self.line_segments = 0;
         self.closed_round_path_unverified = false;
-        self.conic_path_unverified = false;
+        self.curve_path_unverified = false;
         self.left_border.reset();
         self.right_border.reset();
         self.left_outline = FT_OutlineSnapshot::default();
@@ -3937,6 +3937,109 @@ impl StrokerState {
         stack[base + 1].y = a >> 1;
     }
 
+    fn cubic_split(stack: &mut [FT_Vector; 37], base: usize) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:156-185` splits one cubic
+        // Bézier in-place as `[to, control2, control1, from]`.
+        stack[base + 6].x = stack[base + 3].x;
+        let mut a = stack[base].x + stack[base + 1].x;
+        let b = stack[base + 1].x + stack[base + 2].x;
+        let mut c = stack[base + 2].x + stack[base + 3].x;
+        stack[base + 5].x = c >> 1;
+        c += b;
+        stack[base + 4].x = c >> 2;
+        stack[base + 1].x = a >> 1;
+        a += b;
+        stack[base + 2].x = a >> 2;
+        stack[base + 3].x = (a + c) >> 3;
+
+        stack[base + 6].y = stack[base + 3].y;
+        let mut a = stack[base].y + stack[base + 1].y;
+        let b = stack[base + 1].y + stack[base + 2].y;
+        let mut c = stack[base + 2].y + stack[base + 3].y;
+        stack[base + 5].y = c >> 1;
+        c += b;
+        stack[base + 4].y = c >> 2;
+        stack[base + 1].y = a >> 1;
+        a += b;
+        stack[base + 2].y = a >> 2;
+        stack[base + 3].y = (a + c) >> 3;
+    }
+
+    fn angle_mean(angle1: FT_Angle, angle2: FT_Angle) -> FT_Angle {
+        // FreeType 2.14.3 `src/base/ftstroke.c:188-196`; using
+        // `FT_Angle_Diff` keeps opposite-sign angles in the same wrap space.
+        angle1 + FT_Angle_Diff(angle1, angle2) / 2
+    }
+
+    fn cubic_is_small_enough(
+        arc: [FT_Vector; 4],
+        angle_in: &mut FT_Angle,
+        angle_mid: &mut FT_Angle,
+        angle_out: &mut FT_Angle,
+    ) -> bool {
+        // FreeType 2.14.3 `src/base/ftstroke.c:199-292`.
+        const FT_SMALL_CUBIC_THRESHOLD: FT_Angle = FT_ANGLE_PI as FT_Angle / 8;
+
+        let d1 = FT_Vector {
+            x: arc[2].x - arc[3].x,
+            y: arc[2].y - arc[3].y,
+        };
+        let d2 = FT_Vector {
+            x: arc[1].x - arc[2].x,
+            y: arc[1].y - arc[2].y,
+        };
+        let d3 = FT_Vector {
+            x: arc[0].x - arc[1].x,
+            y: arc[0].y - arc[1].y,
+        };
+
+        let close1 = ft_stroker_is_small(d1.x) && ft_stroker_is_small(d1.y);
+        let close2 = ft_stroker_is_small(d2.x) && ft_stroker_is_small(d2.y);
+        let close3 = ft_stroker_is_small(d3.x) && ft_stroker_is_small(d3.y);
+
+        match (close1, close2, close3) {
+            (true, true, true) => {}
+            (true, true, false) => {
+                *angle_in = FT_Atan2(d3.x, d3.y);
+                *angle_mid = *angle_in;
+                *angle_out = *angle_in;
+            }
+            (true, false, true) => {
+                *angle_in = FT_Atan2(d2.x, d2.y);
+                *angle_mid = *angle_in;
+                *angle_out = *angle_in;
+            }
+            (true, false, false) => {
+                *angle_in = FT_Atan2(d2.x, d2.y);
+                *angle_mid = *angle_in;
+                *angle_out = FT_Atan2(d3.x, d3.y);
+            }
+            (false, true, true) => {
+                *angle_in = FT_Atan2(d1.x, d1.y);
+                *angle_mid = *angle_in;
+                *angle_out = *angle_in;
+            }
+            (false, true, false) => {
+                *angle_in = FT_Atan2(d1.x, d1.y);
+                *angle_out = FT_Atan2(d3.x, d3.y);
+                *angle_mid = Self::angle_mean(*angle_in, *angle_out);
+            }
+            (false, false, true) => {
+                *angle_in = FT_Atan2(d1.x, d1.y);
+                *angle_mid = FT_Atan2(d2.x, d2.y);
+                *angle_out = *angle_mid;
+            }
+            (false, false, false) => {
+                *angle_in = FT_Atan2(d1.x, d1.y);
+                *angle_mid = FT_Atan2(d2.x, d2.y);
+                *angle_out = FT_Atan2(d3.x, d3.y);
+            }
+        }
+
+        FT_Angle_Diff(*angle_in, *angle_mid).abs() < FT_SMALL_CUBIC_THRESHOLD
+            && FT_Angle_Diff(*angle_mid, *angle_out).abs() < FT_SMALL_CUBIC_THRESHOLD
+    }
+
     fn start_conic_subpath(&mut self, start_angle: FT_Angle) {
         let mut delta = FT_Vector::default();
         FT_Vector_From_Polar(
@@ -4021,7 +4124,7 @@ impl StrokerState {
         self.center = to;
         self.line_length = 0;
         self.border_counts_valid = false;
-        self.conic_path_unverified = true;
+        self.curve_path_unverified = true;
         true
     }
 
@@ -4087,7 +4190,139 @@ impl StrokerState {
         self.center = to;
         self.line_length = 0;
         self.border_counts_valid = false;
-        self.conic_path_unverified = true;
+        self.curve_path_unverified = true;
+        true
+    }
+
+    fn append_cubic_offset_arc(
+        &mut self,
+        control1: FT_Vector,
+        control2: FT_Vector,
+        to: FT_Vector,
+        angle_in: FT_Angle,
+        angle_mid: FT_Angle,
+        angle_out: FT_Angle,
+    ) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1636-1745` adds a small cubic
+        // arc directly to both stroke borders.  The wide-stroke negative-sector
+        // branch is intentionally guarded by `append_cubic_segment`.
+        let theta1 = FT_Angle_Diff(angle_in, angle_mid) / 2;
+        let theta2 = FT_Angle_Diff(angle_mid, angle_out) / 2;
+        let phi1 = Self::angle_mean(angle_in, angle_mid);
+        let phi2 = Self::angle_mean(angle_mid, angle_out);
+        let length1 = FT_DivFix(self.radius, FT_Cos(theta1));
+        let length2 = FT_DivFix(self.radius, FT_Cos(theta2));
+
+        for side in 0..=1 {
+            let rotate = Self::side_to_rotate(side);
+
+            let mut ctrl1 = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut ctrl1), length1, phi1 + rotate);
+            ctrl1.x += control1.x;
+            ctrl1.y += control1.y;
+
+            let mut ctrl2 = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut ctrl2), length2, phi2 + rotate);
+            ctrl2.x += control2.x;
+            ctrl2.y += control2.y;
+
+            let mut end = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut end), self.radius, angle_out + rotate);
+            end.x += to.x;
+            end.y += to.y;
+
+            if side == 0 {
+                self.right_border.cubicto(ctrl1, ctrl2, end);
+            } else {
+                self.left_border.cubicto(ctrl1, ctrl2, end);
+            }
+        }
+    }
+
+    fn append_cubic_segment(
+        &mut self,
+        control1: FT_Vector,
+        control2: FT_Vector,
+        to: FT_Vector,
+    ) -> bool {
+        if self.handle_wide_strokes {
+            return false;
+        }
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:1579-1757` subdivides larger
+        // cubics on a fixed stack until every arc is below
+        // `FT_SMALL_CUBIC_THRESHOLD`, then appends each small arc to both
+        // borders.  Keep glyph-level export guarded until broad stroked-outline
+        // parity is proven against the pinned C oracle.
+        const FT_SMALL_CUBIC_THRESHOLD: FT_Angle = FT_ANGLE_PI as FT_Angle / 8;
+        const LIMIT: usize = 32;
+        let mut stack = [FT_Vector::default(); 37];
+        stack[0] = to;
+        stack[1] = control2;
+        stack[2] = control1;
+        stack[3] = self.center;
+
+        let mut arc = 0usize;
+        let mut first_arc = true;
+        loop {
+            let mut angle_in = self.angle_in;
+            let mut angle_mid = self.angle_in;
+            let mut angle_out = self.angle_in;
+            let current = [stack[arc], stack[arc + 1], stack[arc + 2], stack[arc + 3]];
+
+            if arc < LIMIT
+                && !Self::cubic_is_small_enough(
+                    current,
+                    &mut angle_in,
+                    &mut angle_mid,
+                    &mut angle_out,
+                )
+            {
+                if self.first_point {
+                    self.angle_in = angle_in;
+                }
+                Self::cubic_split(&mut stack, arc);
+                arc += 3;
+                continue;
+            }
+
+            if first_arc {
+                first_arc = false;
+                if self.first_point {
+                    self.start_conic_subpath(angle_in);
+                } else {
+                    self.angle_out = angle_in;
+                    self.process_corner(0);
+                }
+            } else if FT_Angle_Diff(self.angle_in, angle_in).abs() > FT_SMALL_CUBIC_THRESHOLD / 4 {
+                self.center = stack[arc + 3];
+                self.angle_out = angle_in;
+                let saved_line_join = self.line_join;
+                self.line_join = FT_STROKER_LINEJOIN_ROUND as FT_Int;
+                self.process_corner(0);
+                self.line_join = saved_line_join;
+            }
+
+            self.append_cubic_offset_arc(
+                stack[arc + 2],
+                stack[arc + 1],
+                stack[arc],
+                angle_in,
+                angle_mid,
+                angle_out,
+            );
+            self.angle_in = angle_out;
+
+            if arc == 0 {
+                break;
+            }
+            arc -= 3;
+        }
+
+        self.center = to;
+        self.line_length = 0;
+        self.border_counts_valid = false;
+        self.curve_path_unverified = true;
         true
     }
 
@@ -5072,6 +5307,9 @@ pub fn FT_Stroker_CubicTo(
             entry.state.set_open_cubic_first_segment_outline();
             entry.state.first_point = false;
             entry.state.center = *to;
+            return FT_Err_Ok;
+        }
+        if entry.state.append_cubic_segment(*control1, *control2, *to) {
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
