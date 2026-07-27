@@ -213,6 +213,13 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   compared Pillow and `pillow-rs-py` loading for `pathlib.Path` and byte-path
   inputs, then verified file-like variation-font reconstruction and variation
   setters still reach Rust.
+- Python ABI oracle coverage now includes
+  `tests/test_imagefont_facade_oracle.py`: six strict-cover tests compare
+  `pillow-rs-py` against Pillow 12.2.0 for `truetype` path-like and byte-path
+  inputs, file-like variation names/axes, both variation setters, and
+  file-like `font_variant(size=...)`. This is facade parity evidence; the
+  Rust core/public Font corpus remains the source of truth for `imagingft.rs`
+  region coverage.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
 - Commit `3558b7762` hardens the libraqm source guard: `PilError::UnsupportedLibraqm` must remain a unit variant with the one core hard-coded message, and `imagingft.rs` must use the dedicated constructor instead of encoding `KeyError` text directly.
