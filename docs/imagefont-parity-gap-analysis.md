@@ -115,11 +115,11 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `4691882e713c846b9e30c42f004b0bbfbbef1765` and ingested
-  snapshot `e8cb3b95-019e-42ea-8539-494099dce68e` from run
-  `1cc1112d-0e31-44bd-945d-16b9b9f9783d`. Direct `imagingft.rs` coverage
-  is `1667/1689` lines, `249/254` branches, `162/173` functions, and
-  `2611/2695` regions. The seven remaining direct marker lines are `91`,
+  passed at commit `90189cdeded9de405562a3830c8219079174b71b` and ingested
+  snapshot `e9c5aa78-094d-4f88-bb04-a6212f1325f0` from run
+  `f30aa9c3-0419-4e43-a8e6-6aa1dbdc3ac8`. Direct `imagingft.rs` coverage
+  is `1687/1709` lines, `249/254` branches, `163/174` functions, and
+  `2633/2719` regions. The seven remaining direct marker lines are `91`,
   `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
   and `928` are partial-branch/source-map markers, while `253` and `271` are
   static FreeType error-table tuple-start mappings. No current gap identifies
@@ -493,9 +493,9 @@ from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
 at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
 Current-head Font-with-FreeType snapshot:
-`e8cb3b95-019e-42ea-8539-494099dce68e` from Coverage MCP run
-`1cc1112d-0e31-44bd-945d-16b9b9f9783d` at runtime commit
-`4691882e713c846b9e30c42f004b0bbfbbef1765`.
+`e9c5aa78-094d-4f88-bb04-a6212f1325f0` from Coverage MCP run
+`f30aa9c3-0419-4e43-a8e6-6aa1dbdc3ac8` at runtime commit
+`90189cdeded9de405562a3830c8219079174b71b`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -509,14 +509,14 @@ refactor.
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 366/366 100.00% | n/a | 77/77 100.00% | 476/476 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | source-line gap is rustdoc line 140 on `from_pilfont_data`; branch coverage is 100%. No current source-line gap identifies a missing bitmap `ImageFont.ImageFont` behavior. Add bitmap rows only when they exercise a distinct public Pillow behavior, not to chase LLVM function/region artifacts. |
-| `pillow-rs/src/font/imagingft.rs` | 1667/1689 98.70% | 249/254 98.03% | 162/173 93.64% | 2611/2695 96.88% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
+| `pillow-rs/src/font/imagingft.rs` | 1687/1709 98.71% | 249/254 98.03% | 163/174 93.68% | 2633/2719 96.84% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
 
 Overall snapshot totals for this suite:
 
-- Lines: 17913/52955, 33.83%
+- Lines: 17954/53005, 33.87%
 - Branches: 3039/11188, 27.16%
-- Functions: 1362/3691, 36.90%
-- Regions: 25604/81561, 31.39%
+- Functions: 1369/3700, 37.00%
+- Regions: 25656/81624, 31.43%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
