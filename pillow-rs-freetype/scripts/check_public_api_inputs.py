@@ -1349,11 +1349,6 @@ def ftstroke_path_construction_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join": (
-            "FT_Stroker_BeginSubPath wide-stroke parity has a maintained "
-            "diagnostic route, but Rust does not yet match pinned C exported "
-            "outline geometry for open wide-stroke rows"
-        ),
         "ftstroke.FT_Stroker_LineTo.line_segment_success": (
             "FT_Stroker_LineTo segment parity needs a maintained route proving "
             "line joins, emitted border points, tags, contours, and current "
@@ -6528,6 +6523,12 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         }
     ):
         return "FT_Stroker_BeginSubPath initial-state routes validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.begin_subpath_wide_stroke"
+        and row.case_id
+        == "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join"
+    ):
+        return "FT_Stroker_BeginSubPath wide-stroke setup and open-path finalization validate exported outlines through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftstroke.conic_to"
         and row.case_id == "ftstroke.FT_Stroker_ConicTo.conic_curve_success"

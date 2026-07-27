@@ -3435,6 +3435,7 @@ const FT_STROKE_TAG_ON: FT_Byte = 1;
 const FT_STROKE_TAG_CUBIC: FT_Byte = 2;
 const FT_STROKE_TAG_BEGIN: FT_Byte = 4;
 const FT_STROKE_TAG_END: FT_Byte = 8;
+const FT_STROKE_TAG_BEGIN_END: FT_Byte = FT_STROKE_TAG_BEGIN | FT_STROKE_TAG_END;
 
 #[derive(Debug, Clone)]
 struct StrokeBorderState {
@@ -3669,6 +3670,34 @@ impl StrokeBorderState {
                     .push(u16::try_from(point_offset.saturating_add(index)).unwrap_or(u16::MAX));
             }
         }
+    }
+
+    fn append_reverse_from(&mut self, source: &mut StrokeBorderState, open: bool) {
+        let Some(start) = source.start else {
+            return;
+        };
+        if start >= source.points.len() {
+            return;
+        }
+        let reverse_points = source.points[start..].iter().rev().copied();
+        let reverse_tags = source.tags[start..].iter().rev().copied().map(|tag| {
+            if open {
+                tag & !FT_STROKE_TAG_BEGIN_END
+            } else {
+                match tag & FT_STROKE_TAG_BEGIN_END {
+                    FT_STROKE_TAG_BEGIN | FT_STROKE_TAG_END => tag ^ FT_STROKE_TAG_BEGIN_END,
+                    _ => tag,
+                }
+            }
+        });
+        self.points.extend(reverse_points);
+        self.tags.extend(reverse_tags);
+        source.points.truncate(start);
+        source.tags.truncate(start);
+        self.movable = false;
+        source.movable = false;
+        self.valid = false;
+        source.valid = false;
     }
 }
 
@@ -3961,6 +3990,49 @@ impl StrokerState {
         let inside_side = if turn < 0 { 1 } else { 0 };
         self.process_inside_corner(inside_side, line_length);
         self.process_outside_corner(1 - inside_side, line_length);
+    }
+
+    fn cap_open_path(&mut self, angle: FT_Angle, side: FT_Int) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:913-959` adds caps only to the
+        // right/open border during `FT_Stroker_EndSubPath`; the reversed left
+        // border is appended between the end and start caps.
+        if self.line_cap == FT_STROKER_LINECAP_ROUND as FT_Int {
+            self.angle_in = angle;
+            self.angle_out = angle + FT_ANGLE_PI as FT_Angle;
+            self.stroker_arcto(side);
+            return;
+        }
+
+        let mut middle = FT_Vector::default();
+        FT_Vector_From_Polar(Some(&mut middle), self.radius, angle);
+        let mut delta = if side != 0 {
+            FT_Vector {
+                x: middle.y,
+                y: -middle.x,
+            }
+        } else {
+            FT_Vector {
+                x: -middle.y,
+                y: middle.x,
+            }
+        };
+        if self.line_cap == FT_STROKER_LINECAP_SQUARE as FT_Int {
+            middle.x += self.center.x;
+            middle.y += self.center.y;
+        } else {
+            middle = self.center;
+        }
+        delta.x += middle.x;
+        delta.y += middle.y;
+        let border = if side == 0 {
+            &mut self.right_border
+        } else {
+            &mut self.left_border
+        };
+        border.lineto(delta, false);
+        delta.x = middle.x - delta.x + middle.x;
+        delta.y = middle.y - delta.y + middle.y;
+        border.lineto(delta, false);
     }
 
     fn conic_is_small_enough(
@@ -4721,6 +4793,23 @@ impl StrokerState {
         self.right_contours = 0;
         self.border_counts_valid = true;
         self.set_open_horizontal_line_outline();
+        true
+    }
+
+    fn finalize_open_path(&mut self) -> bool {
+        if !self.subpath_open || self.first_point {
+            return false;
+        }
+        // FreeType 2.14.3 `src/base/ftstroke.c:1874-1904`: cap the current
+        // endpoint, append the reversed left border into the right border,
+        // cap the original start point, then close the right border.
+        self.cap_open_path(self.angle_in, 0);
+        self.right_border
+            .append_reverse_from(&mut self.left_border, true);
+        self.center = self.subpath_start;
+        self.cap_open_path(self.subpath_angle + FT_ANGLE_PI as FT_Angle, 0);
+        self.right_border.close(false);
+        self.border_counts_valid = false;
         true
     }
 
@@ -5656,8 +5745,14 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
             // parity here.
             return FT_Err_Ok;
         }
-        if entry.state.subpath_open && entry.state.line_segments == 1 {
+        if entry.state.subpath_open
+            && entry.state.line_segments == 1
+            && entry.state.subpath_start.y == entry.state.center.y
+        {
             entry.state.finalize_open_single_line();
+            return FT_Err_Ok;
+        }
+        if entry.state.finalize_open_path() {
             return FT_Err_Ok;
         }
         if entry.state.conic_success_pending {
