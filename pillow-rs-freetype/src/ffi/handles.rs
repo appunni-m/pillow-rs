@@ -3866,9 +3866,23 @@ impl StrokerState {
 
     fn process_outside_corner(&mut self, side: FT_Int, _line_length: FT_Fixed) {
         // FreeType 2.14.3 `src/base/ftstroke.c:1032-1215`.  The fully
-        // general bevel/miter paths remain unimplemented here; round joins are
-        // the active Pillow/ImageFont dependency.
+        // general miter paths remain unimplemented here.  Fixed bevel joins
+        // append the outgoing offset corner; round joins emit an arc.
         if self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int {
+            if self.line_join == FT_STROKER_LINEJOIN_BEVEL as FT_Int {
+                let rotate = Self::side_to_rotate(side);
+                let mut delta = FT_Vector::default();
+                FT_Vector_From_Polar(Some(&mut delta), self.radius, self.angle_out + rotate);
+                delta.x += self.center.x;
+                delta.y += self.center.y;
+                let border = if side == 0 {
+                    &mut self.right_border
+                } else {
+                    &mut self.left_border
+                };
+                border.movable = false;
+                border.lineto(delta, false);
+            }
             return;
         }
         self.stroker_arcto(side);
@@ -4386,11 +4400,8 @@ impl StrokerState {
         self.border_counts_valid = false;
     }
 
-    fn finalize_closed_round_path(&mut self) -> bool {
-        if self.subpath_open
-            || self.line_segments == 0
-            || self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int
-        {
+    fn finalize_closed_path(&mut self) -> bool {
+        if self.subpath_open || self.line_segments == 0 {
             return false;
         }
 
@@ -5526,7 +5537,7 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
         if entry.state.finalize_closed_two_line_right_angle() {
             return FT_Err_Ok;
         }
-        if entry.state.finalize_closed_round_path() {
+        if entry.state.finalize_closed_path() {
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature

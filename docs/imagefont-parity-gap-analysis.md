@@ -1016,3 +1016,17 @@ Current request classification for `imagingft.rs` region coverage:
   ImageFont adapter ownership logic. Keep the row pending until the lower
   stroker can export the exact outline points/tags/contours for that geometry;
   do not reduce it to ownership-only parity.
+- Follow-up lower-stroker slice: Rust now ports the fixed-bevel outside-corner
+  action from FreeType 2.14.3 `src/base/ftstroke.c:1079-1094` and lets generic
+  closed-path finalization reach non-round joins instead of gating all closed
+  paths behind round joins. This is source-aligned implementation plumbing for
+  the DejaVuSans glyph-50/radius-128 `FT_Glyph_Stroke.destroy_original_option`
+  blocker, whose fixture uses `FT_STROKER_LINEJOIN_BEVEL`. It does not promote
+  the row: focused include-pending verification still fails on status because
+  the curve/wide-stroke path returns error code `7` before exact outline export.
+  Focused normal gates remain green:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` keeps
+  `7/7` runnable rows passing with `1` pending, and
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
+  keeps `4/4` rows passing. The next real fix is the lower wide-stroke
+  conic/cubic path for non-round joins, not an `_imagingft.rs` adapter change.
