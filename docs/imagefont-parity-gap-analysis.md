@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `79cc59aaca4100a86b09bfb9d2247fc1980c1492`
+Rust commit reviewed: `7f90a7166eefd17d88396f22f2ae28a337ffede6`
 
-Coverage MCP run: `dec0a7db-804c-43fa-a8f1-551f7b136afe`
+Coverage MCP run: `d166a0fb-ce18-4422-84d6-fa5b0c9ce4b9`
 
-Coverage MCP snapshot: `82e252e5-5aee-4acf-8e57-dbb7c488f266`
+Coverage MCP snapshot: `35b7777f-adad-4344-b3d8-bfc5d9c3fb31`
 
 Suite: `font-with-freetype`
 
@@ -99,20 +99,20 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
-| `pillow-rs/src/font/mod.rs` | 374/374 100.00% | n/a | 78/78 100.00% | 487/487 100.00% | covered |
+| `pillow-rs/src/font/mod.rs` | 372/372 100.00% | n/a | 80/80 100.00% | 494/494 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | one reported line gap is rustdoc, not executable |
-| `pillow-rs/src/font/imagingft.rs` | 1607/1631 98.53% | 254/262 96.95% | 157/168 93.45% | 2529/2623 96.42% | real partial branch gaps remain |
+| `pillow-rs/src/font/imagingft.rs` | 1628/1655 98.37% | 255/264 96.59% | 159/170 93.53% | 2539/2635 96.36% | real partial branch gaps remain |
 
 ## Uncovered/partial line logic analysis
 
-Coverage MCP reports two uncovered executable lines in `imagingft.rs`; the rest of the targeted gaps are partial branches.
+Coverage MCP reports no fully uncovered executable lines in `imagingft.rs`; all remaining targeted gaps are partial branches.
 
 | Rust line(s) | Rust logic | Pillow 12.2.0 reference | Analysis | Required action |
 |---:|---|---|---|---|
 | `91`, `105` | `ft_error_to_pil` hand-maps a subset of FreeType errors and falls back to `ValueError("FreeType error N")`. | `_imagingft.c:38-112` builds an `FT_ERRORS_H` table and raises `OSError` for known errors, with unknown fallback also as `OSError`. | Current fixture rows hit several errors, but the implementation is not table-equivalent to Pillow. This is a real parity risk, not only coverage noise. | Replace subset mapping with complete FreeType error table semantics or generate the table from `fontdone` constants. Add rows for unknown/error-table fallback behavior if reachable. |
-| `796` | Empty stroked text returns a zero-filled square mask after validating negative stroke collapse. | `_imagingft.c` allocates from stroke-expanded dimensions and errors on negative size collapse. | The success side is covered; the negative/collapsed side remains partial. | Keep the existing negative-stroke row and add only if a distinct Pillow error path is found. |
-| `826-829` | `ceil().max(0.0)` dimensions for the stroke-expanded bbox. | Pillow computes dimensions through `bounding_box_and_anchors` and C integer conversions. | The negative max branch is partially untested after the shared run refactor. This is dimension sanitization, not a separate public feature. | Cover only with an input that moves a real Pillow branch, not by adding duplicate stroke rows. |
-| `833`, `836` | Rust clamps stroked bitmap extents when actual stroked bitmap exceeds bbox-derived expected dimensions. | `_imagingft.c:998-1001` says render dimensions must match `font_getsize`; `_imagingft.c:1115-1128` clips during paste. | This looks like a workaround for bbox/stroker mismatch. Pillow allocates from `bounding_box_and_anchors`, then clips when writing; it does not mutate the computed bitmap extent this way. | Treat as suspect implementation. Fix lower bbox/stroker parity, then remove or justify clamp with exact C evidence. Add rows that prove both clamp sides if it remains. |
+| `796-797` | `stroke_filled` unsupported guard before stroked rendering. | `_imagingft.c:1048-1051` routes `stroke_filled=true` to `FT_Glyph_StrokeBorder`. | Rust now makes the unsupported path explicit instead of silently treating it as default stroke. This is not full Pillow parity; it is a guard against false-positive parity. | Implement `FT_Glyph_StrokeBorder` in `fontdone`, then add a `stroke_width + stroke_filled=true` fixture row that must pass against the live oracle. |
+| `826`, `829` | `ceil().max(0.0)` dimensions for the stroke-expanded bbox. | Pillow computes dimensions through `bounding_box_and_anchors` and C integer conversions. | The negative max branch is partially untested after the shared run refactor. This is dimension sanitization, not a separate public feature. | Cover only with an input that moves a real Pillow branch, not by adding duplicate stroke rows. |
+| `846`, `849` | Rust clamps stroked bitmap extents when actual stroked bitmap exceeds bbox-derived expected dimensions. | `_imagingft.c:998-1001` says render dimensions must match `font_getsize`; `_imagingft.c:1115-1128` clips during paste. | This looks like a workaround for bbox/stroker mismatch. Pillow allocates from `bounding_box_and_anchors`, then clips when writing; it does not mutate the computed bitmap extent this way. | Treat as suspect implementation. Fix lower bbox/stroker parity, then remove or justify clamp with exact C evidence. Add rows that prove both clamp sides if it remains. |
 | `928`, `929` | Rust sets `FT_STROKER_LINEJOIN_ROUND` and miter limit `0` before glyph stroking. | `_imagingft.c:989-995` uses the same line cap, line join, and miter limit. | Source parity is now aligned; the coverage marker reflects constant/argument instrumentation, not a known behavior gap. | No action unless a lower-level stroker fixture shows these values are not honored. |
 
 ## Other ImageFont-related files where coverage is missing
@@ -151,7 +151,7 @@ Rust now always uses `FT_RENDER_MODE_NORMAL` for stroked glyph bitmap conversion
 
 Remaining action: keep/add fixture rows for mode `"1"` plus `stroke_width` so this behavior remains protected by the runtime Pillow oracle.
 
-### 2. `stroke_filled` is missing from Rust public text options
+### 2. `stroke_filled` is explicit but still unsupported for successful rendering
 
 Pillow `FreeTypeFont.getmask2` passes `kwargs.get("stroke_filled", False)` into the C render call in `ImageFont.py:632-644`.
 
@@ -235,4 +235,4 @@ The unsafe claim today is:
 
 > `PIL.ImageFont` is fully implemented with complete parity.
 
-That second claim is not defensible until the stroked rendering, `stroke_filled`, error-table mapping, layout-run ownership, and lower `pillow-rs-freetype` coverage gaps are addressed.
+That second claim is not defensible until successful `stroke_filled` rendering, error-table mapping, stroked extent clamping, and lower `pillow-rs-freetype` coverage gaps are addressed.
