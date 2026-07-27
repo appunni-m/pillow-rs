@@ -1232,3 +1232,25 @@ Current request classification for `imagingft.rs` region coverage:
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Set` now
   passes `3/3` runnable rows with `1` pending broad attribute-matrix row.
   Route audit moves to `real-parity=4849` and `pending-route=173`.
+- Fixed/variable miter join geometry promotion: the narrow enum-variant rows
+  `ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry` and
+  `ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry`
+  now have a shared maintained route using their fixture path `[(0,0),
+  (512,0), (576,512)]`, radius `64`, butt cap, and miter limits `65536` and
+  `131072`. Pinned C FreeType emits the oracle `outline_by_limit` maps and the
+  route compares exact points/tags/contours through Rust FFI, C ABI, and WASM
+  ABI. The output booleans (`bevel_fallback` for fixed, `variable_clip` for
+  variable) are derived from whether the two exported outlines differ. Verified
+  commands:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry`,
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry`,
+  `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED`, and
+  `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE` all pass. Both normal
+  lanes are now `2/2` runnable with `0` pending. Route audit moves to
+  `real-parity=4851` and `pending-route=171`. Remaining line-join pending rows
+  are still bevel, round, miter alias, wide round-curve restoration, and the
+  broad `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.

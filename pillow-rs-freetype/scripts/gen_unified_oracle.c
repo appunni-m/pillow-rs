@@ -20866,6 +20866,83 @@ static int emit_stroker_set_miter_limit(int argc, char** argv) {
     return 0;
 }
 
+static int stroker_outline_equal(FT_Outline* a, FT_Outline* b) {
+    if (a->n_points != b->n_points || a->n_contours != b->n_contours || a->flags != b->flags) {
+        return 0;
+    }
+    for (short i = 0; i < a->n_points; i++) {
+        if (a->points[i].x != b->points[i].x ||
+            a->points[i].y != b->points[i].y ||
+            (unsigned char)a->tags[i] != (unsigned char)b->tags[i]) {
+            return 0;
+        }
+    }
+    for (short i = 0; i < a->n_contours; i++) {
+        if (a->contours[i] != b->contours[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static void build_stroker_miter_join_outline(FT_Stroker_LineJoin line_join,
+                                             FT_Fixed miter_limit,
+                                             FT_Outline* exported) {
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    FT_Stroker stroker = NULL;
+    FT_Error status = init_error ? init_error : FT_Stroker_New(library, &stroker);
+    if (!status && stroker) {
+        FT_Stroker_Set(stroker,
+                       64,
+                       FT_STROKER_LINECAP_BUTT,
+                       line_join,
+                       miter_limit);
+        FT_Vector start = { 0, 0 };
+        FT_Vector p1 = { 512, 0 };
+        FT_Vector p2 = { 576, 512 };
+        status = FT_Stroker_BeginSubPath(stroker, &start, 0);
+        if (!status) status = FT_Stroker_LineTo(stroker, &p1);
+        if (!status) status = FT_Stroker_LineTo(stroker, &p2);
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+        FT_UInt points = 0;
+        FT_UInt contours = 0;
+        if (!status) status = FT_Stroker_GetCounts(stroker, &points, &contours);
+        if (!status) FT_Stroker_Export(stroker, exported);
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    if (library) FT_Done_FreeType(library);
+}
+
+static int emit_stroker_miter_join_geometry(int argc, char** argv) {
+    if (argc != 3) return 2;
+    FT_Stroker_LineJoin line_join = streq(argv[2], "variable")
+        ? FT_STROKER_LINEJOIN_MITER_VARIABLE
+        : FT_STROKER_LINEJOIN_MITER_FIXED;
+    FT_Vector points_low[256] = {0};
+    unsigned char tags_low[256] = {0};
+    unsigned short contours_low[64] = {0};
+    FT_Outline low = {0, 0, points_low, tags_low, contours_low, 0};
+    FT_Vector points_high[256] = {0};
+    unsigned char tags_high[256] = {0};
+    unsigned short contours_high[64] = {0};
+    FT_Outline high = {0, 0, points_high, tags_high, contours_high, 0};
+    build_stroker_miter_join_outline(line_join, 65536, &low);
+    build_stroker_miter_join_outline(line_join, 131072, &high);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"outline_by_limit\":{\"65536\":");
+    print_stroker_outline_value(&low);
+    printf(",\"131072\":");
+    print_stroker_outline_value(&high);
+    if (line_join == FT_STROKER_LINEJOIN_MITER_FIXED) {
+        printf("},\"bevel_fallback\":%s}}\n", stroker_outline_equal(&low, &high) ? "false" : "true");
+    } else {
+        printf("},\"variable_clip\":%s}}\n", stroker_outline_equal(&low, &high) ? "false" : "true");
+    }
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -27501,6 +27578,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-set-miter-limit")) {
         return emit_stroker_set_miter_limit(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-miter-join-geometry")) {
+        return emit_stroker_miter_join_geometry(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);

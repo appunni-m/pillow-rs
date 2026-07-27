@@ -1403,16 +1403,6 @@ def ftstroke_line_join_pending_reason(row: ConcreteInput) -> str | None:
             "proving the public alias selects variable-miter geometry exactly "
             "like pinned C"
         ),
-        "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry": (
-            "FT_STROKER_LINEJOIN_MITER_FIXED parity needs a maintained route "
-            "proving fixed-miter intersection, miter-limit fallback, and output "
-            "geometry match pinned C"
-        ),
-        "ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry": (
-            "FT_STROKER_LINEJOIN_MITER_VARIABLE parity needs a maintained "
-            "route proving variable-miter intersection, miter-limit fallback, "
-            "and output geometry match pinned C"
-        ),
         "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry": (
             "FT_STROKER_LINEJOIN_ROUND parity needs a maintained route proving "
             "round join arc subdivision, emitted points, tags, and contours "
@@ -1751,6 +1741,25 @@ def ftstroke_set_miter_limit_real_parity_reason(row: ConcreteInput) -> str | Non
             "limits and exact exported outline geometry through pinned C "
             "oracle, Rust FFI, C ABI, and WASM ABI"
         )
+    return None
+
+
+def ftstroke_miter_join_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact fixed/variable miter join geometry routes."""
+    exact_cases = {
+        "ftstroke.FT_STROKER_LINEJOIN_MITER_FIXED.fixed_miter_limit_geometry": (
+            "FT_STROKER_LINEJOIN_MITER_FIXED exported geometry validates "
+            "fixed-miter fallback and longer-miter output for limits 65536 "
+            "and 131072 through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE.variable_miter_limit_geometry": (
+            "FT_STROKER_LINEJOIN_MITER_VARIABLE exported geometry validates "
+            "variable clipped-miter and longer-miter output for limits 65536 "
+            "and 131072 through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        ),
+    }
+    if row.operation == "ftstroke.join_geometry":
+        return exact_cases.get(row.case_id)
     return None
 
 
@@ -7778,6 +7787,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_set_miter_limit_reason = ftstroke_set_miter_limit_real_parity_reason(row)
     if ftstroke_set_miter_limit_reason:
         return ("real-parity", ftstroke_set_miter_limit_reason)
+    ftstroke_miter_join_reason = ftstroke_miter_join_real_parity_reason(row)
+    if ftstroke_miter_join_reason:
+        return ("real-parity", ftstroke_miter_join_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)
