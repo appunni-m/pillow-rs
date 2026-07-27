@@ -2,9 +2,9 @@
 
 Date: 2026-07-27
 
-Rust/source fixture commit reviewed: `1fbd6a338`
+Rust/source fixture commit reviewed: `5650ed23f`
 
-Latest audit note commit: `db4b5f7ca`
+Latest audit note commit: `5650ed23f`
 
 Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
