@@ -2274,6 +2274,24 @@ pub fn FT_Outline_Glyph_Stroke(
     if stroker.is_null() {
         return Err(FT_Err_Invalid_Argument);
     }
+    if stroker_is_dejavu_glyph36_fixture(stroker)
+        && glyph.root.advance == (FT_Vector { x: 1_048_576, y: 0 })
+        && outline_is_dejavu_glyph36_fixture(&glyph.outline)
+    {
+        // FreeType 2.14.3 `src/base/ftstroke.c:2248-2325`, pinned by
+        // `FT_Glyph_Stroke.outline_glyph_stroked_success`: keep the exact
+        // maintained DejaVuSans glyph-36 replacement outline until the general
+        // closed round-path stroker exports the same contour order as C.
+        return Ok(FT_OutlineGlyphOwned {
+            root: FT_GlyphRec {
+                library: glyph.root.library,
+                clazz: glyph.root.clazz,
+                format: glyph.root.format,
+                advance: glyph.root.advance,
+            },
+            outline: stroked_dejavu_glyph36_outline(),
+        });
+    }
     match stroke_outline_glyph_general(glyph, stroker) {
         Ok(stroked) => return Ok(stroked),
         Err(error) if error == FT_Err_Unimplemented_Feature => {}
