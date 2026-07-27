@@ -4,8 +4,9 @@
 # Run `make` or `make help` to see all targets.
 
 # ── Variables ─────────────────────────────────────────────────────────────────
-MATURIN      := maturin
-PYTHON       := python3
+PYTHON       ?= $(shell if [ -x .venv/bin/python ]; then printf '%s' .venv/bin/python; else printf '%s' python3; fi)
+PIP          := $(PYTHON) -m pip
+MATURIN      := $(PYTHON) -m maturin
 IMAGE_ORACLE_PYTHON ?= $(abspath .oracle-venv/bin/python)
 NODE         := node
 CARGO        := cargo
@@ -146,13 +147,15 @@ help: ## Show this help
 .PHONY: setup setup-ci
 
 setup: ## Install all dev dependencies
-	@command -v $(MATURIN) >/dev/null 2>&1 || { echo "Installing maturin..."; pip install maturin; }
+	@$(PYTHON) -m pip --version >/dev/null 2>&1 || { echo "Bootstrapping pip..."; $(PYTHON) -m ensurepip --upgrade; }
+	@$(MATURIN) --version >/dev/null 2>&1 || { echo "Installing maturin..."; $(PIP) install maturin; }
 	@command -v $(WASM_PACK) >/dev/null 2>&1 || { echo "Installing wasm-pack..."; cargo install wasm-pack; }
-	@[ -n "$$VIRTUAL_ENV" ] || [ -n "$$CONDA_PREFIX" ] || echo "⚠️  No virtualenv detected — consider: python3 -m venv .venv && source .venv/bin/activate"
-	pip install maturin coverage pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+	@[ -n "$$VIRTUAL_ENV" ] || [ -n "$$CONDA_PREFIX" ] || [ "$(PYTHON)" = ".venv/bin/python" ] || echo "⚠️  No virtualenv detected — consider: python3 -m venv .venv && source .venv/bin/activate"
+	$(PIP) install maturin coverage pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 setup-ci: ## Install dev deps for CI
-	pip install maturin coverage pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+	@$(PYTHON) -m pip --version >/dev/null 2>&1 || { echo "Bootstrapping pip..."; $(PYTHON) -m ensurepip --upgrade; }
+	$(PIP) install maturin coverage pillow==12.2.0 numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 .PHONY: build build-dev build-wasm build-wasm-core build-wasm-extra build-wasm-release build-all
