@@ -317,19 +317,19 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `9264cb97-1f0b-4ffa-bb72-bc57a37c2db5`
-- Snapshot: `3dc2db95-1480-468f-bcc8-a168e44feee2`
+- Run: `025caed9-308c-4cfa-86d4-680f2916fb3a`
+- Snapshot: `42a114c8-2be7-41e8-9ae9-9a87ab098305`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `f495b80873e599a3605ac684c6c08017d804a139`
+- Commit measured: `264257bebed406ccf8539ff7432740b6f29d4c60`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/default_aileron.rs` | `17/17` (`100.00%`) | n/a | `3/3` (`100.00%`) | `24/24` (`100.00%`) |
-| `pillow-rs/src/font/imagingft.rs` | `1658/1684` (`98.46%`) | `268/278` (`96.40%`) | `164/176` (`93.18%`) | `2627/2727` (`96.33%`) |
-| `pillow-rs/src/font/mod.rs` | `191/191` (`100.00%`) | n/a | `41/41` (`100.00%`) | `252/252` (`100.00%`) |
+| `pillow-rs/src/font/imagingft.rs` | `1618/1643` (`98.48%`) | `268/278` (`96.40%`) | `159/171` (`92.98%`) | `2588/2687` (`96.32%`) |
+| `pillow-rs/src/font/mod.rs` | `374/374` (`100.00%`) | n/a | `78/78` (`100.00%`) | `487/487` (`100.00%`) |
 | `pillow-rs/src/font/pilfont.rs` | `715/737` (`97.01%`) | `142/142` (`100.00%`) | `58/78` (`74.36%`) | `1014/1094` (`92.69%`) |
 
 Current full-module scope note:
@@ -426,9 +426,9 @@ Latest Font wrapper movement:
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`3dc2db95-1480-468f-bcc8-a168e44feee2`:
+`42a114c8-2be7-41e8-9ae9-9a87ab098305`:
 
-- `91-92`: generic unknown FreeType error fallback. No public Font fixture has
+- `91`, `105`: generic and rare mapped FreeType error branches. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
   manufacturing invalid internal state. A sweep across the tracked Font assets
   and available FreeType fixture assets found only the already-mapped runtime
@@ -452,7 +452,7 @@ Remaining targeted gaps in `imagingft.rs` from snapshot
   finite coordinate arrays in the Pillow oracle. The 62-font isolated sweep
   likewise found no structured Pillow axes-setter errors; crash-only malformed
   rows remain excluded from the active corpus.
-- `815`, `845`, `848`, `831`, `947`, and `948`: general visible non-zero
+- `796`, `826-827`, `829`, `857`, `860`, `928`, and `959`: general visible non-zero
   `stroke_width`; partially routed through real pure-Rust `FT_Glyph_Stroke` for
   maintained DejaVuSans `"A"` single-glyph and multi-glyph rows plus the
   Pillow-compatible empty-text allocation path, with broader visible glyph
