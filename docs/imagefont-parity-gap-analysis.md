@@ -2,13 +2,13 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `12d434ca`
+Rust commit reviewed: `072af0fbb`
 
-Coverage MCP run: `506ee215-8240-4110-810f-d31c502b3093`
+Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
-Coverage MCP snapshot: `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba`
+Coverage MCP snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
 
-Suite: `imagingft`
+Suite: `font-with-freetype`
 
 Oracle runtime:
 
@@ -26,8 +26,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 367 input-only rows execute.
-- 367 rows match live Pillow 12.2.0 exactly.
+- 369 input-only rows execute.
+- 369 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -55,6 +55,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Prior current-head Coverage MCP run `dbd9ae3e-9d15-4413-9c63-7f3e2c0267f6` at commit `be450e63` passed and ingested snapshot `ac1fd3bb-3dc7-4b2e-b7b2-0dfc835be82c`. Direct `imagingft.rs` remained `1247/1295` lines, `204/226` branches, `121/132` functions, and `2012/2129` regions. The direct suite gaps were unchanged from the current classification: constructor `?`/rare `FT_Request_Size`, static FreeType error-message entries, variation setter status lines, optional-name LLVM tuple instrumentation, and text wrapper `?` instrumentation. The focused lower `FT_Glyph_To_Bitmap` lane still passed all active rows while keeping the mono-target stroked row pending, so no lower freetype refactor was justified for coverage-only reasons.
 - Prior broader Font-with-FreeType Coverage MCP run `1e4c7216-3c82-4090-8d08-3092c6f7331e` at commit `6956a87e` passed and ingested snapshot `842b90ff-80c0-4287-b51b-0dfba70103ad`. In that suite, `imagingft.rs` was `1660/1682` lines, `249/254` branches, `162/173` functions, and `2610/2696` regions. The remaining ranges were `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`; they remain constructor/static-table/helper-boundary instrumentation unless a new Pillow/ImageFont behavior gap is proven by reverse comparison.
 - Commit `12d434ca` adds two input-only public rows, `font.getlength.dejavusans20_missing_glyph_breaks_kerning` and `font.getbbox.dejavusans20_missing_glyph_breaks_kerning`, for `A\uFFFFV`. These prove Pillow/Rust parity for the BASIC layout rule that kerning is skipped when either adjacent glyph index is zero. `make -C pillow-rs font-tests` passes 367/367 live-oracle rows. Coverage MCP run `506ee215-8240-4110-810f-d31c502b3093` ingests direct snapshot `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba`; direct `imagingft.rs` coverage remains `1247/1295` lines, `204/226` branches, `121/132` functions, and `2012/2129` regions. Broader Font-with-FreeType run `05563d47-760a-4c24-addf-d1c3091b9fb2` ingests snapshot `11bf2724-44b8-4070-9455-cb37502d1f0a`; `imagingft.rs` remains `1660/1682` lines, `249/254` branches, `162/173` functions, and `2610/2696` regions.
+- Commit `072af0fbb` adds two input-only public rows, `font.getbbox.sbit_mono_private_base` and `font.getlength.sbit_bgra_private_base`, for private-use SBIT glyphs that already have live-oracle mask coverage. These rows independently prove Pillow/Rust parity for embedded-bitmap layout bbox and BGRA strike advance through the public `FreeTypeFont` surface. `make -C pillow-rs font-tests` passes 369/369 live-oracle rows. Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e` ingests snapshot `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`; `imagingft.rs` remains `1660/1682` lines, `249/254` branches, `162/173` functions, and `2610/2696` regions in the Font-with-FreeType suite. The unchanged coverage confirms these SBIT rows are truthful parity coverage but do not target the remaining LLVM/static-data markers.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -145,9 +146,9 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.TransposedFont.getmask.json` | 6 |
 | `font.constructor.json` | 10 |
 | `font.get_transposed_mask.json` | 10 |
-| `font.getbbox.json` | 34 |
+| `font.getbbox.json` | 36 |
 | `font.getbbox_binary.json` | 10 |
-| `font.getlength.json` | 24 |
+| `font.getlength.json` | 26 |
 | `font.getmask.json` | 39 |
 | `font.getmask2.json` | 47 |
 | `font.getmask2_with_start.json` | 23 |
@@ -166,13 +167,17 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 365 |
+| total | 369 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba`
+Direct coverage snapshot: `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba`
 from Coverage MCP run `506ee215-8240-4110-810f-d31c502b3093`
 at runtime commit `12d434ca39a9d289be3581a8f32589ef327af320`.
+
+Current Font-with-FreeType snapshot: `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`
+from Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e`
+at runtime commit `072af0fbb8e309f936b68f566e6e133cca6a0c29`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -514,7 +519,15 @@ coverage bytes. If future SBIT failures require table-format knowledge in
 `imagingft.rs`, that is a layering bug; fix the lower `pillow-rs-freetype`
 implementation instead.
 
-Decision: keep the active SBIT rows as trusted public parity proof, then add further ImageFont oracle rows only for still-independent embedded bitmap formats, compound glyphs, malformed SBIT errors, vertical/TTB metrics if/when libraqm enters scope, horizontal device metrics, and variation metric deltas. If a feature is not in supported scope, record the explicit exclusion instead of leaving it ambiguous.
+Decision: keep the active SBIT rows as trusted public parity proof. Commit
+`072af0fbb` adds the missing independent public checks for bitmap layout bbox
+and strike advance using private-use SBIT glyphs; Coverage MCP confirms these
+rows are coverage-neutral for `imagingft.rs`, so the remaining region work is
+not an SBIT adapter gap. Add further ImageFont oracle rows only for still-
+independent embedded bitmap formats, compound glyphs, malformed SBIT errors,
+vertical/TTB metrics if/when libraqm enters scope, horizontal device metrics,
+and variation metric deltas. If a feature is not in supported scope, record the
+explicit exclusion instead of leaving it ambiguous.
 
 ## Recommended action order
 
@@ -524,7 +537,9 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
    - height-side stroked clipping: covered for DejaVuSans glyph 36 by the
      current negative-Y `getmask` and `getmask2` rows;
    - successful stroked kerning and no-kerning transitions after lower stroker support is generalized;
-   - additional embedded bitmap glyph paths not covered by the current SBIT rows;
+   - additional embedded bitmap glyph paths only when they represent a new
+     ImageFont-visible behavior not already covered by the private-use SBIT
+     bbox/length/mask/mask2 rows;
    - reachable FreeType table errors.
 2. Re-run `make -C pillow-rs font-tests`.
 3. Re-run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
@@ -532,7 +547,7 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 365-row Font fixture corpus.
+The current implementation is good enough to trust the active 369-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because broader stroke-border/destroy/general glyph support is still incomplete even though the active public extent behavior is now explained by `_imagingft.c` clipping.
 
@@ -557,7 +572,7 @@ Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and
 - Refreshed run after wiring the exact native C oracle and Rust/C/WASM runner route for the stroked mono-target glyph-to-bitmap sequence: `eff0e9cf-09c0-479c-b86e-63865875b6ef`, snapshot `4e2e6bc3-c28f-4453-8600-f21dfc7885bd`, commit `41b2b74451a906938d481935c962e11e25109cd9`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
 - The new input-only Font row `font.getmask2.dejavusans24_a_stroke_1_5_filled_l` passes exact live Pillow 12.2.0 oracle parity and reaches `imagingft.rs:1212`.
 - The new input-only Font rows `font.getmask.dejavusans24_a_stroke_start_negative_y_clips` and `font.getmask2.dejavusans24_a_stroke_start_negative_y_clips` pass exact live Pillow 12.2.0 oracle parity. They increase active corpus proof but do not move direct `imagingft.rs` coverage metrics.
-- Current refreshed Font-with-FreeType evidence: Coverage MCP run `05563d47-760a-4c24-addf-d1c3091b9fb2`, snapshot `11bf2724-44b8-4070-9455-cb37502d1f0a`, at runtime commit `12d434ca` passed and ingested.
+- Current refreshed Font-with-FreeType evidence: Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e`, snapshot `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`, at runtime commit `072af0fbb` passed and ingested.
 - `pillow-rs/src/font/imagingft.rs` is now 1660/1682 lines, 249/254 branches, 162/173 functions, and 2610/2696 regions in the Font-with-FreeType suite.
 - The prior real public blocker at lines 1211-1212 is resolved: line 1211 has both branches covered and line 1212 has one hit.
 - Remaining Font-with-FreeType gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, 831, and 928. These are not currently known public ImageFont behavior mismatches.
