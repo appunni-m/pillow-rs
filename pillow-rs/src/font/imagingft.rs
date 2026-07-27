@@ -79,17 +79,16 @@ fn load_truetype_with_index(
     let style_name = face.style_name.clone();
     let metrics = face.size_metrics;
 
-    Ok(ImageFont {
-        engine: TrueTypeEngine {
-            face,
-            font_bytes: data,
-            face_index,
-            size_pt: size,
-            family_name,
-            style_name,
-            metrics,
-        },
-    })
+    let engine = TrueTypeEngine {
+        face,
+        font_bytes: data,
+        face_index,
+        size_pt: size,
+        family_name,
+        style_name,
+        metrics,
+    };
+    Ok(ImageFont { engine })
 }
 
 // Pillow 12.2.0 `_imagingft.c::geterror` includes FreeType's `fterrdef.h`
