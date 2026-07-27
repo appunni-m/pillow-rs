@@ -288,6 +288,13 @@ Current blocker to literal 100% region coverage:
   `PIL.ImageFont` oracle input, a documented public ImageFont blocker, or
   implementation simplification; they must not be covered with mocks or Rust
   self-comparison.
+- A direct `PIL.ImageFont.FreeTypeFont.getmask/getmask2` probe with
+  DejaVuSans `"A"`, `stroke_width=1.5`, and `mode="1"` found another valid
+  public blocked row. Pillow returns an antialiased `L` mask from a
+  mono-targeted stroked outline. Rust currently produces binary coverage on
+  the mono stroked path; forcing normal stroked rendering only reproduces the
+  existing `mode="L"` row. Keep this row out of the active corpus until the
+  lower-level mono-targeted glyph load plus stroker behavior matches Pillow.
 
 Rejected during execution:
 
