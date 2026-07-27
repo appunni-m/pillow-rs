@@ -35,6 +35,33 @@ def _bitmap_font_observation(font):
     }
 
 
+def _freetype_mask_observation(font, method, text, **kwargs):
+    try:
+        value = getattr(font, method)(text, **kwargs)
+        if method == "getmask2":
+            mask, offset = value
+            return {
+                "status": "ok",
+                "mode": mask.mode,
+                "size": mask.size,
+                "bytes": bytes(mask),
+                "offset": offset,
+            }
+        return {
+            "status": "ok",
+            "mode": value.mode,
+            "size": value.size,
+            "bytes": bytes(value),
+        }
+    except Exception as exc:
+        return {
+            "status": "err",
+            "class": type(exc).__name__,
+            "args": exc.args,
+            "message": str(exc),
+        }
+
+
 def _transposed_observation(font, text, method):
     try:
         value = getattr(font, method)(text)
@@ -183,6 +210,39 @@ def test_imagefont_file_like_font_variant_matches_pillow(RSPIL):
     pil_font = PILImageFont.truetype(BytesIO(data), 20).font_variant(size=21)
 
     assert _font_observation(rs_font) == _font_observation(pil_font)
+
+
+@pytest.mark.covers("ImageFont.FreeTypeFont.getmask")
+def test_imagefont_freetype_getmask_bytes_and_errors_match_pillow(RSPIL):
+    rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20)
+    pil_font = PILImageFont.truetype(DEJAVU, 20)
+    for text, kwargs in (
+        ("AV", {}),
+        ("AV", {"mode": "1"}),
+        ("jQ", {"stroke_width": 1.5}),
+        ("AV", {"mode": "RGBA"}),
+        ("AV", {"direction": "rtl"}),
+    ):
+        assert _freetype_mask_observation(rs_font, "getmask", text, **kwargs) == (
+            _freetype_mask_observation(pil_font, "getmask", text, **kwargs)
+        )
+
+
+@pytest.mark.covers("ImageFont.FreeTypeFont.getmask2")
+def test_imagefont_freetype_getmask2_bytes_offsets_and_errors_match_pillow(RSPIL):
+    rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20)
+    pil_font = PILImageFont.truetype(DEJAVU, 20)
+    for text, kwargs in (
+        ("AV", {}),
+        ("AV", {"mode": "1"}),
+        ("jQ", {"stroke_width": 1.5}),
+        ("AV", {"start": (0.5, 0.25)}),
+        ("AV", {"mode": "RGBA"}),
+        ("AV", {"direction": "rtl"}),
+    ):
+        assert _freetype_mask_observation(rs_font, "getmask2", text, **kwargs) == (
+            _freetype_mask_observation(pil_font, "getmask2", text, **kwargs)
+        )
 
 
 @pytest.mark.covers("ImageFont.TransposedFont.getbbox")

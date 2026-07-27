@@ -268,6 +268,24 @@
       }
     },
     {
+      "case_id": "font.getmask.dejavusans20_jq_stroke_1_5_l",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "mode": "L",
+          "stroke_width": 1.5
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.dejavu-native_s7_u0021_pil122_getmask",
       "operation": "getmask",
       "inputs": {
