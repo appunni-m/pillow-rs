@@ -20999,6 +20999,98 @@ static int parse_stroker_join_path(const char* text,
     return count;
 }
 
+static int emit_stroker_begin_subpath(int argc, char** argv) {
+    if (argc != 10) return 2;
+    FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
+    FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[3], NULL, 10);
+    FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)strtol(argv[4], NULL, 10);
+    FT_Fixed miter_limit = (FT_Fixed)strtol(argv[5], NULL, 10);
+    FT_Bool open = (FT_Bool)strtol(argv[6], NULL, 10);
+    FT_Vector start = {
+        (FT_Pos)strtol(argv[7], NULL, 10),
+        (FT_Pos)strtol(argv[8], NULL, 10),
+    };
+    char encoded[2048];
+    snprintf(encoded, sizeof(encoded), "%s", argv[9]);
+
+    FT_Library library = NULL;
+    FT_Error status = FT_Init_FreeType(&library);
+    FT_Stroker stroker = NULL;
+    if (!status) status = FT_Stroker_New(library, &stroker);
+    FT_Error begin_status = status;
+    FT_Error status_sequence[64] = {0};
+    int status_count = 0;
+    FT_Error left_status = status;
+    FT_Error right_status = status;
+    FT_UInt left_points = 0;
+    FT_UInt left_contours = 0;
+    FT_UInt right_points = 0;
+    FT_UInt right_contours = 0;
+    FT_Vector exported_points[256] = {0};
+    unsigned char exported_tags[256] = {0};
+    unsigned short exported_contours[64] = {0};
+    FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+
+    if (!status && stroker) {
+        FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+        begin_status = FT_Stroker_BeginSubPath(stroker, &start, open);
+        status = begin_status;
+        status_sequence[status_count++] = begin_status;
+        char* command_save = NULL;
+        char* command = strtok_r(encoded, "|", &command_save);
+        while (command && !status) {
+            if (command[0] == 'L') {
+                long x = 0;
+                long y = 0;
+                if (sscanf(command, "L,%ld,%ld", &x, &y) != 2) return 2;
+                FT_Vector to = { x, y };
+                status = FT_Stroker_LineTo(stroker, &to);
+            } else if (command[0] == 'E') {
+                status = FT_Stroker_EndSubPath(stroker);
+            } else {
+                return 2;
+            }
+            if (status_count < 64) status_sequence[status_count++] = status;
+            command = strtok_r(NULL, "|", &command_save);
+        }
+        left_status = FT_Stroker_GetBorderCounts(
+            stroker,
+            FT_STROKER_BORDER_LEFT,
+            &left_points,
+            &left_contours);
+        right_status = FT_Stroker_GetBorderCounts(
+            stroker,
+            FT_STROKER_BORDER_RIGHT,
+            &right_points,
+            &right_contours);
+        if (!status && !left_status && !right_status) {
+            FT_Stroker_Export(stroker, &exported);
+        }
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    if (library) FT_Done_FreeType(library);
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"begin_status\":%d,\"status_sequence\":[", begin_status);
+    for (int i = 0; i < status_count; i++) {
+        if (i) printf(",");
+        printf("%d", status_sequence[i]);
+    }
+    printf("],\"left_counts\":{\"status\":%d,\"points\":%u,\"contours\":%u},",
+           left_status,
+           left_points,
+           left_contours);
+    printf("\"right_counts\":{\"status\":%d,\"points\":%u,\"contours\":%u},",
+           right_status,
+           right_points,
+           right_contours);
+    printf("\"exported_outline\":");
+    print_stroker_outline_value(&exported);
+    printf("}}\n");
+    return 0;
+}
+
 static int emit_stroker_bevel_join_geometry(int argc, char** argv) {
     if (argc != 7) return 2;
     FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
@@ -27934,6 +28026,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-export-border-append")) {
         return emit_stroker_export_border_append(argc, argv);
+    }
+    if (argc == 10 && streq(argv[1], "--stroker-begin-subpath")) {
+        return emit_stroker_begin_subpath(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-finalized-counts")) {
         return emit_stroker_finalized_counts(argc, argv);

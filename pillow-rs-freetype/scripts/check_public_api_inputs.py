@@ -1349,16 +1349,6 @@ def ftstroke_path_construction_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state": (
-            "FT_Stroker_BeginSubPath closed-subpath parity needs a maintained "
-            "route proving the opened flag, first point, and left/right border "
-            "initial state for a closed path match pinned C"
-        ),
-        "ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state": (
-            "FT_Stroker_BeginSubPath open-subpath parity needs a maintained "
-            "route proving the opened flag, first point, and cap-dependent "
-            "border initial state for an open path match pinned C"
-        ),
         "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join": (
             "FT_Stroker_BeginSubPath wide-stroke parity needs a maintained "
             "route proving FreeType selects wide-stroke setup from cap and "
@@ -6529,6 +6519,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.case_id == "ftstroke.FT_Stroker_BeginSubPath.invalid_arguments"
     ):
         return "FT_Stroker_BeginSubPath invalid-argument errors validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.begin_subpath"
+        and row.case_id
+        in {
+            "ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state",
+            "ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state",
+        }
+    ):
+        return "FT_Stroker_BeginSubPath initial-state routes validate through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
     if (
         row.operation == "ftstroke.conic_to"
         and row.case_id == "ftstroke.FT_Stroker_ConicTo.conic_curve_success"

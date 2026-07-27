@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "unit": "26.6",
+  "paths": {
+    "square_open_line": [
+      {"op": "move", "to": [0, 0]},
+      {"op": "line", "to": [640, 0]}
+    ]
+  }
+}

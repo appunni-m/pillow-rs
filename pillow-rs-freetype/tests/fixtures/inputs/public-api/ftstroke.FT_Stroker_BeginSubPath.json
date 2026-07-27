@@ -26,8 +26,7 @@
           "paths": {
             "kind": "ref",
             "id": "outlines/stroker/manual-paths.json",
-            "asset_kind": "outline_path_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_path_records"
           }
         },
         "params": {
@@ -97,8 +96,7 @@
           "paths": {
             "kind": "ref",
             "id": "outlines/stroker/open-line-caps.json",
-            "asset_kind": "outline_path_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_path_records"
           }
         },
         "params": {

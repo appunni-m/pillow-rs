@@ -26010,6 +26010,345 @@ fn stroker_cap_name(action: &str) -> &'static str {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+enum StrokerBeginCommand {
+    LineTo(FT_Vector),
+    EndSubPath,
+}
+
+#[derive(Debug, Clone)]
+struct StrokerBeginSubPathParams {
+    start: FT_Vector,
+    open: bool,
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+    commands: Vec<StrokerBeginCommand>,
+}
+
+fn is_stroker_begin_subpath_initial_state_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state"
+            | "ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state"
+    )
+}
+
+fn stroker_begin_subpath_params(case: &InputCase) -> Result<StrokerBeginSubPathParams, String> {
+    let params = &case.inputs.params;
+    let start = stroker_vector_param(params, "start", FT_Vector { x: 0, y: 0 })?;
+    let open = bool_param(params, "open", false)?;
+    let stroker = params.get("stroker").unwrap_or(params);
+    let radius = i64_value_or_default(stroker.get("radius"), "radius", 64)?;
+    let line_cap = stroker_line_cap_value(
+        stroker
+            .get("line_cap")
+            .or_else(|| params.get("line_cap"))
+            .and_then(Value::as_str)
+            .unwrap_or("FT_STROKER_LINECAP_ROUND"),
+    )?;
+    let line_join = stroker_line_join_value(
+        stroker
+            .get("line_join")
+            .or_else(|| params.get("line_join"))
+            .and_then(Value::as_str)
+            .unwrap_or("FT_STROKER_LINEJOIN_ROUND"),
+    )?;
+    let miter_limit = i64_value_or_default(stroker.get("miter_limit"), "miter_limit", 65_536)?;
+    let commands = string_array_param(params, "after_begin_commands")?
+        .into_iter()
+        .map(|command| stroker_begin_command_from_str(&command))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(StrokerBeginSubPathParams {
+        start,
+        open,
+        radius,
+        line_cap,
+        line_join,
+        miter_limit,
+        commands,
+    })
+}
+
+fn i64_value_or_default(value: Option<&Value>, key: &str, default: i64) -> Result<i64, String> {
+    value.map_or(Ok(default), |value| i64_value(value, key))
+}
+
+fn stroker_line_cap_value(name: &str) -> Result<FT_Int, String> {
+    match name {
+        "FT_STROKER_LINECAP_BUTT" => Ok(FT_STROKER_LINECAP_BUTT as FT_Int),
+        "FT_STROKER_LINECAP_ROUND" => Ok(FT_STROKER_LINECAP_ROUND as FT_Int),
+        "FT_STROKER_LINECAP_SQUARE" => Ok(FT_STROKER_LINECAP_SQUARE as FT_Int),
+        other => Err(format!("unsupported stroker line cap {other}")),
+    }
+}
+
+fn stroker_line_join_value(name: &str) -> Result<FT_Int, String> {
+    match name {
+        "FT_STROKER_LINEJOIN_ROUND" => Ok(FT_STROKER_LINEJOIN_ROUND as FT_Int),
+        "FT_STROKER_LINEJOIN_BEVEL" => Ok(FT_STROKER_LINEJOIN_BEVEL as FT_Int),
+        "FT_STROKER_LINEJOIN_MITER" | "FT_STROKER_LINEJOIN_MITER_VARIABLE" => {
+            Ok(FT_STROKER_LINEJOIN_MITER_VARIABLE as FT_Int)
+        }
+        "FT_STROKER_LINEJOIN_MITER_FIXED" => Ok(FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int),
+        other => Err(format!("unsupported stroker line join {other}")),
+    }
+}
+
+fn stroker_begin_command_from_str(command: &str) -> Result<StrokerBeginCommand, String> {
+    if command == "EndSubPath" {
+        return Ok(StrokerBeginCommand::EndSubPath);
+    }
+    let Some(rest) = command.strip_prefix("LineTo(") else {
+        return Err(format!(
+            "unsupported BeginSubPath follow-up command {command}"
+        ));
+    };
+    let Some(coords) = rest.strip_suffix(')') else {
+        return Err(format!("malformed LineTo command {command}"));
+    };
+    let (x, y) = coords
+        .split_once(',')
+        .ok_or_else(|| format!("malformed LineTo coordinates {command}"))?;
+    Ok(StrokerBeginCommand::LineTo(FT_Vector {
+        x: x.trim()
+            .parse::<i64>()
+            .map_err(|err| format!("LineTo x parse failed for {command}: {err}"))?,
+        y: y.trim()
+            .parse::<i64>()
+            .map_err(|err| format!("LineTo y parse failed for {command}: {err}"))?,
+    }))
+}
+
+fn stroker_begin_commands_arg(params: &StrokerBeginSubPathParams) -> String {
+    params
+        .commands
+        .iter()
+        .map(|command| match command {
+            StrokerBeginCommand::LineTo(to) => format!("L,{},{}", to.x, to.y),
+            StrokerBeginCommand::EndSubPath => "E".to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn stroker_begin_subpath_output(
+    begin_status: FT_Error,
+    status_sequence: Vec<FT_Error>,
+    left_status: FT_Error,
+    left_points: FT_UInt,
+    left_contours: FT_UInt,
+    right_status: FT_Error,
+    right_points: FT_UInt,
+    right_contours: FT_UInt,
+    exported_outline: Value,
+) -> RunOutput {
+    let output = json!({
+        "begin_status": begin_status,
+        "status_sequence": status_sequence,
+        "left_counts": {
+            "status": left_status,
+            "points": left_points,
+            "contours": left_contours
+        },
+        "right_counts": {
+            "status": right_status,
+            "points": right_points,
+            "contours": right_contours
+        },
+        "exported_outline": exported_outline
+    });
+    let status = status_sequence
+        .iter()
+        .copied()
+        .chain([left_status, right_status])
+        .find(|status| *status != FT_Err_Ok)
+        .unwrap_or(FT_Err_Ok);
+    if status == FT_Err_Ok {
+        ok(output)
+    } else {
+        error_with_output(status, output)
+    }
+}
+
+fn rust_stroker_begin_subpath_initial_state(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_begin_subpath_initial_state_case(case) {
+        return Err(format!(
+            "{} is not a maintained BeginSubPath initial-state route",
+            case.case_id
+        ));
+    }
+    let params = stroker_begin_subpath_params(case)?;
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        params.radius,
+        params.line_cap,
+        params.line_join,
+        params.miter_limit,
+    );
+    let begin_status = FT_Stroker_BeginSubPath(
+        stroker,
+        Some(&params.start),
+        if params.open { 1 } else { 0 },
+    );
+    let mut status_sequence = vec![begin_status];
+    let mut status = begin_status;
+    for command in &params.commands {
+        if status != FT_Err_Ok {
+            break;
+        }
+        status = match command {
+            StrokerBeginCommand::LineTo(to) => FT_Stroker_LineTo(stroker, Some(to)),
+            StrokerBeginCommand::EndSubPath => FT_Stroker_EndSubPath(stroker),
+        };
+        status_sequence.push(status);
+    }
+    let mut left_points = 0;
+    let mut left_contours = 0;
+    let mut right_points = 0;
+    let mut right_contours = 0;
+    let left_status = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        Some(&mut left_points),
+        Some(&mut left_contours),
+    );
+    let right_status = FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        Some(&mut right_points),
+        Some(&mut right_contours),
+    );
+    let mut exported = FT_OutlineSnapshot::default();
+    if status == FT_Err_Ok && left_status == FT_Err_Ok && right_status == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_begin_subpath_output(
+        begin_status,
+        status_sequence,
+        left_status,
+        left_points,
+        left_contours,
+        right_status,
+        right_points,
+        right_contours,
+        outline_snapshot_json(&exported),
+    ))
+}
+
+fn c_stroker_begin_subpath_initial_state(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_begin_subpath_initial_state_case(case) {
+        return Err(format!(
+            "{} is not a maintained BeginSubPath initial-state route",
+            case.case_id
+        ));
+    }
+    let params = stroker_begin_subpath_params(case)?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        params.radius,
+        params.line_cap,
+        params.line_join,
+        params.miter_limit,
+    );
+    let start = c_abi::FT_Vector {
+        x: params.start.x,
+        y: params.start.y,
+    };
+    let begin_status =
+        c_abi::FT_Stroker_BeginSubPath(stroker, &start, if params.open { 1 } else { 0 });
+    let mut status_sequence = vec![begin_status];
+    let mut status = begin_status;
+    for command in &params.commands {
+        if status != FT_Err_Ok {
+            break;
+        }
+        status = match command {
+            StrokerBeginCommand::LineTo(to) => {
+                let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                c_abi::FT_Stroker_LineTo(stroker, &to)
+            }
+            StrokerBeginCommand::EndSubPath => c_abi::FT_Stroker_EndSubPath(stroker),
+        };
+        status_sequence.push(status);
+    }
+    let mut left_points = 0;
+    let mut left_contours = 0;
+    let mut right_points = 0;
+    let mut right_contours = 0;
+    let left_status = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_LEFT as FT_Int,
+        &mut left_points,
+        &mut left_contours,
+    );
+    let right_status = c_abi::FT_Stroker_GetBorderCounts(
+        stroker,
+        FT_STROKER_BORDER_RIGHT as FT_Int,
+        &mut right_points,
+        &mut right_contours,
+    );
+    let mut exported_points = [c_abi::FT_Vector::default(); 256];
+    let mut exported_tags = [0u8; 256];
+    let mut exported_contours = [0u16; 64];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    if status == FT_Err_Ok && left_status == FT_Err_Ok && right_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+    }
+    let outline = c_outline_arrays_json(
+        &exported,
+        &exported_points,
+        &exported_tags,
+        &exported_contours,
+    );
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_begin_subpath_output(
+        begin_status,
+        status_sequence,
+        left_status,
+        left_points,
+        left_contours,
+        right_status,
+        right_points,
+        right_contours,
+        outline,
+    ))
+}
+
+fn wasm_stroker_begin_subpath_initial_state(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_begin_subpath_initial_state_case(case) {
+        return Err(format!(
+            "{} is not a maintained BeginSubPath initial-state route",
+            case.case_id
+        ));
+    }
+    rust_stroker_begin_subpath_initial_state(case)
+}
+
 fn stroker_open_line_geometry_output(
     action: &str,
     mut run_one: impl FnMut(&str) -> Result<Value, String>,
@@ -34118,6 +34457,20 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 .to_string(),
             ])
         }
+        "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
+            let params = stroker_begin_subpath_params(case)?;
+            Ok(vec![
+                "--stroker-begin-subpath".to_string(),
+                params.radius.to_string(),
+                params.line_cap.to_string(),
+                params.line_join.to_string(),
+                params.miter_limit.to_string(),
+                i32::from(params.open).to_string(),
+                params.start.x.to_string(),
+                params.start.y.to_string(),
+                stroker_begin_commands_arg(&params),
+            ])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -35817,6 +36170,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             rust_stroker_export_append(case)
         }
+        "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
+            rust_stroker_begin_subpath_initial_state(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -37048,6 +37404,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             c_stroker_export_append(case)
         }
+        "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
+            c_stroker_begin_subpath_initial_state(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -38173,6 +38532,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             wasm_stroker_export_append(case)
+        }
+        "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
+            wasm_stroker_begin_subpath_initial_state(case)
         }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
