@@ -625,6 +625,106 @@
       }
     },
     {
+      "case_id": "font.getmask2.sbit_composite_format9_private_component",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-success-format9.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_composite_mono_carry_private_component",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-mono-carry-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_composite_gray2_private_component",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-gray2-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_composite_gray4_private_component",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-gray4-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_composite_bgra_private_component",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-bgra-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask2.cblc_cbdt_invalid_pixel_size",
       "operation": "getmask2",
       "inputs": {
