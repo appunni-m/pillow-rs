@@ -484,6 +484,26 @@
       }
     },
     {
+      "case_id": "font.getmask.sbit_composite_format8_private_component",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.invalid_maxp_too_many_instruction_defs",
       "operation": "getmask",
       "inputs": {
