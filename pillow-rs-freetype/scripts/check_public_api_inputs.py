@@ -1591,6 +1591,20 @@ def ftstroke_parse_line_conic_cubic_real_parity_reason(row: ConcreteInput) -> st
     return None
 
 
+def ftstroke_parse_opened_outline_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact opened ParseOutline line-cap route verified against ftstroke.c."""
+    if (
+        row.operation == "ftstroke.parse_outline"
+        and row.case_id == "ftstroke.FT_Stroker_ParseOutline.opened_outline_success"
+    ):
+        return (
+            "FT_Stroker_ParseOutline opened-outline cap behavior validates "
+            "through pinned C oracle, Rust FFI, C ABI, and WASM ABI for butt, "
+            "round, and square caps"
+        )
+    return None
+
+
 def ftstroke_set_attribute_geometry_real_parity_reason(row: ConcreteInput) -> str | None:
     """Exact FT_Stroker_Set attribute matrix route verified against ftstroke.c."""
     if (
@@ -7791,6 +7805,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_degenerate_curve_reason = ftstroke_degenerate_curve_real_parity_reason(row)
     if ftstroke_degenerate_curve_reason:
         return ("real-parity", ftstroke_degenerate_curve_reason)
+    ftstroke_parse_opened_outline_reason = ftstroke_parse_opened_outline_real_parity_reason(row)
+    if ftstroke_parse_opened_outline_reason:
+        return ("real-parity", ftstroke_parse_opened_outline_reason)
     ftstroke_parse_line_conic_cubic_reason = ftstroke_parse_line_conic_cubic_real_parity_reason(row)
     if ftstroke_parse_line_conic_cubic_reason:
         return ("real-parity", ftstroke_parse_line_conic_cubic_reason)
