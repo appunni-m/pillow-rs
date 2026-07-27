@@ -2,109 +2,191 @@
 
 Date: 2026-07-27
 
-Scope reviewed:
+Purpose: provide a decision document for what is still missing before claiming
+truth-level parity between Pillow 12.2.0 `PIL.ImageFont` and the Rust
+implementation.
 
-- Pillow oracle: repo-local `.oracle-venv`, Pillow `12.2.0`, `PIL.ImageFont.py`, native `PIL._imagingft`.
-- Rust public surface: `pillow-rs/src/lib.rs`, `pillow-rs/src/font/mod.rs`, `pillow-rs/src/font/pilfont.rs`, `pillow-rs/src/font/imagingft.rs`.
-- Lower FreeType implementation used by ImageFont: `pillow-rs-freetype/src/ffi/handles.rs` and related `pillow-rs-freetype/src/*`.
-- Active tests only: `pillow-rs/tests/fixtures/font/inputs/public-api` through `pillow-rs/tests/font_public_api.rs`.
+This document combines two views:
 
-Coverage evidence:
+1. Coverage-MCP uncovered-line / uncovered-region analysis.
+2. Source-level comparison of Pillow `ImageFont` public behavior against Rust
+   code across `pillow-rs/src/font/**`, `pillow-rs/src/lib.rs`, and the lower
+   `pillow-rs-freetype/src/**` implementation used by FreeType-backed fonts.
+
+## Evidence boundary
 
 - Coverage MCP suite: `font-with-freetype`
-- Run: `01bdeaea-2730-4fb7-af76-f7ec384d53d6`
-- Snapshot: `300395c8-6699-444d-a4e2-2b5dae0f24c4`
-- Measured commit: `3d432999415f4366d0f62816107b9ddd227b34d5`
+- Latest trusted run: `974f35c7-e61d-4dec-bc8a-16ba4e91978e`
+- Latest trusted snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`
+- Measured commit: `13c410dc64fa93576f87377e2c8dde8f671f7ca9`
+- Oracle: repo-local `.oracle-venv`, Pillow `12.2.0`,
+  `PIL.ImageFont`, native `PIL._imagingft`
+- Rust public entry points: `pillow-rs/src/lib.rs`,
+  `pillow-rs/src/font/mod.rs`
+- Rust FreeType adapter: `pillow-rs/src/font/imagingft.rs`
+- Rust bitmap PILfont adapter: `pillow-rs/src/font/pilfont.rs`
+- Lower FreeType implementation: `pillow-rs-freetype/src/**`
+- Active fixture root: `pillow-rs/tests/fixtures/font/inputs/public-api`
+- Manifest: `pillow-rs/tests/fixtures/font/font_manifest.yaml`
+- Harness gate: `pillow-rs/tests/font_public_api.rs`
+
+The trusted snapshot has 348 passing active input-only rows. The working tree
+currently contains two additional uncommitted fixture rows, making 350 local
+rows. Those two rows are not part of the trusted snapshot yet. One of them is a
+known real mismatch: Pillow reports `OSError("too many instruction definitions")`
+while Rust currently reports `OSError("invalid outline")`.
 
 ## Current defensible status
 
-The active ImageFont fixture corpus is exact live-oracle parity for the rows it covers.
+The current trusted active ImageFont fixture corpus has exact live-oracle parity
+for the rows it exercises.
 
-- 345 input-only fixture rows are active.
-- Expected output is generated at runtime by Pillow 12.2.0, not stored in the input JSON.
-- The Rust test compares Rust `Result` status/payload to live Pillow status/payload.
-- RAQM rows are only no-libraqm error parity rows.
-- The new `font.load_failure.missing_hmtx_table` row proves the lower FreeType hmtx table error mapping through public `PIL.ImageFont.truetype`.
-- The new `font.getmetrics.fixed_width` and `font.getmetrics.hhea_zero_no_os2_fallback` rows prove two additional lower metrics-table shapes through public `PIL.ImageFont.FreeTypeFont.getmetrics`.
-- The new mono BASIC rows prove `mode="1"` load-flag parity for `AV` and `jQ` across `getlength`, `getbbox`, `getmask`, and `getmask2`, but Coverage MCP confirms they do not reduce the remaining `imagingft.rs` region gaps.
+- Expected output is generated at runtime by Pillow 12.2.0.
+- Input JSON files do not contain expected output hashes, expected errors,
+  stored pixels, or oracle payloads.
+- Rust results are compared against live Pillow results by `Result`-style
+  success/error payload semantics.
+- The manifest and test gate reject output-looking keys in fixture input JSON.
+- The tested public operation list has 33 operations and includes
+  `ImageFont.*`, `FreeTypeFont`-style operations, `TransposedFont.*`, load
+  operations, variation operations, and controlled harness helpers.
+- RAQM/libraqm successful shaping is explicitly out of scope. Current RAQM rows
+  only prove no-libraqm error parity.
 
-The correct claim is:
+Correct claim:
 
-> Current active ImageFont fixture rows match Pillow 12.2.0 exactly.
+> Current trusted active ImageFont fixture rows match Pillow 12.2.0 exactly.
 
-The incorrect claim is:
+Incorrect claim:
 
 > Rust has complete `PIL.ImageFont` parity.
 
-That is not defensible yet because uncovered regions and known implementation mismatches remain.
+That is not defensible yet because uncovered regions and implementation gaps
+remain, especially under stroked FreeType rendering and lower fontdone table /
+glyph paths.
 
 ## 1. Uncovered-line logic-based analysis
 
-Coverage MCP reports this for `pillow-rs/src/font/imagingft.rs`:
+### Direct Rust Font implementation coverage
 
-| Metric | Covered | Total | Rate |
-|---|---:|---:|---:|
-| lines | 1642 | 1666 | 98.56% |
-| branches | 246 | 254 | 96.85% |
-| functions | 163 | 174 | 93.68% |
-| regions | 2547 | 2645 | 96.29% |
+Coverage snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` reports:
 
-Relevant remaining line gaps:
+| File | Lines | Branches | Functions | Regions | Decision |
+|---|---:|---:|---:|---:|---|
+| `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | Covered by default FreeType font rows. |
+| `pillow-rs/src/font/mod.rs` | 372/372 100.00% | n/a | 80/80 100.00% | 494/494 100.00% | Covered at adapter method level. |
+| `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | Bitmap `ImageFont.ImageFont` is mostly covered but not fully trusted. |
+| `pillow-rs/src/font/imagingft.rs` | 1642/1666 98.56% | 246/254 96.85% | 163/174 93.68% | 2547/2645 96.29% | FreeType-backed ImageFont remains below the region goal. |
+
+### `pillow-rs/src/font/imagingft.rs` remaining gaps
+
+Coverage MCP reports 13 relevant direct gaps: 5 uncovered lines and 8
+partial-branch lines.
 
 | Line(s) | Coverage reason | Logic | Meaning | Decision |
 |---:|---|---|---|---|
-| 91, 92, 253, 271 | partial/uncovered | FreeType error message table and table miss handling | The table is source-aligned with Pillow `_imagingft.c::geterror`, but rare FreeType status values are not reachable through current public ImageFont fixtures. | Do not add private table unit tests as proof. Add only public `PIL.ImageFont` inputs that naturally trigger these errors. |
-| 796 | partial branch | `KERN_DEFAULT` constant declaration area | Coverage artifact marks this from LLVM segment normalization. It is not meaningful product behavior. | No product change. Keep recorded as coverage artifact noise unless future MCP source context proves otherwise. |
-| 826, 829 | partial branches | `floor26` / `ceil26` 26.6 conversion helpers | Current rows do not cover all rounding-region shapes. This can hide bbox, offset, and mask-size edge differences. | Add public rows with negative bearings, fractional starts, descenders, ascenders, and fonts/glyphs that cross floor/ceil boundaries. |
-| 928 | partial branch | `bbox_from_run_with_flags(..., load_flags)` path | Additional mono `AV`/`jQ` rows now prove public `mode="1"` load-flag behavior, but this line remains partial in Coverage MCP. | Do not add duplicate BASIC rows only to chase this marker. Focus next on stroker/stroke-border and rare public error paths. |
-| 1094, 1097, 1099 | partial/uncovered | stroked width/height extent clamps | This is Rust-only compatibility logic around stroked bitmap extents. Width path executes; height clamp body remains unproven. | Treat as suspect until lower stroker/bbox parity is fixed. Do not preserve this permanently unless C/Pillow trace proves equivalent behavior. |
-| 1193, 1194 | partial/uncovered | `stroke_filled=true` routes to `FT_Outline_Glyph_StrokeBorder` | The public option is wired, but no active successful ImageFont row proves real `stroke_filled=true` output. | Blocked by lower general stroker support. Add public success rows only after real outline stroke-border works. |
+| `91` | partial branch | FreeType error-table miss handling. | Pillow `_imagingft.c::geterror` returns `unknown freetype error` for table misses. Rust has the behavior, but the miss branch is not reached by active public ImageFont rows. | Do not add private table unit tests as parity proof. Add only public rows if a real Pillow input can trigger this. |
+| `92` | uncovered | `unknown freetype error` payload. | Same as above. | Same as above. |
+| `253` | uncovered | `FT_Err_Too_Many_Instruction_Defs -> "too many instruction definitions"`. | A local pending fixture row already found a real mismatch: Rust currently collapses this path to `invalid outline`. | Fix lower `fontdone` error propagation/mapping so public ImageFont matches Pillow, then rerun Font coverage. |
+| `271` | uncovered | `FT_Err_Invalid_Horiz_Metrics -> "invalid horizontal metrics"`. | Horizontal metrics errors can affect `truetype`, layout, metrics, bbox, and masks. Existing missing-`hmtx` coverage is a different error. | Add a real malformed public ImageFont row only if Pillow naturally reaches this exact error. |
+| `796` | partial branch | Constant/declaration area around kerning defaults. | LLVM segment normalization artifact; not meaningful product behavior by itself. | No product change unless later source context proves a real missing branch. |
+| `826`, `829` | partial branches | `floor26` / `ceil26` fixed-point conversion. | Can hide bbox and mask-size off-by-one differences for negative bearings, fractional starts, and descenders. | Add independent public rows that naturally cross floor/ceil boundaries. Avoid duplicate BASIC rows. |
+| `928` | partial branch | `bbox_from_run_with_flags(..., load_flags)`. | Mono `mode="1"` rows for `AV` and `jQ` already prove useful public behavior, but this marker remains partial. | Treat as lower priority; do not chase with duplicate rows. Recheck after stroke/error work. |
+| `1094`, `1097`, `1099` | partial/uncovered | Stroked bitmap width/height extent clamp. | This is Rust-only compatibility logic. Pillow allocates from `_imagingft.c::bounding_box_and_anchors` and clips writes. Width path executes; height body is still unproven. | Suspect implementation. Remove or prove with C/Pillow trace after lower stroker parity is fixed. |
+| `1193`, `1194` | partial/uncovered | `stroke_filled=true` route to `FT_Outline_Glyph_StrokeBorder`. | Pillow supports successful `getmask2(..., stroke_filled=True)`. Rust has the public option wired, but real-glyph success is not proven. | Blocked by incomplete lower stroker/border export. Add success rows only after the lower implementation is real. |
 
-Other direct `pillow-rs/src/font` coverage:
+### `pillow-rs/src/font/pilfont.rs` gap
 
-| File | Line status | Region status | Meaning |
-|---|---:|---:|---|
-| `pillow-rs/src/font/default_aileron.rs` | 100.00% | 100.00% | Covered by default FreeType font rows. |
-| `pillow-rs/src/font/mod.rs` | 100.00% | 100.00% | Root ImageFont adapter methods are covered. |
-| `pillow-rs/src/font/pilfont.rs` | 97.01% | 92.69% | Bitmap `ImageFont.ImageFont` is mostly covered, but functions/regions are not fully trusted yet. |
-| `pillow-rs/src/font/imagingft.rs` | 98.56% | 96.29% | FreeType-backed ImageFont remains below region goal. |
+`pilfont.rs` has high line coverage but weaker function/region coverage.
+Coverage marks a rustdoc line around `from_pilfont_data` as uncovered, but the
+important issue is broader: bitmap ImageFont paths are not yet 100% trusted by
+region/function coverage. Add only public bitmap rows that prove distinct
+Pillow behavior: malformed PIL descriptors, raster mode variants, glyph
+clipping, missing glyphs, and text length boundaries. Do not count private
+loader unit tests as ImageFont parity proof.
 
-Lower FreeType files are still a larger trust gap for ImageFont because `imagingft.rs` delegates into them:
+### Lower `pillow-rs-freetype` gaps that affect ImageFont trust
 
-| File | Line coverage | Region coverage | Risk |
-|---|---:|---:|---|
-| `pillow-rs-freetype/src/ffi/handles.rs` | 13.05% | 12.10% | High. Contains FreeType ABI-style handles, glyph, stroker, bitmap, charmap, and face routes used under ImageFont. |
-| `pillow-rs-freetype/src/api.rs` | 17.54% | 15.83% | High. Public fontdone API paths feeding ImageFont. |
-| `pillow-rs-freetype/src/font.rs` | 26.54% | 25.64% | High. Face loading, glyph machinery, metrics. |
-| `pillow-rs-freetype/src/render.rs` | 39.24% | 39.13% | High. Render output parity. |
-| `pillow-rs-freetype/src/tt/sbit.rs` | 12.29% | 14.66% | High for embedded bitmap/color glyph rows. |
-| `pillow-rs-freetype/src/tt/hdmx.rs` | 0.00% | 0.00% | Unproven horizontal device metrics. |
-| `pillow-rs-freetype/src/tt/mvar.rs` | 0.00% | 0.00% | Unproven variation metric deltas. |
-| `pillow-rs-freetype/src/tt/vhea.rs` | 0.00% | 0.00% | Unproven vertical metrics. |
-| `pillow-rs-freetype/src/tt/vmtx.rs` | 0.00% | 0.00% | Unproven vertical metrics. |
+`imagingft.rs` is not the whole Font implementation. It delegates into
+`pillow-rs-freetype` for face loading, glyph lookup, metrics, hinting,
+rasterization, embedded bitmap handling, variations, and stroking. These lower
+files must be covered through public `PIL.ImageFont` rows before the ImageFont
+claim is trustworthy.
 
-Latest lower-level fix:
+Current high-risk lower coverage from snapshot
+`06e0a61c-a56e-43e5-bfe7-a8b821be22f1`:
 
-- `pillow-rs-freetype/src/ffi/convert.rs` now maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`.
-- This fixes the public ImageFont mismatch where Pillow returned `OSError("horizontal metrics (hmtx) table missing")` but Rust returned `OSError("broken file")`.
-- Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` arm is executed by the Font suite.
-- This did not change `pillow-rs/src/font/imagingft.rs` region coverage; it fixes an ImageFont-dependent lower FreeType conversion branch.
-- Coverage snapshot `33772692-59a3-46aa-9471-0c48db9437c0` added fixed-width and hhea-zero/no-OS2 fallback `getmetrics()` rows. This raised lower `pillow-rs-freetype/src/font.rs` coverage from 1260 to 1266 covered lines, branches from 153 to 157, functions from 118 to 119, and regions from 1725 to 1735 compared with the earlier `3f959b1c-cb26-4af4-92e3-c6c0c736163e` baseline.
-- Coverage snapshot `300395c8-6699-444d-a4e2-2b5dae0f24c4` added six mono BASIC public rows and confirmed exact Pillow parity with no change to the remaining `imagingft.rs` region gap set.
+| File | Lines | Branches | Functions | Regions | ImageFont risk |
+|---|---:|---:|---:|---:|---|
+| `pillow-rs-freetype/src/ffi/handles.rs` | 1107/8186 13.52% | 77/2075 3.71% | 94/586 16.04% | 1442/11495 12.54% | Very high: face, glyph, charmap, bitmap, stroker, variation, and handle routes. |
+| `pillow-rs-freetype/src/api.rs` | 208/1186 17.54% | 35/294 11.90% | 25/105 23.81% | 275/1737 15.83% | High: lower public font API feeding ImageFont. |
+| `pillow-rs-freetype/src/font.rs` | 1286/4747 27.09% | 161/702 22.93% | 126/392 32.14% | 1777/6728 26.41% | High: font load, face properties, glyph machinery, metrics. |
+| `pillow-rs-freetype/src/render.rs` | 965/2459 39.24% | 157/486 32.30% | 76/158 48.10% | 1343/3432 39.13% | High: rendered mask byte parity. |
+| `pillow-rs-freetype/src/tt/sbit.rs` | 100/814 12.29% | 13/72 18.06% | 13/108 12.04% | 186/1269 14.66% | High for embedded bitmap/color glyph behavior. |
+| `pillow-rs-freetype/src/tt/cmap.rs` | 271/809 33.50% | 39/174 22.41% | 10/58 17.24% | 395/1089 36.27% | High for Unicode/bytes charmap behavior. |
+| `pillow-rs-freetype/src/tt/glyf.rs` | 174/545 31.93% | 34/96 35.42% | 8/20 40.00% | 219/694 31.56% | High for TrueType outlines. |
+| `pillow-rs-freetype/src/tt/cff.rs` | 355/735 48.30% | 37/112 33.04% | 29/81 35.80% | 507/1087 46.64% | High for CFF/OpenType outlines. |
+| `pillow-rs-freetype/src/tt/hinter/exec.rs` | 722/1489 48.49% | 146/476 30.67% | 32/48 66.67% | 1296/3103 41.77% | High for hinted TrueType and bytecode error parity. |
+| `pillow-rs-freetype/src/tt/hdmx.rs` | 26/42 61.90% | 6/12 50.00% | 1/2 50.00% | 44/67 65.67% | Partially proven by public `font.getlength.hdmx_observable_av`; malformed paths remain untrusted. |
+| `pillow-rs-freetype/src/tt/mvar.rs` | 58/67 86.57% | 3/6 50.00% | 4/7 57.14% | 92/113 81.42% | Partially proven by public `font.getmetrics.mvar_vertical_metrics`; unsupported/malformed value-tag paths remain untrusted. |
+| `pillow-rs-freetype/src/tt/vhea.rs` | 8/11 72.73% | 1/2 50.00% | 1/1 100.00% | 8/9 88.89% | Partially proven by public `font.getmetrics.vertical_vhea_only`; short/error path remains untrusted. |
+| `pillow-rs-freetype/src/tt/vmtx.rs` | 28/50 56.00% | 3/8 37.50% | 1/2 50.00% | 44/65 67.69% | Partially proven by public `font.getmetrics.vertical_vhea_only`; malformed/overflow paths remain untrusted. |
+
+Decision: do not treat near-complete `imagingft.rs` line coverage as enough.
+The real target is public Pillow rows that naturally execute these lower files
+and match Pillow output or error payload exactly.
 
 ## 2. Pillow `ImageFont` public surface vs Rust implementation
 
-Pillow 12.2.0 exposes these relevant public surfaces:
+Pillow 12.2.0 source inspected:
 
-| Pillow surface | Public API | Rust status |
-|---|---|---|
-| module functions | `load`, `load_path`, `load_default_imagefont`, `load_default`, `truetype` | Represented by Rust byte-oriented constructors and fixture operations. Filesystem path handling is intentionally binding/test harness owned, not core owned. |
-| `ImageFont.ImageFont` bitmap class | `getmask`, `getbbox`, `getlength`, `info` | Implemented as `PilFont`, not the same Rust class shape as FreeType `ImageFont`. Covered by active bitmap fixture rows, but `pilfont.rs` is not 100% region covered. |
-| `ImageFont.FreeTypeFont` class | constructor, `getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `getmask2`, `font_variant`, variations APIs | Mostly implemented as Rust `ImageFont`. BASIC no-raqm path is parity-tested. Successful libraqm shaping is out of scope. Successful `stroke_filled=true` is not proven. |
-| `ImageFont.TransposedFont` class | constructor, `getmask`, `getbbox`, `getlength` | Rust exposes helper-style operations, not a class. Fixture rows cover behavior, but class-shape parity is not implemented. |
-| `Layout` enum | `Layout.BASIC`, `Layout.RAQM` | BASIC is implemented. RAQM success is intentionally unsupported. No-libraqm error parity is tested. |
+- `.oracle-venv/lib/python3.12/site-packages/PIL/ImageFont.py`
+- Native FreeType path: `PIL._imagingft`
 
-Rust extra helper operations that are not Pillow public methods:
+Rust source inspected:
+
+- `pillow-rs/src/lib.rs`
+- `pillow-rs/src/font/mod.rs`
+- `pillow-rs/src/font/imagingft.rs`
+- `pillow-rs/src/font/pilfont.rs`
+- `pillow-rs/tests/support/font_runner.rs`
+
+### Public surface matrix
+
+| Pillow surface | Pillow public API | Rust implementation status | Missing/wrong/coverage decision |
+|---|---|---|---|
+| Module constants | `MAX_STRING_LENGTH`, `Layout.BASIC`, `Layout.RAQM` | `MAX_STRING_LENGTH` is internal to the Font adapters; BASIC is implemented; RAQM success is unsupported. | No-libraqm error parity is covered. Full RAQM parity is not implemented. |
+| Module function | `load(filename)` | Represented through fixture `load` operation and `PilFont` byte/data loaders. | Core should not own filesystem I/O. Keep bindings thin and byte-oriented. |
+| Module function | `load_path(filename)` | Represented through fixture operation. | Path search is binding/test-harness behavior, not core font logic. |
+| Module function | `load_default_imagefont()` | Represented through bitmap default rows. | Behavior is covered, but bitmap `pilfont.rs` region/function coverage is not complete. |
+| Module function | `load_default(size=None)` | Rust uses embedded Aileron subset through `ImageFont::load_default`. | Covered for current rows. Keep Pillow 12.2.0 Aileron behavior explicit. |
+| Module function | `truetype(font, size, index=0, encoding="", layout_engine=None)` | Rust exposes root byte constructors and options: `imagefont_from_bytes*`, `ImageFont::from_bytes*`. | Correct architecture if Python/JS only load bytes and pass options. Stream/path object shape is not core-owned. |
+| Bitmap class | `ImageFont.ImageFont.getbbox` | Implemented in `PilFont`/adapter paths. | Active rows pass; add distinct bitmap edge rows only where coverage indicates real behavior gaps. |
+| Bitmap class | `ImageFont.ImageFont.getlength` | Implemented in `PilFont`/adapter paths. | Active rows pass; not full function/region coverage. |
+| Bitmap class | `ImageFont.ImageFont.getmask` | Implemented in `PilFont`. | Active rows pass; remaining trust depends on malformed/raster/clipping cases. |
+| Bitmap class | `ImageFont.ImageFont.info` | Implemented as `PilFont::info`. | Covered by active rows. |
+| FreeType class | `FreeTypeFont.__init__` | `ImageFont::from_bytes_with_options`. | Constructor bytes/options covered; path/stream are binding-owned. |
+| FreeType class | `__getstate__`, `__setstate__` | No explicit Rust public pickle/state API. | Missing if Rust API-shape parity includes serialization/state. Ignore only if product scope is behavior-only rendering/metrics. |
+| FreeType class | `getname` | `ImageFont::getname` / root `imagefont_getname*`. | Covered. Keep missing-name rows because Pillow fallback details matter. |
+| FreeType class | `getmetrics` | `ImageFont::getmetrics`. | Covered for standard/fixed-width/metric fallback rows; lower metrics tables are still undercovered. |
+| FreeType class | `getlength` | `ImageFont::getlength*`. | BASIC rows pass. RAQM success missing. Rounding, bytecode error, and lower metrics edge rows remain. |
+| FreeType class | `getbbox` | `ImageFont::getbbox*`. | BASIC rows pass. Rounding, anchor extremes, stroke, and lower bbox/stroker gaps remain. |
+| FreeType class | `getmask` | `ImageFont::getmask*`. | BASIC rows pass. Stroked output and embedded bitmap paths remain weak. |
+| FreeType class | `getmask2` | `ImageFont::getmask2*`. | BASIC/start/offset rows pass. Successful `stroke_filled=true` is not proven. |
+| FreeType class | `font_variant` | `ImageFont::font_variant*`. | Covered by rows; variation-related lower tables remain only partially trusted. |
+| FreeType class | `get_variation_names` | `ImageFont::get_variation_names`. | Covered by rows; name-table edge cases remain a lower-trust area. |
+| FreeType class | `set_variation_by_name` | `ImageFont::set_variation_by_name`. | Covered by rows. Add render/metric rows after changes where distinct. |
+| FreeType class | `get_variation_axes` | `ImageFont::get_variation_axes`. | Covered by rows. `mvar` is now exercised by a public metrics row, but malformed/value-tag paths remain. |
+| FreeType class | `set_variation_by_axes` | `ImageFont::set_variation_by_axes`. | Covered by rows. Add rows that prove axes affect metrics/rendering where possible. |
+| Transposed class | `TransposedFont.__init__` | No Rust class; helper operations use orientation. | Class-shape parity is missing. Behavior parity is covered by helper rows. |
+| Transposed class | `TransposedFont.getmask` | `get_transposed_mask` helper. | Active rows pass. |
+| Transposed class | `TransposedFont.getbbox` | `transposed_bbox` helper. | Active rows pass. |
+| Transposed class | `TransposedFont.getlength` | `validate_transposed_length` helper. | Active rows pass. |
+
+### Rust helper/test surfaces that are not Pillow public endpoints
+
+These exist as binding/test adapters around Pillow behavior. They must not
+become independent truth sources:
 
 - `getbbox_binary`
 - `getmask2_with_start`
@@ -112,51 +194,100 @@ Rust extra helper operations that are not Pillow public methods:
 - `transposed_bbox`
 - `validate_transposed_length`
 - `text_bbox`
+- `draw_text`
 - `render_text`
 - `render_text_binary`
 
-These are acceptable only as binding/test adapters. They should not become independent public behavior beyond what Pillow rows prove.
+Decision: keep these only when each maps cleanly to a Pillow public behavior
+under the runtime oracle. Do not let helper-specific expected values define
+parity.
 
 ## 3. Missing or wrong Rust implementation across files
 
-### A. General stroker implementation is incomplete
+### A. General stroked outline support is incomplete
 
 Files:
 
 - `pillow-rs/src/font/imagingft.rs`
 - `pillow-rs-freetype/src/ffi/handles.rs`
 
-Observed issue:
+Pillow behavior:
 
-- `imagingft.rs` routes stroked text through `FT_Outline_Glyph_Stroke` or `FT_Outline_Glyph_StrokeBorder`.
-- `handles.rs` currently has a DejaVu glyph-36 fixture-specific guard around `FT_Outline_Glyph_Stroke`.
-- Real conic/cubic/closed glyph segment parsing/export remains pending in `FT_Stroker_ParseOutline`.
-- Exploratory stroked descender rows such as `jQ` showed Pillow succeeds but Rust returns `FT_Err_Unimplemented_Feature`.
+- `FreeTypeFont.getmask` / `getmask2` support `stroke_width`.
+- `getmask2(..., stroke_filled=True)` routes through
+  `FT_Glyph_StrokeBorder`.
+- Stroked outline glyphs are rendered to bitmap with FreeType normal render
+  mode even when the public `mode="1"` path set mono load flags.
+
+Rust status:
+
+- `ImageFontTextOptions` carries `stroke_width` and `stroke_filled`.
+- `imagingft.rs` routes to `FT_Outline_Glyph_Stroke` or
+  `FT_Outline_Glyph_StrokeBorder`.
+- `FT_Stroker_ParseOutline` now follows FreeType 2.14.3
+  `ftstroke.c:2067-2242` contour/tag parser control flow.
+- The lower stroker/export implementation is still incomplete for general real
+  glyph outlines.
+- `FT_Outline_Glyph_Stroke` still has a DejaVu glyph-36 fixture-specific
+  successful path documented in `handles.rs`.
+- A prior stroked descender sweep showed Pillow succeeds for cases Rust still
+  reports as `FT_Err_Unimplemented_Feature`.
 
 Decision:
 
-- This is wrong/incomplete implementation, not just missing coverage.
+- This is a real implementation gap, not just missing coverage.
 - Do not add more glyph-specific shortcuts.
-- Fix by implementing general outline parse/export in `pillow-rs-freetype`, then add public Pillow rows for stroked ascenders, descenders, mono mode, and `stroke_filled=true`.
+- Finish general outline segment stroker geometry and border export in
+  `pillow-rs-freetype`.
+- Then add public Pillow rows for successful `stroke_width`,
+  `stroke_filled=true`, descenders/ascenders such as `jQ`, mono stroke, and
+  clipping at each side.
 
-### B. Stroked extent clamp is a Rust-only compatibility shim
+### B. Stroked extent clamp is suspect Rust-only behavior
 
 File:
 
 - `pillow-rs/src/font/imagingft.rs`
 
-Observed issue:
+Rust mutates `x_max`/`y_max` when actual stroked bitmap extents exceed
+bbox-derived expected dimensions. The code comment says this is a compatibility
+clip retained because the current lower stroker can produce a larger bitmap than
+the active Pillow-compatible target.
 
-- Rust mutates `x_max`/`y_max` when actual stroked bitmap extents exceed expected bbox-derived dimensions.
-- Pillow allocates from `_imagingft.c::bounding_box_and_anchors` and clips during render.
-- Current coverage proves the width clamp but not the height clamp body.
+Pillow instead allocates through `_imagingft.c::bounding_box_and_anchors` and
+clips while writing pixels.
 
 Decision:
 
-- Treat as suspect. It may be compensating for lower stroker geometry mismatch.
-- After general stroker support lands, either remove this shim or prove it with a C/Pillow trace and fixture rows.
+- Treat the clamp as temporary compatibility logic.
+- Once lower stroker parity is fixed, remove the clamp unless a C/Pillow trace
+  proves the same behavior.
+- Current coverage executes the width condition but not the height body; that
+  lack of coverage is useful because it points at unproven stroke geometry.
 
-### C. Successful RAQM shaping is not implemented
+### C. TrueType bytecode error mapping is incomplete
+
+Files:
+
+- `pillow-rs/src/font/imagingft.rs`
+- `pillow-rs-freetype/src/ffi/convert.rs`
+- `pillow-rs-freetype/src/tt/hinter/exec.rs`
+
+Rust has table entries for FreeType bytecode errors, including
+`FT_Err_Too_Many_Instruction_Defs`. The pending local fixture
+`font.getlength.hinter_too_many_instruction_defs` proves a current mismatch:
+
+- Pillow: `OSError("too many instruction definitions")`
+- Rust: `OSError("invalid outline")`
+
+Decision:
+
+- This is a real parity bug.
+- Fix lower `fontdone` error propagation/mapping so the public Rust Font result
+  reaches the same FreeType status as Pillow.
+- Keep the fixture row after the fix; it should cover `imagingft.rs:253`.
+
+### D. Successful libraqm shaping is not implemented
 
 Files:
 
@@ -164,19 +295,22 @@ Files:
 - `pillow-rs/src/error.rs`
 - `pillow-rs/tests/support/font_runner.rs`
 
-Observed issue:
+Pillow can support successful `direction`, `features`, and `language` when
+compiled with libraqm. The current oracle is no-libraqm, so Pillow returns
+errors for those parameters.
 
-- Pillow supports successful `direction`, `features`, and `language` shaping when built with libraqm.
-- Current oracle environment is no-libraqm, so Pillow returns an error for these arguments.
-- Rust correctly returns a dedicated internal `PilError::UnsupportedLibraqm`, then maps outward to the Pillow-compatible `KeyError` payload.
+Rust correctly uses a dedicated internal `PilError::UnsupportedLibraqm`, then
+maps outward to the Pillow-compatible no-libraqm `KeyError` payload for the
+fixture comparison.
 
 Decision:
 
-- This is an explicit scope exclusion, not full parity.
-- Keep rows proving no-libraqm error behavior.
-- Do not claim full `PIL.ImageFont` until either RAQM success is implemented or permanently excluded in product scope.
+- This is an explicit scope exclusion, not complete ImageFont parity.
+- Keep no-libraqm error rows.
+- Do not claim full `PIL.ImageFont` parity unless successful RAQM shaping is
+  implemented or permanently excluded from product scope.
 
-### D. Bitmap `ImageFont.ImageFont` is implemented as `PilFont`, not one class shape
+### E. Bitmap `ImageFont.ImageFont` is not a 1:1 Rust type shape
 
 Files:
 
@@ -184,18 +318,35 @@ Files:
 - `pillow-rs/src/font/mod.rs`
 - `pillow-rs/src/lib.rs`
 
-Observed issue:
-
-- Pillow has `ImageFont.ImageFont` for bitmap fonts and `FreeTypeFont` for TrueType/OpenType fonts.
-- Rust has `PilFont` for bitmap fonts and `ImageFont` for FreeType fonts.
-- This is operationally testable, but not a 1:1 type shape.
+Pillow has a bitmap `ImageFont.ImageFont` class and a FreeType
+`ImageFont.FreeTypeFont` class. Rust currently has `PilFont` for bitmap fonts
+and `ImageFont` for FreeType fonts.
 
 Decision:
 
-- If the product goal is Rust API shape parity with Pillow names, decide whether to introduce a public enum/class-like wrapper or rename/split surfaces.
-- If the product goal is behavior parity only, keep the split but continue fixture coverage until `pilfont.rs` reaches 100% trusted region coverage.
+- If product scope requires Rust API-shape parity, introduce an explicit public
+  shape that distinguishes bitmap `ImageFont`, `FreeTypeFont`, and
+  `TransposedFont`.
+- If product scope is behavior parity only, the split can remain, but fixture
+  coverage must reach trusted region/function coverage for `pilfont.rs`.
 
-### E. Path and stream behavior is not core-owned
+### F. `FreeTypeFont.__getstate__` / `__setstate__` are not represented
+
+File:
+
+- Pillow `ImageFont.py`
+
+Rust has no direct public pickle/state equivalent. This may be acceptable for a
+Rust core API, but it is a public Pillow class surface.
+
+Decision:
+
+- Explicitly exclude state/pickle parity if the target is rendering/metrics
+  behavior only.
+- If Python API parity is in scope later, add thin binding-level behavior and
+  public rows comparing Pillow state roundtrips.
+
+### G. Path and stream behavior is binding-owned
 
 Files:
 
@@ -204,57 +355,46 @@ Files:
 - `pillow-rs-js`
 - `pillow-rs/tests/support/font_runner.rs`
 
-Observed issue:
-
-- Pillow module functions accept paths and binary streams.
-- Core Rust takes bytes and options.
+Pillow accepts paths and binary streams. Core Rust accepts bytes plus options.
 
 Decision:
 
-- This is correct architecture if bindings stay thin.
-- Binding crates may load bytes, but must not own font parsing, glyph rendering, layout, or Pillow-specific comparison logic.
+- This is correct architecture. Core should not own filesystem or Python/JS
+  object behavior.
+- Bindings may load bytes, but must not implement font parsing, layout,
+  rendering, or parity comparison logic.
 
-### F. Embedded bitmap, variation metrics, and vertical metrics are untrusted
+### H. Embedded bitmap, cmap, CFF, variation, and vertical/device metrics remain undertrusted
 
 Files:
 
 - `pillow-rs-freetype/src/tt/sbit.rs`
+- `pillow-rs-freetype/src/tt/cmap.rs`
+- `pillow-rs-freetype/src/tt/cff.rs`
 - `pillow-rs-freetype/src/tt/hdmx.rs`
 - `pillow-rs-freetype/src/tt/mvar.rs`
 - `pillow-rs-freetype/src/tt/vhea.rs`
 - `pillow-rs-freetype/src/tt/vmtx.rs`
+- `pillow-rs-freetype/src/tt/gvar.rs`
+- `pillow-rs-freetype/src/tt/hvar.rs`
 
-Observed issue:
-
-- Coverage is low or zero in lower FreeType tables that can affect ImageFont rendering/metrics.
-- Active fixtures include embedded-bitmap font assets, but the measured lower coverage is not high enough to trust all table paths.
-
-Decision:
-
-- Add public ImageFont fixture rows that naturally exercise these paths, or explicitly mark each table irrelevant to current product scope.
-- Do not add FreeType-only unit tests and count them as ImageFont parity proof.
-
-### G. Error table completeness is not behavior coverage
-
-File:
-
-- `pillow-rs/src/font/imagingft.rs`
-
-Observed issue:
-
-- Rust has a broad FreeType error mapping table.
-- Several table entries are uncovered because no public ImageFont row reaches those exact FreeType errors.
+Current public rows have started exercising hdmx, mvar, vhea, and vmtx, but
+coverage remains partial. Embedded bitmap coverage is particularly weak.
 
 Decision:
 
-- Table presence is not enough for parity trust.
-- Add only real public Pillow inputs that trigger the same error class/message behavior.
+- Add public ImageFont rows that naturally hit each supported lower table path.
+- If a table path does not affect supported ImageFont behavior, record the
+  exclusion explicitly.
+- Do not count lower FreeType-only unit tests as ImageFont parity proof.
 
-## 4. What is currently covered by fixtures
+## 4. Active fixture files and case counts
 
-Active input files and case counts:
+Trusted snapshot case count: 348.
 
-| Input file | Cases |
+Working-tree count including uncommitted pending rows: 350.
+
+| Input file | Working-tree cases |
 |---|---:|
 | `font.ImageFont.getbbox.json` | 4 |
 | `font.ImageFont.getlength.json` | 4 |
@@ -265,13 +405,13 @@ Active input files and case counts:
 | `font.TransposedFont.getmask.json` | 6 |
 | `font.constructor.json` | 9 |
 | `font.get_transposed_mask.json` | 10 |
-| `font.getbbox.json` | 31 |
+| `font.getbbox.json` | 32 |
 | `font.getbbox_binary.json` | 9 |
-| `font.getlength.json` | 20 |
+| `font.getlength.json` | 22 |
 | `font.getmask.json` | 36 |
 | `font.getmask2.json` | 43 |
 | `font.getmask2_with_start.json` | 23 |
-| `font.getmetrics.json` | 6 |
+| `font.getmetrics.json` | 8 |
 | `font.getname.json` | 5 |
 | `font.has_variations.json` | 4 |
 | `font.layout_failure.json` | 1 |
@@ -286,24 +426,48 @@ Active input files and case counts:
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 345 |
+| Total | 350 |
+
+Pending rows not included in the trusted snapshot:
+
+- `font.getbbox.hhea_descender_only_av`
+- `font.getlength.hinter_too_many_instruction_defs`
+
+The second row is intentionally failing until the bytecode error mapping is
+fixed. Keep it as a real bug detector.
 
 ## 5. Action list for decision
 
-Recommended next actions, in order:
+1. Fix the bytecode error mismatch so
+   `font.getlength.hinter_too_many_instruction_defs` matches Pillow and covers
+   `imagingft.rs:253`.
+2. Complete general stroked outline support in
+   `pillow-rs-freetype/src/ffi/handles.rs`; remove fixture-specific stroker
+   shortcuts instead of adding more.
+3. Re-evaluate and either remove or prove the `imagingft.rs` stroked extent
+   clamp with a C/Pillow trace.
+4. Add public ImageFont rows for successful stroke, `stroke_filled=true`,
+   stroked descenders/ascenders, mono stroke, and side clipping after lower
+   stroker support works.
+5. Add targeted public rows for `floor26`/`ceil26` rounding via negative
+   bearings, fractional `start`, descenders, and glyphs crossing pixel
+   boundaries.
+6. Add public rows for embedded bitmap/sbit behavior and supported cmap/CFF
+   shapes. Use live Pillow output only.
+7. Decide whether Python/Rust API-shape parity includes
+   `FreeTypeFont.__getstate__` / `__setstate__` and distinct public type shapes
+   for bitmap `ImageFont`, `FreeTypeFont`, and `TransposedFont`.
+8. Keep RAQM/libraqm success excluded unless the product decision changes.
+   Current no-libraqm rows are not proof of successful shaping parity.
 
-1. Fix general FreeType stroker support in `pillow-rs-freetype/src/ffi/handles.rs`; do not add fixture-specific shortcuts.
-2. Add public ImageFont rows for successful stroked descenders, `stroke_filled=true`, mono stroked output, and height-side clipping.
-3. Add public rows for `floor26`/`ceil26` edge behavior: negative bearings, fractional starts, ascenders/descenders, and bbox/mask offsets.
-4. Add public rows that hit embedded bitmap, horizontal device metrics, and variation metric paths if those are in product scope.
-5. Decide whether Rust public type shape must mirror Pillow class shape (`ImageFont.ImageFont`, `FreeTypeFont`, `TransposedFont`) or whether behavior-only parity is enough.
-6. Keep RAQM marked out of scope unless the product decision changes.
-7. Re-run `make -C pillow-rs font-tests`.
-8. Re-run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
-9. Update this file and `docs/imagefont-parity-gap-analysis.md` with new run/snapshot IDs and remove only gaps proven by live Pillow oracle rows.
+## Final conclusion
 
-## Final decision point
+The branch has a trustworthy runtime-oracle fixture harness for current active
+rows, but it does not yet have complete `PIL.ImageFont` parity.
 
-The branch currently has trustworthy parity for the active 345-row live Pillow corpus.
-
-The branch does not yet have complete `PIL.ImageFont` parity. The main blocker is not more fixture JSON; it is incomplete general stroke geometry under `pillow-rs-freetype/src/ffi/handles.rs`. More fixture rows should be added after that implementation becomes real, otherwise the new rows will correctly fail against Pillow.
+The biggest real implementation blocker is general stroked outline behavior
+under `pillow-rs-freetype/src/ffi/handles.rs`. The next concrete bug is the
+pending TrueType bytecode error mapping mismatch for
+`too many instruction definitions`. Coverage is useful here because it shows
+which Rust paths are merely present versus actually proven through public
+Pillow ImageFont behavior.
