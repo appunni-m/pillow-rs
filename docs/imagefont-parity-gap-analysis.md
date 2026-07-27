@@ -87,6 +87,10 @@ Current-head Coverage MCP run: `d0dc76e2-aab5-4dc1-8110-a6f627388485`
 
 Current-head Coverage MCP snapshot: `286cfb3e-f78e-4cb5-b2b7-b3ae820b687f`
 
+Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
+
+Post ImageFont facade target Coverage MCP snapshot: `e912dce7-e207-4d82-b8ab-d434a65799fd`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -111,9 +115,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `5286c6c4536321bda67071f1849029fe3fd3a185` and ingested
-  snapshot `286cfb3e-f78e-4cb5-b2b7-b3ae820b687f` from run
-  `d0dc76e2-aab5-4dc1-8110-a6f627388485`. Direct `imagingft.rs` coverage
+  passed at commit `c9af8880a096ee12b1b2fca871a8a4e66fca8b43` and ingested
+  snapshot `e912dce7-e207-4d82-b8ab-d434a65799fd` from run
+  `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`. Direct `imagingft.rs` coverage
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The seven remaining direct marker lines are `91`,
   `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
