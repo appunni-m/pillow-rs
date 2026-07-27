@@ -793,8 +793,10 @@ pub(crate) fn render_text_binary(
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     validate_text_length(text)?;
     let _ = spacing;
-    let mask = mask_from_run_with_start(font, text, TGT_MONO, (0.0, 0.0))?;
-    pack_rgba(mask, fill)
+    pack_rgba(
+        mask_from_run_with_start(font, text, TGT_MONO, (0.0, 0.0))?,
+        fill,
+    )
 }
 
 fn validate_basic_layout_options(options: &ImageFontTextOptions) -> Result<(), PilError> {
