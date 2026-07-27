@@ -252,6 +252,15 @@ The lower `FT_Glyph_StrokeBorder` wrapper now mirrors one more FreeType
 succeeds. Rust now keeps that same wrapper behavior instead of returning the
 count error, but this does not make real glyph border geometry complete.
 
+The lower stroker state now also records C-shaped left/right border point and
+tag buffers for the first line segment. This follows FreeType 2.14.3
+`src/base/ftstroke.c:1232-1263`: the first segment derives the normal from
+`FT_Atan2`, stores the incoming angle and line length, moves the right border to
+`center + normal`, moves the left border to `center - normal`, and appends the
+segment endpoints. This is foundational state only; it does not yet prove
+general border export, joins, caps, curves, or `FT_Glyph_StrokeBorder` success
+rows.
+
 Decision: complete the lower stroker segment geometry and border-export behavior
 needed by real outline glyphs, then add successful `stroke_filled=true` fixture
 rows. `FT_Stroker_ParseOutline` now follows the C-shaped contour/tag walk, so
@@ -273,6 +282,10 @@ Current lower-stroker verification:
   passes the maintained runnable row, but only 1 row is runnable and 3 remain
   pending: outside-border success, inside-border success, and destroy-option
   parity.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`
+  passes 5/5 runnable rows after the first-line border state update. This
+  verifies no regression in the public segment lane; it is not proof of general
+  glyph border stroking.
 - Source inspection shows the real blocker is still lower stroker geometry in
   `pillow-rs-freetype/src/ffi/handles.rs`: `FT_Stroker_LineTo`,
   `FT_Stroker_ConicTo`, and `FT_Stroker_CubicTo` contain maintained
