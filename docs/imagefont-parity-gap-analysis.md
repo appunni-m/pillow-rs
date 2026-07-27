@@ -568,12 +568,14 @@ Latest measured Font-with-FreeType snapshot:
 `pillow-rs/src/font/imagingft.rs` coverage in that snapshot is `1739/1760`
 lines, `251/256` branches, `173/184` functions, and `2712/2797` regions.
 
-Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
-region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
-coverage is not itself a 100% target for this work; it is only dependency
-evidence when a missing `imagingft.rs` region is blocked by missing lower
-FreeType behavior. Do not broaden this into a `pillow-rs-freetype` coverage
-refactor.
+Coverage target policy: direct `pillow-rs/src/font/imagingft.rs` coverage
+should only move toward 100% through live Pillow 12.2.0 oracle rows that prove
+distinct public behavior, or through parity-neutral implementation cleanup that
+removes unreachable/confusing adapter code. Do not add duplicate rows for the
+current static-table or LLVM source-map markers. `pillow-rs-freetype` coverage
+is not itself a 100% target for this work; it is only dependency evidence when
+a missing `imagingft.rs` region is blocked by missing lower FreeType behavior.
+Do not broaden this into a `pillow-rs-freetype` coverage refactor.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
