@@ -1499,25 +1499,10 @@ def ftstroke_set_rewind_pending_reason(row: ConcreteInput) -> str | None:
             "proving values below one are clamped before miter fallback "
             "decisions exactly like pinned C"
         ),
-        "ftstroke.FT_Stroker_Set.clears_existing_path": (
-            "FT_Stroker_Set path-clearing parity needs a maintained route "
-            "proving resetting attributes also clears prior border/path state "
-            "exactly like pinned C"
-        ),
-        "ftstroke.FT_Stroker_Rewind.clears_previous_path": (
-            "FT_Stroker_Rewind path-clearing parity needs a maintained route "
-            "proving rewind clears previous border/path state exactly like "
-            "pinned C"
-        ),
         "ftstroke.FT_Stroker_Rewind.attributes_preserved": (
             "FT_Stroker_Rewind attribute parity needs a maintained route "
             "proving radius, cap, join, and miter-limit attributes are "
             "preserved while path state is cleared exactly like pinned C"
-        ),
-        "ftstroke.FT_Stroker_Rewind.set_calls_rewind": (
-            "FT_Stroker_Set/Rewind interaction parity needs a maintained "
-            "route proving Set performs the same implicit rewind/path clear "
-            "sequence as pinned C"
         ),
     }
     return exact_cases.get(row.case_id)
