@@ -192,6 +192,12 @@ pub(super) fn error_to_ft(error: FontError) -> FT_Error {
             FT_Err_Invalid_Stream_Operation as FT_Error
         }
         FontError::SfntZeroTablesStreamOperation => FT_Err_Invalid_Stream_Operation as FT_Error,
+        // FreeType 2.14.3 rejects an SFNT with a truncated mandatory `head`
+        // table as `Unknown_File_Format` during face open.  Pillow exposes
+        // this through `ImageFont.truetype` as `OSError("unknown file format")`.
+        FontError::InvalidFont(message) if message.starts_with("head table too short") => {
+            FT_Err_Unknown_File_Format as FT_Error
+        }
         FontError::InvalidFont(message)
             if message.starts_with("face index ") || message.starts_with("named instance ") =>
         {

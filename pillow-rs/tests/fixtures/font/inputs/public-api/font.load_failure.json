@@ -183,6 +183,66 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.load_failure.cff_broken_table",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/cff-malformed-short-header.otf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.cff_broken_file",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/cff-malformed-name-index-offsets-out-of-order.otf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.loca_invalid_argument",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/loca-long-truncated.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.load_failure.head_short_unknown_file_format",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/head-short-eof.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }
