@@ -893,3 +893,9 @@ Current request classification for `imagingft.rs` region coverage:
   same ranges `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`. This
   confirms the harness diagnostic does not alter active public parity behavior
   and that the remaining region gap is not closed by adding FreeType diagnostics.
+- Coverage MCP run `b114c059-ce8c-48a7-b9a4-8c588d0c75e3` passed and ingested
+  snapshot `e603711e-a92c-466e-9c52-7c36d2a58320` for commit `cf28ac862`.
+  Direct `imagingft.rs` coverage again remains unchanged at `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2610/2696` regions with the
+  same eight ranges. This run is the current-head evidence after adding the
+  source-outline diagnostic for the promoted lower stroker blocker.
