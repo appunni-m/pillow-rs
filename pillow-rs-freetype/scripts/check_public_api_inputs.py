@@ -3556,7 +3556,9 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "to C left/right border counts 35/37 with contour ends [2, 34] "
             "and [20, 36], versus Rust 24/34 with [7, 23] and [1, 33]. Keep "
             "this pending until closed round/conic stroke geometry/export is "
-            "exact against pinned C."
+            "exact against pinned C. Per-source-contour tracing shows the "
+            "first miss occurs in contour 0: C right border 21/1 versus Rust "
+            "18/1."
         ),
         "ftglyph.FT_Glyph.caller_owned_lifetime": (
             "FT_Glyph caller-owned lifetime parity needs a maintained "

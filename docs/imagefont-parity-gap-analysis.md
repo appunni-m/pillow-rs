@@ -704,3 +704,10 @@ Current request classification for `imagingft.rs` region coverage:
   the next first-divergence trace should focus inside conic subdivision/corner
   insertion before `ft_stroke_border_close`, not on the public
   `FT_Glyph_To_Bitmap` wrapper.
+- Per-source-contour tracing confirms the divergence starts in the first source
+  contour. After contour `0`, native C has left/right borders `3/1` and `21/1`,
+  while Rust has `3/1` and `18/1`; the first missing points are on the right
+  border during the first contour's closed round/conic processing. After
+  contour `1`, native C reaches `35/2` and `37/2`, while Rust reaches `24/2`
+  and `34/2`. This narrows the first source-level target to the contour-0
+  outside-corner / `ft_stroker_arcto` / conic subdivision path.
