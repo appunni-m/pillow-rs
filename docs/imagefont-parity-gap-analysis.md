@@ -44,8 +44,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 377 input-only rows execute.
-- 377 rows match live Pillow 12.2.0 exactly.
+- 379 input-only rows execute.
+- 379 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -614,10 +614,15 @@ explicit exclusion instead of leaving it ambiguous.
      `getmask` and `getmask2` rows;
    - stroked kerning text is active through
      `font.getmask.dejavusans24_av_stroke_1_5_l` and
-     `font.getmask2.dejavusans24_av_stroke_1_5_l`.
+     `font.getmask2.dejavusans24_av_stroke_1_5_l`;
+   - stroked missing-glyph/no-kerning transition text is active through
+     `font.getmask.dejavusans24_missing_glyph_breaks_kerning_stroke_1_5_l`
+     and
+     `font.getmask2.dejavusans24_missing_glyph_breaks_kerning_stroke_1_5_l`.
 2. Add minimal, independent oracle fixtures only for new public behavior:
-   - stroked no-kerning or missing-glyph transitions if a live Pillow row proves
-     a distinct public path not covered by existing `A`/`AA`/`AV` stroke rows;
+   - additional stroked text transitions only if a live Pillow row proves a
+     distinct public path not covered by existing `A`/`AA`/`AV`/missing-glyph
+     stroke rows;
    - additional embedded bitmap glyph paths only when they represent a new
      ImageFont-visible behavior not already covered by the private-use SBIT
      bbox/length/mask/mask2 rows;
@@ -630,7 +635,7 @@ explicit exclusion instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 375-row Font fixture corpus.
+The current implementation is good enough to trust the active 379-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
@@ -660,6 +665,12 @@ Latest focused ftstroke evidence after the outside-border route update:
   `26f88533-a211-49cd-8775-23b64d8ab218`; direct `imagingft.rs` coverage
   remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions with the same eight ranges.
+- Stroked missing-glyph/no-kerning transition rows
+  `font.getmask.dejavusans24_missing_glyph_breaks_kerning_stroke_1_5_l` and
+  `font.getmask2.dejavusans24_missing_glyph_breaks_kerning_stroke_1_5_l` are
+  active input-only rows and pass exact live Pillow 12.2.0 oracle comparison.
+  They independently prove the BASIC layout rule that a zero glyph index breaks
+  pair kerning before the stroked multi-glyph render path.
 - Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passed after clearing the stale stroke blocker guard as run
   `eab645c4-3f6c-477d-bd95-f72f83fce2cf` and ingested snapshot
