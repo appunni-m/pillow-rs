@@ -111,6 +111,15 @@ pub enum PilError {
     DimensionError(String),
 }
 
+impl PilError {
+    pub(crate) fn unsupported_libraqm() -> Self {
+        Self::UnsupportedLibraqm(
+            "'setting text direction, language or font features is not supported without libraqm'"
+                .into(),
+        )
+    }
+}
+
 impl From<std::io::Error> for PilError {
     fn from(error: std::io::Error) -> Self {
         Self::Io(Arc::new(error))
