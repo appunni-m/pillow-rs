@@ -535,3 +535,26 @@ Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and
 - The prior real public blocker at lines 1211-1212 is resolved: line 1211 has both branches covered and line 1212 has one hit.
 - Remaining direct gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, and 928. These are not currently known public ImageFont behavior mismatches.
 - Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. For `imagingft.rs`, the remaining direct gaps are currently classified as static-data or LLVM segment artifacts, not known public Pillow behavior misses. Add new Font rows only when they exercise independent ImageFont behavior, not to force these markers.
+
+Current request classification for `imagingft.rs` region coverage:
+
+- `imagingft.rs` has no known remaining adapter-owned implementation branch
+  that should be filled by moving FreeType logic upward. The adapter already
+  follows Pillow's `_imagingft.c` shape for stroked text: load the glyph using
+  the public BASIC load flags, call `FT_Get_Glyph`, call `FT_Glyph_Stroke` or
+  `FT_Glyph_StrokeBorder`, convert the stroked outline to a normal gray bitmap,
+  then clip/paste into the Pillow-sized mask.
+- The rejected public `stroke_width=1.5, mode="1"` rows are valid missing
+  behavior, but the first divergence is lower than `imagingft.rs`: current
+  `pillow-rs-freetype` maintains a DejaVuSans glyph-36 normal-outline
+  `FT_Glyph_Stroke` fallback while the general closed-round stroker remains
+  guarded as unverified. Pillow's mono row succeeds because the source outline
+  after `FT_LOAD_TARGET_MONO` is not the same as the maintained normal-outline
+  fallback. Adding a mono-target shortcut in `imagingft.rs` would be false
+  parity; the fix belongs in the lower `FT_Stroker`/`FT_Glyph_Stroke` geometry
+  route.
+- Therefore the next legitimate way to move `imagingft.rs` region coverage is
+  to first make lower stroker geometry real enough for mono-target stroked
+  outlines, then add the public Font input-only rows back and let the live
+  Pillow 12.2.0 oracle drive expected output. Do not add duplicate rows for the
+  static error-table or LLVM source-map markers.
