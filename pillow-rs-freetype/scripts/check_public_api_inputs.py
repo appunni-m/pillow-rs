@@ -1393,11 +1393,6 @@ def ftstroke_line_join_pending_reason(row: ConcreteInput) -> str | None:
     if not row.operation.startswith("ftstroke."):
         return None
     exact_cases = {
-        "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry": (
-            "FT_STROKER_LINEJOIN_BEVEL parity needs a maintained route proving "
-            "bevel join points, tags, contours, and cutover behavior match "
-            "pinned C"
-        ),
         "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry": (
             "FT_STROKER_LINEJOIN_ROUND parity needs a maintained route proving "
             "round join arc subdivision, emitted points, tags, and contours "
@@ -1757,6 +1752,11 @@ def ftstroke_miter_join_real_parity_reason(row: ConcreteInput) -> str | None:
             "FT_STROKER_LINEJOIN_MITER_VARIABLE exported geometry validates "
             "variable clipped-miter and longer-miter output for limits 65536 "
             "and 131072 through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        ),
+        "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry": (
+            "FT_STROKER_LINEJOIN_BEVEL exported geometry validates bevel "
+            "points, tags, contours, and join-shape output through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
         ),
     }
     if row.operation in {"ftstroke.join_geometry", "ftstroke.join_geometry_alias"}:
