@@ -563,6 +563,13 @@ Latest focused ftstroke evidence after the outside-border route update:
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`: 9/9 runnable rows pass, 2 rows remain pending. The pending row `pending_stroked_mono_target_outline_to_bitmap` names the exact lower sequence blocking public `mode="1"` stroked ImageFont parity: `FT_LOAD_TARGET_MONO` outline, `FT_Glyph_Stroke`, then `FT_Glyph_To_Bitmap` with `FT_RENDER_MODE_NORMAL`, comparing bitmap placement and coverage bytes against pinned C. The native C oracle command and Rust/C/WASM runner branches now execute this exact sequence; temporarily promoting the row to real parity exposes a `/bitmap/buffer_hex` mismatch, while bitmap shape/placement has advanced past the previous wrong-oracle `/advance/x` artifact.
 - `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 180 `pending-route` cases overall and 4842 `real-parity` cases after promoting `FT_Glyph_StrokeBorder.outside_border_success` and adding the explicit pending `FT_Glyph_To_Bitmap` blocker route. The project still cannot claim complete FreeType-backed ImageFont parity yet because `inside_border_success`, destroy-option ownership, stroked mono-target bitmap conversion, and general glyph stroke geometry remain incomplete.
+- Refreshed focused check at doc commit `9f4211154`:
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`
+  passes 9/9 runnable rows with the same 2 explicit pending rows. The generated
+  route audit still reports `pending-route=180` and `real-parity=4842`. This
+  confirms the public ImageFont blocker is still not an `_imagingft.rs`
+  coverage-input problem; it remains the lower closed round/conic stroker
+  geometry/export route described below.
 
 Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and height-side stroked clipping rows:
 
