@@ -3,6 +3,7 @@ from pathlib import Path
 import sys
 
 import pytest
+from PIL import Image
 from PIL import ImageFont as PILImageFont
 
 
@@ -32,6 +33,48 @@ def _bitmap_font_observation(font):
         "mask_size": mask.size,
         "mask_bytes": bytes(mask),
     }
+
+
+def _transposed_observation(font, text, method):
+    try:
+        value = getattr(font, method)(text)
+        if method == "getmask":
+            value = {
+                "mode": value.mode,
+                "size": value.size,
+                "bytes": bytes(value),
+            }
+        return {"status": "ok", "value": value}
+    except Exception as exc:
+        return {
+            "status": "err",
+            "class": type(exc).__name__,
+            "message": str(exc),
+        }
+
+
+def _transposed_pairs(RSPIL):
+    return (
+        (None, None),
+        (Image.Transpose.FLIP_LEFT_RIGHT, RSPIL.Transpose.FLIP_LEFT_RIGHT),
+        (Image.Transpose.FLIP_TOP_BOTTOM, RSPIL.Transpose.FLIP_TOP_BOTTOM),
+        (Image.Transpose.ROTATE_90, RSPIL.Transpose.ROTATE_90),
+        (Image.Transpose.ROTATE_180, RSPIL.Transpose.ROTATE_180),
+        (Image.Transpose.ROTATE_270, RSPIL.Transpose.ROTATE_270),
+    )
+
+
+def _font_pairs_for_transpose(RSPIL):
+    return (
+        (
+            RSPIL.ImageFont.truetype(DEJAVU, 20),
+            PILImageFont.truetype(DEJAVU, 20),
+        ),
+        (
+            RSPIL.ImageFont.load(COURB08),
+            PILImageFont.load(COURB08),
+        ),
+    )
 
 
 @pytest.mark.covers("ImageFont.truetype")
@@ -140,3 +183,36 @@ def test_imagefont_file_like_font_variant_matches_pillow(RSPIL):
     pil_font = PILImageFont.truetype(BytesIO(data), 20).font_variant(size=21)
 
     assert _font_observation(rs_font) == _font_observation(pil_font)
+
+
+@pytest.mark.covers("ImageFont.TransposedFont.getbbox")
+def test_imagefont_transposed_getbbox_matches_pillow(RSPIL):
+    for rs_base, pil_base in _font_pairs_for_transpose(RSPIL):
+        for pil_orientation, rs_orientation in _transposed_pairs(RSPIL):
+            assert _transposed_observation(
+                RSPIL.ImageFont.TransposedFont(rs_base, rs_orientation), "ABC", "getbbox"
+            ) == _transposed_observation(
+                PILImageFont.TransposedFont(pil_base, pil_orientation), "ABC", "getbbox"
+            )
+
+
+@pytest.mark.covers("ImageFont.TransposedFont.getlength")
+def test_imagefont_transposed_getlength_matches_pillow(RSPIL):
+    for rs_base, pil_base in _font_pairs_for_transpose(RSPIL):
+        for pil_orientation, rs_orientation in _transposed_pairs(RSPIL):
+            assert _transposed_observation(
+                RSPIL.ImageFont.TransposedFont(rs_base, rs_orientation), "ABC", "getlength"
+            ) == _transposed_observation(
+                PILImageFont.TransposedFont(pil_base, pil_orientation), "ABC", "getlength"
+            )
+
+
+@pytest.mark.covers("ImageFont.TransposedFont.getmask")
+def test_imagefont_transposed_getmask_matches_pillow(RSPIL):
+    for rs_base, pil_base in _font_pairs_for_transpose(RSPIL):
+        for pil_orientation, rs_orientation in _transposed_pairs(RSPIL):
+            assert _transposed_observation(
+                RSPIL.ImageFont.TransposedFont(rs_base, rs_orientation), "ABC", "getmask"
+            ) == _transposed_observation(
+                PILImageFont.TransposedFont(pil_base, pil_orientation), "ABC", "getmask"
+            )
