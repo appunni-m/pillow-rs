@@ -21403,6 +21403,113 @@ static int emit_stroker_wide_curve(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_begin_subpath_wide_stroke(int argc, char** argv) {
+    if (argc != 6) return 2;
+    FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
+    FT_Fixed miter_limit = (FT_Fixed)strtol(argv[3], NULL, 10);
+    char encoded_rows[2048];
+    char encoded_path_source[8192];
+    snprintf(encoded_rows, sizeof(encoded_rows), "%s", argv[4]);
+    snprintf(encoded_path_source, sizeof(encoded_path_source), "%s", argv[5]);
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int first_row = 1;
+    char* row_save = NULL;
+    char* row_text = strtok_r(encoded_rows, "|", &row_save);
+    while (row_text) {
+        long open_value = 0;
+        long line_cap_value = 0;
+        long line_join_value = 0;
+        if (sscanf(row_text, "%ld,%ld,%ld", &open_value, &line_cap_value, &line_join_value) != 3) {
+            return 2;
+        }
+        FT_Bool open = (FT_Bool)open_value;
+        FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)line_cap_value;
+        FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)line_join_value;
+        FT_Bool handle_wide_strokes =
+            ( line_join != FT_STROKER_LINEJOIN_ROUND ||
+              ( open && line_cap == FT_STROKER_LINECAP_BUTT ) );
+        char encoded_path[8192];
+        snprintf(encoded_path, sizeof(encoded_path), "%s", encoded_path_source);
+
+        FT_Library library = NULL;
+        FT_Error status = FT_Init_FreeType(&library);
+        FT_Stroker stroker = NULL;
+        if (!status) status = FT_Stroker_New(library, &stroker);
+        FT_Error status_sequence[256] = {0};
+        int status_count = 0;
+        FT_Vector exported_points[512] = {0};
+        unsigned char exported_tags[512] = {0};
+        unsigned short exported_contours[64] = {0};
+        FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+
+        if (!status && stroker) {
+            FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+            char* record_save = NULL;
+            char* record = strtok_r(encoded_path, "|", &record_save);
+            int began = 0;
+            FT_Error segment_status = FT_Err_Ok;
+            while (record && !segment_status) {
+                char op = record[0];
+                long x0 = 0, y0 = 0, x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                if (op == 'M') {
+                    if (sscanf(record, "M,%ld,%ld", &x0, &y0) != 2) return 2;
+                    FT_Vector to = { x0, y0 };
+                    segment_status = FT_Stroker_BeginSubPath(stroker, &to, open);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                    began = 1;
+                } else if (op == 'L') {
+                    if (!began || sscanf(record, "L,%ld,%ld", &x0, &y0) != 2) return 2;
+                    FT_Vector to = { x0, y0 };
+                    segment_status = FT_Stroker_LineTo(stroker, &to);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                } else if (op == 'Q') {
+                    if (!began || sscanf(record, "Q,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1) != 4) return 2;
+                    FT_Vector control = { x0, y0 };
+                    FT_Vector to = { x1, y1 };
+                    segment_status = FT_Stroker_ConicTo(stroker, &control, &to);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                } else if (op == 'C') {
+                    if (!began || sscanf(record, "C,%ld,%ld,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1, &x2, &y2) != 6) return 2;
+                    FT_Vector control1 = { x0, y0 };
+                    FT_Vector control2 = { x1, y1 };
+                    FT_Vector to = { x2, y2 };
+                    segment_status = FT_Stroker_CubicTo(stroker, &control1, &control2, &to);
+                    if (status_count < 256) status_sequence[status_count++] = segment_status;
+                } else {
+                    return 2;
+                }
+                record = strtok_r(NULL, "|", &record_save);
+            }
+            status = segment_status ? segment_status : FT_Stroker_EndSubPath(stroker);
+            if (status_count < 256) status_sequence[status_count++] = status;
+            FT_UInt points = 0;
+            FT_UInt contours = 0;
+            if (!status) status = FT_Stroker_GetCounts(stroker, &points, &contours);
+            if (!status) FT_Stroker_Export(stroker, &exported);
+        }
+        if (stroker) FT_Stroker_Done(stroker);
+        if (library) FT_Done_FreeType(library);
+
+        if (!first_row) printf(",");
+        first_row = 0;
+        printf("{\"status_sequence\":[");
+        for (int i = 0; i < status_count; i++) {
+            if (i) printf(",");
+            printf("%d", status_sequence[i]);
+        }
+        printf("],\"wide_stroke_class\":\"%s\",\"exported_outline\":",
+               handle_wide_strokes ? "active" : "inactive");
+        print_stroker_outline_value(&exported);
+        printf("}");
+        row_text = strtok_r(NULL, "|", &row_save);
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -28056,6 +28163,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 6 && streq(argv[1], "--stroker-wide-curve")) {
         return emit_stroker_wide_curve(argc, argv);
+    }
+    if (argc == 6 && streq(argv[1], "--stroker-begin-subpath-wide-stroke")) {
+        return emit_stroker_begin_subpath_wide_stroke(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-miter-join-alias")) {
         return emit_stroker_miter_join_alias(argc, argv);

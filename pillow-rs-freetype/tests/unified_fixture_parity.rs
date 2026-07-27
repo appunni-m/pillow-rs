@@ -26035,6 +26035,17 @@ fn is_stroker_begin_subpath_initial_state_case(case: &InputCase) -> bool {
     )
 }
 
+fn is_stroker_begin_subpath_wide_stroke_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join"
+}
+
+#[derive(Debug, Clone, Copy)]
+struct StrokerWideStrokeRow {
+    open: bool,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+}
+
 fn stroker_begin_subpath_params(case: &InputCase) -> Result<StrokerBeginSubPathParams, String> {
     let params = &case.inputs.params;
     let start = stroker_vector_param(params, "start", FT_Vector { x: 0, y: 0 })?;
@@ -26069,6 +26080,32 @@ fn stroker_begin_subpath_params(case: &InputCase) -> Result<StrokerBeginSubPathP
         miter_limit,
         commands,
     })
+}
+
+fn stroker_begin_subpath_wide_stroke_rows(
+    case: &InputCase,
+) -> Result<Vec<StrokerWideStrokeRow>, String> {
+    array_param(&case.inputs.params, "rows")?
+        .iter()
+        .map(|row| {
+            let open = bool_param(row, "open", false)?;
+            let line_cap = stroker_line_cap_value(
+                row.get("line_cap")
+                    .and_then(Value::as_str)
+                    .unwrap_or("FT_STROKER_LINECAP_ROUND"),
+            )?;
+            let line_join = stroker_line_join_value(
+                row.get("line_join")
+                    .and_then(Value::as_str)
+                    .unwrap_or("FT_STROKER_LINEJOIN_ROUND"),
+            )?;
+            Ok(StrokerWideStrokeRow {
+                open,
+                line_cap,
+                line_join,
+            })
+        })
+        .collect()
 }
 
 fn i64_value_or_default(value: Option<&Value>, key: &str, default: i64) -> Result<i64, String> {
@@ -26131,6 +26168,23 @@ fn stroker_begin_commands_arg(params: &StrokerBeginSubPathParams) -> String {
         })
         .collect::<Vec<_>>()
         .join("|")
+}
+
+fn stroker_wide_stroke_rows_arg(rows: &[StrokerWideStrokeRow]) -> String {
+    rows.iter()
+        .map(|row| format!("{},{},{}", i32::from(row.open), row.line_cap, row.line_join))
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+fn stroker_wide_stroke_class(row: StrokerWideStrokeRow) -> &'static str {
+    if row.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int
+        || (row.open && row.line_cap == FT_STROKER_LINECAP_BUTT as FT_Int)
+    {
+        "active"
+    } else {
+        "inactive"
+    }
 }
 
 fn stroker_begin_subpath_output(
@@ -26347,6 +26401,236 @@ fn wasm_stroker_begin_subpath_initial_state(case: &InputCase) -> Result<RunOutpu
         ));
     }
     rust_stroker_begin_subpath_initial_state(case)
+}
+
+fn stroker_begin_subpath_wide_stroke_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn rust_stroker_begin_subpath_wide_stroke(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_begin_subpath_wide_stroke_case(case) {
+        return Err(format!(
+            "{} is not a maintained BeginSubPath wide-stroke route",
+            case.case_id
+        ));
+    }
+    let radius = i64_value_or_default(case.inputs.params.get("radius"), "radius", 64)?;
+    let miter_limit =
+        i64_value_or_default(case.inputs.params.get("miter_limit"), "miter_limit", 65_536)?;
+    let ops = stroker_manual_single_path(case)?;
+    let Some(StrokerPathOp::Move(start)) = ops.first() else {
+        return Err("wide-stroke path must begin with move".to_string());
+    };
+    let mut output_rows = Vec::new();
+    for row in stroker_begin_subpath_wide_stroke_rows(case)? {
+        let library = FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            output_rows.push(json!({
+                "status_sequence": [new_error],
+                "wide_stroke_class": stroker_wide_stroke_class(row),
+                "exported_outline": outline_snapshot_json(&FT_OutlineSnapshot::default())
+            }));
+            continue;
+        }
+        FT_Stroker_Set(stroker, radius, row.line_cap, row.line_join, miter_limit);
+        let begin_error =
+            FT_Stroker_BeginSubPath(stroker, Some(start), if row.open { 1 } else { 0 });
+        let mut status_sequence = vec![begin_error];
+        let mut status = begin_error;
+        if status == FT_Err_Ok {
+            for op in &ops[1..] {
+                status = match op {
+                    StrokerPathOp::Move(_) => {
+                        FT_Stroker_Done(stroker);
+                        return Err("wide-stroke path contains nested move".to_string());
+                    }
+                    StrokerPathOp::Line(to) => FT_Stroker_LineTo(stroker, Some(to)),
+                    StrokerPathOp::Conic { control, to } => {
+                        FT_Stroker_ConicTo(stroker, Some(control), Some(to))
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => FT_Stroker_CubicTo(stroker, Some(control1), Some(control2), Some(to)),
+                };
+                status_sequence.push(status);
+                if status != FT_Err_Ok {
+                    break;
+                }
+            }
+        }
+        let end_error = if status == FT_Err_Ok {
+            FT_Stroker_EndSubPath(stroker)
+        } else {
+            status
+        };
+        status_sequence.push(end_error);
+        let mut point_count = 0;
+        let mut contour_count = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+        } else {
+            end_error
+        };
+        let mut exported = FT_OutlineSnapshot::default();
+        if counts_error == FT_Err_Ok {
+            FT_Stroker_Export(stroker, Some(&mut exported));
+        }
+        FT_Stroker_Done(stroker);
+        output_rows.push(json!({
+            "status_sequence": status_sequence,
+            "wide_stroke_class": stroker_wide_stroke_class(row),
+            "exported_outline": outline_snapshot_json(&exported)
+        }));
+    }
+    Ok(stroker_begin_subpath_wide_stroke_output(output_rows))
+}
+
+fn c_stroker_begin_subpath_wide_stroke(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_begin_subpath_wide_stroke_case(case) {
+        return Err(format!(
+            "{} is not a maintained BeginSubPath wide-stroke route",
+            case.case_id
+        ));
+    }
+    let radius = i64_value_or_default(case.inputs.params.get("radius"), "radius", 64)?;
+    let miter_limit =
+        i64_value_or_default(case.inputs.params.get("miter_limit"), "miter_limit", 65_536)?;
+    let ops = stroker_manual_single_path(case)?;
+    let Some(StrokerPathOp::Move(start)) = ops.first() else {
+        return Err("wide-stroke path must begin with move".to_string());
+    };
+    let mut output_rows = Vec::new();
+    for row in stroker_begin_subpath_wide_stroke_rows(case)? {
+        let mut library = ptr::null_mut();
+        let init_error = c_abi::FT_Init_FreeType(&mut library);
+        if init_error != FT_Err_Ok {
+            output_rows.push(json!({
+                "status_sequence": [init_error],
+                "wide_stroke_class": stroker_wide_stroke_class(row),
+                "exported_outline": empty_outline_json()
+            }));
+            continue;
+        }
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            c_done_library(library);
+            output_rows.push(json!({
+                "status_sequence": [new_error],
+                "wide_stroke_class": stroker_wide_stroke_class(row),
+                "exported_outline": empty_outline_json()
+            }));
+            continue;
+        }
+        c_abi::FT_Stroker_Set(stroker, radius, row.line_cap, row.line_join, miter_limit);
+        let c_start = c_abi::FT_Vector {
+            x: start.x,
+            y: start.y,
+        };
+        let begin_error =
+            c_abi::FT_Stroker_BeginSubPath(stroker, &c_start, if row.open { 1 } else { 0 });
+        let mut status_sequence = vec![begin_error];
+        let mut status = begin_error;
+        if status == FT_Err_Ok {
+            for op in &ops[1..] {
+                status = match op {
+                    StrokerPathOp::Move(_) => {
+                        c_abi::FT_Stroker_Done(stroker);
+                        c_done_library(library);
+                        return Err("wide-stroke path contains nested move".to_string());
+                    }
+                    StrokerPathOp::Line(to) => {
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_LineTo(stroker, &to)
+                    }
+                    StrokerPathOp::Conic { control, to } => {
+                        let control = c_abi::FT_Vector {
+                            x: control.x,
+                            y: control.y,
+                        };
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_ConicTo(stroker, &control, &to)
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => {
+                        let control1 = c_abi::FT_Vector {
+                            x: control1.x,
+                            y: control1.y,
+                        };
+                        let control2 = c_abi::FT_Vector {
+                            x: control2.x,
+                            y: control2.y,
+                        };
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_CubicTo(stroker, &control1, &control2, &to)
+                    }
+                };
+                status_sequence.push(status);
+                if status != FT_Err_Ok {
+                    break;
+                }
+            }
+        }
+        let end_error = if status == FT_Err_Ok {
+            c_abi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            status
+        };
+        status_sequence.push(end_error);
+        let mut point_count = 0;
+        let mut contour_count = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+        } else {
+            end_error
+        };
+        let mut exported_points = [c_abi::FT_Vector::default(); 512];
+        let mut exported_tags = [0u8; 512];
+        let mut exported_contours = [0u16; 64];
+        let mut exported = c_empty_outline(
+            &mut exported_points,
+            &mut exported_tags,
+            &mut exported_contours,
+        );
+        if counts_error == FT_Err_Ok {
+            c_abi::FT_Stroker_Export(stroker, &mut exported);
+        }
+        let outline = c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        );
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        output_rows.push(json!({
+            "status_sequence": status_sequence,
+            "wide_stroke_class": stroker_wide_stroke_class(row),
+            "exported_outline": outline
+        }));
+    }
+    Ok(stroker_begin_subpath_wide_stroke_output(output_rows))
+}
+
+fn wasm_stroker_begin_subpath_wide_stroke(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_begin_subpath_wide_stroke_case(case) {
+        return Err(format!(
+            "{} is not a maintained BeginSubPath wide-stroke route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_cubic_success() {
+        rust_stroker_begin_subpath_wide_stroke(case)
+    } else {
+        Err("unsupported BeginSubPath wide-stroke route".to_string())
+    }
 }
 
 fn stroker_open_line_geometry_output(
@@ -34471,6 +34755,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 stroker_begin_commands_arg(&params),
             ])
         }
+        "ftstroke.begin_subpath_wide_stroke" if is_stroker_begin_subpath_wide_stroke_case(case) => {
+            let rows = stroker_begin_subpath_wide_stroke_rows(case)?;
+            Ok(vec![
+                "--stroker-begin-subpath-wide-stroke".to_string(),
+                i64_value_or_default(case.inputs.params.get("radius"), "radius", 64)?.to_string(),
+                i64_value_or_default(case.inputs.params.get("miter_limit"), "miter_limit", 65_536)?
+                    .to_string(),
+                stroker_wide_stroke_rows_arg(&rows),
+                stroker_single_path_arg(case)?,
+            ])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -36173,6 +36468,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
             rust_stroker_begin_subpath_initial_state(case)
         }
+        "ftstroke.begin_subpath_wide_stroke" if is_stroker_begin_subpath_wide_stroke_case(case) => {
+            rust_stroker_begin_subpath_wide_stroke(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -37407,6 +37705,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
             c_stroker_begin_subpath_initial_state(case)
         }
+        "ftstroke.begin_subpath_wide_stroke" if is_stroker_begin_subpath_wide_stroke_case(case) => {
+            c_stroker_begin_subpath_wide_stroke(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -38535,6 +38836,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.begin_subpath" if is_stroker_begin_subpath_initial_state_case(case) => {
             wasm_stroker_begin_subpath_initial_state(case)
+        }
+        "ftstroke.begin_subpath_wide_stroke" if is_stroker_begin_subpath_wide_stroke_case(case) => {
+            wasm_stroker_begin_subpath_wide_stroke(case)
         }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"

@@ -215,11 +215,13 @@
           "paths": {
             "kind": "ref",
             "id": "outlines/stroker/wide-curve-joins.json",
-            "asset_kind": "outline_path_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_path_records"
           }
         },
         "params": {
+          "path": "wide_curve_negative_sector",
+          "radius": 64,
+          "miter_limit": 65536,
           "rows": [
             {
               "open": false,
