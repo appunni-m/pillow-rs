@@ -11,6 +11,9 @@ use serde_json::Value;
 #[path = "support/font_runner.rs"]
 mod font_runner;
 
+const NO_LIBRAQM_MESSAGE: &str =
+    "'setting text direction, language or font features is not supported without libraqm'";
+
 const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
     "error",
     "expect_error",
@@ -1811,6 +1814,34 @@ fn assert_raqm_rows_use_dedicated_core_error(cases: &[Value], fixture_root: &Pat
     );
 }
 
+fn assert_libraqm_error_contract_is_hard_coded() {
+    assert_eq!(
+        pillow_rs::PilError::UnsupportedLibraqm.to_string(),
+        NO_LIBRAQM_MESSAGE,
+        "PilError::UnsupportedLibraqm must keep Pillow's no-libraqm message hard-coded in core"
+    );
+
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let py_binding = fs::read_to_string(repo_root.join("pillow-rs-py/src/lib.rs"))
+        .expect("Python binding source must be readable");
+    assert!(
+        py_binding.contains("PilError::UnsupportedLibraqm")
+            && py_binding.contains("pyo3::exceptions::PyKeyError::new_err"),
+        "Python binding must expose PilError::UnsupportedLibraqm as Pillow-compatible KeyError"
+    );
+
+    let js_binding = fs::read_to_string(repo_root.join("pillow-rs-js/src/lib.rs"))
+        .expect("JavaScript binding source must be readable");
+    assert!(
+        js_binding.contains("pillow_rs::PilError::UnsupportedLibraqm")
+            && js_binding.contains("\"KeyError\""),
+        "JavaScript binding must classify PilError::UnsupportedLibraqm as KeyError"
+    );
+}
+
 #[test]
 fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let root = fixture_root();
@@ -1853,6 +1884,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
     assert_documented_blocked_public_parameters();
     assert_blocked_public_parameters_have_active_dependency_blockers();
+    assert_libraqm_error_contract_is_hard_coded();
     assert_raqm_rows_use_dedicated_core_error(&cases, &root);
 
     let observed = cases
