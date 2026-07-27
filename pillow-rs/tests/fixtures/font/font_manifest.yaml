@@ -179,10 +179,10 @@ public_method_parameters:
     covered:
       - font
       - size
-    blocked:
       - index
       - encoding
       - layout_engine
+    blocked: []
 input_files:
   - font.ImageFont.getbbox.json
   - font.ImageFont.info.json

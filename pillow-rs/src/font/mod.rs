@@ -15,6 +15,20 @@ pub struct ImageFont {
     engine: imagingft::TrueTypeEngine,
 }
 
+/// Optional Pillow `ImageFont.truetype()` constructor arguments.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ImageFontLoadOptions {
+    /// Pillow `index` argument, selecting a face from a collection.
+    pub index: Option<usize>,
+    /// Pillow `encoding` argument. The BASIC Unicode-compatible Rust path
+    /// preserves this as a public API option while selecting the Unicode
+    /// charmap, matching the active Pillow oracle rows.
+    pub encoding: Option<String>,
+    /// Pillow `layout_engine` argument. In the no-raqm oracle configuration,
+    /// Pillow accepts this and falls back to BASIC layout.
+    pub layout_engine: Option<String>,
+}
+
 /// One Pillow `FreeTypeFont.get_variation_axes()` axis record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImageFontVariationAxis {
@@ -79,6 +93,15 @@ impl ImageFont {
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
         imagingft::load_truetype(data, size)
+    }
+
+    /// Load a TrueType/OpenType face from bytes using Pillow constructor options.
+    pub fn from_bytes_with_options(
+        data: Vec<u8>,
+        size: f32,
+        options: &ImageFontLoadOptions,
+    ) -> Result<Self, PilError> {
+        imagingft::load_truetype_with_options(data, size, options)
     }
 
     /// Loads the same embedded Aileron Regular subset as Pillow 12.2.0.

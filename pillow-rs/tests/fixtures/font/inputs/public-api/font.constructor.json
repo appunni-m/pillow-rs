@@ -61,6 +61,54 @@
       }
     },
     {
+      "case_id": "font.constructor.truetype_dejavusans_index_0",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "index": 0
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.truetype_dejavusans_encoding_empty",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "encoding": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.constructor.truetype_dejavusans_layout_raqm_fallback",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "layout_engine": "RAQM"
+        }
+      }
+    },
+    {
       "case_id": "font.constructor.font_size_default_10",
       "operation": "font_size",
       "inputs": {

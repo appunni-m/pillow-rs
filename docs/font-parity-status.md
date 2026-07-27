@@ -81,12 +81,14 @@ surface. This prevents hidden manifest drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
 exclusion is successful libraqm shaping; `direction`, `features`, and
 `language` no-libraqm error rows remain active parity rows.
-For covered public parameters, the verifier now requires 73 concrete values
+For covered public parameters, the verifier now requires 76 concrete values
 from the active corpus. This includes no-libraqm values
 (`direction="rtl"`, `language="en"`, `features=[]`, and
 `features=["-kern"]` where accepted) plus the currently exercised
 `stroke_width`, `anchor`, `start`, `ink`, `args`, `kwargs`, and
-`font_variant(layout_engine)` values.
+`font_variant(layout_engine)` values. It also now requires active
+`truetype(index=0)`, `truetype(encoding="")`, and
+`truetype(layout_engine=RAQM)` rows.
 The test also queries the live `PIL.ImageFont.Layout` enum and requires exactly
 `BASIC` and `RAQM`; active `font_variant` rows must exercise both values while
 successful RAQM shaping remains the only layout behavior outside the target.
@@ -111,9 +113,6 @@ Current blocked public parameters:
 - `TransposedFont.getlength.kwargs`
 - `TransposedFont.getmask.args`
 - `TransposedFont.getmask.kwargs`
-- `truetype.encoding`
-- `truetype.index`
-- `truetype.layout_engine`
 
 ## Missing implementation
 
@@ -122,12 +121,6 @@ The remaining non-libraqm public parity gaps are:
 - Arbitrary `*args`/`**kwargs` pass-through on bitmap `ImageFont` and
   `TransposedFont` methods. Pillow accepts these at the Python wrapper layer;
   Rust currently exposes only the effective text/mode/orientation behavior.
-- `truetype(index, encoding, layout_engine)` as an explicit Rust public API.
-  Rust currently exposes repo-root font loading from bytes plus size, while
-  bindings own file-path translation. To match the `PIL.ImageFont.truetype`
-  surface as a Rust public API, root `pillow-rs` needs a structured constructor
-  option type that includes index/encoding/layout engine without adding path I/O
-  to core.
 - general `stroke_width != 0` for all visible glyph outlines. The active Font
   corpus now includes the maintained lower-level DejaVuSans `"A"` route at
   `stroke_width=1.5`; broader stroked glyph coverage still depends on the

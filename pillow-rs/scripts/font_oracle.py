@@ -133,10 +133,17 @@ def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
         return value
 
     if font["kind"] == "ref":
+        kwargs: dict[str, Any] = {"layout_engine": ImageFont.Layout.BASIC}
+        if "index" in params:
+            kwargs["index"] = params["index"]
+        if "encoding" in params:
+            kwargs["encoding"] = params["encoding"]
+        if "layout_engine" in params:
+            kwargs["layout_engine"] = layout_engine(params["layout_engine"], ImageFont)
         loaded = ImageFont.truetype(
             FIXTURE_ROOT / font["id"],
             size,
-            layout_engine=ImageFont.Layout.BASIC,
+            **kwargs,
         )
         ensure_c_font_path(loaded)
         return loaded

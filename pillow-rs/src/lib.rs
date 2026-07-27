@@ -145,6 +145,7 @@ pub use crate::draw::Draw;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::ImageFont;
+pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxis;
@@ -221,6 +222,15 @@ pub use crate::pipeline::ResampleFilter;
 /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
 pub fn font_from_bytes(data: Vec<u8>, size: f32) -> Result<ImageFont, PilError> {
     ImageFont::from_bytes(data, size)
+}
+
+/// Load a TrueType/OpenType face from bytes with Pillow constructor options.
+pub fn font_from_bytes_with_options(
+    data: Vec<u8>,
+    size: f32,
+    options: &ImageFontLoadOptions,
+) -> Result<ImageFont, PilError> {
+    ImageFont::from_bytes_with_options(data, size, options)
 }
 
 /// Loads the same embedded default font subset as Pillow.
