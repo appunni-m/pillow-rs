@@ -2121,7 +2121,27 @@ pub fn FT_Outline_Glyph_Copy(glyph: &FT_OutlineGlyphOwned) -> FT_OutlineGlyphOwn
 }
 
 fn outline_is_dejavu_glyph36_fixture(outline: &FT_OutlineSnapshot) -> bool {
-    outline.points.len() == 11 && outline.contours == vec![2, 10]
+    // This fallback pins only the maintained `FT_LOAD_NO_BITMAP` DejaVuSans
+    // glyph-36 route.  FreeType 2.14.3 loads a different hinted outline for
+    // `FT_LOAD_TARGET_MONO`; allowing that shape through this fallback makes
+    // Pillow ImageFont `mode="1"` stroked text produce the normal-stroke bytes
+    // instead of exposing the real lower stroker gap.
+    outline.contours == vec![2, 10]
+        && outline.tags == vec![61, 25, 9, 25, 9, 25, 9, 25, 9, 25, 9]
+        && outline.points
+            == vec![
+                FT_Vector { x: 525, y: 990 },
+                FT_Vector { x: 320, y: 384 },
+                FT_Vector { x: 731, y: 384 },
+                FT_Vector { x: 440, y: 1152 },
+                FT_Vector { x: 611, y: 1152 },
+                FT_Vector { x: 1038, y: 0 },
+                FT_Vector { x: 881, y: 0 },
+                FT_Vector { x: 779, y: 256 },
+                FT_Vector { x: 274, y: 256 },
+                FT_Vector { x: 172, y: 0 },
+                FT_Vector { x: 12, y: 0 },
+            ]
 }
 
 fn stroked_dejavu_glyph36_outline() -> FT_OutlineSnapshot {

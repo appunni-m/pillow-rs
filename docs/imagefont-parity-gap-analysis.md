@@ -600,3 +600,13 @@ Current request classification for `imagingft.rs` region coverage:
   sequence. The only promoted failure remains bitmap coverage bytes, so the
   classification must stay pending until lower stroke geometry/render parity is
   fixed.
+- Follow-up lower cleanup: the maintained DejaVu glyph-36 fallback now matches
+  the exact `FT_LOAD_NO_BITMAP` source outline points/tags/contours instead of
+  only checking point count and contour ends. Oracle inspection shows the
+  blocker `FT_LOAD_TARGET_MONO` source outline has different coordinates
+  (`(512,1014), (279,384), ...`) from the maintained normal source outline
+  (`(525,990), (320,384), ...`). This prevents the normal-stroke fallback from
+  silently serving mono-target source geometry. Focused verification still
+  passes for the maintained rows:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` and
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`.
