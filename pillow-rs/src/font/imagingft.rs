@@ -1108,20 +1108,14 @@ fn stroked_mask_from_run_with_start(
     let expected_h = ((bbox.3 - bbox.1) as f32 + stroke_width * 2.0)
         .ceil()
         .max(0.0) as i32;
-    let actual_w = x_max - x_min;
-    let actual_h = y_max - y_min;
     // Pillow 12.2.0 `_imagingft.c::font_render_impl` allocates from
     // `bounding_box_and_anchors` and clips stroked glyph writes to that target.
     // The current pure-Rust stroker can produce a larger bitmap than the
-    // bbox-derived target for the active DejaVuSans "A" stroke row; keep this
-    // compatibility clip visible until lower stroker/bbox parity removes the
-    // mismatch at the source.
-    if expected_w < actual_w {
-        x_max -= actual_w - expected_w;
-    }
-    if expected_h < actual_h {
-        y_max -= actual_h - expected_h;
-    }
+    // bbox-derived target for the active DejaVuSans "A" stroke row, so keep
+    // the public allocation bounded by Pillow's bbox-derived dimensions until
+    // lower stroker/bbox parity removes the mismatch at the source.
+    x_max = x_min + (x_max - x_min).min(expected_w);
+    y_max = y_min + (y_max - y_min).min(expected_h);
 
     let start_width = start.0.ceil() as i32;
     let start_height = start.1.ceil() as i32;
