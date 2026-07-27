@@ -178,7 +178,7 @@ Coverage MCP reports 13 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 5 un
 
 | Rust line(s) | Rust logic | Pillow 12.2.0 reference | Analysis | Required action |
 |---:|---|---|---|---|
-| `91`, `92`, `253`, `271` | Complete FreeType 2.14.3 error message table data / table declaration. | `_imagingft.c::geterror` builds the table from FreeType `FT_ERRORS_H` and raises `OSError`; unknown table misses use `"unknown freetype error"`. | Rust is source-aligned and data-driven. The new `font.getlength.hinter_too_many_instruction_defs` row proves the public Pillow/Rust error payload for `FT_Err_Too_Many_Instruction_Defs`, but LLVM still reports static table line `253` as uncovered because the table data itself is not attributed as executed. | Treat line `253` as behaviorally proven through public `ImageFont` error parity but still LLVM-uncovered. Add future rows only for real remaining public errors such as `Invalid_Horiz_Metrics` or table-miss behavior. |
+| `91`, `92`, `253`, `271` | Complete FreeType 2.14.3 error message table data / table declaration. | `_imagingft.c::geterror` builds the table from FreeType `FT_ERRORS_H` and raises `OSError`; unknown table misses use `"unknown freetype error"`. | Rust is source-aligned and data-driven. The new `font.getlength.hinter_too_many_instruction_defs` row proves the public Pillow/Rust error payload for `FT_Err_Too_Many_Instruction_Defs`, but LLVM still reports static table line `253` as uncovered because the table data itself is not attributed as executed. `FT_Err_Invalid_Horiz_Metrics` is a FreeType-origin error, so a valid coverage row must originate from a real lower `pillow-rs-freetype` SFNT fixture and then be observed through Pillow/ImageFont if Pillow exposes it. The current lower fixture row names `fonts/synthetic/sfnt/invalid-hmtx-counts.ttf`, but that asset is not checked in and the row is still marked `unsupported_until_runner_added`. A direct Pillow 12.2.0 probe with simple `hhea.numberOfHMetrics` and `hmtx` length mutations loaded and rendered successfully, so those mutations are not acceptable ImageFont parity inputs. | Treat line `253` as behaviorally proven through public `ImageFont` error parity but still LLVM-uncovered. Do not add an ImageFont row for `Invalid_Horiz_Metrics` until `pillow-rs-freetype` has a maintained synthetic SFNT generator plus a runnable lower FreeType parity row proving pinned C returns `FT_Err_Invalid_Horiz_Metrics` for that exact asset. |
 | `796` | Constant/section instrumentation around FFI helper declarations. | Not a Pillow behavior. | Coverage marks a partial branch here due LLVM segment normalization, not a meaningful behavior gap. | No product action. |
 | `826`, `829` | `floor26` / `ceil26` 26.6 conversion helper branch instrumentation. | Pillow BASIC layout converts 26.6 values through `PIXEL(...)`-style rounding in `_imagingft.c`. | Partial markers mean current inputs do not hit every conversion-region shape. This is not an independent feature but can hide bbox/offset rounding differences. | Add targeted bbox/mask rows with negative bearings, fractional starts, ascenders/descenders, and kerning pairs. |
 | `928` | Branch in BASIC glyph run construction around previous-glyph kerning. | `_imagingft.c::text_layout_fallback` only adds kerning when a previous glyph exists. | Additional `mode="1"` rows for `AV` and `jQ` now prove public mono load-flag parity across length, bbox, mask, and mask2, but Coverage MCP still reports this line as partial. The remaining marker is therefore not removable by duplicate mono fixture expansion. | Keep this as a coverage artifact/branch-marker gap unless source-context evidence identifies a distinct public input. Do not add more duplicate BASIC rows only to chase this line. |
@@ -246,6 +246,21 @@ Remaining risk: fixtures need more independent kerning/no-kerning and missing-gl
 Rust maps FreeType 2.14.3 errors through a full table and returns `PilError::OsError`, matching Pillow's broad `OSError` behavior.
 
 Remaining risk: rare FreeType errors are present as table data but not all are reachable through current public ImageFont fixtures. They should only be added if a real Pillow input can trigger them.
+
+Layering decision for `FT_Err_Invalid_Horiz_Metrics`: this is not an
+`imagingft.rs` implementation gap by itself. FreeType's `sfnt/ttload.c` and
+TrueType metrics loader own the original behavior, so the first required fix is
+lower-layer: add or regenerate a maintained synthetic SFNT asset under
+`pillow-rs-freetype` that pinned C FreeType rejects with
+`FT_Err_Invalid_Horiz_Metrics`, then promote the existing lower fixture row from
+`unsupported_until_runner_added` to exact runtime parity. Only after that lower
+row is real should the same asset be imported into the ImageFont corpus, and
+only if Pillow 12.2.0 exposes the same public `OSError("invalid horizontal
+metrics")` through `PIL.ImageFont.truetype` or a public font method. Simple
+mutations of `hhea.numberOfHMetrics` and the `hmtx` directory length were probed
+against the repo Pillow 12.2.0 oracle and did not trigger this public error;
+they loaded and rendered successfully, so using them as ImageFont rows would be
+false coverage.
 
 Resolved during the latest pass: the new `font.load_failure.missing_hmtx_table` row imports the maintained FreeType `missing-hmtx.ttf` fixture into the Font corpus. Pillow returns `OSError("horizontal metrics (hmtx) table missing")`; Rust previously returned `OSError("broken file")` because `fontdone::ffi::error_to_ft` mapped every `FontError::InvalidFont(_)` to `FT_Err_Invalid_File_Format`. The fix adds the specific `FT_Err_Hmtx_Table_Missing` mapping before the generic fallback. Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` branch is executed.
 
