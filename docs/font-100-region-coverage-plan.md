@@ -1,6 +1,29 @@
-# Font 100% Region Coverage Plan
+# PIL.ImageFont 100% Region Coverage Plan
 
-Last updated: 2026-07-26 (Asia/Kolkata)
+Last updated: 2026-07-27 (Asia/Kolkata)
+
+## Current target clarification: PIL.ImageFont, not FreeType-only
+
+This plan is now scoped to the full public `PIL.ImageFont` module behavior.
+`ImageFont.FreeTypeFont`, `_imagingft.c`, and `pillow-rs-freetype` are
+implementation routes inside that target, not the target itself.
+
+The only explicit out-of-scope area is successful libraqm shaping. Inputs that
+use `direction`, `features`, or `language` without libraqm remain in scope and
+must match Pillow's runtime error behavior exactly.
+
+Coverage work must therefore be tied back to one of these:
+
+- an active input-only fixture row under
+  `pillow-rs/tests/fixtures/font/inputs/public-api`;
+- a manifest-enforced `PIL.ImageFont` public operation/parameter in
+  `pillow-rs/tests/fixtures/font/font_manifest.yaml`;
+- a documented lower-level blocker that prevents a specific public
+  `PIL.ImageFont` row from passing.
+
+Do not use `_imagingft` or `pillow-rs-freetype` coverage alone to claim Font
+completion. Those measurements are useful only when they explain or unlock the
+public `PIL.ImageFont` behavior.
 
 ## Execution status update: 2026-07-26
 
