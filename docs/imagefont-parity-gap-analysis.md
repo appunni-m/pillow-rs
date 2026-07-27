@@ -83,13 +83,13 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Latest measured code Coverage MCP run: `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`
+Latest measured code Coverage MCP run: `d0132f79-3bb0-42e8-bf50-5e22b091b19d`
 
-Latest measured code Coverage MCP snapshot: `26484398-df28-4103-9a43-44331068fade`
+Latest measured code Coverage MCP snapshot: `f0e57660-bb40-418e-ac55-2788b7c4cf14`
 
-Latest direct imagingft Coverage MCP run: `c9b7785b-1e94-4c67-9b42-7eacea698531`
+Latest direct imagingft Coverage MCP run: `5df681fa-be65-43af-b99b-683bb7887f85`
 
-Latest direct imagingft Coverage MCP snapshot: `3246085e-cbd3-437e-969c-36944d680bd7`
+Latest direct imagingft Coverage MCP snapshot: `8c59b014-0d64-467a-ba5c-80fae53637ef`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -149,16 +149,16 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 439 input-only rows execute.
-- 439 rows match live Pillow 12.2.0 exactly.
+- 441 input-only rows execute.
+- 441 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Latest measured code Coverage MCP command
   `font-tests-coverage-with-freetype-pillow-12-2` passed at commit
-  `53d3b0a07114fcc032498dd6b59626a2dc8809e5` and ingested
-  snapshot `26484398-df28-4103-9a43-44331068fade` from run
-  `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`. Direct `imagingft.rs` coverage
+  `cb56633d7bf9a43d57e4804dcee6cbb19c294318` and ingested
+  snapshot `f0e57660-bb40-418e-ac55-2788b7c4cf14` from run
+  `d0132f79-3bb0-42e8-bf50-5e22b091b19d`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
@@ -167,14 +167,22 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   with adjacent behavior lines already hit. No current gap identifies an
   adapter-owned Pillow `_imagingft.c` behavior miss.
 - Direct compatibility command `imagingft-tests-coverage-fixed` passed at
-  commit `41aadb6718f225e8e508da458c1fab6d5b051be5` and ingested snapshot
-  `3246085e-cbd3-437e-969c-36944d680bd7` from run
-  `c9b7785b-1e94-4c67-9b42-7eacea698531`. In the direct `imagingft` suite,
+  commit `cb56633d7bf9a43d57e4804dcee6cbb19c294318` and ingested snapshot
+  `8c59b014-0d64-467a-ba5c-80fae53637ef` from run
+  `5df681fa-be65-43af-b99b-683bb7887f85`. In the direct `imagingft` suite,
   `imagingft.rs` coverage is `1347/1394` lines, `210/232` branches,
   `135/146` functions, and `2140/2256` regions. This narrower suite excludes
   lower `pillow-rs-freetype` coverage and is retained as a compatibility view;
   the Font-with-FreeType suite above is the project evidence for public
   ImageFont behavior flowing through the lower font implementation.
+- Commit `cb56633d7` adds two input-only native variation rows:
+  `font.native_setvaraxes.variable_named_instances_empty_reset` and
+  `font.native_setvaraxes.dejavusans_invalid_argument`. They prove Pillow
+  12.2.0 native `_imagingft.Font.setvaraxes` accepts an empty axis reset for a
+  variable font and raises `OSError("invalid argument")` for a non-variable
+  font. The rows pass live-oracle parity and increase the active corpus from
+  439 to 441 rows, but Coverage MCP confirms they do not change the remaining
+  LLVM-reported `imagingft.rs` region markers.
 - Commit `ccecf6682` removes the zero-flag `length_from_basic_layout` wrapper
   and routes the two BASIC length callers directly into
   `length_from_basic_layout_with_flags(..., 0)`. This is behavior-neutral and
@@ -995,7 +1003,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 439-row Font fixture corpus.
+The current implementation is good enough to trust the active 441-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
@@ -1302,15 +1310,15 @@ current blockers.
   `ImageDraw.text`, `multiline_text`, `textbbox`, `textlength`, and
   `multiline_textbbox` with `direction="rtl"` and verifies exact no-libraqm
   `KeyError` parity.
-- Latest measured code Coverage MCP audit after `53d3b0a07`: managed command
+- Latest measured code Coverage MCP audit after `cb56633d7`: managed command
   `font-tests-coverage-with-freetype-pillow-12-2` passed as run
-  `3328cd07-7a7b-47e5-9e8a-bc50612abf1e` and ingested snapshot
-  `26484398-df28-4103-9a43-44331068fade`. Direct `imagingft.rs` remains
+  `d0132f79-3bb0-42e8-bf50-5e22b091b19d` and ingested snapshot
+  `f0e57660-bb40-418e-ac55-2788b7c4cf14`. Direct `imagingft.rs` remains
   `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining markers are still `91`, `253`, `271`,
-  `796`, `826`, `829`, and `928`, so the ImageDraw facade fix did not regress
-  the core Font/ImageFont parity corpus or create a new adapter-owned coverage
-  gap.
+  `796`, `826`, `829`, and `928`, so the added native `setvaraxes` rows did
+  not regress the core Font/ImageFont parity corpus or create a new
+  adapter-owned coverage gap.
 - Follow-up audit after `022ead7d1`: Coverage MCP snapshot
   `fcb80e1b-dd82-4f58-b36b-e84e671737b4` reports direct `imagingft.rs`
   coverage at `1660/1682` lines, `249/254` branches, `162/173` functions, and
