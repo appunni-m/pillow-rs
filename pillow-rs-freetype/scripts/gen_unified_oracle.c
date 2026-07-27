@@ -20866,6 +20866,73 @@ static int emit_stroker_set_miter_limit(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_done_after_export(int argc, char** argv) {
+    if (argc != 3) return 2;
+    char encoded[8192];
+    snprintf(encoded, sizeof(encoded), "%s", argv[2]);
+
+    FT_Library library = NULL;
+    FT_Error status = FT_Init_FreeType(&library);
+    FT_Stroker stroker = NULL;
+    if (!status) status = FT_Stroker_New(library, &stroker);
+    FT_Vector exported_points[256] = {0};
+    unsigned char exported_tags[256] = {0};
+    unsigned short exported_contours[64] = {0};
+    FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+
+    if (!status && stroker) {
+        FT_Stroker_Set(stroker,
+                       96,
+                       FT_STROKER_LINECAP_ROUND,
+                       FT_STROKER_LINEJOIN_ROUND,
+                       65536);
+        char* record_save = NULL;
+        char* record = strtok_r(encoded, "|", &record_save);
+        int began = 0;
+        while (record && !status) {
+            char op = record[0];
+            long x0 = 0, y0 = 0, x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+            if (op == 'M') {
+                if (sscanf(record, "M,%ld,%ld", &x0, &y0) != 2) return 2;
+                FT_Vector to = { x0, y0 };
+                status = FT_Stroker_BeginSubPath(stroker, &to, 0);
+                began = 1;
+            } else if (op == 'L') {
+                if (!began || sscanf(record, "L,%ld,%ld", &x0, &y0) != 2) return 2;
+                FT_Vector to = { x0, y0 };
+                status = FT_Stroker_LineTo(stroker, &to);
+            } else if (op == 'Q') {
+                if (!began || sscanf(record, "Q,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1) != 4) return 2;
+                FT_Vector control = { x0, y0 };
+                FT_Vector to = { x1, y1 };
+                status = FT_Stroker_ConicTo(stroker, &control, &to);
+            } else if (op == 'C') {
+                if (!began || sscanf(record, "C,%ld,%ld,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1, &x2, &y2) != 6) return 2;
+                FT_Vector control1 = { x0, y0 };
+                FT_Vector control2 = { x1, y1 };
+                FT_Vector to = { x2, y2 };
+                status = FT_Stroker_CubicTo(stroker, &control1, &control2, &to);
+            } else {
+                return 2;
+            }
+            record = strtok_r(NULL, "|", &record_save);
+        }
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+        if (!status) FT_Stroker_Export(stroker, &exported);
+    }
+
+    printf("{");
+    print_status(status);
+    printf(",\"output\":{\"exported_outline_before_done\":");
+    print_stroker_outline_value(&exported);
+    if (stroker) FT_Stroker_Done(stroker);
+    if (library) FT_Done_FreeType(library);
+    printf(",\"exported_outline_after_done\":");
+    print_stroker_outline_value(&exported);
+    printf(",\"allocation_event_log\":\"stroker_done_releases_stroker_buffers_only\"}}\n");
+    return 0;
+}
+
 static int stroker_outline_equal(FT_Outline* a, FT_Outline* b) {
     if (a->n_points != b->n_points || a->n_contours != b->n_contours || a->flags != b->flags) {
         return 0;
@@ -28148,6 +28215,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-set-miter-limit")) {
         return emit_stroker_set_miter_limit(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-done-after-export")) {
+        return emit_stroker_done_after_export(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-miter-join-geometry")) {
         return emit_stroker_miter_join_geometry(argc, argv);

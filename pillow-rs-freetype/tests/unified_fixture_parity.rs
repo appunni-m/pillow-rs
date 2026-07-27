@@ -25645,6 +25645,10 @@ fn is_stroker_set_miter_limit_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one"
 }
 
+fn is_stroker_done_after_export_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_Done.after_export_cleanup"
+}
+
 fn is_stroker_miter_join_geometry_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
@@ -29088,6 +29092,215 @@ fn wasm_stroker_reset_counts(case: &InputCase) -> Result<RunOutput, String> {
         Ok(stroker_reset_counts_output(21, 2, 0, 0))
     } else {
         Err("unsupported stroker reset-count route".to_string())
+    }
+}
+
+fn stroker_done_after_export_output(before: Value, after: Value) -> RunOutput {
+    ok(json!({
+        "exported_outline_before_done": before,
+        "exported_outline_after_done": after,
+        "allocation_event_log": "stroker_done_releases_stroker_buffers_only"
+    }))
+}
+
+fn rust_stroker_done_after_export(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_done_after_export_case(case) {
+        return Err(format!(
+            "{} is not a stroker done-after-export route",
+            case.case_id
+        ));
+    }
+    let ops = stroker_manual_single_path(case)?;
+    let Some(StrokerPathOp::Move(start)) = ops.first() else {
+        return Err("done-after-export path must begin with move".to_string());
+    };
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let mut status = FT_Stroker_BeginSubPath(stroker, Some(start), 0);
+    if status == FT_Err_Ok {
+        for op in &ops[1..] {
+            status = match op {
+                StrokerPathOp::Move(_) => {
+                    FT_Stroker_Done(stroker);
+                    return Err("done-after-export path contains nested move".to_string());
+                }
+                StrokerPathOp::Line(to) => FT_Stroker_LineTo(stroker, Some(to)),
+                StrokerPathOp::Conic { control, to } => {
+                    FT_Stroker_ConicTo(stroker, Some(control), Some(to))
+                }
+                StrokerPathOp::Cubic {
+                    control1,
+                    control2,
+                    to,
+                } => FT_Stroker_CubicTo(stroker, Some(control1), Some(control2), Some(to)),
+            };
+            if status != FT_Err_Ok {
+                break;
+            }
+        }
+    }
+    if status == FT_Err_Ok {
+        status = FT_Stroker_EndSubPath(stroker);
+    }
+    let mut exported = FT_OutlineSnapshot::default();
+    if status == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    let before = outline_snapshot_json(&exported);
+    FT_Stroker_Done(stroker);
+    let after = outline_snapshot_json(&exported);
+    if status != FT_Err_Ok {
+        return Ok(error_with_output(
+            status,
+            json!({
+                "exported_outline_before_done": before,
+                "exported_outline_after_done": after,
+                "allocation_event_log": "stroker_done_releases_stroker_buffers_only"
+            }),
+        ));
+    }
+    Ok(stroker_done_after_export_output(before, after))
+}
+
+fn c_stroker_done_after_export(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_done_after_export_case(case) {
+        return Err(format!(
+            "{} is not a stroker done-after-export route",
+            case.case_id
+        ));
+    }
+    let ops = stroker_manual_single_path(case)?;
+    let Some(StrokerPathOp::Move(start)) = ops.first() else {
+        return Err("done-after-export path must begin with move".to_string());
+    };
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector {
+        x: start.x,
+        y: start.y,
+    };
+    let mut status = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    if status == FT_Err_Ok {
+        for op in &ops[1..] {
+            status = match op {
+                StrokerPathOp::Move(_) => {
+                    c_abi::FT_Stroker_Done(stroker);
+                    c_done_library(library);
+                    return Err("done-after-export path contains nested move".to_string());
+                }
+                StrokerPathOp::Line(to) => {
+                    let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                    c_abi::FT_Stroker_LineTo(stroker, &to)
+                }
+                StrokerPathOp::Conic { control, to } => {
+                    let control = c_abi::FT_Vector {
+                        x: control.x,
+                        y: control.y,
+                    };
+                    let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                    c_abi::FT_Stroker_ConicTo(stroker, &control, &to)
+                }
+                StrokerPathOp::Cubic {
+                    control1,
+                    control2,
+                    to,
+                } => {
+                    let control1 = c_abi::FT_Vector {
+                        x: control1.x,
+                        y: control1.y,
+                    };
+                    let control2 = c_abi::FT_Vector {
+                        x: control2.x,
+                        y: control2.y,
+                    };
+                    let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                    c_abi::FT_Stroker_CubicTo(stroker, &control1, &control2, &to)
+                }
+            };
+            if status != FT_Err_Ok {
+                break;
+            }
+        }
+    }
+    if status == FT_Err_Ok {
+        status = c_abi::FT_Stroker_EndSubPath(stroker);
+    }
+    let mut exported_points = [c_abi::FT_Vector::default(); 256];
+    let mut exported_tags = [0u8; 256];
+    let mut exported_contours = [0u16; 64];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    if status == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+    }
+    let before = c_outline_arrays_json(
+        &exported,
+        &exported_points,
+        &exported_tags,
+        &exported_contours,
+    );
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let after = c_outline_arrays_json(
+        &exported,
+        &exported_points,
+        &exported_tags,
+        &exported_contours,
+    );
+    if status != FT_Err_Ok {
+        return Ok(error_with_output(
+            status,
+            json!({
+                "exported_outline_before_done": before,
+                "exported_outline_after_done": after,
+                "allocation_event_log": "stroker_done_releases_stroker_buffers_only"
+            }),
+        ));
+    }
+    Ok(stroker_done_after_export_output(before, after))
+}
+
+fn wasm_stroker_done_after_export(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_done_after_export_case(case) {
+        return Err(format!(
+            "{} is not a stroker done-after-export route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_closed_end_subpath() {
+        rust_stroker_done_after_export(case)
+    } else {
+        Err("unsupported stroker done-after-export route".to_string())
     }
 }
 
@@ -34904,6 +35117,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--stroker-null-noop".to_string(),
             stroker_null_noop_action(case)?.0.to_string(),
         ]),
+        "ftstroke.stroker_done_after_export" if is_stroker_done_after_export_case(case) => {
+            Ok(vec![
+                "--stroker-done-after-export".to_string(),
+                stroker_single_path_arg(case)?,
+            ])
+        }
         "load_char" => {
             if params.get("char_code").is_none() {
                 return oracle_fallback_args(case);
@@ -36534,6 +36753,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             rust_stroker_null_noop(case)
         }
+        "ftstroke.stroker_done_after_export" if is_stroker_done_after_export_case(case) => {
+            rust_stroker_done_after_export(case)
+        }
         "load_char" => rust_load_char_public_api(case),
         "load_glyph" => {
             if lifecycle_handle_param_is_null(&case.inputs.params, "face") {
@@ -37767,6 +37989,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_stroker_end_subpath_no_segment(case)
         }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => c_stroker_null_noop(case),
+        "ftstroke.stroker_done_after_export" if is_stroker_done_after_export_case(case) => {
+            c_stroker_done_after_export(case)
+        }
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
                 return c_load_char_output(std::ptr::null_mut(), &case.inputs.params);
@@ -38902,6 +39127,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.set" | "ftstroke.rewind" | "ftstroke.stroker_done" => {
             wasm_stroker_null_noop(case)
+        }
+        "ftstroke.stroker_done_after_export" if is_stroker_done_after_export_case(case) => {
+            wasm_stroker_done_after_export(case)
         }
         "load_char" => {
             if lifecycle_handle_param(&case.inputs.params, "face") == Some("null") {
