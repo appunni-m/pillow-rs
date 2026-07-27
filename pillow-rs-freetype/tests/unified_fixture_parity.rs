@@ -30077,6 +30077,12 @@ fn oracle_fallback_args(case: &InputCase) -> Result<Vec<String>, String> {
     // Both the C oracle and Rust FFI must agree they don't support this operation.
     // When an operation gets implemented, add explicit match arms to BOTH
     // oracle_args and run_rust_ffi simultaneously.
+    if case.route_evidence == RouteEvidence::PendingRoute {
+        return Err(
+            "pending-route cases require an explicit maintained runtime route; generic fallback is not parity evidence"
+                .to_string(),
+        );
+    }
     if case.expect_error {
         if has_no_font_assets(case) {
             if let Ok(err) = classify_null_operation(&case.operation) {

@@ -172,6 +172,9 @@ blockers: `FT_Glyph_Stroke.destroy_original_option`,
 `FT_Glyph_StrokeBorder.inside_border_success`, and
 `FT_Glyph_StrokeBorder.destroy_original_option`. The route audit is
 `real-parity=4843`, `pending-route=179`.
+Forced pending-case runs no longer accept the shared generic fallback for these
+rows. A pending stroke row must have an explicit maintained runtime route before
+it can be promoted to C/Rust/WASM parity evidence.
 
 Additional lower-level blocker reduction:
 
