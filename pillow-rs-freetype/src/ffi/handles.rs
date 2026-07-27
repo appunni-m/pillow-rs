@@ -3419,6 +3419,71 @@ impl StrokeBorderState {
         self.valid = false;
     }
 
+    fn cubicto(&mut self, control1: FT_Vector, control2: FT_Vector, to: FT_Vector) {
+        self.points.extend([control1, control2, to]);
+        self.tags
+            .extend([FT_STROKE_TAG_CUBIC, FT_STROKE_TAG_CUBIC, FT_STROKE_TAG_ON]);
+        self.movable = false;
+        self.valid = false;
+    }
+
+    fn arcto(
+        &mut self,
+        center: FT_Vector,
+        radius: FT_Fixed,
+        angle_start: FT_Angle,
+        angle_diff: FT_Angle,
+    ) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:532-586` approximates a
+        // circular arc with one or more cubic Bézier segments.
+        const FT_ARC_CUBIC_ANGLE: FT_Angle = FT_ANGLE_PI as FT_Angle / 2;
+
+        let mut arcs: FT_Int = 1;
+        while angle_diff > FT_ARC_CUBIC_ANGLE * FT_Angle::from(arcs)
+            || -angle_diff > FT_ARC_CUBIC_ANGLE * FT_Angle::from(arcs)
+        {
+            arcs += 1;
+        }
+
+        let mut coef = FT_Tan(angle_diff / (4 * FT_Angle::from(arcs)));
+        coef += coef / 3;
+
+        let mut a0 = FT_Vector::default();
+        FT_Vector_From_Polar(Some(&mut a0), radius, angle_start);
+        let mut a1 = FT_Vector {
+            x: FT_MulFix(-a0.y, coef),
+            y: FT_MulFix(a0.x, coef),
+        };
+
+        a0.x += center.x;
+        a0.y += center.y;
+        a1.x += a0.x;
+        a1.y += a0.y;
+
+        for index in 1..=arcs {
+            let mut a3 = FT_Vector::default();
+            FT_Vector_From_Polar(
+                Some(&mut a3),
+                radius,
+                angle_start + FT_Angle::from(index) * angle_diff / FT_Angle::from(arcs),
+            );
+            let mut a2 = FT_Vector {
+                x: FT_MulFix(a3.y, coef),
+                y: FT_MulFix(-a3.x, coef),
+            };
+
+            a3.x += center.x;
+            a3.y += center.y;
+            a2.x += a3.x;
+            a2.y += a3.y;
+
+            self.cubicto(a1, a2, a3);
+
+            a1.x = a3.x - a2.x + a3.x;
+            a1.y = a3.y - a2.y + a3.y;
+        }
+    }
+
     fn close(&mut self, reverse: bool) {
         let Some(start) = self.start else {
             return;
@@ -3649,6 +3714,85 @@ impl StrokerState {
         self.border_counts_valid = false;
     }
 
+    fn side_to_rotate(side: FT_Int) -> FT_Angle {
+        FT_ANGLE_PI2 as FT_Angle - FT_Angle::from(side) * FT_ANGLE_PI as FT_Angle
+    }
+
+    fn process_inside_corner(&mut self, side: FT_Int, line_length: FT_Fixed) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:960-1028` either intersects
+        // adjacent line borders or appends the outgoing offset point.
+        let rotate = Self::side_to_rotate(side);
+        let theta = FT_Angle_Diff(self.angle_in, self.angle_out) / 2;
+        let border = if side == 0 {
+            &mut self.right_border
+        } else {
+            &mut self.left_border
+        };
+
+        let mut sigma = FT_Vector::default();
+        let intersect =
+            if !border.movable || line_length == 0 || theta > 0x59C000 || theta < -0x59C000 {
+                false
+            } else {
+                FT_Vector_Unit(Some(&mut sigma), theta);
+                let min_length = FT_MulDiv(self.radius, sigma.y, sigma.x).abs();
+                min_length != 0 && self.line_length >= min_length && line_length >= min_length
+            };
+
+        let mut delta = FT_Vector::default();
+        if !intersect {
+            FT_Vector_From_Polar(Some(&mut delta), self.radius, self.angle_out + rotate);
+            delta.x += self.center.x;
+            delta.y += self.center.y;
+            border.movable = false;
+        } else {
+            let phi = self.angle_in + theta + rotate;
+            let length = FT_DivFix(self.radius, sigma.x);
+            FT_Vector_From_Polar(Some(&mut delta), length, phi);
+            delta.x += self.center.x;
+            delta.y += self.center.y;
+        }
+        border.lineto(delta, false);
+    }
+
+    fn process_outside_corner(&mut self, side: FT_Int, _line_length: FT_Fixed) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1032-1215`.  The fully
+        // general bevel/miter paths remain unimplemented here; round joins are
+        // the active Pillow/ImageFont dependency.
+        if self.line_join != FT_STROKER_LINEJOIN_ROUND as FT_Int {
+            return;
+        }
+        self.stroker_arcto(side);
+    }
+
+    fn stroker_arcto(&mut self, side: FT_Int) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:883-902`.
+        let rotate = Self::side_to_rotate(side);
+        let mut total = FT_Angle_Diff(self.angle_in, self.angle_out);
+        if total == FT_ANGLE_PI as FT_Angle {
+            total = -rotate * 2;
+        }
+        let border = if side == 0 {
+            &mut self.right_border
+        } else {
+            &mut self.left_border
+        };
+        border.arcto(self.center, self.radius, self.angle_in + rotate, total);
+        border.movable = false;
+    }
+
+    fn process_corner(&mut self, line_length: FT_Fixed) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1219-1229` dispatches the
+        // inside and outside borders based on turn direction.
+        let turn = FT_Angle_Diff(self.angle_in, self.angle_out);
+        if turn == 0 {
+            return;
+        }
+        let inside_side = if turn < 0 { 1 } else { 0 };
+        self.process_inside_corner(inside_side, line_length);
+        self.process_outside_corner(1 - inside_side, line_length);
+    }
+
     fn append_line_segment_candidate(&mut self, to: FT_Vector) {
         let mut delta = FT_Vector {
             x: to.x - self.center.x,
@@ -3665,11 +3809,9 @@ impl StrokerState {
         // FreeType 2.14.3 `src/base/ftstroke.c:1303-1337` stores the outgoing
         // angle, processes the current corner, appends the offset segment
         // endpoints to right then left border, then records the incoming angle,
-        // current center, and segment length.  The corner join itself remains
-        // intentionally unexported until `ft_stroker_process_corner` is ported;
-        // this preserves the real state needed for that port without claiming
-        // public geometry parity too early.
+        // current center, and segment length.
         self.angle_out = angle;
+        self.process_corner(line_length);
         let right_to = FT_Vector {
             x: to.x + delta.x,
             y: to.y + delta.y,
