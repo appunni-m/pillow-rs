@@ -89,6 +89,7 @@ fn load_truetype_with_index(
 // Pillow 12.2.0 `_imagingft.c::geterror` includes FreeType's `fterrdef.h`
 // through `FT_ERRORS_H`, raises `OSError` for every listed code, and uses
 // `unknown freetype error` for table misses.
+#[rustfmt::skip]
 const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
     (
         ffi::FT_Err_Cannot_Open_Resource as i32,
@@ -248,14 +249,8 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         ffi::FT_Err_Execution_Too_Long as i32,
         "execution context too long",
     ),
-    (
-        ffi::FT_Err_Too_Many_Function_Defs as i32,
-        "too many function definitions",
-    ),
-    (
-        ffi::FT_Err_Too_Many_Instruction_Defs as i32,
-        "too many instruction definitions",
-    ),
+    (ffi::FT_Err_Too_Many_Function_Defs as i32, "too many function definitions"),
+    (ffi::FT_Err_Too_Many_Instruction_Defs as i32, "too many instruction definitions"),
     (ffi::FT_Err_Table_Missing as i32, "SFNT font table missing"),
     (
         ffi::FT_Err_Horiz_Header_Missing as i32,
@@ -266,14 +261,8 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         "locations (loca) table missing",
     ),
     (ffi::FT_Err_Name_Table_Missing as i32, "name table missing"),
-    (
-        ffi::FT_Err_CMap_Table_Missing as i32,
-        "character map (cmap) table missing",
-    ),
-    (
-        ffi::FT_Err_Hmtx_Table_Missing as i32,
-        "horizontal metrics (hmtx) table missing",
-    ),
+    (ffi::FT_Err_CMap_Table_Missing as i32, "character map (cmap) table missing"),
+    (ffi::FT_Err_Hmtx_Table_Missing as i32, "horizontal metrics (hmtx) table missing"),
     (
         ffi::FT_Err_Post_Table_Missing as i32,
         "PostScript (post) table missing",
@@ -295,10 +284,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         ffi::FT_Err_Could_Not_Find_Context as i32,
         "could not find context",
     ),
-    (
-        ffi::FT_Err_Invalid_Post_Table_Format as i32,
-        "invalid PostScript (post) table format",
-    ),
+    (ffi::FT_Err_Invalid_Post_Table_Format as i32, "invalid PostScript (post) table format"),
     (
         ffi::FT_Err_Invalid_Post_Table as i32,
         "invalid PostScript (post) table",
@@ -341,10 +327,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         ffi::FT_Err_Missing_Size_Field as i32,
         "`SIZE' field missing",
     ),
-    (
-        ffi::FT_Err_Missing_Fontboundingbox_Field as i32,
-        "`FONTBOUNDINGBOX' field missing",
-    ),
+    (ffi::FT_Err_Missing_Fontboundingbox_Field as i32, "`FONTBOUNDINGBOX' field missing"),
     (
         ffi::FT_Err_Missing_Chars_Field as i32,
         "`CHARS' field missing",
@@ -359,14 +342,8 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
     ),
     (ffi::FT_Err_Missing_Bbx_Field as i32, "`BBX' field missing"),
     (ffi::FT_Err_Bbx_Too_Big as i32, "`BBX' too big"),
-    (
-        ffi::FT_Err_Corrupted_Font_Header as i32,
-        "Font header corrupted or missing fields",
-    ),
-    (
-        ffi::FT_Err_Corrupted_Font_Glyphs as i32,
-        "Font glyphs corrupted or missing fields",
-    ),
+    (ffi::FT_Err_Corrupted_Font_Header as i32, "Font header corrupted or missing fields"),
+    (ffi::FT_Err_Corrupted_Font_Glyphs as i32, "Font glyphs corrupted or missing fields"),
 ];
 
 fn ft_error_to_pil(error: i32) -> PilError {
