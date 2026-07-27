@@ -132,6 +132,15 @@ The remaining non-libraqm public parity gaps are:
   corpus now includes the maintained lower-level DejaVuSans `"A"` route at
   `stroke_width=1.5`; broader stroked glyph coverage still depends on the
   general pure-Rust FreeType stroker.
+- stroked visible glyphs with public `mode="1"`. A temporary input-only sweep
+  for DejaVuSans `"A"` at 24px, `stroke_width=1.5`, and `mode="1"` proved this
+  is a distinct Pillow public behavior: Pillow still returns an `L` mask with
+  antialiased stroked coverage, not the binary mask Rust currently produces
+  through the mono stroked render path. Forcing normal stroked rendering in the
+  adapter still matched the existing `mode="L"` path rather than Pillow's
+  mono-targeted stroked outline, so the real fix belongs in the lower-level
+  mono-targeted glyph load/stroker interaction before this row can become an
+  active passing fixture.
 
 Pillow `11.3.0` passes stroke rendering from Python into `_imagingft.c`, where
 the native render path creates an `FT_Stroker`, obtains a glyph with
@@ -455,7 +464,10 @@ Remaining targeted gaps in `imagingft.rs` from snapshot
   maintained DejaVuSans `"A"` single-glyph and multi-glyph rows plus the
   Pillow-compatible empty-text allocation path, with broader visible glyph
   coverage still blocked on complete `FT_Glyph_Stroke`/
-  `FT_Glyph_StrokeBorder` implementation.
+  `FT_Glyph_StrokeBorder` implementation. The `mode="1"` stroked row is also
+  blocked here: Pillow's C path uses mono-targeted glyph loading but converts
+  the stroked outline to antialiased `L` coverage, while Rust's current mono
+  stroked path renders binary coverage.
 - stroked `.notdef` glyph and negative non-empty stroke rows. Pillow succeeds
   for inputs such as a missing Unicode scalar followed by `"A"` and for
   `text="A", stroke_width=-1.5`; Rust currently errors because the lower-level
