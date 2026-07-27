@@ -15,10 +15,10 @@ review. It combines:
 
 Important evidence boundary:
 
-- Coverage run: `a6721cc4-bd8e-4049-8846-a913fb52f71e`
-- Coverage snapshot: `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`
+- Coverage run: `974f35c7-e61d-4dec-bc8a-16ba4e91978e`
+- Coverage snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`
 - Suite: `font-with-freetype`
-- Measured commit: `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
+- Measured commit: `13c410dc64fa93576f87377e2c8dde8f671f7ca9`
 - Oracle: repo-local `.oracle-venv`, Pillow `12.2.0`, native
   `PIL._imagingft`
 - Stroker parser note: commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
@@ -33,7 +33,7 @@ Important evidence boundary:
 The active input-only Font fixture corpus has exact live-oracle parity for the
 rows it exercises.
 
-- Active rows: 345.
+- Active rows: 348.
 - Oracle outputs are generated at runtime by Pillow 12.2.0.
 - Input JSON files do not contain expected output hashes, pixel data, or
   expected errors.
@@ -41,7 +41,7 @@ rows it exercises.
   success/error payload semantics.
 - `make -C pillow-rs font-tests` passed before this document.
 - Coverage MCP managed run passed and ingested snapshot
-  `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`.
+  `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
 
 The correct product claim is:
 
@@ -57,7 +57,7 @@ That is not true yet.
 
 ### Direct Font implementation coverage
 
-Coverage snapshot `2c1810bd-489d-49aa-96d5-bbaa5de7c71d` reports:
+Coverage snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` reports:
 
 | File | Lines | Branches | Functions | Regions | Decision |
 |---|---:|---:|---:|---:|---|
@@ -104,10 +104,10 @@ High-risk lower coverage from the same snapshot:
 | `pillow-rs-freetype/src/tt/cmap.rs` | 271/809 33.50% | 39/174 22.41% | 10/58 17.24% | 395/1089 36.27% | High for char mapping and byte/unicode behavior. |
 | `pillow-rs-freetype/src/tt/glyf.rs` | 174/545 31.93% | 34/96 35.42% | 8/20 40.00% | 219/694 31.56% | High for TrueType outlines. |
 | `pillow-rs-freetype/src/tt/cff.rs` | 355/735 48.30% | 37/112 33.04% | 29/81 35.80% | 507/1087 46.64% | High for CFF/OpenType outlines. |
-| `pillow-rs-freetype/src/tt/hdmx.rs` | 0/42 0.00% | 0/12 0.00% | 0/2 0.00% | 0/67 0.00% | Unproven horizontal device metrics. |
-| `pillow-rs-freetype/src/tt/mvar.rs` | 0/67 0.00% | 0/6 0.00% | 0/7 0.00% | 0/113 0.00% | Unproven variation metric deltas. |
-| `pillow-rs-freetype/src/tt/vhea.rs` | 0/11 0.00% | 0/2 0.00% | 0/1 0.00% | 0/9 0.00% | Unproven vertical metrics. |
-| `pillow-rs-freetype/src/tt/vmtx.rs` | 0/50 0.00% | 0/8 0.00% | 0/2 0.00% | 0/65 0.00% | Unproven vertical metrics. |
+| `pillow-rs-freetype/src/tt/hdmx.rs` | 26/42 61.90% | 6/12 50.00% | 1/2 50.00% | 44/67 65.67% | Now publicly exercised by `font.getlength.hdmx_observable_av`; malformed rows remain unproven. |
+| `pillow-rs-freetype/src/tt/mvar.rs` | 58/67 86.57% | 3/6 50.00% | 4/7 57.14% | 92/113 81.42% | Now publicly exercised by `font.getmetrics.mvar_vertical_metrics`; malformed/value-tag rows remain unproven. |
+| `pillow-rs-freetype/src/tt/vhea.rs` | 8/11 72.73% | 1/2 50.00% | 1/1 100.00% | 8/9 88.89% | Now publicly exercised by `font.getmetrics.vertical_vhea_only`; short/error path remains unproven. |
+| `pillow-rs-freetype/src/tt/vmtx.rs` | 28/50 56.00% | 3/8 37.50% | 1/2 50.00% | 44/65 67.69% | Now publicly exercised by `font.getmetrics.vertical_vhea_only`; malformed/overflow paths remain unproven. |
 
 Decision: do not treat `imagingft.rs` near-100% line coverage as enough.
 ImageFont parity requires public Pillow rows that naturally execute the lower
@@ -146,7 +146,7 @@ Source inspected:
 | Class | `FreeTypeFont.font_variant` | Rust `ImageFont::font_variant*`. | Covered through fixture rows; validate lower variation-table coverage separately. |
 | Class | `FreeTypeFont.get_variation_names` | Rust `ImageFont::get_variation_names`. | Covered by rows but lower variation coverage is incomplete. |
 | Class | `FreeTypeFont.set_variation_by_name` | Rust `ImageFont::set_variation_by_name`. | Covered by rows; lower variation edge cases remain. |
-| Class | `FreeTypeFont.get_variation_axes` | Rust `ImageFont::get_variation_axes`. | Covered by rows; `mvar` remains 0% and variation metric deltas are unproven. |
+| Class | `FreeTypeFont.get_variation_axes` | Rust `ImageFont::get_variation_axes`. | Covered by rows; `mvar` is now exercised by a public metrics row, but malformed/value-tag paths remain unproven. |
 | Class | `FreeTypeFont.set_variation_by_axes` | Rust `ImageFont::set_variation_by_axes`. | Covered by rows; add metric/render rows after axis changes if not already distinct. |
 | Class | `TransposedFont.__init__` | Rust does not expose a class; helper operations use orientation. | Behavior can be tested, but class-shape parity is not implemented. |
 | Class | `TransposedFont.getmask` | Rust `get_transposed_mask`. | Behavior rows pass. |
@@ -304,8 +304,10 @@ Files:
 
 Current issue:
 
-- Coverage is low or zero in table paths that can affect ImageFont metrics and
-  rendering.
+- Coverage is still weak in table paths that can affect ImageFont metrics and
+  rendering. `hdmx`, `mvar`, `vhea`, and `vmtx` are no longer zero after the
+  lower metrics-table fixture pass, but their malformed/error branches remain
+  unproven.
 
 Decision:
 
@@ -354,7 +356,7 @@ Recommended order:
 
 ## Final decision summary
 
-The implementation is currently trustworthy for the active 345 runtime-oracle
+The implementation is currently trustworthy for the active 348 runtime-oracle
 fixture rows.
 
 It is not yet trustworthy for the full Pillow 12.2.0 `PIL.ImageFont` surface.
