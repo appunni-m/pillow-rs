@@ -116,6 +116,22 @@
       }
     },
     {
+      "case_id": "font.getbbox.pure_cff_tiny_size_success",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/pure-cff-cubic.otf"
+          }
+        },
+        "params": {
+          "size": 0.0001,
+          "text": "A"
+        }
+      }
+    },
+    {
       "case_id": "font.getbbox.embedded_strike_a",
       "operation": "getbbox",
       "inputs": {
