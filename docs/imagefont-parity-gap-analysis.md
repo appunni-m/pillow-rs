@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `d5002746717b69bc06f78897fb32606e0ca577b3`
+Rust commit reviewed: `11efd14a4827df4b16734ab53de1fe3c40cb0860`
 
-Coverage MCP run: `a2cec088-38dd-4051-8079-5e662d3b1b6a`
+Coverage MCP run: `677d731a-4841-464b-a0d9-826b5e303360`
 
-Coverage MCP snapshot: `2ecbaa2d-3a32-4802-bd26-42dbd340bdd4`
+Coverage MCP snapshot: `e7850c9c-a571-4d3d-91a9-391dc60634ca`
 
 Suite: `font-with-freetype`
 
@@ -30,6 +30,8 @@ The current live Font fixture corpus has exact runtime-oracle parity:
 - 336 rows match live Pillow 12.2.0 exactly.
 - Inputs do not contain output, error expectation, pixel hash, oracle result, or stored expected payload.
 - The oracle script now fails unless the repo-local venv is Pillow 12.2.0.
+- Local verification command `make -C pillow-rs font-tests` passes.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests the coverage artifact.
 
 This is not enough to claim full `PIL.ImageFont` parity. It proves only the current fixture rows. Coverage and source comparison still show unproven and likely-wrong areas, especially stroked FreeType rendering, error mapping, and lower `pillow-rs-freetype` engine branches.
 
@@ -99,7 +101,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 374/374 100.00% | n/a | 78/78 100.00% | 487/487 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | one reported line gap is rustdoc, not executable |
-| `pillow-rs/src/font/imagingft.rs` | 1618/1643 98.48% | 268/278 96.40% | 159/171 92.98% | 2591/2687 96.43% | real partial branch gaps remain |
+| `pillow-rs/src/font/imagingft.rs` | 1638/1663 98.50% | 267/276 96.74% | 162/174 93.10% | 2611/2707 96.45% | real partial branch gaps remain |
 
 ## Uncovered/partial line logic analysis
 
@@ -109,11 +111,9 @@ Coverage MCP reports no fully uncovered executable lines in `imagingft.rs`; all 
 |---:|---|---|---|---|
 | `91`, `105` | `ft_error_to_pil` hand-maps a subset of FreeType errors and falls back to `ValueError("FreeType error N")`. | `_imagingft.c:38-112` builds an `FT_ERRORS_H` table and raises `OSError` for known errors, with unknown fallback also as `OSError`. | Current fixture rows hit several errors, but the implementation is not table-equivalent to Pillow. This is a real parity risk, not only coverage noise. | Replace subset mapping with complete FreeType error table semantics or generate the table from `fontdone` constants. Add rows for unknown/error-table fallback behavior if reachable. |
 | `796` | `mask_from_run_with_start` returns `Ok((w, h, canvas))`. | `_imagingft.c:1244-1249` returns image plus offset after cleanup. | Likely compiler-generated `Result`/drop branch. No visible Pillow behavior difference at this line. | Do not hack. Leave unless a safe refactor removes impossible instrumentation without changing behavior. |
-| `826` | Stroked path loads each glyph with `FT_Load_Glyph(face, g, load_flags)`. | `_imagingft.c:1007-1011` does a bounds pass with `load_flags | FT_LOAD_RENDER`; `_imagingft.c:1040-1044` then loads with `load_flags`. | Rust does not follow the exact C two-pass render-bounds structure. It may still match many cases, but the path is undercovered and tied to lower stroker correctness. | Add independent stroked success/error rows after correcting implementation deltas below. |
-| `827-829` | Rust applies local previous-glyph kerning in the render loop with `prev.filter(|p| *p != 0 && g != 0)`. | `_imagingft.c:1003-1025` and `1237-1238` consume `glyph_info[i].x_offset/x_advance/y_offset/y_advance` from layout. | In Pillow C, layout owns glyph positioning. Rust render code recomputes kerning locally. This can diverge for missing glyphs, zero glyph index transitions, or any future non-BASIC layout. | Refactor render loops to consume a layout run equivalent to Pillow `GlyphInfo` rather than recomputing layout inside render. Add zero-glyph and kerning-pair stroked rows. |
+| `826-829` | Stroked path loads each glyph and applies local previous-glyph kerning in the render loop. | `_imagingft.c:1003-1025` and `1237-1238` consume `glyph_info[i].x_offset/x_advance/y_offset/y_advance` from layout. | In Pillow C, layout owns glyph positioning. Rust render code recomputes kerning locally. This can diverge for missing glyphs, zero glyph index transitions, or any future non-BASIC layout. | Refactor render loops to consume a layout run equivalent to Pillow `GlyphInfo` rather than recomputing layout inside render. Add zero-glyph and kerning-pair stroked rows. |
 | `857`, `860` | Rust clamps stroked bitmap extents when actual stroked bitmap exceeds bbox-derived expected dimensions. | `_imagingft.c:998-1001` says render dimensions must match `font_getsize`; `_imagingft.c:1115-1128` clips during paste. | This looks like a workaround for bbox/stroker mismatch. Pillow allocates from `bounding_box_and_anchors`, then clips when writing; it does not mutate the computed bitmap extent this way. | Treat as suspect implementation. Fix lower bbox/stroker parity, then remove or justify clamp with exact C evidence. Add rows that prove both clamp sides if it remains. |
 | `928` | Rust slices `canvas[dst..dst + cw]` after manual clipping. | `_imagingft.c:1115-1128` clips x/y before writing to target. | Likely bounds-check instrumentation. Still worth covering with partially clipped and fully clipped glyph rows because this is the exact paste boundary. | Add edge rows only if they exercise new clipping behavior. Do not add duplicate rows that do not move coverage. |
-| `959` | Rust chooses `FT_RENDER_MODE_MONO` for stroked glyph bitmap conversion when `TGT_MONO` is set. | `_imagingft.c:1053-1055` always calls `FT_Glyph_To_Bitmap(..., FT_RENDER_MODE_NORMAL, ...)` on stroked glyphs. | This is a real C/Rust difference. Current fixture rows do not prove the mono-stroked branch is correct; according to Pillow 12.2.0 it should probably not exist. | Change stroked glyph rendering to always use normal render mode unless a first-divergence trace proves a different C path. |
 
 ## Other ImageFont-related files where coverage is missing
 
@@ -143,13 +143,13 @@ These are not all direct `PIL.ImageFont` public methods, but they are underneath
 
 ## Implementation differences or unproven behavior against Pillow 12.2.0
 
-### 1. Stroked render mode is wrong or at least unproven
+### 1. Stroked render mode is now aligned
 
 Pillow C always converts stroked glyphs to bitmap with `FT_RENDER_MODE_NORMAL` in `_imagingft.c:1053-1055`.
 
-Rust uses `FT_RENDER_MODE_MONO` when `load_flags & TGT_MONO != 0` in `imagingft.rs:959-963`.
+Rust now always uses `FT_RENDER_MODE_NORMAL` for stroked glyph bitmap conversion, including `mode="1"`.
 
-Decision needed: change Rust to normal mode for stroked glyphs, then regenerate/extend rows for mode `"1"` plus `stroke_width`.
+Remaining action: keep/add fixture rows for mode `"1"` plus `stroke_width` so this behavior remains protected by the runtime Pillow oracle.
 
 ### 2. `stroke_filled` is missing from Rust public text options
 
@@ -161,15 +161,13 @@ Rust `ImageFontTextOptions` only records `has_kwargs`; it does not parse or carr
 
 Decision needed: add `stroke_filled: bool` to `ImageFontTextOptions`, parse it in the runner/bindings, implement `FT_Glyph_StrokeBorder` behavior in `fontdone`, and add rows where `stroke_filled=true` changes output.
 
-### 3. Stroker parameters differ
+### 3. Stroker miter parameter is now aligned
 
 Pillow C calls `FT_Stroker_Set(..., FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 0)` in `_imagingft.c:989-995`.
 
-Rust calls `FT_Stroker_Set(..., ROUND, ROUND, 65_536)` in `imagingft.rs:949-955`.
+Rust now passes miter limit `0` for the stroked ImageFont path.
 
-The miter limit may not affect round joins in common cases, but it is still not exact source parity.
-
-Decision needed: set the same value as Pillow unless traced evidence proves no behavioral difference.
+Remaining action: still implement `stroke_filled`/`FT_Glyph_StrokeBorder` parity; that is the larger stroked-rendering gap.
 
 ### 4. Rust stroked layout/render loop does local kerning instead of consuming a Pillow-equivalent layout run
 
@@ -215,10 +213,7 @@ Decision needed: keep file/path I/O outside core, but ensure Python/JS bindings 
 
 ## Recommended action order
 
-1. Fix the obvious C/Rust stroked rendering differences:
-   - render stroked glyphs as `FT_RENDER_MODE_NORMAL`;
-   - match `FT_Stroker_Set` miter limit;
-   - add `stroke_filled` to typed options and implement `FT_Glyph_StrokeBorder`.
+1. Add `stroke_filled` to typed options and implement `FT_Glyph_StrokeBorder`.
 2. Replace `ft_error_to_pil` with table-equivalent Pillow 12.2.0 error mapping.
 3. Refactor BASIC layout into a shared run consumed by length, bbox, mask, and stroke.
 4. Re-evaluate and remove the stroked extent clamps if they are only masking lower stroker/bbox issues.
