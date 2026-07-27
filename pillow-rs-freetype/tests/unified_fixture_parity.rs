@@ -25641,6 +25641,10 @@ fn is_stroker_rewind_attributes_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_Rewind.attributes_preserved"
 }
 
+fn is_stroker_set_miter_limit_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one"
+}
+
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
     matches!(
         case.case_id.as_str(),
@@ -27971,6 +27975,204 @@ fn wasm_stroker_rewind_attributes(case: &InputCase) -> Result<RunOutput, String>
         rust_stroker_rewind_attributes(case)
     } else {
         Err("unsupported stroker rewind-attributes route".to_string())
+    }
+}
+
+fn stroker_miter_limit_rows_output(
+    mut run_one: impl FnMut(FT_Fixed) -> Result<Value, String>,
+) -> Result<RunOutput, String> {
+    let mut rows = Vec::new();
+    for miter_limit in [0, 32_768, 65_535, 65_536, 131_072] {
+        rows.push(run_one(miter_limit)?);
+    }
+    Ok(ok(json!({ "rows": rows })))
+}
+
+fn rust_stroker_set_miter_limit(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_set_miter_limit_case(case) {
+        return Err(format!(
+            "{} is not a stroker set miter-limit route",
+            case.case_id
+        ));
+    }
+    stroker_miter_limit_rows_output(|miter_limit| {
+        let library = FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            return Ok(json!({
+                "miter_limit": miter_limit,
+                "effective_miter_limit": miter_limit.max(65_536),
+                "status": new_error,
+                "exported_outline": outline_snapshot_json(&FT_OutlineSnapshot::default())
+            }));
+        }
+        FT_Stroker_Set(
+            stroker,
+            224,
+            FT_STROKER_LINECAP_SQUARE as FT_Int,
+            FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int,
+            miter_limit,
+        );
+        let start = FT_Vector { x: 0, y: 0 };
+        let p1 = FT_Vector { x: 640, y: 0 };
+        let p2 = FT_Vector { x: 160, y: 224 };
+        let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+        let line1_error = if begin_error == FT_Err_Ok {
+            FT_Stroker_LineTo(stroker, Some(&p1))
+        } else {
+            begin_error
+        };
+        let line2_error = if line1_error == FT_Err_Ok {
+            FT_Stroker_LineTo(stroker, Some(&p2))
+        } else {
+            line1_error
+        };
+        let end_error = if line2_error == FT_Err_Ok {
+            FT_Stroker_EndSubPath(stroker)
+        } else {
+            line2_error
+        };
+        let mut points = 99;
+        let mut contours = 99;
+        let counts_status = if end_error == FT_Err_Ok {
+            FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+        } else {
+            end_error
+        };
+        let mut exported = FT_OutlineSnapshot::default();
+        if counts_status == FT_Err_Ok {
+            FT_Stroker_Export(stroker, Some(&mut exported));
+        }
+        FT_Stroker_Done(stroker);
+        Ok(json!({
+            "miter_limit": miter_limit,
+            "effective_miter_limit": miter_limit.max(65_536),
+            "status": counts_status,
+            "point_count": points,
+            "contour_count": contours,
+            "exported_outline": outline_snapshot_json(&exported)
+        }))
+    })
+}
+
+fn c_stroker_set_miter_limit(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_set_miter_limit_case(case) {
+        return Err(format!(
+            "{} is not a stroker set miter-limit route",
+            case.case_id
+        ));
+    }
+    stroker_miter_limit_rows_output(|miter_limit| {
+        let mut library = ptr::null_mut();
+        let init_error = c_abi::FT_Init_FreeType(&mut library);
+        if init_error != FT_Err_Ok {
+            return Ok(json!({
+                "miter_limit": miter_limit,
+                "effective_miter_limit": miter_limit.max(65_536),
+                "status": init_error,
+                "point_count": 0,
+                "contour_count": 0,
+                "exported_outline": c_outline_arrays_json(
+                    &c_abi::FT_Outline::default(),
+                    &[],
+                    &[],
+                    &[],
+                )
+            }));
+        }
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            c_done_library(library);
+            return Ok(json!({
+                "miter_limit": miter_limit,
+                "effective_miter_limit": miter_limit.max(65_536),
+                "status": new_error,
+                "point_count": 0,
+                "contour_count": 0,
+                "exported_outline": c_outline_arrays_json(
+                    &c_abi::FT_Outline::default(),
+                    &[],
+                    &[],
+                    &[],
+                )
+            }));
+        }
+        c_abi::FT_Stroker_Set(
+            stroker,
+            224,
+            FT_STROKER_LINECAP_SQUARE as FT_Int,
+            FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int,
+            miter_limit,
+        );
+        let start = c_abi::FT_Vector { x: 0, y: 0 };
+        let p1 = c_abi::FT_Vector { x: 640, y: 0 };
+        let p2 = c_abi::FT_Vector { x: 160, y: 224 };
+        let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+        let line1_error = if begin_error == FT_Err_Ok {
+            c_abi::FT_Stroker_LineTo(stroker, &p1)
+        } else {
+            begin_error
+        };
+        let line2_error = if line1_error == FT_Err_Ok {
+            c_abi::FT_Stroker_LineTo(stroker, &p2)
+        } else {
+            line1_error
+        };
+        let end_error = if line2_error == FT_Err_Ok {
+            c_abi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            line2_error
+        };
+        let mut points = 99;
+        let mut contours = 99;
+        let counts_status = if end_error == FT_Err_Ok {
+            c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours)
+        } else {
+            end_error
+        };
+        let mut exported_points = [c_abi::FT_Vector::default(); 256];
+        let mut exported_tags = [0u8; 256];
+        let mut exported_contours = [0u16; 64];
+        let mut exported = c_empty_outline(
+            &mut exported_points,
+            &mut exported_tags,
+            &mut exported_contours,
+        );
+        if counts_status == FT_Err_Ok {
+            c_abi::FT_Stroker_Export(stroker, &mut exported);
+        }
+        let outline = c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        );
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        Ok(json!({
+            "miter_limit": miter_limit,
+            "effective_miter_limit": miter_limit.max(65_536),
+            "status": counts_status,
+            "point_count": points,
+            "contour_count": contours,
+            "exported_outline": outline
+        }))
+    })
+}
+
+fn wasm_stroker_set_miter_limit(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_set_miter_limit_case(case) {
+        return Err(format!(
+            "{} is not a stroker set miter-limit route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_set_miter_limit() {
+        rust_stroker_set_miter_limit(case)
+    } else {
+        Err("unsupported stroker set miter-limit route".to_string())
     }
 }
 
@@ -32565,6 +32767,9 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
             Ok(vec!["--stroker-rewind-attributes".to_string()])
         }
+        "ftstroke.set" if is_stroker_set_miter_limit_case(case) => {
+            Ok(vec!["--stroker-set-miter-limit".to_string()])
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -34173,6 +34378,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
             rust_stroker_rewind_attributes(case)
         }
+        "ftstroke.set" if is_stroker_set_miter_limit_case(case) => {
+            rust_stroker_set_miter_limit(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -35383,6 +35591,7 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
             c_stroker_rewind_attributes(case)
         }
+        "ftstroke.set" if is_stroker_set_miter_limit_case(case) => c_stroker_set_miter_limit(case),
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -36489,6 +36698,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.rewind" if is_stroker_rewind_attributes_case(case) => {
             wasm_stroker_rewind_attributes(case)
+        }
+        "ftstroke.set" if is_stroker_set_miter_limit_case(case) => {
+            wasm_stroker_set_miter_limit(case)
         }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>

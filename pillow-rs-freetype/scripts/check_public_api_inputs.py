@@ -1494,11 +1494,6 @@ def ftstroke_set_rewind_pending_reason(row: ConcreteInput) -> str | None:
             "radius, line cap, line join, and miter-limit fields change later "
             "stroke geometry exactly like pinned C"
         ),
-        "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one": (
-            "FT_Stroker_Set miter-limit parity needs a maintained route "
-            "proving values below one are clamped before miter fallback "
-            "decisions exactly like pinned C"
-        ),
     }
     return exact_cases.get(row.case_id)
 
@@ -1740,6 +1735,21 @@ def ftstroke_rewind_attributes_real_parity_reason(row: ConcreteInput) -> str | N
             "and miter-limit attributes while clearing path state; the second "
             "acute-corner path validates exact exported outline geometry and "
             "counts through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    return None
+
+
+def ftstroke_set_miter_limit_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact Set route proving miter limits below one are clamped."""
+    if (
+        row.case_id == "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one"
+        and row.operation == "ftstroke.set"
+    ):
+        return (
+            "FT_Stroker_Set clamps miter_limit values below 1.0 (65536) before "
+            "fixed-miter fallback decisions; five rows validate effective "
+            "limits and exact exported outline geometry through pinned C "
+            "oracle, Rust FFI, C ABI, and WASM ABI"
         )
     return None
 
@@ -7765,6 +7775,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_rewind_attributes_reason = ftstroke_rewind_attributes_real_parity_reason(row)
     if ftstroke_rewind_attributes_reason:
         return ("real-parity", ftstroke_rewind_attributes_reason)
+    ftstroke_set_miter_limit_reason = ftstroke_set_miter_limit_real_parity_reason(row)
+    if ftstroke_set_miter_limit_reason:
+        return ("real-parity", ftstroke_set_miter_limit_reason)
     absent_or_noop_reason = absent_or_noop_surface_real_parity_reason(row)
     if absent_or_noop_reason:
         return ("real-parity", absent_or_noop_reason)

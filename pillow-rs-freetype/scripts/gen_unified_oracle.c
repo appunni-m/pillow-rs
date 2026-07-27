@@ -20801,6 +20801,71 @@ static int emit_stroker_rewind_attributes(int argc, char** argv) {
     return 0;
 }
 
+static void emit_stroker_set_miter_limit_row(FT_Fixed miter_limit, int* emitted) {
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = init_error ? init_error : FT_Stroker_New(library, &stroker);
+    FT_Error status = new_error;
+    if (!status && stroker) {
+        FT_Stroker_Set(stroker,
+                       224,
+                       FT_STROKER_LINECAP_SQUARE,
+                       FT_STROKER_LINEJOIN_MITER_FIXED,
+                       miter_limit);
+        FT_Vector start = { 0, 0 };
+        FT_Vector p1 = { 640, 0 };
+        FT_Vector p2 = { 160, 224 };
+        status = FT_Stroker_BeginSubPath(stroker, &start, 0);
+        if (!status) status = FT_Stroker_LineTo(stroker, &p1);
+        if (!status) status = FT_Stroker_LineTo(stroker, &p2);
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+    }
+    FT_UInt points = 99;
+    FT_UInt contours = 99;
+    if (!status) {
+        status = FT_Stroker_GetCounts(stroker, &points, &contours);
+    }
+    FT_Vector exported_points[256] = {0};
+    unsigned char exported_tags[256] = {0};
+    unsigned short exported_contours[64] = {0};
+    FT_Outline exported = {
+        .n_contours = 0,
+        .n_points = 0,
+        .points = exported_points,
+        .tags = exported_tags,
+        .contours = exported_contours,
+        .flags = 0
+    };
+    if (!status) {
+        FT_Stroker_Export(stroker, &exported);
+    }
+    if (*emitted) printf(",");
+    *emitted = 1;
+    printf("{\"miter_limit\":%ld,", (long)miter_limit);
+    printf("\"effective_miter_limit\":%ld,", (long)(miter_limit < 65536 ? 65536 : miter_limit));
+    printf("\"status\":%d,\"point_count\":%u,\"contour_count\":%u,", status, points, contours);
+    printf("\"exported_outline\":");
+    print_stroker_outline_value(&exported);
+    printf("}");
+    if (stroker) FT_Stroker_Done(stroker);
+    if (library) FT_Done_FreeType(library);
+}
+
+static int emit_stroker_set_miter_limit(int argc, char** argv) {
+    if (argc != 2) return 2;
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int emitted = 0;
+    FT_Fixed rows[5] = { 0, 32768, 65535, 65536, 131072 };
+    for (int i = 0; i < 5; i++) {
+        emit_stroker_set_miter_limit_row(rows[i], &emitted);
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -27433,6 +27498,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-rewind-attributes")) {
         return emit_stroker_rewind_attributes(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-set-miter-limit")) {
+        return emit_stroker_set_miter_limit(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);

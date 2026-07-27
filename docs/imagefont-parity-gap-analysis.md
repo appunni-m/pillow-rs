@@ -1218,3 +1218,17 @@ Current request classification for `imagingft.rs` region coverage:
   (`96.88%`), with the same eight reported ranges `91`, `253`, `271`, `796`,
   `826`, `829`, `831`, and `928`. This proves no new active Pillow Font
   coverage gap was introduced or closed by the lower stroker fix.
+- `FT_Stroker_Set.miter_limit_clamped_to_one` promotion: after the non-round
+  outside-corner miter branch was ported, the miter-limit clamp row has a
+  maintained route. The route runs the fixture miter limits `0`, `32768`,
+  `65535`, `65536`, and `131072` through pinned C FreeType, Rust FFI, C ABI,
+  and WASM ABI. Pinned C shows the first four rows clamp to effective
+  `65536` and export identical 11-point/2-contour fixed-miter fallback
+  outlines, while `131072` remains effective `131072` and exports the
+  10-point/2-contour longer-miter outline. Rust now matches those exported
+  points/tags/contours exactly. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one` passes `1/1`;
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Set` now
+  passes `3/3` runnable rows with `1` pending broad attribute-matrix row.
+  Route audit moves to `real-parity=4849` and `pending-route=173`.

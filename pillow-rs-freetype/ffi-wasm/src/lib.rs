@@ -3854,6 +3854,68 @@ pub fn abi_support_stroker_rewind_attributes() -> bool {
 }
 
 #[cfg(feature = "abi-test-support")]
+pub fn abi_support_stroker_set_miter_limit() -> bool {
+    for miter_limit in [0, 32_768, 65_535, 65_536, 131_072] {
+        let library = rust_ffi::FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        if rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker)) != rust_ffi::FT_Err_Ok {
+            return false;
+        }
+        if stroker.is_null() {
+            return false;
+        }
+        rust_ffi::FT_Stroker_Set(
+            stroker,
+            224,
+            rust_ffi::FT_STROKER_LINECAP_SQUARE as FT_Int,
+            rust_ffi::FT_STROKER_LINEJOIN_MITER_FIXED as FT_Int,
+            miter_limit,
+        );
+        let start = rust_ffi::FT_Vector { x: 0, y: 0 };
+        let p1 = rust_ffi::FT_Vector { x: 640, y: 0 };
+        let p2 = rust_ffi::FT_Vector { x: 160, y: 224 };
+        let begin_error = rust_ffi::FT_Stroker_BeginSubPath(stroker, Some(&start), 0);
+        let line1_error = if begin_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_LineTo(stroker, Some(&p1))
+        } else {
+            begin_error
+        };
+        let line2_error = if line1_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_LineTo(stroker, Some(&p2))
+        } else {
+            line1_error
+        };
+        let end_error = if line2_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            line2_error
+        };
+        let mut points = 99;
+        let mut contours = 99;
+        let counts_status = if end_error == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+        } else {
+            end_error
+        };
+        let mut exported = rust_ffi::FT_OutlineSnapshot::default();
+        if counts_status == rust_ffi::FT_Err_Ok {
+            rust_ffi::FT_Stroker_Export(stroker, Some(&mut exported));
+        }
+        rust_ffi::FT_Stroker_Done(stroker);
+        let expected_points = if miter_limit < 131_072 { 11 } else { 10 };
+        if counts_status != rust_ffi::FT_Err_Ok
+            || points != expected_points
+            || contours != 2
+            || exported.points.len() != expected_points as usize
+            || exported.contours.len() != 2
+        {
+            return false;
+        }
+    }
+    true
+}
+
+#[cfg(feature = "abi-test-support")]
 pub fn abi_support_stroker_parse_degenerate() -> bool {
     let library = rust_ffi::FT_Init_FreeType();
     let mut stroker = ptr::null_mut();
