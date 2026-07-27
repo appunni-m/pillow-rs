@@ -199,6 +199,19 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
   branches, `162/173` functions, and `2612/2696` regions with the same seven
   markers.
+- `FT_Err_Name_Table_Missing` lower pending-route triage: the lower rows
+  `fterrdef.FT_Err_Name_Table_Missing.sfnt_name_storage_out_of_bounds` and
+  `fterrdef.FT_Err_Name_Table_Missing.sfnt_without_name_table` should not drive
+  a new ImageFont load-failure row. The maintained
+  `name_table_missing.ttf`/`name-table-missing.ttf` asset is already present in
+  the active Font corpus as `font.getname.name_table_missing`; live Pillow
+  12.2.0 loads it, returns `getname == (None, None)`, and returns a normal bbox
+  for `"A"`. The lower route audit also records that the generated no-name-table
+  SFNT opens successfully in pinned C and the bad-storage fixture returns a
+  different public C error. Therefore adding an ImageFont constructor error row
+  for `FT_Err_Name_Table_Missing` would be false coverage. Keep this as lower
+  FreeType fixture discovery work until pinned C exposes the exact error through
+  a real same-input public route.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
