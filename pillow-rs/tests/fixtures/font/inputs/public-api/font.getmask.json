@@ -664,6 +664,23 @@
           "text_bytes_hex": "c3a9"
         }
       }
+    },
+    {
+      "case_id": "font.getmask.dejavusans20_jq_mode_1",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "mode": "1"
+        }
+      }
     }
   ]
 }

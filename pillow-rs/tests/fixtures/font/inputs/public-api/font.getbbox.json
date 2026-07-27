@@ -482,6 +482,40 @@
           "anchor": "mm"
         }
       }
+    },
+    {
+      "case_id": "font.getbbox.dejavusans20_av_mode_1",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "mode": "1"
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.dejavusans20_jq_mode_1",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "mode": "1"
+        }
+      }
     }
   ]
 }
