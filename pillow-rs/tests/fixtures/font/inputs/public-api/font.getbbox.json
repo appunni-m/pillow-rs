@@ -132,6 +132,22 @@
       }
     },
     {
+      "case_id": "font.getbbox.sbit_mono_private_base",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-mono-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000"
+        }
+      }
+    },
+    {
       "case_id": "font.getbbox.variable_named_instances_a",
       "operation": "getbbox",
       "inputs": {

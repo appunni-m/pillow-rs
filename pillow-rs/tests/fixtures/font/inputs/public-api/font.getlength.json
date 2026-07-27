@@ -116,6 +116,22 @@
       }
     },
     {
+      "case_id": "font.getlength.sbit_bgra_private_base",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-bgra-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000"
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.variable_named_instances_av",
       "operation": "getlength",
       "inputs": {
