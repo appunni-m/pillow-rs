@@ -484,6 +484,13 @@ Latest focused ftstroke evidence after the export-append runner update:
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`: 7/7 runnable rows pass, 0 pending. This now includes `append_to_existing_outline` with sentinel-prefix preservation and contour-index offset comparison against the pinned C oracle.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ExportBorder`: 4/4 runnable rows pass, 0 pending. This now includes selected-border append-to-existing-outline parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
-- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit-in-progress ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route, but the Font public corpus does not yet reach those new lines because public `stroke_filled=true` remains guarded by the lower `FT_Glyph_StrokeBorder` success blocker.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
 - `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 180 `pending-route` cases overall, down from 183 after promoting the two export append rows and the parsed stroker lifecycle row to real runtime parity. The project still cannot claim complete FreeType-backed ImageFont parity yet.
+
+Latest Coverage MCP evidence after the conic-subdivision and lint pass:
+
+- Run `14116d4f-256e-4dff-b4ca-347945cff567`, snapshot `348fa42c-e2fe-47dd-9646-3a2cff24e4bf`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
+- `pillow-rs/src/font/imagingft.rs` remains 1663/1686 lines, 248/254 branches, 162/173 functions, and 2604/2700 regions.
+- Remaining `imagingft.rs` direct gaps are unchanged: line 91 partial branch; table-data lines 253 and 271; rounding/helper branch lines 796, 826, 829, and 928; and the real public blocker at lines 1211-1212 where `stroke_filled=true` must call `FT_Outline_Glyph_StrokeBorder`.
+- Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. The next coverage-moving ImageFont task is still to make lower `FT_Glyph_StrokeBorder` inside/outside success geometry real enough for a live Pillow oracle `ImageFont.getmask2(..., stroke_width>0, stroke_filled=true)` row.

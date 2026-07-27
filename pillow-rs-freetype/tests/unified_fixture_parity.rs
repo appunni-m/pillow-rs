@@ -27827,7 +27827,7 @@ fn c_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, String>
         ];
         let mut tags = [1u8, 1u8];
         let mut contours = [1u16];
-        let mut outline = c_abi::FT_Outline {
+        let outline = c_abi::FT_Outline {
             n_contours: 1,
             n_points: 2,
             points: points.as_mut_ptr(),
@@ -27835,7 +27835,7 @@ fn c_stroker_parse_opened_outline(case: &InputCase) -> Result<RunOutput, String>
             contours: contours.as_mut_ptr(),
             flags: 0,
         };
-        let parse_status = c_abi::FT_Stroker_ParseOutline(stroker, &mut outline, 1);
+        let parse_status = c_abi::FT_Stroker_ParseOutline(stroker, &outline, 1);
         let mut left_points = 0;
         let mut left_contours = 0;
         let left_status = if parse_status == FT_Err_Ok {

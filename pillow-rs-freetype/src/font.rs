@@ -6189,8 +6189,14 @@ mod tests {
     #[test]
     fn getlength_reports_glyph_slot_advance_without_implicit_kerning() {
         let font = test_font();
-        let single = font.getlength("A").unwrap();
-        let text = font.getlength("AA").unwrap();
+        let single = match font.getlength("A") {
+            Ok(value) => value,
+            Err(error) => panic!("getlength('A') failed: {error}"),
+        };
+        let text = match font.getlength("AA") {
+            Ok(value) => value,
+            Err(error) => panic!("getlength('AA') failed: {error}"),
+        };
 
         assert!(text > single);
         assert_eq!(text, single * 2.0);
