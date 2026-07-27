@@ -185,6 +185,18 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   remains `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions with the same seven direct markers.
 - Commits `121702b10` and `2b34fb4ac` close the Python binding option-forwarding leak for ImageFont: the thin wrapper now forwards `direction`, `features`, `language`, `stroke_width`, `stroke_filled`, `anchor`, `ink`, `mode`, and `start` into the Rust core, raises the Rust `PilError::UnsupportedLibraqm` path for no-libraqm options, and preserves Pillow-visible integral bbox value types.
+- This slice closes a Python `ImageFont.FreeTypeFont` facade leak for variation
+  APIs. Pillow 12.2.0 implements `get_variation_names`,
+  `set_variation_by_name`, `get_variation_axes`, and
+  `set_variation_by_axes` by calling the underlying `_imagingft` font object.
+  Our PyO3 layer already exposed the matching Rust root APIs, but the Python
+  facade still raised a local `NotImplementedError` after a local
+  `has_variations` check. The facade now delegates those four methods to the
+  Rust core, returns Pillow-shaped axis dictionaries, accepts in-memory font
+  bytes for reconstructed variants, and the Font oracle test guards against
+  reintroducing the local variation block. This does not change upstream
+  Pillow; it removes an incompatibility in the `pillow-rs-py`
+  Pillow-compatible surface.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
 - Commit `3558b7762` hardens the libraqm source guard: `PilError::UnsupportedLibraqm` must remain a unit variant with the one core hard-coded message, and `imagingft.rs` must use the dedicated constructor instead of encoding `KeyError` text directly.
