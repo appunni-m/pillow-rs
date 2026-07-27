@@ -1506,10 +1506,10 @@ current blockers.
   `make -C pillow-rs-freetype test-pending-case
   CASE=ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state`, and
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_BeginSubPath`
-  pass. The normal lane is now `3/3` runnable rows passing with one explicit
-  pending row left:
+  pass. At that commit, the normal lane was `3/3` runnable rows passing with
+  one explicit pending row left:
   `ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join`.
-  Route audit moves to `real-parity=4858` and `pending-route=164`. This is a
+  Route audit moved to `real-parity=4858` and `pending-route=164`. This is a
   lower FreeType stroker-route coverage/parity improvement; it does not by
   itself claim a new direct `imagingft.rs` region or public Pillow Font behavior.
   Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passed
@@ -1518,29 +1518,30 @@ current blockers.
   Direct `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines,
   `249/254` branches, `162/173` functions, and `2612/2696` regions with the
   same seven markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
-- `FT_Stroker_BeginSubPath` wide-stroke diagnostic route: the remaining row
+- `FT_Stroker_BeginSubPath` wide-stroke route promotion: the remaining row
   `ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join`
-  now has a maintained diagnostic route shape and uses the existing input-only
-  path fixture
+  now has a maintained same-input route and uses the existing input-only path
+  fixture
   `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/wide-curve-joins.json`
   with `path=wide_curve_negative_sector`. The route feeds the same
   move/cubic/line path and three cap/join/open rows to pinned C FreeType, Rust
   FFI, C ABI, and WASM ABI, comparing `status_sequence`,
-  `wide_stroke_class`, and exported outline `points/tags/contours`. It remains
-  classified as `pending-route`, not real parity, because the first forced run
-  exposed a lower Rust stroker geometry/finalization divergence. Native C
-  FreeType produces successful rows with exported outline sizes
-  `60 points / 2 contours`, `57 points / 1 contour`, and
-  `67 points / 1 contour` for the bevel, open-butt, and open-round rows. Rust
-  returns the same `status_sequence=[0,0,0,0]` and class values, but exports
+  `wide_stroke_class`, and exported outline `points/tags/contours`. The first
+  diagnostic run proved the real lower divergence: native C FreeType produced
+  successful rows with exported outline sizes `60 points / 2 contours`,
+  `57 points / 1 contour`, and `67 points / 1 contour`, while Rust returned
+  the same `status_sequence=[0,0,0,0]` and class values but exported
   `58 points / 2 contours`, then empty outlines for the two open rows. The
-  first exact failure is
-  `/rows/1/exported_outline/contours/0`, expected `56`, actual missing. This is
-  not an `imagingft.rs` adapter gap and not a fixture-output issue; it is lower
-  `pillow-rs-freetype/src/ffi/handles.rs` stroker behavior around
-  `FT_Stroker_EndSubPath` open wide-stroke finalization and/or wide cubic/line
-  border export. Verification command:
+  first exact failure was `/rows/1/exported_outline/contours/0`, expected `56`,
+  actual missing. The fix ports the FreeType 2.14.3
+  `src/base/ftstroke.c:1874-1904` open-subpath finalization shape into lower
+  `pillow-rs-freetype/src/ffi/handles.rs`: cap the current endpoint, append the
+  reversed left border into the right border, cap the original start point, and
+  close the right border. The existing horizontal single-line shortcut remains
+  limited to its maintained exact rows. Verification:
   `make -C pillow-rs-freetype test-pending-case
   CASE=ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join`
-  currently fails with that exact mismatch. Keep this row pending until the
-  lower stroker output matches pinned C exactly.
+  passes `1/1` with `0` pending. The normal
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_BeginSubPath`
+  lane now passes `4/4` runnable rows with `0` pending, and route audit moves
+  to `real-parity=4859`, `pending-route=163`.
