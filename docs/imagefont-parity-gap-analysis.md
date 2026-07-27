@@ -1082,7 +1082,7 @@ Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and
 - Current refreshed Font-with-FreeType evidence: Coverage MCP run `30dede2c-7df1-4204-85fa-0d7059680a1e`, snapshot `b8ddc28d-1a4c-4764-b8e0-1256685fb20c`, at runtime commit `072af0fbb` passed and ingested.
 - `pillow-rs/src/font/imagingft.rs` is now 1660/1682 lines, 249/254 branches, 162/173 functions, and 2610/2696 regions in the Font-with-FreeType suite.
 - The prior real public blocker at lines 1211-1212 is resolved: line 1211 has both branches covered and line 1212 has one hit.
-- Remaining Font-with-FreeType gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, 831, and 928. These are not currently known public ImageFont behavior mismatches.
+- Remaining Font-with-FreeType gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/source-map lines 796, 826, 829, and 928. These are not currently known public ImageFont behavior mismatches.
 - Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. For `imagingft.rs`, the remaining direct gaps are currently classified as static-data or LLVM segment artifacts, not known public Pillow behavior misses. Add new Font rows only when they exercise independent ImageFont behavior, not to force these markers.
 
 Current request classification for `imagingft.rs` region coverage:
@@ -1107,7 +1107,7 @@ Current request classification for `imagingft.rs` region coverage:
   task; it is retained below only as historical first-divergence context.
 - The remaining legitimate ways to improve `imagingft.rs` coverage are now:
   find a new Pillow 12.2.0 public ImageFont behavior not already represented in
-  the input-only corpus, or prove that one of the eight remaining LLVM-reported
+  the input-only corpus, or prove that one of the seven remaining LLVM-reported
   ranges maps to real public behavior. Do not add duplicate rows for static
   error-table or LLVM source-map markers.
 
