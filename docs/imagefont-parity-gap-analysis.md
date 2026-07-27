@@ -87,9 +87,9 @@ Latest measured code Coverage MCP run: `6048e1fb-d345-43bf-846c-82d69869eef0`
 
 Latest measured code Coverage MCP snapshot: `cda2eecf-da36-415b-8bc6-a7908b1f50e0`
 
-Latest direct imagingft Coverage MCP run: `483456d5-fb96-451a-b7bc-4b3a7272768a`
+Latest direct imagingft Coverage MCP run: `a6045940-f625-45fa-bd95-e3e01d238360`
 
-Latest direct imagingft Coverage MCP snapshot: `9dab45ce-31ba-4e95-b5c8-63f86d0d1b3b`
+Latest direct imagingft Coverage MCP snapshot: `3a2e9a05-3240-431f-be4b-08cae4bf9556`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -167,9 +167,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   with adjacent behavior lines already hit. No current gap identifies an
   adapter-owned Pillow `_imagingft.c` behavior miss.
 - Direct compatibility command `imagingft-tests-coverage-fixed` passed at
-  commit `c9c141856d3fd4c6a6e9bcbc6d1289555edead77` and ingested snapshot
-  `9dab45ce-31ba-4e95-b5c8-63f86d0d1b3b` from run
-  `483456d5-fb96-451a-b7bc-4b3a7272768a`. In the direct `imagingft` suite,
+  commit `0cec7d266629f82b7101c62adfa36c5c9a2a1f56` and ingested snapshot
+  `3a2e9a05-3240-431f-be4b-08cae4bf9556` from run
+  `a6045940-f625-45fa-bd95-e3e01d238360`. In the direct `imagingft` suite,
   `imagingft.rs` coverage is `1347/1394` lines, `210/232` branches,
   `135/146` functions, and `2140/2256` regions. This narrower suite excludes
   lower `pillow-rs-freetype` coverage and is retained as a compatibility view;
