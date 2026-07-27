@@ -91,6 +91,36 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.getmetrics.mvar_vertical_metrics",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/mvar-vertical-metrics.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.vertical_vhea_only",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/vertical-vhea-only.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }
