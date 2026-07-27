@@ -1462,3 +1462,25 @@ current blockers.
   `826`, `829`, `831`, and `928`. This confirms the lower route promotion did
   not close a direct Pillow `_imagingft.c` adapter region; it removes a lower
   stroker route blocker from the audit ledger.
+- Current pending-route audit after `e791687aa`: `make -C pillow-rs-freetype
+  route-buckets` reports `7298` concrete cases with
+  `real-parity=4856`, `pending-route=166`, `generic-fallback=1`,
+  `real-null-validation=9`, and `compile-contract=2266`. The first visible
+  ImageFont-adjacent lower bucket is `operation=ftstroke.begin_subpath`
+  with two rows:
+  `ftstroke.FT_Stroker_BeginSubPath.closed_subpath_initial_state` and
+  `ftstroke.FT_Stroker_BeginSubPath.open_subpath_initial_state`.
+  Forced execution through `make -C pillow-rs-freetype test-pending-case
+  CASE=<case-id>` still runs `0` parity rows for each and keeps both pending as
+  `ftstroke.begin_subpath:pending-route cases require an explicit maintained
+  runtime route; generic fallback is not parity evidence`. The fixture rows also
+  still reference future-only path assets
+  `outlines/stroker/manual-paths.json` and
+  `outlines/stroker/open-line-caps.json`. The next correct implementation step
+  is therefore not an `imagingft.rs` change: add those maintained path-record
+  fixtures and a same-input `ftstroke.begin_subpath` runtime route that feeds the
+  declared start/open/after-begin command sequence to pinned C FreeType, Rust
+  FFI, C ABI, and WASM ABI, then compares exact begin status, border counts, and
+  exported outline. Only after that lower route passes should a public
+  `PIL.ImageFont` row be added, and only if it exposes distinct Pillow-visible
+  stroked text behavior not already covered by the active Font corpus.
