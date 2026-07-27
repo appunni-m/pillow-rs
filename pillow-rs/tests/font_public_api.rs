@@ -1887,6 +1887,31 @@ fn assert_stroke_filled_rows_do_not_fake_branch_coverage(cases: &[Value]) {
     );
 }
 
+fn assert_imagingft_has_no_coverage_or_oracle_shortcuts() {
+    let imagingft =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/font/imagingft.rs"))
+            .expect("imagingft source must be readable");
+    let forbidden = [
+        "#[coverage",
+        "coverage(off)",
+        "cfg(coverage",
+        "cfg_attr(coverage",
+        "#[cfg(test)]",
+        "Command::new",
+        "std::process",
+        ".oracle-venv",
+        "tests/fixtures",
+    ];
+    let present = forbidden
+        .into_iter()
+        .filter(|needle| imagingft.contains(needle))
+        .collect::<Vec<_>>();
+    assert!(
+        present.is_empty(),
+        "imagingft.rs must not use coverage exclusions, test cfg shortcuts, subprocess or fixture/oracle paths to fake Font parity or region coverage: {present:?}"
+    );
+}
+
 fn assert_libraqm_error_contract_is_hard_coded() {
     assert_eq!(
         pillow_rs::PilError::UnsupportedLibraqm.to_string(),
@@ -2002,6 +2027,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_documented_blocked_public_parameters();
     assert_gap_analysis_tracks_stroke_filled_status();
     assert_blocked_public_parameters_have_active_dependency_blockers();
+    assert_imagingft_has_no_coverage_or_oracle_shortcuts();
     assert_libraqm_error_contract_is_hard_coded();
     assert_raqm_rows_use_dedicated_core_error(&cases, &root);
     assert_stroke_filled_rows_do_not_fake_branch_coverage(&cases);
