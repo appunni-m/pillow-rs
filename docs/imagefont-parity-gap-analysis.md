@@ -2,9 +2,9 @@
 
 Date: 2026-07-27
 
-Rust/source fixture commit reviewed: `c42da9794`
+Rust/source fixture commit reviewed: `9bbc6da56`
 
-Latest audit note commit: `edac5f076`
+Latest audit note commit: `9bbc6da56`
 
 Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
@@ -48,8 +48,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 401 input-only rows execute.
-- 401 rows match live Pillow 12.2.0 exactly.
+- 402 input-only rows execute.
+- 402 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -235,7 +235,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.TransposedFont.getmask.json` | 6 |
 | `font.constructor.json` | 11 |
 | `font.get_transposed_mask.json` | 11 |
-| `font.getbbox.json` | 36 |
+| `font.getbbox.json` | 37 |
 | `font.getbbox_binary.json` | 10 |
 | `font.getlength.json` | 26 |
 | `font.getmask.json` | 51 |
@@ -256,7 +256,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 401 |
+| total | 402 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -312,7 +312,7 @@ For the current broader Font-with-FreeType suite, the remaining seven reported
 
 | Rust line | Coverage reason | Current classification | Action |
 |---:|---|---|---|
-| `91` | partial branch on `Ok(ImageFont { engine })` | Constructor success is heavily hit; marker is return/source-map instrumentation after `FT_Request_Size`/face setup. | Add only a real font/size row if Pillow reaches a distinct constructor branch. |
+| `91` | partial branch on `Ok(ImageFont { engine })` | Constructor success is heavily hit; marker is return/source-map instrumentation after `FT_Request_Size`/face setup. A live Pillow 12.2.0 constructor sweep now records the real distinction that tiny TrueType sizes (`0.0001` through `0.1`) fail with `OSError("invalid ppem value")`, while the CFF fixture accepts the same tiny sizes and returns a normal public bbox. Active row `font.getbbox.pure_cff_tiny_size_success` covers that success path without stored expected output. | Add only a real font/size row if Pillow reaches another distinct constructor branch. |
 | `253` | uncovered static tuple-start line | `FT_Err_Execution_Too_Long` table entry. Current Pillow 12.2.0 probes with the maintained `hinter-execution-too-long-loop.ttf` asset at public size `7` return normal `getlength`/`getbbox`/`getmask`/`getmask2` results, so the active Font row is a success-path parity row, not an execution-too-long error row. No current Pillow `ImageFont` path is known to emit this code. | Do not add rows for this table entry unless a pinned FreeType/Pillow public route emits the exact error. |
 | `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. Direct Pillow 12.2.0 probes with `post-missing.ttf`, `no-post-names.ttf`, `post-format-unsupported.ttf`, and `invalid-post-format.ttf` all load and return normal public `getname`/`getbbox`/`getlength`/`getmask` results. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
 | `796` | partial branch on `gid` helper | `FT_Get_Char_Index` helper is hit millions of times; marker is helper call/source-map accounting. | No duplicate text rows. |
@@ -672,7 +672,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 401-row Font fixture corpus.
+The current implementation is good enough to trust the active 402-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
