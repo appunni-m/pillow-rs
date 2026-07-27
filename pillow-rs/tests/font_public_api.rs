@@ -1933,6 +1933,23 @@ fn assert_libraqm_error_contract_is_hard_coded() {
             && py_binding.contains("pyo3::exceptions::PyKeyError::new_err"),
         "Python binding must expose PilError::UnsupportedLibraqm as Pillow-compatible KeyError"
     );
+    assert!(
+        py_binding.contains("text_with_options"),
+        "Python ImageDraw binding must route text options through Rust core instead of bypassing PilError::UnsupportedLibraqm"
+    );
+
+    let py_imagedraw =
+        fs::read_to_string(repo_root.join("pillow-rs-py/python/pillow_rs/imagedraw.py"))
+            .expect("Python ImageDraw facade source must be readable");
+    assert!(
+        py_imagedraw.contains("direction")
+            && py_imagedraw.contains("features")
+            && py_imagedraw.contains("language")
+            && py_imagedraw.contains("self._draw.text(")
+            && py_imagedraw.contains("self._draw.textbbox(")
+            && py_imagedraw.contains("self._draw.textlength("),
+        "Python ImageDraw facade must pass libraqm-dependent text options into the Rust core binding"
+    );
 
     let js_binding = fs::read_to_string(repo_root.join("pillow-rs-js/src/lib.rs"))
         .expect("JavaScript binding source must be readable");

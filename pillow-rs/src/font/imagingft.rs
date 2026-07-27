@@ -588,6 +588,7 @@ pub(crate) fn getbbox_with_options(
     Ok((left - stroke, top - stroke, right + stroke, bottom + stroke))
 }
 
+#[cfg(feature = "test-api")]
 pub(crate) fn getbbox_binary(
     font: &ImageFont,
     text: &str,
@@ -682,15 +683,7 @@ fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
     }
 }
 
-pub(crate) fn render_text(
-    font: &ImageFont,
-    text: &str,
-    fill: (u8, u8, u8, u8),
-    _spacing: f32,
-) -> Result<(u32, u32, Vec<u8>), PilError> {
-    pack_rgba(getmask(font, text)?, fill)
-}
-
+#[cfg(feature = "test-api")]
 pub(crate) fn render_text_binary(
     font: &ImageFont,
     text: &str,
@@ -766,6 +759,7 @@ fn anchored_bbox(
     ))
 }
 
+#[cfg(feature = "test-api")]
 fn pack_rgba(
     (w, h, mask): (u32, u32, Vec<u8>),
     fill: (u8, u8, u8, u8),

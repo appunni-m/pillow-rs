@@ -764,3 +764,14 @@ Current request classification for `imagingft.rs` region coverage:
   `_imagingft.c` public behavior by itself. The remaining non-100% region
   count is therefore coverage-mapping noise plus static table data unless a
   new Pillow/ImageFont behavior gap is found by reverse API comparison.
+- Follow-up libraqm audit after `e64ec2f4b`: direct `ImageFont` methods already
+  route `direction`, `features`, and `language` through
+  `PilError::UnsupportedLibraqm`, but the Python `ImageDraw` facade accepted
+  the same libraqm-dependent arguments and dropped them before calling Rust
+  draw text. The fix adds an options-aware `Draw::text_with_options` path that
+  delegates to `ImageFont::getmask2_with_options`, so no-libraqm validation is
+  owned by the same core `ImageFontTextOptions` route. PyO3 `ImageDraw.text`,
+  `multiline_text`, `textbbox`, `textlength`, and `multiline_textbbox` now
+  forward `direction`/`features`/`language` into core, and the Python facade
+  passes those arguments through instead of silently drawing BASIC text.
+  `pillow-rs/tests/font_public_api.rs` now guards this source contract.

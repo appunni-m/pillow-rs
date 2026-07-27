@@ -1032,28 +1032,53 @@ impl Draw {
         font: &crate::font::ImageFont,
         fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
+        self.text_with_options(
+            x,
+            y,
+            text,
+            font,
+            fill,
+            &crate::font::ImageFontTextOptions::default(),
+        )
+    }
+
+    /// Draws text at `(x, y)` using Pillow-compatible text options.
+    ///
+    /// Libraqm-dependent options (`direction`, `features`, `language`) are
+    /// validated by the `ImageFont` adapter and return
+    /// [`PilError::UnsupportedLibraqm`] in no-libraqm builds.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when text option validation, font rendering, or
+    /// destination materialization fails.
+    pub fn text_with_options(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        font: &crate::font::ImageFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
         let mode = self.effective_mode();
         let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
+        let mut options = options.clone();
+        if binary && options.mode.is_none() {
+            options.mode = Some("1".to_string());
+        }
 
         // ImageFont rendering always uses alpha=255 so glyph coverage is preserved.
         // Mode-specific alpha handling (e.g., LA alpha=0 for int fills) is done
         // in text_compose_direct / text_compose_rgba.
         let render_fill = (fill.0, fill.1, fill.2, 255u8);
-        let (w, h, pixels) = if binary {
-            crate::font::imagingft::render_text_binary(font, text, render_fill, 0.0)?
-        } else {
-            crate::font::imagingft::render_text(font, text, render_fill, 0.0)?
-        };
+        let (w, h, mask, offset) = font.getmask2_with_options(text, &options)?;
+        let pixels = text_mask_to_rgba(mask, render_fill);
         if w == 0 || h == 0 {
             return Ok(());
         }
-        let bbox = if binary {
-            crate::font::imagingft::getbbox_binary(font, text)?
-        } else {
-            crate::font::imagingft::getbbox(font, text)?
-        };
-        let draw_x = x.saturating_add(bbox.0);
-        let draw_y = y.saturating_add(bbox.1);
+        let draw_x = x.saturating_add(offset.0);
+        let draw_y = y.saturating_add(offset.1);
 
         match mode.as_str() {
             "RGB" | "RGBA" => self.text_compose_rgba(draw_x, draw_y, w, h, &pixels, fill),
@@ -1499,6 +1524,21 @@ pub(crate) fn pil_blend(fg: u8, bg: u8, cov: u8) -> u8 {
     // Note: `(x + 127 + (x >> 8)) >> 8` is NOT used — it is an approximation
     // that differs from the exact /255 for some inputs (e.g., x=37104 gives 145 vs 146).
     ((x + 127) / 255) as u8
+}
+
+fn text_mask_to_rgba(mask: Vec<u8>, fill: (u8, u8, u8, u8)) -> Vec<u8> {
+    let mut pixels = vec![0u8; mask.len() * 4];
+    for (index, coverage) in mask.into_iter().enumerate() {
+        if coverage == 0 {
+            continue;
+        }
+        let offset = index * 4;
+        pixels[offset] = fill.0;
+        pixels[offset + 1] = fill.1;
+        pixels[offset + 2] = fill.2;
+        pixels[offset + 3] = coverage;
+    }
+    pixels
 }
 
 /// Compute cubic Bezier curve subdivision points.

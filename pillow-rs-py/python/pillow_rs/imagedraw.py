@@ -91,10 +91,25 @@ class Draw:
                   stroke_fill=stroke_fill, embedded_color=embedded_color)
 
     def textbbox(self, xy, text, font=None, **kwargs):
-        return self._draw.textbbox(xy, str(text), font)
+        return self._draw.textbbox(
+            xy,
+            str(text),
+            font,
+            kwargs.get("direction"),
+            kwargs.get("features"),
+            kwargs.get("language"),
+            float(kwargs.get("stroke_width", 0)),
+            kwargs.get("anchor"),
+        )
 
     def textlength(self, text, font=None, **kwargs):
-        return self._draw.textlength(str(text), font)
+        return self._draw.textlength(
+            str(text),
+            font,
+            kwargs.get("direction"),
+            kwargs.get("features"),
+            kwargs.get("language"),
+        )
 
     def getfont(self):
         """Return the current font."""
@@ -104,7 +119,18 @@ class Draw:
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
-        return self._draw.multiline_textbbox(xy, str(text), font, spacing, align)
+        return self._draw.multiline_textbbox(
+            xy,
+            str(text),
+            font,
+            spacing,
+            align,
+            direction,
+            features,
+            language,
+            float(stroke_width),
+            anchor,
+        )
 
     def shape(self, shape, fill=None, outline=None):
         """Draw a shape using Rust's Pillow-compatible outline semantics."""
@@ -121,7 +147,17 @@ class Draw:
              stroke_width=0, stroke_fill=None, embedded_color=False):
         font = self._get_font(font)
         if hasattr(font, '_rust_font'):
-            self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font._rust_font)
+            self._draw.text(
+                (float(xy[0]), float(xy[1])),
+                str(text),
+                fill,
+                font._rust_font,
+                direction,
+                features,
+                language,
+                float(stroke_width),
+                anchor,
+            )
         elif hasattr(font, 'getmask'):
             mask = font.getmask(text, mode="1" if self._orig_mode == "1" else "L")
             self.bitmap(xy, mask, fill=fill)
