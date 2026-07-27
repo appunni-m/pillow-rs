@@ -822,9 +822,7 @@ fn anchored_bbox(
         return Ok((left as f32, top as f32, right as f32, bottom as f32));
     };
     if anchor.len() != 2 {
-        return Err(PilError::ValueError(
-            "bad anchor specified: ".to_owned() + anchor,
-        ));
+        return Err(bad_anchor_error(anchor));
     }
     let width = right - left;
     let ascent = pixel(font.engine.metrics.ascender);
@@ -834,9 +832,7 @@ fn anchored_bbox(
         b'm' => -((width + 1) / 2),
         b'r' => -width,
         _ => {
-            return Err(PilError::ValueError(
-                "bad anchor specified: ".to_owned() + anchor,
-            ));
+            return Err(bad_anchor_error(anchor));
         }
     };
     let y_shift = match anchor.as_bytes()[1] {
@@ -847,9 +843,7 @@ fn anchored_bbox(
         b'b' => -bottom,
         b'd' => -(ascent + descent),
         _ => {
-            return Err(PilError::ValueError(
-                "bad anchor specified: ".to_owned() + anchor,
-            ));
+            return Err(bad_anchor_error(anchor));
         }
     };
     Ok((
@@ -858,6 +852,10 @@ fn anchored_bbox(
         (right + x_shift) as f32,
         (bottom + y_shift) as f32,
     ))
+}
+
+fn bad_anchor_error(anchor: &str) -> PilError {
+    PilError::ValueError("bad anchor specified: ".to_owned() + anchor)
 }
 
 #[cfg(feature = "test-api")]
