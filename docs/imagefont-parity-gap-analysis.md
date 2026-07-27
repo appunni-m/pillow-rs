@@ -83,9 +83,9 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Current-head Coverage MCP run: `1cc1112d-0e31-44bd-945d-16b9b9f9783d`
+Current-head Coverage MCP run: `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`
 
-Current-head Coverage MCP snapshot: `e8cb3b95-019e-42ea-8539-494099dce68e`
+Current-head Coverage MCP snapshot: `26484398-df28-4103-9a43-44331068fade`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -151,9 +151,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `32f24049be6f3abea42785d164815b476ef16770` and ingested
-  snapshot `12232546-8324-4731-b6ba-a2c855b62f5e` from run
-  `6a6de48a-f14c-475d-a80a-43e512d36206`. Direct `imagingft.rs` coverage
+  passed at commit `53d3b0a07114fcc032498dd6b59626a2dc8809e5` and ingested
+  snapshot `26484398-df28-4103-9a43-44331068fade` from run
+  `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
@@ -1288,6 +1288,15 @@ current blockers.
   `ImageDraw.text`, `multiline_text`, `textbbox`, `textlength`, and
   `multiline_textbbox` with `direction="rtl"` and verifies exact no-libraqm
   `KeyError` parity.
+- Current-head Coverage MCP audit after `53d3b0a07`: managed command
+  `font-tests-coverage-with-freetype-pillow-12-2` passed as run
+  `3328cd07-7a7b-47e5-9e8a-bc50612abf1e` and ingested snapshot
+  `26484398-df28-4103-9a43-44331068fade`. Direct `imagingft.rs` remains
+  `1739/1760` lines, `251/256` branches, `173/184` functions, and
+  `2712/2797` regions. The remaining markers are still `91`, `253`, `271`,
+  `796`, `826`, `829`, and `928`, so the ImageDraw facade fix did not regress
+  the core Font/ImageFont parity corpus or create a new adapter-owned coverage
+  gap.
 - Follow-up audit after `022ead7d1`: Coverage MCP snapshot
   `fcb80e1b-dd82-4f58-b36b-e84e671737b4` reports direct `imagingft.rs`
   coverage at `1660/1682` lines, `249/254` branches, `162/173` functions, and
