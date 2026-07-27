@@ -2252,18 +2252,6 @@ fn stroker_is_dejavu_glyph36_fixture(stroker: FT_Stroker) -> bool {
     })
 }
 
-fn stroker_used_unverified_curve_path(stroker: FT_Stroker) -> bool {
-    if stroker.is_null() {
-        return false;
-    }
-    STROKER_REGISTRY.with(|registry| {
-        registry
-            .borrow()
-            .get(&(stroker as usize))
-            .is_some_and(|entry| entry.state.curve_path_unverified)
-    })
-}
-
 pub fn FT_Outline_Glyph_Stroke(
     glyph: Option<&FT_OutlineGlyphOwned>,
     stroker: FT_Stroker,
@@ -2332,13 +2320,6 @@ fn stroke_outline_glyph_general(
     if parse_status != FT_Err_Ok {
         return Err(parse_status);
     }
-    if stroker_used_unverified_curve_path(stroker) {
-        // The curve stroker state machine is source-shaped but still needs
-        // broader conic/cubic export proof.  Line-only closed round paths are
-        // verified by the promoted Pillow ImageFont mono-target stroke route.
-        return Err(FT_Err_Unimplemented_Feature);
-    }
-
     let mut n_points = 0;
     let mut n_contours = 0;
     let count_status = FT_Stroker_GetCounts(stroker, Some(&mut n_points), Some(&mut n_contours));
@@ -3426,7 +3407,6 @@ struct StrokerState {
     border_counts_valid: bool,
     line_segments: FT_UInt,
     closed_round_path_unverified: bool,
-    curve_path_unverified: bool,
     left_border: StrokeBorderState,
     right_border: StrokeBorderState,
     left_outline: FT_OutlineSnapshot,
@@ -3723,7 +3703,6 @@ impl StrokerState {
             border_counts_valid: true,
             line_segments: 0,
             closed_round_path_unverified: false,
-            curve_path_unverified: false,
             left_border: StrokeBorderState::new(),
             right_border: StrokeBorderState::new(),
             left_outline: FT_OutlineSnapshot::default(),
@@ -3766,7 +3745,6 @@ impl StrokerState {
         self.border_counts_valid = true;
         self.line_segments = 0;
         self.closed_round_path_unverified = false;
-        self.curve_path_unverified = false;
         self.left_border.reset();
         self.right_border.reset();
         self.left_outline = FT_OutlineSnapshot::default();
@@ -4102,15 +4080,21 @@ impl StrokerState {
         &mut self,
         control: FT_Vector,
         to: FT_Vector,
+        from: FT_Vector,
         angle_in: FT_Angle,
         angle_out: FT_Angle,
     ) {
         // FreeType 2.14.3 `src/base/ftstroke.c:1425-1524` adds a small conic
-        // arc directly to the right and left stroke borders.  The wide-stroke
-        // negative-sector branch is intentionally handled by the caller guard.
+        // arc directly to the right and left stroke borders, including the
+        // wide-stroke negative-sector branch used for non-round joins.
         let theta = FT_Angle_Diff(angle_in, angle_out) / 2;
         let phi = angle_in + theta;
         let length = FT_DivFix(self.radius, FT_Cos(theta));
+        let alpha0 = if self.handle_wide_strokes {
+            FT_Atan2(to.x - from.x, to.y - from.y)
+        } else {
+            0
+        };
         for side in 0..=1 {
             let rotate = Self::side_to_rotate(side);
             let mut ctrl = FT_Vector::default();
@@ -4123,19 +4107,60 @@ impl StrokerState {
             end.x += to.x;
             end.y += to.y;
 
-            if side == 0 {
-                self.right_border.conicto(ctrl, end);
+            let border = if side == 0 {
+                &mut self.right_border
             } else {
-                self.left_border.conicto(ctrl, end);
+                &mut self.left_border
+            };
+            if self.handle_wide_strokes
+                && Self::append_wide_conic_negative_sector(border, from, to, ctrl, end, alpha0)
+            {
+                continue;
             }
+            border.conicto(ctrl, end);
         }
     }
 
-    fn append_small_conic_segment(&mut self, control: FT_Vector, to: FT_Vector) -> bool {
-        if self.handle_wide_strokes {
+    fn append_wide_conic_negative_sector(
+        border: &mut StrokeBorderState,
+        from: FT_Vector,
+        to: FT_Vector,
+        ctrl: FT_Vector,
+        end: FT_Vector,
+        alpha0: FT_Angle,
+    ) -> bool {
+        let Some(&start) = border.points.last() else {
+            return false;
+        };
+        let alpha1 = FT_Atan2(end.x - start.x, end.y - start.y);
+        if FT_Angle_Diff(alpha0, alpha1).abs() <= FT_ANGLE_PI as FT_Angle / 2 {
             return false;
         }
 
+        let beta = FT_Atan2(from.x - start.x, from.y - start.y);
+        let gamma = FT_Atan2(to.x - end.x, to.y - end.y);
+        let bvec = FT_Vector {
+            x: end.x - start.x,
+            y: end.y - start.y,
+        };
+        let blen = FT_Vector_Length(Some(&bvec));
+        let sin_a = FT_Sin(alpha1 - gamma).abs();
+        let sin_b = FT_Sin(beta - gamma).abs();
+        let alen = FT_MulDiv(blen, sin_a, sin_b);
+        let mut delta = FT_Vector::default();
+        FT_Vector_From_Polar(Some(&mut delta), alen, beta);
+        delta.x += start.x;
+        delta.y += start.y;
+
+        border.movable = false;
+        border.lineto(delta, false);
+        border.lineto(end, false);
+        border.conicto(ctrl, start);
+        border.lineto(end, false);
+        true
+    }
+
+    fn append_small_conic_segment(&mut self, control: FT_Vector, to: FT_Vector) -> bool {
         let arc = [to, control, self.center];
         let mut angle_in = self.angle_in;
         let mut angle_out = self.angle_in;
@@ -4154,26 +4179,22 @@ impl StrokerState {
             self.process_corner(0);
         }
 
-        self.append_conic_offset_arc(control, to, angle_in, angle_out);
+        self.append_conic_offset_arc(control, to, self.center, angle_in, angle_out);
 
         self.angle_in = angle_out;
         self.center = to;
         self.line_length = 0;
         self.border_counts_valid = false;
-        self.curve_path_unverified = true;
         true
     }
 
     fn append_conic_segment(&mut self, control: FT_Vector, to: FT_Vector) -> bool {
-        if self.handle_wide_strokes {
-            return false;
-        }
-
         // FreeType 2.14.3 `src/base/ftstroke.c:1370-1535` subdivides larger
         // conics on a fixed stack until every arc is below
         // `FT_SMALL_CONIC_THRESHOLD`, then appends each small arc to both
-        // borders.  This mirrors the stack order while keeping public glyph
-        // export guarded until the full border geometry is exact.
+        // borders, including FreeType's wide-stroke negative-sector branch.
+        // The exact C-oracle fixture remains pending until exported points,
+        // tags, and contours match.
         const FT_SMALL_CONIC_THRESHOLD: FT_Angle = FT_ANGLE_PI as FT_Angle / 6;
         const LIMIT: usize = 30;
         let mut stack = [FT_Vector::default(); 34];
@@ -4214,7 +4235,13 @@ impl StrokerState {
                 self.line_join = saved_line_join;
             }
 
-            self.append_conic_offset_arc(stack[arc + 1], stack[arc], angle_in, angle_out);
+            self.append_conic_offset_arc(
+                stack[arc + 1],
+                stack[arc],
+                stack[arc + 2],
+                angle_in,
+                angle_out,
+            );
             self.angle_in = angle_out;
 
             if arc == 0 {
@@ -4226,7 +4253,6 @@ impl StrokerState {
         self.center = to;
         self.line_length = 0;
         self.border_counts_valid = false;
-        self.curve_path_unverified = true;
         true
     }
 
@@ -4235,19 +4261,25 @@ impl StrokerState {
         control1: FT_Vector,
         control2: FT_Vector,
         to: FT_Vector,
+        from: FT_Vector,
         angle_in: FT_Angle,
         angle_mid: FT_Angle,
         angle_out: FT_Angle,
     ) {
         // FreeType 2.14.3 `src/base/ftstroke.c:1636-1745` adds a small cubic
-        // arc directly to both stroke borders.  The wide-stroke negative-sector
-        // branch is intentionally guarded by `append_cubic_segment`.
+        // arc directly to both stroke borders, including the wide-stroke
+        // negative-sector branch used for non-round joins.
         let theta1 = FT_Angle_Diff(angle_in, angle_mid) / 2;
         let theta2 = FT_Angle_Diff(angle_mid, angle_out) / 2;
         let phi1 = Self::angle_mean(angle_in, angle_mid);
         let phi2 = Self::angle_mean(angle_mid, angle_out);
         let length1 = FT_DivFix(self.radius, FT_Cos(theta1));
         let length2 = FT_DivFix(self.radius, FT_Cos(theta2));
+        let alpha0 = if self.handle_wide_strokes {
+            FT_Atan2(to.x - from.x, to.y - from.y)
+        } else {
+            0
+        };
 
         for side in 0..=1 {
             let rotate = Self::side_to_rotate(side);
@@ -4267,12 +4299,60 @@ impl StrokerState {
             end.x += to.x;
             end.y += to.y;
 
-            if side == 0 {
-                self.right_border.cubicto(ctrl1, ctrl2, end);
+            let border = if side == 0 {
+                &mut self.right_border
             } else {
-                self.left_border.cubicto(ctrl1, ctrl2, end);
+                &mut self.left_border
+            };
+            if self.handle_wide_strokes
+                && Self::append_wide_cubic_negative_sector(
+                    border, from, to, ctrl1, ctrl2, end, alpha0,
+                )
+            {
+                continue;
             }
+            border.cubicto(ctrl1, ctrl2, end);
         }
+    }
+
+    fn append_wide_cubic_negative_sector(
+        border: &mut StrokeBorderState,
+        from: FT_Vector,
+        to: FT_Vector,
+        ctrl1: FT_Vector,
+        ctrl2: FT_Vector,
+        end: FT_Vector,
+        alpha0: FT_Angle,
+    ) -> bool {
+        let Some(&start) = border.points.last() else {
+            return false;
+        };
+        let alpha1 = FT_Atan2(end.x - start.x, end.y - start.y);
+        if FT_Angle_Diff(alpha0, alpha1).abs() <= FT_ANGLE_PI as FT_Angle / 2 {
+            return false;
+        }
+
+        let beta = FT_Atan2(from.x - start.x, from.y - start.y);
+        let gamma = FT_Atan2(to.x - end.x, to.y - end.y);
+        let bvec = FT_Vector {
+            x: end.x - start.x,
+            y: end.y - start.y,
+        };
+        let blen = FT_Vector_Length(Some(&bvec));
+        let sin_a = FT_Sin(alpha1 - gamma).abs();
+        let sin_b = FT_Sin(beta - gamma).abs();
+        let alen = FT_MulDiv(blen, sin_a, sin_b);
+        let mut delta = FT_Vector::default();
+        FT_Vector_From_Polar(Some(&mut delta), alen, beta);
+        delta.x += start.x;
+        delta.y += start.y;
+
+        border.movable = false;
+        border.lineto(delta, false);
+        border.lineto(end, false);
+        border.cubicto(ctrl2, ctrl1, start);
+        border.lineto(end, false);
+        true
     }
 
     fn append_cubic_segment(
@@ -4281,15 +4361,12 @@ impl StrokerState {
         control2: FT_Vector,
         to: FT_Vector,
     ) -> bool {
-        if self.handle_wide_strokes {
-            return false;
-        }
-
         // FreeType 2.14.3 `src/base/ftstroke.c:1579-1757` subdivides larger
         // cubics on a fixed stack until every arc is below
         // `FT_SMALL_CUBIC_THRESHOLD`, then appends each small arc to both
-        // borders.  Keep glyph-level export guarded until broad stroked-outline
-        // parity is proven against the pinned C oracle.
+        // borders, including FreeType's wide-stroke negative-sector branch.
+        // The exact C-oracle fixture remains pending until exported points,
+        // tags, and contours match.
         const FT_SMALL_CUBIC_THRESHOLD: FT_Angle = FT_ANGLE_PI as FT_Angle / 8;
         const LIMIT: usize = 32;
         let mut stack = [FT_Vector::default(); 37];
@@ -4343,6 +4420,7 @@ impl StrokerState {
                 stack[arc + 2],
                 stack[arc + 1],
                 stack[arc],
+                stack[arc + 3],
                 angle_in,
                 angle_mid,
                 angle_out,
@@ -4358,7 +4436,6 @@ impl StrokerState {
         self.center = to;
         self.line_length = 0;
         self.border_counts_valid = false;
-        self.curve_path_unverified = true;
         true
     }
 
@@ -4401,7 +4478,7 @@ impl StrokerState {
     }
 
     fn finalize_closed_path(&mut self) -> bool {
-        if self.subpath_open || self.line_segments == 0 {
+        if self.subpath_open || self.first_point {
             return false;
         }
 
