@@ -155,10 +155,8 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
 
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 0] = [];
 
-const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 2] = [
-    "ftstroke.FT_Glyph_Stroke.destroy_original_option",
-    "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
-];
+const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 1] =
+    ["ftstroke.FT_Glyph_Stroke.destroy_original_option"];
 
 const EXPECTED_PARTIAL_STROKER_SYMBOLS: [&str; 17] = [
     "FT_Outline_GetInsideBorder",
@@ -1557,7 +1555,7 @@ fn assert_blocked_public_parameters_have_active_dependency_blockers() {
     assert_eq!(
         stroke_border.get("status").and_then(Value::as_str),
         Some("partial"),
-        "FT_Glyph_StrokeBorder must stay marked partial while successful border geometry and destroy-option parity remain pending"
+        "FT_Glyph_StrokeBorder must stay marked partial while broader stroke-border geometry remains guarded"
     );
     assert!(
         stroke_border
@@ -1674,6 +1672,7 @@ fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
                 "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
                     | "ftstroke.FT_Glyph_StrokeBorder.outside_border_success"
                     | "ftstroke.FT_Glyph_StrokeBorder.inside_border_success"
+                    | "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option"
             )
         })
         .collect()
