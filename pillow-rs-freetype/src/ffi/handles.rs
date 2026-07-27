@@ -3765,7 +3765,7 @@ impl StrokerState {
 
         let mut sigma = FT_Vector::default();
         let intersect =
-            if !border.movable || line_length == 0 || theta > 0x59C000 || theta < -0x59C000 {
+            if !border.movable || line_length == 0 || !(-0x59C000..=0x59C000).contains(&theta) {
                 false
             } else {
                 FT_Vector_Unit(Some(&mut sigma), theta);
@@ -3865,6 +3865,25 @@ impl StrokerState {
         FT_Angle_Diff(*angle_in, *angle_out).abs() < FT_SMALL_CONIC_THRESHOLD
     }
 
+    fn conic_split(stack: &mut [FT_Vector; 34], base: usize) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:82-100` splits one quadratic
+        // Bézier in-place as `[to, control, from] -> [right..., middle,
+        // left...]` so the stroker stack can process the left arc first.
+        stack[base + 4].x = stack[base + 2].x;
+        let a = stack[base].x + stack[base + 1].x;
+        let b = stack[base + 1].x + stack[base + 2].x;
+        stack[base + 3].x = b >> 1;
+        stack[base + 2].x = (a + b) >> 2;
+        stack[base + 1].x = a >> 1;
+
+        stack[base + 4].y = stack[base + 2].y;
+        let a = stack[base].y + stack[base + 1].y;
+        let b = stack[base + 1].y + stack[base + 2].y;
+        stack[base + 3].y = b >> 1;
+        stack[base + 2].y = (a + b) >> 2;
+        stack[base + 1].y = a >> 1;
+    }
+
     fn start_conic_subpath(&mut self, start_angle: FT_Angle) {
         let mut delta = FT_Vector::default();
         FT_Vector_From_Polar(
@@ -3885,6 +3904,39 @@ impl StrokerState {
         self.subpath_line_length = 0;
         self.first_point = false;
         self.border_counts_valid = false;
+    }
+
+    fn append_conic_offset_arc(
+        &mut self,
+        control: FT_Vector,
+        to: FT_Vector,
+        angle_in: FT_Angle,
+        angle_out: FT_Angle,
+    ) {
+        // FreeType 2.14.3 `src/base/ftstroke.c:1425-1524` adds a small conic
+        // arc directly to the right and left stroke borders.  The wide-stroke
+        // negative-sector branch is intentionally handled by the caller guard.
+        let theta = FT_Angle_Diff(angle_in, angle_out) / 2;
+        let phi = angle_in + theta;
+        let length = FT_DivFix(self.radius, FT_Cos(theta));
+        for side in 0..=1 {
+            let rotate = Self::side_to_rotate(side);
+            let mut ctrl = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut ctrl), length, phi + rotate);
+            ctrl.x += control.x;
+            ctrl.y += control.y;
+
+            let mut end = FT_Vector::default();
+            FT_Vector_From_Polar(Some(&mut end), self.radius, angle_out + rotate);
+            end.x += to.x;
+            end.y += to.y;
+
+            if side == 0 {
+                self.right_border.conicto(ctrl, end);
+            } else {
+                self.left_border.conicto(ctrl, end);
+            }
+        }
     }
 
     fn append_small_conic_segment(&mut self, control: FT_Vector, to: FT_Vector) -> bool {
@@ -3910,29 +3962,75 @@ impl StrokerState {
             self.process_corner(0);
         }
 
-        let theta = FT_Angle_Diff(angle_in, angle_out) / 2;
-        let phi = angle_in + theta;
-        let length = FT_DivFix(self.radius, FT_Cos(theta));
-        for side in 0..=1 {
-            let rotate = Self::side_to_rotate(side);
-            let mut ctrl = FT_Vector::default();
-            FT_Vector_From_Polar(Some(&mut ctrl), length, phi + rotate);
-            ctrl.x += control.x;
-            ctrl.y += control.y;
-
-            let mut end = FT_Vector::default();
-            FT_Vector_From_Polar(Some(&mut end), self.radius, angle_out + rotate);
-            end.x += to.x;
-            end.y += to.y;
-
-            if side == 0 {
-                self.right_border.conicto(ctrl, end);
-            } else {
-                self.left_border.conicto(ctrl, end);
-            }
-        }
+        self.append_conic_offset_arc(control, to, angle_in, angle_out);
 
         self.angle_in = angle_out;
+        self.center = to;
+        self.line_length = 0;
+        self.border_counts_valid = false;
+        self.conic_path_unverified = true;
+        true
+    }
+
+    fn append_conic_segment(&mut self, control: FT_Vector, to: FT_Vector) -> bool {
+        if self.handle_wide_strokes {
+            return false;
+        }
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:1370-1535` subdivides larger
+        // conics on a fixed stack until every arc is below
+        // `FT_SMALL_CONIC_THRESHOLD`, then appends each small arc to both
+        // borders.  This mirrors the stack order while keeping public glyph
+        // export guarded until the full border geometry is exact.
+        const FT_SMALL_CONIC_THRESHOLD: FT_Angle = FT_ANGLE_PI as FT_Angle / 6;
+        const LIMIT: usize = 30;
+        let mut stack = [FT_Vector::default(); 34];
+        stack[0] = to;
+        stack[1] = control;
+        stack[2] = self.center;
+
+        let mut arc = 0usize;
+        let mut first_arc = true;
+        loop {
+            let mut angle_in = self.angle_in;
+            let mut angle_out = self.angle_in;
+            let current = [stack[arc], stack[arc + 1], stack[arc + 2]];
+
+            if arc < LIMIT && !Self::conic_is_small_enough(current, &mut angle_in, &mut angle_out) {
+                if self.first_point {
+                    self.angle_in = angle_in;
+                }
+                Self::conic_split(&mut stack, arc);
+                arc += 2;
+                continue;
+            }
+
+            if first_arc {
+                first_arc = false;
+                if self.first_point {
+                    self.start_conic_subpath(angle_in);
+                } else {
+                    self.angle_out = angle_in;
+                    self.process_corner(0);
+                }
+            } else if FT_Angle_Diff(self.angle_in, angle_in).abs() > FT_SMALL_CONIC_THRESHOLD / 4 {
+                self.center = stack[arc + 2];
+                self.angle_out = angle_in;
+                let saved_line_join = self.line_join;
+                self.line_join = FT_STROKER_LINEJOIN_ROUND as FT_Int;
+                self.process_corner(0);
+                self.line_join = saved_line_join;
+            }
+
+            self.append_conic_offset_arc(stack[arc + 1], stack[arc], angle_in, angle_out);
+            self.angle_in = angle_out;
+
+            if arc == 0 {
+                break;
+            }
+            arc -= 2;
+        }
+
         self.center = to;
         self.line_length = 0;
         self.border_counts_valid = false;
@@ -4015,8 +4113,7 @@ impl StrokerState {
         let y = self.subpath_start.y;
         let radius = self.radius;
         let round_control =
-            FT_Pos::try_from((i64::from(radius) * 55_228_475 + 50_000_000) / 100_000_000)
-                .unwrap_or(radius);
+            FT_Pos::try_from((radius * 55_228_475 + 50_000_000) / 100_000_000).unwrap_or(radius);
         let points = match self.line_cap {
             x if x == FT_STROKER_LINECAP_BUTT as FT_Int => vec![
                 FT_Vector {
@@ -4853,7 +4950,7 @@ pub fn FT_Stroker_ConicTo(
             entry.state.center = *to;
             return FT_Err_Ok;
         }
-        if entry.state.append_small_conic_segment(*control, *to) {
+        if entry.state.append_conic_segment(*control, *to) {
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
