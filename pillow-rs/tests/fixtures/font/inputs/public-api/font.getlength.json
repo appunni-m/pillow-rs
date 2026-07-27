@@ -381,6 +381,24 @@
           "text_repeat": 1000001
         }
       }
+    },
+    {
+      "case_id": "font.getlength.dejavusans20_too_many_characters_with_mode_error",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "text_repeat": 1000001,
+          "mode": "1"
+        }
+      }
     }
   ]
 }

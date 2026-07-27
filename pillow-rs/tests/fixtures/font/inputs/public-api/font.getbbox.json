@@ -532,6 +532,41 @@
           "text": "AV"
         }
       }
+    },
+    {
+      "case_id": "font.getbbox.dejavusans20_too_many_characters_error",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "text_repeat": 1000001
+        }
+      }
+    },
+    {
+      "case_id": "font.getbbox.dejavusans20_too_many_characters_with_anchor_error",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "text_repeat": 1000001,
+          "anchor": "mm"
+        }
+      }
     }
   ]
 }

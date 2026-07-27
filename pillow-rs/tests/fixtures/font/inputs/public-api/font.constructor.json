@@ -109,6 +109,21 @@
       }
     },
     {
+      "case_id": "font.constructor.truetype_dejavusans_negative_fractional_size_error",
+      "operation": "truetype",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": -1.5
+        }
+      }
+    },
+    {
       "case_id": "font.constructor.font_size_default_10",
       "operation": "font_size",
       "inputs": {

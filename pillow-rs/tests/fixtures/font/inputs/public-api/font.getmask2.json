@@ -908,6 +908,23 @@
           "mode": "1"
         }
       }
+    },
+    {
+      "case_id": "font.getmask2.dejavusans20_too_many_characters_error",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "text_repeat": 1000001
+        }
+      }
     }
   ]
 }
