@@ -62,12 +62,11 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   using an explicit maintained Rust/C/WASM runtime route. The row now remains
   pending with the reason `pending-route cases require an explicit maintained
   runtime route; generic fallback is not parity evidence`.
-- `FT_Glyph_StrokeBorder.inside_border_success` no longer depends on an
-  unresolved future font asset. Its input now uses the existing maintained CFF
-  fixture `input/fonts/cff/fontinfo-populated.otf` for the non-TrueType
-  orientation side. The row still remains pending because there is no explicit
-  maintained inside-border runtime route yet; this change removes only the
-  missing-asset blocker.
+- `FT_Glyph_StrokeBorder.inside_border_success` now has an explicit maintained
+  C-oracle/Rust/C-ABI/WASM-ABI runtime route. The fix was in lower
+  `pillow-rs-freetype`: stroked replacement outlines must keep the fresh
+  `FT_Outline_New` owner flag and `FT_Stroker_ExportBorder` must not overwrite
+  caller outline flags while appending geometry.
 - Coverage MCP command `imagingft-tests-coverage-fixed` passes and ingests snapshot `b3b632ff-18b8-469c-b8ba-eba2ebd6d2ba` at runtime commit `12d434ca`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
@@ -424,12 +423,11 @@ Current lower-stroker verification:
   `outline_glyph_stroked_success` route loads glyph 36 with
   `FT_LOAD_NO_BITMAP`, not the public ImageFont blocker shape
   `FT_LOAD_TARGET_MONO`. Only 4 rows are runnable and 4 remain pending. The
-  pending rows are destroy-option coverage plus the `FT_Glyph_StrokeBorder`
-  inside/outside/destroy routes that the combined case filter reports as owned
-  follow-up work.
+  pending rows are destroy-option coverage plus lower glyph-stroke follow-up
+  work.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
-  passes 2/2 runnable rows. The remaining pending rows are inside-border
-  success and destroy-option parity.
+  passes the maintained runnable rows. The remaining pending row is
+  destroy-option parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`
   passes 5/5 runnable rows after the first-line border state update. This
   verifies no regression in the public segment lane; it is not proof of general
@@ -613,14 +611,14 @@ Latest focused ftstroke evidence after the outside-border route update:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`: 59/59 runnable rows pass, 9 rows remain pending. The parsed `FT_Stroker.lifecycle_contract` row now validates New, Set, BeginSubPath, two LineTo calls, EndSubPath, GetCounts, Export, and Done status/count behavior through pinned C, Rust FFI, C ABI, and WASM ABI.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`: 4/4 runnable rows pass, 4 rows remain pending.
-- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: 2/2 runnable rows pass, 2 rows remain pending. The newly maintained `outside_border_success` route compares selected border, replacement outline points/tags/contours, CBox, status sequence, and preserve-original ownership against pinned C, Rust FFI, C ABI, and WASM ABI.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: the maintained runnable rows pass. The newly maintained `inside_border_success` route compares orientation-selected inside border, replacement outline points/tags/contours, and owner flags against pinned C, Rust FFI, C ABI, and WASM ABI. The remaining pending row is destroy-option ownership parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`: 7/7 runnable rows pass, 0 pending. This now includes `append_to_existing_outline` with sentinel-prefix preservation and contour-index offset comparison against the pinned C oracle.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ExportBorder`: 4/4 runnable rows pass, 0 pending. This now includes selected-border append-to-existing-outline parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit `99f7e415d` ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route. Public `stroke_filled=true` now reaches the maintained outside-border glyph row, but general closed round-path stroker geometry remains guarded for broader glyph shapes.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`: 9/9 runnable rows pass, 2 rows remain pending. The pending row `pending_stroked_mono_target_outline_to_bitmap` names the exact lower sequence blocking public `mode="1"` stroked ImageFont parity: `FT_LOAD_TARGET_MONO` outline, `FT_Glyph_Stroke`, then `FT_Glyph_To_Bitmap` with `FT_RENDER_MODE_NORMAL`, comparing bitmap placement and coverage bytes against pinned C. The native C oracle command and Rust/C/WASM runner branches now execute this exact sequence; temporarily promoting the row to real parity exposes a `/bitmap/buffer_hex` mismatch, while bitmap shape/placement has advanced past the previous wrong-oracle `/advance/x` artifact.
-- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 180 `pending-route` cases overall and 4842 `real-parity` cases after promoting `FT_Glyph_StrokeBorder.outside_border_success` and adding the explicit pending `FT_Glyph_To_Bitmap` blocker route. The project still cannot claim complete FreeType-backed ImageFont parity yet because `inside_border_success`, destroy-option ownership, stroked mono-target bitmap conversion, and general glyph stroke geometry remain incomplete.
+- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` must be refreshed after the inside-border promotion. The project still cannot claim complete FreeType-backed ImageFont parity yet because destroy-option ownership, stroked mono-target bitmap conversion, and general glyph stroke geometry remain incomplete.
 - Refreshed focused check at doc commit `9f4211154`:
   `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`
   passes 9/9 runnable rows with the same 2 explicit pending rows. The generated
@@ -958,3 +956,20 @@ Current request classification for `imagingft.rs` region coverage:
   branches, `162/173` functions, and `2610/2696` regions with the same eight
   gap lines. This is a real parity improvement and lower-route coverage
   improvement, but not an LLVM-attributed `imagingft.rs` region movement.
+- Coverage MCP run `316bb0b7-be25-4c8c-80a8-9f2296950a35` passed and ingested
+  snapshot `eeab1264-1871-4a3d-a19a-f11391348f15` for the current uncommitted
+  inside-border promotion worktree state. Direct `imagingft.rs` coverage in
+  that snapshot is `1247/1295` lines, `204/226` branches, `121/132`
+  functions, and `2012/2129` regions (`94.50%` region coverage). The current
+  uncovered/partial ranges are lines `49`, `51`, `74-75`, `77`, `80`, `84`,
+  `88`, `193-195`, `201-203`, `211-213`, `265`, `271-272`, `297`, `360`,
+  `375`, `453`, `511`, `519`, `537`, `541`, `563`, `568`, `575`, `584`,
+  `593`, `596`, `600`, `602-603`, and `619`.
+  Source review classifies these as ImageFont adapter coverage gaps, not
+  `pillow-rs-freetype` region gaps: font-size/index/error formatting branches,
+  rare FreeType error-table message tuples, optional-name/default-variant
+  wrappers, variation failure/saturation paths, and empty-text/simple-wrapper
+  branches for `getlength`, `getbbox`, `getbbox_binary`, `getmask`, and
+  `getmask2`. Reaching 100% region coverage in `imagingft.rs` requires adding
+  active Pillow-oracle ImageFont fixture rows for these adapter branches; it
+  should not be pursued by broad FreeType refactors.

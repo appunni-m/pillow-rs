@@ -169,9 +169,9 @@ the pinned C oracle. It is not the general glyph stroker implementation.
 Current focused stroker rows pass. The broader `ftstroke.FT_Glyph_Stroke`
 filter now compares 5 runnable rows, all exact, with three explicit pending
 blockers: `FT_Glyph_Stroke.destroy_original_option`,
-`FT_Glyph_StrokeBorder.inside_border_success`, and
-`FT_Glyph_StrokeBorder.destroy_original_option`. The route audit is
-`real-parity=4843`, `pending-route=179`.
+`FT_Glyph_StrokeBorder.destroy_original_option`, and lower stroked-bitmap
+geometry. `FT_Glyph_StrokeBorder.inside_border_success` now has an explicit
+maintained C-oracle/Rust/C-ABI/WASM-ABI route.
 Forced pending-case runs no longer accept the shared generic fallback for these
 rows. A pending stroke row must have an explicit maintained runtime route before
 it can be promoted to C/Rust/WASM parity evidence.
@@ -491,8 +491,9 @@ make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder
 
 Result after the `FT_Glyph_Stroke.outline_glyph_stroked_success` movement:
 `FT_Glyph_Stroke` filtered rows pass (`5/5`) with three route-pending blocker
-rows still reported, and `FT_Glyph_StrokeBorder` runnable rows pass (`2/2`)
-with two route-pending blocker rows still reported. The interface map now
+rows still reported, and `FT_Glyph_StrokeBorder` runnable rows include the
+maintained inside-border route with only destroy-option parity still pending.
+The interface map now
 classifies the lower stroker group as partial rather than out of scope;
 successful stroke-border geometry remains pending rather than excluded.
 
