@@ -621,12 +621,12 @@ fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
 
 pub(crate) fn getlength(font: &FreeTypeFont, text: &str) -> Result<f32, PilError> {
     validate_text_length(text)?;
-    Ok(length_from_basic_layout(font, text)? as f32 / 64.0)
+    Ok(length_from_basic_layout_with_flags(font, text, 0)? as f32 / 64.0)
 }
 
 pub(crate) fn native_getlength_26dot6(font: &FreeTypeFont, text: &str) -> Result<i32, PilError> {
     validate_text_length(text)?;
-    length_from_basic_layout(font, text)
+    length_from_basic_layout_with_flags(font, text, 0)
 }
 
 pub(crate) fn native_getsize(
@@ -923,10 +923,6 @@ fn floor26(x: i64) -> i32 {
 
 fn ceil26(x: i64) -> i32 {
     (((x + 63) & -64) >> 6) as i32
-}
-
-fn length_from_basic_layout(ttf: &FreeTypeFont, text: &str) -> Result<i32, PilError> {
-    length_from_basic_layout_with_flags(ttf, text, 0)
 }
 
 fn length_from_basic_layout_with_flags(
