@@ -2331,11 +2331,13 @@ pub fn FT_Outline_Glyph_StrokeBorder(
 
     let mut n_points = 0;
     let mut n_contours = 0;
-    let count_status =
-        FT_Stroker_GetBorderCounts(stroker, border, Some(&mut n_points), Some(&mut n_contours));
-    if count_status != FT_Err_Ok {
-        return Err(count_status);
-    }
+    // FreeType 2.14.3 `src/base/ftstroke.c:2372-2373` intentionally ignores
+    // `FT_Stroker_GetBorderCounts`' return status in `FT_Glyph_StrokeBorder`.
+    // The helper zeroes both output counts on invalid border state, then the
+    // wrapper continues through allocation/export with an empty replacement
+    // outline.  Keep that lower FreeType wrapper behavior here; successful
+    // real-glyph parity still depends on the stroker geometry routes above.
+    let _ = FT_Stroker_GetBorderCounts(stroker, border, Some(&mut n_points), Some(&mut n_contours));
 
     let mut outline = FT_OutlineSnapshot {
         points: Vec::with_capacity(n_points as usize),
