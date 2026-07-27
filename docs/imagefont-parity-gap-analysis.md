@@ -1283,3 +1283,18 @@ Current request classification for `imagingft.rs` region coverage:
   `pending-route=169`. Remaining line-join pending rows are now round,
   wide round-curve restoration, and the broad
   `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.
+- `FT_STROKER_LINEJOIN_ROUND.round_join_geometry` re-check: forced pending
+  execution with `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry` still runs
+  `0` parity rows and stays pending as
+  `ftstroke.stroke_manual_path:pending-route cases require an explicit
+  maintained runtime route; generic fallback is not parity evidence`. The
+  active input references future-only assets
+  `outlines/stroker/round-join-line-conic-cubic.json` and named paths
+  `acute_line_join`, `conic_join`, and `cubic_join`; no matching asset currently
+  exists under `pillow-rs-freetype/tests/fixtures`. Promoting this row correctly
+  requires adding maintained path-record fixtures and a
+  `ftstroke.stroke_manual_path` route that feeds the same records into pinned C,
+  Rust FFI, C ABI, and WASM ABI, then compares exact status sequence,
+  point/contour counts, exported outline, and cbox. It should not be promoted by
+  route reclassification alone.
