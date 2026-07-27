@@ -53,6 +53,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Commit `b1f4f88e` adds the maintained `dejavu-missing-family-style.ttf` fixture and a public `getname` row proving Pillow returns `(None, None)` when the selected SFNT family/style records are absent. Rust previously surfaced lower defaults `("Unknown", "Regular")`; the lower FFI face wrapper now nulls only the C-compatible `FT_Face.family_name/style_name` pointers when selected SFNT names are absent. Coverage MCP run `46240b96-9faf-447c-a367-34ff908df978` passed and ingested snapshot `1c686a77-cb2d-4d0a-ad7d-adb7d91ec124`; direct `imagingft.rs` region totals did not move because line `375` still has an LLVM partial marker despite hits through both named and missing-name rows.
 - Commit `800384a5` adds `font.variations.set_variation_by_axes.fvar_axis_size_short_error`, proving Pillow/Rust exact `OSError("invalid argument")` parity for malformed fvar axis-size data through the public setter. Coverage MCP run `4db68a8e-f5aa-4af1-b918-a895b2efdcd6` passed and ingested snapshot `eb41f17c-7e76-453d-90ba-ab996a041dbf`; direct `imagingft.rs` metrics did not move because the lower error is returned before the adapter reaches the exact `FT_Set_Var_Design_Coordinates` status line.
 - Current-head Coverage MCP run `dbd9ae3e-9d15-4413-9c63-7f3e2c0267f6` at commit `be450e63` passes and ingests snapshot `ac1fd3bb-3dc7-4b2e-b7b2-0dfc835be82c`. Direct `imagingft.rs` remains `1247/1295` lines, `204/226` branches, `121/132` functions, and `2012/2129` regions. The direct suite gaps are unchanged from the current classification: constructor `?`/rare `FT_Request_Size`, static FreeType error-message entries, variation setter status lines, optional-name LLVM tuple instrumentation, and text wrapper `?` instrumentation. The focused lower `FT_Glyph_To_Bitmap` lane still passes all active rows while keeping the mono-target stroked row pending, so no lower freetype refactor is justified for coverage-only reasons.
+- Current broader Font-with-FreeType Coverage MCP run `1e4c7216-3c82-4090-8d08-3092c6f7331e` at commit `6956a87e` passes and ingests snapshot `842b90ff-80c0-4287-b51b-0dfba70103ad`. In that suite, `imagingft.rs` is `1660/1682` lines, `249/254` branches, `162/173` functions, and `2610/2696` regions. The remaining current ranges are `91`, `253`, `271`, `796`, `826`, `829`, `831`, and `928`; they remain constructor/static-table/helper-boundary instrumentation unless a new Pillow/ImageFont behavior gap is proven by reverse comparison.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -522,7 +523,7 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 356-row Font fixture corpus.
+The current implementation is good enough to trust the active 365-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because broader stroke-border/destroy/general glyph support is still incomplete even though the active public extent behavior is now explained by `_imagingft.c` clipping.
 
@@ -547,9 +548,10 @@ Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and
 - Refreshed run after wiring the exact native C oracle and Rust/C/WASM runner route for the stroked mono-target glyph-to-bitmap sequence: `eff0e9cf-09c0-479c-b86e-63865875b6ef`, snapshot `4e2e6bc3-c28f-4453-8600-f21dfc7885bd`, commit `41b2b74451a906938d481935c962e11e25109cd9`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
 - The new input-only Font row `font.getmask2.dejavusans24_a_stroke_1_5_filled_l` passes exact live Pillow 12.2.0 oracle parity and reaches `imagingft.rs:1212`.
 - The new input-only Font rows `font.getmask.dejavusans24_a_stroke_start_negative_y_clips` and `font.getmask2.dejavusans24_a_stroke_start_negative_y_clips` pass exact live Pillow 12.2.0 oracle parity. They increase active corpus proof but do not move direct `imagingft.rs` coverage metrics.
-- `pillow-rs/src/font/imagingft.rs` is now 1664/1686 lines, 249/254 branches, 162/173 functions, and 2608/2700 regions.
+- Current refreshed Font-with-FreeType evidence: Coverage MCP run `1e4c7216-3c82-4090-8d08-3092c6f7331e`, snapshot `842b90ff-80c0-4287-b51b-0dfba70103ad`, at commit `6956a87e` passed and ingested.
+- `pillow-rs/src/font/imagingft.rs` is now 1660/1682 lines, 249/254 branches, 162/173 functions, and 2610/2696 regions in the Font-with-FreeType suite.
 - The prior real public blocker at lines 1211-1212 is resolved: line 1211 has both branches covered and line 1212 has one hit.
-- Remaining direct gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, and 928. These are not currently known public ImageFont behavior mismatches.
+- Remaining Font-with-FreeType gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, 831, and 928. These are not currently known public ImageFont behavior mismatches.
 - Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. For `imagingft.rs`, the remaining direct gaps are currently classified as static-data or LLVM segment artifacts, not known public Pillow behavior misses. Add new Font rows only when they exercise independent ImageFont behavior, not to force these markers.
 
 Current request classification for `imagingft.rs` region coverage:
