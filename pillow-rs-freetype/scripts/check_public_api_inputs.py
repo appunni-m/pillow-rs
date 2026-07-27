@@ -1270,11 +1270,6 @@ def ftstroke_export_pending_reason(row: ConcreteInput) -> str | None:
             "proving the combined outline appends left then right border "
             "geometry in pinned C point/tag/contour order"
         ),
-        "ftstroke.FT_Stroker_Export.append_to_existing_outline": (
-            "FT_Stroker_Export append parity needs a maintained route proving "
-            "export appends to existing outline contents with the same point, "
-            "tag, contour, and contour-index offsets as pinned C"
-        ),
         "ftstroke.FT_Stroker_Export.invalid_inputs_noop": (
             "FT_Stroker_Export invalid-input parity needs a maintained route "
             "proving null stroker or null outline inputs preserve the existing "
@@ -1294,11 +1289,6 @@ def ftstroke_export_pending_reason(row: ConcreteInput) -> str | None:
             "FT_Stroker_ExportBorder invalid-input parity needs a maintained "
             "route proving invalid border values, null stroker, or null outline "
             "preserve output and no-op exactly like pinned C"
-        ),
-        "ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline": (
-            "FT_Stroker_ExportBorder append parity needs a maintained route "
-            "proving border export appends to existing outline contents with "
-            "the same contour-index offset behavior as pinned C"
         ),
     }
     return exact_cases.get(row.case_id)
@@ -5106,7 +5096,9 @@ def future_batch_real_parity_reason(row: ConcreteInput) -> str | None:
         "ftstroke.FT_Stroker_Done.valid_stroker_releases_buffers": "FT_Stroker_Done non-null release validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker.unparsed_handle_lifecycle_matches_c": "FT_Stroker unparsed non-null handle lifecycle validates New, Set, unparsed Export/ExportBorder no-op, Rewind, and Done through pinned C oracle, Rust FFI, C ABI, and WASM ABI; path geometry/count lifecycle remains pending",
         "ftstroke.FT_Stroker_Export.invalid_inputs_noop": "FT_Stroker_Export null/invalid-input no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_Export.append_to_existing_outline": "FT_Stroker_Export append-to-existing-outline behavior validates sentinel preservation plus point/tag/contour offset appends through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftstroke.FT_Stroker_ExportBorder.invalid_inputs_or_border_noop": "FT_Stroker_ExportBorder null/invalid-border/unparsed-stroker no-op validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
+        "ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline": "FT_Stroker_ExportBorder append-to-existing-outline behavior validates sentinel preservation plus selected-border point/tag/contour offset appends through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.outline_renderer_lookup_success": "FT_Get_Renderer outline renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.bitmap_svg_and_unknown_formats": "FT_Get_Renderer bitmap/SVG/outline/unknown renderer class metadata validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI",
         "ftrender.FT_Get_Renderer.null_library_returns_null": "FT_Get_Renderer null-library lookup returns no renderer through pinned C oracle, Rust FFI, C ABI, and WASM ABI",

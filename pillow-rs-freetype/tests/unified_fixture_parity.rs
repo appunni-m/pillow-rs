@@ -25451,6 +25451,14 @@ fn stroker_open_line_geometry_radius(case: &InputCase) -> FT_Fixed {
     }
 }
 
+fn is_stroker_export_append_case(case: &InputCase) -> bool {
+    matches!(
+        case.case_id.as_str(),
+        "ftstroke.FT_Stroker_Export.append_to_existing_outline"
+            | "ftstroke.FT_Stroker_ExportBorder.append_to_existing_outline"
+    )
+}
+
 fn is_stroker_simple_line_counts_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineTo.pre_end_counts_invalid_outline"
 }
@@ -25818,6 +25826,199 @@ fn wasm_stroker_open_line_geometry(case: &InputCase) -> Result<RunOutput, String
         Err(format!(
             "unsupported stroker open-line geometry route {action}"
         ))
+    }
+}
+
+fn sentinel_stroker_outline() -> FT_OutlineSnapshot {
+    FT_OutlineSnapshot {
+        points: vec![FT_Vector { x: -11, y: -22 }, FT_Vector { x: -33, y: -44 }],
+        tags: vec![FT_CURVE_TAG_ON as FT_Byte, FT_CURVE_TAG_ON as FT_Byte],
+        contours: vec![1],
+        flags: 0,
+    }
+}
+
+fn stroker_append_output(outline: &FT_OutlineSnapshot) -> RunOutput {
+    let prefix_points = &outline.points[..2.min(outline.points.len())];
+    let prefix_tags = &outline.tags[..2.min(outline.tags.len())];
+    let prefix_contours = &outline.contours[..1.min(outline.contours.len())];
+    let sentinel_prefix = prefix_points == sentinel_stroker_outline().points.as_slice()
+        && prefix_tags == sentinel_stroker_outline().tags.as_slice()
+        && prefix_contours == sentinel_stroker_outline().contours.as_slice();
+    ok(json!({
+        "sentinel_prefix": if sentinel_prefix { "unchanged" } else { "changed" },
+        "appended_outline": {
+            "points": outline.points.iter().skip(2).map(|point| json!({"x": point.x, "y": point.y})).collect::<Vec<_>>(),
+            "tags": outline.tags.iter().skip(2).copied().collect::<Vec<_>>(),
+            "contours": outline.contours.iter().skip(1).copied().collect::<Vec<_>>(),
+            "flags": outline.flags
+        },
+        "n_points": outline.points.len(),
+        "n_contours": outline.contours.len()
+    }))
+}
+
+fn run_rust_stroker_append(case: &InputCase) -> Result<FT_OutlineSnapshot, String> {
+    if !is_stroker_export_append_case(case) {
+        return Err(format!(
+            "{} is not a maintained stroker append route",
+            case.case_id
+        ));
+    }
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Err(format!("FT_Stroker_New failed with {new_error}"));
+    }
+    FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = FT_Vector { x: 0, y: 0 };
+    let to = FT_Vector { x: 640, y: 0 };
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&start), 1);
+    let line_error = if begin_error == FT_Err_Ok {
+        FT_Stroker_LineTo(stroker, Some(&to))
+    } else {
+        begin_error
+    };
+    let end_error = if line_error == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        line_error
+    };
+    if end_error != FT_Err_Ok {
+        FT_Stroker_Done(stroker);
+        return Err(format!("append setup failed with {end_error}"));
+    }
+    let mut count_points = 0;
+    let mut count_contours = 0;
+    let counts_error =
+        FT_Stroker_GetCounts(stroker, Some(&mut count_points), Some(&mut count_contours));
+    if counts_error != FT_Err_Ok {
+        FT_Stroker_Done(stroker);
+        return Err(format!("append count setup failed with {counts_error}"));
+    }
+    let mut outline = sentinel_stroker_outline();
+    if case.case_id == "ftstroke.FT_Stroker_Export.append_to_existing_outline" {
+        FT_Stroker_Export(stroker, Some(&mut outline));
+    } else {
+        FT_Stroker_ExportBorder(
+            stroker,
+            FT_STROKER_BORDER_LEFT as FT_Int,
+            Some(&mut outline),
+        );
+    }
+    FT_Stroker_Done(stroker);
+    Ok(outline)
+}
+
+fn rust_stroker_export_append(case: &InputCase) -> Result<RunOutput, String> {
+    run_rust_stroker_append(case).map(|outline| stroker_append_output(&outline))
+}
+
+fn c_stroker_export_append(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_export_append_case(case) {
+        return Err(format!(
+            "{} is not a maintained stroker append route",
+            case.case_id
+        ));
+    }
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        96,
+        FT_STROKER_LINECAP_ROUND as FT_Int,
+        FT_STROKER_LINEJOIN_ROUND as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector { x: 0, y: 0 };
+    let to = c_abi::FT_Vector { x: 640, y: 0 };
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 1);
+    let line_error = if begin_error == FT_Err_Ok {
+        c_abi::FT_Stroker_LineTo(stroker, &to)
+    } else {
+        begin_error
+    };
+    let end_error = if line_error == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        line_error
+    };
+    if end_error != FT_Err_Ok {
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        return Err(format!("append setup failed with {end_error}"));
+    }
+    let mut count_points = 0;
+    let mut count_contours = 0;
+    let counts_error = c_abi::FT_Stroker_GetCounts(stroker, &mut count_points, &mut count_contours);
+    if counts_error != FT_Err_Ok {
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        return Err(format!("append count setup failed with {counts_error}"));
+    }
+    let mut points = [c_abi::FT_Vector::default(); 128];
+    let mut tags = [0u8; 128];
+    let mut contours = [0u16; 16];
+    points[0] = c_abi::FT_Vector { x: -11, y: -22 };
+    points[1] = c_abi::FT_Vector { x: -33, y: -44 };
+    tags[0] = FT_CURVE_TAG_ON as FT_Byte;
+    tags[1] = FT_CURVE_TAG_ON as FT_Byte;
+    contours[0] = 1;
+    let mut outline = c_empty_outline(&mut points, &mut tags, &mut contours);
+    outline.n_points = 2;
+    outline.n_contours = 1;
+    if case.case_id == "ftstroke.FT_Stroker_Export.append_to_existing_outline" {
+        c_abi::FT_Stroker_Export(stroker, &mut outline);
+    } else {
+        c_abi::FT_Stroker_ExportBorder(stroker, FT_STROKER_BORDER_LEFT as FT_Int, &mut outline);
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    let snapshot = FT_OutlineSnapshot {
+        points: points
+            .iter()
+            .take(outline.n_points as usize)
+            .map(|point| FT_Vector {
+                x: point.x,
+                y: point.y,
+            })
+            .collect(),
+        tags: tags
+            .iter()
+            .take(outline.n_points as usize)
+            .copied()
+            .collect(),
+        contours: contours
+            .iter()
+            .take(outline.n_contours as usize)
+            .copied()
+            .collect(),
+        flags: outline.flags,
+    };
+    Ok(stroker_append_output(&snapshot))
+}
+
+fn wasm_stroker_export_append(case: &InputCase) -> Result<RunOutput, String> {
+    if wasm_abi::abi_support_stroker_open_line_geometry(0, 96) {
+        rust_stroker_export_append(case)
+    } else {
+        Err("unsupported stroker append export route".to_string())
     }
 }
 
@@ -31830,6 +32031,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--glyph-stroke-outline-success".to_string(),
             required_asset_pathname(case, "font")?,
         ]),
+        "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
+            Ok(vec![
+                if case.operation == "ftstroke.export" {
+                    "--stroker-export-append"
+                } else {
+                    "--stroker-export-border-append"
+                }
+                .to_string(),
+            ])
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -33435,6 +33646,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke" if is_glyph_stroke_outline_success_case(case) => {
             rust_glyph_stroke_outline_success(case)
         }
+        "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
+            rust_stroker_export_append(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -34627,6 +34841,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke" if is_glyph_stroke_outline_success_case(case) => {
             c_glyph_stroke_outline_success(case)
         }
+        "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
+            c_stroker_export_append(case)
+        }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"
         | "ftstroke.export_border"
@@ -35715,6 +35932,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.glyph_stroke" if is_glyph_stroke_outline_success_case(case) => {
             wasm_glyph_stroke_outline_success(case)
+        }
+        "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
+            wasm_stroker_export_append(case)
         }
         "ftstroke.open_path_geometry"
         | "ftstroke.end_subpath"

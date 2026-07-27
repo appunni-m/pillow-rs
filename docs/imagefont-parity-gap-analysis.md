@@ -371,11 +371,13 @@ The current implementation is good enough to trust the active 352-row Font fixtu
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
 
-Latest focused ftstroke evidence from commit `49f7178d3`:
+Latest focused ftstroke evidence after the export-append runner update:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`: 4/4 runnable rows pass, 4 rows remain pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: 1/1 runnable row passes, 3 rows remain pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`: 7/7 runnable rows pass, 0 pending. This now includes `append_to_existing_outline` with sentinel-prefix preservation and contour-index offset comparison against the pinned C oracle.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ExportBorder`: 4/4 runnable rows pass, 0 pending. This now includes selected-border append-to-existing-outline parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
-- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` still reports 183 `pending-route` cases overall, so the project cannot claim complete FreeType-backed ImageFont parity yet.
+- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 181 `pending-route` cases overall, down from 183 after promoting the two export append rows to real runtime parity. The project still cannot claim complete FreeType-backed ImageFont parity yet.
