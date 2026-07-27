@@ -43,6 +43,26 @@
           "text_bytes_hex": "410042"
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.getbbox.ignored_args_kwargs_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
     }
   ]
 }

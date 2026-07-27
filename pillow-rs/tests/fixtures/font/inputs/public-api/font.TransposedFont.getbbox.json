@@ -31,6 +31,27 @@
           "orientation": "FLIP_LEFT_RIGHT"
         }
       }
+    },
+    {
+      "case_id": "font.TransposedFont.getbbox.ignored_args_kwargs_default_bitmap",
+      "operation": "TransposedFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "orientation": "FLIP_LEFT_RIGHT",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
     }
   ]
 }

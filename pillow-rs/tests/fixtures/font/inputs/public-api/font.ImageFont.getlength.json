@@ -44,6 +44,26 @@
           "text_repeat": 1000001
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.getlength.ignored_args_kwargs_default_bitmap",
+      "operation": "ImageFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
     }
   ]
 }

@@ -89,6 +89,9 @@ from the active corpus. This includes no-libraqm values
 `font_variant(layout_engine)` values. It also now requires active
 `truetype(index=0)`, `truetype(encoding="")`, and
 `truetype(layout_engine=RAQM)` rows.
+Bitmap `ImageFont` and `TransposedFont` variadic `*args`/`**kwargs` parameters
+are also covered by input-only rows that pass those extras into the live Pillow
+oracle at runtime and compare the ignored-result behavior exactly.
 The test also queries the live `PIL.ImageFont.Layout` enum and requires exactly
 `BASIC` and `RAQM`; active `font_variant` rows must exercise both values while
 successful RAQM shaping remains the only layout behavior outside the target.
@@ -101,26 +104,12 @@ repo public helpers/consumers that exercise the same `PIL.ImageFont` behavior.
 
 Current blocked public parameters:
 
-- `ImageFont.getbbox.args`
-- `ImageFont.getbbox.kwargs`
-- `ImageFont.getlength.args`
-- `ImageFont.getlength.kwargs`
-- `ImageFont.getmask.args`
-- `ImageFont.getmask.kwargs`
-- `TransposedFont.getbbox.args`
-- `TransposedFont.getbbox.kwargs`
-- `TransposedFont.getlength.args`
-- `TransposedFont.getlength.kwargs`
-- `TransposedFont.getmask.args`
-- `TransposedFont.getmask.kwargs`
+- None.
 
 ## Missing implementation
 
 The remaining non-libraqm public parity gaps are:
 
-- Arbitrary `*args`/`**kwargs` pass-through on bitmap `ImageFont` and
-  `TransposedFont` methods. Pillow accepts these at the Python wrapper layer;
-  Rust currently exposes only the effective text/mode/orientation behavior.
 - general `stroke_width != 0` for all visible glyph outlines. The active Font
   corpus now includes the maintained lower-level DejaVuSans `"A"` route at
   `stroke_width=1.5`; broader stroked glyph coverage still depends on the
@@ -317,11 +306,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `b5d409dd-a9ed-479f-9fc3-140fa87fc668`
-- Snapshot: `660d6993-1912-44e8-b37e-590e29121114`
+- Run: `9d1b2e91-2166-4988-8798-e6fd69060482`
+- Snapshot: `56f9fc44-93cf-400c-aa70-3449c4adce1b`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `2d7499e0cc7f0d91de01cf6a5db9aa6326c6bdbe`
+- Commit measured: `1352ed73c8a0e3301fa8a0bf9ce693b06729783b` plus local bitmap variadic public-parameter rows
 
 Target file metrics:
 
@@ -426,7 +415,7 @@ Latest Font wrapper movement:
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`660d6993-1912-44e8-b37e-590e29121114`:
+`56f9fc44-93cf-400c-aa70-3449c4adce1b`:
 
 - `91`, `105`: generic and rare mapped FreeType error branches. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without

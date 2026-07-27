@@ -272,6 +272,11 @@ def getmask2_call_args(params: dict[str, Any]) -> tuple[list[Any], dict[str, Any
     return args, kwargs
 
 
+def bitmap_extra_call_args(params: dict[str, Any]) -> tuple[list[Any], dict[str, Any]]:
+    """Return Pillow-compatible ignored bitmap ImageFont variadic arguments."""
+    return list(params.get("args", [])), dict(params.get("kwargs", {}))
+
+
 def text_value(params: dict[str, Any]) -> str | bytes | None:
     if "text_bytes_hex" in params:
         return bytes.fromhex(params["text_bytes_hex"]) * params.get("text_repeat", 1)
@@ -305,15 +310,16 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
             font = ImageFont.TransposedFont(
                 font, orientation(params.get("orientation"), Image)
             )
+        args, kwargs = bitmap_extra_call_args(params)
         if operation == "ImageFont.getbbox":
-            return {"type": "bbox", "value": list(font.getbbox(text))}
+            return {"type": "bbox", "value": list(font.getbbox(text, *args, **kwargs))}
         if operation == "TransposedFont.getbbox":
-            return {"type": "bbox", "value": list(font.getbbox(text))}
+            return {"type": "bbox", "value": list(font.getbbox(text, *args, **kwargs))}
         if operation == "ImageFont.getlength":
-            return {"type": "length", "value": font.getlength(text)}
+            return {"type": "length", "value": font.getlength(text, *args, **kwargs)}
         if operation == "TransposedFont.getlength":
-            return {"type": "length", "value": font.getlength(text)}
-        mask = font.getmask(text, mode=params.get("mode", ""))
+            return {"type": "length", "value": font.getlength(text, *args, **kwargs)}
+        mask = font.getmask(text, params.get("mode", ""), *args, **kwargs)
         return image_value(mask.size, mask.mode, bytes(mask))
 
     font = load_font(case, ImageFont)

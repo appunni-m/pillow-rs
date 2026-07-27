@@ -151,20 +151,7 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
     "font.variations.",
 ];
 
-const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 12] = [
-    ("ImageFont.getbbox", "args"),
-    ("ImageFont.getbbox", "kwargs"),
-    ("ImageFont.getlength", "args"),
-    ("ImageFont.getlength", "kwargs"),
-    ("ImageFont.getmask", "args"),
-    ("ImageFont.getmask", "kwargs"),
-    ("TransposedFont.getbbox", "args"),
-    ("TransposedFont.getbbox", "kwargs"),
-    ("TransposedFont.getlength", "args"),
-    ("TransposedFont.getlength", "kwargs"),
-    ("TransposedFont.getmask", "args"),
-    ("TransposedFont.getmask", "kwargs"),
-];
+const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 0] = [];
 
 const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
     "ftstroke.FT_Glyph_Stroke.destroy_original_option",
@@ -1677,11 +1664,6 @@ fn documented_current_blocked_public_parameters(
         documented.insert(value.to_owned());
     }
 
-    assert!(
-        !documented.is_empty(),
-        "{} must contain a non-empty Current blocked public parameters section",
-        status_path.display()
-    );
     documented
 }
 

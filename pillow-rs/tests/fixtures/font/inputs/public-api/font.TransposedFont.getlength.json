@@ -31,6 +31,27 @@
           "orientation": "ROTATE_90"
         }
       }
+    },
+    {
+      "case_id": "font.TransposedFont.getlength.ignored_args_kwargs_default_bitmap",
+      "operation": "TransposedFont.getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "orientation": "FLIP_LEFT_RIGHT",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
     }
   ]
 }

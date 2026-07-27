@@ -77,6 +77,28 @@
           "orientation": "FLIP_TOP_BOTTOM"
         }
       }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.ignored_args_kwargs_default_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "mode": "",
+          "orientation": "FLIP_LEFT_RIGHT",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
     }
   ]
 }
