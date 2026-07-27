@@ -29,6 +29,20 @@
           "text": ""
         }
       }
+    },
+    {
+      "case_id": "font.ImageFont.getbbox.bytes_with_nul_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text_bytes_hex": "410042"
+        }
+      }
     }
   ]
 }
