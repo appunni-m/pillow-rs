@@ -347,10 +347,13 @@ weakening the Font oracle comparison.
 Current lower-stroker verification:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`
-  passes the maintained runnable rows, but only 4 rows are runnable and 4 remain
-  pending. The pending rows are destroy-option coverage plus the
-  `FT_Glyph_StrokeBorder` inside/outside/destroy routes that the combined case
-  filter reports as owned follow-up work.
+  passes the maintained runnable rows, but the active
+  `outline_glyph_stroked_success` route loads glyph 36 with
+  `FT_LOAD_NO_BITMAP`, not the public ImageFont blocker shape
+  `FT_LOAD_TARGET_MONO`. Only 4 rows are runnable and 4 remain pending. The
+  pending rows are destroy-option coverage plus the `FT_Glyph_StrokeBorder`
+  inside/outside/destroy routes that the combined case filter reports as owned
+  follow-up work.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
   passes 2/2 runnable rows. The remaining pending rows are inside-border
   success and destroy-option parity.
@@ -586,3 +589,14 @@ Current request classification for `imagingft.rs` region coverage:
   `stroker_used_unverified_closed_round_path` guard makes the general stroker
   output share the C prefix and suffix but still diverge through the middle
   coverage bytes, so promoting that path would be false parity.
+- Current promoted-route diagnostic at `02c6dc0c7`: temporarily removing only
+  the pending-route classification makes
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`
+  compare 10 rows and fail exactly one row:
+  `ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`
+  on `rust ffi:field:/bitmap/buffer_hex`. The route audit moves from 180 to
+  179 pending rows and from 4842 to 4843 real-parity rows for that temporary
+  run, proving the native C oracle and Rust/C/WASM runners execute the intended
+  sequence. The only promoted failure remains bitmap coverage bytes, so the
+  classification must stay pending until lower stroke geometry/render parity is
+  fixed.
