@@ -89,9 +89,8 @@
         "assets": {
           "ps_orientation_font": {
             "kind": "ref",
-            "id": "fonts/cff/postscript-orientation.otf",
-            "asset_kind": "font",
-            "status": "required_future_asset"
+            "id": "input/fonts/cff/fontinfo-populated.otf",
+            "asset_kind": "font"
           }
         },
         "params": {
@@ -135,7 +134,7 @@
           ]
         },
         "fixture_requirements": [
-          "postscript-orientation fixture must expose at least one outline glyph whose FT_Outline_Get_Orientation result differs from the TrueType fixture."
+          "CFF fixture must expose at least one outline glyph whose FT_Outline_Get_Orientation result differs from the TrueType fixture."
         ],
         "source_refs": [
           "freetype/src/base/ftstroke.c:2349-2360"
