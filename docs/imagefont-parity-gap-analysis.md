@@ -313,8 +313,8 @@ For the current broader Font-with-FreeType suite, the remaining seven reported
 | `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
 | `796` | partial branch on `gid` helper | `FT_Get_Char_Index` helper is hit millions of times; marker is helper call/source-map accounting. | No duplicate text rows. |
 | `826` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. | No duplicate bbox/mask rows. |
-| `829` | partial branch on `length_from_basic_layout` wrapper | Wrapper is hit thousands of times; marker is `?`/wrapper propagation accounting. | No duplicate length rows unless new public behavior appears. |
-| `928` | partial branch between bbox helpers | Both empty and non-empty glyph-run branches are covered below this line; marker is helper-boundary/source-map accounting. | No duplicate bbox rows. |
+| `829` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. | No duplicate bbox/mask rows. |
+| `928` | partial branch on `glyph_run(...)?` inside `bbox_from_run_with_flags` | Current snapshot `3ce9480d-ef4f-4476-a975-fccc15551087` shows line `928` hit 495 times and the following success line `929` hit 477 times, so 18 live-oracle calls already return through the error side. | No duplicate bbox error rows; both success and error outcomes are already represented. |
 Exploratory note: Coverage MCP run `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c`
 temporarily added valid live-oracle rows for DejaVuSans `"À"` negative-top
 bbox/mask and an `A\uFFFFV` missing-glyph kerning guard. The run passed and
