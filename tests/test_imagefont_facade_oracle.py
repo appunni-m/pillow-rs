@@ -11,6 +11,7 @@ FONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/font
 PILFONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/font/input/pilfont"
 DEJAVU = FONT_ROOT / "DejaVuSans.ttf"
 VARIABLE = FONT_ROOT / "variable-named-instances.ttf"
+VARIABLE_MISSING_SUBFAMILY = FONT_ROOT / "variable-name-missing-subfamily.ttf"
 COURB08 = PILFONT_ROOT / "courb08.pil"
 NON_BEHAVIORAL_PILLOW_IMAGEFONT_NAMES = {
     "Any",
@@ -287,6 +288,12 @@ def test_imagefont_freetype_native_variation_subset_matches_pillow(RSPIL):
         )
     assert _native_variation_after_setvaraxes(rs_factory, [100, 400]) == (
         _native_variation_after_setvaraxes(pil_factory, [100, 400])
+    )
+
+    rs_missing_factory = lambda: RSPIL.ImageFont.truetype(VARIABLE_MISSING_SUBFAMILY, 20)
+    pil_missing_factory = lambda: PILImageFont.truetype(VARIABLE_MISSING_SUBFAMILY, 20)
+    assert _native_variation_after_setvarname(rs_missing_factory, 5) == (
+        _native_variation_after_setvarname(pil_missing_factory, 5)
     )
 
 

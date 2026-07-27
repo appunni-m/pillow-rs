@@ -1919,9 +1919,12 @@ impl PyFont {
             .map_err(map_error)
     }
 
-    fn get_name(&self) -> (String, String) {
+    fn get_name(&self) -> (Option<String>, Option<String>) {
         let (family, style) = pillow_rs::imagefont_getname(&self.inner);
-        (family.to_owned(), style.to_owned())
+        (
+            family.map(ToOwned::to_owned),
+            style.map(ToOwned::to_owned),
+        )
     }
 
     fn get_size(&self) -> f32 {

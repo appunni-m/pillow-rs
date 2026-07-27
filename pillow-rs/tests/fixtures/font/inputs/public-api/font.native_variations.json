@@ -84,6 +84,23 @@
       }
     },
     {
+      "case_id": "font.native_setvarname.missing_subfamily_name_keeps_none",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-missing-subfamily.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": 5
+        }
+      }
+    },
+    {
       "case_id": "font.native_setvarname.variable_named_instances_invalid_positive",
       "operation": "native_setvarname",
       "inputs": {
