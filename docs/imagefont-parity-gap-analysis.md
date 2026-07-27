@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `7ab81d804`
+Rust/source fixture commit reviewed: `c42193313`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -74,6 +74,10 @@ Post-commit load-failure error-row Coverage MCP snapshot: `8dd555b5-b581-421a-8c
 Post extended load-failure error-row Coverage MCP run: `5bef365a-911d-4116-a326-2c379181f250`
 
 Post extended load-failure error-row Coverage MCP snapshot: `6c110f52-93f8-43c9-9e43-4d8eb5b1a3f7`
+
+Post-commit extended load-failure error-row Coverage MCP run: `8415695b-1c23-4f0b-970a-dd2e5304ab3b`
+
+Post-commit extended load-failure error-row Coverage MCP snapshot: `1a0beeb6-3e82-4f27-906a-2f4412705920`
 
 Suite: `font-with-freetype`
 
@@ -253,9 +257,10 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `FT_Err_Invalid_File_Format`, surfacing `OSError("broken file")`. The lower
   `pillow-rs-freetype/src/ffi/convert.rs` mapping now classifies that exact
   head-table-short face-open path as `FT_Err_Unknown_File_Format`. `make -C
-  pillow-rs font-tests` passes `411/411` live-oracle rows. Coverage MCP run
-  `5bef365a-911d-4116-a326-2c379181f250` passed and ingested snapshot
-  `6c110f52-93f8-43c9-9e43-4d8eb5b1a3f7`; direct `imagingft.rs` remains
+  pillow-rs font-tests` passes `411/411` live-oracle rows. Post-commit
+  Coverage MCP run `8415695b-1c23-4f0b-970a-dd2e5304ab3b` passed at commit
+  `c42193313` and ingested snapshot
+  `1a0beeb6-3e82-4f27-906a-2f4412705920`; direct `imagingft.rs` remains
   `1666/1688` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions with the same seven broad-suite markers.
 
