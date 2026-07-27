@@ -87,6 +87,10 @@ Latest measured code Coverage MCP run: `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`
 
 Latest measured code Coverage MCP snapshot: `26484398-df28-4103-9a43-44331068fade`
 
+Latest direct imagingft Coverage MCP run: `c9b7785b-1e94-4c67-9b42-7eacea698531`
+
+Latest direct imagingft Coverage MCP snapshot: `3246085e-cbd3-437e-969c-36944d680bd7`
+
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
 Post ImageFont facade target Coverage MCP snapshot: `e912dce7-e207-4d82-b8ab-d434a65799fd`
@@ -162,6 +166,15 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   other markers are source-map, defensive fallback, or partial-branch markers
   with adjacent behavior lines already hit. No current gap identifies an
   adapter-owned Pillow `_imagingft.c` behavior miss.
+- Direct compatibility command `imagingft-tests-coverage-fixed` passed at
+  commit `41aadb6718f225e8e508da458c1fab6d5b051be5` and ingested snapshot
+  `3246085e-cbd3-437e-969c-36944d680bd7` from run
+  `c9b7785b-1e94-4c67-9b42-7eacea698531`. In the direct `imagingft` suite,
+  `imagingft.rs` coverage is `1347/1394` lines, `210/232` branches,
+  `135/146` functions, and `2140/2256` regions. This narrower suite excludes
+  lower `pillow-rs-freetype` coverage and is retained as a compatibility view;
+  the Font-with-FreeType suite above is the project evidence for public
+  ImageFont behavior flowing through the lower font implementation.
 - Commit `ccecf6682` removes the zero-flag `length_from_basic_layout` wrapper
   and routes the two BASIC length callers directly into
   `length_from_basic_layout_with_flags(..., 0)`. This is behavior-neutral and
