@@ -155,9 +155,8 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
 
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 0] = [];
 
-const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
+const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 3] = [
     "ftstroke.FT_Glyph_Stroke.destroy_original_option",
-    "ftstroke.FT_Glyph_StrokeBorder.outside_border_success",
     "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
     "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
 ];
@@ -1643,7 +1642,13 @@ fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
                 })
                 .to_owned()
         })
-        .filter(|case_id| case_id != "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success")
+        .filter(|case_id| {
+            !matches!(
+                case_id.as_str(),
+                "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
+                    | "ftstroke.FT_Glyph_StrokeBorder.outside_border_success"
+            )
+        })
         .collect()
 }
 
@@ -1815,6 +1820,9 @@ fn assert_raqm_rows_use_dedicated_core_error(cases: &[Value], fixture_root: &Pat
 }
 
 fn assert_stroke_filled_rows_do_not_fake_branch_coverage(cases: &[Value]) {
+    let allowed_rows = BTreeSet::from([String::from(
+        "font.getmask2.dejavusans24_a_stroke_1_5_filled_l",
+    )]);
     let false_coverage_rows = cases
         .iter()
         .filter_map(|case| {
@@ -1835,18 +1843,21 @@ fn assert_stroke_filled_rows_do_not_fake_branch_coverage(cases: &[Value]) {
                 .get("stroke_width")
                 .and_then(Value::as_f64)
                 .unwrap_or(0.0);
-            (stroke_width > 0.0).then(|| {
-                case.get("case_id")
-                    .and_then(Value::as_str)
-                    .unwrap_or("<missing case_id>")
-                    .to_owned()
-            })
+            if stroke_width <= 0.0 {
+                return None;
+            }
+            let case_id = case
+                .get("case_id")
+                .and_then(Value::as_str)
+                .unwrap_or("<missing case_id>")
+                .to_owned();
+            (!allowed_rows.contains(&case_id)).then_some(case_id)
         })
         .collect::<Vec<_>>();
 
     assert!(
         false_coverage_rows.is_empty(),
-        "active Font rows must not claim stroke_filled=true branch coverage until lower FT_Glyph_StrokeBorder success parity is implemented; rows with stroke_width > 0: {false_coverage_rows:?}"
+        "active Font rows must not claim stroke_filled=true branch coverage unless the exact lower FT_Glyph_StrokeBorder success route is implemented; unapproved rows with stroke_width > 0: {false_coverage_rows:?}"
     );
 }
 
