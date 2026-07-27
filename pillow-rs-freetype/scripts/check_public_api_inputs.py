@@ -3548,9 +3548,11 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
             "maintained lower stroker route for the exact Pillow ImageFont "
             "sequence: FT_LOAD_TARGET_MONO outline, FT_Glyph_Stroke, then "
             "FT_Glyph_To_Bitmap with FT_RENDER_MODE_NORMAL. The native C "
-            "oracle and Rust/C/WASM runners can execute the sequence, but "
-            "current lower closed round-path stroke geometry still differs in "
-            "bitmap coverage bytes."
+            "oracle and Rust/C/WASM runners can execute the sequence. The "
+            "normal glyph-36 fallback is now restricted to its exact "
+            "FT_LOAD_NO_BITMAP outline, so the mono-target route currently "
+            "exposes the real lower gap as FT_Err_Unimplemented_Feature until "
+            "closed round-path stroke geometry/export is verified against C."
         ),
         "ftglyph.FT_Glyph.caller_owned_lifetime": (
             "FT_Glyph caller-owned lifetime parity needs a maintained "
