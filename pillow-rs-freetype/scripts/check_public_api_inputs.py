@@ -1350,9 +1350,9 @@ def ftstroke_path_construction_pending_reason(row: ConcreteInput) -> str | None:
         return None
     exact_cases = {
         "ftstroke.FT_Stroker_BeginSubPath.wide_stroke_mode_depends_on_cap_and_join": (
-            "FT_Stroker_BeginSubPath wide-stroke parity needs a maintained "
-            "route proving FreeType selects wide-stroke setup from cap and "
-            "join attributes exactly like pinned C"
+            "FT_Stroker_BeginSubPath wide-stroke parity has a maintained "
+            "diagnostic route, but Rust does not yet match pinned C exported "
+            "outline geometry for open wide-stroke rows"
         ),
         "ftstroke.FT_Stroker_LineTo.line_segment_success": (
             "FT_Stroker_LineTo segment parity needs a maintained route proving "
