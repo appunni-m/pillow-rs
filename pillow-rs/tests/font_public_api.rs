@@ -1788,6 +1788,121 @@ fn assert_manifest_covers_pillow_public_signatures(
     }
 }
 
+fn assert_gap_analysis_live_corpus_matches_inputs(input_dir: &Path, manifest: &FontManifest) {
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let analysis_path = repo_root.join("docs/imagefont-parity-gap-analysis.md");
+    let analysis = fs::read_to_string(&analysis_path)
+        .expect("ImageFont parity gap analysis document must be readable");
+
+    let (documented_counts, documented_total) =
+        documented_live_corpus_counts(&analysis, &analysis_path);
+    let actual_counts = actual_live_corpus_counts(input_dir, manifest);
+    let actual_total = actual_counts.values().sum::<usize>();
+
+    assert_eq!(
+        documented_counts, actual_counts,
+        "{} Live fixture corpus table must exactly match manifest input JSON case counts",
+        analysis_path.display()
+    );
+    assert_eq!(
+        documented_total, actual_total,
+        "{} Live fixture corpus total must match active input JSON case count",
+        analysis_path.display()
+    );
+}
+
+fn documented_live_corpus_counts(
+    analysis: &str,
+    analysis_path: &Path,
+) -> (BTreeMap<String, usize>, usize) {
+    let mut in_section = false;
+    let mut counts = BTreeMap::new();
+    let mut total = None;
+
+    for line in analysis.lines() {
+        let trimmed = line.trim();
+        if trimmed == "## Live fixture corpus" {
+            in_section = true;
+            continue;
+        }
+        if in_section && trimmed.starts_with("## ") {
+            break;
+        }
+        if !in_section || !trimmed.starts_with('|') {
+            continue;
+        }
+        if trimmed.starts_with("|---") || trimmed.starts_with("| Input file ") {
+            continue;
+        }
+        if let Some(file_name) = markdown_backtick_value(trimmed) {
+            let case_count = markdown_table_second_cell_usize(trimmed, analysis_path);
+            counts.insert(file_name, case_count);
+        } else if trimmed.starts_with("| total |") {
+            total = Some(markdown_table_second_cell_usize(trimmed, analysis_path));
+        }
+    }
+
+    assert!(
+        !counts.is_empty(),
+        "{} must document the active Font input file counts under Live fixture corpus",
+        analysis_path.display()
+    );
+    let total = total.unwrap_or_else(|| {
+        panic!(
+            "{} must document the active Font input total under Live fixture corpus",
+            analysis_path.display()
+        )
+    });
+    (counts, total)
+}
+
+fn markdown_backtick_value(line: &str) -> Option<String> {
+    let start = line.find('`')?;
+    let after_start = &line[start + 1..];
+    let end = after_start.find('`')?;
+    Some(after_start[..end].to_owned())
+}
+
+fn markdown_table_second_cell_usize(line: &str, path: &Path) -> usize {
+    line.split('|')
+        .nth(2)
+        .unwrap_or_else(|| panic!("{} has malformed markdown table row: {line}", path.display()))
+        .trim()
+        .parse::<usize>()
+        .unwrap_or_else(|error| {
+            panic!(
+                "{} has non-numeric Live fixture corpus count in row `{line}`: {error}",
+                path.display()
+            )
+        })
+}
+
+fn actual_live_corpus_counts(
+    input_dir: &Path,
+    manifest: &FontManifest,
+) -> BTreeMap<String, usize> {
+    manifest
+        .input_files
+        .iter()
+        .map(|file_name| {
+            let path = input_dir.join(file_name);
+            let document: Value = serde_json::from_slice(
+                &fs::read(&path).expect("font public-api input must be readable"),
+            )
+            .expect("font public-api input must be valid JSON");
+            let count = document
+                .get("cases")
+                .and_then(Value::as_array)
+                .unwrap_or_else(|| panic!("{} must contain a cases array", path.display()))
+                .len();
+            (file_name.clone(), count)
+        })
+        .collect()
+}
+
 fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
     let expected_status = expected
         .get("status")
@@ -2026,6 +2141,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
     assert_documented_blocked_public_parameters();
     assert_gap_analysis_tracks_stroke_filled_status();
+    assert_gap_analysis_live_corpus_matches_inputs(&input_dir, &manifest);
     assert_blocked_public_parameters_have_active_dependency_blockers();
     assert_imagingft_has_no_coverage_or_oracle_shortcuts();
     assert_libraqm_error_contract_is_hard_coded();
