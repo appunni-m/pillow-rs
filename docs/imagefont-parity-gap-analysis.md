@@ -83,9 +83,9 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 63 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Latest measured code Coverage MCP run: `866edd68-0b81-4b41-bcdc-941ffd985e1a`
+Latest measured code Coverage MCP run: `6048e1fb-d345-43bf-846c-82d69869eef0`
 
-Latest measured code Coverage MCP snapshot: `afe952f5-7908-4c89-824a-159aa116d5a8`
+Latest measured code Coverage MCP snapshot: `cda2eecf-da36-415b-8bc6-a7908b1f50e0`
 
 Latest direct imagingft Coverage MCP run: `483456d5-fb96-451a-b7bc-4b3a7272768a`
 
@@ -156,9 +156,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest measured code Coverage MCP command
   `font-tests-coverage-with-freetype-pillow-12-2` passed at commit
-  `c9c141856d3fd4c6a6e9bcbc6d1289555edead77` and ingested
-  snapshot `afe952f5-7908-4c89-824a-159aa116d5a8` from run
-  `866edd68-0b81-4b41-bcdc-941ffd985e1a`. Direct `imagingft.rs` coverage
+  `defcf0a5a810e05d332a4542a5ca20941526a1e1` and ingested
+  snapshot `cda2eecf-da36-415b-8bc6-a7908b1f50e0` from run
+  `6048e1fb-d345-43bf-846c-82d69869eef0`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining direct marker lines are `91`, `253`,
   `271`, `796`, `826`, `829`, and `928`;
@@ -1328,10 +1328,10 @@ current blockers.
   `ImageDraw.text`, `multiline_text`, `textbbox`, `textlength`, and
   `multiline_textbbox` with `direction="rtl"` and verifies exact no-libraqm
   `KeyError` parity.
-- Latest measured code Coverage MCP audit after `c9c141856`: managed command
+- Latest measured code Coverage MCP audit after `defcf0a5a`: managed command
   `font-tests-coverage-with-freetype-pillow-12-2` passed as run
-  `866edd68-0b81-4b41-bcdc-941ffd985e1a` and ingested snapshot
-  `afe952f5-7908-4c89-824a-159aa116d5a8`. Direct `imagingft.rs` remains
+  `6048e1fb-d345-43bf-846c-82d69869eef0` and ingested snapshot
+  `cda2eecf-da36-415b-8bc6-a7908b1f50e0`. Direct `imagingft.rs` remains
   `1739/1760` lines, `251/256` branches, `173/184` functions, and
   `2712/2797` regions. The remaining markers are still `91`, `253`, `271`,
   `796`, `826`, `829`, and `928`, so the added native variation fallback rows
