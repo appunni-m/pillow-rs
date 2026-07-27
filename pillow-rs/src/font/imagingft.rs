@@ -4,7 +4,10 @@
 //! `fontdone::ffi` — proven pixel-identical with C FreeType 2.14.3
 //! (4,097/4,097 unified parity).
 
-use super::{ImageFont, ImageFontTextOptions, ImageFontVariantOptions, ImageFontVariationAxis};
+use super::{
+    ImageFont, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
+    ImageFontVariationAxis,
+};
 use crate::error::PilError;
 use crate::image::Image;
 use fontdone::{ffi, tt};
@@ -23,6 +26,15 @@ pub(super) struct TrueTypeEngine {
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<ImageFont, PilError> {
     load_truetype_with_index(data, size, 0)
+}
+
+pub(super) fn load_truetype_with_options(
+    data: Vec<u8>,
+    size: f32,
+    options: &ImageFontLoadOptions,
+) -> Result<ImageFont, PilError> {
+    let _pillow_accepted_public_options = (&options.encoding, &options.layout_engine);
+    load_truetype_with_index(data, size, options.index.unwrap_or(0))
 }
 
 fn load_truetype_with_index(

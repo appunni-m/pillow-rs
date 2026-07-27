@@ -151,7 +151,7 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
     "font.variations.",
 ];
 
-const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 15] = [
+const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 12] = [
     ("ImageFont.getbbox", "args"),
     ("ImageFont.getbbox", "kwargs"),
     ("ImageFont.getlength", "args"),
@@ -164,9 +164,6 @@ const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 15] = [
     ("TransposedFont.getlength", "kwargs"),
     ("TransposedFont.getmask", "args"),
     ("TransposedFont.getmask", "kwargs"),
-    ("truetype", "encoding"),
-    ("truetype", "index"),
-    ("truetype", "layout_engine"),
 ];
 
 const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 4] = [
@@ -260,10 +257,14 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
     ("getmask2", "stroke_width", DEFAULT_PARAMETER_VALUE),
     ("getmask2", "stroke_width", "-1.5"),
     ("getmask2", "stroke_width", "1.5"),
+    ("truetype", "encoding", ""),
+    ("truetype", "index", "0"),
+    ("truetype", "layout_engine", "RAQM"),
 ];
 
-const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 37] = [
+const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 38] = [
     ("font_from_bytes", "truetype"),
+    ("font_from_bytes_with_options", "truetype"),
     ("font_get_variation_axes", "get_variation_axes"),
     ("font_get_variation_names", "get_variation_names"),
     ("font_get_transposed_mask", "get_transposed_mask"),
@@ -1379,6 +1380,23 @@ fn observed_public_parameter_values(
                     .and_then(Value::as_str)
                     .unwrap_or(DEFAULT_PARAMETER_VALUE)
                     .to_owned(),
+                "layout_engine" if operation == "truetype" => params
+                    .get("layout_engine")
+                    .and_then(Value::as_str)
+                    .unwrap_or(DEFAULT_PARAMETER_VALUE)
+                    .to_owned(),
+                "encoding" if operation == "truetype" => params
+                    .get("encoding")
+                    .and_then(Value::as_str)
+                    .unwrap_or(DEFAULT_PARAMETER_VALUE)
+                    .to_owned(),
+                "index" if operation == "truetype" => params
+                    .get("index")
+                    .map(|value| {
+                        serde_json::to_string(value)
+                            .expect("font index value must serialize for coverage")
+                    })
+                    .unwrap_or_else(|| DEFAULT_PARAMETER_VALUE.to_owned()),
                 other => panic!("unsupported required public value-coverage parameter: {other}"),
             };
             observed

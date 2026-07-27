@@ -1,8 +1,8 @@
 use std::{borrow::Cow, fs, path::Path};
 
 use pillow_rs::{
-    Draw, Image, ImageFont, ImageFontTextOptions, ImageFontVariantOptions, ImageFontVariationAxis,
-    PilError, PilFont,
+    Draw, Image, ImageFont, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
+    ImageFontVariationAxis, PilError, PilFont,
 };
 use serde_json::{Value, json};
 
@@ -658,12 +658,39 @@ fn load_font(case: &Value, fixture_root: &Path) -> Result<ImageFont, PilError> {
                 .ok_or_else(|| PilError::TypeError("font id must be a string".into()))?;
             let data = fs::read(fixture_root.join(id))
                 .map_err(|_| PilError::OsError("cannot open resource".into()))?;
-            pillow_rs::font_from_bytes(data, size)
+            if uses_font_load_options(params) {
+                pillow_rs::font_from_bytes_with_options(data, size, &font_load_options(params)?)
+            } else {
+                pillow_rs::font_from_bytes(data, size)
+            }
         }
         kind => Err(PilError::ValueError(format!(
             "unsupported font fixture font kind: {kind}"
         ))),
     }
+}
+
+fn uses_font_load_options(params: &Value) -> bool {
+    params.get("index").is_some()
+        || params.get("encoding").is_some()
+        || params.get("layout_engine").is_some()
+}
+
+fn font_load_options(params: &Value) -> Result<ImageFontLoadOptions, PilError> {
+    let index = params
+        .get("index")
+        .map(|value| {
+            value
+                .as_u64()
+                .and_then(|value| usize::try_from(value).ok())
+                .ok_or_else(|| PilError::TypeError("index must be an integer".into()))
+        })
+        .transpose()?;
+    Ok(ImageFontLoadOptions {
+        index,
+        encoding: optional_string(params, "encoding")?,
+        layout_engine: optional_string(params, "layout_engine")?,
+    })
 }
 
 fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> {
