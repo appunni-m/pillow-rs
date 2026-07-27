@@ -12,9 +12,13 @@ import struct
 
 
 ROOT = Path(__file__).resolve().parents[1]
+DEJAVU_SOURCE = ROOT / "tests/fixtures/font/input/fonts/DejaVuSans.ttf"
 SOURCE = ROOT / "tests/fixtures/font/input/fonts/variable-named-instances.ttf"
 WINDOWS_TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-windows-fallback.ttf"
 PLATFORM1_TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-platform1-fallback.ttf"
+MISSING_FAMILY_STYLE_TARGET = (
+    ROOT / "tests/fixtures/font/input/fonts/dejavu-missing-family-style.ttf"
+)
 
 
 def table(data: bytes, tag: bytes) -> tuple[int, int]:
@@ -44,7 +48,28 @@ def variation_name_ids(data: bytes) -> set[int]:
     return ids
 
 
+def write_missing_family_style_fixture() -> None:
+    """Retag family/style name records so FreeType reports no family/style."""
+    data = bytearray(DEJAVU_SOURCE.read_bytes())
+    name_offset, _ = table(data, b"name")
+    _, record_count, _ = struct.unpack_from(">HHH", data, name_offset)
+
+    changed = 0
+    for index in range(record_count):
+        record_offset = name_offset + 6 + index * 12
+        name_id = struct.unpack_from(">H", data, record_offset + 6)[0]
+        if name_id in {1, 2, 16, 17}:
+            struct.pack_into(">H", data, record_offset + 6, 65000 + name_id)
+            changed += 1
+
+    if changed != 4:
+        raise SystemExit(f"expected to retag 4 family/style records, patched {changed}")
+    MISSING_FAMILY_STYLE_TARGET.write_bytes(data)
+
+
 def main() -> None:
+    write_missing_family_style_fixture()
+
     source = SOURCE.read_bytes()
     ids = variation_name_ids(source)
 

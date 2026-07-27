@@ -76,6 +76,21 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.getname.missing_family_style_names",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/dejavu-missing-family-style.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }

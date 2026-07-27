@@ -207,6 +207,16 @@ pub(crate) fn family_name(
     family_name_from_records(&table.records, ignore_typographic_family, is_wws_only)
 }
 
+/// Return whether FreeType can select a public family-name record.
+pub(crate) fn has_family_name(
+    table: &NameTable,
+    ignore_typographic_family: bool,
+    is_wws_only: bool,
+) -> bool {
+    selected_family_name_from_records(&table.records, ignore_typographic_family, is_wws_only)
+        .is_some()
+}
+
 /// Return the public subfamily name after applying FreeType's open-parameter
 /// typographic-name selection flags.
 pub(crate) fn subfamily_name(
@@ -217,11 +227,30 @@ pub(crate) fn subfamily_name(
     subfamily_name_from_records(&table.records, ignore_typographic_subfamily, is_wws_only)
 }
 
+/// Return whether FreeType can select a public subfamily/style-name record.
+pub(crate) fn has_subfamily_name(
+    table: &NameTable,
+    ignore_typographic_subfamily: bool,
+    is_wws_only: bool,
+) -> bool {
+    selected_subfamily_name_from_records(&table.records, ignore_typographic_subfamily, is_wws_only)
+        .is_some()
+}
+
 fn family_name_from_records(
     records: &[SfntNameRecord],
     ignore_typographic_family: bool,
     is_wws_only: bool,
 ) -> String {
+    selected_family_name_from_records(records, ignore_typographic_family, is_wws_only)
+        .unwrap_or_else(|| "Unknown".into())
+}
+
+fn selected_family_name_from_records(
+    records: &[SfntNameRecord],
+    ignore_typographic_family: bool,
+    is_wws_only: bool,
+) -> Option<String> {
     // FreeType `sfnt_init_face` (sfobjs.c:1039-1068) gives WWS name IDs
     // priority for non-WWS-only faces, but skips WWS and optionally skips
     // typographic IDs when the matching FT_Open_Face ignore parameter is set.
@@ -240,7 +269,6 @@ fn family_name_from_records(
             .or_else(|| name_string_from_records(records, NAME_ID_TYPO_FAMILY))
             .or_else(|| name_string_from_records(records, NAME_ID_FAMILY))
     }
-    .unwrap_or_else(|| "Unknown".into())
 }
 
 fn subfamily_name_from_records(
@@ -248,6 +276,15 @@ fn subfamily_name_from_records(
     ignore_typographic_subfamily: bool,
     is_wws_only: bool,
 ) -> String {
+    selected_subfamily_name_from_records(records, ignore_typographic_subfamily, is_wws_only)
+        .unwrap_or_else(|| "Regular".into())
+}
+
+fn selected_subfamily_name_from_records(
+    records: &[SfntNameRecord],
+    ignore_typographic_subfamily: bool,
+    is_wws_only: bool,
+) -> Option<String> {
     // Mirrors the family-name order above from FreeType `sfnt_init_face`
     // (sfobjs.c:1039-1068) for `face->root.style_name`.
     if is_wws_only {
@@ -265,7 +302,6 @@ fn subfamily_name_from_records(
             .or_else(|| name_string_from_records(records, NAME_ID_TYPO_SUBFAMILY))
             .or_else(|| name_string_from_records(records, NAME_ID_SUBFAMILY))
     }
-    .unwrap_or_else(|| "Regular".into())
 }
 
 fn name_string_from_records(records: &[SfntNameRecord], name_id: u16) -> Option<String> {
