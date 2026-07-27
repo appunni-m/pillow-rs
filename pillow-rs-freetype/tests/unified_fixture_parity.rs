@@ -25564,6 +25564,10 @@ fn is_glyph_stroke_border_outside_success_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Glyph_StrokeBorder.outside_border_success"
 }
 
+fn is_glyph_stroke_border_inside_success_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Glyph_StrokeBorder.inside_border_success"
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -32226,6 +32230,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 required_asset_pathname(case, "tt_font")?,
             ])
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
+            Ok(vec![
+                "--glyph-stroke-border-inside-success".to_string(),
+                fixture_dir()
+                    .join("input/fonts/DejaVuSans.ttf")
+                    .display()
+                    .to_string(),
+                required_asset_pathname(case, "ps_orientation_font")?,
+            ])
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             Ok(vec![
                 if case.operation == "ftstroke.export" {
@@ -33859,6 +33873,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
             rust_glyph_stroke_border_outside_success(case)
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
+            rust_glyph_stroke_border_inside_success(case)
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             rust_stroker_export_append(case)
         }
@@ -35057,6 +35074,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
             c_glyph_stroke_border_outside_success(case)
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
+            c_glyph_stroke_border_inside_success(case)
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             c_stroker_export_append(case)
         }
@@ -36151,6 +36171,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
             wasm_glyph_stroke_border_outside_success(case)
+        }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_inside_success_case(case) => {
+            wasm_glyph_stroke_border_inside_success(case)
         }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             wasm_stroker_export_append(case)
@@ -37802,6 +37825,30 @@ fn glyph_stroke_border_output(
     }))
 }
 
+fn glyph_stroke_border_inside_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn glyph_stroke_border_inside_row_json(
+    label: &str,
+    status: FT_Error,
+    outside_border: Option<FT_Int>,
+    selected_border: Option<FT_Int>,
+    outline: Option<Value>,
+) -> Value {
+    json!({
+        "label": label,
+        "status": status,
+        "outside_border": outside_border.unwrap_or(-1),
+        "selected_border": selected_border.unwrap_or(-1),
+        "outline": outline.unwrap_or(Value::Null)
+    })
+}
+
+fn default_dejavu_font_bytes() -> Result<Arc<[u8]>, String> {
+    cached_file_bytes("input/fonts/DejaVuSans.ttf")
+}
+
 fn rust_glyph_stroke_outline_success(case: &InputCase) -> Result<RunOutput, String> {
     if !is_glyph_stroke_outline_success_case(case) {
         return Err(format!(
@@ -38296,6 +38343,274 @@ fn wasm_glyph_stroke_border_outside_success(case: &InputCase) -> Result<RunOutpu
     }
     wasm_done_face(handle);
     Ok(output)
+}
+
+fn rust_glyph_stroke_border_inside_row(
+    label: &str,
+    bytes: Arc<[u8]>,
+    glyph_index: u32,
+) -> Result<Value, String> {
+    let mut face =
+        open_face_from_bytes_with_size_or_char_size(bytes.as_ref(), 0, (20, 20), &Value::Null)?;
+    let size_status = FT_Set_Char_Size(&mut face, 0, 1536, 72, 72);
+    let load_result = if size_status == FT_Err_Ok {
+        FT_Load_Glyph(&face, glyph_index, FT_LOAD_NO_BITMAP)
+    } else {
+        Err(size_status)
+    };
+    let glyph_result = match load_result {
+        Ok(slot) => FT_Get_Outline_Glyph(Some(&slot)),
+        Err(error) => Err(error),
+    };
+    let (status, outside_border, selected_border, outline) = match glyph_result {
+        Ok(glyph) => {
+            let outside_border = FT_Outline_GetOutsideBorder(Some(&glyph.outline));
+            let selected_border = FT_Outline_GetInsideBorder(Some(&glyph.outline));
+            let library = FT_Init_FreeType();
+            let mut stroker = ptr::null_mut();
+            let stroker_new_status = FT_Stroker_New(Some(&library), Some(&mut stroker));
+            if stroker_new_status == FT_Err_Ok {
+                FT_Stroker_Set(
+                    stroker,
+                    160,
+                    FT_STROKER_LINECAP_ROUND as FT_Int,
+                    FT_STROKER_LINEJOIN_BEVEL as FT_Int,
+                    65_536,
+                );
+            }
+            let stroke_result = if stroker_new_status == FT_Err_Ok {
+                FT_Outline_Glyph_StrokeBorder(Some(&glyph), stroker, 1)
+            } else {
+                Err(stroker_new_status)
+            };
+            if !stroker.is_null() {
+                FT_Stroker_Done(stroker);
+            }
+            match stroke_result {
+                Ok(stroked) => (
+                    FT_Err_Ok,
+                    Some(outside_border),
+                    Some(selected_border),
+                    Some(outline_snapshot_json(&stroked.outline)),
+                ),
+                Err(error) => (error, Some(outside_border), Some(selected_border), None),
+            }
+        }
+        Err(error) => (error, None, None, None),
+    };
+    Ok(glyph_stroke_border_inside_row_json(
+        label,
+        status,
+        outside_border,
+        selected_border,
+        outline,
+    ))
+}
+
+fn rust_glyph_stroke_border_inside_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_inside_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border inside route",
+            case.case_id
+        ));
+    }
+    let rows = vec![
+        rust_glyph_stroke_border_inside_row(
+            "truetype_orientation",
+            default_dejavu_font_bytes()?,
+            12,
+        )?,
+        rust_glyph_stroke_border_inside_row(
+            "postscript_orientation",
+            required_asset_bytes(case, "ps_orientation_font")?,
+            glyph_index_param(&case.inputs.params)?,
+        )?,
+    ];
+    Ok(glyph_stroke_border_inside_output(rows))
+}
+
+fn c_glyph_stroke_border_inside_row(
+    label: &str,
+    bytes: Arc<[u8]>,
+    glyph_index: u32,
+) -> Result<Value, String> {
+    let (library, face) =
+        c_open_face_from_bytes_with_size_or_char_size(bytes.as_ref(), 0, (20, 20), &Value::Null)?;
+    let size_status = c_abi::FT_Set_Char_Size(face, 0, 1536, 72, 72);
+    let load_status = if size_status == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP)
+    } else {
+        size_status
+    };
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let get_status = if load_status == FT_Err_Ok {
+        match c_abi::abi_get_outline_glyph_from_face(face) {
+            Ok(created) => {
+                glyph = created;
+                FT_Err_Ok
+            }
+            Err(error) => error,
+        }
+    } else {
+        load_status
+    };
+    let snapshot_before = if get_status == FT_Err_Ok && !glyph.is_null() {
+        c_abi::abi_outline_glyph_snapshot(glyph)
+    } else {
+        None
+    };
+    let outside_border = snapshot_before
+        .as_ref()
+        .map(|snapshot| FT_Outline_GetOutsideBorder(Some(&snapshot.outline)));
+    let selected_border = snapshot_before
+        .as_ref()
+        .map(|snapshot| FT_Outline_GetInsideBorder(Some(&snapshot.outline)));
+    let mut stroker = ptr::null_mut();
+    let stroker_new_status = c_abi::FT_Stroker_New(library, &mut stroker);
+    if stroker_new_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Set(
+            stroker,
+            160,
+            FT_STROKER_LINECAP_ROUND as FT_Int,
+            FT_STROKER_LINEJOIN_BEVEL as FT_Int,
+            65_536,
+        );
+    }
+    let stroke_status = if get_status == FT_Err_Ok && stroker_new_status == FT_Err_Ok {
+        c_abi::FT_Glyph_StrokeBorder(&mut glyph, stroker, 1, 0)
+    } else if get_status != FT_Err_Ok {
+        get_status
+    } else {
+        stroker_new_status
+    };
+    let outline = if stroke_status == FT_Err_Ok {
+        c_abi::abi_outline_glyph_snapshot(glyph)
+            .map(|snapshot| outline_snapshot_json(&snapshot.outline))
+    } else {
+        None
+    };
+    if !stroker.is_null() {
+        c_abi::FT_Stroker_Done(stroker);
+    }
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(glyph_stroke_border_inside_row_json(
+        label,
+        stroke_status,
+        outside_border,
+        selected_border,
+        outline,
+    ))
+}
+
+fn c_glyph_stroke_border_inside_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_inside_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border inside route",
+            case.case_id
+        ));
+    }
+    let rows = vec![
+        c_glyph_stroke_border_inside_row("truetype_orientation", default_dejavu_font_bytes()?, 12)?,
+        c_glyph_stroke_border_inside_row(
+            "postscript_orientation",
+            required_asset_bytes(case, "ps_orientation_font")?,
+            glyph_index_param(&case.inputs.params)?,
+        )?,
+    ];
+    Ok(glyph_stroke_border_inside_output(rows))
+}
+
+fn wasm_glyph_stroke_border_inside_row(
+    label: &str,
+    bytes: Arc<[u8]>,
+    glyph_index: u32,
+) -> Result<Value, String> {
+    let handle = wasm_open_face_from_bytes_with_size_or_char_size(
+        bytes.as_ref(),
+        0,
+        (20, 20),
+        &Value::Null,
+    )?;
+    let size_status = wasm_abi::fontdone_wasm_set_char_size(handle, 0, 1536, 72, 72);
+    let load_status = if size_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(handle, glyph_index, FT_LOAD_NO_BITMAP)
+    } else {
+        size_status
+    };
+    let mut glyph = 0usize;
+    let get_status = if load_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph)
+    } else {
+        load_status
+    };
+    let snapshot_before = if get_status == FT_Err_Ok {
+        wasm_abi::abi_outline_glyph_snapshot(glyph)
+    } else {
+        None
+    };
+    let outside_border = snapshot_before
+        .as_ref()
+        .map(|snapshot| FT_Outline_GetOutsideBorder(Some(&snapshot.outline)));
+    let selected_border = snapshot_before
+        .as_ref()
+        .map(|snapshot| FT_Outline_GetInsideBorder(Some(&snapshot.outline)));
+    let stroke_result = if get_status == FT_Err_Ok {
+        wasm_abi::abi_support_glyph_stroke_border_inside_success(glyph)
+    } else {
+        Err(get_status)
+    };
+    let (stroke_status, stroked) = match stroke_result {
+        Ok(stroked) => (FT_Err_Ok, Some(stroked)),
+        Err(error) => (error, None),
+    };
+    let outline = if let Some(stroked) = stroked {
+        let snapshot = wasm_abi::abi_outline_glyph_snapshot(stroked).ok_or_else(|| {
+            "missing wasm stroked inside-border outline glyph snapshot".to_string()
+        })?;
+        let stroked_ptr = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(stroked);
+        wasm_abi::fontdone_wasm_done_glyph_handle(stroked_ptr);
+        Some(outline_snapshot_json(&snapshot.outline))
+    } else {
+        None
+    };
+    if glyph != 0 {
+        let glyph_ptr = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph_ptr);
+    }
+    wasm_done_face(handle);
+    Ok(glyph_stroke_border_inside_row_json(
+        label,
+        stroke_status,
+        outside_border,
+        selected_border,
+        outline,
+    ))
+}
+
+fn wasm_glyph_stroke_border_inside_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_inside_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border inside route",
+            case.case_id
+        ));
+    }
+    let rows = vec![
+        wasm_glyph_stroke_border_inside_row(
+            "truetype_orientation",
+            default_dejavu_font_bytes()?,
+            12,
+        )?,
+        wasm_glyph_stroke_border_inside_row(
+            "postscript_orientation",
+            required_asset_bytes(case, "ps_orientation_font")?,
+            glyph_index_param(&case.inputs.params)?,
+        )?,
+    ];
+    Ok(glyph_stroke_border_inside_output(rows))
 }
 
 fn rust_glyph_transform(case: &InputCase) -> Result<RunOutput, String> {

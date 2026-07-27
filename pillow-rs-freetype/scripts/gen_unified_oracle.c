@@ -20191,6 +20191,64 @@ static int emit_glyph_stroke_border_outside_success(int argc, char** argv) {
     return 0;
 }
 
+static FT_Error glyph_stroke_border_inside_row(const char* label,
+                                               const char* path,
+                                               FT_UInt glyph_index,
+                                               int* wrote) {
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    FT_Face face = NULL;
+    FT_Error face_error = init_error ? init_error : FT_New_Face(library, path, 0, &face);
+    FT_Error size_error = face_error ? face_error : FT_Set_Char_Size(face, 0, 1536, 72, 72);
+    FT_Error load_error = size_error ? size_error : FT_Load_Glyph(face, glyph_index, FT_LOAD_NO_BITMAP);
+    FT_Glyph glyph = NULL;
+    FT_Error get_error = load_error ? load_error : FT_Get_Glyph(face->glyph, &glyph);
+    FT_StrokerBorder outside_border = -1;
+    FT_StrokerBorder selected_border = -1;
+    if (!get_error && glyph && glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        outside_border = FT_Outline_GetOutsideBorder(&outline_glyph->outline);
+        selected_border = FT_Outline_GetInsideBorder(&outline_glyph->outline);
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = get_error ? get_error : FT_Stroker_New(library, &stroker);
+    if (!new_error && stroker) {
+        FT_Stroker_Set(stroker, 160, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_BEVEL, 65536);
+    }
+    FT_Error stroke_error = new_error ? new_error : FT_Glyph_StrokeBorder(&glyph, stroker, 1, 0);
+    if (*wrote) printf(",");
+    *wrote = 1;
+    printf("{\"label\":\"%s\",\"status\":%d,\"outside_border\":%d,\"selected_border\":%d,",
+           label,
+           stroke_error,
+           outside_border,
+           selected_border);
+    if (stroke_error || !glyph || glyph->format != FT_GLYPH_FORMAT_OUTLINE) {
+        printf("\"outline\":null}");
+    } else {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        print_outline(&outline_glyph->outline);
+        printf("}");
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    if (glyph) FT_Done_Glyph(glyph);
+    if (face) FT_Done_Face(face);
+    if (library) FT_Done_FreeType(library);
+    return stroke_error;
+}
+
+static int emit_glyph_stroke_border_inside_success(int argc, char** argv) {
+    if (argc != 4) return 2;
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int wrote = 0;
+    glyph_stroke_border_inside_row("truetype_orientation", argv[2], 12, &wrote);
+    glyph_stroke_border_inside_row("postscript_orientation", argv[3], 12, &wrote);
+    printf("]}}\n");
+    return 0;
+}
+
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
     if (argc != 4) return 2;
     const char* action = argv[2];
@@ -27166,6 +27224,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--glyph-stroke-border-outside-success")) {
         return emit_glyph_stroke_border_outside_success(argc, argv);
+    }
+    if (argc == 4 && streq(argv[1], "--glyph-stroke-border-inside-success")) {
+        return emit_glyph_stroke_border_inside_success(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);

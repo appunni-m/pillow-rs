@@ -2350,7 +2350,11 @@ fn stroke_outline_glyph_general(
         points: Vec::with_capacity(n_points as usize),
         tags: Vec::with_capacity(n_points as usize),
         contours: Vec::with_capacity(n_contours as usize),
-        flags: glyph.outline.flags,
+        // FreeType 2.14.3 `src/base/ftstroke.c:2297-2305` discards the copied
+        // outline, allocates a replacement with `FT_Outline_New`, and exports
+        // into that fresh outline.  `FT_Outline_New` initializes only
+        // `FT_OUTLINE_OWNER`; source outline flags are not copied here.
+        flags: FT_OUTLINE_OWNER as FT_Int,
     };
     FT_Stroker_Export(stroker, Some(&mut outline));
     Ok(FT_OutlineGlyphOwned {
@@ -2427,7 +2431,10 @@ pub fn FT_Outline_Glyph_StrokeBorder(
         points: Vec::with_capacity(n_points as usize),
         tags: Vec::with_capacity(n_points as usize),
         contours: Vec::with_capacity(n_contours as usize),
-        flags: glyph.outline.flags,
+        // FreeType 2.14.3 `src/base/ftstroke.c:2375-2384` replaces the copied
+        // outline with a fresh `FT_Outline_New` allocation before exporting
+        // the selected border.  The fresh outline carries only OWNER.
+        flags: FT_OUTLINE_OWNER as FT_Int,
     };
     FT_Stroker_ExportBorder(stroker, border, Some(&mut outline));
     Ok(FT_OutlineGlyphOwned {
@@ -5042,7 +5049,6 @@ fn append_stroker_outline(target: &mut FT_OutlineSnapshot, source: &FT_OutlineSn
             .iter()
             .map(|contour| contour.saturating_add(u16::try_from(point_offset).unwrap_or(u16::MAX))),
     );
-    target.flags = source.flags;
 }
 
 fn stroker_exists(stroker: FT_Stroker) -> bool {

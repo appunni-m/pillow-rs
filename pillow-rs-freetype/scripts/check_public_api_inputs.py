@@ -1533,11 +1533,6 @@ def ftstroke_glyph_stroke_pending_reason(row: ConcreteInput) -> str | None:
             "glyph-object route proving destroy=0 preserves the input glyph "
             "and destroy=1 releases or replaces it exactly like pinned C"
         ),
-        "ftstroke.FT_Glyph_StrokeBorder.inside_border_success": (
-            "FT_Glyph_StrokeBorder inside parity needs a maintained "
-            "glyph-object route proving inside-border stroking emits the same "
-            "outline geometry and ownership result as pinned C"
-        ),
         "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option": (
             "FT_Glyph_StrokeBorder destroy-option parity needs a maintained "
             "glyph-object route proving destroy=0 preserves the input glyph "
@@ -6619,6 +6614,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
             "selected border, replacement outline points, tags, contours, "
             "CBox, status sequence, and preserve-original ownership through "
             "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
+    if (
+        row.operation == "ftstroke.glyph_stroke_border"
+        and row.case_id == "ftstroke.FT_Glyph_StrokeBorder.inside_border_success"
+    ):
+        return (
+            "FT_Glyph_StrokeBorder inside-border route validates exact "
+            "orientation-selected border, replacement outline points, tags, "
+            "contours, and owner flags through pinned C oracle, Rust FFI, "
+            "C ABI, and WASM ABI"
         )
     if (
         row.operation == "ftstroke.glyph_stroke_border"

@@ -2437,6 +2437,35 @@ pub fn abi_support_glyph_stroke_border_outside_success(
     }
 }
 
+#[cfg(feature = "abi-test-support")]
+pub fn abi_support_glyph_stroke_border_inside_success(
+    glyph_handle: usize,
+) -> Result<usize, FT_Error> {
+    let glyph = ptr::with_exposed_provenance::<FontdoneWasmGlyph>(glyph_handle);
+    let Some(owned) = wasm_owned_outline_glyph_from_root(glyph) else {
+        return Err(rust_ffi::FT_Err_Invalid_Argument);
+    };
+    let library = rust_ffi::FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = rust_ffi::FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != rust_ffi::FT_Err_Ok {
+        return Err(new_error);
+    }
+    rust_ffi::FT_Stroker_Set(
+        stroker,
+        160,
+        rust_ffi::FT_STROKER_LINECAP_ROUND as FT_Int,
+        rust_ffi::FT_STROKER_LINEJOIN_BEVEL as FT_Int,
+        65_536,
+    );
+    let result = rust_ffi::FT_Outline_Glyph_StrokeBorder(Some(&owned.core), stroker, 1);
+    rust_ffi::FT_Stroker_Done(stroker);
+    match result {
+        Ok(stroked) => Ok(Box::into_raw(Box::new(WasmOwnedOutlineGlyph::new(stroked))).addr()),
+        Err(error) => Err(error),
+    }
+}
+
 #[unsafe(no_mangle)]
 pub extern "C" fn fontdone_wasm_outline_get_bbox(
     outline: *const FontdoneWasmOutline,
