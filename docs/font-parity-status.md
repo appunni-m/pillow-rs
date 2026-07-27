@@ -37,7 +37,7 @@ because Pillow exposes it through `PIL.ImageFont`.
 
 ## PIL.ImageFont public surface comparison
 
-The pinned Pillow `11.3.0` oracle reports these public `PIL.ImageFont`
+The pinned Pillow `12.2.0` oracle reports these public `PIL.ImageFont`
 module/class surfaces in scope:
 
 - module functions: `load`, `load_path`, `load_default_imagefont`,
