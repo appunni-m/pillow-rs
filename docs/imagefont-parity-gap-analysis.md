@@ -39,6 +39,10 @@ Post stroked missing-glyph fixture Coverage MCP run: `68075bd9-fce0-43ed-a276-66
 
 Post stroked missing-glyph fixture Coverage MCP snapshot: `c46dcc15-676c-4cba-b1bc-44bdeab17507`
 
+Post BeginSubPath wide-stroke Coverage MCP run: `983d785a-e8a8-49bd-9582-a68b1c5e013a`
+
+Post BeginSubPath wide-stroke Coverage MCP snapshot: `c24eedd7-8629-4b54-b4f7-0bc6f4984c79`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -1544,4 +1548,10 @@ current blockers.
   passes `1/1` with `0` pending. The normal
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_BeginSubPath`
   lane now passes `4/4` runnable rows with `0` pending, and route audit moves
-  to `real-parity=4859`, `pending-route=163`.
+  to `real-parity=4859`, `pending-route=163`. Coverage MCP command
+  `font-tests-coverage-with-freetype-pillow-12-2` passed after this fix as run
+  `983d785a-e8a8-49bd-9582-a68b1c5e013a` and ingested snapshot
+  `c24eedd7-8629-4b54-b4f7-0bc6f4984c79` for commit `f6c1252e2`. Direct
+  `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
+  branches, `162/173` functions, and `2612/2696` regions with the same seven
+  markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
