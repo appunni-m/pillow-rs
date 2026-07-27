@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `7f90a7166eefd17d88396f22f2ae28a337ffede6`
+Rust commit reviewed: `4eab9da2b4d8fa0f90d47f3b54bd2d0b9589728e`
 
-Coverage MCP run: `d166a0fb-ce18-4422-84d6-fa5b0c9ce4b9`
+Coverage MCP run: `7b697179-bbd6-4a45-bc39-67ba09cb82ad`
 
-Coverage MCP snapshot: `35b7777f-adad-4344-b3d8-bfc5d9c3fb31`
+Coverage MCP snapshot: `24a389d0-d924-4b51-b40d-30c5263bcb4e`
 
 Suite: `font-with-freetype`
 
@@ -101,15 +101,16 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 372/372 100.00% | n/a | 80/80 100.00% | 494/494 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | one reported line gap is rustdoc, not executable |
-| `pillow-rs/src/font/imagingft.rs` | 1628/1655 98.37% | 255/264 96.59% | 159/170 93.53% | 2539/2635 96.36% | real partial branch gaps remain |
+| `pillow-rs/src/font/imagingft.rs` | 1624/1651 98.36% | 240/248 96.77% | 163/174 93.68% | 2523/2618 96.37% | real partial branch gaps remain |
 
 ## Uncovered/partial line logic analysis
 
-Coverage MCP reports no fully uncovered executable lines in `imagingft.rs`; all remaining targeted gaps are partial branches.
+Coverage MCP reports five uncovered source lines in `imagingft.rs`. Three are rare FreeType error table data rows, one is variation named-instance success propagation, and one is the stroked extent-clamp body. The rest of the targeted gaps are partial branches.
 
 | Rust line(s) | Rust logic | Pillow 12.2.0 reference | Analysis | Required action |
 |---:|---|---|---|---|
-| `91`, `105` | `ft_error_to_pil` hand-maps a subset of FreeType errors and falls back to `ValueError("FreeType error N")`. | `_imagingft.c:38-112` builds an `FT_ERRORS_H` table and raises `OSError` for known errors, with unknown fallback also as `OSError`. | Current fixture rows hit several errors, but the implementation is not table-equivalent to Pillow. This is a real parity risk, not only coverage noise. | Replace subset mapping with complete FreeType error table semantics or generate the table from `fontdone` constants. Add rows for unknown/error-table fallback behavior if reachable. |
+| `91`, `92`, `253`, `271` | Complete FreeType 2.14.3 error message table data. | `_imagingft.c:38-112` builds an `FT_ERRORS_H` table and raises `OSError` for known errors, with unknown fallback also as `OSError`. | Rust now uses a complete table and always returns `PilError::OsError`; remaining uncovered rows mean those rare error codes are not triggered by the current public ImageFont corpus. | Add public fixture rows only when the corresponding FreeType failures are reachable through `PIL.ImageFont`; do not unit-test private table rows as a parity substitute. |
+| `515` | Successful `FT_Set_Named_Instance` after variation-name lookup. | Pillow `FreeTypeFont.set_variation_by_name` selects the named instance through `_imagingft`. | Existing variation rows cover name lookup and post-variation behavior, but this exact success propagation line is not covered. | Add a minimal successful named-instance row if a fixture font exposes a named instance that Pillow and Rust can both select exactly. |
 | `796-797` | `stroke_filled` unsupported guard before stroked rendering. | `_imagingft.c:1048-1051` routes `stroke_filled=true` to `FT_Glyph_StrokeBorder`. | Rust now makes the unsupported path explicit instead of silently treating it as default stroke. This is not full Pillow parity; it is a guard against false-positive parity. | Implement `FT_Glyph_StrokeBorder` in `fontdone`, then add a `stroke_width + stroke_filled=true` fixture row that must pass against the live oracle. |
 | `826`, `829` | `ceil().max(0.0)` dimensions for the stroke-expanded bbox. | Pillow computes dimensions through `bounding_box_and_anchors` and C integer conversions. | The negative max branch is partially untested after the shared run refactor. This is dimension sanitization, not a separate public feature. | Cover only with an input that moves a real Pillow branch, not by adding duplicate stroke rows. |
 | `846`, `849` | Rust clamps stroked bitmap extents when actual stroked bitmap exceeds bbox-derived expected dimensions. | `_imagingft.c:998-1001` says render dimensions must match `font_getsize`; `_imagingft.c:1115-1128` clips during paste. | This looks like a workaround for bbox/stroker mismatch. Pillow allocates from `bounding_box_and_anchors`, then clips when writing; it does not mutate the computed bitmap extent this way. | Treat as suspect implementation. Fix lower bbox/stroker parity, then remove or justify clamp with exact C evidence. Add rows that prove both clamp sides if it remains. |
@@ -185,11 +186,13 @@ Pillow C allocates from `bounding_box_and_anchors`, then clips while writing to 
 
 Decision needed: after stroker parity improves, remove the clamp or document the exact C-equivalent reason. Add rows that would fail if this clamp hides a real extent bug.
 
-### 6. FreeType error mapping is not table-equivalent
+### 6. FreeType error mapping is now table-equivalent
 
 Pillow `_imagingft.c` uses the FreeType error table. Rust maps a small set of errors and uses a different error class for fallback.
 
-Decision needed: make Rust error mapping generated/table-driven and make exact `OSError` message parity part of the manifest.
+Rust now uses a complete FreeType 2.14.3 error-message table derived from `fterrdef.h`, always returns `PilError::OsError`, and uses Pillow's `"unknown freetype error"` fallback for table misses.
+
+Remaining action: add public fixture rows only for FreeType errors that are reachable through `PIL.ImageFont` inputs. Do not add private unit tests for the table as a parity substitute.
 
 ### 7. Libraqm successful shaping is intentionally not implemented
 
@@ -213,17 +216,16 @@ Decision needed: keep file/path I/O outside core, but ensure Python/JS bindings 
 
 ## Recommended action order
 
-1. Add `stroke_filled` to typed options and implement `FT_Glyph_StrokeBorder`.
-2. Replace `ft_error_to_pil` with table-equivalent Pillow 12.2.0 error mapping.
-3. Re-evaluate and remove the stroked extent clamps if they are only masking lower stroker/bbox issues.
-4. Add minimal independent fixture rows for:
+1. Implement `FT_Glyph_StrokeBorder` and remove the `stroke_filled` unsupported guard.
+2. Re-evaluate and remove the stroked extent clamps if they are only masking lower stroker/bbox issues.
+3. Add minimal independent fixture rows for:
    - stroked mode `"1"`;
    - `stroke_filled=true`;
    - zero-glyph/missing-glyph kerning transitions;
    - clipped stroked bitmap paste;
    - table-mapped FreeType errors not currently represented.
-5. Run `make -C pillow-rs font-tests`, then Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
-6. Only after coverage moves, update this document with the new snapshot and remaining gaps.
+4. Run `make -C pillow-rs font-tests`, then Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
+5. Only after coverage moves, update this document with the new snapshot and remaining gaps.
 
 ## Current decision point
 
