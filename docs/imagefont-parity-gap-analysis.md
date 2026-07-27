@@ -191,8 +191,8 @@ The live Pillow oracle exposes the following ImageFont surfaces:
 | Pillow surface | Pillow public methods/functions | Rust status |
 |---|---|---|
 | module functions | `load`, `load_default`, `load_default_imagefont`, `load_path`, `truetype` | Partially modeled. Core Rust intentionally accepts bytes, not filesystem paths. Python/JS binding I/O must stay thin and delegate after byte loading. |
-| `ImageFont.ImageFont` bitmap font | `getbbox`, `getlength`, `getmask`, `info` on loaded bitmap fonts | Implemented as separate Rust `PilFont`, not yet as the same root `ImageFont` class shape. Fixture rows exist for bitmap `ImageFont.*`. |
-| `ImageFont.FreeTypeFont` | `getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `getmask2`, `font_variant`, `get_variation_names`, `set_variation_by_name`, `get_variation_axes`, `set_variation_by_axes` | Modeled through explicit Rust root `FreeTypeFont`; `ImageFont` remains a compatibility alias for existing Rust callers. BASIC layout paths are oracle-tested. Successful libraqm shaping is out of scope. The public `getmask2(..., stroke_width=1.5, stroke_filled=True)` route is proven for the maintained DejaVuSans glyph-36 outside-border path; lower `FT_Glyph_StrokeBorder` outside/inside/destroy wrapper rows now have exact maintained routes. Broader stroke geometry remains incomplete. |
+| `ImageFont.ImageFont` bitmap font | `getbbox`, `getlength`, `getmask`, `info` on loaded bitmap fonts | Exposed at the Rust root as `ImageFont`, aliasing the internal `PilFont` implementation. Fixture rows exist for bitmap `ImageFont.*`. |
+| `ImageFont.FreeTypeFont` | `getname`, `getmetrics`, `getlength`, `getbbox`, `getmask`, `getmask2`, `font_variant`, `get_variation_names`, `set_variation_by_name`, `get_variation_axes`, `set_variation_by_axes` | Modeled through explicit Rust root `FreeTypeFont`. BASIC layout paths are oracle-tested. Successful libraqm shaping is out of scope. The public `getmask2(..., stroke_width=1.5, stroke_filled=True)` route is proven for the maintained DejaVuSans glyph-36 outside-border path; lower `FT_Glyph_StrokeBorder` outside/inside/destroy wrapper rows now have exact maintained routes. Broader stroke geometry remains incomplete. |
 | `ImageFont.TransposedFont` | `getmask`, `getbbox`, `getlength` | Not modeled as a Rust class; exposed as helper operations (`get_transposed_mask`, `transposed_bbox`, `validate_transposed_length`) and tested through fixtures. |
 | enum-like values | `Layout.BASIC`, `Layout.RAQM` | BASIC implemented. RAQM success intentionally unsupported; no-libraqm behavior is tested as error parity. |
 
@@ -588,9 +588,9 @@ Snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` moves lower table coverage from 
 
 ### 6. Bitmap and FreeType class shape is not 1:1
 
-Pillow has `ImageFont.ImageFont` for bitmap fonts and `ImageFont.FreeTypeFont` for FreeType fonts. Rust now exposes an explicit root `FreeTypeFont` for the FreeType-backed class; `ImageFont` remains as a compatibility alias during migration. Bitmap fonts still use `PilFont`.
+Pillow has `ImageFont.ImageFont` for bitmap fonts and `ImageFont.FreeTypeFont` for FreeType fonts. Rust now mirrors those root names: `ImageFont` aliases the bitmap `PilFont` implementation, and `FreeTypeFont` owns the FreeType-backed implementation.
 
-Decision: the FreeType-backed Rust root API should use `FreeTypeFont`, matching Pillow's public class name. The remaining class-shape gap is bitmap font naming: `PilFont` is still the core bitmap implementation while Pillow presents loaded bitmap fonts as `ImageFont.ImageFont` instances.
+Decision: class naming is source-aligned at the Rust root. Keep `PilFont` exported for explicit legacy PILfont loading/fixtures, but new code that means Pillow's bitmap base class should use `ImageFont`; new code that means Pillow's FreeType class should use `FreeTypeFont`.
 
 ### 7. Path/stream behavior is binding-owned, not core-owned
 

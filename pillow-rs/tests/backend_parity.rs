@@ -5,8 +5,8 @@ use std::path::{Path, PathBuf};
 
 use pillow_rs::Backend;
 use pillow_rs::Draw;
+use pillow_rs::FreeTypeFont;
 use pillow_rs::Image;
-use pillow_rs::ImageFont;
 use pillow_rs::PaletteTransparency;
 use pillow_rs::PasteSource;
 use pillow_rs::PilError;
@@ -1555,7 +1555,7 @@ fn indexed_bitmap_and_text_preserve_pillow_format_and_pending_transparency() {
             "text" => {
                 let xy = case.parameters["xy"].as_array().expect("text xy");
                 let fill = byte(&case.parameters["fill"]);
-                let font = ImageFont::load_default(
+                let font = FreeTypeFont::load_default(
                     case.parameters["font_size"]
                         .as_f64()
                         .expect("default font size") as f32,
