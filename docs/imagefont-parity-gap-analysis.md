@@ -18,6 +18,10 @@ Post wide-curve Coverage MCP run: `c766c267-e09f-4196-b204-736a8b44d8bd`
 
 Post wide-curve Coverage MCP snapshot: `27ad41d7-ae88-40cb-b286-224f227a4e5e`
 
+Post stroke-blocker cleanup Coverage MCP run: `eab645c4-3f6c-477d-bd95-f72f83fce2cf`
+
+Post stroke-blocker cleanup Coverage MCP snapshot: `9dc9cb42-54a6-4aa8-b217-43ff0d0b351b`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -629,6 +633,15 @@ Latest focused ftstroke evidence after the outside-border route update:
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit `99f7e415d` ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route. Public `stroke_filled=true` now reaches the maintained outside-border glyph row, but general closed round-path stroker geometry remains guarded for broader glyph shapes.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
 - Current recheck: `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap` passes `11/11` runnable rows with `0` pending. The live public rows `font.getmask.dejavusans24_a_stroke_1_5_mode_1` and `font.getmask2.dejavusans24_a_stroke_1_5_mode_1` are active and pass exact Pillow 12.2.0 oracle comparison, so the previous mono-target stroked ImageFont blocker is cleared.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
+  passed after clearing the stale stroke blocker guard as run
+  `eab645c4-3f6c-477d-bd95-f72f83fce2cf` and ingested snapshot
+  `9dc9cb42-54a6-4aa8-b217-43ff0d0b351b` for commit `4697676ed`.
+  Direct `pillow-rs/src/font/imagingft.rs` coverage remains `1660/1682`
+  lines, `249/254` branches, `162/173` functions, and `2612/2696` regions
+  (`96.88%`), with the same eight reported ranges `91`, `253`, `271`, `796`,
+  `826`, `829`, `831`, and `928`. This confirms the cleanup corrected blocker
+  accounting without claiming false direct adapter-region movement.
 
 Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and height-side stroked clipping rows:
 
