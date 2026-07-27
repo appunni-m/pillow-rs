@@ -43,6 +43,10 @@ Post BeginSubPath wide-stroke Coverage MCP run: `983d785a-e8a8-49bd-9582-a68b1c5
 
 Post BeginSubPath wide-stroke Coverage MCP snapshot: `c24eedd7-8629-4b54-b4f7-0bc6f4984c79`
 
+Post Stroker_Done after-export Coverage MCP run: `5c77afff-e542-4f7b-9085-2d0e59df55de`
+
+Post Stroker_Done after-export Coverage MCP snapshot: `cc33788c-0fe4-4e5b-9240-117edc98d574`
+
 Suite: `font-with-freetype`
 
 Oracle runtime:
@@ -1570,4 +1574,10 @@ current blockers.
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Done` passes
   `3/3` with `0` pending. Route audit moves to `real-parity=4860`,
   `pending-route=162`. This is lower FreeType ownership/route parity and does
-  not claim a new direct `imagingft.rs` adapter region.
+  not claim a new direct `imagingft.rs` adapter region. Coverage MCP command
+  `font-tests-coverage-with-freetype-pillow-12-2` passed after this route as
+  run `5c77afff-e542-4f7b-9085-2d0e59df55de` and ingested snapshot
+  `cc33788c-0fe4-4e5b-9240-117edc98d574` for commit `70af09b91`. Direct
+  `pillow-rs/src/font/imagingft.rs` remains `1666/1688` lines, `249/254`
+  branches, `162/173` functions, and `2612/2696` regions with the same seven
+  markers: `91`, `253`, `271`, `796`, `826`, `829`, and `928`.
