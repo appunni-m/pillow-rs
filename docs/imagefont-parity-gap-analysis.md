@@ -157,9 +157,9 @@ Pillow `FreeTypeFont.getmask2` passes `kwargs.get("stroke_filled", False)` into 
 
 Pillow C then chooses between `FT_Glyph_StrokeBorder` and `FT_Glyph_Stroke` in `_imagingft.c:1048-1051`.
 
-Rust `ImageFontTextOptions` only records `has_kwargs`; it does not parse or carry `stroke_filled`. Current parity passes because the active rows do not make this value semantically matter. This is a real public API gap for `getmask2`.
+Rust `ImageFontTextOptions` now carries `stroke_filled` explicitly. The adapter refuses `stroke_width != 0 && stroke_filled=true` with `NotImplementedError` instead of silently treating it as the default `FT_Glyph_Stroke` path. Current parity passes because the active rows do not require successful `FT_Glyph_StrokeBorder` rendering.
 
-Decision needed: add `stroke_filled: bool` to `ImageFontTextOptions`, parse it in the runner/bindings, implement `FT_Glyph_StrokeBorder` behavior in `fontdone`, and add rows where `stroke_filled=true` changes output.
+Decision needed: implement `FT_Glyph_StrokeBorder` behavior in `fontdone`, then add rows where `stroke_filled=true` changes output and remove the explicit unsupported guard.
 
 ### 3. Stroker miter parameter is now aligned
 
