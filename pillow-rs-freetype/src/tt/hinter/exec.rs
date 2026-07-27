@@ -726,12 +726,23 @@ impl ExecContext {
             ));
         }
 
-        if !(0..=0xFF).contains(&opcode) {
+        let opcode_index = if (0..=0xFF).contains(&opcode) {
+            opcode as usize
+        } else {
+            // FreeType's IDEF path reports positive custom-opcode overflow as
+            // `Too_Many_Instruction_Defs`, which Pillow exposes as
+            // `OSError("too many instruction definitions")`. Keep negative
+            // values on the defensive invalid-outline path because they do not
+            // represent an exhausted positive instruction-definition slot.
+            if opcode > 0 || self.num_instruction_defs >= self.max_instruction_defs {
+                return Err(FontError::InvalidOutline(
+                    "bytecode: too many instruction definitions".into(),
+                ));
+            }
             return Err(FontError::InvalidOutline(
                 "bytecode: IDEF opcode out of range".into(),
             ));
-        }
-        let opcode_index = opcode as usize;
+        };
         let redefining = self.instruction_defs[opcode_index].is_some();
         if !redefining {
             if self.num_instruction_defs >= self.max_instruction_defs {

@@ -318,6 +318,22 @@
       }
     },
     {
+      "case_id": "font.getlength.hinter_too_many_instruction_defs",
+      "operation": "getlength",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-idef-opcode-overflow.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A"
+        }
+      }
+    },
+    {
       "case_id": "font.getlength.hinter_nested_defs",
       "operation": "getlength",
       "inputs": {

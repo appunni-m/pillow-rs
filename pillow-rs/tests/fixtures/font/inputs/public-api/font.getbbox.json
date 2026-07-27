@@ -516,6 +516,22 @@
           "mode": "1"
         }
       }
+    },
+    {
+      "case_id": "font.getbbox.hhea_descender_only_av",
+      "operation": "getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hhea-descender-only.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
     }
   ]
 }
