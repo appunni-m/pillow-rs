@@ -509,10 +509,9 @@ pub(crate) fn set_variation_by_name(font: &mut ImageFont, name: &[u8]) -> Result
             String::from_utf8_lossy(name)
         )));
     };
-    check_ft_error(ffi::FT_Set_Named_Instance(
-        Some(&mut font.engine.face),
-        (index + 1) as ffi::FT_UInt,
-    ))?;
+    let status =
+        ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), (index + 1) as ffi::FT_UInt);
+    check_ft_error(status)?;
     refresh_engine_metadata(font);
     font.engine.style_name = Some(String::from_utf8_lossy(&names[index]).into_owned());
     Ok(())
