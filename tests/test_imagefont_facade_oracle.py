@@ -224,7 +224,7 @@ def test_imagefont_freetype_native_variation_subset_matches_pillow(RSPIL):
     pil_factory = lambda: PILImageFont.truetype(VARIABLE, 20)
 
     assert _native_variation_observation(rs_factory) == _native_variation_observation(pil_factory)
-    for instance_index in (1, 3, -1):
+    for instance_index in (0, 1, 3, 13, -1):
         assert _native_variation_after_setvarname(rs_factory, instance_index) == (
             _native_variation_after_setvarname(pil_factory, instance_index)
         )
