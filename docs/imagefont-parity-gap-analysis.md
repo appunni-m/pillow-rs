@@ -555,7 +555,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.native_getlength_26dot6.json` | 3 |
 | `font.native_getsize.json` | 3 |
 | `font.native_render.json` | 7 |
-| `font.native_variations.json` | 11 |
+| `font.native_variations.json` | 13 |
 | `font.render_text.json` | 7 |
 | `font.render_text_binary.json` | 10 |
 | `font.text_bbox.json` | 6 |
@@ -563,7 +563,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 439 |
+| total | 441 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
