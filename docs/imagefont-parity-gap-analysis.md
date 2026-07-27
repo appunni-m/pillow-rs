@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `fd13e23a18fadc71f1b9f5489c515ebeb2721aee`
+Rust commit reviewed: `19af4a948c4ba2bd571ade408d05b2edc0b138fe`
 
-Coverage MCP run: `10c4619d-ba0b-4653-a80c-79e30c6ee404`
+Coverage MCP run: `428957b1-ee53-4581-853e-7601ce4357e2`
 
-Coverage MCP snapshot: `6ece0246-d035-42b1-a586-6ad6c4673e18`
+Coverage MCP snapshot: `0947955f-88c1-438e-87d3-51e35a4b1f16`
 
 Suite: `font-with-freetype`
 
@@ -31,8 +31,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `6ece0246-d035-42b1-a586-6ad6c4673e18`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `0947955f-88c1-438e-87d3-51e35a4b1f16`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
+- Commit `19af4a948` makes `PilError::UnsupportedLibraqm` a hard-coded unit variant, so core code can no longer attach ad-hoc libraqm error text while Python and JavaScript bindings still expose Pillow's no-libraqm `KeyError` category.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
 - Additional mono BASIC rows for `AV` and `jQ` now prove live-oracle parity for normal-vs-mono load-flag behavior across `getlength`, `getbbox`, `getmask`, and `getmask2`. Coverage MCP shows these rows are semantically useful but do not reduce the remaining LLVM-reported `imagingft.rs` region gaps; the next coverage-moving gap is still lower stroker/stroke-border implementation.
@@ -154,7 +155,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `6ece0246-d035-42b1-a586-6ad6c4673e18`.
+Coverage snapshot: `0947955f-88c1-438e-87d3-51e35a4b1f16`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -165,7 +166,7 @@ Coverage snapshot: `6ece0246-d035-42b1-a586-6ad6c4673e18`.
 
 Overall snapshot totals for this suite:
 
-- Lines: 16178/50820, 31.83%
+- Lines: 16175/50817, 31.83%
 - Branches: 2744/10774, 25.47%
 - Functions: 1234/3612, 34.16%
 - Regions: 23238/78678, 29.54%
