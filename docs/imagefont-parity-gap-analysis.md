@@ -218,10 +218,10 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   inputs, then verified file-like variation-font reconstruction and variation
   setters still reach Rust.
 - Python ABI oracle coverage now includes
-  `tests/test_imagefont_facade_oracle.py`: twenty strict-cover tests compare
+  `tests/test_imagefont_facade_oracle.py`: twenty-one strict-cover tests compare
   `pillow-rs-py` against Pillow 12.2.0 for module load functions, `Layout`,
-  `truetype` path-like and byte-path inputs, file-like variation names/axes,
-  both variation setters, file-like `font_variant(size=...)`,
+  `MAX_STRING_LENGTH`, `truetype` path-like and byte-path inputs, file-like
+  variation names/axes, both variation setters, file-like `font_variant(size=...)`,
   `FreeTypeFont.getmetrics`/`getname`,
   `FreeTypeFont.getbbox`/`getlength` values and errors,
   `FreeTypeFont.getmask`/`getmask2` bytes and errors, and `TransposedFont`
