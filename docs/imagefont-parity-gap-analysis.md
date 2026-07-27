@@ -109,8 +109,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 429 input-only rows execute.
-- 429 rows match live Pillow 12.2.0 exactly.
+- 431 input-only rows execute.
+- 431 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -469,7 +469,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.native_face_attrs.json` | 2 |
 | `font.native_getlength_26dot6.json` | 3 |
 | `font.native_getsize.json` | 3 |
-| `font.native_variations.json` | 8 |
+| `font.native_variations.json` | 10 |
 | `font.render_text.json` | 7 |
 | `font.render_text_binary.json` | 10 |
 | `font.text_bbox.json` | 6 |
@@ -477,7 +477,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 429 |
+| total | 431 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -899,7 +899,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 429-row Font fixture corpus.
+The current implementation is good enough to trust the active 431-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
