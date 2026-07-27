@@ -26,8 +26,7 @@
           "paths": {
             "kind": "ref",
             "id": "outlines/stroker/set-attribute-matrix.json",
-            "asset_kind": "outline_path_records",
-            "status": "required_future_asset"
+            "asset_kind": "outline_path_records"
           }
         },
         "params": {

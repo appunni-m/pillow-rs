@@ -20866,6 +20866,131 @@ static int emit_stroker_set_miter_limit(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_set_attribute_matrix(int argc, char** argv) {
+    if (argc != 3) return 2;
+    char encoded[16384];
+    snprintf(encoded, sizeof(encoded), "%s", argv[2]);
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"rows\":[");
+    int first_row = 1;
+    char* row_save = NULL;
+    char* row_text = strtok_r(encoded, ";", &row_save);
+    while (row_text) {
+        char* path_text = strchr(row_text, ':');
+        if (!path_text) return 2;
+        *path_text = '\0';
+        path_text++;
+        char label[128];
+        long radius_value = 0;
+        long line_cap_value = 0;
+        long line_join_value = 0;
+        long miter_limit_value = 0;
+        long open_value = 0;
+        if (sscanf(row_text,
+                   "%127[^,],%ld,%ld,%ld,%ld,%ld",
+                   label,
+                   &radius_value,
+                   &line_cap_value,
+                   &line_join_value,
+                   &miter_limit_value,
+                   &open_value) != 6) {
+            return 2;
+        }
+
+        FT_Library library = NULL;
+        FT_Error status = FT_Init_FreeType(&library);
+        FT_Stroker stroker = NULL;
+        if (!status) status = FT_Stroker_New(library, &stroker);
+        FT_Error status_sequence[128] = {0};
+        int status_count = 0;
+        FT_UInt point_count = 0;
+        FT_UInt contour_count = 0;
+        FT_Vector exported_points[512] = {0};
+        unsigned char exported_tags[512] = {0};
+        unsigned short exported_contours[64] = {0};
+        FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+        FT_BBox cbox = {0, 0, 0, 0};
+
+        if (!status && stroker) {
+            FT_Stroker_Set(stroker,
+                           (FT_Fixed)radius_value,
+                           (FT_Stroker_LineCap)line_cap_value,
+                           (FT_Stroker_LineJoin)line_join_value,
+                           (FT_Fixed)miter_limit_value);
+            char* record_save = NULL;
+            char* record = strtok_r(path_text, "|", &record_save);
+            int began = 0;
+            while (record && !status) {
+                char op = record[0];
+                long x0 = 0, y0 = 0, x1 = 0, y1 = 0, x2 = 0, y2 = 0;
+                if (op == 'M') {
+                    if (sscanf(record, "M,%ld,%ld", &x0, &y0) != 2) return 2;
+                    FT_Vector to = { x0, y0 };
+                    status = FT_Stroker_BeginSubPath(stroker, &to, (FT_Bool)open_value);
+                    if (status_count < 128) status_sequence[status_count++] = status;
+                    began = 1;
+                } else if (op == 'L') {
+                    if (!began || sscanf(record, "L,%ld,%ld", &x0, &y0) != 2) return 2;
+                    FT_Vector to = { x0, y0 };
+                    status = FT_Stroker_LineTo(stroker, &to);
+                    if (status_count < 128) status_sequence[status_count++] = status;
+                } else if (op == 'Q') {
+                    if (!began || sscanf(record, "Q,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1) != 4) return 2;
+                    FT_Vector control = { x0, y0 };
+                    FT_Vector to = { x1, y1 };
+                    status = FT_Stroker_ConicTo(stroker, &control, &to);
+                    if (status_count < 128) status_sequence[status_count++] = status;
+                } else if (op == 'C') {
+                    if (!began || sscanf(record, "C,%ld,%ld,%ld,%ld,%ld,%ld", &x0, &y0, &x1, &y1, &x2, &y2) != 6) return 2;
+                    FT_Vector control1 = { x0, y0 };
+                    FT_Vector control2 = { x1, y1 };
+                    FT_Vector to = { x2, y2 };
+                    status = FT_Stroker_CubicTo(stroker, &control1, &control2, &to);
+                    if (status_count < 128) status_sequence[status_count++] = status;
+                } else {
+                    return 2;
+                }
+                record = strtok_r(NULL, "|", &record_save);
+            }
+            FT_Error end_status = status ? status : FT_Stroker_EndSubPath(stroker);
+            if (status_count < 128) status_sequence[status_count++] = end_status;
+            status = end_status;
+            if (!status) status = FT_Stroker_GetCounts(stroker, &point_count, &contour_count);
+            if (!status) {
+                FT_Stroker_Export(stroker, &exported);
+                FT_Outline_Get_CBox(&exported, &cbox);
+            }
+        }
+        if (stroker) FT_Stroker_Done(stroker);
+        if (library) FT_Done_FreeType(library);
+
+        if (!first_row) printf(",");
+        first_row = 0;
+        printf("{\"path\":\"%s\",\"radius\":%ld,\"line_cap\":%ld,\"line_join\":%ld,",
+               label,
+               radius_value,
+               line_cap_value,
+               line_join_value);
+        printf("\"status_sequence\":[");
+        for (int index = 0; index < status_count; index++) {
+            if (index) printf(",");
+            printf("%d", status_sequence[index]);
+        }
+        printf("],\"point_count\":%u,\"contour_count\":%u,\"exported_outline\":",
+               point_count,
+               contour_count);
+        print_stroker_outline_json(&exported);
+        printf(",\"cbox\":");
+        print_stroker_bbox_json(cbox);
+        printf("}");
+        row_text = strtok_r(NULL, ";", &row_save);
+    }
+    printf("]}}\n");
+    return 0;
+}
+
 static int emit_stroker_done_after_export(int argc, char** argv) {
     if (argc != 3) return 2;
     char encoded[8192];
@@ -28441,6 +28566,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 2 && streq(argv[1], "--stroker-set-miter-limit")) {
         return emit_stroker_set_miter_limit(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--stroker-set-attribute-matrix")) {
+        return emit_stroker_set_attribute_matrix(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-done-after-export")) {
         return emit_stroker_done_after_export(argc, argv);

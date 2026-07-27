@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "unit": "26.6",
+  "paths": {
+    "open_line": [
+      {"op": "move", "to": [0, 0]},
+      {"op": "line", "to": [640, 0]}
+    ],
+    "acute_corner": [
+      {"op": "move", "to": [0, 0]},
+      {"op": "line", "to": [640, 0]},
+      {"op": "line", "to": [160, 224]}
+    ],
+    "conic_curve": [
+      {"op": "move", "to": [0, 0]},
+      {"op": "conic", "control": [256, 512], "to": [512, 0]}
+    ],
+    "cubic_curve": [
+      {"op": "move", "to": [0, 0]},
+      {"op": "cubic", "control1": [160, 640], "control2": [480, 640], "to": [640, 0]}
+    ]
+  }
+}

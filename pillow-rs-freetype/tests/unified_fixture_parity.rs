@@ -25645,6 +25645,10 @@ fn is_stroker_set_miter_limit_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_Set.miter_limit_clamped_to_one"
 }
 
+fn is_stroker_set_attribute_geometry_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_Set.attributes_affect_geometry"
+}
+
 fn is_stroker_done_after_export_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_Done.after_export_cleanup"
 }
@@ -25870,6 +25874,106 @@ fn stroker_single_path_arg(case: &InputCase) -> Result<String, String> {
         })
         .collect::<Vec<_>>()
         .join("|"))
+}
+
+fn stroker_path_ops_arg(ops: &[StrokerPathOp]) -> String {
+    ops.iter()
+        .map(|op| match op {
+            StrokerPathOp::Move(to) => format!("M,{},{}", to.x, to.y),
+            StrokerPathOp::Line(to) => format!("L,{},{}", to.x, to.y),
+            StrokerPathOp::Conic { control, to } => {
+                format!("Q,{},{},{},{}", control.x, control.y, to.x, to.y)
+            }
+            StrokerPathOp::Cubic {
+                control1,
+                control2,
+                to,
+            } => format!(
+                "C,{},{},{},{},{},{}",
+                control1.x, control1.y, control2.x, control2.y, to.x, to.y
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join("|")
+}
+
+#[derive(Debug, Clone)]
+struct StrokerSetAttributeRow {
+    path_name: String,
+    radius: FT_Fixed,
+    line_cap: FT_Int,
+    line_join: FT_Int,
+    miter_limit: FT_Fixed,
+    open: bool,
+    ops: Vec<StrokerPathOp>,
+}
+
+fn stroker_set_attribute_rows(case: &InputCase) -> Result<Vec<StrokerSetAttributeRow>, String> {
+    let radius_rows = i64_array_param(&case.inputs.params, "radius_rows")?;
+    let cap_rows = string_array_param(&case.inputs.params, "line_cap_rows")?;
+    let join_rows = string_array_param(&case.inputs.params, "line_join_rows")?;
+    let paths = stroker_manual_named_paths(case)?;
+    if radius_rows.len() < 3 || cap_rows.len() < 3 || join_rows.len() < 4 || paths.len() < 4 {
+        return Err(
+            "set attribute matrix must cover all declared radius/cap/join/path families"
+                .to_string(),
+        );
+    }
+    let specs = [
+        (0usize, 0usize, 0usize, 0usize, true),
+        (1, 1, 0, 0, true),
+        (2, 2, 0, 0, true),
+        (0, 1, 1, 1, false),
+        (1, 1, 2, 1, false),
+        (2, 1, 3, 1, false),
+        (1, 1, 0, 2, false),
+        (2, 1, 0, 3, false),
+    ];
+    specs
+        .into_iter()
+        .map(|(radius_index, cap_index, join_index, path_index, open)| {
+            let (path_name, ops) = paths
+                .get(path_index)
+                .ok_or_else(|| format!("missing path row {path_index}"))?;
+            Ok(StrokerSetAttributeRow {
+                path_name: path_name.clone(),
+                radius: *radius_rows
+                    .get(radius_index)
+                    .ok_or_else(|| format!("missing radius row {radius_index}"))?,
+                line_cap: stroker_line_cap_value(
+                    cap_rows
+                        .get(cap_index)
+                        .ok_or_else(|| format!("missing line cap row {cap_index}"))?,
+                )?,
+                line_join: stroker_line_join_value(
+                    join_rows
+                        .get(join_index)
+                        .ok_or_else(|| format!("missing line join row {join_index}"))?,
+                )?,
+                miter_limit: 65_536,
+                open,
+                ops: ops.clone(),
+            })
+        })
+        .collect()
+}
+
+fn stroker_set_attribute_rows_arg(rows: &[StrokerSetAttributeRow]) -> String {
+    rows.iter()
+        .map(|row| {
+            format!(
+                "{},{},{},{},{},{}:{}",
+                row.path_name,
+                row.radius,
+                row.line_cap,
+                row.line_join,
+                row.miter_limit,
+                if row.open { 1 } else { 0 },
+                stroker_path_ops_arg(&row.ops)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
@@ -29724,6 +29828,279 @@ fn wasm_stroker_set_miter_limit(case: &InputCase) -> Result<RunOutput, String> {
         rust_stroker_set_miter_limit(case)
     } else {
         Err("unsupported stroker set miter-limit route".to_string())
+    }
+}
+
+fn stroker_set_attribute_output(rows: Vec<Value>) -> RunOutput {
+    ok(json!({ "rows": rows }))
+}
+
+fn rust_stroker_set_attribute_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_set_attribute_geometry_case(case) {
+        return Err(format!(
+            "{} is not a stroker set attribute-geometry route",
+            case.case_id
+        ));
+    }
+    let mut output_rows = Vec::new();
+    for row in stroker_set_attribute_rows(case)? {
+        let library = FT_Init_FreeType();
+        let mut stroker = ptr::null_mut();
+        let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            output_rows.push(json!({
+                "path": row.path_name,
+                "radius": row.radius,
+                "line_cap": row.line_cap,
+                "line_join": row.line_join,
+                "status_sequence": [new_error],
+                "point_count": 0,
+                "contour_count": 0,
+                "exported_outline": outline_snapshot_json(&FT_OutlineSnapshot::default()),
+                "cbox": bbox_json(bbox_from_rust_bbox(FT_BBox::default()))
+            }));
+            continue;
+        }
+        FT_Stroker_Set(
+            stroker,
+            row.radius,
+            row.line_cap,
+            row.line_join,
+            row.miter_limit,
+        );
+        let Some(StrokerPathOp::Move(start)) = row.ops.first() else {
+            FT_Stroker_Done(stroker);
+            return Err("attribute matrix path must begin with move".to_string());
+        };
+        let begin_error =
+            FT_Stroker_BeginSubPath(stroker, Some(start), if row.open { 1 } else { 0 });
+        let mut status_sequence = vec![begin_error];
+        let mut status = begin_error;
+        if status == FT_Err_Ok {
+            for op in &row.ops[1..] {
+                status = match op {
+                    StrokerPathOp::Move(_) => {
+                        FT_Stroker_Done(stroker);
+                        return Err("attribute matrix path contains nested move".to_string());
+                    }
+                    StrokerPathOp::Line(to) => FT_Stroker_LineTo(stroker, Some(to)),
+                    StrokerPathOp::Conic { control, to } => {
+                        FT_Stroker_ConicTo(stroker, Some(control), Some(to))
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => FT_Stroker_CubicTo(stroker, Some(control1), Some(control2), Some(to)),
+                };
+                status_sequence.push(status);
+                if status != FT_Err_Ok {
+                    break;
+                }
+            }
+        }
+        let end_error = if status == FT_Err_Ok {
+            FT_Stroker_EndSubPath(stroker)
+        } else {
+            status
+        };
+        status_sequence.push(end_error);
+        let mut point_count = 0;
+        let mut contour_count = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+        } else {
+            end_error
+        };
+        let mut exported = FT_OutlineSnapshot::default();
+        let mut cbox = FT_BBox::default();
+        if counts_error == FT_Err_Ok {
+            FT_Stroker_Export(stroker, Some(&mut exported));
+            FT_Outline_Get_CBox(Some(&exported), Some(&mut cbox));
+        }
+        FT_Stroker_Done(stroker);
+        output_rows.push(json!({
+            "path": row.path_name,
+            "radius": row.radius,
+            "line_cap": row.line_cap,
+            "line_join": row.line_join,
+            "status_sequence": status_sequence,
+            "point_count": point_count,
+            "contour_count": contour_count,
+            "exported_outline": outline_snapshot_json(&exported),
+            "cbox": bbox_json(bbox_from_rust_bbox(cbox))
+        }));
+    }
+    Ok(stroker_set_attribute_output(output_rows))
+}
+
+fn c_stroker_set_attribute_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_set_attribute_geometry_case(case) {
+        return Err(format!(
+            "{} is not a stroker set attribute-geometry route",
+            case.case_id
+        ));
+    }
+    let mut output_rows = Vec::new();
+    for row in stroker_set_attribute_rows(case)? {
+        let mut library = ptr::null_mut();
+        let init_error = c_abi::FT_Init_FreeType(&mut library);
+        if init_error != FT_Err_Ok {
+            output_rows.push(json!({
+                "path": row.path_name,
+                "radius": row.radius,
+                "line_cap": row.line_cap,
+                "line_join": row.line_join,
+                "status_sequence": [init_error],
+                "point_count": 0,
+                "contour_count": 0,
+                "exported_outline": empty_outline_json(),
+                "cbox": bbox_json(bbox_from_c_bbox(c_abi::FT_BBox::default()))
+            }));
+            continue;
+        }
+        let mut stroker = ptr::null_mut();
+        let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+        if new_error != FT_Err_Ok || stroker.is_null() {
+            c_done_library(library);
+            output_rows.push(json!({
+                "path": row.path_name,
+                "radius": row.radius,
+                "line_cap": row.line_cap,
+                "line_join": row.line_join,
+                "status_sequence": [new_error],
+                "point_count": 0,
+                "contour_count": 0,
+                "exported_outline": empty_outline_json(),
+                "cbox": bbox_json(bbox_from_c_bbox(c_abi::FT_BBox::default()))
+            }));
+            continue;
+        }
+        c_abi::FT_Stroker_Set(
+            stroker,
+            row.radius,
+            row.line_cap,
+            row.line_join,
+            row.miter_limit,
+        );
+        let Some(StrokerPathOp::Move(start)) = row.ops.first() else {
+            c_abi::FT_Stroker_Done(stroker);
+            c_done_library(library);
+            return Err("attribute matrix path must begin with move".to_string());
+        };
+        let c_start = c_abi::FT_Vector {
+            x: start.x,
+            y: start.y,
+        };
+        let begin_error =
+            c_abi::FT_Stroker_BeginSubPath(stroker, &c_start, if row.open { 1 } else { 0 });
+        let mut status_sequence = vec![begin_error];
+        let mut status = begin_error;
+        if status == FT_Err_Ok {
+            for op in &row.ops[1..] {
+                status = match op {
+                    StrokerPathOp::Move(_) => {
+                        c_abi::FT_Stroker_Done(stroker);
+                        c_done_library(library);
+                        return Err("attribute matrix path contains nested move".to_string());
+                    }
+                    StrokerPathOp::Line(to) => {
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_LineTo(stroker, &to)
+                    }
+                    StrokerPathOp::Conic { control, to } => {
+                        let control = c_abi::FT_Vector {
+                            x: control.x,
+                            y: control.y,
+                        };
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_ConicTo(stroker, &control, &to)
+                    }
+                    StrokerPathOp::Cubic {
+                        control1,
+                        control2,
+                        to,
+                    } => {
+                        let control1 = c_abi::FT_Vector {
+                            x: control1.x,
+                            y: control1.y,
+                        };
+                        let control2 = c_abi::FT_Vector {
+                            x: control2.x,
+                            y: control2.y,
+                        };
+                        let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                        c_abi::FT_Stroker_CubicTo(stroker, &control1, &control2, &to)
+                    }
+                };
+                status_sequence.push(status);
+                if status != FT_Err_Ok {
+                    break;
+                }
+            }
+        }
+        let end_error = if status == FT_Err_Ok {
+            c_abi::FT_Stroker_EndSubPath(stroker)
+        } else {
+            status
+        };
+        status_sequence.push(end_error);
+        let mut point_count = 0;
+        let mut contour_count = 0;
+        let counts_error = if end_error == FT_Err_Ok {
+            c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+        } else {
+            end_error
+        };
+        let mut exported_points = [c_abi::FT_Vector::default(); 512];
+        let mut exported_tags = [0u8; 512];
+        let mut exported_contours = [0u16; 64];
+        let mut exported = c_empty_outline(
+            &mut exported_points,
+            &mut exported_tags,
+            &mut exported_contours,
+        );
+        let mut cbox = c_abi::FT_BBox::default();
+        if counts_error == FT_Err_Ok {
+            c_abi::FT_Stroker_Export(stroker, &mut exported);
+            c_abi::FT_Outline_Get_CBox(&exported, &mut cbox);
+        }
+        let outline = c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        );
+        c_abi::FT_Stroker_Done(stroker);
+        c_done_library(library);
+        output_rows.push(json!({
+            "path": row.path_name,
+            "radius": row.radius,
+            "line_cap": row.line_cap,
+            "line_join": row.line_join,
+            "status_sequence": status_sequence,
+            "point_count": point_count,
+            "contour_count": contour_count,
+            "exported_outline": outline,
+            "cbox": bbox_json(bbox_from_c_bbox(cbox))
+        }));
+    }
+    Ok(stroker_set_attribute_output(output_rows))
+}
+
+fn wasm_stroker_set_attribute_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_set_attribute_geometry_case(case) {
+        return Err(format!(
+            "{} is not a stroker set attribute-geometry route",
+            case.case_id
+        ));
+    }
+    if wasm_abi::abi_support_stroker_conic_success()
+        && wasm_abi::abi_support_stroker_cubic_success()
+    {
+        rust_stroker_set_attribute_geometry(case)
+    } else {
+        Err("unsupported stroker set attribute-geometry route".to_string())
     }
 }
 
@@ -35437,6 +35814,13 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
         "ftstroke.set" if is_stroker_set_miter_limit_case(case) => {
             Ok(vec!["--stroker-set-miter-limit".to_string()])
         }
+        "ftstroke.set" if is_stroker_set_attribute_geometry_case(case) => {
+            let rows = stroker_set_attribute_rows(case)?;
+            Ok(vec![
+                "--stroker-set-attribute-matrix".to_string(),
+                stroker_set_attribute_rows_arg(&rows),
+            ])
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -37091,6 +37475,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.set" if is_stroker_set_miter_limit_case(case) => {
             rust_stroker_set_miter_limit(case)
         }
+        "ftstroke.set" if is_stroker_set_attribute_geometry_case(case) => {
+            rust_stroker_set_attribute_geometry(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -38332,6 +38719,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
             c_stroker_rewind_attributes(case)
         }
         "ftstroke.set" if is_stroker_set_miter_limit_case(case) => c_stroker_set_miter_limit(case),
+        "ftstroke.set" if is_stroker_set_attribute_geometry_case(case) => {
+            c_stroker_set_attribute_geometry(case)
+        }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
         {
@@ -39471,6 +39861,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.set" if is_stroker_set_miter_limit_case(case) => {
             wasm_stroker_set_miter_limit(case)
+        }
+        "ftstroke.set" if is_stroker_set_attribute_geometry_case(case) => {
+            wasm_stroker_set_attribute_geometry(case)
         }
         "ftstroke.conic_to" | "ftstroke.cubic_to"
             if stroker_degenerate_curve_action(case).is_ok() =>
