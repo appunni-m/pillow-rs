@@ -397,11 +397,17 @@ Latest Font wrapper movement:
 - `font.getmask`/`font.getmask2` `mode="1", stroke_width=1.5` probes for
   DejaVuSans `"A"` were rejected because they expose real lower-level
   mismatches. Pillow returns `L` payloads with size `19x21`; `getmask2` offset is
-  `(-2, 4)`. Rust's current mono route keeps size/offset but thresholded bytes
-  differ. A 2026-07-27 probe that forced the stroked glyph through normal
-  grayscale rendering also kept size/offset but still produced different
-  coverage bytes, so this remains a lower stroker/raster route issue rather than
-  a trustworthy Font adapter row.
+  `(-2, 4)`. The live Pillow oracle payload is grayscale coverage even though
+  the public call uses `mode="1"`. Rust's current mono route keeps size/offset
+  but returns thresholded bytes. A 2026-07-27 probe that forced the stroked glyph
+  through normal grayscale rendering also kept size/offset but still produced
+  different coverage bytes, so this remains a lower stroker/raster route issue
+  rather than a trustworthy Font adapter row.
+- `font.getmask2` stroked probes for DejaVuSans `"jQ"` and `"T"` were rejected.
+  Pillow succeeds for both public `PIL.ImageFont` rows, while Rust currently
+  returns an error. These rows would be valid Font coverage only after the
+  lower-level pure-Rust stroker supports those glyph outlines with exact
+  `FT_Glyph_Stroke`/bitmap parity.
 - A `font.getmask2` `text="A\uFFFF", stroke_width=1.5` probe was also rejected.
   Pillow succeeds, while Rust currently returns an error when the stroked run
   crosses from a valid DejaVuSans glyph into the missing-glyph route. This would
