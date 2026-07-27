@@ -4,7 +4,7 @@ Date: 2026-07-27
 
 Rust/source fixture commit reviewed: `1fbd6a338`
 
-Latest audit note commit: `1fbd6a338`
+Latest audit note commit: `7eaa3c11c`
 
 Coverage MCP run: `30dede2c-7df1-4204-85fa-0d7059680a1e`
 
