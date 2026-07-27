@@ -524,7 +524,8 @@ Latest focused ftstroke evidence after the outside-border route update:
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit `99f7e415d` ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route. Public `stroke_filled=true` now reaches the maintained outside-border glyph row, but general closed round-path stroker geometry remains guarded for broader glyph shapes.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
-- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 179 `pending-route` cases overall and 4842 `real-parity` cases after promoting `FT_Glyph_StrokeBorder.outside_border_success`. The project still cannot claim complete FreeType-backed ImageFont parity yet because `inside_border_success`, destroy-option ownership, and general glyph stroke geometry remain incomplete.
+- `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`: 9/9 runnable rows pass, 2 rows remain pending. The new pending row `pending_stroked_mono_target_outline_to_bitmap` names the exact lower sequence blocking public `mode="1"` stroked ImageFont parity: `FT_LOAD_TARGET_MONO` outline, `FT_Glyph_Stroke`, then `FT_Glyph_To_Bitmap` with `FT_RENDER_MODE_NORMAL`, comparing bitmap placement and coverage bytes against pinned C.
+- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 180 `pending-route` cases overall and 4842 `real-parity` cases after promoting `FT_Glyph_StrokeBorder.outside_border_success` and adding the explicit pending `FT_Glyph_To_Bitmap` blocker route. The project still cannot claim complete FreeType-backed ImageFont parity yet because `inside_border_success`, destroy-option ownership, stroked mono-target bitmap conversion, and general glyph stroke geometry remain incomplete.
 
 Latest Coverage MCP evidence after the outside-border, Font `stroke_filled`, and height-side stroked clipping rows:
 
@@ -572,3 +573,8 @@ Current request classification for `imagingft.rs` region coverage:
   public Font input-only rows back and let the live Pillow 12.2.0 oracle drive
   expected output. Do not add duplicate rows for the static error-table or LLVM
   source-map markers.
+- This lower route is now tracked directly in
+  `pillow-rs-freetype/tests/fixtures/inputs/public-api/ftglyph.FT_Glyph_To_Bitmap.json`
+  as `pending_stroked_mono_target_outline_to_bitmap`; it is intentionally a
+  pending route, not a mocked pass, until the C/Rust bitmap bytes can be made
+  exact.
