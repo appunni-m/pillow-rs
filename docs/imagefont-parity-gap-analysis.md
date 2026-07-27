@@ -859,3 +859,25 @@ Current request classification for `imagingft.rs` region coverage:
   forward `direction`/`features`/`language` into core, and the Python facade
   passes those arguments through instead of silently drawing BASIC text.
   `pillow-rs/tests/font_public_api.rs` now guards this source contract.
+- Follow-up audit after `022ead7d1`: Coverage MCP snapshot
+  `fcb80e1b-dd82-4f58-b36b-e84e671737b4` reports direct `imagingft.rs`
+  coverage at `1660/1682` lines, `249/254` branches, `162/173` functions, and
+  `2610/2696` regions. The remaining relevant ranges are still `91`, `253`,
+  `271`, `796`, `826`, `829`, `831`, and `928`. Source review confirms these
+  are constructor/function-boundary mappings, static FreeType error-table tuple
+  starts, and helper boundary mappings; they do not currently identify a
+  missing Pillow `_imagingft.c` adapter behavior. The `FT_Err_Execution_Too_Long`
+  public error row already exercises the table lookup semantically, but LLVM
+  still marks the tuple-start source line as uncovered, so adding more static
+  error-table rows is not justified as ImageFont parity work.
+- The maintained pending-case diagnostic now prints Rust lower stroker state for
+  `ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`.
+  Current output is `status=7`, left border `24` points / `2` contours, right
+  border `34` points / `2` contours, total `58` points / `4` contours. Pinned C
+  for the same real ImageFont route returns success and reaches left/right
+  border counts `35/37` before exporting a `72`-point stroked outline. This
+  confirms the actionable blocker is lower FreeType stroker geometry/export
+  (`FT_Stroker_ParseOutline` through closed round/conic border export), not the
+  `imagingft.rs` adapter. Do not refactor `pillow-rs-freetype` broadly for this;
+  the next valid implementation edit must be a narrow first-divergence fix
+  inside the stroker segment/corner path, proven against pinned C.
