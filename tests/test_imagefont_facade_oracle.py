@@ -4,6 +4,7 @@ import sys
 
 import pytest
 from PIL import Image
+from PIL import ImageDraw as PILImageDraw
 from PIL import ImageFont as PILImageFont
 
 
@@ -87,6 +88,39 @@ def _freetype_value_observation(font, method, text, **kwargs):
         return {
             "status": "ok",
             "value": getattr(font, method)(text, **kwargs),
+        }
+    except Exception as exc:
+        return {
+            "status": "err",
+            "class": type(exc).__name__,
+            "args": exc.args,
+            "message": str(exc),
+        }
+
+
+def _draw_text_observation(image_module, draw_module, font_module, method, **kwargs):
+    image = image_module.new("RGB", (96, 48), (255, 255, 255))
+    draw = draw_module.Draw(image)
+    font = font_module.truetype(DEJAVU, 20)
+    try:
+        if method == "text":
+            value = draw.text((0, 0), "AV", font=font, fill=(0, 0, 0), **kwargs)
+        elif method == "multiline_text":
+            value = draw.multiline_text((0, 0), "AV\njQ", font=font, fill=(0, 0, 0), **kwargs)
+        elif method == "textbbox":
+            value = draw.textbbox((0, 0), "AV", font=font, **kwargs)
+        elif method == "textlength":
+            value = draw.textlength("AV", font=font, **kwargs)
+        elif method == "multiline_textbbox":
+            value = draw.multiline_textbbox((0, 0), "AV\njQ", font=font, **kwargs)
+        else:
+            raise AssertionError(f"unsupported draw text method: {method}")
+        return {
+            "status": "ok",
+            "value": value,
+            "mode": image.mode,
+            "size": image.size,
+            "bytes": image.tobytes(),
         }
     except Exception as exc:
         return {
@@ -493,6 +527,28 @@ def test_imagefont_freetype_getmask2_bytes_offsets_and_errors_match_pillow(RSPIL
     ):
         assert _freetype_mask_observation(rs_font, "getmask2", text, **kwargs) == (
             _freetype_mask_observation(pil_font, "getmask2", text, **kwargs)
+        )
+
+
+@pytest.mark.covers("ImageDraw.text")
+@pytest.mark.covers("ImageDraw.multiline_text")
+@pytest.mark.covers("ImageDraw.textbbox")
+@pytest.mark.covers("ImageDraw.textlength")
+@pytest.mark.covers("ImageDraw.multiline_textbbox")
+def test_imagedraw_no_libraqm_text_options_match_pillow(RSPIL):
+    for method in ("text", "multiline_text", "textbbox", "textlength", "multiline_textbbox"):
+        assert _draw_text_observation(
+            RSPIL.Image,
+            RSPIL.ImageDraw,
+            RSPIL.ImageFont,
+            method,
+            direction="rtl",
+        ) == _draw_text_observation(
+            Image,
+            PILImageDraw,
+            PILImageFont,
+            method,
+            direction="rtl",
         )
 
 
