@@ -455,20 +455,15 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 
 ## Recommended action order
 
-1. Add the smallest lower stroker segment-geometry and border-export behavior
-   needed for a real public `ImageFont.getmask2(stroke_filled=true)` Pillow
-   row. This is dependency work only; do not chase 100%
-   `pillow-rs-freetype` coverage and do not add glyph-specific shortcuts.
-2. Add minimal, independent oracle fixtures for:
-   - successful `stroke_width + stroke_filled=true`;
+1. Add minimal, independent oracle fixtures for:
    - stroked mode `"1"`;
    - height-side stroked clipping;
    - successful stroked kerning and no-kerning transitions after lower stroker support is generalized;
    - additional embedded bitmap glyph paths not covered by the current SBIT rows;
    - reachable FreeType table errors.
-3. Re-run `make -C pillow-rs font-tests`.
-4. Re-run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
-5. Update this document with the new run/snapshot and remove only gaps proven by live Pillow oracle rows.
+2. Re-run `make -C pillow-rs font-tests`.
+3. Re-run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
+4. Update this document with the new run/snapshot and remove only gaps proven by live Pillow oracle rows.
 
 ## Current decision point
 
@@ -476,21 +471,23 @@ The current implementation is good enough to trust the active 353-row Font fixtu
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
 
-Latest focused ftstroke evidence after the export-append runner update:
+Latest focused ftstroke evidence after the outside-border route update:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`: 59/59 runnable rows pass, 9 rows remain pending. The parsed `FT_Stroker.lifecycle_contract` row now validates New, Set, BeginSubPath, two LineTo calls, EndSubPath, GetCounts, Export, and Done status/count behavior through pinned C, Rust FFI, C ABI, and WASM ABI.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`: 4/4 runnable rows pass, 4 rows remain pending.
-- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: 1/1 runnable row passes, 3 rows remain pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: 2/2 runnable rows pass, 2 rows remain pending. The newly maintained `outside_border_success` route compares selected border, replacement outline points/tags/contours, CBox, status sequence, and preserve-original ownership against pinned C, Rust FFI, C ABI, and WASM ABI.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_Export`: 7/7 runnable rows pass, 0 pending. This now includes `append_to_existing_outline` with sentinel-prefix preservation and contour-index offset comparison against the pinned C oracle.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ExportBorder`: 4/4 runnable rows pass, 0 pending. This now includes selected-border append-to-existing-outline parity.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
-- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit-in-progress ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route, but the Font public corpus does not yet reach those new lines because public `stroke_filled=true` remains guarded by the lower `FT_Glyph_StrokeBorder` success blocker.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending. Commit `99f7e415d` ports the FreeType `ft_conic_split` stack shape and dispatches `FT_Stroker_ConicTo` through the staged generic conic route. Public `stroke_filled=true` now reaches the maintained outside-border glyph row, but general closed round-path stroker geometry remains guarded for broader glyph shapes.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
-- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 180 `pending-route` cases overall, down from 183 after promoting the two export append rows and the parsed stroker lifecycle row to real runtime parity. The project still cannot claim complete FreeType-backed ImageFont parity yet.
+- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` now reports 179 `pending-route` cases overall and 4842 `real-parity` cases after promoting `FT_Glyph_StrokeBorder.outside_border_success`. The project still cannot claim complete FreeType-backed ImageFont parity yet because `inside_border_success`, destroy-option ownership, and general glyph stroke geometry remain incomplete.
 
-Latest Coverage MCP evidence after the conic-subdivision and lint pass:
+Latest Coverage MCP evidence after the outside-border and Font `stroke_filled` pass:
 
-- Run `d58a4ca9-137b-4fb4-8598-a748291e4d9f`, snapshot `6577461e-2c33-40c4-9f1a-9330404c39c4`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, commit `99f7e415d6583400f58e3c95c566aca48bbcb382`, status `passed`, ingested.
-- `pillow-rs/src/font/imagingft.rs` remains 1663/1686 lines, 248/254 branches, 162/173 functions, and 2604/2700 regions.
-- Remaining `imagingft.rs` direct gaps are unchanged: line 91 partial branch; table-data lines 253 and 271; rounding/helper branch lines 796, 826, 829, and 928; and the real public blocker at lines 1211-1212 where `stroke_filled=true` must call `FT_Outline_Glyph_StrokeBorder`.
-- Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. The next coverage-moving ImageFont task is still to make lower `FT_Glyph_StrokeBorder` inside/outside success geometry real enough for a live Pillow oracle `ImageFont.getmask2(..., stroke_width>0, stroke_filled=true)` row.
+- Run `a968dd68-1581-4362-a2b6-cc57d66cfa4f`, snapshot `9e05b91d-0328-4d7d-a514-ef27443c4ca7`, command `font-tests-coverage-with-freetype-pillow-12-2`, suite `font-with-freetype`, status `passed`, ingested.
+- The new input-only Font row `font.getmask2.dejavusans24_a_stroke_1_5_filled_l` passes exact live Pillow 12.2.0 oracle parity and reaches `imagingft.rs:1212`.
+- `pillow-rs/src/font/imagingft.rs` is now 1664/1686 lines, 249/254 branches, 162/173 functions, and 2608/2700 regions.
+- The prior real public blocker at lines 1211-1212 is resolved: line 1211 has both branches covered and line 1212 has one hit.
+- Remaining direct gaps are line 91 partial branch; static FreeType error-table data lines 253 and 271; and LLVM partial-branch artifacts around helper/comment or bit-rounding lines 796, 826, 829, and 928. These are not currently known public ImageFont behavior mismatches.
+- Conclusion: do not chase 100% region coverage in `pillow-rs-freetype`. For `imagingft.rs`, the next meaningful work is to classify whether the remaining LLVM region gaps are actionable public Pillow paths or coverage artifacts before adding rows.

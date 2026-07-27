@@ -25546,6 +25546,10 @@ fn is_glyph_stroke_outline_success_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
 }
 
+fn is_glyph_stroke_border_outside_success_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Glyph_StrokeBorder.outside_border_success"
+}
+
 fn stroker_open_line_geometry_action(case: &InputCase) -> Result<&'static str, String> {
     match case.case_id.as_str() {
         "ftstroke.FT_STROKER_LINECAP_BUTT.butt_cap_open_line_geometry" => Ok("butt"),
@@ -32154,6 +32158,12 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--glyph-stroke-outline-success".to_string(),
             required_asset_pathname(case, "font")?,
         ]),
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
+            Ok(vec![
+                "--glyph-stroke-border-outside-success".to_string(),
+                required_asset_pathname(case, "tt_font")?,
+            ])
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             Ok(vec![
                 if case.operation == "ftstroke.export" {
@@ -33769,6 +33779,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke" if is_glyph_stroke_outline_success_case(case) => {
             rust_glyph_stroke_outline_success(case)
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
+            rust_glyph_stroke_border_outside_success(case)
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             rust_stroker_export_append(case)
         }
@@ -34964,6 +34977,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.glyph_stroke" if is_glyph_stroke_outline_success_case(case) => {
             c_glyph_stroke_outline_success(case)
         }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
+            c_glyph_stroke_border_outside_success(case)
+        }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             c_stroker_export_append(case)
         }
@@ -36055,6 +36071,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.glyph_stroke" if is_glyph_stroke_outline_success_case(case) => {
             wasm_glyph_stroke_outline_success(case)
+        }
+        "ftstroke.glyph_stroke_border" if is_glyph_stroke_border_outside_success_case(case) => {
+            wasm_glyph_stroke_border_outside_success(case)
         }
         "ftstroke.export" | "ftstroke.export_border" if is_stroker_export_append_case(case) => {
             wasm_stroker_export_append(case)
@@ -37674,6 +37693,38 @@ fn glyph_stroke_outline_output(
     }))
 }
 
+fn glyph_stroke_border_output(
+    status: FT_Error,
+    size_status: FT_Error,
+    load_status: FT_Error,
+    get_status: FT_Error,
+    stroker_new_status: FT_Error,
+    stroke_status: FT_Error,
+    selected_border: Option<FT_Int>,
+    outline: Option<Value>,
+    cbox: Option<Value>,
+) -> RunOutput {
+    if status != FT_Err_Ok {
+        return ok(Value::Null);
+    }
+    ok(json!({
+        "status": status,
+        "status_sequence": {
+            "face": 0,
+            "size": size_status,
+            "load": load_status,
+            "get": get_status,
+            "stroker_new": stroker_new_status,
+            "stroke": stroke_status
+        },
+        "selected_border": selected_border.unwrap_or(-1),
+        "glyph_pointer_class": "new outline glyph",
+        "original_destroyed": false,
+        "outline": outline.unwrap_or(Value::Null),
+        "cbox": cbox.unwrap_or(Value::Null)
+    }))
+}
+
 fn rust_glyph_stroke_outline_success(case: &InputCase) -> Result<RunOutput, String> {
     if !is_glyph_stroke_outline_success_case(case) {
         return Err(format!(
@@ -37908,6 +37959,252 @@ fn wasm_glyph_stroke_outline_success(case: &InputCase) -> Result<RunOutput, Stri
             get_status,
             FT_Err_Ok,
             stroke_status,
+            None,
+            None,
+        )
+    };
+    if let Some(stroked) = stroked {
+        let stroked = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(stroked);
+        wasm_abi::fontdone_wasm_done_glyph_handle(stroked);
+    }
+    if glyph != 0 {
+        let glyph = ptr::with_exposed_provenance_mut::<wasm_abi::FontdoneWasmGlyph>(glyph);
+        wasm_abi::fontdone_wasm_done_glyph_handle(glyph);
+    }
+    wasm_done_face(handle);
+    Ok(output)
+}
+
+fn rust_glyph_stroke_border_outside_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_outside_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border route",
+            case.case_id
+        ));
+    }
+    let mut face = open_named_face(case, "tt_font")?;
+    let size_status = FT_Set_Char_Size(&mut face, 0, 1536, 72, 72);
+    let load_result = if size_status == FT_Err_Ok {
+        FT_Load_Glyph(&face, 36, FT_LOAD_NO_BITMAP)
+    } else {
+        Err(size_status)
+    };
+    let (load_status, glyph_result) = match load_result {
+        Ok(slot) => (FT_Err_Ok, FT_Get_Outline_Glyph(Some(&slot))),
+        Err(error) => (error, Err(error)),
+    };
+    let (get_status, glyph) = match glyph_result {
+        Ok(glyph) => (FT_Err_Ok, Some(glyph)),
+        Err(error) => (error, None),
+    };
+    let selected_border = glyph
+        .as_ref()
+        .map(|glyph| FT_Outline_GetOutsideBorder(Some(&glyph.outline)));
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let stroker_new_status = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if stroker_new_status == FT_Err_Ok {
+        FT_Stroker_Set(
+            stroker,
+            96,
+            FT_STROKER_LINECAP_ROUND as FT_Int,
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+    }
+    let stroke_result = if get_status == FT_Err_Ok && stroker_new_status == FT_Err_Ok {
+        FT_Outline_Glyph_StrokeBorder(glyph.as_ref(), stroker, 0)
+    } else if get_status != FT_Err_Ok {
+        Err(get_status)
+    } else {
+        Err(stroker_new_status)
+    };
+    let (stroke_status, stroked) = match stroke_result {
+        Ok(glyph) => (FT_Err_Ok, Some(glyph)),
+        Err(error) => (error, None),
+    };
+    if !stroker.is_null() {
+        FT_Stroker_Done(stroker);
+    }
+    if let Some(stroked) = stroked {
+        let mut cbox = FT_BBox::default();
+        FT_Outline_Glyph_CBox(Some(&stroked), 0, Some(&mut cbox));
+        Ok(glyph_stroke_border_output(
+            stroke_status,
+            size_status,
+            load_status,
+            get_status,
+            stroker_new_status,
+            stroke_status,
+            selected_border,
+            Some(outline_snapshot_json(&stroked.outline)),
+            Some(bbox_json(bbox_from_rust_bbox(cbox))),
+        ))
+    } else {
+        Ok(glyph_stroke_border_output(
+            stroke_status,
+            size_status,
+            load_status,
+            get_status,
+            stroker_new_status,
+            stroke_status,
+            selected_border,
+            None,
+            None,
+        ))
+    }
+}
+
+fn c_glyph_stroke_border_outside_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_outside_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border route",
+            case.case_id
+        ));
+    }
+    let (library, face) = c_open_named_face(case, "tt_font")?;
+    let size_status = c_abi::FT_Set_Char_Size(face, 0, 1536, 72, 72);
+    let load_status = if size_status == FT_Err_Ok {
+        c_abi::FT_Load_Glyph(face, 36, FT_LOAD_NO_BITMAP)
+    } else {
+        size_status
+    };
+    let mut glyph: c_abi::FT_Glyph = ptr::null_mut();
+    let get_status = if load_status == FT_Err_Ok {
+        match c_abi::abi_get_outline_glyph_from_face(face) {
+            Ok(created) => {
+                glyph = created;
+                FT_Err_Ok
+            }
+            Err(error) => error,
+        }
+    } else {
+        load_status
+    };
+    let selected_border = if get_status == FT_Err_Ok && !glyph.is_null() {
+        c_abi::abi_outline_glyph_snapshot(glyph)
+            .map(|snapshot| FT_Outline_GetOutsideBorder(Some(&snapshot.outline)))
+    } else {
+        None
+    };
+    let original = glyph;
+    let mut stroker = ptr::null_mut();
+    let stroker_new_status = c_abi::FT_Stroker_New(library, &mut stroker);
+    if stroker_new_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Set(
+            stroker,
+            96,
+            FT_STROKER_LINECAP_ROUND as FT_Int,
+            FT_STROKER_LINEJOIN_ROUND as FT_Int,
+            65_536,
+        );
+    }
+    let stroke_status = if get_status == FT_Err_Ok && stroker_new_status == FT_Err_Ok {
+        c_abi::FT_Glyph_StrokeBorder(&mut glyph, stroker, 0, 0)
+    } else if get_status != FT_Err_Ok {
+        get_status
+    } else {
+        stroker_new_status
+    };
+    let output = if stroke_status == FT_Err_Ok {
+        let snapshot = c_abi::abi_outline_glyph_snapshot(glyph)
+            .ok_or_else(|| "missing c stroked border outline glyph snapshot".to_string())?;
+        glyph_stroke_border_output(
+            stroke_status,
+            size_status,
+            load_status,
+            get_status,
+            stroker_new_status,
+            stroke_status,
+            selected_border,
+            Some(outline_snapshot_json(&snapshot.outline)),
+            Some(bbox_json(bbox_from_c_bbox(snapshot.cbox))),
+        )
+    } else {
+        glyph_stroke_border_output(
+            stroke_status,
+            size_status,
+            load_status,
+            get_status,
+            stroker_new_status,
+            stroke_status,
+            selected_border,
+            None,
+            None,
+        )
+    };
+    if !stroker.is_null() {
+        c_abi::FT_Stroker_Done(stroker);
+    }
+    if !glyph.is_null() {
+        c_abi::FT_Done_Glyph(glyph);
+    }
+    if !original.is_null() && original != glyph {
+        c_abi::FT_Done_Glyph(original);
+    }
+    c_done_face(face);
+    c_done_library(library);
+    Ok(output)
+}
+
+fn wasm_glyph_stroke_border_outside_success(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_glyph_stroke_border_outside_success_case(case) {
+        return Err(format!(
+            "{} is not the maintained glyph stroke border route",
+            case.case_id
+        ));
+    }
+    let handle = wasm_open_named_face(case, "tt_font")?;
+    let size_status = wasm_abi::fontdone_wasm_set_char_size(handle, 0, 1536, 72, 72);
+    let load_status = if size_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_load_glyph(handle, 36, FT_LOAD_NO_BITMAP)
+    } else {
+        size_status
+    };
+    let mut glyph = 0usize;
+    let get_status = if load_status == FT_Err_Ok {
+        wasm_abi::fontdone_wasm_get_glyph_from_face(handle, &mut glyph)
+    } else {
+        load_status
+    };
+    let selected_border = if get_status == FT_Err_Ok {
+        wasm_abi::abi_outline_glyph_snapshot(glyph)
+            .map(|snapshot| FT_Outline_GetOutsideBorder(Some(&snapshot.outline)))
+    } else {
+        None
+    };
+    let stroke_result = if get_status == FT_Err_Ok {
+        wasm_abi::abi_support_glyph_stroke_border_outside_success(glyph)
+    } else {
+        Err(get_status)
+    };
+    let (stroke_status, stroked) = match stroke_result {
+        Ok(stroked) => (FT_Err_Ok, Some(stroked)),
+        Err(error) => (error, None),
+    };
+    let output = if let Some(stroked) = stroked {
+        let snapshot = wasm_abi::abi_outline_glyph_snapshot(stroked)
+            .ok_or_else(|| "missing wasm stroked border outline glyph snapshot".to_string())?;
+        glyph_stroke_border_output(
+            stroke_status,
+            size_status,
+            load_status,
+            get_status,
+            FT_Err_Ok,
+            stroke_status,
+            selected_border,
+            Some(outline_snapshot_json(&snapshot.outline)),
+            Some(bbox_json(bbox_from_wasm_public_bbox(snapshot.cbox))),
+        )
+    } else {
+        glyph_stroke_border_output(
+            stroke_status,
+            size_status,
+            load_status,
+            get_status,
+            FT_Err_Ok,
+            stroke_status,
+            selected_border,
             None,
             None,
         )

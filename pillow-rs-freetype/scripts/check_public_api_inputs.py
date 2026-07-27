@@ -1533,11 +1533,6 @@ def ftstroke_glyph_stroke_pending_reason(row: ConcreteInput) -> str | None:
             "glyph-object route proving destroy=0 preserves the input glyph "
             "and destroy=1 releases or replaces it exactly like pinned C"
         ),
-        "ftstroke.FT_Glyph_StrokeBorder.outside_border_success": (
-            "FT_Glyph_StrokeBorder outside parity needs a maintained "
-            "glyph-object route proving outside-border stroking emits the same "
-            "outline geometry and ownership result as pinned C"
-        ),
         "ftstroke.FT_Glyph_StrokeBorder.inside_border_success": (
             "FT_Glyph_StrokeBorder inside parity needs a maintained "
             "glyph-object route proving inside-border stroking emits the same "
@@ -6615,6 +6610,16 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         == "ftstroke.FT_Glyph_Stroke.failure_sets_output_null_when_preserving_original"
     ):
         return "FT_Glyph_Stroke failure output-null policy validates through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftstroke.glyph_stroke_border"
+        and row.case_id == "ftstroke.FT_Glyph_StrokeBorder.outside_border_success"
+    ):
+        return (
+            "FT_Glyph_StrokeBorder outside-border route validates exact "
+            "selected border, replacement outline points, tags, contours, "
+            "CBox, status sequence, and preserve-original ownership through "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "ftstroke.glyph_stroke_border"
         and row.case_id == "ftstroke.FT_Glyph_StrokeBorder.invalid_glyph_arguments"

@@ -20075,6 +20075,71 @@ static int emit_glyph_stroke_outline_success(int argc, char** argv) {
     return 0;
 }
 
+static int emit_glyph_stroke_border_outside_success(int argc, char** argv) {
+    if (argc != 3) return 2;
+    FT_Library library = NULL;
+    FT_Error init_error = FT_Init_FreeType(&library);
+    if (init_error) {
+        printf("{");
+        print_status(init_error);
+        printf(",\"output\":null}\n");
+        return 0;
+    }
+    FT_Face face = NULL;
+    FT_Error face_error = FT_New_Face(library, argv[2], 0, &face);
+    FT_Error size_error = face_error ? face_error : FT_Set_Char_Size(face, 0, 1536, 72, 72);
+    FT_Error load_error = size_error ? size_error : FT_Load_Glyph(face, 36, FT_LOAD_NO_BITMAP);
+    FT_Glyph glyph = NULL;
+    FT_Error get_error = load_error ? load_error : FT_Get_Glyph(face->glyph, &glyph);
+    FT_Glyph original = glyph;
+    FT_StrokerBorder selected_border = -1;
+    if (!get_error && glyph && glyph->format == FT_GLYPH_FORMAT_OUTLINE) {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        selected_border = FT_Outline_GetOutsideBorder(&outline_glyph->outline);
+    }
+    FT_Stroker stroker = NULL;
+    FT_Error new_error = get_error ? get_error : FT_Stroker_New(library, &stroker);
+    if (!new_error && stroker) {
+        FT_Stroker_Set(stroker, 96, FT_STROKER_LINECAP_ROUND, FT_STROKER_LINEJOIN_ROUND, 65536);
+    }
+    FT_Error stroke_error = new_error ? new_error : FT_Glyph_StrokeBorder(&glyph, stroker, 0, 0);
+    FT_BBox cbox = {0, 0, 0, 0};
+    if (!stroke_error && glyph) {
+        FT_Glyph_Get_CBox(glyph, FT_GLYPH_BBOX_UNSCALED, &cbox);
+    }
+    printf("{");
+    print_status(stroke_error);
+    printf(",\"output\":");
+    if (stroke_error || !glyph || glyph->format != FT_GLYPH_FORMAT_OUTLINE) {
+        printf("null");
+    } else {
+        FT_OutlineGlyph outline_glyph = (FT_OutlineGlyph)glyph;
+        printf("{\"status\":%d,", stroke_error);
+        printf("\"status_sequence\":{\"face\":%d,\"size\":%d,\"load\":%d,\"get\":%d,\"stroker_new\":%d,\"stroke\":%d},",
+               face_error,
+               size_error,
+               load_error,
+               get_error,
+               new_error,
+               stroke_error);
+        printf("\"selected_border\":%d,", selected_border);
+        printf("\"glyph_pointer_class\":\"%s\",",
+               glyph && original && glyph != original ? "new outline glyph" : "same glyph");
+        printf("\"original_destroyed\":false,");
+        print_outline(&outline_glyph->outline);
+        printf(",");
+        print_bbox_named("cbox", cbox);
+        printf("}");
+    }
+    printf("}\n");
+    if (stroker) FT_Stroker_Done(stroker);
+    if (glyph) FT_Done_Glyph(glyph);
+    if (original && original != glyph) FT_Done_Glyph(original);
+    if (face) FT_Done_Face(face);
+    FT_Done_FreeType(library);
+    return 0;
+}
+
 static int emit_stroker_open_line_geometry(int argc, char** argv) {
     if (argc != 4) return 2;
     const char* action = argv[2];
@@ -27019,6 +27084,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--glyph-stroke-outline-success")) {
         return emit_glyph_stroke_outline_success(argc, argv);
+    }
+    if (argc == 3 && streq(argv[1], "--glyph-stroke-border-outside-success")) {
+        return emit_glyph_stroke_border_outside_success(argc, argv);
     }
     if (argc == 4 && streq(argv[1], "--stroker-open-line-geometry")) {
         return emit_stroker_open_line_geometry(argc, argv);
