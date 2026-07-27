@@ -33,6 +33,66 @@
       }
     },
     {
+      "case_id": "font.native_getvarnames.windows_non_en_us_fallback",
+      "operation": "native_getvarnames",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvaraxes.windows_non_en_us_fallback",
+      "operation": "native_getvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvarnames.platform1_fallback",
+      "operation": "native_getvarnames",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvaraxes.platform1_fallback",
+      "operation": "native_getvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
       "case_id": "font.native_setvarname.variable_named_instances_default",
       "operation": "native_setvarname",
       "inputs": {
