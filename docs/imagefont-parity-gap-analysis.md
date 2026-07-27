@@ -921,3 +921,9 @@ Current request classification for `imagingft.rs` region coverage:
   observable through Pillow `FreeTypeFont.getmask/getmask2`, not only through
   lower FreeType harness diagnostics. Curve stroker export remains guarded by
   `curve_path_unverified`; this fix does not claim conic/cubic stroke parity.
+- Coverage MCP run `a4f5d83d-1a10-4ec6-93e8-38f9764307c7` passed and ingested
+  snapshot `bf952de6-9353-414a-8a88-3c7f577a66fa` for commit `d14e88631`.
+  Direct `imagingft.rs` coverage remains `1660/1682` lines, `249/254`
+  branches, `162/173` functions, and `2610/2696` regions with the same eight
+  gap lines. This is a real parity improvement and lower-route coverage
+  improvement, but not an LLVM-attributed `imagingft.rs` region movement.
