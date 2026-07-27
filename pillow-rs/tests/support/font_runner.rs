@@ -26,6 +26,12 @@ pub fn run(case: &Value, fixture_root: &Path) -> Value {
     }
 }
 
+pub fn core_error_kind(case: &Value, fixture_root: &Path) -> Option<&'static str> {
+    try_run(case, fixture_root)
+        .err()
+        .map(|error| internal_error_kind(&error))
+}
+
 fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
     let operation = operation(case)?;
     let params = inputs(case)?
@@ -940,5 +946,28 @@ fn error_kind(error: &PilError) -> &'static str {
         | PilError::UnknownFormat(_)
         | PilError::PaletteError(_)
         | PilError::InternalError(_) => "ValueError",
+    }
+}
+
+fn internal_error_kind(error: &PilError) -> &'static str {
+    match error {
+        PilError::IOError(_) => "IOError",
+        PilError::OsError(_) => "OsError",
+        PilError::AssertionError(_) => "AssertionError",
+        PilError::IndexError(_) => "IndexError",
+        PilError::KeyError(_) => "KeyError",
+        PilError::UnsupportedLibraqm(_) => "UnsupportedLibraqm",
+        PilError::UnidentifiedImageError(_) => "UnidentifiedImageError",
+        PilError::ValueError(_) => "ValueError",
+        PilError::SyntaxError(_) => "SyntaxError",
+        PilError::TypeError(_) => "TypeError",
+        PilError::SystemError(_) => "SystemError",
+        PilError::ImageError(_) => "ImageError",
+        PilError::NotImplementedError(_) => "NotImplementedError",
+        PilError::UnknownFormat(_) => "UnknownFormat",
+        PilError::Io(_) => "Io",
+        PilError::PaletteError(_) => "PaletteError",
+        PilError::InternalError(_) => "InternalError",
+        PilError::DimensionError(_) => "DimensionError",
     }
 }

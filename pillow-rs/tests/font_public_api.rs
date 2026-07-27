@@ -1757,6 +1757,42 @@ fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
     );
 }
 
+fn assert_raqm_rows_use_dedicated_core_error(cases: &[Value], fixture_root: &Path) {
+    let mut checked = 0usize;
+    for case in cases {
+        let operation = font_runner::operation(case).expect("case operation must be valid");
+        if !matches!(operation, "getbbox" | "getlength" | "getmask" | "getmask2") {
+            continue;
+        }
+        let Some(params) = case
+            .get("inputs")
+            .and_then(|inputs| inputs.get("params"))
+            .and_then(Value::as_object)
+        else {
+            continue;
+        };
+        if !(params.contains_key("direction")
+            || params.contains_key("features")
+            || params.contains_key("language"))
+        {
+            continue;
+        }
+
+        let case_id = case["case_id"].as_str().expect("case_id must be a string");
+        let core_kind = font_runner::core_error_kind(case, fixture_root)
+            .unwrap_or_else(|| panic!("{case_id}: RAQM row must fail in Rust core"));
+        assert_eq!(
+            core_kind, "UnsupportedLibraqm",
+            "{case_id}: direction/features/language must be hard-coded to the dedicated PilError::UnsupportedLibraqm variant before Pillow-visible KeyError mapping"
+        );
+        checked += 1;
+    }
+    assert!(
+        checked >= 12,
+        "font public-api corpus must keep explicit no-libraqm rows for getbbox/getlength/getmask/getmask2"
+    );
+}
+
 #[test]
 fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let root = fixture_root();
@@ -1799,6 +1835,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_covers_required_public_parameter_values(&manifest, &cases);
     assert_documented_blocked_public_parameters();
     assert_blocked_public_parameters_have_active_dependency_blockers();
+    assert_raqm_rows_use_dedicated_core_error(&cases, &root);
 
     let observed = cases
         .iter()
