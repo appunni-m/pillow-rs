@@ -436,43 +436,36 @@ cannot replace the maintained exact glyph fallback. Snapshot
 progress only; `imagingft.rs` remains unchanged at 2604/2700 regions.
 
 Decision: keep the successful `stroke_filled=true` Font row because it is backed
-by a real lower outside-border C oracle route. Continue lower stroker segment
-geometry and border-export work before adding broader inside-border,
-destroy-option, or additional glyph-shape stroke fixtures. `FT_Stroker_ParseOutline`
-now follows the C-shaped contour/tag walk, so the remaining general-stroke
-blocker is not an `imagingft.rs` wrapper problem and not a reason to pursue
-100% `pillow-rs-freetype` coverage. Do not add more glyph-specific shortcuts;
-the current normal-stroke path still has a DejaVu glyph-36 `A` fallback for the
-existing passing route, and a stroked `jQ` sweep row proved that Pillow succeeds
-while Rust fails before rendering.
+by a real lower outside-border C oracle route. Current active public Font
+stroke rows now pass exact live Pillow 12.2.0 oracle parity, including
+`mode="1"`, stroked kerning text, and missing-glyph/no-kerning transitions.
+Broader lower stroker geometry is still lower FreeType parity work unless a new
+public Font row proves Pillow-visible impact. `FT_Stroker_ParseOutline` now
+follows the C-shaped contour/tag walk, so any remaining general-stroke blocker
+is not an `imagingft.rs` wrapper problem and not a reason to pursue 100%
+`pillow-rs-freetype` coverage. Do not add more glyph-specific shortcuts.
 
-Latest Font-corpus sweep: two active input-only rows now cover height-side
-stroked clipping through live Pillow 12.2.0 oracle parity:
+Current Font-corpus stroke sweep: active input-only rows cover height-side
+stroked clipping, mono-target stroked rendering, stroked kerning, and
+missing-glyph/no-kerning transitions through live Pillow 12.2.0 oracle parity.
+Height-side clipping is covered by:
 
 - `font.getmask.dejavusans24_a_stroke_start_negative_y_clips`
 - `font.getmask2.dejavusans24_a_stroke_start_negative_y_clips`
 
-The attempted independent `stroke_width=1.5, mode="1"` rows were not kept
-active because they exposed a real lower stroke-outline blocker. Direct Pillow
-12.2.0 reports `mode="1"` stroked glyph 36 as a `19x21` L mask with the
-mono-target stroked outline bytes, while current Rust produces the normal
-stroked outline bytes for that row. This must be fixed in the lower
-`pillow-rs-freetype` stroke implementation by making the real stroked outline
-depend on the loaded outline, not by adding a new glyph-specific shortcut or
-weakening the Font oracle comparison.
+The previous `stroke_width=1.5, mode="1"` blocker has been fixed and retained
+as active public rows:
+
+- `font.getmask.dejavusans24_a_stroke_1_5_mode_1`
+- `font.getmask2.dejavusans24_a_stroke_1_5_mode_1`
 
 Current lower-stroker verification:
 
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`
-  passes the maintained runnable rows, but the active
-  `outline_glyph_stroked_success` route loads glyph 36 with
-  `FT_LOAD_NO_BITMAP`, not the public ImageFont blocker shape
-  `FT_LOAD_TARGET_MONO`. Only 4 rows are runnable and 4 remain pending. The
-  pending rows are destroy-option coverage plus lower glyph-stroke follow-up
-  work.
+  passes `8/8` runnable rows with `0` pending.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
-  passes the maintained runnable rows. The remaining pending row is
-  destroy-option parity.
+  passes the maintained runnable rows, including inside-border and
+  destroy-option parity routes.
 - `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`
   passes 5/5 runnable rows after the first-line border state update. This
   verifies no regression in the public segment lane; it is not proof of general
@@ -539,10 +532,11 @@ The active corpus now includes independent missing-glyph transition rows for
 guard that kerning is applied only when both adjacent glyph indices are nonzero,
 matching Pillow 12.2.0 `text_layout_fallback`.
 
-Remaining risk: fixtures still need successful stroked kerning and
-no-kerning transitions after lower stroker support is generalized; do not add
-those rows until the lower stroke path can pass without glyph-specific
-shortcuts.
+The active corpus also includes stroked kerning and stroked missing-glyph
+transition rows through `getmask` and `getmask2`, so this BASIC layout risk is
+closed for currently supported no-libraqm public Font behavior. Add more rows
+only if they exercise a distinct Pillow-visible layout transition not already
+covered by plain, mono, stroked, and missing-glyph cases.
 
 ### 5. Error mapping is now table-equivalent but not exhaustively reached
 
