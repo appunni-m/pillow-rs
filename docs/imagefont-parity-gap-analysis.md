@@ -611,3 +611,14 @@ Current request classification for `imagingft.rs` region coverage:
   passes for the maintained rows:
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke` and
   `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`.
+- Current post-cleanup diagnostics: promoting only
+  `pending_stroked_mono_target_outline_to_bitmap` now fails on Rust status
+  `FT_Err_Unimplemented_Feature` (`7`), because the normal glyph-36 fallback no
+  longer masks the mono-target source outline. Temporarily bypassing only the
+  unverified closed/conic guard reaches bitmap output but still fails
+  `/bitmap/buffer_hex`, with matching prefix/suffix and divergence through the
+  middle coverage bytes. Reusing the maintained `FT_Glyph_Stroke` outline
+  comparison temporarily with `FT_LOAD_TARGET_MONO` and the guard bypass fails
+  before rasterization at `/cbox/xMax` (`expected=1139`, `actual=1125`). The
+  next real fix is therefore lower stroked outline geometry/export, not
+  `imagingft.rs` allocation, offset, or mode handling.
