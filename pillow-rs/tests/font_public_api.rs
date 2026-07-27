@@ -155,9 +155,8 @@ const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
 
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 0] = [];
 
-const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 3] = [
+const EXPECTED_FREETYPE_STROKE_BLOCKING_CASES: [&str; 2] = [
     "ftstroke.FT_Glyph_Stroke.destroy_original_option",
-    "ftstroke.FT_Glyph_StrokeBorder.inside_border_success",
     "ftstroke.FT_Glyph_StrokeBorder.destroy_original_option",
 ];
 
@@ -1674,6 +1673,7 @@ fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
                 case_id.as_str(),
                 "ftstroke.FT_Glyph_Stroke.outline_glyph_stroked_success"
                     | "ftstroke.FT_Glyph_StrokeBorder.outside_border_success"
+                    | "ftstroke.FT_Glyph_StrokeBorder.inside_border_success"
             )
         })
         .collect()
