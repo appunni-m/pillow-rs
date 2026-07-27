@@ -1090,3 +1090,11 @@ Current request classification for `imagingft.rs` region coverage:
   lower fix improves the pending stroker failure from unsupported status to
   geometry mismatch, but it does not claim active ImageFont region closure until
   the exact glyph outline row is promoted.
+- Focused geometry diagnostic after `8ccea47b`: the C oracle for
+  `ftstroke.FT_Glyph_Stroke.destroy_original_option` exports `128` points,
+  `4` contours, and starts the first contour at `(605, 896)` with alternating
+  conic/on tags. Rust exports the same route successfully but starts the first
+  compared contour at `(605, 1152)` and proceeds across the top/right side.
+  This makes the next actionable divergence border close/export ordering or
+  contour start normalization, not the wide-stroke negative-sector math and not
+  `_imagingft.rs`.
