@@ -306,18 +306,18 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `fd191370-3ba9-4da1-9dad-8d62701868a9`
-- Snapshot: `b17bf5e9-3496-4e17-b089-400d151f70f4`
+- Run: `ad6fa1d9-fe03-47ff-86f1-22fdf6499770`
+- Snapshot: `2273e018-4ff1-493a-96cd-9927148b3b26`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `0812d9cd69b4bd7ee01c30dbb9e63d68b8645ae1`
+- Commit measured: `42b4bb1290237381f92fa2d371769448408b1708`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/default_aileron.rs` | `17/17` (`100.00%`) | n/a | `3/3` (`100.00%`) | `24/24` (`100.00%`) |
-| `pillow-rs/src/font/imagingft.rs` | `1618/1643` (`98.48%`) | `268/278` (`96.40%`) | `159/171` (`92.98%`) | `2588/2687` (`96.32%`) |
+| `pillow-rs/src/font/imagingft.rs` | `1618/1643` (`98.48%`) | `268/278` (`96.40%`) | `159/171` (`92.98%`) | `2590/2687` (`96.39%`) |
 | `pillow-rs/src/font/mod.rs` | `374/374` (`100.00%`) | n/a | `78/78` (`100.00%`) | `487/487` (`100.00%`) |
 | `pillow-rs/src/font/pilfont.rs` | `715/737` (`97.01%`) | `142/142` (`100.00%`) | `58/78` (`74.36%`) | `1014/1094` (`92.69%`) |
 
@@ -350,6 +350,12 @@ Current full-module scope note:
 
 Latest Font wrapper movement:
 
+- Added input-only `font.getlength.hinter_code_overflow` and
+  `font.getlength.hinter_nested_defs` rows. Expected errors are generated at
+  runtime by the live Pillow oracle. This independently exercises the public
+  `FreeTypeFont.getlength` endpoint for the same rare hinter error classes
+  already covered through bbox/mask endpoints and moved `imagingft.rs` region
+  coverage from `2588/2687` to `2590/2687`.
 - Added `font.text_bbox.invalid_maxp_too_many_instruction_defs` as an
   input-only row. The expected error is generated at runtime by the pinned
   Pillow oracle.
@@ -415,7 +421,7 @@ Latest Font wrapper movement:
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`b17bf5e9-3496-4e17-b089-400d151f70f4`:
+`2273e018-4ff1-493a-96cd-9927148b3b26`:
 
 - `91`, `105`: generic and rare mapped FreeType error branches. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
