@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `a19288004172521b9e4f6b1f2b29209b39535438`
+Rust commit reviewed: `20512f87c055a81292bd18e20b709cc49ebdc4aa`
 
-Coverage MCP run: `5c279518-37b6-4201-83ce-5a666014f8be`
+Coverage MCP run: `91c7f2f9-4a8c-495a-a85e-970279610a7e`
 
-Coverage MCP snapshot: `50c3027f-9fdb-413d-9c41-c2cb510a8048`
+Coverage MCP snapshot: `b32c889b-2b0a-47d6-a1a9-80438fec8f73`
 
 Suite: `font-with-freetype`
 
@@ -31,7 +31,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `50c3027f-9fdb-413d-9c41-c2cb510a8048`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `b32c889b-2b0a-47d6-a1a9-80438fec8f73`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
@@ -154,7 +154,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `50c3027f-9fdb-413d-9c41-c2cb510a8048`.
+Coverage snapshot: `b32c889b-2b0a-47d6-a1a9-80438fec8f73`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -290,7 +290,7 @@ Decision: keep filesystem I/O outside core, but ensure binding crates remain thi
 
 Coverage still shows weak coverage for `sbit`, `vhea`, `vmtx`, `hdmx`, and `mvar`; `vhea`, `vmtx`, `hdmx`, and `mvar` are no longer zero after the lower metrics-table pass. SBIT is now actively exercised through public `getmask`/`getmask2` rows for private-use embedded bitmap glyphs, but `sbit.rs` remains far below complete region coverage.
 
-Resolved during the SBIT pass: previous SBIT rows used `"A"` and did not hit the embedded bitmap strikes in the generated fixtures. Commit `21086af6f5fff5921b554e3b6fe76d6613b5874d` changes those rows to private-use glyphs (`U+E000`, `U+E001`), fixes bitmap glyph layout cbox calculation in `imagingft.rs`, and expands SBIT `GRAY2`, `GRAY4`, and `BGRA` pixels to Pillow-compatible mask coverage. The current BGRA fixture adds an alpha-zero pixel through the maintained generator, so `gray_for_premultiplied_srgb_bgra` now covers both transparent and non-transparent branches under live Pillow oracle rows. `make -C pillow-rs font-tests` passes with 352 rows. Coverage MCP snapshot `50c3027f-9fdb-413d-9c41-c2cb510a8048` confirms `imagingft.rs` moved to 1687/1712 lines, 253/262 branches, and 2619/2718 regions.
+Resolved during the SBIT pass: previous SBIT rows used `"A"` and did not hit the embedded bitmap strikes in the generated fixtures. Commit `21086af6f5fff5921b554e3b6fe76d6613b5874d` changes those rows to private-use glyphs (`U+E000`, `U+E001`), fixes bitmap glyph layout cbox calculation in `imagingft.rs`, and expands SBIT `GRAY2`, `GRAY4`, and `BGRA` pixels to Pillow-compatible mask coverage. The current BGRA fixture adds an alpha-zero pixel through the maintained generator, so `gray_for_premultiplied_srgb_bgra` now covers both transparent and non-transparent branches under live Pillow oracle rows. `make -C pillow-rs font-tests` passes with 352 rows. Coverage MCP snapshot `b32c889b-2b0a-47d6-a1a9-80438fec8f73` confirms `imagingft.rs` moved to 1687/1712 lines, 253/262 branches, and 2619/2718 regions.
 
 Boundary decision: SBIT table parsing, strike selection, glyph bitmap decoding,
 compound bitmap composition, and malformed embedded-bitmap classification must
