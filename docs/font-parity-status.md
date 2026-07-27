@@ -308,11 +308,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `16b08176-e1d4-4b49-b869-68f5e83bdf4f`
-- Snapshot: `72572244-a9f9-4026-a909-9e1b18274e64`
+- Run: `8b9c95e8-9469-40bf-9a7a-d9dcf41c6225`
+- Snapshot: `27908899-4a78-4501-b18c-902cddf3c475`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `28b8740c9231ab906c6912ee106a1ede5bcf10eb`
+- Commit measured: `4f601806c4c379269cf0ef00215adc917eb1a725`
 
 Target file metrics:
 
@@ -417,14 +417,17 @@ Latest Font wrapper movement:
   cover the stroked kerning guard's `g == 0` branch, but it cannot be kept as an
   active fixture until the lower-level missing-glyph stroke path matches Pillow.
 Remaining targeted gaps in `imagingft.rs` from snapshot
-`ef0700eb-b098-4ad4-a2b0-3d741f0e7ddb`:
+`27908899-4a78-4501-b18c-902cddf3c475`:
 
 - `91-92`: generic unknown FreeType error fallback. No public Font fixture has
   been found that reaches this via the Pillow-compatible surface without
   manufacturing invalid internal state. A sweep across the tracked Font assets
   and available FreeType fixture assets found only the already-mapped runtime
   errors: `code overflow`, `nested DEFS`, `too many instruction definitions`,
-  and `too many function definitions`.
+  and `too many function definitions`. The active corpus now includes these
+  mapped errors through `getbbox`, `getmask`, and `getmask2` public rows where
+  Pillow exposes them, but LLVM still reports the generic fallback line as
+  uncovered because no live public row reaches an unmapped FreeType error.
 - `253`: `set_variation_by_name` error propagation from
   `FT_Set_Named_Instance` after a valid public name match.
   Current tracked variable fonts accept all discovered named instances in the
