@@ -1210,3 +1210,11 @@ Current request classification for `imagingft.rs` region coverage:
   `FT_Stroker_Set`, `FT_STROKER_LINEJOIN_MITER_FIXED`, and
   `FT_STROKER_LINEJOIN_MITER_VARIABLE` still pass their runnable rows and keep
   their broader geometry rows pending until maintained same-input routes exist.
+  Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passed
+  after this commit as run `b9a859c8-6b20-4f46-81fd-a25cc271bbf7` and ingested
+  snapshot `2cfc0d96-5639-436d-b0be-49140d32c10b` for commit `81ff11fa`.
+  `pillow-rs/src/font/imagingft.rs` remains unchanged at `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2612/2696` regions
+  (`96.88%`), with the same eight reported ranges `91`, `253`, `271`, `796`,
+  `826`, `829`, `831`, and `928`. This proves no new active Pillow Font
+  coverage gap was introduced or closed by the lower stroker fix.
