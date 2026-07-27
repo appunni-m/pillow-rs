@@ -293,7 +293,7 @@ For the current broader Font-with-FreeType suite, the remaining eight reported
 |---:|---|---|---|
 | `91` | partial branch on `Ok(ImageFont { engine })` | Constructor success is heavily hit; marker is return/source-map instrumentation after `FT_Request_Size`/face setup. | Add only a real font/size row if Pillow reaches a distinct constructor branch. |
 | `253` | uncovered static tuple-start line | `FT_Err_Execution_Too_Long` table entry. Public `font.getlength.hinter_execution_too_long` already proves the behavior, but LLVM still leaves the tuple-start source line uncovered. | No coverage-only refactor. |
-| `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Needs a real Pillow-visible lower FreeType error if this behavior matters. | Add only with a real corrupted-font fixture/oracle row. |
+| `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
 | `796` | partial branch on `gid` helper | `FT_Get_Char_Index` helper is hit millions of times; marker is helper call/source-map accounting. | No duplicate text rows. |
 | `826` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. | No duplicate bbox/mask rows. |
 | `829` | partial branch on `length_from_basic_layout` wrapper | Wrapper is hit thousands of times; marker is `?`/wrapper propagation accounting. | No duplicate length rows unless new public behavior appears. |
@@ -606,15 +606,16 @@ implementation instead.
 
 Decision: keep the active SBIT rows as trusted public parity proof. Commit
 `072af0fbb` adds the missing independent public checks for bitmap layout bbox
-and strike advance using private-use SBIT glyphs. Commit `0ac52bb92`
-adds the next independent embedded-bitmap behavior: public `getmask`/`getmask2`
-rows for a maintained image-format-8 compound bitmap glyph. Coverage MCP
-confirms the compound rows move lower SBIT coverage but do not change direct
-`imagingft.rs` region accounting. Add further ImageFont oracle rows only for
-still-independent embedded bitmap formats, malformed SBIT errors, vertical/TTB
-metrics if/when libraqm enters scope, horizontal device metrics, and variation
-metric deltas. If a feature is not in supported scope, record the explicit
-exclusion instead of leaving it ambiguous.
+and strike advance using private-use SBIT glyphs. Commits `0ac52bb92`,
+`5e6621e50`, `76eca2cce`, and `846e5df3` add independent simple/compound,
+malformed/unsupported, and invalid compound-placement embedded-bitmap behavior
+through public Font rows. Coverage MCP confirms these rows move lower SBIT
+coverage but do not change direct `imagingft.rs` region accounting. Add further
+ImageFont oracle rows only for still-independent embedded bitmap behavior not
+already covered by the current simple/compound/error rows, vertical/TTB metrics
+if/when libraqm enters scope, horizontal device metrics, and variation metric
+deltas. If a feature is not in supported scope, record the explicit exclusion
+instead of leaving it ambiguous.
 
 ## Recommended action order
 
@@ -636,8 +637,9 @@ exclusion instead of leaving it ambiguous.
      distinct public path not covered by existing `A`/`AA`/`AV`/missing-glyph
      stroke rows;
    - additional embedded bitmap glyph paths only when they represent a new
-     ImageFont-visible behavior not already covered by the private-use SBIT
-     bbox/length/mask/mask2 rows or the compound image-format-8 mask rows;
+     ImageFont-visible behavior not already covered by the current simple SBIT,
+     compound SBIT, malformed/unsupported SBIT, and invalid compound-placement
+     rows;
    - reachable FreeType table errors where the same public Pillow ImageFont
      operation naturally emits the error.
 3. Re-run `make -C pillow-rs font-tests`.
