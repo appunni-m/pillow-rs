@@ -57,6 +57,10 @@ def _pilfont_text(text):
     return text
 
 
+def _none_if_empty(value):
+    return None if value == "" else value
+
+
 def _wrap_pilfont(font):
     wrapped = ImageFont()
     wrapped.font = font
@@ -92,16 +96,24 @@ class FreeTypeFont:
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
-        return self._rust_font.getbbox(text)
+        return self._rust_font.getbbox_with_options(
+            str(text), _none_if_empty(mode), direction, features, language,
+            float(stroke_width), anchor
+        )
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
-        return self._rust_font.getlength(str(text))
+        return self._rust_font.getlength_with_options(
+            str(text), _none_if_empty(mode), direction, features, language
+        )
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
-        w, h, alpha = self._rust_font.getmask_alpha(str(text))
+        w, h, alpha = self._rust_font.getmask_alpha_with_options(
+            str(text), _none_if_empty(mode), direction, features, language,
+            float(stroke_width), anchor, ink, start
+        )
         return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
@@ -114,20 +126,25 @@ class FreeTypeFont:
                      mode.
         :param direction: Direction of the text. It can be 'rtl' (right to
                           left), 'ltr' (left to right) or 'ttb' (top to bottom).
-                          Requires libraqm — currently ignored.
+                          Requires libraqm; unsupported builds raise the same
+                          no-libraqm error category as Pillow.
         :param features: A list of OpenType font features to be used during text
-                         layout. Currently ignored.
-        :param language: Language of the text. Currently ignored.
-        :param stroke_width: The width of the text stroke. Currently ignored.
-        :param anchor: The text anchor alignment. Currently ignored.
-        :param ink: Foreground ink for rendering. Currently ignored.
+                         layout.
+        :param language: Language of the text.
+        :param stroke_width: The width of the text stroke.
+        :param anchor: The text anchor alignment.
+        :param ink: Foreground ink for rendering.
         :param start: Tuple of horizontal and vertical offset.
 
         :return: A tuple of the mask (L-mode Image) and the text offset
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
-        image, offset = self._rust_font.getmask2_image(str(text), start)
+        image, offset = self._rust_font.getmask2_image_with_options(
+            str(text), _none_if_empty(mode), direction, features, language,
+            float(stroke_width), anchor, ink, start,
+            bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
+        )
         mask = ImagingCore(PILImage(image))
         return mask, offset
 
