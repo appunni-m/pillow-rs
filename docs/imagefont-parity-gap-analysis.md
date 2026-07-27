@@ -227,6 +227,25 @@ Rust now carries `stroke_filled` in `ImageFontTextOptions` and routes to `fontdo
 
 Decision: complete `FT_Stroker_ParseOutline`/border-export for real glyphs, then add successful `stroke_filled=true` fixture rows. Until then, this is a known parity gap. Do not add more glyph-specific shortcuts; the current normal-stroke path still has a DejaVu glyph-36 `A` fallback for the existing passing route, and a stroked `jQ` sweep row proved that Pillow succeeds while Rust fails before rendering.
 
+Current lower-stroker verification:
+
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`
+  passes the maintained runnable rows, but only 4 rows are runnable and 4 remain
+  pending. The pending rows are destroy-option coverage plus the
+  `FT_Glyph_StrokeBorder` inside/outside/destroy routes that the combined case
+  filter reports as owned follow-up work.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
+  passes the maintained runnable row, but only 1 row is runnable and 3 remain
+  pending: outside-border success, inside-border success, and destroy-option
+  parity.
+- Source inspection shows the real blocker is still lower stroker geometry in
+  `pillow-rs-freetype/src/ffi/handles.rs`: `FT_Stroker_LineTo`,
+  `FT_Stroker_ConicTo`, and `FT_Stroker_CubicTo` contain maintained
+  exact-coordinate fixture routes and otherwise return
+  `FT_Err_Unimplemented_Feature`. `FT_Outline_Glyph_Stroke` already attempts the
+  FreeType-shaped parse/count/export wrapper first, so more wrapper wiring in
+  `imagingft.rs` would not fix the source mismatch.
+
 ### 3. Stroked extent clamping is suspect Rust-only logic
 
 Rust clamps stroked `x_max`/`y_max` when actual bitmap extents exceed bbox-derived dimensions.
