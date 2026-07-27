@@ -318,9 +318,8 @@ class FreeTypeFont:
     def getname(self):
         """Return font family name and style name.
 
-        :return: A tuple ``(family, style)``. Falls back to
-                 ``("Unknown", "Regular")`` when the Rust backend does
-                 not expose names.
+        :return: A tuple ``(family, style)``. Missing names are returned as
+                 ``None``, matching Pillow.
         """
         return self._rust_font.get_name()
 

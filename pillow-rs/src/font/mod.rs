@@ -189,13 +189,11 @@ impl FreeTypeFont {
     }
 
     /// Return Pillow's public `(family, style)` font name tuple.
-    pub fn getname(&self) -> (&str, &str) {
-        let (family, style) = imagingft::getname_optional(self);
-        (family.unwrap_or("Unknown"), style.unwrap_or("Regular"))
+    pub fn getname(&self) -> (Option<&str>, Option<&str>) {
+        imagingft::getname_optional(self)
     }
 
     /// Return Pillow's raw public name tuple, preserving missing face names.
-    #[cfg(feature = "test-api")]
     pub fn getname_optional(&self) -> (Option<&str>, Option<&str>) {
         imagingft::getname_optional(self)
     }

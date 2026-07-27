@@ -113,8 +113,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 438 input-only rows execute.
-- 438 rows match live Pillow 12.2.0 exactly.
+- 439 input-only rows execute.
+- 439 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -248,6 +248,14 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `getvarnames`, `getvaraxes`, `setvarname`, and `setvaraxes` are now covered
   separately against Pillow's raw native-name byte behavior; the high-level
   `FreeTypeFont.get_variation_*` facade remains covered separately.
+- Native `setvarname` missing-name parity fix: Pillow 12.2.0 accepts a named
+  instance whose subfamily record normalizes to empty and then exposes
+  `FreeTypeFont.getname()` style as `None`, not `"Regular"` or `""`. Active
+  row `font.native_setvarname.missing_subfamily_name_keeps_none` uses the
+  maintained `variable-name-missing-subfamily.ttf` fixture to pin that behavior
+  through the live oracle. Root `imagefont_getname` and the Python facade now
+  preserve optional family/style values; JS returns `null` array entries for
+  missing names.
 - Coverage MCP ledger run `f3667517-e046-4bc5-ac69-43e87c218b61` executed the
   full Python fixture command at commit `1707c013b`. The overall command failed
   with existing non-ImageFont failures (`Image.effect_spread`, `Image.getim`,
@@ -477,7 +485,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.native_getlength_26dot6.json` | 3 |
 | `font.native_getsize.json` | 3 |
 | `font.native_render.json` | 7 |
-| `font.native_variations.json` | 10 |
+| `font.native_variations.json` | 11 |
 | `font.render_text.json` | 7 |
 | `font.render_text_binary.json` | 10 |
 | `font.text_bbox.json` | 6 |
@@ -485,7 +493,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 438 |
+| total | 439 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -907,7 +915,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 438-row Font fixture corpus.
+The current implementation is good enough to trust the active 439-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and

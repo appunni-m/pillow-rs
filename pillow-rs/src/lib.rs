@@ -255,12 +255,11 @@ pub fn imagefont_text_bbox_bytes(font: &FreeTypeFont, text: &[u8]) -> Result<(u3
 }
 
 /// Return Pillow's public `(family, style)` font name tuple.
-pub fn imagefont_getname(font: &FreeTypeFont) -> (&str, &str) {
+pub fn imagefont_getname(font: &FreeTypeFont) -> (Option<&str>, Option<&str>) {
     font.getname()
 }
 
 /// Return Pillow's raw public name tuple, preserving missing face names.
-#[cfg(feature = "test-api")]
 pub fn imagefont_getname_optional(font: &FreeTypeFont) -> (Option<&str>, Option<&str>) {
     font.getname_optional()
 }

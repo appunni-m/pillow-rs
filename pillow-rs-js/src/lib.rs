@@ -1084,9 +1084,12 @@ impl ImageFont {
     }
 
     #[wasm_bindgen(js_name = "getname")]
-    pub fn getname(&self) -> Vec<String> {
+    pub fn getname(&self) -> js_sys::Array {
         let (family, style) = pillow_rs::imagefont_getname(&self.font);
-        vec![family.to_owned(), style.to_owned()]
+        let result = js_sys::Array::new();
+        result.push(&family.map_or(JsValue::NULL, JsValue::from_str));
+        result.push(&style.map_or(JsValue::NULL, JsValue::from_str));
+        result
     }
 
     #[wasm_bindgen(js_name = "getVariationAxes")]
