@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
+Rust commit reviewed: `13c410dc64fa93576f87377e2c8dde8f671f7ca9`
 
-Coverage MCP run: `a6721cc4-bd8e-4049-8846-a913fb52f71e`
+Coverage MCP run: `974f35c7-e61d-4dec-bc8a-16ba4e91978e`
 
-Coverage MCP snapshot: `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`
+Coverage MCP snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`
 
 Suite: `font-with-freetype`
 
@@ -26,17 +26,18 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 345 input-only rows execute.
-- 345 rows match live Pillow 12.2.0 exactly.
+- 348 input-only rows execute.
+- 348 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
 - Additional mono BASIC rows for `AV` and `jQ` now prove live-oracle parity for normal-vs-mono load-flag behavior across `getlength`, `getbbox`, `getmask`, and `getmask2`. Coverage MCP shows these rows are semantically useful but do not reduce the remaining LLVM-reported `imagingft.rs` region gaps; the next coverage-moving gap is still lower stroker/stroke-border implementation.
 - Commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0` moves `FT_Stroker_ParseOutline` from a two-point-line-only parser to the FreeType 2.14.3 contour/tag control flow that delegates line, conic, and cubic segments to the existing segment routes. This is architectural progress for the stroke blocker, but it does not yet move public ImageFont coverage because the mixed-outline route and general segment stroker/export behavior remain pending.
+- Commit `13c410dc64fa93576f87377e2c8dde8f671f7ca9` adds three public ImageFont rows for lower metric-table paths: `hdmx_observable` through `getlength`, `mvar_vertical_metrics` through `getmetrics`, and `vertical_vhea_only` through `getmetrics`. These rows move lower `hdmx`, `mvar`, `vhea`, and `vmtx` from 0% to live Pillow-backed coverage without changing `imagingft.rs` region gaps.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -90,11 +91,11 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.get_transposed_mask.json` | 10 |
 | `font.getbbox.json` | 31 |
 | `font.getbbox_binary.json` | 9 |
-| `font.getlength.json` | 20 |
+| `font.getlength.json` | 21 |
 | `font.getmask.json` | 36 |
 | `font.getmask2.json` | 43 |
 | `font.getmask2_with_start.json` | 23 |
-| `font.getmetrics.json` | 6 |
+| `font.getmetrics.json` | 8 |
 | `font.getname.json` | 5 |
 | `font.has_variations.json` | 4 |
 | `font.layout_failure.json` | 1 |
@@ -109,11 +110,11 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 345 |
+| total | 348 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`.
+Coverage snapshot: `06e0a61c-a56e-43e5-bfe7-a8b821be22f1`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -163,10 +164,10 @@ These lower-level `pillow-rs-freetype` files sit underneath `ImageFont` FreeType
 | `pillow-rs-freetype/src/tt/hinter/exec.rs` | 722/1489 48.49% | 146/476 30.67% | 32/48 66.67% | 1296/3103 41.77% | high for hinted TrueType |
 | `pillow-rs-freetype/src/autohint/latin.rs` | 1988/2962 67.12% | 673/1263 53.29% | 45/67 67.16% | 2806/4283 65.51% | medium/high |
 | `pillow-rs-freetype/src/autohint/cjk.rs` | 396/879 45.05% | 130/398 32.66% | 11/18 61.11% | 531/1180 45.00% | high for CJK fonts |
-| `pillow-rs-freetype/src/tt/hdmx.rs` | 0/42 0.00% | 0/12 0.00% | 0/2 0.00% | 0/67 0.00% | unproven horizontal device metrics |
-| `pillow-rs-freetype/src/tt/mvar.rs` | 0/67 0.00% | 0/6 0.00% | 0/7 0.00% | 0/113 0.00% | unproven variation metrics |
-| `pillow-rs-freetype/src/tt/vhea.rs` | 0/11 0.00% | 0/2 0.00% | 0/1 0.00% | 0/9 0.00% | unproven vertical metrics |
-| `pillow-rs-freetype/src/tt/vmtx.rs` | 0/50 0.00% | 0/8 0.00% | 0/2 0.00% | 0/65 0.00% | unproven vertical metrics |
+| `pillow-rs-freetype/src/tt/hdmx.rs` | 26/42 61.90% | 6/12 50.00% | 1/2 50.00% | 44/67 65.67% | now publicly exercised by `font.getlength.hdmx_observable_av`; malformed hdmx rows remain unproven |
+| `pillow-rs-freetype/src/tt/mvar.rs` | 58/67 86.57% | 3/6 50.00% | 4/7 57.14% | 92/113 81.42% | now publicly exercised by `font.getmetrics.mvar_vertical_metrics`; malformed/unsupported value-tag paths remain unproven |
+| `pillow-rs-freetype/src/tt/vhea.rs` | 8/11 72.73% | 1/2 50.00% | 1/1 100.00% | 8/9 88.89% | now publicly exercised by `font.getmetrics.vertical_vhea_only`; short/error path remains unproven |
+| `pillow-rs-freetype/src/tt/vmtx.rs` | 28/50 56.00% | 3/8 37.50% | 1/2 50.00% | 44/65 67.69% | now publicly exercised by `font.getmetrics.vertical_vhea_only`; malformed/overflow paths remain unproven |
 
 ## Implementation differences or unproven behavior against Pillow 12.2.0
 
@@ -219,7 +220,15 @@ Resolved during the mono BASIC pass: six input-only rows now prove public `mode=
 - `font.getmask.dejavusans20_jq_mode_1`
 - `font.getmask2.dejavusans20_jq_mode_1`
 
-These rows passed exact live Pillow 12.2.0 parity in `make -C pillow-rs font-tests` and Coverage MCP run `a6721cc4-bd8e-4049-8846-a913fb52f71e`. Snapshot `2c1810bd-489d-49aa-96d5-bbaa5de7c71d` confirms `imagingft.rs` stayed at 1642/1666 lines, 246/254 branches, 163/174 functions, and 2547/2645 regions. The rows increase behavioral proof to 345 cases, but they do not move region coverage; the remaining coverage-moving work is still stroker/stroke-border and rare reachable error paths.
+These rows passed exact live Pillow 12.2.0 parity in `make -C pillow-rs font-tests` and Coverage MCP run `974f35c7-e61d-4dec-bc8a-16ba4e91978e`. Snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` confirms `imagingft.rs` stayed at 1642/1666 lines, 246/254 branches, 163/174 functions, and 2547/2645 regions. The rows increased behavioral proof to 348 cases, but they do not move direct `imagingft.rs` region coverage; the remaining direct coverage-moving work is still stroker/stroke-border and rare reachable error paths.
+
+Resolved during the lower metrics-table pass: three input-only rows now prove public ImageFont access to table paths that were previously 0% covered:
+
+- `font.getlength.hdmx_observable_av`
+- `font.getmetrics.mvar_vertical_metrics`
+- `font.getmetrics.vertical_vhea_only`
+
+Snapshot `06e0a61c-a56e-43e5-bfe7-a8b821be22f1` moves lower table coverage from 0% to: `hdmx.rs` 44/67 regions, `mvar.rs` 92/113 regions, `vhea.rs` 8/9 regions, and `vmtx.rs` 44/65 regions.
 
 ### 6. Bitmap and FreeType class shape is not 1:1
 
@@ -235,7 +244,7 @@ Decision: keep filesystem I/O outside core, but ensure binding crates remain thi
 
 ### 8. Embedded bitmap, vertical metrics, and device metrics are untrusted
 
-Coverage shows weak or zero coverage for `sbit`, `vhea`, `vmtx`, `hdmx`, and `mvar`.
+Coverage still shows weak coverage for `sbit`, `vhea`, `vmtx`, `hdmx`, and `mvar`; `vhea`, `vmtx`, `hdmx`, and `mvar` are no longer zero after the lower metrics-table pass.
 
 Decision: add ImageFont oracle rows with fonts that exercise embedded bitmap glyphs, vertical/TTB metrics if/when libraqm enters scope, horizontal device metrics, and variation metric deltas. If a feature is not in supported scope, record the explicit exclusion instead of leaving it ambiguous.
 
@@ -255,6 +264,6 @@ Decision: add ImageFont oracle rows with fonts that exercise embedded bitmap gly
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 345-row Font fixture corpus.
+The current implementation is good enough to trust the active 348-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
