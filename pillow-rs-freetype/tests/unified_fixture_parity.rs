@@ -25723,6 +25723,10 @@ fn is_stroker_round_manual_path_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry"
 }
 
+fn is_stroker_wide_curve_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration"
+}
+
 fn is_stroker_line_join_matrix_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit"
 }
@@ -25763,6 +25767,25 @@ fn stroker_manual_named_paths(
             Ok((name, ops))
         })
         .collect()
+}
+
+fn stroker_manual_single_path(case: &InputCase) -> Result<Vec<StrokerPathOp>, String> {
+    let asset = stroker_manual_path_asset(case)?;
+    let path_name = case
+        .inputs
+        .params
+        .get("path")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "missing path param".to_string())?;
+    let paths = asset
+        .get("paths")
+        .and_then(Value::as_object)
+        .ok_or_else(|| "manual path asset missing paths object".to_string())?;
+    let records = paths
+        .get(path_name)
+        .and_then(Value::as_array)
+        .ok_or_else(|| format!("manual path asset missing path {path_name}"))?;
+    records.iter().map(stroker_path_op_from_value).collect()
 }
 
 fn stroker_path_op_from_value(value: &Value) -> Result<StrokerPathOp, String> {
@@ -25821,6 +25844,28 @@ fn stroker_manual_path_arg(case: &InputCase) -> Result<String, String> {
         })
         .collect::<Vec<_>>()
         .join(";"))
+}
+
+fn stroker_single_path_arg(case: &InputCase) -> Result<String, String> {
+    Ok(stroker_manual_single_path(case)?
+        .iter()
+        .map(|op| match op {
+            StrokerPathOp::Move(to) => format!("M,{},{}", to.x, to.y),
+            StrokerPathOp::Line(to) => format!("L,{},{}", to.x, to.y),
+            StrokerPathOp::Conic { control, to } => {
+                format!("Q,{},{},{},{}", control.x, control.y, to.x, to.y)
+            }
+            StrokerPathOp::Cubic {
+                control1,
+                control2,
+                to,
+            } => format!(
+                "C,{},{},{},{},{},{}",
+                control1.x, control1.y, control2.x, control2.y, to.x, to.y
+            ),
+        })
+        .collect::<Vec<_>>()
+        .join("|"))
 }
 
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
@@ -27730,6 +27775,225 @@ fn wasm_stroker_manual_path(case: &InputCase) -> Result<RunOutput, String> {
         rust_stroker_manual_path(case)
     } else {
         Err("unsupported manual stroker path route".to_string())
+    }
+}
+
+fn stroker_wide_curve_output(
+    status_sequence: Vec<FT_Error>,
+    line_join_after_curve: FT_Int,
+    exported_outline: Value,
+) -> RunOutput {
+    ok(json!({
+        "status_sequence": status_sequence,
+        "line_join_after_curve": line_join_after_curve,
+        "exported_outline": exported_outline
+    }))
+}
+
+fn rust_stroker_wide_curve(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_wide_curve_case(case) {
+        return Err(format!("{} is not a wide-curve route", case.case_id));
+    }
+    let params = &case.inputs.params;
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_join = i64_param(params, "initial_line_join")?;
+    let ops = stroker_manual_single_path(case)?;
+    let Some(StrokerPathOp::Move(start)) = ops.first() else {
+        return Err("wide-curve path must begin with move".to_string());
+    };
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        radius,
+        line_cap as FT_Int,
+        line_join as FT_Int,
+        65_536,
+    );
+    let mut status_sequence = Vec::new();
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(start), 0);
+    status_sequence.push(begin_error);
+    let mut status = begin_error;
+    if status == FT_Err_Ok {
+        for op in &ops[1..] {
+            status = match op {
+                StrokerPathOp::Move(_) => {
+                    FT_Stroker_Done(stroker);
+                    return Err("wide-curve path contains nested move".to_string());
+                }
+                StrokerPathOp::Line(to) => FT_Stroker_LineTo(stroker, Some(to)),
+                StrokerPathOp::Conic { control, to } => {
+                    FT_Stroker_ConicTo(stroker, Some(control), Some(to))
+                }
+                StrokerPathOp::Cubic {
+                    control1,
+                    control2,
+                    to,
+                } => FT_Stroker_CubicTo(stroker, Some(control1), Some(control2), Some(to)),
+            };
+            status_sequence.push(status);
+            if status != FT_Err_Ok {
+                break;
+            }
+        }
+    }
+    let end_error = if status == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        status
+    };
+    status_sequence.push(end_error);
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if end_error == FT_Err_Ok {
+        FT_Stroker_GetCounts(stroker, Some(&mut point_count), Some(&mut contour_count))
+    } else {
+        end_error
+    };
+    let mut exported = FT_OutlineSnapshot::default();
+    if counts_error == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_wide_curve_output(
+        status_sequence,
+        line_join as FT_Int,
+        outline_snapshot_json(&exported),
+    ))
+}
+
+fn c_stroker_wide_curve(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_wide_curve_case(case) {
+        return Err(format!("{} is not a wide-curve route", case.case_id));
+    }
+    let params = &case.inputs.params;
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_join = i64_param(params, "initial_line_join")?;
+    let ops = stroker_manual_single_path(case)?;
+    let Some(StrokerPathOp::Move(start)) = ops.first() else {
+        return Err("wide-curve path must begin with move".to_string());
+    };
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        c_done_library(library);
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        radius,
+        line_cap as FT_Int,
+        line_join as FT_Int,
+        65_536,
+    );
+    let start = c_abi::FT_Vector {
+        x: start.x,
+        y: start.y,
+    };
+    let mut status_sequence = Vec::new();
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &start, 0);
+    status_sequence.push(begin_error);
+    let mut status = begin_error;
+    if status == FT_Err_Ok {
+        for op in &ops[1..] {
+            status = match op {
+                StrokerPathOp::Move(_) => {
+                    c_abi::FT_Stroker_Done(stroker);
+                    c_done_library(library);
+                    return Err("wide-curve path contains nested move".to_string());
+                }
+                StrokerPathOp::Line(to) => {
+                    let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                    c_abi::FT_Stroker_LineTo(stroker, &to)
+                }
+                StrokerPathOp::Conic { control, to } => {
+                    let control = c_abi::FT_Vector {
+                        x: control.x,
+                        y: control.y,
+                    };
+                    let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                    c_abi::FT_Stroker_ConicTo(stroker, &control, &to)
+                }
+                StrokerPathOp::Cubic {
+                    control1,
+                    control2,
+                    to,
+                } => {
+                    let control1 = c_abi::FT_Vector {
+                        x: control1.x,
+                        y: control1.y,
+                    };
+                    let control2 = c_abi::FT_Vector {
+                        x: control2.x,
+                        y: control2.y,
+                    };
+                    let to = c_abi::FT_Vector { x: to.x, y: to.y };
+                    c_abi::FT_Stroker_CubicTo(stroker, &control1, &control2, &to)
+                }
+            };
+            status_sequence.push(status);
+            if status != FT_Err_Ok {
+                break;
+            }
+        }
+    }
+    let end_error = if status == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        status
+    };
+    status_sequence.push(end_error);
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_error = if end_error == FT_Err_Ok {
+        c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+    } else {
+        end_error
+    };
+    let mut exported_points = [c_abi::FT_Vector::default(); 512];
+    let mut exported_tags = [0u8; 512];
+    let mut exported_contours = [0u16; 64];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    if counts_error == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+    }
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_wide_curve_output(
+        status_sequence,
+        line_join as FT_Int,
+        c_outline_arrays_json(
+            &exported,
+            &exported_points,
+            &exported_tags,
+            &exported_contours,
+        ),
+    ))
+}
+
+fn wasm_stroker_wide_curve(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_wide_curve_case(case) {
+        return Err(format!("{} is not a wide-curve route", case.case_id));
+    }
+    if wasm_abi::abi_support_stroker_cubic_success() {
+        rust_stroker_wide_curve(case)
+    } else {
+        Err("unsupported wide-curve route".to_string())
     }
 }
 
@@ -33912,6 +34176,16 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 stroker_manual_path_arg(case)?,
             ])
         }
+        "ftstroke.stroke_wide_curve" if is_stroker_wide_curve_case(case) => {
+            let params = &case.inputs.params;
+            Ok(vec![
+                "--stroker-wide-curve".to_string(),
+                i64_param(params, "radius")?.to_string(),
+                i64_param(params, "line_cap")?.to_string(),
+                i64_param(params, "initial_line_join")?.to_string(),
+                stroker_single_path_arg(case)?,
+            ])
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             Ok(vec!["--stroker-miter-join-alias".to_string()])
         }
@@ -35564,6 +35838,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             rust_stroker_manual_path(case)
         }
+        "ftstroke.stroke_wide_curve" if is_stroker_wide_curve_case(case) => {
+            rust_stroker_wide_curve(case)
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             rust_stroker_miter_join_alias(case)
         }
@@ -36792,6 +37069,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             c_stroker_manual_path(case)
         }
+        "ftstroke.stroke_wide_curve" if is_stroker_wide_curve_case(case) => {
+            c_stroker_wide_curve(case)
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             c_stroker_miter_join_alias(case)
         }
@@ -37914,6 +38194,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             wasm_stroker_manual_path(case)
+        }
+        "ftstroke.stroke_wide_curve" if is_stroker_wide_curve_case(case) => {
+            wasm_stroker_wide_curve(case)
         }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             wasm_stroker_miter_join_alias(case)

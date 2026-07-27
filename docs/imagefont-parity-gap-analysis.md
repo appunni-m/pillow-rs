@@ -1341,3 +1341,24 @@ Current request classification for `imagingft.rs` region coverage:
   CASE=ftstroke.FT_Stroker_LineJoin` passes `2/2` with `0` pending. Route audit
   moves to `real-parity=4855` and `pending-route=167`. The remaining line-join
   blocker is now only `FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration`.
+- `FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration` promotion: the
+  missing wide-curve path-record asset now exists at
+  `pillow-rs-freetype/tests/fixtures/input/outlines/stroker/wide-curve-joins.json`
+  with the maintained `wide_curve_negative_sector` record. The
+  `ftstroke.stroke_wide_curve` route feeds that exact move/cubic/line sequence
+  through pinned C FreeType, Rust FFI, C ABI, and WASM ABI. Exact output
+  includes the ordered `status_sequence` and exported outline
+  `points/tags/contours`. The route does not read FreeType private stroker
+  state; restoration of the saved non-round join after the temporary round
+  curve subdivision is proven by the post-curve line segment's exported geometry
+  matching pinned C exactly. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_ROUND.wide_curve_join_restoration` passes
+  `1/1`, and `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_ROUND` passes `3/3` with `0` pending.
+  `make -C pillow-rs-freetype test-ffi-compat`, `make -C pillow-rs font-tests`,
+  and `make fontdone-lint` also pass. Route audit moves to
+  `real-parity=4856` and `pending-route=166`. This clears the currently named
+  line-join pending rows; remaining ImageFont-adjacent lower blockers should be
+  selected from the next pending-route audit rather than by adding duplicate
+  public Font rows.
