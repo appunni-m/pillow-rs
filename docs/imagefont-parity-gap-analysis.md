@@ -49,8 +49,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 402 input-only rows execute.
-- 402 rows match live Pillow 12.2.0 exactly.
+- 403 input-only rows execute.
+- 403 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -236,7 +236,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.TransposedFont.getmask.json` | 6 |
 | `font.constructor.json` | 11 |
 | `font.get_transposed_mask.json` | 11 |
-| `font.getbbox.json` | 37 |
+| `font.getbbox.json` | 38 |
 | `font.getbbox_binary.json` | 10 |
 | `font.getlength.json` | 26 |
 | `font.getmask.json` | 51 |
@@ -257,7 +257,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 37 |
-| total | 402 |
+| total | 403 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
@@ -317,8 +317,8 @@ For the current broader Font-with-FreeType suite, the remaining seven reported
 | `253` | uncovered static tuple-start line | `FT_Err_Execution_Too_Long` table entry. Current Pillow 12.2.0 probes with the maintained `hinter-execution-too-long-loop.ttf` asset at public size `7` return normal `getlength`/`getbbox`/`getmask`/`getmask2` results, so the active Font row is a success-path parity row, not an execution-too-long error row. No current Pillow `ImageFont` path is known to emit this code. | Do not add rows for this table entry unless a pinned FreeType/Pillow public route emits the exact error. |
 | `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. Direct Pillow 12.2.0 probes with `post-missing.ttf`, `no-post-names.ttf`, `post-format-unsupported.ttf`, and `invalid-post-format.ttf` all load and return normal public `getname`/`getbbox`/`getlength`/`getmask` results. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
 | `796` | partial branch on `gid` helper | `FT_Get_Char_Index` helper is hit millions of times; marker is helper call/source-map accounting. | No duplicate text rows. |
-| `826` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. | No duplicate bbox/mask rows. |
-| `829` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. | No duplicate bbox/mask rows. |
+| `826` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. Active row `font.getbbox.dejavusans20_a_grave_negative_top` now covers a real Pillow 12.2.0 negative-top bbox for `"À"` without stored expected output. | No duplicate bbox/mask rows unless another distinct public geometry behavior appears. |
+| `829` | partial branch on `ceil26` helper close brace | Helper is hit millions of times; marker is LLVM return/source-map accounting. Active row `font.getbbox.dejavusans20_a_grave_negative_top` now covers a real Pillow 12.2.0 negative-top bbox for `"À"` without stored expected output. | No duplicate bbox/mask rows unless another distinct public geometry behavior appears. |
 | `928` | partial branch on `glyph_run(...)?` inside `bbox_from_run_with_flags` | Current snapshot `3ce9480d-ef4f-4476-a975-fccc15551087` shows line `928` hit 495 times and the following success line `929` hit 477 times, so 18 live-oracle calls already return through the error side. | No duplicate bbox error rows; both success and error outcomes are already represented. |
 Exploratory note: Coverage MCP run `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c`
 temporarily added valid live-oracle rows for DejaVuSans `"À"` negative-top
@@ -673,7 +673,7 @@ instead of leaving it ambiguous.
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 402-row Font fixture corpus.
+The current implementation is good enough to trust the active 403-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow
 12.2.0 because successful libraqm shaping remains intentionally unsupported and
