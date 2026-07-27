@@ -695,3 +695,12 @@ Current request classification for `imagingft.rs` region coverage:
   topology mismatch. This restores the blocker classification to lower
   closed-round/conic stroker geometry/export, not gray-rasterizer behavior and
   not `imagingft.rs`.
+- Follow-up border tracing narrows the topology mismatch further: native C has
+  left border `35` points / `2` contours with ends `[2,34]` and right border
+  `37` points / `2` contours with ends `[20,36]`. The current Rust lower route
+  has left border `24` points / `2` contours with ends `[7,23]` and right border
+  `34` points / `2` contours with ends `[1,33]`. Rust is therefore missing
+  `11` left-border points and `3` right-border points before combined export;
+  the next first-divergence trace should focus inside conic subdivision/corner
+  insertion before `ft_stroke_border_close`, not on the public
+  `FT_Glyph_To_Bitmap` wrapper.
