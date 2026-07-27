@@ -114,6 +114,50 @@ def _native_font_observation(native_font):
     }
 
 
+def _native_variation_observation(font_factory):
+    font = font_factory()
+    return {
+        "names": font.font.getvarnames(),
+        "axes": font.font.getvaraxes(),
+    }
+
+
+def _native_variation_after_setvarname(font_factory, instance_index):
+    font = font_factory()
+    try:
+        font.font.setvarname(instance_index)
+        return {
+            "status": "ok",
+            "name": font.getname(),
+            "length": font.getlength("AV"),
+        }
+    except Exception as exc:
+        return {
+            "status": "err",
+            "class": type(exc).__name__,
+            "args": exc.args,
+            "message": str(exc),
+        }
+
+
+def _native_variation_after_setvaraxes(font_factory, axes):
+    font = font_factory()
+    try:
+        font.font.setvaraxes(axes)
+        return {
+            "status": "ok",
+            "name": font.getname(),
+            "length": font.getlength("AV"),
+        }
+    except Exception as exc:
+        return {
+            "status": "err",
+            "class": type(exc).__name__,
+            "args": exc.args,
+            "message": str(exc),
+        }
+
+
 def _transposed_observation(font, text, method):
     try:
         value = getattr(font, method)(text)
@@ -172,6 +216,21 @@ def test_imagefont_freetype_native_font_subset_matches_pillow(RSPIL):
         assert _native_font_observation(RSPIL.ImageFont.truetype(source, 20).font) == (
             _native_font_observation(PILImageFont.truetype(source, 20).font)
         )
+
+
+@pytest.mark.coverage_meta
+def test_imagefont_freetype_native_variation_subset_matches_pillow(RSPIL):
+    rs_factory = lambda: RSPIL.ImageFont.truetype(VARIABLE, 20)
+    pil_factory = lambda: PILImageFont.truetype(VARIABLE, 20)
+
+    assert _native_variation_observation(rs_factory) == _native_variation_observation(pil_factory)
+    for instance_index in (1, 3, -1):
+        assert _native_variation_after_setvarname(rs_factory, instance_index) == (
+            _native_variation_after_setvarname(pil_factory, instance_index)
+        )
+    assert _native_variation_after_setvaraxes(rs_factory, [100, 400]) == (
+        _native_variation_after_setvaraxes(pil_factory, [100, 400])
+    )
 
 
 @pytest.mark.covers("ImageFont.MAX_STRING_LENGTH")

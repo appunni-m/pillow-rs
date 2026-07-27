@@ -26,6 +26,7 @@ use pyo3::pymodule;
 use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBytes;
 use pyo3::types::PyBytesMethods;
+use pyo3::types::PyDict;
 use pyo3::types::PyDictMethods;
 use pyo3::types::PyInt;
 use pyo3::types::PyList;
@@ -1840,12 +1841,44 @@ impl PyFont {
         pillow_rs::imagefont_get_variation_names(&self.inner).map_err(map_error)
     }
 
+    fn getvarnames(&self) -> PyResult<Vec<Vec<u8>>> {
+        pillow_rs::imagefont_native_getvarnames(&self.inner).map_err(map_error)
+    }
+
+    fn getvaraxes(&self) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            pillow_rs::imagefont_native_getvaraxes(&self.inner)
+                .map(|axes| {
+                    axes.into_iter()
+                        .map(|axis| {
+                            let dict = PyDict::new(py);
+                            dict.set_item("minimum", axis.minimum).expect("dict set");
+                            dict.set_item("default", axis.default).expect("dict set");
+                            dict.set_item("maximum", axis.maximum).expect("dict set");
+                            dict.set_item("name", PyBytes::new(py, &axis.name))
+                                .expect("dict set");
+                            dict.into()
+                        })
+                        .collect()
+                })
+                .map_err(map_error)
+        })
+    }
+
     fn set_variation_by_name(&mut self, name: Vec<u8>) -> PyResult<()> {
         pillow_rs::imagefont_set_variation_by_name(&mut self.inner, &name).map_err(map_error)
     }
 
+    fn setvarname(&mut self, instance_index: i64) -> PyResult<()> {
+        pillow_rs::imagefont_native_setvarname(&mut self.inner, instance_index).map_err(map_error)
+    }
+
     fn set_variation_by_axes(&mut self, axes: Vec<f32>) -> PyResult<()> {
         pillow_rs::imagefont_set_variation_by_axes(&mut self.inner, &axes).map_err(map_error)
+    }
+
+    fn setvaraxes(&mut self, axes: Vec<f32>) -> PyResult<()> {
+        pillow_rs::imagefont_native_setvaraxes(&mut self.inner, &axes).map_err(map_error)
     }
 
     #[pyo3(signature = (size=None))]

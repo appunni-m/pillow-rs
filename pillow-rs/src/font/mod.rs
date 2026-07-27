@@ -275,6 +275,26 @@ impl FreeTypeFont {
         imagingft::set_variation_by_axes(self, axes)
     }
 
+    /// Return Pillow native `_imagingft.Font.getvaraxes()` records.
+    pub fn native_getvaraxes(&self) -> Result<Vec<ImageFontVariationAxis>, PilError> {
+        imagingft::native_getvaraxes(self)
+    }
+
+    /// Return Pillow native `_imagingft.Font.getvarnames()` records.
+    pub fn native_getvarnames(&self) -> Result<Vec<Vec<u8>>, PilError> {
+        imagingft::native_getvarnames(self)
+    }
+
+    /// Set Pillow native `_imagingft.Font` named instance index.
+    pub fn native_setvarname(&mut self, instance_index: i64) -> Result<(), PilError> {
+        imagingft::native_setvarname(self, instance_index)
+    }
+
+    /// Set Pillow native `_imagingft.Font` variation coordinates.
+    pub fn native_setvaraxes(&mut self, axes: &[f32]) -> Result<(), PilError> {
+        imagingft::native_setvaraxes(self, axes)
+    }
+
     /// Return Pillow's public text bounding box.
     pub fn getbbox(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
         imagingft::getbbox(self, text)

@@ -25,6 +25,10 @@ required_operations:
   - native_face_attrs
   - native_getlength_26dot6
   - native_getsize
+  - native_getvaraxes
+  - native_getvarnames
+  - native_setvaraxes
+  - native_setvarname
   - truetype
   - font_size
   - text_bbox
@@ -214,6 +218,7 @@ input_files:
   - font.native_face_attrs.json
   - font.native_getlength_26dot6.json
   - font.native_getsize.json
+  - font.native_variations.json
   - font.render_text.json
   - font.render_text_binary.json
   - font.text_bbox.json

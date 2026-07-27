@@ -542,6 +542,57 @@ pub(crate) fn set_variation_by_axes(font: &mut FreeTypeFont, axes: &[f32]) -> Re
     Ok(())
 }
 
+pub(crate) fn native_getvaraxes(
+    font: &FreeTypeFont,
+) -> Result<Vec<ImageFontVariationAxis>, PilError> {
+    let (fvar, name_table) = variation_tables(font)?;
+    Ok(fvar
+        .axes
+        .iter()
+        .map(|axis| ImageFontVariationAxis {
+            minimum: fixed_16_16_to_pillow_int(axis.min_value),
+            default: fixed_16_16_to_pillow_int(axis.default_value),
+            maximum: fixed_16_16_to_pillow_int(axis.max_value),
+            name: raw_name_bytes(&name_table, axis.name_id).unwrap_or_default(),
+        })
+        .collect())
+}
+
+pub(crate) fn native_getvarnames(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    let (fvar, name_table) = variation_tables(font)?;
+    Ok(fvar
+        .instances
+        .iter()
+        .map(|instance| raw_name_bytes(&name_table, instance.subfamily_name_id).unwrap_or_default())
+        .collect())
+}
+
+pub(crate) fn native_setvarname(
+    font: &mut FreeTypeFont,
+    instance_index: i64,
+) -> Result<(), PilError> {
+    let instance_index =
+        u32::try_from(instance_index).map_err(|_| PilError::OsError("invalid argument".into()))?;
+    let names = if instance_index == 0 {
+        Vec::new()
+    } else {
+        get_variation_names(font)?
+    };
+    let status = ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index);
+    check_ft_error(status)?;
+    refresh_engine_metadata(font);
+    if instance_index != 0 {
+        if let Some(name) = names.get(instance_index as usize - 1) {
+            font.engine.style_name = Some(String::from_utf8_lossy(name).into_owned());
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn native_setvaraxes(font: &mut FreeTypeFont, axes: &[f32]) -> Result<(), PilError> {
+    set_variation_by_axes(font, axes)
+}
+
 fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
     let scaled = f64::from(axis) * 65536.0;
     let fixed = if scaled > ffi::FT_Long::MAX as f64 {
@@ -1373,6 +1424,22 @@ fn fixed_16_16_to_pillow_int(value: i32) -> i32 {
 }
 
 fn name_bytes(table: &tt::name::NameTable, name_id: u16) -> Option<Vec<u8>> {
+    let record = preferred_name_record(table, name_id)?;
+    if record.platform_id == 3 {
+        Some(decode_utf16be_to_utf8(&record.string).into_bytes())
+    } else {
+        Some(record.string.clone())
+    }
+}
+
+fn raw_name_bytes(table: &tt::name::NameTable, name_id: u16) -> Option<Vec<u8>> {
+    preferred_name_record(table, name_id).map(|record| record.string.clone())
+}
+
+fn preferred_name_record(
+    table: &tt::name::NameTable,
+    name_id: u16,
+) -> Option<&tt::name::SfntNameRecord> {
     let preferred = table
         .records
         .iter()
@@ -1395,12 +1462,7 @@ fn name_bytes(table: &tt::name::NameTable, name_id: u16) -> Option<Vec<u8>> {
                 .iter()
                 .position(|record| record.name_id == name_id && record.platform_id == 1)
         })?;
-    let record = &table.records[preferred];
-    if record.platform_id == 3 {
-        Some(decode_utf16be_to_utf8(&record.string).into_bytes())
-    } else {
-        Some(record.string.clone())
-    }
+    Some(&table.records[preferred])
 }
 
 fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {

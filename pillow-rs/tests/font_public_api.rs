@@ -41,7 +41,7 @@ struct ParameterCoverage {
     covered: BTreeSet<String>,
 }
 
-const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 36] = [
+const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 40] = [
     "ImageFont.getbbox",
     "ImageFont.info",
     "ImageFont.getlength",
@@ -71,6 +71,10 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 36] = [
     "native_face_attrs",
     "native_getlength_26dot6",
     "native_getsize",
+    "native_getvaraxes",
+    "native_getvarnames",
+    "native_setvaraxes",
+    "native_setvarname",
     "render_text_binary",
     "set_variation_by_axes",
     "set_variation_by_name",
@@ -80,7 +84,7 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 36] = [
     "validate_transposed_length",
 ];
 
-const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 13] = [
+const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 17] = [
     "draw_text",
     "font_size",
     "get_transposed_mask",
@@ -90,6 +94,10 @@ const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 13] = [
     "native_face_attrs",
     "native_getlength_26dot6",
     "native_getsize",
+    "native_getvaraxes",
+    "native_getvarnames",
+    "native_setvaraxes",
+    "native_setvarname",
     "render_text_binary",
     "text_bbox",
     "transposed_bbox",
@@ -272,7 +280,7 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
     ("truetype", "layout_engine", "RAQM"),
 ];
 
-const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 41] = [
+const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 45] = [
     ("imagefont_from_bytes", "truetype"),
     ("imagefont_from_bytes_with_options", "truetype"),
     ("imagefont_get_variation_axes", "get_variation_axes"),
@@ -309,6 +317,10 @@ const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 41] = [
         "native_getlength_26dot6",
     ),
     ("imagefont_native_getsize", "native_getsize"),
+    ("imagefont_native_getvaraxes", "native_getvaraxes"),
+    ("imagefont_native_getvarnames", "native_getvarnames"),
+    ("imagefont_native_setvaraxes", "native_setvaraxes"),
+    ("imagefont_native_setvarname", "native_setvarname"),
     ("imagefont_render_text_binary", "render_text_binary"),
     ("imagefont_set_variation_by_axes", "set_variation_by_axes"),
     ("imagefont_set_variation_by_name", "set_variation_by_name"),

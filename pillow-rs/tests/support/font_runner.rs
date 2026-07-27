@@ -178,6 +178,46 @@ fn try_run(case: &Value, fixture_root: &Path) -> Result<Value, PilError> {
                 "offset": [x, y],
             }))
         }
+        "native_getvaraxes" => Ok(variation_axes_value(
+            pillow_rs::imagefont_native_getvaraxes(&font)?,
+        )),
+        "native_getvarnames" => Ok(json!({
+            "type": "variation_names",
+            "value": pillow_rs::imagefont_native_getvarnames(&font)?
+                .into_iter()
+                .map(|name| hex(&name))
+                .collect::<Vec<_>>(),
+        })),
+        "native_setvarname" => {
+            let instance_index = required(params, "instance_index")?
+                .as_i64()
+                .ok_or_else(|| PilError::TypeError("instance_index must be an integer".into()))?;
+            pillow_rs::imagefont_native_setvarname(&mut font, instance_index)?;
+            Ok(json!({
+                "type": "font_after_variation",
+                "name": pillow_rs::imagefont_getname(&font),
+                "length": getlength(&font, params)?,
+            }))
+        }
+        "native_setvaraxes" => {
+            let axes = required(params, "axes")?
+                .as_array()
+                .ok_or_else(|| PilError::TypeError("axes must be a list".into()))?
+                .iter()
+                .map(|value| {
+                    value
+                        .as_f64()
+                        .map(|value| value as f32)
+                        .ok_or_else(|| PilError::TypeError("axis must be a number".into()))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+            pillow_rs::imagefont_native_setvaraxes(&mut font, &axes)?;
+            Ok(json!({
+                "type": "font_after_variation",
+                "name": pillow_rs::imagefont_getname(&font),
+                "length": getlength(&font, params)?,
+            }))
+        }
         "getlength" => Ok(json!({
             "type": "length",
             "value": getlength(&font, params)?,
