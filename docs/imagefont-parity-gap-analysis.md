@@ -243,9 +243,21 @@ Current lower-stroker verification:
   `pillow-rs-freetype/src/ffi/handles.rs`: `FT_Stroker_LineTo`,
   `FT_Stroker_ConicTo`, and `FT_Stroker_CubicTo` contain maintained
   exact-coordinate fixture routes and otherwise return
-  `FT_Err_Unimplemented_Feature`. `FT_Outline_Glyph_Stroke` already attempts the
+  `FT_Err_Unimplemented_Feature`. The segment-level public rows currently pass:
+  `FT_Stroker_LineTo` 5/5 runnable, `FT_Stroker_ConicTo` 4/4 runnable, and
+  `FT_Stroker_CubicTo` 4/4 runnable. That proves the maintained rows, not
+  general glyph stroking. `FT_Outline_Glyph_Stroke` already attempts the
   FreeType-shaped parse/count/export wrapper first, so more wrapper wiring in
   `imagingft.rs` would not fix the source mismatch.
+
+Layering decision: `Pillow _imagingft.c` only chooses between
+`FT_Glyph_Stroke` and `FT_Glyph_StrokeBorder`, passes the configured stroker
+settings, renders the returned glyph, and maps any FreeType status to Pillow's
+public exception shape. General stroke geometry, border orientation/export,
+curve subdivision, cap/join behavior, and destroy-option ownership are
+FreeType-original behavior. They must be implemented in
+`pillow-rs-freetype`; adding glyph-specific or bbox-clamping fixes in
+`imagingft.rs` would be false parity.
 
 ### 3. Stroked extent clamping is suspect Rust-only logic
 
@@ -358,3 +370,12 @@ Decision: keep the active SBIT rows as trusted public parity proof, then add fur
 The current implementation is good enough to trust the active 352-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
+
+Latest focused ftstroke evidence from commit `49f7178d3`:
+
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_Stroke`: 4/4 runnable rows pass, 4 rows remain pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`: 1/1 runnable row passes, 3 rows remain pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_LineTo`: 5/5 runnable rows pass, 0 pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_ConicTo`: 4/4 runnable rows pass, 0 pending.
+- `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`: 4/4 runnable rows pass, 0 pending.
+- `pillow-rs-freetype/target/api-abi-audit/route_audit.json` still reports 183 `pending-route` cases overall, so the project cannot claim complete FreeType-backed ImageFont parity yet.
