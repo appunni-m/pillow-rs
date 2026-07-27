@@ -2,7 +2,7 @@
 
 Date: 2026-07-28
 
-Rust/source fixture commit reviewed: `c42193313`
+Rust/source fixture commit reviewed: `ce0618689`
 
 Latest audit note: this document is the maintained audit record; use `git log`
 for the exact latest doc-only commit.
@@ -78,6 +78,10 @@ Post extended load-failure error-row Coverage MCP snapshot: `6c110f52-93f8-43c9-
 Post-commit extended load-failure error-row Coverage MCP run: `8415695b-1c23-4f0b-970a-dd2e5304ab3b`
 
 Post-commit extended load-failure error-row Coverage MCP snapshot: `1a0beeb6-3e82-4f27-906a-2f4412705920`
+
+Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
+repo fixtures; no public `PIL.ImageFont` route emitted
+`FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
 Suite: `font-with-freetype`
 
@@ -431,8 +435,8 @@ For the current broader Font-with-FreeType suite, the remaining seven reported
 | Rust line | Coverage reason | Current classification | Action |
 |---:|---|---|---|
 | `91` | partial branch on `Ok(FreeTypeFont { engine })` | Constructor success is heavily hit; marker is return/source-map instrumentation after `FT_Request_Size`/face setup. A live Pillow 12.2.0 constructor sweep now records the real distinction that tiny TrueType sizes (`0.0001` through `0.1`) fail with `OSError("invalid ppem value")`, while the CFF fixture accepts the same tiny sizes and returns a normal public bbox. Active row `font.getbbox.pure_cff_tiny_size_success` covers that success path without stored expected output. Current snapshot `e6e22c8d-e3f6-4270-828a-41dc982a6d43` reports line `91` hit `2749` times with `1/2` branches covered. | Add only a real font/size row if Pillow reaches another distinct constructor branch. |
-| `253` | uncovered static tuple-start line | `FT_Err_Execution_Too_Long` table entry. Current Pillow 12.2.0 probes with the maintained `hinter-execution-too-long-loop.ttf` asset at public size `7` return normal `getlength`/`getbbox`/`getmask`/`getmask2` results, so the active Font row is a success-path parity row, not an execution-too-long error row. No current Pillow `ImageFont` path is known to emit this code. | Do not add rows for this table entry unless a pinned FreeType/Pillow public route emits the exact error. |
-| `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. Direct Pillow 12.2.0 probes with `post-missing.ttf`, `no-post-names.ttf`, `post-format-unsupported.ttf`, and `invalid-post-format.ttf` all load and return normal public `getname`/`getbbox`/`getlength`/`getmask` results. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
+| `253` | uncovered static tuple-start line | `FT_Err_Execution_Too_Long` table entry. Current Pillow 12.2.0 probes with the maintained `hinter-execution-too-long-loop.ttf` asset at public size `7` return normal `getlength`/`getbbox`/`getmask`/`getmask2` results, so the active Font row is a success-path parity row, not an execution-too-long error row. A broader 59-fixture Pillow sweep across `post`, `execution`, `loop`, `hinter`, `fpgm`, `prep`, `idef`, `instr`, and related lower assets tried constructor, `getlength`, `getbbox`, `getmask`, `getmask2`, and `getname` at sizes `0.0001`, `0.001`, `0.01`, `0.1`, `1`, `2`, `7`, `12`, `20`, and `64`; the observed public errors were only `code overflow`, `too many instruction definitions`, `nested DEFS`, `invalid ppem value`, and `unknown file format`. | Do not add rows for this table entry unless a pinned FreeType/Pillow public route emits the exact error. |
+| `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. Direct Pillow 12.2.0 probes with `post-missing.ttf`, `no-post-names.ttf`, `post-format-unsupported.ttf`, and `invalid-post-format.ttf` all load and return normal public `getname`/`getbbox`/`getlength`/`getmask` results. The same 59-fixture sweep above did not produce `OSError("PostScript (post) table missing")` through any tested public ImageFont route. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
 | `796` | partial branch on the `TGT_NORM` load-flag constant source span | The immediately following `gid` helper is hit `34147534` times in current coverage, so this marker is not evidence that character-to-glyph lookup is untested. LLVM attributes one missed branch to the constant/source-map span for `TGT_NORM`; the active corpus already exercises both normal and mono target load flags. | No duplicate text rows. Revisit only if source-context evidence maps the missed branch to a real public load-flag behavior. |
 | `826` | partial branch on the `floor26` function-boundary/source-map span | `floor26` is hit `68213910` times in current coverage. The marker is LLVM return/source-map accounting, not an uncalled helper body. Active rows cover real floor-based bbox/mask geometry. | No duplicate bbox/mask rows unless another distinct public geometry behavior appears. |
 | `829` | partial branch on the `ceil26` function-boundary/source-map span | `ceil26` is hit `68213910` times in current coverage. Active row `font.getbbox.dejavusans20_a_grave_negative_top` now covers a real Pillow 12.2.0 negative-top bbox for `"À"` without stored expected output. | No duplicate bbox/mask rows unless another distinct public geometry behavior appears. |
