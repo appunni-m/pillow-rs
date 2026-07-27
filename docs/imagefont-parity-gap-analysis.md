@@ -726,3 +726,11 @@ Current request classification for `imagingft.rs` region coverage:
   `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`.
   The mono-target stroked bitmap row remains pending; this cubic port is real
   lower FreeType alignment, not complete ImageFont stroke parity.
+- Coverage MCP run `913a7464-ea14-46f6-ab16-cb4cbd612596` passed and ingested
+  snapshot `9520c181-560b-4eb9-9893-915a7dbd9438` for commit `1af634793`.
+  Direct `imagingft.rs` coverage remains `1664/1686` lines, `249/254`
+  branches, `162/173` functions, and `2608/2700` regions. The Font-with-FreeType
+  suite does not hit the new lower cubic route yet; that is expected because no
+  active public ImageFont row depends on a cubic stroked outline. Treat the cubic
+  port as lower implementation progress proven by focused pinned-C FreeType
+  lanes, not as public ImageFont coverage closure.
