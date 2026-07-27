@@ -246,6 +246,12 @@ Rust now carries `stroke_filled` in `ImageFontTextOptions` and routes to `fontdo
 
 The interface map now classifies the lower FreeType stroker group as partial, not out of scope: Rust has the lifecycle, segment, export, glyph-stroke, and glyph-stroke-border wrappers, but successful outside/inside border and destroy-option rows are not runnable exact parity yet.
 
+The lower `FT_Glyph_StrokeBorder` wrapper now mirrors one more FreeType
+2.14.3 detail: `src/base/ftstroke.c:2372-2373` intentionally ignores
+`FT_Stroker_GetBorderCounts`' return status after `FT_Stroker_ParseOutline`
+succeeds. Rust now keeps that same wrapper behavior instead of returning the
+count error, but this does not make real glyph border geometry complete.
+
 Decision: complete the lower stroker segment geometry and border-export behavior
 needed by real outline glyphs, then add successful `stroke_filled=true` fixture
 rows. `FT_Stroker_ParseOutline` now follows the C-shaped contour/tag walk, so
