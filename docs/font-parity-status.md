@@ -308,11 +308,11 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `224abc06-7039-4109-b3ab-bde477a408c4`
-- Snapshot: `080e732f-f385-48c0-b862-ca547f41e030`
+- Run: `16b08176-e1d4-4b49-b869-68f5e83bdf4f`
+- Snapshot: `72572244-a9f9-4026-a909-9e1b18274e64`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `5927513263992bf2a42b86e7e859cf09456c0ff0`
+- Commit measured: `28b8740c9231ab906c6912ee106a1ede5bcf10eb`
 
 Target file metrics:
 
@@ -335,7 +335,9 @@ Current full-module scope note:
 - `pilfont.rs` now has no uncovered executable lines and no partial branches in
   the active Font coverage snapshot. Its branch coverage is `70/70`
   (`100.00%`). The remaining function/region deltas are LLVM function/region
-  accounting with no line-level gaps reported by Coverage MCP.
+  accounting with no line-level gaps reported by Coverage MCP. Additional
+  byte-text `PIL.ImageFont.ImageFont.getbbox` and `getmask` rows pass exact live
+  Pillow parity, but they do not change this LLVM function/region accounting.
 - `default_aileron.rs` now embeds the decoded Aileron TTF bytes directly instead
   of validating a checked-in base64 payload at runtime. Corrupt repo data is not
   a public `PIL.ImageFont` input, so the user-facing `Result` boundary remains
@@ -343,8 +345,9 @@ Current full-module scope note:
 - PILfont rows now include repo-local PNG, GIF/PBM discovery behavior, valid
   `P1` and `P4` PBM, CRLF P4 raster separator behavior, CRLF short-raster lazy
   loader semantics, L-mode glyph images, clipped PILfont metrics, public
-  `ImageFont.info`, malformed metrics/header cases, invalid glyph-image mode
-  mapping, PBM tokenizer failures, truncated raster failures, and
+  `ImageFont.info`, byte-text bitmap `getbbox`/`getmask`, malformed
+  metrics/header cases, invalid glyph-image mode mapping, PBM tokenizer
+  failures, truncated raster failures, and
   Pillow-matching `SystemError` render failures.
 
 Latest Font wrapper movement:
