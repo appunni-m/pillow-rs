@@ -26,8 +26,8 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 365 input-only rows execute.
-- 365 rows match live Pillow 12.2.0 exactly.
+- 367 input-only rows execute.
+- 367 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
@@ -427,7 +427,15 @@ needed to explain the `20x21` vs `20x22` public ImageFont extent.
 
 Pillow C lays out glyphs once and rendering consumes the resulting glyph info. Rust now builds a shared BASIC `GlyphRun` for length, bbox, mask, and stroke.
 
-Remaining risk: fixtures need more independent kerning/no-kerning and missing-glyph transitions so shared-run parity is not only proven by duplicate easy rows.
+The active corpus now includes independent missing-glyph transition rows for
+`A\uFFFFV` through `getlength` and `getbbox`. These rows verify the BASIC layout
+guard that kerning is applied only when both adjacent glyph indices are nonzero,
+matching Pillow 12.2.0 `text_layout_fallback`.
+
+Remaining risk: fixtures still need successful stroked kerning and
+no-kerning transitions after lower stroker support is generalized; do not add
+those rows until the lower stroke path can pass without glyph-specific
+shortcuts.
 
 ### 5. Error mapping is now table-equivalent but not exhaustively reached
 
