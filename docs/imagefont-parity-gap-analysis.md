@@ -55,7 +55,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - `make -C pillow-rs font-tests` passes.
 - Latest Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
   passes for the current Rust/fixture source state and ingests snapshot
-  `9dc9cb42-54a6-4aa8-b217-43ff0d0b351b`. Direct `imagingft.rs` coverage
+  `05099530-d3be-4b9c-b18b-c3d76f027c47` from run
+  `9d18396c-0f16-44ac-8b1c-902dbda5b38b` at commit `0ac52bb92`. Direct
+  `imagingft.rs` coverage
   remains `1660/1682` lines, `249/254` branches, `162/173` functions, and
   `2612/2696` regions. The eight remaining gap lines are still `91`, `253`,
   `271`, `796`, `826`, `829`, `831`, and `928`; Coverage MCP line selection
@@ -97,7 +99,7 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Commit `2e45e4e4dec60bdfca5df2a7a17640f67a0037c7` adds two public ImageFont rows: `font.getbbox.hhea_descender_only_av` and `font.getlength.hinter_too_many_instruction_defs`. It also fixes lower TrueType IDEF opcode-overflow classification so Pillow's public `OSError("too many instruction definitions")` matches Rust. Coverage moved lower `tt/hinter/exec.rs` but did not change direct `imagingft.rs` region totals because LLVM still attributes the static `FT_ERROR_MESSAGES` table line as uncovered.
 - Commit `384a4139a07aa8b5f09486a1f034ba5fbcb9541b` adds `font.getlength.hinter_execution_too_long` using the maintained lower `hinter-execution-too-long-loop.ttf` fixture. The row passes exact live Pillow/Rust parity and is a valid public Font input, but snapshot `cb299da6-0589-4066-b118-11ed0feeeae4` shows `imagingft.rs` still unchanged: the `FT_Err_Execution_Too_Long` static table-entry line remains LLVM-uncovered even though the lower font path is exercised.
 - Commit `21086af6f5fff5921b554e3b6fe76d6613b5874d` replaces false SBIT `"A"` rows with private-use glyph rows that actually hit embedded bitmap strikes, fixes bitmap glyph layout bbox calculation in `imagingft.rs`, and expands SBIT pixel modes (`GRAY2`, `GRAY4`, `BGRA`) to Pillow-compatible coverage bytes. This moves lower `tt/sbit.rs` coverage from 100/814 lines and 186/1269 regions to 254/814 lines and 375/1269 regions.
-- Current SBIT compound pass adds public `getmask`/`getmask2` rows for the maintained lower `sbit_composite_success_format8.ttf` fixture. These rows use private-use glyph `U+E001` to reach glyph 2, a compound image-format-8 embedded bitmap assembled from glyph 1, and pass exact live Pillow 12.2.0 oracle comparison without storing expected output in input JSON.
+- Commit `0ac52bb92` adds public `getmask`/`getmask2` rows for the maintained lower `sbit_composite_success_format8.ttf` fixture. These rows use private-use glyph `U+E001` to reach glyph 2, a compound image-format-8 embedded bitmap assembled from glyph 1, and pass exact live Pillow 12.2.0 oracle comparison without storing expected output in input JSON. Coverage MCP snapshot `05099530-d3be-4b9c-b18b-c3d76f027c47` shows this moved lower `pillow-rs-freetype/src/tt/sbit.rs` to `366/814` lines, `29/72` branches, `25/108` functions, and `567/1269` regions while direct `imagingft.rs` stayed unchanged.
 - Commits `121702b10` and `2b34fb4ac` close the Python binding option-forwarding leak for ImageFont: the thin wrapper now forwards `direction`, `features`, `language`, `stroke_width`, `stroke_filled`, `anchor`, `ink`, `mode`, and `start` into the Rust core, raises the Rust `PilError::UnsupportedLibraqm` path for no-libraqm options, and preserves Pillow-visible integral bbox value types.
 - Commit `9912cf4f5` documents the hard source boundary, and commit `a19288004` makes `FT_Outline_Glyph_Stroke` attempt the FreeType-shaped parse/count/export wrapper path before falling back to the maintained DejaVu glyph-36 route. This reduces wrapper-level shortcut behavior, but the real parity blocker remains lower stroker segment geometry, border export, and destroy-option ownership.
 - Commit `b71ca868e` adds a live-corpus guard that fails if any active Font input tries to claim `stroke_filled=true` branch coverage with `stroke_width > 0` before lower `FT_Glyph_StrokeBorder` success parity is implemented. The current `stroke_filled=true` row remains valid because it has no stroke width and Pillow ignores it.
@@ -601,10 +603,10 @@ implementation instead.
 
 Decision: keep the active SBIT rows as trusted public parity proof. Commit
 `072af0fbb` adds the missing independent public checks for bitmap layout bbox
-and strike advance using private-use SBIT glyphs. The current compound SBIT pass
+and strike advance using private-use SBIT glyphs. Commit `0ac52bb92`
 adds the next independent embedded-bitmap behavior: public `getmask`/`getmask2`
-rows for a maintained image-format-8 compound bitmap glyph. Coverage MCP must
-still confirm whether the new compound rows move lower SBIT coverage or direct
+rows for a maintained image-format-8 compound bitmap glyph. Coverage MCP
+confirms the compound rows move lower SBIT coverage but do not change direct
 `imagingft.rs` region accounting. Add further ImageFont oracle rows only for
 still-independent embedded bitmap formats, malformed SBIT errors, vertical/TTB
 metrics if/when libraqm enters scope, horizontal device metrics, and variation
