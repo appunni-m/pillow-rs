@@ -1251,6 +1251,21 @@ Current request classification for `imagingft.rs` region coverage:
   `make -C pillow-rs-freetype test-case
   CASE=ftstroke.FT_STROKER_LINEJOIN_MITER_VARIABLE` all pass. Both normal
   lanes are now `2/2` runnable with `0` pending. Route audit moves to
-  `real-parity=4851` and `pending-route=171`. Remaining line-join pending rows
-  are still bevel, round, miter alias, wide round-curve restoration, and the
-  broad `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.
+  `real-parity=4851` and `pending-route=171`. At this point the remaining
+  line-join pending rows were bevel, round, miter alias, wide round-curve
+  restoration, and the broad `FT_Stroker_LineJoin.join_geometry_and_miter_limit`
+  row.
+- `FT_STROKER_LINEJOIN_MITER` alias promotion: the alias row
+  `ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry`
+  now has a maintained route comparing the same fixture path/radius/cap at
+  miter limit `65536` through the public `FT_STROKER_LINEJOIN_MITER` alias and
+  `FT_STROKER_LINEJOIN_MITER_VARIABLE`. Pinned C, Rust FFI, C ABI, and WASM ABI
+  all export identical outlines and report `alias_geometry_equal=true`.
+  Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry`
+  and `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_MITER` pass. Route audit moves to
+  `real-parity=4852` and `pending-route=170`. Remaining line-join pending rows
+  are now bevel, round, wide round-curve restoration, and the broad
+  `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.

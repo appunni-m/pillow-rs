@@ -20943,6 +20943,29 @@ static int emit_stroker_miter_join_geometry(int argc, char** argv) {
     return 0;
 }
 
+static int emit_stroker_miter_join_alias(int argc, char** argv) {
+    if (argc != 2) return 2;
+    FT_Vector points_miter[256] = {0};
+    unsigned char tags_miter[256] = {0};
+    unsigned short contours_miter[64] = {0};
+    FT_Outline miter = {0, 0, points_miter, tags_miter, contours_miter, 0};
+    FT_Vector points_variable[256] = {0};
+    unsigned char tags_variable[256] = {0};
+    unsigned short contours_variable[64] = {0};
+    FT_Outline variable = {0, 0, points_variable, tags_variable, contours_variable, 0};
+    build_stroker_miter_join_outline(FT_STROKER_LINEJOIN_MITER, 65536, &miter);
+    build_stroker_miter_join_outline(FT_STROKER_LINEJOIN_MITER_VARIABLE, 65536, &variable);
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"outline_by_join\":{\"FT_STROKER_LINEJOIN_MITER\":");
+    print_stroker_outline_value(&miter);
+    printf(",\"FT_STROKER_LINEJOIN_MITER_VARIABLE\":");
+    print_stroker_outline_value(&variable);
+    printf("},\"alias_geometry_equal\":%s}}\n",
+           stroker_outline_equal(&miter, &variable) ? "true" : "false");
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -27581,6 +27604,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--stroker-miter-join-geometry")) {
         return emit_stroker_miter_join_geometry(argc, argv);
+    }
+    if (argc == 2 && streq(argv[1], "--stroker-miter-join-alias")) {
+        return emit_stroker_miter_join_alias(argc, argv);
     }
     if (argc == 3 && streq(argv[1], "--stroker-parse-degenerate")) {
         return emit_stroker_parse_degenerate(argc, argv);
