@@ -6,6 +6,7 @@
     "success_outline_to_bitmap_destroy_true",
     "success_already_bitmap_noop",
     "success_origin_translation_affects_render",
+    "pending_stroked_mono_target_outline_to_bitmap",
     "error_invalid_arguments_or_unrenderable_format",
     "error_render_failure_preserves_original"
   ],
@@ -207,6 +208,74 @@
         "source_refs": [
           "freetype/include/freetype/ftglyph.h",
           "freetype/src/base/ftglyph.c"
+        ]
+      }
+    },
+    {
+      "case_id": "ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap",
+      "subject": "ftglyph.FT_Glyph_To_Bitmap",
+      "case": "pending_stroked_mono_target_outline_to_bitmap",
+      "operation": "ftglyph.glyph_to_bitmap",
+      "schema": "glyph_to_bitmap",
+      "expect_error": false,
+      "inputs": {
+        "assets": {
+          "outline_font": {
+            "kind": "file",
+            "role": "font",
+            "path": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "source_creation": "FT_Get_Glyph outline then FT_Glyph_Stroke",
+          "glyph_index": 36,
+          "size_26_6": 1536,
+          "load_flags": [
+            "FT_LOAD_TARGET_MONO"
+          ],
+          "stroker": {
+            "radius": 96,
+            "line_cap": "FT_STROKER_LINECAP_ROUND",
+            "line_join": "FT_STROKER_LINEJOIN_ROUND",
+            "miter_limit": 65536
+          },
+          "render_mode": "FT_RENDER_MODE_NORMAL",
+          "destroy": false
+        }
+      },
+      "classifiers": [
+        "kind:function",
+        "header:ftglyph",
+        "area:glyph",
+        "area:stroker",
+        "area:rasterizer",
+        "imagefont:blocker"
+      ],
+      "expectation": {
+        "status": "ok",
+        "output_shape": {
+          "return": "FT_Error",
+          "source": "mono-target stroked outline glyph",
+          "result_kind": "FT_BitmapGlyph",
+          "bitmap": [
+            "left",
+            "top",
+            "FT_Bitmap fields",
+            "buffer bytes"
+          ]
+        },
+        "compare": {
+          "mode": "exact",
+          "paths": [
+            "error",
+            "handle_replacement_class",
+            "bitmap"
+          ]
+        },
+        "source_refs": [
+          "freetype/src/base/ftglyph.c:771-869",
+          "freetype/src/base/ftstroke.c:2248-2325",
+          "Pillow 12.2.0 src/_imagingft.c:font_render_impl"
         ]
       }
     },

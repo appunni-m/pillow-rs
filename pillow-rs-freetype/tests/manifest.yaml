@@ -6277,6 +6277,8 @@ subjects:
         description: Passing a bitmap glyph returns FT_Err_Ok and leaves the glyph handle, bitmap bytes, and ownership unchanged.
       - id: success_origin_translation_affects_render
         description: A non-null origin translates the glyph before rendering, affects bitmap left/top and pixels like C, and is undone on the original glyph when destroy is false.
+      - id: pending_stroked_mono_target_outline_to_bitmap
+        description: A glyph loaded with FT_LOAD_TARGET_MONO, detached with FT_Get_Glyph, stroked with FT_Glyph_Stroke, then rendered through FT_Glyph_To_Bitmap with FT_RENDER_MODE_NORMAL must match C/Pillow bitmap placement and coverage bytes.
       - id: error_invalid_arguments_or_unrenderable_format
         description: Null the_glyph, null *the_glyph, null library, null clazz, or a class without glyph_prepare returns FT_Err_Invalid_Argument and preserves the caller handle according to C.
       - id: error_render_failure_preserves_original
