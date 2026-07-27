@@ -984,3 +984,20 @@ Current request classification for `imagingft.rs` region coverage:
   `0` pending, and route audit moves to `real-parity=4845`,
   `pending-route=177`. This does not claim broad stroke-border geometry parity;
   it closes the public wrapper ownership row.
+- Current-commit Coverage MCP verification after that promotion:
+  `font-tests-coverage-with-freetype-pillow-12-2` run
+  `9c5a3218-173f-4034-8550-a7e3375f32af` passed and ingested snapshot
+  `47f01433-d43c-4bbd-a734-6a6670fd710e` for commit `dd687feb6`.
+  `pillow-rs/src/font/imagingft.rs` remains `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2610/2696` regions
+  (`96.81%` region coverage). The remaining ranges are still lines `91`,
+  `253`, `271`, `796`, `826`, `829`, `831`, and `928`.
+  Bounded source review classifies these as:
+  constructor return/source-map branch accounting (`91`), static FreeType
+  error-message table tuple-start mappings (`253`, `271`), heavily exercised
+  one-line helper/function-boundary mappings (`796`, `826`, `829`, `928`), and
+  an empty/source-mapped separator line (`831`). None of these ranges currently
+  points to a missing `pillow-rs-freetype` implementation endpoint. Therefore
+  no lower FreeType refactor is justified from this coverage evidence alone;
+  lower FreeType changes should be limited to proven public ImageFont blockers
+  such as broader stroked glyph geometry, not coverage-only denominator work.
