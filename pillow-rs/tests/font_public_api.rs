@@ -116,7 +116,7 @@ const EXPECTED_IMAGEFONT_BEHAVIORAL_PUBLIC_NAMES: [&str; 9] = [
     "truetype",
 ];
 
-const EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES: [&str; 22] = [
+const EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES: [&str; 21] = [
     "Any",
     "Axis",
     "BinaryIO",
@@ -134,7 +134,6 @@ const EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES: [&str; 22] = [
     "base64",
     "cast",
     "core",
-    "features",
     "is_path",
     "os",
     "sys",
