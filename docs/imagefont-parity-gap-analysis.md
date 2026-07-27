@@ -624,9 +624,9 @@ Do not broaden this into a `pillow-rs-freetype` coverage refactor.
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
-| `pillow-rs/src/font/mod.rs` | 366/366 100.00% | n/a | 77/77 100.00% | 476/476 100.00% | covered |
+| `pillow-rs/src/font/mod.rs` | 391/391 100.00% | n/a | 84/84 100.00% | 506/506 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | source-line gap is rustdoc line 140 on `from_pilfont_data`; branch coverage is 100%. No current source-line gap identifies a missing bitmap `ImageFont.ImageFont` behavior. Add bitmap rows only when they exercise a distinct public Pillow behavior, not to chase LLVM function/region artifacts. |
-| `pillow-rs/src/font/imagingft.rs` | 1747/1768 98.81% | 251/256 98.05% | 175/186 94.09% | 2723/2808 96.97% | current Font-with-FreeType suite after centralizing anchor errors; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
+| `pillow-rs/src/font/imagingft.rs` | 1739/1760 98.81% | 251/256 98.05% | 173/184 94.02% | 2712/2797 96.96% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
 
 Overall snapshot totals for this suite:
 
