@@ -1269,3 +1269,17 @@ Current request classification for `imagingft.rs` region coverage:
   `real-parity=4852` and `pending-route=170`. Remaining line-join pending rows
   are now bevel, round, wide round-curve restoration, and the broad
   `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.
+- `FT_STROKER_LINEJOIN_BEVEL` promotion: the row
+  `ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry` now has a maintained
+  input-driven route. The harness reads `path`, `radius`, `line_cap`,
+  `line_join`, and `miter_limit` from the fixture, passes those values to the
+  pinned C oracle, and compares exact exported bevel outline points/tags/contours
+  plus `join_shape="bevel"` through Rust FFI, C ABI, and WASM ABI. Verification:
+  `make -C pillow-rs-freetype test-pending-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry` and
+  `make -C pillow-rs-freetype test-case
+  CASE=ftstroke.FT_STROKER_LINEJOIN_BEVEL` pass. The normal bevel lane is now
+  `2/2` runnable with `0` pending. Route audit moves to `real-parity=4853` and
+  `pending-route=169`. Remaining line-join pending rows are now round,
+  wide round-curve restoration, and the broad
+  `FT_Stroker_LineJoin.join_geometry_and_miter_limit` row.

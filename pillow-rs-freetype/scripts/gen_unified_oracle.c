@@ -20966,6 +20966,80 @@ static int emit_stroker_miter_join_alias(int argc, char** argv) {
     return 0;
 }
 
+static int parse_stroker_join_path(const char* text,
+                                   FT_Vector* points,
+                                   int max_points) {
+    int count = 0;
+    const char* cursor = text;
+    while (*cursor) {
+        if (count >= max_points) {
+            return -1;
+        }
+        char* end = NULL;
+        long x = strtol(cursor, &end, 10);
+        if (end == cursor || *end != ',') {
+            return -1;
+        }
+        cursor = end + 1;
+        long y = strtol(cursor, &end, 10);
+        if (end == cursor) {
+            return -1;
+        }
+        points[count].x = x;
+        points[count].y = y;
+        count++;
+        if (*end == '\0') {
+            return count;
+        }
+        if (*end != ';') {
+            return -1;
+        }
+        cursor = end + 1;
+    }
+    return count;
+}
+
+static int emit_stroker_bevel_join_geometry(int argc, char** argv) {
+    if (argc != 7) return 2;
+    FT_Fixed radius = (FT_Fixed)strtol(argv[2], NULL, 10);
+    FT_Stroker_LineCap line_cap = (FT_Stroker_LineCap)strtol(argv[3], NULL, 10);
+    FT_Stroker_LineJoin line_join = (FT_Stroker_LineJoin)strtol(argv[4], NULL, 10);
+    FT_Fixed miter_limit = (FT_Fixed)strtol(argv[5], NULL, 10);
+    FT_Vector path[32] = {0};
+    int point_count = parse_stroker_join_path(argv[6], path, 32);
+    if (point_count < 2) return 2;
+
+    FT_Library library = NULL;
+    FT_Error status = FT_Init_FreeType(&library);
+    FT_Stroker stroker = NULL;
+    if (!status) status = FT_Stroker_New(library, &stroker);
+    FT_Vector exported_points[256] = {0};
+    unsigned char exported_tags[256] = {0};
+    unsigned short exported_contours[64] = {0};
+    FT_Outline exported = {0, 0, exported_points, exported_tags, exported_contours, 0};
+    if (!status && stroker) {
+        FT_Stroker_Set(stroker, radius, line_cap, line_join, miter_limit);
+        status = FT_Stroker_BeginSubPath(stroker, &path[0], 0);
+        for (int i = 1; !status && i < point_count; i++) {
+            status = FT_Stroker_LineTo(stroker, &path[i]);
+        }
+        if (!status) status = FT_Stroker_EndSubPath(stroker);
+        FT_UInt points = 0;
+        FT_UInt contours = 0;
+        if (!status) status = FT_Stroker_GetCounts(stroker, &points, &contours);
+        if (!status) FT_Stroker_Export(stroker, &exported);
+    }
+    if (stroker) FT_Stroker_Done(stroker);
+    if (library) FT_Done_FreeType(library);
+
+    printf("{");
+    print_status(FT_Err_Ok);
+    printf(",\"output\":{\"outline\":");
+    print_stroker_outline_value(&exported);
+    printf(",\"join_shape\":\"bevel\"}}\n");
+    return 0;
+}
+
 static void print_stroker_parse_degenerate_row(const char* label,
                                                FT_Error parse_status,
                                                FT_Error counts_status,
@@ -27604,6 +27678,9 @@ static int dispatch(int argc, char** argv) {
     }
     if (argc == 3 && streq(argv[1], "--stroker-miter-join-geometry")) {
         return emit_stroker_miter_join_geometry(argc, argv);
+    }
+    if (argc == 7 && streq(argv[1], "--stroker-bevel-join-geometry")) {
+        return emit_stroker_bevel_join_geometry(argc, argv);
     }
     if (argc == 2 && streq(argv[1], "--stroker-miter-join-alias")) {
         return emit_stroker_miter_join_alias(argc, argv);

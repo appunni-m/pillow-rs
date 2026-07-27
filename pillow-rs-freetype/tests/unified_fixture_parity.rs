@@ -25653,6 +25653,10 @@ fn is_stroker_miter_join_geometry_case(case: &InputCase) -> bool {
     )
 }
 
+fn is_stroker_bevel_join_geometry_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_STROKER_LINEJOIN_BEVEL.bevel_join_geometry"
+}
+
 fn is_stroker_miter_join_alias_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_STROKER_LINEJOIN_MITER.alias_matches_variable_join_geometry"
 }
@@ -25677,6 +25681,27 @@ fn stroker_miter_join_action(case: &InputCase) -> Result<&'static str, String> {
         }
         _ => Err(format!("{} is not a miter join route", case.case_id)),
     }
+}
+
+fn stroker_join_geometry_path(params: &Value) -> Result<Vec<FT_Vector>, String> {
+    array_param(params, "path")?
+        .iter()
+        .map(|value| {
+            let vector = vector_value_from_value(value)?;
+            Ok(FT_Vector {
+                x: vector.x,
+                y: vector.y,
+            })
+        })
+        .collect()
+}
+
+fn stroker_join_geometry_path_arg(params: &Value) -> Result<String, String> {
+    Ok(stroker_join_geometry_path(params)?
+        .iter()
+        .map(|point| format!("{},{}", point.x, point.y))
+        .collect::<Vec<_>>()
+        .join(";"))
 }
 
 fn is_stroker_parse_degenerate_case(case: &InputCase) -> bool {
@@ -28383,6 +28408,170 @@ fn wasm_stroker_miter_join_geometry(case: &InputCase) -> Result<RunOutput, Strin
         rust_stroker_miter_join_geometry(case)
     } else {
         Err("unsupported miter join geometry route".to_string())
+    }
+}
+
+fn stroker_bevel_join_output(outline: Value) -> RunOutput {
+    ok(json!({
+        "outline": outline,
+        "join_shape": "bevel"
+    }))
+}
+
+fn rust_stroker_bevel_join_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_bevel_join_geometry_case(case) {
+        return Err(format!("{} is not a bevel join route", case.case_id));
+    }
+    let params = &case.inputs.params;
+    let path = stroker_join_geometry_path(params)?;
+    if path.len() < 2 {
+        return Err(format!(
+            "{} path must contain at least 2 points",
+            case.case_id
+        ));
+    }
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_join = i64_param(params, "line_join")?;
+    let miter_limit = i64_param(params, "miter_limit")?;
+    let library = FT_Init_FreeType();
+    let mut stroker = ptr::null_mut();
+    let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        return Ok(error(new_error));
+    }
+    FT_Stroker_Set(
+        stroker,
+        radius,
+        line_cap as FT_Int,
+        line_join as FT_Int,
+        miter_limit,
+    );
+    let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&path[0]), 0);
+    let mut status = begin_error;
+    if status == FT_Err_Ok {
+        for point in &path[1..] {
+            status = FT_Stroker_LineTo(stroker, Some(point));
+            if status != FT_Err_Ok {
+                break;
+            }
+        }
+    }
+    let end_error = if status == FT_Err_Ok {
+        FT_Stroker_EndSubPath(stroker)
+    } else {
+        status
+    };
+    let mut points = 0;
+    let mut contours = 0;
+    let counts_status = if end_error == FT_Err_Ok {
+        FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+    } else {
+        end_error
+    };
+    let mut exported = FT_OutlineSnapshot::default();
+    if counts_status == FT_Err_Ok {
+        FT_Stroker_Export(stroker, Some(&mut exported));
+    }
+    FT_Stroker_Done(stroker);
+    Ok(stroker_bevel_join_output(outline_snapshot_json(&exported)))
+}
+
+fn c_stroker_bevel_join_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_bevel_join_geometry_case(case) {
+        return Err(format!("{} is not a bevel join route", case.case_id));
+    }
+    let params = &case.inputs.params;
+    let path = stroker_join_geometry_path(params)?;
+    if path.len() < 2 {
+        return Err(format!(
+            "{} path must contain at least 2 points",
+            case.case_id
+        ));
+    }
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_join = i64_param(params, "line_join")?;
+    let miter_limit = i64_param(params, "miter_limit")?;
+    let mut library = ptr::null_mut();
+    let init_error = c_abi::FT_Init_FreeType(&mut library);
+    if init_error != FT_Err_Ok {
+        return Ok(error(init_error));
+    }
+    let mut stroker = ptr::null_mut();
+    let new_error = c_abi::FT_Stroker_New(library, &mut stroker);
+    if new_error != FT_Err_Ok || stroker.is_null() {
+        if !library.is_null() {
+            c_done_library(library);
+        }
+        return Ok(error(new_error));
+    }
+    c_abi::FT_Stroker_Set(
+        stroker,
+        radius,
+        line_cap as FT_Int,
+        line_join as FT_Int,
+        miter_limit,
+    );
+    let c_path: Vec<c_abi::FT_Vector> = path
+        .iter()
+        .map(|point| c_abi::FT_Vector {
+            x: point.x,
+            y: point.y,
+        })
+        .collect();
+    let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &c_path[0], 0);
+    let mut status = begin_error;
+    if status == FT_Err_Ok {
+        for point in &c_path[1..] {
+            status = c_abi::FT_Stroker_LineTo(stroker, point);
+            if status != FT_Err_Ok {
+                break;
+            }
+        }
+    }
+    let end_error = if status == FT_Err_Ok {
+        c_abi::FT_Stroker_EndSubPath(stroker)
+    } else {
+        status
+    };
+    let mut point_count = 0;
+    let mut contour_count = 0;
+    let counts_status = if end_error == FT_Err_Ok {
+        c_abi::FT_Stroker_GetCounts(stroker, &mut point_count, &mut contour_count)
+    } else {
+        end_error
+    };
+    let mut exported_points = vec![c_abi::FT_Vector::default(); point_count as usize];
+    let mut exported_tags = vec![0u8; point_count as usize];
+    let mut exported_contours = vec![0u16; contour_count as usize];
+    let mut exported = c_empty_outline(
+        &mut exported_points,
+        &mut exported_tags,
+        &mut exported_contours,
+    );
+    if counts_status == FT_Err_Ok {
+        c_abi::FT_Stroker_Export(stroker, &mut exported);
+    }
+    let outline = c_outline_arrays_json(
+        &exported,
+        &exported_points,
+        &exported_tags,
+        &exported_contours,
+    );
+    c_abi::FT_Stroker_Done(stroker);
+    c_done_library(library);
+    Ok(stroker_bevel_join_output(outline))
+}
+
+fn wasm_stroker_bevel_join_geometry(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_bevel_join_geometry_case(case) {
+        return Err(format!("{} is not a bevel join route", case.case_id));
+    }
+    if wasm_abi::abi_support_stroker_bevel_join_geometry() {
+        rust_stroker_bevel_join_geometry(case)
+    } else {
+        Err("unsupported bevel join geometry route".to_string())
     }
 }
 
@@ -33099,6 +33288,17 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
             "--stroker-miter-join-geometry".to_string(),
             stroker_miter_join_action(case)?.to_string(),
         ]),
+        "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
+            let params = &case.inputs.params;
+            Ok(vec![
+                "--stroker-bevel-join-geometry".to_string(),
+                i64_param(params, "radius")?.to_string(),
+                i64_param(params, "line_cap")?.to_string(),
+                i64_param(params, "line_join")?.to_string(),
+                i64_param(params, "miter_limit")?.to_string(),
+                stroker_join_geometry_path_arg(params)?,
+            ])
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             Ok(vec!["--stroker-miter-join-alias".to_string()])
         }
@@ -34742,6 +34942,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.join_geometry" if is_stroker_miter_join_geometry_case(case) => {
             rust_stroker_miter_join_geometry(case)
         }
+        "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
+            rust_stroker_bevel_join_geometry(case)
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             rust_stroker_miter_join_alias(case)
         }
@@ -35961,6 +36164,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.join_geometry" if is_stroker_miter_join_geometry_case(case) => {
             c_stroker_miter_join_geometry(case)
         }
+        "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
+            c_stroker_bevel_join_geometry(case)
+        }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             c_stroker_miter_join_alias(case)
         }
@@ -37074,6 +37280,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.join_geometry" if is_stroker_miter_join_geometry_case(case) => {
             wasm_stroker_miter_join_geometry(case)
+        }
+        "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
+            wasm_stroker_bevel_join_geometry(case)
         }
         "ftstroke.join_geometry_alias" if is_stroker_miter_join_alias_case(case) => {
             wasm_stroker_miter_join_alias(case)
