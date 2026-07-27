@@ -28,16 +28,16 @@ public `PIL.ImageFont` behavior.
 ## Current measured checkpoint: 2026-07-27
 
 - Command: `font-tests-coverage-with-freetype`
-- Run: `ad6fa1d9-fe03-47ff-86f1-22fdf6499770`
-- Snapshot: `2273e018-4ff1-493a-96cd-9927148b3b26`
-- Commit: `42b4bb1290237381f92fa2d371769448408b1708`
+- Run: `150b677f-c229-4846-8c18-4705aa8d4bcd`
+- Snapshot: `2a895073-ef7f-474a-ae79-f4fdc34c81b4`
+- Commit: `665da57df87b79b316ea86cee8ccfb59c6a39392`
 - Result: passed, ingested
 - `pillow-rs/src/font/default_aileron.rs`: regions `24/24` (`100.00%`)
 - `pillow-rs/src/font/mod.rs`: regions `487/487` (`100.00%`)
 - `pillow-rs/src/font/pilfont.rs`: regions `1014/1094` (`92.69%`), with
   complete branch coverage and one reported doc-comment line gap in the current
   LLVM source map.
-- `pillow-rs/src/font/imagingft.rs`: regions `2590/2687` (`96.39%`).
+- `pillow-rs/src/font/imagingft.rs`: regions `2591/2687` (`96.43%`).
 
 The remaining region gap is not manifest drift: the active manifest/test
 contract already targets `PIL.ImageFont` and verifies the public operation and

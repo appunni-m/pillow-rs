@@ -306,18 +306,18 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 Managed command: `font-tests-coverage-with-freetype`
 
-- Run: `ad6fa1d9-fe03-47ff-86f1-22fdf6499770`
-- Snapshot: `2273e018-4ff1-493a-96cd-9927148b3b26`
+- Run: `150b677f-c229-4846-8c18-4705aa8d4bcd`
+- Snapshot: `2a895073-ef7f-474a-ae79-f4fdc34c81b4`
 - Status: passed
 - Coverage artifact: ingested
-- Commit measured: `42b4bb1290237381f92fa2d371769448408b1708`
+- Commit measured: `665da57df87b79b316ea86cee8ccfb59c6a39392`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/default_aileron.rs` | `17/17` (`100.00%`) | n/a | `3/3` (`100.00%`) | `24/24` (`100.00%`) |
-| `pillow-rs/src/font/imagingft.rs` | `1618/1643` (`98.48%`) | `268/278` (`96.40%`) | `159/171` (`92.98%`) | `2590/2687` (`96.39%`) |
+| `pillow-rs/src/font/imagingft.rs` | `1618/1643` (`98.48%`) | `268/278` (`96.40%`) | `159/171` (`92.98%`) | `2591/2687` (`96.43%`) |
 | `pillow-rs/src/font/mod.rs` | `374/374` (`100.00%`) | n/a | `78/78` (`100.00%`) | `487/487` (`100.00%`) |
 | `pillow-rs/src/font/pilfont.rs` | `715/737` (`97.01%`) | `142/142` (`100.00%`) | `58/78` (`74.36%`) | `1014/1094` (`92.69%`) |
 
@@ -350,6 +350,12 @@ Current full-module scope note:
 
 Latest Font wrapper movement:
 
+- Added input-only `font.getmask2.hinter_code_overflow_stroked` and
+  `font.getmask2.hinter_nested_defs_stroked` rows. Expected errors are
+  generated at runtime by the live Pillow oracle. These rows exercise the
+  public stroked `FreeTypeFont.getmask2` error path where glyph loading fails
+  before the lower stroker runs, moving `imagingft.rs` region coverage from
+  `2590/2687` to `2591/2687`.
 - Added input-only `font.getlength.hinter_code_overflow` and
   `font.getlength.hinter_nested_defs` rows. Expected errors are generated at
   runtime by the live Pillow oracle. This independently exercises the public
