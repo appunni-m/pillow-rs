@@ -247,10 +247,32 @@ def variation_axes_value(font: Any) -> dict[str, Any]:
     }
 
 
+def native_variation_axes_value(font: Any) -> dict[str, Any]:
+    return {
+        "type": "variation_axes",
+        "value": [
+            {
+                "minimum": axis["minimum"],
+                "default": axis["default"],
+                "maximum": axis["maximum"],
+                "name_hex": axis["name"].hex(),
+            }
+            for axis in font.font.getvaraxes()
+        ],
+    }
+
+
 def variation_names_value(font: Any) -> dict[str, Any]:
     return {
         "type": "variation_names",
         "value": [bytes_hex(name) for name in font.get_variation_names()],
+    }
+
+
+def native_variation_names_value(font: Any) -> dict[str, Any]:
+    return {
+        "type": "variation_names",
+        "value": [name.hex() for name in font.font.getvarnames()],
     }
 
 
@@ -367,6 +389,24 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
             "type": "native_size",
             "size": list(size),
             "offset": list(offset),
+        }
+    if operation == "native_getvaraxes":
+        return native_variation_axes_value(font)
+    if operation == "native_getvarnames":
+        return native_variation_names_value(font)
+    if operation == "native_setvarname":
+        font.font.setvarname(params["instance_index"])
+        return {
+            "type": "font_after_variation",
+            "name": list(font.getname()),
+            "length": font.getlength(text),
+        }
+    if operation == "native_setvaraxes":
+        font.font.setvaraxes(params["axes"])
+        return {
+            "type": "font_after_variation",
+            "name": list(font.getname()),
+            "length": font.getlength(text),
         }
     if operation == "getlength":
         return {"type": "length", "value": font.getlength(text, **text_kwargs(params))}

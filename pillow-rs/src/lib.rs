@@ -364,6 +364,31 @@ pub fn imagefont_set_variation_by_axes(
     font.set_variation_by_axes(axes)
 }
 
+/// Return Pillow native `_imagingft.Font.getvaraxes()` records.
+pub fn imagefont_native_getvaraxes(
+    font: &FreeTypeFont,
+) -> Result<Vec<ImageFontVariationAxis>, PilError> {
+    font.native_getvaraxes()
+}
+
+/// Return Pillow native `_imagingft.Font.getvarnames()` records.
+pub fn imagefont_native_getvarnames(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    font.native_getvarnames()
+}
+
+/// Set Pillow native `_imagingft.Font` named instance index.
+pub fn imagefont_native_setvarname(
+    font: &mut FreeTypeFont,
+    instance_index: i64,
+) -> Result<(), PilError> {
+    font.native_setvarname(instance_index)
+}
+
+/// Set Pillow native `_imagingft.Font` variation coordinates.
+pub fn imagefont_native_setvaraxes(font: &mut FreeTypeFont, axes: &[f32]) -> Result<(), PilError> {
+    font.native_setvaraxes(axes)
+}
+
 /// Return Pillow's public text bounding box.
 pub fn imagefont_getbbox(
     font: &FreeTypeFont,
