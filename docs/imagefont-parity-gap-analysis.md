@@ -115,15 +115,16 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `90189cdeded9de405562a3830c8219079174b71b` and ingested
-  snapshot `e9c5aa78-094d-4f88-bb04-a6212f1325f0` from run
-  `f30aa9c3-0419-4e43-a8e6-6aa1dbdc3ac8`. Direct `imagingft.rs` coverage
-  is `1687/1709` lines, `249/254` branches, `163/174` functions, and
-  `2633/2719` regions. The seven remaining direct marker lines are `91`,
-  `253`, `271`, `796`, `826`, `829`, and `928`; `91`, `796`, `826`, `829`,
-  and `928` are partial-branch/source-map markers, while `253` and `271` are
-  static FreeType error-table tuple-start mappings. No current gap identifies
-  an adapter-owned Pillow `_imagingft.c` behavior miss.
+  passed at commit `fe2f7ddb0522e4119dcf816d24add6b66d442d4a` and ingested
+  snapshot `4023d03c-5c27-45ff-b96c-51c11d1deda5` from run
+  `653faebd-346f-4e4e-8aa3-924db6317cda`. Direct `imagingft.rs` coverage
+  is `1739/1760` lines, `252/258` branches, `174/185` functions, and
+  `2718/2806` regions. The remaining direct marker lines are `91`, `253`,
+  `271`, `585`, `587`, `796`, `826`, `829`, `831`, `928`, and `929`;
+  `253` and `271` are static FreeType error-table tuple-start mappings. The
+  other markers are source-map, defensive fallback, or partial-branch markers
+  with adjacent behavior lines already hit. No current gap identifies an
+  adapter-owned Pillow `_imagingft.c` behavior miss.
 - Historical lower-stroker guard checks kept the maintained DejaVuSans glyph-36
   `FT_Glyph_Stroke.outline_glyph_stroked_success` path ahead of the newer
   general closed round-path stroker. The general path can now return a stroked
@@ -494,9 +495,9 @@ from Coverage MCP run `35b97347-c509-4e62-b260-4ce480a07c06`
 at runtime commit `49d45d736be70ac55b246def7eded5040b2209a5`.
 
 Current-head Font-with-FreeType snapshot:
-`e9c5aa78-094d-4f88-bb04-a6212f1325f0` from Coverage MCP run
-`f30aa9c3-0419-4e43-a8e6-6aa1dbdc3ac8` at runtime commit
-`90189cdeded9de405562a3830c8219079174b71b`.
+`4023d03c-5c27-45ff-b96c-51c11d1deda5` from Coverage MCP run
+`653faebd-346f-4e4e-8aa3-924db6317cda` at runtime commit
+`fe2f7ddb0522e4119dcf816d24add6b66d442d4a`.
 
 Current coverage target: drive `pillow-rs/src/font/imagingft.rs` to 100%
 region coverage with live Pillow 12.2.0 oracle rows. `pillow-rs-freetype`
@@ -510,14 +511,14 @@ refactor.
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 366/366 100.00% | n/a | 77/77 100.00% | 476/476 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | source-line gap is rustdoc line 140 on `from_pilfont_data`; branch coverage is 100%. No current source-line gap identifies a missing bitmap `ImageFont.ImageFont` behavior. Add bitmap rows only when they exercise a distinct public Pillow behavior, not to chase LLVM function/region artifacts. |
-| `pillow-rs/src/font/imagingft.rs` | 1687/1709 98.71% | 249/254 98.03% | 163/174 93.68% | 2633/2719 96.84% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
+| `pillow-rs/src/font/imagingft.rs` | 1739/1760 98.81% | 252/258 97.67% | 174/185 94.05% | 2718/2806 96.86% | current Font-with-FreeType suite; remaining markers are static FreeType error-table entries, defensive fallback, or LLVM source-map/partial-branch artifacts, not known public ImageFont mismatches |
 
 Overall snapshot totals for this suite:
 
-- Lines: 17954/53005, 33.87%
-- Branches: 3039/11188, 27.16%
-- Functions: 1369/3700, 37.00%
-- Regions: 25656/81624, 31.43%
+- Lines: 18039/53084, 33.98%
+- Branches: 3044/11192, 27.20%
+- Functions: 1388/3719, 37.32%
+- Regions: 25782/81746, 31.54%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -538,13 +539,13 @@ For the current broader Font-with-FreeType suite, the remaining seven reported
 
 | Rust line | Coverage reason | Current classification | Action |
 |---:|---|---|---|
-| `91` | partial branch on `Ok(FreeTypeFont { engine })` | Constructor success is heavily hit; marker is return/source-map instrumentation after `FT_Request_Size`/face setup. A live Pillow 12.2.0 constructor sweep records the real distinction that tiny TrueType sizes (`0.0001` through `0.1`) fail with `OSError("invalid ppem value")`, while the CFF fixture accepts the same tiny sizes and returns a normal public bbox. Active row `font.getbbox.pure_cff_tiny_size_success` covers that success path without stored expected output. Current snapshot `e9c5aa78-094d-4f88-bb04-a6212f1325f0` reports line `91` hit `11132` times with `1/2` branches covered. | Add only a real font/size row if Pillow reaches another distinct constructor branch. |
+| `91` | partial branch on `Ok(FreeTypeFont { engine })` | Constructor success is heavily hit; marker is return/source-map instrumentation after `FT_Request_Size`/face setup. A live Pillow 12.2.0 constructor sweep records the real distinction that tiny TrueType sizes (`0.0001` through `0.1`) fail with `OSError("invalid ppem value")`, while the CFF fixture accepts the same tiny sizes and returns a normal public bbox. Active row `font.getbbox.pure_cff_tiny_size_success` covers that success path without stored expected output. Current snapshot `4023d03c-5c27-45ff-b96c-51c11d1deda5` still reports this as a one-branch source-map marker. | Add only a real font/size row if Pillow reaches another distinct constructor branch. |
 | `253` | uncovered static tuple-start line | `FT_Err_Execution_Too_Long` table entry. Current Pillow 12.2.0 probes with the maintained `hinter-execution-too-long-loop.ttf` asset at public size `7` return normal `getlength`/`getbbox`/`getmask`/`getmask2` results, so the active Font row is a success-path parity row, not an execution-too-long error row. A broader 59-fixture Pillow sweep across `post`, `execution`, `loop`, `hinter`, `fpgm`, `prep`, `idef`, `instr`, and related lower assets tried constructor, `getlength`, `getbbox`, `getmask`, `getmask2`, and `getname` at sizes `0.0001`, `0.001`, `0.01`, `0.1`, `1`, `2`, `7`, `12`, `20`, and `64`; the observed public errors were only `code overflow`, `too many instruction definitions`, `nested DEFS`, `invalid ppem value`, and `unknown file format`. | Do not add rows for this table entry unless a pinned FreeType/Pillow public route emits the exact error. |
 | `271` | uncovered static tuple-start line | `FT_Err_Post_Table_Missing` table entry. Lower FreeType oracle rows prove absent optional `post` table is surfaced by public glyph-name APIs as `FT_Err_Invalid_Argument`, not `FT_Err_Post_Table_Missing`; no current Pillow `ImageFont` path is known to emit this code. Direct Pillow 12.2.0 probes with `post-missing.ttf`, `no-post-names.ttf`, `post-format-unsupported.ttf`, and `invalid-post-format.ttf` all load and return normal public `getname`/`getbbox`/`getlength`/`getmask` results. The same 59-fixture sweep above did not produce `OSError("PostScript (post) table missing")` through any tested public ImageFont route. | Do not add ImageFont rows for absent `post` tables. Revisit only if a pinned FreeType/Pillow public route emits this exact code. |
-| `796` | partial branch on the `pack_rgba` test helper argument/source span | `pack_rgba` is hit by `render_text_binary` rows. Current snapshot `e9c5aa78-094d-4f88-bb04-a6212f1325f0` shows line `799` has `4/4` branches covered, including the active `font.render_text_binary.space_zero_height` row where Pillow returns mask size `(6, 0)`. The remaining line `796` marker is therefore not a missing zero-width/zero-height behavior. | No duplicate binary-render rows. Revisit only if a new public Pillow case returns a distinct mask shape or payload. |
-| `826` | partial branch on the `TGT_NORM` load-flag constant source span | Both normal and mono target load flags are active. Current snapshot reports line `826` hit `7` times with one LLVM branch marker uncovered on the constant span, while the text load-flag branch itself is already covered through `"1"` and default modes. | No duplicate mode rows. Revisit only if source-context evidence maps the missed branch to a real public load-flag behavior. |
-| `829` | partial branch on the `gid` helper function-boundary/source span | `gid` is hit `58164222` times in current coverage. The active corpus includes normal glyphs, missing glyph transitions, and kerning/no-kerning rows. The marker is function-boundary/source-map accounting rather than evidence that character-to-glyph lookup is untested. | No duplicate text rows unless they expose a distinct public glyph mapping behavior. |
-| `928` | partial branch on the `pen_before` source span inside `glyph_run` | Current snapshot reports line `928` hit `1000687` times with one partial marker. The surrounding `FT_Load_Glyph` and advance-validation paths include both success and error outcomes through live-oracle rows; this marker is not currently tied to a missing public bbox/mask error branch. | No duplicate bbox error rows; both success and error outcomes are already represented. |
+| `585`, `587` | partial/uncovered markers on native `setvarname` style-name fallback | Active native rows cover index `0`, valid named instances, negative invalid index, and positive out-of-range index. Pillow returns `OSError("invalid argument")` for index `13`, so Rust returns before the defensive `names.get(...)=None` fallback. A successful FreeType status with an absent matching fvar name record is not currently known through Pillow. | Add only if a real variable font makes Pillow accept an instance index while no matching name record exists. |
+| `796` | partial branch on the `pack_rgba` test helper argument/source span | `pack_rgba` is hit by `render_text_binary` rows. Snapshot `4023d03c-5c27-45ff-b96c-51c11d1deda5` still shows the real zero-dimension branch covered, including active `font.render_text_binary.space_zero_height` where Pillow returns mask size `(6, 0)`. The remaining line `796` marker is not a missing zero-width/zero-height behavior. | No duplicate binary-render rows. Revisit only if a new public Pillow case returns a distinct mask shape or payload. |
+| `826`, `829`, `831` | partial/uncovered markers inside vertical anchor dispatch | Active rows cover valid vertical anchors and invalid vertical anchor `font.getbbox.bad_vertical_anchor_error` (`anchor="lx"`). Snapshot line data shows the error body lines immediately after `831` are hit, so line `831` itself is source-map accounting on the match arm. | No duplicate anchor rows. Revisit only if a new Pillow anchor string reaches a distinct message or offset behavior. |
+| `928`, `929` | partial/uncovered markers inside `validate_advance_26_6` | Active rows cover success and invalid-advance error behavior. Snapshot line data shows the conditional and error side are hit; the `Ok(())` line marker remains uncovered due return/source mapping while the following function exit is heavily hit. | No duplicate advance rows unless a new font exposes a distinct Pillow advance-validation error. |
 Exploratory-to-active note: earlier Coverage MCP run
 `46f8b0bb-b94a-4eaa-8d8d-70b527901b7c` showed DejaVuSans `"À"` negative-top
 bbox/mask and an `A\uFFFFV` missing-glyph kerning guard pass live Pillow oracle
