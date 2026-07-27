@@ -633,7 +633,7 @@ Current request classification for `imagingft.rs` region coverage:
   Re-inspection against FreeType 2.14.3 `ftstroke.c` confirms the only real
   behavior blocker is lower `FT_Stroker_EndSubPath`/border export for closed
   round/conic paths; the Rust lower layer intentionally guards that path with
-  `closed_round_path_unverified`/`conic_path_unverified`. This is a valid
+  `closed_round_path_unverified`/`curve_path_unverified`. This is a valid
   implementation gap if it is fixed by porting the exact lower stroker
   geometry/export behavior, but it is not a reason to chase 100%
   `pillow-rs-freetype` coverage or to move stroke math into `imagingft.rs`.
@@ -660,7 +660,7 @@ Current request classification for `imagingft.rs` region coverage:
   (`3584`, `3587`, and `3588` each hit 11 times in the Font-with-FreeType
   suite), but this lower progress cannot move `imagingft.rs` until the
   mono-target stroked bitmap row is promotable without bypassing the
-  `closed_round_path_unverified`/`conic_path_unverified` guard.
+  `closed_round_path_unverified`/`curve_path_unverified` guard.
 - Lower stroker progress after `acc8040f1`: `FT_Stroker_BeginSubPath` now
   mirrors FreeType 2.14.3 `src/base/ftstroke.c:1765-1795` by resetting
   `angle_in` to zero at every new subpath. Rust previously preserved the prior
@@ -711,3 +711,18 @@ Current request classification for `imagingft.rs` region coverage:
   contour `1`, native C reaches `35/2` and `37/2`, while Rust reaches `24/2`
   and `34/2`. This narrows the first source-level target to the contour-0
   outside-corner / `ft_stroker_arcto` / conic subdivision path.
+- Lower stroker progress after `f6d0fd6c8`: `FT_Stroker_CubicTo` now has the
+  FreeType 2.14.3 no-wide-stroke cubic stack route in
+  `pillow-rs-freetype/src/ffi/handles.rs`. The Rust path mirrors
+  `src/base/ftstroke.c:156-292` for cubic splitting, angle mean, and small-arc
+  classification, and `src/base/ftstroke.c:1579-1757` for sub-arc dispatch,
+  round-corner insertion, and border cubic emission. The broad glyph export
+  guard was renamed from `conic_path_unverified` to `curve_path_unverified`
+  because both generic conic and cubic routes still need broader outline-export
+  proof before replacing the maintained glyph-level fallbacks. Maintained
+  verification passes:
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker_CubicTo`,
+  `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Stroker`, and
+  `make -C pillow-rs-freetype test-case CASE=ftglyph.FT_Glyph_To_Bitmap`.
+  The mono-target stroked bitmap row remains pending; this cubic port is real
+  lower FreeType alignment, not complete ImageFont stroke parity.
