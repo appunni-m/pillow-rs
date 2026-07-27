@@ -455,6 +455,7 @@ def public_operations(ImageFont: Any) -> list[str]:
 
 
 def public_surface(ImageFont: Any) -> dict[str, Any]:
+    module_public_names = sorted(name for name in dir(ImageFont) if not name.startswith("_"))
     module_functions = {
         name: str(inspect.signature(getattr(ImageFont, name)))
         for name in [
@@ -474,6 +475,7 @@ def public_surface(ImageFont: Any) -> dict[str, Any]:
             if not name.startswith("_") and callable(value)
         }
     return {
+        "module_public_names": module_public_names,
         "module_functions": module_functions,
         "classes": classes,
         "layout": list(ImageFont.Layout.__members__.keys()),

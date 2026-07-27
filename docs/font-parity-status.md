@@ -28,6 +28,12 @@ because Pillow exposes it through `PIL.ImageFont`.
   drifts away from `expected_path: PIL.ImageFont`, `rust_runtime:
   pillow_rs::ImageFont`, or the rule that `_imagingft` is only an
   implementation assertion for FreeTypeFont-backed rows.
+- The public-surface verifier also reads every live non-underscore
+  `PIL.ImageFont` module name. Behavioral classes/functions/enums must be
+  explicitly classified, and public imports/constants/types such as
+  `MAX_STRING_LENGTH`, `Axis`, and `DeferredError` must stay explicitly marked
+  as non-endpoint names. This prevents silently ignoring new public module
+  names when checking manifest completeness.
 
 ## PIL.ImageFont public surface comparison
 

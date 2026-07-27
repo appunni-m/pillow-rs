@@ -104,6 +104,43 @@ const EXPECTED_ORACLE_SCOPE: [(&str, &str); 5] = [
 
 const EXPECTED_IMAGEFONT_LAYOUT_MEMBERS: [&str; 2] = ["BASIC", "RAQM"];
 
+const EXPECTED_IMAGEFONT_BEHAVIORAL_PUBLIC_NAMES: [&str; 9] = [
+    "FreeTypeFont",
+    "ImageFont",
+    "Layout",
+    "TransposedFont",
+    "load",
+    "load_default",
+    "load_default_imagefont",
+    "load_path",
+    "truetype",
+];
+
+const EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES: [&str; 22] = [
+    "Any",
+    "Axis",
+    "BinaryIO",
+    "BytesIO",
+    "DeferredError",
+    "IO",
+    "Image",
+    "IntEnum",
+    "MAX_STRING_LENGTH",
+    "ModuleType",
+    "StrOrBytesPath",
+    "TYPE_CHECKING",
+    "TypedDict",
+    "annotations",
+    "base64",
+    "cast",
+    "core",
+    "features",
+    "is_path",
+    "os",
+    "sys",
+    "warnings",
+];
+
 const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
 
 const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
@@ -193,13 +230,21 @@ const REQUIRED_PUBLIC_PARAMETER_VALUES: &[(&str, &str, &str)] = &[
     ("getmask2", "anchor", DEFAULT_PARAMETER_VALUE),
     ("getmask2", "anchor", "mm"),
     ("getmask2", "args", DEFAULT_PARAMETER_VALUE),
-    ("getmask2", "args", "[\"L\",null,null,null,0,null,123,null,\"ignored\"]"),
+    (
+        "getmask2",
+        "args",
+        "[\"L\",null,null,null,0,null,123,null,\"ignored\"]",
+    ),
     ("getmask2", "direction", "rtl"),
     ("getmask2", "features", "[]"),
     ("getmask2", "ink", DEFAULT_PARAMETER_VALUE),
     ("getmask2", "ink", "[1,2,3]"),
     ("getmask2", "kwargs", DEFAULT_PARAMETER_VALUE),
-    ("getmask2", "kwargs", "{\"stroke_filled\":true,\"unknown\":1}"),
+    (
+        "getmask2",
+        "kwargs",
+        "{\"stroke_filled\":true,\"unknown\":1}",
+    ),
     ("getmask2", "language", "en"),
     ("getmask2", "mode", DEFAULT_PARAMETER_VALUE),
     ("getmask2", "mode", "1"),
@@ -1136,6 +1181,64 @@ fn pillow_imagefont_layout_members() -> BTreeSet<String> {
         .collect()
 }
 
+fn pillow_imagefont_public_names() -> BTreeSet<String> {
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
+    let oracle = oracle_python();
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .canonicalize()
+        .expect("repo root for font tests must be discoverable");
+    let venv_root = repo_root.join(".oracle-venv");
+    let mut command = Command::new(oracle.as_os_str());
+    command
+        .arg(script)
+        .arg("--public-surface")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env_clear()
+        .env("VIRTUAL_ENV", venv_root)
+        .env("PYTHONNOUSERSITE", "1")
+        .env(
+            "PYTHONPATH",
+            env::join_paths(oracle_site_packages()).expect("valid PYTHONPATH join"),
+        );
+    let output = command
+        .output()
+        .expect("the pinned Pillow font oracle public-surface query must finish");
+    assert!(
+        output.status.success(),
+        "Pillow font oracle public-surface query failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let surface = serde_json::from_slice::<Value>(&output.stdout)
+        .expect("oracle public surface output must be JSON");
+    surface
+        .get("module_public_names")
+        .and_then(Value::as_array)
+        .expect("oracle public surface must include module_public_names")
+        .iter()
+        .map(|member| {
+            member
+                .as_str()
+                .expect("ImageFont public module name must be a string")
+                .to_owned()
+        })
+        .collect()
+}
+
+fn assert_pillow_imagefont_public_names_are_classified() {
+    let live_names = pillow_imagefont_public_names();
+    let classified = EXPECTED_IMAGEFONT_BEHAVIORAL_PUBLIC_NAMES
+        .into_iter()
+        .chain(EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES)
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        live_names, classified,
+        "every live PIL.ImageFont public module name must be explicitly classified as a behavioral endpoint/class/enum or a non-endpoint import/constant/type"
+    );
+}
+
 fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeSet<String>> {
     let mut observed = BTreeMap::new();
     for case in cases {
@@ -1673,6 +1776,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_manifest_operations_have_runner_arms(&manifest);
 
     let pillow_methods = pillow_imagefont_public_methods();
+    assert_pillow_imagefont_public_names_are_classified();
     assert_manifest_operations_match_live_pillow_plus_repo_helpers(&manifest, &pillow_methods);
     let pillow_layout_members = pillow_imagefont_layout_members();
     let expected_layout_members = EXPECTED_IMAGEFONT_LAYOUT_MEMBERS
