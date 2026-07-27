@@ -1433,13 +1433,7 @@ def ftstroke_set_rewind_pending_reason(row: ConcreteInput) -> str | None:
     """Case-specific FT_Stroker_Set/Rewind rows needing real routing."""
     if not row.operation.startswith("ftstroke."):
         return None
-    exact_cases = {
-        "ftstroke.FT_Stroker_Set.attributes_affect_geometry": (
-            "FT_Stroker_Set attribute parity needs a maintained route proving "
-            "radius, line cap, line join, and miter-limit fields change later "
-            "stroke geometry exactly like pinned C"
-        ),
-    }
+    exact_cases = {}
     return exact_cases.get(row.case_id)
 
 
@@ -1593,6 +1587,20 @@ def ftstroke_parse_line_conic_cubic_real_parity_reason(row: ConcreteInput) -> st
             "font-like outline rows validate parse status, operation order, "
             "counts, exported geometry, and cbox through pinned C oracle, Rust "
             "FFI, C ABI, and WASM ABI"
+        )
+    return None
+
+
+def ftstroke_set_attribute_geometry_real_parity_reason(row: ConcreteInput) -> str | None:
+    """Exact FT_Stroker_Set attribute matrix route verified against ftstroke.c."""
+    if (
+        row.operation == "ftstroke.set"
+        and row.case_id == "ftstroke.FT_Stroker_Set.attributes_affect_geometry"
+    ):
+        return (
+            "FT_Stroker_Set radius, line cap, line join, and miter-limit fields "
+            "validate through a bounded line/corner/conic/cubic matrix against "
+            "pinned C oracle, Rust FFI, C ABI, and WASM ABI"
         )
     return None
 
@@ -7786,6 +7794,9 @@ def route_category(row: ConcreteInput) -> tuple[str, str]:
     ftstroke_parse_line_conic_cubic_reason = ftstroke_parse_line_conic_cubic_real_parity_reason(row)
     if ftstroke_parse_line_conic_cubic_reason:
         return ("real-parity", ftstroke_parse_line_conic_cubic_reason)
+    ftstroke_set_attribute_geometry_reason = ftstroke_set_attribute_geometry_real_parity_reason(row)
+    if ftstroke_set_attribute_geometry_reason:
+        return ("real-parity", ftstroke_set_attribute_geometry_reason)
     ftstroke_parse_degenerate_reason = ftstroke_parse_degenerate_real_parity_reason(row)
     if ftstroke_parse_degenerate_reason:
         return ("real-parity", ftstroke_parse_degenerate_reason)
