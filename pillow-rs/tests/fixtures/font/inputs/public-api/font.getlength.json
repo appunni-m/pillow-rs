@@ -366,7 +366,7 @@
       }
     },
     {
-      "case_id": "font.getlength.hinter_execution_too_long",
+      "case_id": "font.getlength.hinter_execution_loop_success",
       "operation": "getlength",
       "inputs": {
         "assets": {
