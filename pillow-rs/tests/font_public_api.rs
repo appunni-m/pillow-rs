@@ -1861,6 +1861,33 @@ fn assert_libraqm_error_contract_is_hard_coded() {
         .join("..")
         .canonicalize()
         .expect("repo root for font tests must be discoverable");
+
+    let core_error =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/error.rs"))
+            .expect("core error source must be readable");
+    assert!(
+        !core_error.contains("UnsupportedLibraqm("),
+        "PilError::UnsupportedLibraqm must remain a unit variant; core must not attach ad-hoc libraqm text"
+    );
+    assert_eq!(
+        core_error.matches(NO_LIBRAQM_MESSAGE).count(),
+        1,
+        "the no-libraqm message must be hard-coded exactly once in core error.rs"
+    );
+
+    let imagingft =
+        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/font/imagingft.rs"))
+            .expect("imagingft source must be readable");
+    assert_eq!(
+        imagingft.matches("PilError::unsupported_libraqm()").count(),
+        1,
+        "imagingft must route libraqm-dependent options through the dedicated PilError::UnsupportedLibraqm constructor exactly once"
+    );
+    assert!(
+        !imagingft.contains("KeyError") && !imagingft.contains(NO_LIBRAQM_MESSAGE),
+        "imagingft must not encode Pillow-visible KeyError text directly; bindings own public exception category mapping"
+    );
+
     let py_binding = fs::read_to_string(repo_root.join("pillow-rs-py/src/lib.rs"))
         .expect("Python binding source must be readable");
     assert!(
