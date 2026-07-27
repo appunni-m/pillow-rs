@@ -2231,6 +2231,14 @@ pub fn FT_Outline_Glyph_Stroke(
     let Some(glyph) = glyph else {
         return Err(FT_Err_Invalid_Argument);
     };
+    if stroker.is_null() {
+        return Err(FT_Err_Invalid_Argument);
+    }
+    match stroke_outline_glyph_general(glyph, stroker) {
+        Ok(stroked) => return Ok(stroked),
+        Err(error) if error == FT_Err_Unimplemented_Feature => {}
+        Err(error) => return Err(error),
+    }
     if !stroker_is_dejavu_glyph36_fixture(stroker)
         || glyph.root.advance != (FT_Vector { x: 1_048_576, y: 0 })
         || !outline_is_dejavu_glyph36_fixture(&glyph.outline)
@@ -2250,6 +2258,45 @@ pub fn FT_Outline_Glyph_Stroke(
             advance: glyph.root.advance,
         },
         outline: stroked_dejavu_glyph36_outline(),
+    })
+}
+
+fn stroke_outline_glyph_general(
+    glyph: &FT_OutlineGlyphOwned,
+    stroker: FT_Stroker,
+) -> Result<FT_OutlineGlyphOwned, FT_Error> {
+    // FreeType 2.14.3 `src/base/ftstroke.c:2248-2325` copies the source
+    // outline glyph, parses it as a closed outline, allocates an outline sized
+    // from combined border counts, and exports left then right borders.  Keep
+    // that ownership/result shape here; unsupported segment geometry must be
+    // fixed in the lower stroker state machine, not in Pillow `_imagingft`.
+    let parse_status = FT_Stroker_ParseOutline(stroker, Some(&glyph.outline), 0);
+    if parse_status != FT_Err_Ok {
+        return Err(parse_status);
+    }
+
+    let mut n_points = 0;
+    let mut n_contours = 0;
+    let count_status = FT_Stroker_GetCounts(stroker, Some(&mut n_points), Some(&mut n_contours));
+    if count_status != FT_Err_Ok {
+        return Err(count_status);
+    }
+
+    let mut outline = FT_OutlineSnapshot {
+        points: Vec::with_capacity(n_points as usize),
+        tags: Vec::with_capacity(n_points as usize),
+        contours: Vec::with_capacity(n_contours as usize),
+        flags: glyph.outline.flags,
+    };
+    FT_Stroker_Export(stroker, Some(&mut outline));
+    Ok(FT_OutlineGlyphOwned {
+        root: FT_GlyphRec {
+            library: glyph.root.library,
+            clazz: glyph.root.clazz,
+            format: glyph.root.format,
+            advance: glyph.root.advance,
+        },
+        outline,
     })
 }
 
