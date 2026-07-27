@@ -189,9 +189,23 @@ def gray4_format1_tables() -> tuple[bytes, bytes]:
 
 def bgra_format1_tables() -> tuple[bytes, bytes]:
     # Bit depth 32 uses packed BGRA bytes and FreeType reports
-    # FT_PIXEL_MODE_BGRA with pitch width * 4.
-    image = bytes([1, 2, 1, 1, 3]) + bytes(
-        [0x10, 0x20, 0x30, 0xFF, 0x40, 0x50, 0x60, 0x80]
+    # FT_PIXEL_MODE_BGRA with pitch width * 4.  Include an alpha-zero pixel so
+    # Pillow ImageFont coverage exercises transparent color bitmap conversion.
+    image = bytes([1, 3, 1, 1, 4]) + bytes(
+        [
+            0x10,
+            0x20,
+            0x30,
+            0xFF,
+            0x40,
+            0x50,
+            0x60,
+            0x80,
+            0x00,
+            0x00,
+            0x00,
+            0x00,
+        ]
     )
     return packed_format1_tables(32, image)
 
