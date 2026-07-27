@@ -25723,6 +25723,17 @@ fn is_stroker_round_manual_path_case(case: &InputCase) -> bool {
     case.case_id == "ftstroke.FT_STROKER_LINEJOIN_ROUND.round_join_geometry"
 }
 
+fn is_stroker_line_join_matrix_case(case: &InputCase) -> bool {
+    case.case_id == "ftstroke.FT_Stroker_LineJoin.join_geometry_and_miter_limit"
+}
+
+fn i64_array_param(value: &Value, key: &str) -> Result<Vec<i64>, String> {
+    array_param(value, key)?
+        .iter()
+        .map(|item| i64_value(item, key))
+        .collect()
+}
+
 fn stroker_manual_path_asset(case: &InputCase) -> Result<Value, String> {
     let path = required_asset_pathname(case, "paths")?;
     let text = fs::read_to_string(&path).map_err(|err| format!("read {path}: {err}"))?;
@@ -28949,6 +28960,201 @@ fn wasm_stroker_bevel_join_geometry(case: &InputCase) -> Result<RunOutput, Strin
         rust_stroker_bevel_join_geometry(case)
     } else {
         Err("unsupported bevel join geometry route".to_string())
+    }
+}
+
+fn stroker_line_join_matrix_output(
+    outlines_by_join_and_limit: serde_json::Map<String, Value>,
+) -> RunOutput {
+    let variable = FT_STROKER_LINEJOIN_MITER_VARIABLE as FT_Int;
+    let alias = FT_STROKER_LINEJOIN_MITER as FT_Int;
+    let alias_geometry_equal = [65_536, 131_072].into_iter().all(|limit| {
+        outlines_by_join_and_limit.get(&format!("{alias}:{limit}"))
+            == outlines_by_join_and_limit.get(&format!("{variable}:{limit}"))
+    });
+    ok(json!({
+        "outlines_by_join_and_limit": outlines_by_join_and_limit,
+        "alias_geometry_equal": alias_geometry_equal
+    }))
+}
+
+fn rust_stroker_line_join_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_line_join_matrix_case(case) {
+        return Err(format!("{} is not a line-join matrix route", case.case_id));
+    }
+    let params = &case.inputs.params;
+    let path = stroker_join_geometry_path(params)?;
+    if path.len() < 2 {
+        return Err(format!(
+            "{} path must contain at least 2 points",
+            case.case_id
+        ));
+    }
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_joins = i64_array_param(params, "line_joins")?;
+    let miter_limits = i64_array_param(params, "miter_limits")?;
+    let mut outlines = serde_json::Map::new();
+    for line_join in line_joins {
+        for miter_limit in &miter_limits {
+            let library = FT_Init_FreeType();
+            let mut stroker = ptr::null_mut();
+            let new_error = FT_Stroker_New(Some(&library), Some(&mut stroker));
+            if new_error != FT_Err_Ok || stroker.is_null() {
+                outlines.insert(
+                    format!("{line_join}:{miter_limit}"),
+                    outline_snapshot_json(&FT_OutlineSnapshot::default()),
+                );
+                continue;
+            }
+            FT_Stroker_Set(
+                stroker,
+                radius,
+                line_cap as FT_Int,
+                line_join as FT_Int,
+                *miter_limit,
+            );
+            let begin_error = FT_Stroker_BeginSubPath(stroker, Some(&path[0]), 0);
+            let mut status = begin_error;
+            if status == FT_Err_Ok {
+                for point in &path[1..] {
+                    status = FT_Stroker_LineTo(stroker, Some(point));
+                    if status != FT_Err_Ok {
+                        break;
+                    }
+                }
+            }
+            let end_error = if status == FT_Err_Ok {
+                FT_Stroker_EndSubPath(stroker)
+            } else {
+                status
+            };
+            let mut points = 0;
+            let mut contours = 0;
+            let counts_status = if end_error == FT_Err_Ok {
+                FT_Stroker_GetCounts(stroker, Some(&mut points), Some(&mut contours))
+            } else {
+                end_error
+            };
+            let mut exported = FT_OutlineSnapshot::default();
+            if counts_status == FT_Err_Ok {
+                FT_Stroker_Export(stroker, Some(&mut exported));
+            }
+            FT_Stroker_Done(stroker);
+            outlines.insert(
+                format!("{line_join}:{miter_limit}"),
+                outline_snapshot_json(&exported),
+            );
+        }
+    }
+    Ok(stroker_line_join_matrix_output(outlines))
+}
+
+fn c_stroker_line_join_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_line_join_matrix_case(case) {
+        return Err(format!("{} is not a line-join matrix route", case.case_id));
+    }
+    let params = &case.inputs.params;
+    let path = stroker_join_geometry_path(params)?;
+    if path.len() < 2 {
+        return Err(format!(
+            "{} path must contain at least 2 points",
+            case.case_id
+        ));
+    }
+    let radius = i64_param(params, "radius")?;
+    let line_cap = i64_param(params, "line_cap")?;
+    let line_joins = i64_array_param(params, "line_joins")?;
+    let miter_limits = i64_array_param(params, "miter_limits")?;
+    let c_path: Vec<c_abi::FT_Vector> = path
+        .iter()
+        .map(|point| c_abi::FT_Vector {
+            x: point.x,
+            y: point.y,
+        })
+        .collect();
+    let mut outlines = serde_json::Map::new();
+    for line_join in line_joins {
+        for miter_limit in &miter_limits {
+            let mut library = ptr::null_mut();
+            let init_error = c_abi::FT_Init_FreeType(&mut library);
+            let mut stroker = ptr::null_mut();
+            let new_error = if init_error == FT_Err_Ok {
+                c_abi::FT_Stroker_New(library, &mut stroker)
+            } else {
+                init_error
+            };
+            let mut exported_points = [c_abi::FT_Vector::default(); 256];
+            let mut exported_tags = [0u8; 256];
+            let mut exported_contours = [0u16; 64];
+            let mut exported = c_empty_outline(
+                &mut exported_points,
+                &mut exported_tags,
+                &mut exported_contours,
+            );
+            if new_error == FT_Err_Ok && !stroker.is_null() {
+                c_abi::FT_Stroker_Set(
+                    stroker,
+                    radius,
+                    line_cap as FT_Int,
+                    line_join as FT_Int,
+                    *miter_limit,
+                );
+                let begin_error = c_abi::FT_Stroker_BeginSubPath(stroker, &c_path[0], 0);
+                let mut status = begin_error;
+                if status == FT_Err_Ok {
+                    for point in &c_path[1..] {
+                        status = c_abi::FT_Stroker_LineTo(stroker, point);
+                        if status != FT_Err_Ok {
+                            break;
+                        }
+                    }
+                }
+                let end_error = if status == FT_Err_Ok {
+                    c_abi::FT_Stroker_EndSubPath(stroker)
+                } else {
+                    status
+                };
+                let mut points = 0;
+                let mut contours = 0;
+                let counts_status = if end_error == FT_Err_Ok {
+                    c_abi::FT_Stroker_GetCounts(stroker, &mut points, &mut contours)
+                } else {
+                    end_error
+                };
+                if counts_status == FT_Err_Ok {
+                    c_abi::FT_Stroker_Export(stroker, &mut exported);
+                }
+            }
+            let outline = c_outline_arrays_json(
+                &exported,
+                &exported_points,
+                &exported_tags,
+                &exported_contours,
+            );
+            if !stroker.is_null() {
+                c_abi::FT_Stroker_Done(stroker);
+            }
+            if !library.is_null() {
+                c_done_library(library);
+            }
+            outlines.insert(format!("{line_join}:{miter_limit}"), outline);
+        }
+    }
+    Ok(stroker_line_join_matrix_output(outlines))
+}
+
+fn wasm_stroker_line_join_matrix(case: &InputCase) -> Result<RunOutput, String> {
+    if !is_stroker_line_join_matrix_case(case) {
+        return Err(format!("{} is not a line-join matrix route", case.case_id));
+    }
+    if wasm_abi::abi_support_stroker_bevel_join_geometry()
+        && wasm_abi::abi_support_stroker_miter_join_geometry(false)
+        && wasm_abi::abi_support_stroker_miter_join_geometry(true)
+    {
+        rust_stroker_line_join_matrix(case)
+    } else {
+        Err("unsupported line-join matrix route".to_string())
     }
 }
 
@@ -33676,6 +33882,25 @@ fn oracle_args(case: &InputCase) -> Result<Vec<String>, String> {
                 stroker_join_geometry_path_arg(params)?,
             ])
         }
+        "ftstroke.join_geometry" if is_stroker_line_join_matrix_case(case) => {
+            let params = &case.inputs.params;
+            Ok(vec![
+                "--stroker-line-join-matrix".to_string(),
+                i64_param(params, "radius")?.to_string(),
+                i64_param(params, "line_cap")?.to_string(),
+                i64_array_param(params, "line_joins")?
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+                i64_array_param(params, "miter_limits")?
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(","),
+                stroker_join_geometry_path_arg(params)?,
+            ])
+        }
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             let params = &case.inputs.params;
             Ok(vec![
@@ -35333,6 +35558,9 @@ fn run_rust_ffi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
             rust_stroker_bevel_join_geometry(case)
         }
+        "ftstroke.join_geometry" if is_stroker_line_join_matrix_case(case) => {
+            rust_stroker_line_join_matrix(case)
+        }
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             rust_stroker_manual_path(case)
         }
@@ -36558,6 +36786,9 @@ fn run_c_abi(case: &InputCase) -> Result<RunOutput, String> {
         "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
             c_stroker_bevel_join_geometry(case)
         }
+        "ftstroke.join_geometry" if is_stroker_line_join_matrix_case(case) => {
+            c_stroker_line_join_matrix(case)
+        }
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             c_stroker_manual_path(case)
         }
@@ -37677,6 +37908,9 @@ fn run_wasm_abi(case: &InputCase) -> Result<RunOutput, String> {
         }
         "ftstroke.join_geometry" if is_stroker_bevel_join_geometry_case(case) => {
             wasm_stroker_bevel_join_geometry(case)
+        }
+        "ftstroke.join_geometry" if is_stroker_line_join_matrix_case(case) => {
+            wasm_stroker_line_join_matrix(case)
         }
         "ftstroke.stroke_manual_path" if is_stroker_round_manual_path_case(case) => {
             wasm_stroker_manual_path(case)
