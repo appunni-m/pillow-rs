@@ -460,7 +460,7 @@ fn orientation(params: &Value) -> Result<Option<&str>, PilError> {
         Ok(Some(method))
     } else {
         Err(PilError::TypeError(
-            "an integer is required (got type str)".into(),
+            "'str' object cannot be interpreted as an integer".into(),
         ))
     }
 }
@@ -521,7 +521,9 @@ fn text_options(params: &Value) -> Result<ImageFontTextOptions, PilError> {
             .get("ink")
             .map(|value| {
                 value.as_i64().ok_or_else(|| {
-                    PilError::TypeError("an integer is required (got type list)".into())
+                    PilError::TypeError(
+                        "'list' object cannot be interpreted as an integer".into(),
+                    )
                 })
             })
             .transpose()?,

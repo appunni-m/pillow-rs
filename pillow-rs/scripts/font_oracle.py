@@ -13,11 +13,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = REPO_ROOT.parent
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "font"
 REPO_ORACLE_VENV = WORKSPACE_ROOT / ".oracle-venv"
+EXPECTED_PILLOW_VERSION = "12.2.0"
 
 
 def load_pillow() -> tuple[Any, Any, Any, Any, Any]:
     import PIL
     import os
+
+    if PIL.__version__ != EXPECTED_PILLOW_VERSION:
+        raise RuntimeError(
+            f"font oracle must use Pillow {EXPECTED_PILLOW_VERSION}; got {PIL.__version__}"
+        )
 
     venv_root = Path(os.environ.get("VIRTUAL_ENV", "")).resolve()
     if venv_root != REPO_ORACLE_VENV:

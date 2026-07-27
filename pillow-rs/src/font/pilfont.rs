@@ -298,7 +298,7 @@ impl PilFont {
         }
         if height == 0 {
             return Err(PilError::SystemError(
-                "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                "<method 'getmask' of 'ImagingFont' objects> returned a result with an exception set"
                     .into(),
             ));
         }
@@ -352,13 +352,13 @@ impl PilFont {
         let source_height = glyph.sy1 - glyph.sy0;
         if source_width < 0 || source_height < 0 {
             return Err(PilError::SystemError(
-                "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                "<method 'getmask' of 'ImagingFont' objects> returned a result with an exception set"
                     .into(),
             ));
         }
         if glyph.dx1 - glyph.dx0 != source_width || glyph.dy1 - glyph.dy0 != source_height {
             return Err(PilError::SystemError(
-                "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                "<method 'getmask' of 'ImagingFont' objects> returned a result with an exception set"
                     .into(),
             ));
         }
@@ -474,7 +474,7 @@ fn decode_pbm_for_pilfont(data: &[u8]) -> Result<PilFontGlyphImage, PilError> {
                         width,
                         height,
                         error: PilError::SystemError(
-                            "<method 'getmask' of 'ImagingFont' objects> returned a result with an error set"
+                            "<method 'getmask' of 'ImagingFont' objects> returned a result with an exception set"
                                 .into(),
                         ),
                     });
