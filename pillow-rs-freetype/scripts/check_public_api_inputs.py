@@ -3543,23 +3543,6 @@ def ftglyph_subsystem_pending_reason(row: ConcreteInput) -> str | None:
     if reason is not None:
         return reason
     ftglyph_rows_without_maintained_route = {
-        "ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap": (
-            "FT_Glyph_To_Bitmap stroked mono-target bitmap parity needs a "
-            "maintained lower stroker route for the exact Pillow ImageFont "
-            "sequence: FT_LOAD_TARGET_MONO outline, FT_Glyph_Stroke, then "
-            "FT_Glyph_To_Bitmap with FT_RENDER_MODE_NORMAL. The native C "
-            "oracle and Rust/C/WASM runners can execute the sequence. Native "
-            "FreeType emits a stroked outline with 72 points and contours "
-            "[2, 34, 55, 71] before bitmap conversion; the current bypassed "
-            "Rust lower route emits 58 points and contours [7, 23, 25, 57], "
-            "then fails exact bitmap bytes. Border-level tracing narrows this "
-            "to C left/right border counts 35/37 with contour ends [2, 34] "
-            "and [20, 36], versus Rust 24/34 with [7, 23] and [1, 33]. Keep "
-            "this pending until closed round/conic stroke geometry/export is "
-            "exact against pinned C. Per-source-contour tracing shows the "
-            "first miss occurs in contour 0: C right border 21/1 versus Rust "
-            "18/1."
-        ),
         "ftglyph.FT_Glyph.caller_owned_lifetime": (
             "FT_Glyph caller-owned lifetime parity needs a maintained "
             "allocation/free event route for FT_New_Glyph, FT_Get_Glyph, "

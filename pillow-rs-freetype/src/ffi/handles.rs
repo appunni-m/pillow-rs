@@ -2252,7 +2252,7 @@ fn stroker_is_dejavu_glyph36_fixture(stroker: FT_Stroker) -> bool {
     })
 }
 
-fn stroker_used_unverified_closed_round_path(stroker: FT_Stroker) -> bool {
+fn stroker_used_unverified_curve_path(stroker: FT_Stroker) -> bool {
     if stroker.is_null() {
         return false;
     }
@@ -2260,9 +2260,7 @@ fn stroker_used_unverified_closed_round_path(stroker: FT_Stroker) -> bool {
         registry
             .borrow()
             .get(&(stroker as usize))
-            .is_some_and(|entry| {
-                entry.state.closed_round_path_unverified || entry.state.curve_path_unverified
-            })
+            .is_some_and(|entry| entry.state.curve_path_unverified)
     })
 }
 
@@ -2316,11 +2314,10 @@ fn stroke_outline_glyph_general(
     if parse_status != FT_Err_Ok {
         return Err(parse_status);
     }
-    if stroker_used_unverified_closed_round_path(stroker) {
-        // The closed round-path state machine now follows FreeType source
-        // shape, but its full contour geometry is not yet exact enough to
-        // replace the maintained glyph-level fallback.  Keep the existing
-        // public lane exact until the lower route is verified against pinned C.
+    if stroker_used_unverified_curve_path(stroker) {
+        // The curve stroker state machine is source-shaped but still needs
+        // broader conic/cubic export proof.  Line-only closed round paths are
+        // verified by the promoted Pillow ImageFont mono-target stroke route.
         return Err(FT_Err_Unimplemented_Feature);
     }
 
@@ -5502,22 +5499,7 @@ pub fn FT_Stroker_EndSubPath(stroker: FT_Stroker) -> FT_Error {
         {
             return FT_Err_Ok;
         }
-        if !entry.state.subpath_open
-            && entry.state.line_segments == 2
-            && entry.state.line_join == FT_STROKER_LINEJOIN_ROUND as FT_Int
-        {
-            if entry.state.finalize_closed_two_line_right_angle() {
-                return FT_Err_Ok;
-            }
-            // FreeType 2.14.3 `src/base/ftstroke.c:1874-1933` closes a simple
-            // two-line corner with a small inner left border and a round-join
-            // outer right border.  The maintained route exposes exact public
-            // counts only; point/tag/contour export stays pending.
-            entry.state.left_points = 3;
-            entry.state.left_contours = 1;
-            entry.state.right_points = 18;
-            entry.state.right_contours = 1;
-            entry.state.border_counts_valid = true;
+        if entry.state.finalize_closed_two_line_right_angle() {
             return FT_Err_Ok;
         }
         if entry.state.finalize_closed_round_path() {
