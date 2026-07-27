@@ -71,6 +71,7 @@ help:
 	@printf "\nSingle Feature Testing (<1 min per operation, use for debugging):\n"
 	@printf "  make test-op OP=<op>      Run parity filtered to one operation (always refreshes oracle)\n"
 	@printf "  make test-case CASE=<s>   Run parity filtered to case/subject substring (always refreshes oracle)\n"
+	@printf "  make test-pending-case CASE=<exact-case-id> Promote one pending route into runtime comparison (diagnostic, may fail)\n"
 	@printf "  make test-list            Print selection summary without executing (diagnostic)\n"
 	@printf "  make test-list-ops        Print operation counts without executing\n"
 	@printf "  See doc/TESTING_SINGLE_FEATURE.md for env var reference and cache behavior\n"
@@ -251,6 +252,17 @@ test-case: unified-oracle api-abi-check
 		exit 1; \
 	fi
 	FONTDONE_UNIFIED_CASE_FILTER="$(CASE)" \
+	FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
+	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
+
+.PHONY: test-pending-case
+test-pending-case: unified-oracle api-abi-check
+	@if [ -z "$(CASE)" ]; then \
+		echo "Usage: make test-pending-case CASE=<exact-case-id>" >&2; \
+		exit 2; \
+	fi
+	FONTDONE_UNIFIED_CASE_FILTER="$(CASE)" \
+	FONTDONE_UNIFIED_INCLUDE_PENDING_CASE="$(CASE)" \
 	FONTDONE_UNIFIED_ORACLE_REFRESH=1 \
 	$(CARGO) test --test unified_fixture_parity --locked unified_fixture_parity -- --nocapture
 

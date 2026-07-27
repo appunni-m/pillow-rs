@@ -697,7 +697,7 @@ fn unrouted_slot_state_runtime_reason(_case: &InputCase) -> Option<&'static str>
 }
 
 fn classify_runtime_case(case: &InputCase, operation: &str) -> RuntimeReadiness {
-    if case.route_evidence == RouteEvidence::PendingRoute {
+    if case.route_evidence == RouteEvidence::PendingRoute && !pending_case_is_included(case) {
         return RuntimeReadiness::Pending {
             reason: format!(
                 "{operation}:{}",
@@ -790,6 +790,12 @@ fn select_runtime_cases(cases: &[InputCase]) -> RuntimeSelection {
         unsupported_operations,
         pending_samples,
     }
+}
+
+fn pending_case_is_included(case: &InputCase) -> bool {
+    std::env::var("FONTDONE_UNIFIED_INCLUDE_PENDING_CASE")
+        .ok()
+        .is_some_and(|requested| requested == case.case_id)
 }
 
 fn is_supported_runtime_operation(_case: &InputCase, _operation: &str) -> bool {
