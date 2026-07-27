@@ -155,6 +155,43 @@
       }
     },
     {
+      "case_id": "font.native_setvaraxes.variable_named_instances_empty_reset",
+      "operation": "native_setvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "axes": []
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvaraxes.dejavusans_invalid_argument",
+      "operation": "native_setvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "axes": [
+            100,
+            400
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.native_getvarnames.dejavusans_invalid_argument",
       "operation": "native_getvarnames",
       "inputs": {
