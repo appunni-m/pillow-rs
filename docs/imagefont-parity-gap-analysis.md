@@ -596,7 +596,16 @@ Decision: the FreeType-backed Rust root API should use `FreeTypeFont`, matching 
 
 Pillow module functions accept paths and streams. Core Rust accepts bytes and options.
 
-Decision: keep filesystem I/O outside core, but ensure binding crates remain thin and do not reimplement parsing/layout/rendering logic.
+Decision: keep filesystem I/O outside core. The Python binding may read paths,
+search `sys.path`, and read file-like objects, but parsing/layout/rendering must
+remain in root `pillow_rs::...` APIs. The current audit confirms this boundary:
+`FreeTypeFont` path/stream handling reads bytes and calls
+`imagefont_from_bytes`; bitmap PILfont loading reads the `.pil` metrics file and
+sibling glyph image bytes, then delegates glyph-image decode and metrics parsing
+to `PilFont::open_pilfont_glyph_image` and `PilFont::from_pilfont_*`. The JS ABI
+does not implement host filesystem loading and requires caller-supplied bytes.
+Do not move path I/O into `pillow-rs` core, and do not move PILfont parsing into
+binding crates.
 
 ### 8. Embedded bitmap, vertical metrics, and device metrics are partially trusted
 
