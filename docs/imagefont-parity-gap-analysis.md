@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `71e191b50dd59dd752024bccefe02a91819a0809`
+Rust commit reviewed: `9c032e55436b337436dcdab163b969b20fcffa8a`
 
-Coverage MCP run: `e5d5a1c8-7070-4260-9fcb-f22f832f1c32`
+Coverage MCP run: `c4f7d07a-bc82-46c7-b2bc-614cb32e2f1a`
 
-Coverage MCP snapshot: `3f959b1c-cb26-4af4-92e3-c6c0c736163e`
+Coverage MCP snapshot: `b4872772-06c0-4585-acfd-e5917f1b91da`
 
 Suite: `font-with-freetype`
 
@@ -26,13 +26,14 @@ Local Pillow source used for comparison:
 
 The current live Font fixture corpus has exact runtime-oracle parity for the rows it exercises:
 
-- 336 input-only rows execute.
-- 336 rows match live Pillow 12.2.0 exactly.
+- 337 input-only rows execute.
+- 337 rows match live Pillow 12.2.0 exactly.
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `3f959b1c-cb26-4af4-92e3-c6c0c736163e`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `b4872772-06c0-4585-acfd-e5917f1b91da`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
+- Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -96,7 +97,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.layout_failure.json` | 1 |
 | `font.load.json` | 25 |
 | `font.load_default_imagefont.json` | 1 |
-| `font.load_failure.json` | 7 |
+| `font.load_failure.json` | 8 |
 | `font.load_path.json` | 1 |
 | `font.render_text.json` | 7 |
 | `font.render_text_binary.json` | 9 |
@@ -105,11 +106,11 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.unsupported_operation.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
 | `font.variations.json` | 36 |
-| total | 336 |
+| total | 337 |
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `3f959b1c-cb26-4af4-92e3-c6c0c736163e`.
+Coverage snapshot: `b4872772-06c0-4585-acfd-e5917f1b91da`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -120,10 +121,10 @@ Coverage snapshot: `3f959b1c-cb26-4af4-92e3-c6c0c736163e`.
 
 Overall snapshot totals for this suite:
 
-- Lines: 15501/50634, 30.61%
-- Branches: 2640/10722, 24.62%
-- Functions: 1182/3603, 32.81%
-- Regions: 22312/78414, 28.45%
+- Lines: 15504/50636, 30.62%
+- Branches: 2643/10724, 24.65%
+- Functions: 1183/3603, 32.83%
+- Regions: 22321/78418, 28.46%
 
 The overall totals are low because the suite only targets Font behavior but the coverage artifact includes much of the workspace. For ImageFont decisions, use the file-specific rows above and the lower `pillow-rs-freetype` rows below.
 
@@ -202,6 +203,8 @@ Rust maps FreeType 2.14.3 errors through a full table and returns `PilError::OsE
 
 Remaining risk: rare FreeType errors are present as table data but not reachable through current public ImageFont fixtures. They should only be added if a real Pillow input can trigger them.
 
+Resolved during the latest pass: the new `font.load_failure.missing_hmtx_table` row imports the maintained FreeType `missing-hmtx.ttf` fixture into the Font corpus. Pillow returns `OSError("horizontal metrics (hmtx) table missing")`; Rust previously returned `OSError("broken file")` because `fontdone::ffi::error_to_ft` mapped every `FontError::InvalidFont(_)` to `FT_Err_Invalid_File_Format`. The fix adds the specific `FT_Err_Hmtx_Table_Missing` mapping before the generic fallback. Coverage snapshot `b4872772-06c0-4585-acfd-e5917f1b91da` shows the new `convert.rs:203-204` branch is executed.
+
 ### 6. Bitmap and FreeType class shape is not 1:1
 
 Pillow has `ImageFont.ImageFont` for bitmap fonts and `ImageFont.FreeTypeFont` for FreeType fonts. Rust currently uses `PilFont` for bitmap and `ImageFont` for FreeType.
@@ -236,6 +239,6 @@ Decision: add ImageFont oracle rows with fonts that exercise embedded bitmap gly
 
 ## Current decision point
 
-The current implementation is good enough to trust the active 336-row Font fixture corpus.
+The current implementation is good enough to trust the active 337-row Font fixture corpus.
 
 It is not yet good enough to declare full `PIL.ImageFont` parity across Pillow 12.2.0. The biggest action decision is whether to prioritize real `FT_Glyph_StrokeBorder`/stroker geometry first, because that is the clearest concrete mismatch between Pillow public behavior and Rust implementation.
