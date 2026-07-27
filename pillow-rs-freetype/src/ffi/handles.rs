@@ -3321,6 +3321,7 @@ struct StrokerState {
     subpath_start: FT_Vector,
     subpath_corner: FT_Vector,
     angle_in: FT_Angle,
+    angle_out: FT_Angle,
     subpath_angle: FT_Angle,
     line_length: FT_Fixed,
     subpath_line_length: FT_Fixed,
@@ -3474,6 +3475,7 @@ impl StrokerState {
             subpath_start: FT_Vector::default(),
             subpath_corner: FT_Vector::default(),
             angle_in: 0,
+            angle_out: 0,
             subpath_angle: 0,
             line_length: 0,
             subpath_line_length: 0,
@@ -3514,6 +3516,7 @@ impl StrokerState {
         self.subpath_start = FT_Vector::default();
         self.subpath_corner = FT_Vector::default();
         self.angle_in = 0;
+        self.angle_out = 0;
         self.subpath_angle = 0;
         self.line_length = 0;
         self.subpath_line_length = 0;
@@ -3579,6 +3582,46 @@ impl StrokerState {
         self.first_point = false;
         self.center = to;
         self.line_segments = 1;
+        self.border_counts_valid = false;
+    }
+
+    fn append_line_segment_candidate(&mut self, to: FT_Vector) {
+        let mut delta = FT_Vector {
+            x: to.x - self.center.x,
+            y: to.y - self.center.y,
+        };
+        let angle = FT_Atan2(delta.x, delta.y);
+        let line_length = FT_Vector_Length(Some(&delta));
+        FT_Vector_From_Polar(
+            Some(&mut delta),
+            self.radius,
+            angle + FT_ANGLE_PI2 as FT_Angle,
+        );
+
+        // FreeType 2.14.3 `src/base/ftstroke.c:1303-1337` stores the outgoing
+        // angle, processes the current corner, appends the offset segment
+        // endpoints to right then left border, then records the incoming angle,
+        // current center, and segment length.  The corner join itself remains
+        // intentionally unexported until `ft_stroker_process_corner` is ported;
+        // this preserves the real state needed for that port without claiming
+        // public geometry parity too early.
+        self.angle_out = angle;
+        let right_to = FT_Vector {
+            x: to.x + delta.x,
+            y: to.y + delta.y,
+        };
+        self.right_border.lineto(right_to, true);
+        let left_to = FT_Vector {
+            x: to.x - delta.x,
+            y: to.y - delta.y,
+        };
+        self.left_border.lineto(left_to, true);
+
+        self.angle_in = angle;
+        self.line_length = line_length;
+        self.subpath_corner = self.center;
+        self.center = to;
+        self.line_segments = self.line_segments.saturating_add(1);
         self.border_counts_valid = false;
     }
 
@@ -4367,13 +4410,11 @@ pub fn FT_Stroker_LineTo(stroker: FT_Stroker, to: Option<&FT_Vector>) -> FT_Erro
             return FT_Err_Ok;
         }
         if entry.state.line_segments == 1 {
-            // Count-only maintained route for a simple second line segment.
             // FreeType 2.14.3 continues accumulating unfinalized border state
             // here; finalized public counts become observable only after
-            // `FT_Stroker_EndSubPath`.
-            entry.state.line_segments = 2;
-            entry.state.subpath_corner = entry.state.center;
-            entry.state.center = *to;
+            // `FT_Stroker_EndSubPath`.  Corner processing/export is still
+            // guarded by the maintained routes below.
+            entry.state.append_line_segment_candidate(*to);
             return FT_Err_Ok;
         }
         FT_Err_Unimplemented_Feature
