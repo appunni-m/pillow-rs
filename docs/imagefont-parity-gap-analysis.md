@@ -685,3 +685,13 @@ Current request classification for `imagingft.rs` region coverage:
   instrumentation, static FreeType error-table data, comment/helper boundary
   markers, and function-signature instrumentation rather than a currently known
   adapter-owned Pillow `_imagingft.c` behavior gap.
+- Native-oracle tracing after `36e8e16fd` confirms the first divergence for
+  `pending_stroked_mono_target_outline_to_bitmap` occurs before rasterization:
+  pinned FreeType's `FT_Glyph_Stroke` result has cbox
+  `(-101,-96,1125,1248)`, `72` points, and contours `[2,34,55,71]`. The
+  current lower Rust route, with only the pending-route guard bypassed for
+  diagnosis, has the same cbox but only `58` points and contours
+  `[7,23,25,57]`; its later bitmap failure is downstream of that outline
+  topology mismatch. This restores the blocker classification to lower
+  closed-round/conic stroker geometry/export, not gray-rasterizer behavior and
+  not `imagingft.rs`.
