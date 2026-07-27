@@ -641,6 +641,18 @@ Current request classification for `imagingft.rs` region coverage:
   sequence. The only promoted failure remains bitmap coverage bytes, so the
   classification must stay pending until lower stroke geometry/render parity is
   fixed.
+- Refreshed promoted-route diagnostic at `f10e64927`: temporarily removing the
+  pending-route classification and bypassing only
+  `stroker_used_unverified_closed_round_path` again makes the focused target
+  compare 10 rows, pass 9, and fail only
+  `ftglyph.FT_Glyph_To_Bitmap.pending_stroked_mono_target_outline_to_bitmap`
+  on `rust ffi:field:/bitmap/buffer_hex`. The route audit temporarily moves to
+  `pending-route=179` and `real-parity=4843`; after reverting the diagnostic
+  patch, maintained verification returns to 9/9 runnable rows passing with 2
+  explicit pending rows. The actual bitmap still has the same leading/trailing
+  coverage as C but under-fills the middle stroke body, confirming the first
+  implementation target remains lower closed round/conic border geometry before
+  export, not the `FT_Glyph_To_Bitmap` wrapper or Pillow `_imagingft.rs`.
 - Follow-up lower cleanup: the maintained DejaVu glyph-36 fallback now matches
   the exact `FT_LOAD_NO_BITMAP` source outline points/tags/contours instead of
   only checking point count and contour ends. Oracle inspection shows the
