@@ -227,6 +227,23 @@ def test_imagefont_file_like_font_variant_matches_pillow(RSPIL):
     assert _font_observation(rs_font) == _font_observation(pil_font)
 
 
+@pytest.mark.covers("ImageFont.FreeTypeFont.getmetrics")
+def test_imagefont_freetype_getmetrics_matches_pillow(RSPIL):
+    for rs_font, pil_font in (
+        (RSPIL.ImageFont.truetype(DEJAVU, 20), PILImageFont.truetype(DEJAVU, 20)),
+        (RSPIL.ImageFont.load_default(12), PILImageFont.load_default(12)),
+    ):
+        assert rs_font.getmetrics() == pil_font.getmetrics()
+
+
+@pytest.mark.covers("ImageFont.FreeTypeFont.getname")
+def test_imagefont_freetype_getname_matches_pillow(RSPIL):
+    for source in (DEJAVU, VARIABLE):
+        assert RSPIL.ImageFont.truetype(source, 20).getname() == (
+            PILImageFont.truetype(source, 20).getname()
+        )
+
+
 @pytest.mark.covers("ImageFont.FreeTypeFont.getbbox")
 def test_imagefont_freetype_getbbox_values_and_errors_match_pillow(RSPIL):
     rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20)
