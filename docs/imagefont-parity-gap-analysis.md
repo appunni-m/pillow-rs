@@ -154,6 +154,13 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
   `length_from_basic_layout_with_flags(..., 0)`. This is behavior-neutral and
   reduces implementation indirection, but Coverage MCP shows line `928` remains
   a partial marker on the flagged helper boundary rather than closing.
+- A bounded selected-line query against snapshot
+  `5d8447f8-92ea-407c-9b3f-3f560ddd6460` confirms lines `91`, `796`, `826`,
+  `829`, and `928` are executed but each retains one missed LLVM branch. Lines
+  `253` and `271` are the only zero-hit direct markers, both static FreeType
+  error-table tuple starts. This supports treating further direct-region
+  progress as requiring a real Pillow-visible route for those statuses or a
+  defensible implementation simplification, not additional duplicate fixtures.
 - Commit `9896080d7` records and reverts a measured source-shape cleanup for
   `render_text_binary`: splitting `mask_from_run_with_start(...)?` into a
   named local did not improve line `796` branch attribution and introduced a
