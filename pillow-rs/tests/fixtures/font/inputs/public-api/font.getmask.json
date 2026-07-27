@@ -408,6 +408,66 @@
       }
     },
     {
+      "case_id": "font.getmask.maxp_v1_header_only_too_many_function_defs",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/maxp-v1-header-only.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.hinter_fpgm_fdef_index_overflow_code_overflow",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-fdef-index-overflow.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask.hinter_fpgm_nested_fdef_nested_defs",
+      "operation": "getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hinter-fpgm-nested-fdef.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
       "case_id": "font.getmask.anchor_middle_middle",
       "operation": "getmask",
       "inputs": {
