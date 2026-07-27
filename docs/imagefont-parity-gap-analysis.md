@@ -83,9 +83,9 @@ Post remaining static-error route sweep: Pillow 12.2.0 over 59 candidate
 repo fixtures; no public `PIL.ImageFont` route emitted
 `FT_Err_Execution_Too_Long` or `FT_Err_Post_Table_Missing`.
 
-Current-head Coverage MCP run: `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`
+Latest measured code Coverage MCP run: `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`
 
-Current-head Coverage MCP snapshot: `26484398-df28-4103-9a43-44331068fade`
+Latest measured code Coverage MCP snapshot: `26484398-df28-4103-9a43-44331068fade`
 
 Post ImageFont facade target Coverage MCP run: `a32f45ce-6d4e-4a85-bf08-2bda0bde9593`
 
@@ -150,8 +150,9 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Current-head Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
-  passed at commit `53d3b0a07114fcc032498dd6b59626a2dc8809e5` and ingested
+- Latest measured code Coverage MCP command
+  `font-tests-coverage-with-freetype-pillow-12-2` passed at commit
+  `53d3b0a07114fcc032498dd6b59626a2dc8809e5` and ingested
   snapshot `26484398-df28-4103-9a43-44331068fade` from run
   `3328cd07-7a7b-47e5-9e8a-bc50612abf1e`. Direct `imagingft.rs` coverage
   is `1739/1760` lines, `251/256` branches, `173/184` functions, and
@@ -1288,7 +1289,7 @@ current blockers.
   `ImageDraw.text`, `multiline_text`, `textbbox`, `textlength`, and
   `multiline_textbbox` with `direction="rtl"` and verifies exact no-libraqm
   `KeyError` parity.
-- Current-head Coverage MCP audit after `53d3b0a07`: managed command
+- Latest measured code Coverage MCP audit after `53d3b0a07`: managed command
   `font-tests-coverage-with-freetype-pillow-12-2` passed as run
   `3328cd07-7a7b-47e5-9e8a-bc50612abf1e` and ingested snapshot
   `26484398-df28-4103-9a43-44331068fade`. Direct `imagingft.rs` remains
