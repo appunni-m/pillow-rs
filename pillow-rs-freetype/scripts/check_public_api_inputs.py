@@ -4386,17 +4386,6 @@ def pending_route_reason(row: ConcreteInput) -> str | None:
             "and WASM; raw pointer identity or layout-only checks would be a "
             "green placeholder"
         )
-    if row.case_id == "ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original":
-        return (
-            "FT_Glyph_To_Bitmap render-failure preservation requires a "
-            "maintained glyph_prepare/renderer-failure route matching "
-            "freetype/src/base/ftglyph.c:771-874: create the dummy slot, "
-            "allocate the bitmap glyph, apply and restore origin when "
-            "destroy=false, free the partial bitmap on render error, and leave "
-            "*the_glyph pointing at the original even when destroy=true across "
-            "pinned C, Rust FFI, C ABI, and WASM; early invalid-argument "
-            "coverage is not this path"
-        )
     if (
         (row.operation, row.case_id) in exact_error_route_gaps
         and (row.operation, row.case_id) not in FTERRDEF_EXACT_ERROR_BATCH
@@ -5634,6 +5623,15 @@ def lifecycle_null_real_parity_reason(row: ConcreteInput) -> str | None:
         and row.params.get("no_prepare_hook") is True
     ):
         return "FT_Glyph_To_Bitmap early invalid argument paths validate exact public FT_Error rows and caller-handle preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+    if (
+        row.operation == "ftglyph.glyph_to_bitmap"
+        and row.case_id == "ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original"
+    ):
+        return (
+            "FT_Glyph_To_Bitmap render-failure preservation validates exact "
+            "public FT_Error, partial-bitmap cleanup, and original glyph "
+            "preservation through pinned C oracle, Rust FFI, C ABI, and WASM ABI"
+        )
     if (
         row.operation == "new_memory_face"
         and row.case_id == "fterrdef.FT_Err_Invalid_Library_Handle.library_api_rejects_null_library"

@@ -1156,3 +1156,12 @@ Current request classification for `imagingft.rs` region coverage:
   stroker fixes; the remaining pending `FT_Glyph_To_Bitmap` work is not an
   `imagingft.rs` adapter gap unless a public Font row proves it affects
   Pillow-visible behavior.
+- Follow-up `FT_Glyph_To_Bitmap` route promotion: the remaining
+  `ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original` row also
+  passes when included directly with `make -C pillow-rs-freetype
+  test-pending-case CASE=ftglyph.FT_Glyph_To_Bitmap.error_render_failure_preserves_original`.
+  Promoting that proven row moves the normal lane to `11/11` runnable rows with
+  `0` pending and moves route audit to `real-parity=4847`,
+  `pending-route=175`. This was a classification correction based on exact
+  C/Rust/C-ABI/WASM parity evidence; no lower implementation change was needed
+  for this row.
