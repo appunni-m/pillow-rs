@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `3d432999415f4366d0f62816107b9ddd227b34d5`
+Rust commit reviewed: `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0`
 
-Coverage MCP run: `01bdeaea-2730-4fb7-af76-f7ec384d53d6`
+Coverage MCP run: `a6721cc4-bd8e-4049-8846-a913fb52f71e`
 
-Coverage MCP snapshot: `300395c8-6699-444d-a4e2-2b5dae0f24c4`
+Coverage MCP snapshot: `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`
 
 Suite: `font-with-freetype`
 
@@ -31,11 +31,12 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 - Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
-- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `300395c8-6699-444d-a4e2-2b5dae0f24c4`.
+- Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2` passes and ingests snapshot `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`.
 - Direction/features/language rows now prove two things separately: Rust core returns the dedicated `PilError::UnsupportedLibraqm` variant, and the public parity payload still matches Pillow's no-libraqm `KeyError`.
 - Missing horizontal metrics rows now prove the lower `fontdone` error conversion maps `FontError::InvalidFont("missing 'hmtx' table")` to `FT_Err_Hmtx_Table_Missing`, producing Pillow's public `OSError("horizontal metrics (hmtx) table missing")` instead of the old generic `OSError("broken file")`.
 - Additional metric rows for fixed-width and hhea-zero/no-OS2 fallback fonts now prove `FreeTypeFont.getmetrics()` parity for two more lower metrics-table shapes.
 - Additional mono BASIC rows for `AV` and `jQ` now prove live-oracle parity for normal-vs-mono load-flag behavior across `getlength`, `getbbox`, `getmask`, and `getmask2`. Coverage MCP shows these rows are semantically useful but do not reduce the remaining LLVM-reported `imagingft.rs` region gaps; the next coverage-moving gap is still lower stroker/stroke-border implementation.
+- Commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0` moves `FT_Stroker_ParseOutline` from a two-point-line-only parser to the FreeType 2.14.3 contour/tag control flow that delegates line, conic, and cubic segments to the existing segment routes. This is architectural progress for the stroke blocker, but it does not yet move public ImageFont coverage because the mixed-outline route and general segment stroker/export behavior remain pending.
 
 This is still not enough to claim complete `PIL.ImageFont` parity. The safe claim is:
 
@@ -112,7 +113,7 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 
 ## Direct `pillow-rs/src/font` coverage status
 
-Coverage snapshot: `300395c8-6699-444d-a4e2-2b5dae0f24c4`.
+Coverage snapshot: `2c1810bd-489d-49aa-96d5-bbaa5de7c71d`.
 
 | File | Lines | Branches | Functions | Regions | Status |
 |---|---:|---:|---:|---:|---|
@@ -140,8 +141,8 @@ Coverage MCP reports 13 relevant gaps in `pillow-rs/src/font/imagingft.rs`: 5 un
 | `796` | Constant/section instrumentation around FFI helper declarations. | Not a Pillow behavior. | Coverage marks a partial branch here due LLVM segment normalization, not a meaningful behavior gap. | No product action. |
 | `826`, `829` | `floor26` / `ceil26` 26.6 conversion helper branch instrumentation. | Pillow BASIC layout converts 26.6 values through `PIXEL(...)`-style rounding in `_imagingft.c`. | Partial markers mean current inputs do not hit every conversion-region shape. This is not an independent feature but can hide bbox/offset rounding differences. | Add targeted bbox/mask rows with negative bearings, fractional starts, ascenders/descenders, and kerning pairs. |
 | `928` | Branch in BASIC glyph run construction around previous-glyph kerning. | `_imagingft.c::text_layout_fallback` only adds kerning when a previous glyph exists. | Additional `mode="1"` rows for `AV` and `jQ` now prove public mono load-flag parity across length, bbox, mask, and mask2, but Coverage MCP still reports this line as partial. The remaining marker is therefore not removable by duplicate mono fixture expansion. | Keep this as a coverage artifact/branch-marker gap unless source-context evidence identifies a distinct public input. Do not add more duplicate BASIC rows only to chase this line. |
-| `1095`, `1098`, `1100` | Rust stroked bitmap extent clamps width/height when actual stroker output exceeds bbox-derived target dimensions. | `_imagingft.c::font_render_impl` allocates from `bounding_box_and_anchors` and clips during paste; it does not show this Rust-style post-stroke extent mutation. | This is the highest-risk Rust-only compatibility shim. Width clamp executes; height clamp body is still uncovered. The need for the shim indicates lower stroker/bbox mismatch. A sweep row using stroked `jQ` was not committed because Pillow succeeds while Rust fails earlier with `FT_Err_Unimplemented_Feature`; the lower `fontdone` `FT_Outline_Glyph_Stroke` path is currently pinned to the DejaVu glyph-36 `A` fixture. | Replace the glyph-36-specific stroke shortcut with general `FT_Stroker_ParseOutline`/export support. Then re-add independent stroked descender rows such as `jQ` and prove both width and height clipping against Pillow. |
-| `1194`, `1195` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. FreeType narrow route currently has 1 runnable null/error case and 3 success routes pending. This shares the same lower blocker as normal stroked descender glyphs: real outline stroke geometry is not implemented generally. | Complete lower `FT_Stroker_ParseOutline`/border-export support for real glyph outlines, then add successful `stroke_width + stroke_filled=true` and stroked descender ImageFont fixture rows. |
+| `1094`, `1097`, `1099` | Rust stroked bitmap extent clamps width/height when actual stroker output exceeds bbox-derived target dimensions. | `_imagingft.c::font_render_impl` allocates from `bounding_box_and_anchors` and clips during paste; it does not show this Rust-style post-stroke extent mutation. | This is the highest-risk Rust-only compatibility shim. Width clamp executes; height clamp body is still uncovered. The need for the shim indicates lower stroker/bbox mismatch. A sweep row using stroked `jQ` was not committed because Pillow succeeds while Rust fails earlier with `FT_Err_Unimplemented_Feature`; the lower `fontdone` `FT_Outline_Glyph_Stroke` path is not generally implemented yet. | Finish general `FT_Stroker_ParseOutline` segment routes and export support. Then re-add independent stroked descender rows such as `jQ` and prove both width and height clipping against Pillow. |
+| `1193`, `1194` | `stroke_filled=true` branch routes to `FT_Outline_Glyph_StrokeBorder`. | `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`, otherwise `FT_Glyph_Stroke`. | Rust now has a real safe wrapper and branches correctly, but active Font rows do not execute successful `stroke_filled=true`. FreeType narrow route still has the stroke-border success routes pending. This shares the same lower blocker as normal stroked descender glyphs: real outline stroke geometry/export is not implemented generally. | Complete lower `FT_Stroker_ParseOutline` segment routes and border-export support for real glyph outlines, then add successful `stroke_width + stroke_filled=true` and stroked descender ImageFont fixture rows. |
 
 ## Other ImageFont-related files where coverage is missing
 
@@ -181,7 +182,7 @@ Decision: do not claim complete `PIL.ImageFont` parity while successful RAQM sha
 
 Pillow `FreeTypeFont.getmask2` accepts `stroke_filled` through keyword arguments and passes it into the C render path. `_imagingft.c` chooses `FT_Glyph_StrokeBorder` when `stroke_filled=true`.
 
-Rust now carries `stroke_filled` in `ImageFontTextOptions` and routes to `fontdone::ffi::FT_Outline_Glyph_StrokeBorder`. That removed the old explicit unsupported guard, but the lower `fontdone` stroke-border geometry for real glyph outlines is still incomplete.
+Rust now carries `stroke_filled` in `ImageFontTextOptions` and routes to `fontdone::ffi::FT_Outline_Glyph_StrokeBorder`. That removed the old explicit unsupported guard, but the lower `fontdone` stroke-border geometry for real glyph outlines is still incomplete. Commit `fd0bb7ccafd8968031e962c1f3e12c5102a5e5f0` makes `FT_Stroker_ParseOutline` follow the C contour/tag parser, but the maintained mixed-outline route remains pending because the delegated segment routes and border export are not yet general enough.
 
 Decision: complete `FT_Stroker_ParseOutline`/border-export for real glyphs, then add successful `stroke_filled=true` fixture rows. Until then, this is a known parity gap. Do not add more glyph-specific shortcuts; the current normal-stroke path already has a DejaVu glyph-36 `A` shortcut, and a stroked `jQ` sweep row proved that Pillow succeeds while Rust fails before rendering.
 
@@ -218,7 +219,7 @@ Resolved during the mono BASIC pass: six input-only rows now prove public `mode=
 - `font.getmask.dejavusans20_jq_mode_1`
 - `font.getmask2.dejavusans20_jq_mode_1`
 
-These rows passed exact live Pillow 12.2.0 parity in `make -C pillow-rs font-tests` and Coverage MCP run `01bdeaea-2730-4fb7-af76-f7ec384d53d6`. Snapshot `300395c8-6699-444d-a4e2-2b5dae0f24c4` confirms `imagingft.rs` stayed at 1642/1666 lines, 246/254 branches, 163/174 functions, and 2547/2645 regions. The rows increase behavioral proof to 345 cases, but they do not move region coverage; the remaining coverage-moving work is still stroker/stroke-border and rare reachable error paths.
+These rows passed exact live Pillow 12.2.0 parity in `make -C pillow-rs font-tests` and Coverage MCP run `a6721cc4-bd8e-4049-8846-a913fb52f71e`. Snapshot `2c1810bd-489d-49aa-96d5-bbaa5de7c71d` confirms `imagingft.rs` stayed at 1642/1666 lines, 246/254 branches, 163/174 functions, and 2547/2645 regions. The rows increase behavioral proof to 345 cases, but they do not move region coverage; the remaining coverage-moving work is still stroker/stroke-border and rare reachable error paths.
 
 ### 6. Bitmap and FreeType class shape is not 1:1
 
