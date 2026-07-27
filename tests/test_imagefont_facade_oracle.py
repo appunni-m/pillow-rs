@@ -62,6 +62,21 @@ def _freetype_mask_observation(font, method, text, **kwargs):
         }
 
 
+def _freetype_value_observation(font, method, text, **kwargs):
+    try:
+        return {
+            "status": "ok",
+            "value": getattr(font, method)(text, **kwargs),
+        }
+    except Exception as exc:
+        return {
+            "status": "err",
+            "class": type(exc).__name__,
+            "args": exc.args,
+            "message": str(exc),
+        }
+
+
 def _transposed_observation(font, text, method):
     try:
         value = getattr(font, method)(text)
@@ -210,6 +225,42 @@ def test_imagefont_file_like_font_variant_matches_pillow(RSPIL):
     pil_font = PILImageFont.truetype(BytesIO(data), 20).font_variant(size=21)
 
     assert _font_observation(rs_font) == _font_observation(pil_font)
+
+
+@pytest.mark.covers("ImageFont.FreeTypeFont.getbbox")
+def test_imagefont_freetype_getbbox_values_and_errors_match_pillow(RSPIL):
+    rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20)
+    pil_font = PILImageFont.truetype(DEJAVU, 20)
+    for text, kwargs in (
+        ("AV", {}),
+        ("jQ", {"stroke_width": 1.5}),
+        ("AV", {"mode": "1"}),
+        ("AV", {"anchor": "mm"}),
+        ("AV", {"anchor": "bad"}),
+        ("AV", {"direction": "rtl"}),
+        ("AV", {"features": []}),
+        ("AV", {"language": "en"}),
+    ):
+        assert _freetype_value_observation(rs_font, "getbbox", text, **kwargs) == (
+            _freetype_value_observation(pil_font, "getbbox", text, **kwargs)
+        )
+
+
+@pytest.mark.covers("ImageFont.FreeTypeFont.getlength")
+def test_imagefont_freetype_getlength_values_and_errors_match_pillow(RSPIL):
+    rs_font = RSPIL.ImageFont.truetype(DEJAVU, 20)
+    pil_font = PILImageFont.truetype(DEJAVU, 20)
+    for text, kwargs in (
+        ("AV", {}),
+        ("AV", {"mode": "1"}),
+        ("AV", {"direction": "rtl"}),
+        ("AV", {"features": []}),
+        ("AV", {"features": ["-kern"]}),
+        ("AV", {"language": "en"}),
+    ):
+        assert _freetype_value_observation(rs_font, "getlength", text, **kwargs) == (
+            _freetype_value_observation(pil_font, "getlength", text, **kwargs)
+        )
 
 
 @pytest.mark.covers("ImageFont.FreeTypeFont.getmask")
