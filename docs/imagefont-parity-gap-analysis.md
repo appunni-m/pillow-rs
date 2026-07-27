@@ -2,11 +2,11 @@
 
 Date: 2026-07-27
 
-Rust commit reviewed: `11efd14a4827df4b16734ab53de1fe3c40cb0860`
+Rust commit reviewed: `79cc59aaca4100a86b09bfb9d2247fc1980c1492`
 
-Coverage MCP run: `677d731a-4841-464b-a0d9-826b5e303360`
+Coverage MCP run: `dec0a7db-804c-43fa-a8f1-551f7b136afe`
 
-Coverage MCP snapshot: `e7850c9c-a571-4d3d-91a9-391dc60634ca`
+Coverage MCP snapshot: `82e252e5-5aee-4acf-8e57-dbb7c488f266`
 
 Suite: `font-with-freetype`
 
@@ -101,19 +101,19 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `pillow-rs/src/font/default_aileron.rs` | 17/17 100.00% | n/a | 3/3 100.00% | 24/24 100.00% | covered |
 | `pillow-rs/src/font/mod.rs` | 374/374 100.00% | n/a | 78/78 100.00% | 487/487 100.00% | covered |
 | `pillow-rs/src/font/pilfont.rs` | 715/737 97.01% | 142/142 100.00% | 58/78 74.36% | 1014/1094 92.69% | one reported line gap is rustdoc, not executable |
-| `pillow-rs/src/font/imagingft.rs` | 1638/1663 98.50% | 267/276 96.74% | 162/174 93.10% | 2611/2707 96.45% | real partial branch gaps remain |
+| `pillow-rs/src/font/imagingft.rs` | 1607/1631 98.53% | 254/262 96.95% | 157/168 93.45% | 2529/2623 96.42% | real partial branch gaps remain |
 
 ## Uncovered/partial line logic analysis
 
-Coverage MCP reports no fully uncovered executable lines in `imagingft.rs`; all remaining relevant gaps are partial branches.
+Coverage MCP reports two uncovered executable lines in `imagingft.rs`; the rest of the targeted gaps are partial branches.
 
 | Rust line(s) | Rust logic | Pillow 12.2.0 reference | Analysis | Required action |
 |---:|---|---|---|---|
 | `91`, `105` | `ft_error_to_pil` hand-maps a subset of FreeType errors and falls back to `ValueError("FreeType error N")`. | `_imagingft.c:38-112` builds an `FT_ERRORS_H` table and raises `OSError` for known errors, with unknown fallback also as `OSError`. | Current fixture rows hit several errors, but the implementation is not table-equivalent to Pillow. This is a real parity risk, not only coverage noise. | Replace subset mapping with complete FreeType error table semantics or generate the table from `fontdone` constants. Add rows for unknown/error-table fallback behavior if reachable. |
-| `796` | `mask_from_run_with_start` returns `Ok((w, h, canvas))`. | `_imagingft.c:1244-1249` returns image plus offset after cleanup. | Likely compiler-generated `Result`/drop branch. No visible Pillow behavior difference at this line. | Do not hack. Leave unless a safe refactor removes impossible instrumentation without changing behavior. |
-| `826-829` | Stroked path loads each glyph and applies local previous-glyph kerning in the render loop. | `_imagingft.c:1003-1025` and `1237-1238` consume `glyph_info[i].x_offset/x_advance/y_offset/y_advance` from layout. | In Pillow C, layout owns glyph positioning. Rust render code recomputes kerning locally. This can diverge for missing glyphs, zero glyph index transitions, or any future non-BASIC layout. | Refactor render loops to consume a layout run equivalent to Pillow `GlyphInfo` rather than recomputing layout inside render. Add zero-glyph and kerning-pair stroked rows. |
-| `857`, `860` | Rust clamps stroked bitmap extents when actual stroked bitmap exceeds bbox-derived expected dimensions. | `_imagingft.c:998-1001` says render dimensions must match `font_getsize`; `_imagingft.c:1115-1128` clips during paste. | This looks like a workaround for bbox/stroker mismatch. Pillow allocates from `bounding_box_and_anchors`, then clips when writing; it does not mutate the computed bitmap extent this way. | Treat as suspect implementation. Fix lower bbox/stroker parity, then remove or justify clamp with exact C evidence. Add rows that prove both clamp sides if it remains. |
-| `928` | Rust slices `canvas[dst..dst + cw]` after manual clipping. | `_imagingft.c:1115-1128` clips x/y before writing to target. | Likely bounds-check instrumentation. Still worth covering with partially clipped and fully clipped glyph rows because this is the exact paste boundary. | Add edge rows only if they exercise new clipping behavior. Do not add duplicate rows that do not move coverage. |
+| `796` | Empty stroked text returns a zero-filled square mask after validating negative stroke collapse. | `_imagingft.c` allocates from stroke-expanded dimensions and errors on negative size collapse. | The success side is covered; the negative/collapsed side remains partial. | Keep the existing negative-stroke row and add only if a distinct Pillow error path is found. |
+| `826-829` | `ceil().max(0.0)` dimensions for the stroke-expanded bbox. | Pillow computes dimensions through `bounding_box_and_anchors` and C integer conversions. | The negative max branch is partially untested after the shared run refactor. This is dimension sanitization, not a separate public feature. | Cover only with an input that moves a real Pillow branch, not by adding duplicate stroke rows. |
+| `833`, `836` | Rust clamps stroked bitmap extents when actual stroked bitmap exceeds bbox-derived expected dimensions. | `_imagingft.c:998-1001` says render dimensions must match `font_getsize`; `_imagingft.c:1115-1128` clips during paste. | This looks like a workaround for bbox/stroker mismatch. Pillow allocates from `bounding_box_and_anchors`, then clips when writing; it does not mutate the computed bitmap extent this way. | Treat as suspect implementation. Fix lower bbox/stroker parity, then remove or justify clamp with exact C evidence. Add rows that prove both clamp sides if it remains. |
+| `928`, `929` | Rust sets `FT_STROKER_LINEJOIN_ROUND` and miter limit `0` before glyph stroking. | `_imagingft.c:989-995` uses the same line cap, line join, and miter limit. | Source parity is now aligned; the coverage marker reflects constant/argument instrumentation, not a known behavior gap. | No action unless a lower-level stroker fixture shows these values are not honored. |
 
 ## Other ImageFont-related files where coverage is missing
 
@@ -169,13 +169,13 @@ Rust now passes miter limit `0` for the stroked ImageFont path.
 
 Remaining action: still implement `stroke_filled`/`FT_Glyph_StrokeBorder` parity; that is the larger stroked-rendering gap.
 
-### 4. Rust stroked layout/render loop does local kerning instead of consuming a Pillow-equivalent layout run
+### 4. BASIC layout is now shared by length, bbox, mask, and stroke
 
 Pillow C consumes `glyph_info` generated by the layout path. It does not recompute kerning inside the render paste loop.
 
-Rust computes `gid`, loads the glyph, applies a `prev/g != 0` kerning guard, and advances pen inside both normal and stroked render loops.
+Rust now builds one BASIC `GlyphRun` carrying glyph index, pen, advance, and cbox. Length, bbox, normal mask, and stroked mask consume that run instead of duplicating kerning and pen advancement in render loops.
 
-Decision needed: introduce a shared internal `GlyphRun`/`GlyphInfo` equivalent from BASIC layout and make bbox, length, mask, and stroke consume it. This reduces divergence risk and will make RAQM/no-RAQM separation explicit.
+Remaining action: add zero-glyph/missing-glyph and kerning-pair stroked rows so the shared-run behavior is protected by oracle fixtures.
 
 ### 5. Rust extent clamping in stroked rendering is suspect
 
@@ -215,16 +215,15 @@ Decision needed: keep file/path I/O outside core, but ensure Python/JS bindings 
 
 1. Add `stroke_filled` to typed options and implement `FT_Glyph_StrokeBorder`.
 2. Replace `ft_error_to_pil` with table-equivalent Pillow 12.2.0 error mapping.
-3. Refactor BASIC layout into a shared run consumed by length, bbox, mask, and stroke.
-4. Re-evaluate and remove the stroked extent clamps if they are only masking lower stroker/bbox issues.
-5. Add minimal independent fixture rows for:
+3. Re-evaluate and remove the stroked extent clamps if they are only masking lower stroker/bbox issues.
+4. Add minimal independent fixture rows for:
    - stroked mode `"1"`;
    - `stroke_filled=true`;
    - zero-glyph/missing-glyph kerning transitions;
    - clipped stroked bitmap paste;
    - table-mapped FreeType errors not currently represented.
-6. Run `make -C pillow-rs font-tests`, then Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
-7. Only after coverage moves, update this document with the new snapshot and remaining gaps.
+5. Run `make -C pillow-rs font-tests`, then Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
+6. Only after coverage moves, update this document with the new snapshot and remaining gaps.
 
 ## Current decision point
 
