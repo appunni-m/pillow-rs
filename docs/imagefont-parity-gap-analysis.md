@@ -1030,3 +1030,10 @@ Current request classification for `imagingft.rs` region coverage:
   `make -C pillow-rs-freetype test-case CASE=ftstroke.FT_Glyph_StrokeBorder`
   keeps `4/4` rows passing. The next real fix is the lower wide-stroke
   conic/cubic path for non-round joins, not an `_imagingft.rs` adapter change.
+- Coverage MCP after this slice: `font-tests-coverage-with-freetype-pillow-12-2`
+  run `38a81f90-d18b-4b56-ad35-e42736824972` passed and ingested snapshot
+  `bf7f11cd-72fc-4c46-a072-db6acdec764b` for commit `b6b5bfe35`.
+  `pillow-rs/src/font/imagingft.rs` remains `1660/1682` lines,
+  `249/254` branches, `162/173` functions, and `2610/2696` regions
+  (`96.81%`). The remaining ranges are unchanged: `91`, `253`, `271`, `796`,
+  `826`, `829`, `831`, and `928`.
