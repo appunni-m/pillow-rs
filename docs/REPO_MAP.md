@@ -546,6 +546,7 @@ generated reports, build outputs, and package installs.
     |-- test_drawing_oracle.py
     |-- test_eval_errors.py
     |-- test_fromarray_descriptor_oracle.py
+    |-- test_imagefont_facade_oracle.py
     |-- test_pa_mutations.py
     |-- test_parity.py
     |-- test_paste_oracle.py
