@@ -602,19 +602,24 @@ explicit exclusion instead of leaving it ambiguous.
 
 ## Recommended action order
 
-1. Add minimal, independent oracle fixtures for:
-   - stroked mode `"1"` after lower stroke-outline parity handles mono-target
-     stroked outlines without glyph-specific shortcuts;
-   - height-side stroked clipping: covered for DejaVuSans glyph 36 by the
-     current negative-Y `getmask` and `getmask2` rows;
-   - successful stroked kerning and no-kerning transitions after lower stroker support is generalized;
+1. Do not add duplicate rows for already-covered stroke cases:
+   - stroked mode `"1"` is active through
+     `font.getmask.dejavusans24_a_stroke_1_5_mode_1` and
+     `font.getmask2.dejavusans24_a_stroke_1_5_mode_1`;
+   - height-side stroked clipping is active through the current negative-Y
+     `getmask` and `getmask2` rows.
+2. Add minimal, independent oracle fixtures only for new public behavior:
+   - successful stroked kerning and no-kerning transitions if a live Pillow row
+     proves a distinct public path not covered by existing stroke rows;
    - additional embedded bitmap glyph paths only when they represent a new
      ImageFont-visible behavior not already covered by the private-use SBIT
      bbox/length/mask/mask2 rows;
-   - reachable FreeType table errors.
-2. Re-run `make -C pillow-rs font-tests`.
-3. Re-run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`.
-4. Update this document with the new run/snapshot and remove only gaps proven by live Pillow oracle rows.
+   - reachable FreeType table errors where the same public Pillow ImageFont
+     operation naturally emits the error.
+3. Re-run `make -C pillow-rs font-tests`.
+4. Re-run Coverage MCP command `font-tests-coverage-with-freetype-pillow-12-2`
+   after any parity-affecting fixture/code change.
+5. Update this document with the new run/snapshot and remove only gaps proven by live Pillow oracle rows.
 
 ## Current decision point
 
