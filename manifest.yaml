@@ -997,14 +997,17 @@ modules:
       - cpu
       supported_modes: *id001
     - name: getim
-      signature: getim(*args, **kwargs)
-      status: implemented
+      signature: getim() -> CapsuleType
+      status: ignored
+      reason: >
+        Pillow returns a PyCapsule pointing at its private C Imaging memory.
+        pillow-rs intentionally does not expose a fake or ABI-incompatible
+        capsule; the Python binding raises NotImplementedError instead.
       param_variants:
       - {}
       edge_cases: []
-      supported_targets:
-      - cpu
-      supported_modes: *id001
+      supported_targets: []
+      supported_modes: []
     - name: getpalette
       signature: getpalette(*args, **kwargs)
       status: implemented
