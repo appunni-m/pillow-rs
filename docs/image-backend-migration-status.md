@@ -22,6 +22,10 @@ in `../image-slash-star/docs/lazy-loading-correctness-proposal.md`.
   decoding, encoding, and canonical format name/extension parsing. The unused
   downstream `FormatHandler` registry was removed so it cannot become a second
   codec or detection implementation.
+- `pillow-rs/src/raster/` exclusively owns materialized buffers, pixel
+  structs, generic image views, color conversion, and raster transforms.
+  `DynamicImage`, `ImageBuffer`, and related processing types are re-exported
+  from `pillow-rs`, not from the codec crate.
 - `pillow-rs` only adapts upstream errors to Pillow error categories and wraps
   decoded data in its lazy/persistent image state.
 - `image-codecs-all` forwards JPEG, PNG, GIF, BMP, TIFF, WebP, and ICO.
@@ -144,27 +148,39 @@ The downstream repository is intentionally tested manually rather than through
 Coverage MCP. The maintained evidence is:
 
 ```text
-make image-backend-test
+make test-core
+make image-backend-migration-test
+make image-backend-parity-test
 make image-backend-feature-test
-make fmt
+make test-wasm
+make fmt-fix
 make repo-map-check
-cargo check -p pillow-rs-py -p pillow-rs-js
+cargo clippy -p pillow-rs --lib --all-features -- -A deprecated
 ```
 
-Both manifest targets pass, including all eight codecs, exact structured
-errors, feature forwarding, lifecycle/cache behavior, and all 19 palette
-operation rows. Formatting, repository-map validation, and both binding checks
-pass. `git diff --check` is clean.
+The 68-test core library lane and pinned live Pillow font oracle pass. The
+8-test migration lane, 23-test exact backend parity lane, and reduced-feature
+error lane pass, including all eight codecs, exact structured errors, feature
+forwarding, lifecycle/cache behavior, and all 19 palette operation rows. Both
+optimized JS/WASM codec matrices pass all 9 rows in the `core` and `extra`
+packages. Formatting, public API boundary validation, the repository map, and
+focused strict Clippy for the core library pass.
+
+The workspace-wide `make clippy` target is not currently green: its
+`--all-targets` policy denies existing `expect`/`expect_err` use throughout
+tests and examples, and the Python binding still has an existing
+`map(...).unwrap_or(...)` violation. These failures are outside the ownership
+move and are recorded rather than suppressed.
 
 A full `make pillow-rs-test` run also passes the core and image suites. Its only
 remaining failures are three pre-existing FreeType scalar `getlength` parity
 rows; the corresponding 7,632-case pixel matrix has zero failures. Those
 font-only differences are outside this backend migration.
 
-The upstream `image-slash-star` acceptance remains Coverage MCP run
-`5b0f1ca0-0ecf-433b-a159-722387249757`, snapshot
-`2a9e4148-d559-44db-8368-57df58bf21fc`, with exact 100% line, branch,
-function, and region coverage.
+The upstream `image-slash-star` acceptance is Coverage MCP run
+`ba9a53e9-6673-44c2-b320-7737a1947cfb`, snapshot
+`3ce62ccb-d3bb-4040-bc34-86f46829aaee`: 28,086/28,086 lines,
+3,818/3,818 branches, 1,442/1,442 functions, and 47,601/47,601 regions.
 
 The native workspace and zero-codec core compile. The prior `fontdone` wasm32
 width blocker is resolved with a target-scoped internal arithmetic feature that

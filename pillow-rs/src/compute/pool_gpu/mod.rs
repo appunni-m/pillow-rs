@@ -15,7 +15,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::pipeline::{PipelineOp, PixelMode};
-use image_slash_star::{DynamicImage, RgbaImage};
+use crate::raster::{DynamicImage, RgbaImage};
 use std::collections::HashMap;
 
 // ─── BufferPool ────────────────────────────────────────────────────────────
@@ -871,7 +871,7 @@ fn put_alpha_output(result: DynamicImage, mode: PixelMode) -> Result<DynamicImag
             .pixels()
             .flat_map(|pixel| [pixel[0], pixel[3]])
             .collect();
-        image_slash_star::GrayAlphaImage::from_raw(w, h, samples)
+        crate::raster::GrayAlphaImage::from_raw(w, h, samples)
             .map(DynamicImage::ImageLumaA8)
             .ok_or_else(|| {
                 PilError::InternalError("GPU putalpha buffer shape mismatch".to_string())
@@ -1153,7 +1153,7 @@ impl BackendImpl for GpuPool {
             match op {
                 PipelineOp::Grayscale => {
                     put_alpha_mode = None;
-                    out_mode = Some(image_slash_star::ColorType::L8);
+                    out_mode = Some(crate::raster::ColorType::L8);
                 }
                 PipelineOp::PutAlpha { mode, .. } => {
                     put_alpha_mode = Some(*mode);
@@ -1168,14 +1168,12 @@ impl BackendImpl for GpuPool {
         if let Some(ct) = out_mode {
             // Bypass preserve_mode — use the override color type directly
             match ct {
-                image_slash_star::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
-                image_slash_star::ColorType::La8 => {
+                crate::raster::ColorType::L8 => Ok(DynamicImage::ImageLuma8(result.to_luma8())),
+                crate::raster::ColorType::La8 => {
                     Ok(DynamicImage::ImageLumaA8(result.to_luma_alpha8()))
                 }
-                image_slash_star::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
-                image_slash_star::ColorType::Rgba8 => {
-                    Ok(DynamicImage::ImageRgba8(result.to_rgba8()))
-                }
+                crate::raster::ColorType::Rgb8 => Ok(DynamicImage::ImageRgb8(result.to_rgb8())),
+                crate::raster::ColorType::Rgba8 => Ok(DynamicImage::ImageRgba8(result.to_rgba8())),
                 _ => Ok(crate::image::preserve_mode(img, result)),
             }
         } else {

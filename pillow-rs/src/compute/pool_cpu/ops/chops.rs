@@ -3,9 +3,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
-use image_slash_star::{
-    DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
-};
+use crate::raster::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use std::sync::Arc;
 
 // ── Blend mode lookup tables (generated from PIL C implementation) ──
@@ -315,7 +313,7 @@ pub fn op_chops_blend(
             out.put_pixel(
                 x,
                 y,
-                image_slash_star::Rgb([
+                crate::raster::Rgb([
                     (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
                     (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
                     (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
@@ -349,7 +347,7 @@ pub fn op_chops_composite(
             out.put_pixel(
                 x,
                 y,
-                image_slash_star::Rgb([
+                crate::raster::Rgb([
                     ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
                     ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
                     ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
@@ -379,23 +377,19 @@ pub fn op_chops_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
         }
     }
     Ok(match channels {
-        1 => {
-            DynamicImage::ImageLuma8(image_slash_star::GrayImage::from_raw(w, h, out).ok_or_else(
-                || PilError::InternalError("invert L buffer shape mismatch".to_string()),
-            )?)
-        }
+        1 => DynamicImage::ImageLuma8(crate::raster::GrayImage::from_raw(w, h, out).ok_or_else(
+            || PilError::InternalError("invert L buffer shape mismatch".to_string()),
+        )?),
         2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, out).ok_or_else(|| {
+            crate::raster::GrayAlphaImage::from_raw(w, h, out).ok_or_else(|| {
                 PilError::InternalError("invert LA buffer shape mismatch".to_string())
             })?,
         ),
-        3 => DynamicImage::ImageRgb8(image_slash_star::RgbImage::from_raw(w, h, out).ok_or_else(
+        3 => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_raw(w, h, out).ok_or_else(
             || PilError::InternalError("invert RGB buffer shape mismatch".to_string()),
         )?),
-        _ => {
-            DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_raw(w, h, out).ok_or_else(
-                || PilError::InternalError("invert RGBA buffer shape mismatch".to_string()),
-            )?)
-        }
+        _ => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_raw(w, h, out).ok_or_else(
+            || PilError::InternalError("invert RGBA buffer shape mismatch".to_string()),
+        )?),
     })
 }

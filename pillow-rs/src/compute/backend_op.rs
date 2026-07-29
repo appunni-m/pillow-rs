@@ -16,7 +16,7 @@
 //   (see scripts/check_backend_leaks.sh)
 // ============================================================================
 
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 use crate::error::PilError;
 

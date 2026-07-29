@@ -97,14 +97,14 @@ fn load_truetype_with_index(
 #[rustfmt::skip]
 const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
     (
-        ffi::FT_Err_Cannot_Open_Resource as i32,
+        ffi::FT_Err_Cannot_Open_Resource,
         "cannot open resource",
     ),
     (
-        ffi::FT_Err_Unknown_File_Format as i32,
+        ffi::FT_Err_Unknown_File_Format,
         "unknown file format",
     ),
-    (ffi::FT_Err_Invalid_File_Format as i32, "broken file"),
+    (ffi::FT_Err_Invalid_File_Format, "broken file"),
     (
         ffi::FT_Err_Invalid_Version as i32,
         "invalid FreeType version",
@@ -113,12 +113,12 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         ffi::FT_Err_Lower_Module_Version as i32,
         "module version is too low",
     ),
-    (ffi::FT_Err_Invalid_Argument as i32, "invalid argument"),
+    (ffi::FT_Err_Invalid_Argument, "invalid argument"),
     (
-        ffi::FT_Err_Unimplemented_Feature as i32,
+        ffi::FT_Err_Unimplemented_Feature,
         "unimplemented feature",
     ),
-    (ffi::FT_Err_Invalid_Table as i32, "broken table"),
+    (ffi::FT_Err_Invalid_Table, "broken table"),
     (
         ffi::FT_Err_Invalid_Offset as i32,
         "broken offset within table",
@@ -130,28 +130,28 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
     (ffi::FT_Err_Missing_Module as i32, "missing module"),
     (ffi::FT_Err_Missing_Property as i32, "missing property"),
     (
-        ffi::FT_Err_Invalid_Glyph_Index as i32,
+        ffi::FT_Err_Invalid_Glyph_Index,
         "invalid glyph index",
     ),
     (
-        ffi::FT_Err_Invalid_Character_Code as i32,
+        ffi::FT_Err_Invalid_Character_Code,
         "invalid character code",
     ),
     (
-        ffi::FT_Err_Invalid_Glyph_Format as i32,
+        ffi::FT_Err_Invalid_Glyph_Format,
         "unsupported glyph image format",
     ),
     (
-        ffi::FT_Err_Cannot_Render_Glyph as i32,
+        ffi::FT_Err_Cannot_Render_Glyph,
         "cannot render this glyph format",
     ),
-    (ffi::FT_Err_Invalid_Outline as i32, "invalid outline"),
+    (ffi::FT_Err_Invalid_Outline, "invalid outline"),
     (
         ffi::FT_Err_Invalid_Composite as i32,
         "invalid composite glyph",
     ),
     (ffi::FT_Err_Too_Many_Hints as i32, "too many hints"),
-    (ffi::FT_Err_Invalid_Pixel_Size as i32, "invalid pixel size"),
+    (ffi::FT_Err_Invalid_Pixel_Size, "invalid pixel size"),
     (
         ffi::FT_Err_Invalid_SVG_Document as i32,
         "invalid SVG document",
@@ -170,7 +170,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         "invalid face handle",
     ),
     (
-        ffi::FT_Err_Invalid_Size_Handle as i32,
+        ffi::FT_Err_Invalid_Size_Handle,
         "invalid size handle",
     ),
     (
@@ -178,7 +178,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         "invalid glyph slot handle",
     ),
     (
-        ffi::FT_Err_Invalid_CharMap_Handle as i32,
+        ffi::FT_Err_Invalid_CharMap_Handle,
         "invalid charmap handle",
     ),
     (
@@ -194,7 +194,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         ffi::FT_Err_Too_Many_Extensions as i32,
         "too many extensions",
     ),
-    (ffi::FT_Err_Out_Of_Memory as i32, "out of memory"),
+    (ffi::FT_Err_Out_Of_Memory, "out of memory"),
     (ffi::FT_Err_Unlisted_Object as i32, "unlisted object"),
     (ffi::FT_Err_Cannot_Open_Stream as i32, "cannot open stream"),
     (
@@ -227,7 +227,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         "raster uninitialized",
     ),
     (ffi::FT_Err_Raster_Corrupted as i32, "raster corrupted"),
-    (ffi::FT_Err_Raster_Overflow as i32, "raster overflow"),
+    (ffi::FT_Err_Raster_Overflow, "raster overflow"),
     (
         ffi::FT_Err_Raster_Negative_Height as i32,
         "negative height while rastering",
@@ -277,7 +277,7 @@ const FT_ERROR_MESSAGES: &[(i32, &str)] = &[
         "invalid horizontal metrics",
     ),
     (
-        ffi::FT_Err_Invalid_CharMap_Format as i32,
+        ffi::FT_Err_Invalid_CharMap_Format,
         "invalid character map (cmap) format",
     ),
     (ffi::FT_Err_Invalid_PPem as i32, "invalid ppem value"),
@@ -653,9 +653,9 @@ pub(crate) fn native_face_attrs(
     (
         family,
         style,
-        pixel(metrics.ascender as i64) as u32,
-        (-pixel(metrics.descender as i64)) as u32,
-        pixel(metrics.height as i64) as u32,
+        pixel(metrics.ascender) as u32,
+        (-pixel(metrics.descender)) as u32,
+        pixel(metrics.height) as u32,
         u32::from(metrics.x_ppem),
         u32::from(metrics.y_ppem),
         font.engine.face.num_glyphs,

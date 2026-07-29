@@ -41,7 +41,7 @@
 // ============================================================================
 
 use crate::error::PilError;
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 /// Registered backend functions for one operation key.
 ///

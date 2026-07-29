@@ -23,9 +23,9 @@ impl Image {
         // Determine band count from the image
         let img = self.materialize()?;
         let n_bands = match img.color() {
-            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
-            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
-            image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
+            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
+            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
+            crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
             _ => 4, // Rgba8, Rgba16, or fallback
         };
 

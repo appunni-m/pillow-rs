@@ -5,7 +5,7 @@
 //! Coordinates are integer pixel coordinates. Colors are normalized RGBA byte
 //! tuples before mode-specific drawing rules are applied.
 
-use image_slash_star::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use crate::raster::{DynamicImage, GenericImageView, Rgba, RgbaImage};
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -374,7 +374,7 @@ impl Draw {
                             canvas.put_pixel(
                                 dx as u32,
                                 dy as u32,
-                                image_slash_star::Rgba([r, g, b, a]),
+                                crate::raster::Rgba([r, g, b, a]),
                             );
                         }
                     }
@@ -402,12 +402,12 @@ impl Draw {
                             } else {
                                 pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
                             };
-                            luma.put_pixel(dx as u32, dy as u32, image_slash_star::Luma([v]));
+                            luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                         }
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageLuma8(luma),
+                    crate::raster::DynamicImage::ImageLuma8(luma),
                     Some("1".to_string()),
                 );
                 Ok(())
@@ -431,12 +431,12 @@ impl Draw {
                             } else {
                                 pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
                             };
-                            luma.put_pixel(dx as u32, dy as u32, image_slash_star::Luma([v]));
+                            luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                         }
                     }
                 }
                 self.image =
-                    Image::from_dynamic(image_slash_star::DynamicImage::ImageLuma8(luma), None);
+                    Image::from_dynamic(crate::raster::DynamicImage::ImageLuma8(luma), None);
                 Ok(())
             }
             "LA" => {
@@ -465,12 +465,12 @@ impl Draw {
                             } else {
                                 pil_blend(existing[1], ink_a, m)
                             };
-                            la.put_pixel(dx as u32, dy as u32, image_slash_star::LumaA([l, a]));
+                            la.put_pixel(dx as u32, dy as u32, crate::raster::LumaA([l, a]));
                         }
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageLumaA8(la),
+                    crate::raster::DynamicImage::ImageLumaA8(la),
                     Some("LA".to_string()),
                 );
                 Ok(())
@@ -513,13 +513,13 @@ impl Draw {
                             rgba.put_pixel(
                                 dx as u32,
                                 dy as u32,
-                                image_slash_star::Rgba([c, m_ch, y_ch, k]),
+                                crate::raster::Rgba([c, m_ch, y_ch, k]),
                             );
                         }
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageRgba8(rgba),
+                    crate::raster::DynamicImage::ImageRgba8(rgba),
                     Some("CMYK".to_string()),
                 );
                 Ok(())
@@ -535,7 +535,7 @@ impl Draw {
                     let img = self.image.materialize()?;
                     let luma = img.to_luma8();
                     let (img_w, img_h) = luma.dimensions();
-                    let mut indices = image_slash_star::GrayImage::new(img_w, img_h);
+                    let mut indices = crate::raster::GrayImage::new(img_w, img_h);
                     for (op, ip) in indices.pixels_mut().zip(luma.pixels()) {
                         op[0] = ip[0];
                     }
@@ -554,11 +554,7 @@ impl Draw {
                                 } else {
                                     pil_blend(indices.get_pixel(dx as u32, dy as u32)[0], ink, m)
                                 };
-                                indices.put_pixel(
-                                    dx as u32,
-                                    dy as u32,
-                                    image_slash_star::Luma([v]),
-                                );
+                                indices.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                             }
                         }
                     }
@@ -589,12 +585,12 @@ impl Draw {
                                 } else {
                                     pil_blend(luma.get_pixel(dx as u32, dy as u32)[0], ink, m)
                                 };
-                                luma.put_pixel(dx as u32, dy as u32, image_slash_star::Luma([v]));
+                                luma.put_pixel(dx as u32, dy as u32, crate::raster::Luma([v]));
                             }
                         }
                     }
                     self.image = Image::from_dynamic(
-                        image_slash_star::DynamicImage::ImageLuma8(luma),
+                        crate::raster::DynamicImage::ImageLuma8(luma),
                         Some("P".to_string()),
                     );
                 }
@@ -640,13 +636,13 @@ impl Draw {
                             rgba.put_pixel(
                                 dx as u32,
                                 dy as u32,
-                                image_slash_star::Rgba([b0, b1, b2, b3]),
+                                crate::raster::Rgba([b0, b1, b2, b3]),
                             );
                         }
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageRgba8(rgba),
+                    crate::raster::DynamicImage::ImageRgba8(rgba),
                     Some(mode.to_string()),
                 );
                 Ok(())
@@ -689,7 +685,7 @@ impl Draw {
                             canvas.put_pixel(
                                 dx as u32,
                                 dy as u32,
-                                image_slash_star::Rgba([r, g, b, a]),
+                                crate::raster::Rgba([r, g, b, a]),
                             );
                         }
                     }
@@ -723,7 +719,7 @@ impl Draw {
                                 // No dither: just threshold at 128 (matching PIL's fill behavior)
                                 let gray = crate::color::pil_grayscale_truncate(&img_loaded)?;
                                 let (w, h) = gray.dimensions();
-                                let mut out = image_slash_star::GrayImage::new(w, h);
+                                let mut out = crate::raster::GrayImage::new(w, h);
                                 for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
                                     op[0] = if gp[0] >= 128 { 255 } else { 0 };
                                 }
@@ -735,7 +731,7 @@ impl Draw {
                                 // draw pipeline, preserving the RGBA alpha channel)
                                 let gray = crate::color::pil_grayscale(&img_loaded)?;
                                 let (w, h) = gray.dimensions();
-                                let mut ga = image_slash_star::GrayAlphaImage::new(w, h);
+                                let mut ga = crate::raster::GrayAlphaImage::new(w, h);
                                 let rgba = img_loaded.to_rgba8();
                                 for ((gap, gp), rp) in
                                     ga.pixels_mut().zip(gray.pixels()).zip(rgba.pixels())
@@ -751,7 +747,7 @@ impl Draw {
                                 if let Some(pal) = self.image.palette() {
                                     let (w, h) = img_loaded.dimensions();
                                     let rgba = img_loaded.to_rgba8();
-                                    let mut indices = image_slash_star::GrayImage::new(w, h);
+                                    let mut indices = crate::raster::GrayImage::new(w, h);
                                     for (op, rp) in indices.pixels_mut().zip(rgba.pixels()) {
                                         let idx = pal
                                             .chunks_exact(3)
@@ -1173,12 +1169,12 @@ impl Draw {
                         if off + 3 < pixels.len() && pixels[off + 3] > 0 {
                             let dx = (x as u32 + px).min(img_w - 1);
                             let dy = (y as u32 + py).min(img_h - 1);
-                            luma.put_pixel(dx, dy, image_slash_star::Luma([ink]));
+                            luma.put_pixel(dx, dy, crate::raster::Luma([ink]));
                         }
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageLuma8(luma),
+                    crate::raster::DynamicImage::ImageLuma8(luma),
                     Some("1".to_string()),
                 );
                 Ok(())
@@ -1202,11 +1198,11 @@ impl Draw {
                         let dy = (y as u32 + py).min(img_h - 1);
                         let bg = luma.get_pixel(dx, dy)[0];
                         let result = pil_blend(ink, bg, cov);
-                        luma.put_pixel(dx, dy, image_slash_star::Luma([result]));
+                        luma.put_pixel(dx, dy, crate::raster::Luma([result]));
                     }
                 }
                 self.image =
-                    Image::from_dynamic(image_slash_star::DynamicImage::ImageLuma8(luma), None);
+                    Image::from_dynamic(crate::raster::DynamicImage::ImageLuma8(luma), None);
                 Ok(())
             }
             "LA" => {
@@ -1231,11 +1227,11 @@ impl Draw {
                         let bg = la.get_pixel(dx, dy);
                         let new_l = pil_blend(ink_l, bg[0], cov);
                         let new_a = pil_blend(ink_a, bg[1], cov);
-                        la.put_pixel(dx, dy, image_slash_star::LumaA([new_l, new_a]));
+                        la.put_pixel(dx, dy, crate::raster::LumaA([new_l, new_a]));
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageLumaA8(la),
+                    crate::raster::DynamicImage::ImageLumaA8(la),
                     Some("LA".to_string()),
                 );
                 Ok(())
@@ -1278,7 +1274,7 @@ impl Draw {
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageRgba8(rgba),
+                    crate::raster::DynamicImage::ImageRgba8(rgba),
                     Some("CMYK".to_string()),
                 );
                 Ok(())
@@ -1293,7 +1289,7 @@ impl Draw {
                     let info = self.image.image_info();
                     let img_loaded = img.to_luma8();
                     let (w_i, h_i) = img_loaded.dimensions();
-                    let mut indices = image_slash_star::GrayImage::new(w_i, h_i);
+                    let mut indices = crate::raster::GrayImage::new(w_i, h_i);
                     for (op, ip) in indices.pixels_mut().zip(img_loaded.pixels()) {
                         op[0] = ip[0];
                     }
@@ -1304,7 +1300,7 @@ impl Draw {
                             if off + 3 < pixels.len() && pixels[off + 3] > 0 {
                                 let dx = (x as u32 + px).min(img_w - 1);
                                 let dy = (y as u32 + py).min(img_h - 1);
-                                indices.put_pixel(dx, dy, image_slash_star::Luma([ink]));
+                                indices.put_pixel(dx, dy, crate::raster::Luma([ink]));
                             }
                         }
                     }
@@ -1326,12 +1322,12 @@ impl Draw {
                             if off + 3 < pixels.len() && pixels[off + 3] > 0 {
                                 let dx = (x as u32 + px).min(img_w - 1);
                                 let dy = (y as u32 + py).min(img_h - 1);
-                                luma.put_pixel(dx, dy, image_slash_star::Luma([ink]));
+                                luma.put_pixel(dx, dy, crate::raster::Luma([ink]));
                             }
                         }
                     }
                     self.image = Image::from_dynamic(
-                        image_slash_star::DynamicImage::ImageLuma8(luma),
+                        crate::raster::DynamicImage::ImageLuma8(luma),
                         Some("P".to_string()),
                     );
                 }
@@ -1353,7 +1349,7 @@ impl Draw {
                     }
                 }
                 self.image = Image::from_dynamic(
-                    image_slash_star::DynamicImage::ImageRgba8(rgba),
+                    crate::raster::DynamicImage::ImageRgba8(rgba),
                     Some(mode.to_string()),
                 );
                 Ok(())
