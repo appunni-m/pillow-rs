@@ -4,7 +4,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 pub(crate) mod ops;
 

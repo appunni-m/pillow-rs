@@ -14,7 +14,7 @@ use crate::compute::registry;
 use crate::compute::{Backend, BackendImpl};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 pub(crate) mod ops;
 
@@ -34,7 +34,7 @@ fn normalize_palette_result(
             let rgba = result.to_rgba8();
             let (width, height) = rgba.dimensions();
             let indices = rgba.pixels().map(|pixel| pixel[0]).collect();
-            image_slash_star::GrayImage::from_raw(width, height, indices)
+            crate::raster::GrayImage::from_raw(width, height, indices)
                 .map(DynamicImage::ImageLuma8)
                 .ok_or_else(|| {
                     PilError::InternalError("SIMD P-mode buffer shape mismatch".to_string())
@@ -47,7 +47,7 @@ fn normalize_palette_result(
                 .pixels()
                 .flat_map(|pixel| [pixel[0], pixel[3]])
                 .collect();
-            image_slash_star::GrayAlphaImage::from_raw(width, height, samples)
+            crate::raster::GrayAlphaImage::from_raw(width, height, samples)
                 .map(DynamicImage::ImageLumaA8)
                 .ok_or_else(|| {
                     PilError::InternalError("SIMD PA-mode buffer shape mismatch".to_string())

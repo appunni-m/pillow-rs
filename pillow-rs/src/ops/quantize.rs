@@ -12,7 +12,7 @@
 
 use std::sync::Arc;
 
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
@@ -1529,7 +1529,7 @@ impl Image {
         let (w, h) = (img.width(), img.height());
 
         // PIL uses FASTOCTREE for RGBA mode (method=2 by default for RGBA).
-        let is_rgba = matches!(img.color(), image_slash_star::ColorType::Rgba8)
+        let is_rgba = matches!(img.color(), crate::raster::ColorType::Rgba8)
             || (self.explicit_mode() == Some("RGBA"));
 
         let (indices, palette_bytes, palette_alpha) = if is_rgba {
@@ -1554,7 +1554,7 @@ impl Image {
             (idx, pal_bytes, None)
         };
 
-        let mut out = image_slash_star::GrayImage::new(w, h);
+        let mut out = crate::raster::GrayImage::new(w, h);
         for (i, pixel) in out.pixels_mut().enumerate() {
             pixel[0] = indices.get(i).copied().unwrap_or(0);
         }

@@ -19,7 +19,7 @@
 //! `L` is one byte per pixel, `RGB` is tightly packed triplets, `RGBA` is
 //! tightly packed quadruplets, and `P` returns palette indices. Non-standard
 //! modes such as `CMYK`, `HSV`, `YCbCr`, `I`, and `F` may be carried through
-//! internal `image-slash-star` buffers with an explicit mode tag.
+//! Pillow-owned raster buffers with an explicit mode tag.
 //!
 //! # Lazy Execution
 //!
@@ -28,8 +28,7 @@
 //! [`Image::tobytes`] forces decoding and pipeline execution.
 
 use image_slash_star::{
-    Decoded, DecodedImage, DynamicImage, EncodedImage, GenericImageView, ImageFormat, ImageInfo,
-    ImageMode, ImagePalette,
+    Decoded, DecodedImage, EncodedImage, ImageFormat, ImageInfo, ImageMode, ImagePalette,
 };
 use std::sync::{Arc, OnceLock};
 
@@ -38,6 +37,7 @@ use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+use crate::raster::{DynamicImage, GenericImageView};
 
 /// Default palette matching PIL's web/browser palette.
 /// Used for P-mode images without an explicit palette.
@@ -71,7 +71,7 @@ pub fn default_palette() -> Vec<u8> {
 #[derive(Debug, Clone)]
 pub struct PalettedData {
     /// One palette index byte per pixel.
-    pub indices: image_slash_star::GrayImage,
+    pub indices: crate::raster::GrayImage,
     /// Retained palette data as RGB triples.
     pub palette: Vec<u8>,
     /// Optional per-entry alpha values retained from the encoded palette.
@@ -405,7 +405,7 @@ impl Image {
                 pixels.len()
             )));
         }
-        let image = image_slash_star::GrayImage::from_raw(width, height, pixels)
+        let image = crate::raster::GrayImage::from_raw(width, height, pixels)
             .ok_or_else(|| PilError::InternalError("failed to construct L mask".into()))?;
         Ok(Self::from_dynamic(DynamicImage::ImageLuma8(image), None))
     }
@@ -426,47 +426,47 @@ impl Image {
         color: (u8, u8, u8, u8),
     ) -> Result<Self, PilError> {
         let img = match mode {
-            "RGB" => DynamicImage::ImageRgb8(image_slash_star::RgbImage::from_pixel(
+            "RGB" => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Rgb([color.0, color.1, color.2]),
+                crate::raster::Rgb([color.0, color.1, color.2]),
             )),
-            "RGBA" => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_pixel(
+            "RGBA" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Rgba([color.0, color.1, color.2, color.3]),
+                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             )),
-            "L" => DynamicImage::ImageLuma8(image_slash_star::GrayImage::from_pixel(
+            "L" => DynamicImage::ImageLuma8(crate::raster::GrayImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Luma([color.0]),
+                crate::raster::Luma([color.0]),
             )),
-            "LA" => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::from_pixel(
+            "LA" => DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::from_pixel(
                 width,
                 height,
-                image_slash_star::LumaA([color.0, color.3]),
+                crate::raster::LumaA([color.0, color.3]),
             )),
-            "PA" => DynamicImage::ImageLumaA8(image_slash_star::GrayAlphaImage::from_pixel(
+            "PA" => DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::from_pixel(
                 width,
                 height,
-                image_slash_star::LumaA([color.0, color.3]),
+                crate::raster::LumaA([color.0, color.3]),
             )),
-            "1" => DynamicImage::ImageLuma8(image_slash_star::GrayImage::from_pixel(
+            "1" => DynamicImage::ImageLuma8(crate::raster::GrayImage::from_pixel(
                 width,
                 height,
                 // PIL: stores the exact pixel value (0 or 1 or 255).
                 // PIL's new("1") stores the raw color value as-is.
-                image_slash_star::Luma([color.0]),
+                crate::raster::Luma([color.0]),
             )),
             // A tuple color allocates palette entry zero. Scalar P fills use
             // `new_palette_index` because this resolved tuple no longer carries
             // the Python argument's scalar-versus-tuple distinction.
             "P" => {
                 return Ok(Image::Paletted(PalettedData {
-                    indices: image_slash_star::GrayImage::from_pixel(
+                    indices: crate::raster::GrayImage::from_pixel(
                         width,
                         height,
-                        image_slash_star::Luma([0u8]),
+                        crate::raster::Luma([0u8]),
                     ),
                     // Pillow retains one structural RGB entry here. Keeping
                     // 768 zero-padded bytes would make getpalette() invent 255
@@ -478,21 +478,21 @@ impl Image {
                     materialized: materialization_cache(),
                 }));
             }
-            "CMYK" => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_pixel(
+            "CMYK" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Rgba([color.0, color.1, color.2, color.3]),
+                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             )),
-            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(image_slash_star::RgbImage::from_pixel(
+            "YCbCr" | "HSV" => DynamicImage::ImageRgb8(crate::raster::RgbImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Rgb([color.0, color.1, color.2]),
+                crate::raster::Rgb([color.0, color.1, color.2]),
             )),
             // I and F modes store all four resolved int32/float32 LE bytes.
-            "I" | "F" => DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_pixel(
+            "I" | "F" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Rgba([color.0, color.1, color.2, color.3]),
+                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             )),
             _ => return Err(PilError::ValueError(format!("Unsupported mode: {}", mode))),
         };
@@ -511,10 +511,10 @@ impl Image {
     /// the image retains an empty palette.
     pub fn new_palette_index(width: u32, height: u32, index: u8) -> Self {
         Image::Paletted(PalettedData {
-            indices: image_slash_star::GrayImage::from_pixel(
+            indices: crate::raster::GrayImage::from_pixel(
                 width,
                 height,
-                image_slash_star::Luma([index]),
+                crate::raster::Luma([index]),
             ),
             palette: Vec::new(),
             palette_alpha: Vec::new(),
@@ -563,24 +563,24 @@ impl Image {
         }
         let img = match mode {
             "L" => DynamicImage::ImageLuma8(
-                image_slash_star::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "RGB" => DynamicImage::ImageRgb8(
-                image_slash_star::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "RGBA" => DynamicImage::ImageRgba8(
-                image_slash_star::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "LA" => DynamicImage::ImageLumaA8(
-                image_slash_star::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "P" => {
                 return Ok(Image::Paletted(PalettedData {
-                    indices: image_slash_star::GrayImage::from_raw(w, h, data[..expected].to_vec())
+                    indices: crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                     // Raw P bytes are indices only. Pillow does not synthesize
                     // palette entries until a palette is explicitly attached.
@@ -592,11 +592,11 @@ impl Image {
                 }));
             }
             "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
-                image_slash_star::RgbaImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "HSV" | "YCbCr" => DynamicImage::ImageRgb8(
-                image_slash_star::RgbImage::from_raw(w, h, data[..expected].to_vec())
+                crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
             "1" => {
@@ -616,7 +616,7 @@ impl Image {
                     }
                 }
                 DynamicImage::ImageLuma8(
-                    image_slash_star::GrayImage::from_raw(w, h, pixels)
+                    crate::raster::GrayImage::from_raw(w, h, pixels)
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                 )
             }
@@ -627,7 +627,7 @@ impl Image {
                 let copy_len = data.len().min(expected);
                 pixels[..copy_len].copy_from_slice(&data[..copy_len]);
                 DynamicImage::ImageRgba8(
-                    image_slash_star::RgbaImage::from_raw(w, h, pixels).ok_or_else(|| {
+                    crate::raster::RgbaImage::from_raw(w, h, pixels).ok_or_else(|| {
                         PilError::ValueError("frombytes: RGBA buffer error".into())
                     })?,
                 )
@@ -1582,7 +1582,7 @@ impl Image {
         }
 
         // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
-        if mode == "1" && img.color() == image_slash_star::ColorType::L8 {
+        if mode == "1" && img.color() == crate::raster::ColorType::L8 {
             let gray = img.to_luma8();
             let (w, h) = gray.dimensions();
             let row_bytes = w.div_ceil(8) as usize;
@@ -1722,7 +1722,7 @@ impl Image {
 
     /// Returns the explicit Pillow mode tag carried by this image.
     ///
-    /// Some Pillow modes cannot be represented by `image-slash-star` color types
+    /// Some Pillow modes cannot be represented by the generic raster variants
     /// alone. This method exposes the side-channel mode tag for modes such as
     /// `"1"`, `"P"`, `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
     pub fn explicit_mode(&self) -> Option<&str> {
@@ -2281,11 +2281,11 @@ impl Image {
             return Ok(rgba.pixels().map(|p| p[b]).collect());
         }
         match img.color() {
-            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => {
+            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
                 let gray = img.to_luma8();
                 Ok(gray.into_raw())
             }
-            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => {
+            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
                 let ga = img.to_luma_alpha8();
                 let mut out = Vec::with_capacity((ga.width() * ga.height() * 2) as usize);
                 for p in ga.pixels() {
@@ -2294,9 +2294,9 @@ impl Image {
                 }
                 Ok(out)
             }
-            image_slash_star::ColorType::Rgb8
-            | image_slash_star::ColorType::Rgb16
-            | image_slash_star::ColorType::Rgb32F => {
+            crate::raster::ColorType::Rgb8
+            | crate::raster::ColorType::Rgb16
+            | crate::raster::ColorType::Rgb32F => {
                 let rgb = img.to_rgb8();
                 Ok(rgb.into_raw())
             }
@@ -2556,9 +2556,9 @@ impl Image {
         // For multi-channel modes, use pixel-level counting
         let img = self.materialized_shared()?;
         let n_bands = match img.color() {
-            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
-            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
-            image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
+            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
+            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
+            crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
             _ => 4,
         };
         let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
@@ -2611,7 +2611,7 @@ impl Image {
         // Compute 256-bin histogram
         let mut hist = [0u32; 256];
         match img.color() {
-            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => {
+            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for p in luma.pixels() {
                     hist[p[0] as usize] += 1;
@@ -2645,22 +2645,22 @@ impl Image {
     pub fn entropy(&self) -> Result<f64, PilError> {
         let img = self.materialized_shared()?;
         let n_bands = match img.color() {
-            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
-            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
-            image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
+            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
+            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
+            crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
             _ => 4,
         };
         let mut hists = vec![[0u32; 256]; n_bands];
         // Use mode-aware pixel reading (to_rgba8 remaps LA channels incorrectly for histogram)
         match img.color() {
-            image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => {
+            crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
                 let la = img.to_luma_alpha8();
                 for px in la.pixels() {
                     hists[0][px[0] as usize] += 1;
                     hists[1][px[1] as usize] += 1;
                 }
             }
-            image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => {
+            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
                 let luma = img.to_luma8();
                 for px in luma.pixels() {
                     hists[0][px[0] as usize] += 1;
@@ -2949,7 +2949,7 @@ fn map_codec_error(error: image_slash_star::ImageError, source: &str) -> PilErro
 fn decoded_to_dynamic(decoded: &Decoded<DecodedImage>) -> Result<DynamicImage, PilError> {
     let content = &decoded.content;
     match content.mode {
-        ImageMode::P8 => image_slash_star::GrayImage::from_raw(
+        ImageMode::P8 => crate::raster::GrayImage::from_raw(
             content.width,
             content.height,
             content.pixels.clone(),
@@ -2965,19 +2965,17 @@ fn decoded_to_dynamic(decoded: &Decoded<DecodedImage>) -> Result<DynamicImage, P
                     unpacked.push(if bit == 0 { 0 } else { 255 });
                 }
             }
-            image_slash_star::GrayImage::from_raw(content.width, content.height, unpacked)
+            crate::raster::GrayImage::from_raw(content.width, content.height, unpacked)
                 .map(DynamicImage::ImageLuma8)
                 .ok_or_else(|| PilError::DimensionError("invalid packed bilevel buffer".to_owned()))
         }
-        ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => {
-            image_slash_star::RgbaImage::from_raw(
-                content.width,
-                content.height,
-                content.pixels.clone(),
-            )
-            .map(DynamicImage::ImageRgba8)
-            .ok_or_else(|| PilError::DimensionError("invalid four-byte buffer".to_owned()))
-        }
+        ImageMode::Cmyk8 | ImageMode::F32 | ImageMode::I32 => crate::raster::RgbaImage::from_raw(
+            content.width,
+            content.height,
+            content.pixels.clone(),
+        )
+        .map(DynamicImage::ImageRgba8)
+        .ok_or_else(|| PilError::DimensionError("invalid four-byte buffer".to_owned())),
         mode => DynamicImage::from_decoded(content)
             .ok_or_else(|| PilError::ValueError(format!("unsupported decoded mode {mode:?}"))),
     }
@@ -3016,18 +3014,18 @@ fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), 
 }
 
 fn expand_palette(
-    indices: &image_slash_star::GrayImage,
+    indices: &crate::raster::GrayImage,
     palette: &[u8],
     palette_alpha: &[u8],
 ) -> DynamicImage {
     if palette_alpha.is_empty() {
-        return DynamicImage::ImageRgb8(image_slash_star::RgbImage::from_fn(
+        return DynamicImage::ImageRgb8(crate::raster::RgbImage::from_fn(
             indices.width(),
             indices.height(),
             |x, y| {
                 let index = usize::from(indices.get_pixel(x, y)[0]);
                 let base = index * 3;
-                image_slash_star::Rgb([
+                crate::raster::Rgb([
                     palette.get(base).copied().unwrap_or(0),
                     palette.get(base + 1).copied().unwrap_or(0),
                     palette.get(base + 2).copied().unwrap_or(0),
@@ -3035,13 +3033,13 @@ fn expand_palette(
             },
         ));
     }
-    DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_fn(
+    DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_fn(
         indices.width(),
         indices.height(),
         |x, y| {
             let index = usize::from(indices.get_pixel(x, y)[0]);
             let base = index * 3;
-            image_slash_star::Rgba([
+            crate::raster::Rgba([
                 palette.get(base).copied().unwrap_or(0),
                 palette.get(base + 1).copied().unwrap_or(0),
                 palette.get(base + 2).copied().unwrap_or(0),
@@ -3056,17 +3054,17 @@ fn expand_palette(
 /// Unlike `P`, `PA` owns alpha per pixel. Pillow therefore ignores any alpha
 /// attached to the palette while converting `PA` to `RGBA`.
 fn expand_palette_alpha(
-    indices_alpha: &image_slash_star::GrayAlphaImage,
+    indices_alpha: &crate::raster::GrayAlphaImage,
     palette: &[u8],
 ) -> DynamicImage {
-    DynamicImage::ImageRgba8(image_slash_star::RgbaImage::from_fn(
+    DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_fn(
         indices_alpha.width(),
         indices_alpha.height(),
         |x, y| {
             let pixel = indices_alpha.get_pixel(x, y);
             let index = usize::from(pixel[0]);
             let base = index * 3;
-            image_slash_star::Rgba([
+            crate::raster::Rgba([
                 palette.get(base).copied().unwrap_or(0),
                 palette.get(base + 1).copied().unwrap_or(0),
                 palette.get(base + 2).copied().unwrap_or(0),
@@ -3125,29 +3123,28 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
         return result;
     }
     match orig_color {
-        image_slash_star::ColorType::L8 => {
+        crate::raster::ColorType::L8 => {
             // Extract R channel directly — GPU mode-aware shaders only update R for L mode.
             // G and B may be stale; to_luma8() weights all three channels and would be wrong.
             let rgba = result.to_rgba8();
             let (w, h) = rgba.dimensions();
             let luma: Vec<u8> = rgba.pixels().map(|px| px[0]).collect();
             DynamicImage::ImageLuma8(
-                image_slash_star::GrayImage::from_raw(w, h, luma)
-                    .unwrap_or_else(|| result.to_luma8()),
+                crate::raster::GrayImage::from_raw(w, h, luma).unwrap_or_else(|| result.to_luma8()),
             )
         }
-        image_slash_star::ColorType::La8 => {
+        crate::raster::ColorType::La8 => {
             // Extract R (luma) and A (alpha) directly.
             let rgba = result.to_rgba8();
             let (w, h) = rgba.dimensions();
             let la: Vec<u8> = rgba.pixels().flat_map(|px| [px[0], px[3]]).collect();
             DynamicImage::ImageLumaA8(
-                image_slash_star::GrayAlphaImage::from_raw(w, h, la)
+                crate::raster::GrayAlphaImage::from_raw(w, h, la)
                     .unwrap_or_else(|| result.to_luma_alpha8()),
             )
         }
-        image_slash_star::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
-        image_slash_star::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
+        crate::raster::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
+        crate::raster::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
         _ => result,
     }
 }
@@ -3165,19 +3162,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(w, h, data)
+            crate::raster::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, data)
+            crate::raster::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(w, h, data)
+            crate::raster::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(w, h, data)
+            crate::raster::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(

@@ -4,7 +4,7 @@
 //! operations (Resize, Crop, Rotate, Transpose, Thumbnail, Reduce) that operate
 //! on DynamicImage and return new DynamicImage instances.
 
-use image_slash_star::{DynamicImage, GenericImageView};
+use crate::raster::{DynamicImage, GenericImageView};
 use std::f64;
 
 use crate::checked_dims::CheckedDims;
@@ -98,19 +98,19 @@ pub fn raw_bytes_to_image(
 ) -> Result<DynamicImage, PilError> {
     match channels {
         1 => Ok(DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(w, h, data)
+            crate::raster::GrayImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         2 => Ok(DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, data)
+            crate::raster::GrayAlphaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         3 => Ok(DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(w, h, data)
+            crate::raster::RgbImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         4 => Ok(DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(w, h, data)
+            crate::raster::RgbaImage::from_raw(w, h, data)
                 .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
         )),
         _ => Err(PilError::ValueError(format!(
@@ -227,7 +227,7 @@ fn resize_f(
 
     // Re-pack each f32 as 4 RGBA8 bytes (little-endian).
     let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
-    let out = image_slash_star::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_f: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
@@ -285,7 +285,7 @@ fn resize_i(
         }
         let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
         let out =
-            image_slash_star::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
+            crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes).ok_or_else(|| {
                 PilError::ValueError("resize_i: failed to create output buffer".into())
             })?;
         return Ok(DynamicImage::ImageRgba8(out));
@@ -341,7 +341,7 @@ fn resize_i(
 
     // Re-pack each i32 as 4 RGBA8 bytes (little-endian).
     let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
-    let out = image_slash_star::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+    let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
         .ok_or_else(|| PilError::ValueError("resize_i: failed to create output buffer".into()))?;
     Ok(DynamicImage::ImageRgba8(out))
 }
@@ -630,7 +630,7 @@ pub fn execute_resize(
         // After resize, threshold back to binary {0, 255}: pixel >= 128 => 255 else 0
         let gray = result.to_luma8();
         let (rw, rh) = gray.dimensions();
-        let mut out = image_slash_star::GrayImage::new(rw, rh);
+        let mut out = crate::raster::GrayImage::new(rw, rh);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             op[0] = if ip[0] >= 128 { 255 } else { 0 };
         }
@@ -881,7 +881,7 @@ pub fn execute_thumbnail(
     let needs_reduce = !matches!(effective_filter, ResampleFilter::Nearest)
         && !matches!(
             img.color(),
-            image_slash_star::ColorType::La8 | image_slash_star::ColorType::Rgba8
+            crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
         );
     let mut work_img = img.clone();
     if needs_reduce {
@@ -938,20 +938,20 @@ pub fn execute_thumbnail(
 fn raw_to_dynimage(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::GrayImage::new(w, h)),
+            crate::raster::GrayImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::GrayImage::new(w, h)),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::GrayAlphaImage::new(w, h)),
+            crate::raster::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::GrayAlphaImage::new(w, h)),
         ),
         3 => DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::RgbImage::new(w, h)),
+            crate::raster::RgbImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::RgbImage::new(w, h)),
         ),
         _ => DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::RgbaImage::new(w, h)),
+            crate::raster::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
         ),
     }
 }

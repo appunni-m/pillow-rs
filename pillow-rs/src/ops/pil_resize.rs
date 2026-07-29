@@ -10,7 +10,7 @@
 //! intermediate rounding to match the two-pass quantization behavior.
 
 use crate::pipeline::ResampleFilter;
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 // ── Filter kernels ──
 
@@ -537,10 +537,10 @@ pub(crate) fn pil_preserve_mode(original: &DynamicImage, result: DynamicImage) -
         return result;
     }
     match orig_color {
-        image_slash_star::ColorType::L8 => DynamicImage::ImageLuma8(result.to_luma8()),
-        image_slash_star::ColorType::La8 => DynamicImage::ImageLumaA8(result.to_luma_alpha8()),
-        image_slash_star::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
-        image_slash_star::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
+        crate::raster::ColorType::L8 => DynamicImage::ImageLuma8(result.to_luma8()),
+        crate::raster::ColorType::La8 => DynamicImage::ImageLumaA8(result.to_luma_alpha8()),
+        crate::raster::ColorType::Rgb8 => DynamicImage::ImageRgb8(result.to_rgb8()),
+        crate::raster::ColorType::Rgba8 => DynamicImage::ImageRgba8(result.to_rgba8()),
         _ => result,
     }
 }
@@ -583,7 +583,7 @@ pub fn pil_resize(
         && !is_fi
         && matches!(
             img.color(),
-            image_slash_star::ColorType::Rgba8 | image_slash_star::ColorType::La8
+            crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
         );
     let work = if needs_alpha {
         premultiply_alpha(img)
@@ -597,9 +597,9 @@ pub fn pil_resize(
 
     // Determine channel count
     let channels = match work.color() {
-        image_slash_star::ColorType::L8 => 1usize,
-        image_slash_star::ColorType::La8 => 2usize,
-        image_slash_star::ColorType::Rgb8 => 3usize,
+        crate::raster::ColorType::L8 => 1usize,
+        crate::raster::ColorType::La8 => 2usize,
+        crate::raster::ColorType::Rgb8 => 3usize,
         _ => 4usize,
     };
 
@@ -718,7 +718,7 @@ pub fn pil_resize_boxed(
         && !is_fi
         && matches!(
             img.color(),
-            image_slash_star::ColorType::Rgba8 | image_slash_star::ColorType::La8
+            crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
         );
     let work = if needs_alpha {
         premultiply_alpha(img)
@@ -730,9 +730,9 @@ pub fn pil_resize_boxed(
     let (sw, sh) = (work.width(), work.height());
 
     let channels = match work.color() {
-        image_slash_star::ColorType::L8 => 1usize,
-        image_slash_star::ColorType::La8 => 2usize,
-        image_slash_star::ColorType::Rgb8 => 3usize,
+        crate::raster::ColorType::L8 => 1usize,
+        crate::raster::ColorType::La8 => 2usize,
+        crate::raster::ColorType::Rgb8 => 3usize,
         _ => 4usize,
     };
 
@@ -789,20 +789,20 @@ pub fn pil_resize_boxed(
 fn raw_to_dynamic(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImage {
     match channels {
         1 => DynamicImage::ImageLuma8(
-            image_slash_star::GrayImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::GrayImage::new(w, h)),
+            crate::raster::GrayImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::GrayImage::new(w, h)),
         ),
         2 => DynamicImage::ImageLumaA8(
-            image_slash_star::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::GrayAlphaImage::new(w, h)),
+            crate::raster::GrayAlphaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::GrayAlphaImage::new(w, h)),
         ),
         3 => DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::RgbImage::new(w, h)),
+            crate::raster::RgbImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::RgbImage::new(w, h)),
         ),
         _ => DynamicImage::ImageRgba8(
-            image_slash_star::RgbaImage::from_raw(w, h, bytes.to_vec())
-                .unwrap_or_else(|| image_slash_star::RgbaImage::new(w, h)),
+            crate::raster::RgbaImage::from_raw(w, h, bytes.to_vec())
+                .unwrap_or_else(|| crate::raster::RgbaImage::new(w, h)),
         ),
     }
 }

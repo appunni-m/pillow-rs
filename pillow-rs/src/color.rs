@@ -1,6 +1,6 @@
 //! Pillow-compatible color parsing and color-space conversion.
 //!
-//! This module accepts Rust primitives and `image-slash-star` buffers, then
+//! This module accepts Rust primitives and Pillow-owned raster buffers, then
 //! applies the same mode-aware color behavior that Pillow exposes through
 //! `ImageColor`, `Image.new`, and `Image.convert`.
 //!
@@ -10,22 +10,22 @@
 //!   `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, and `"F"`.
 //! - Multi-byte scalar modes are represented in little-endian byte order inside
 //!   RGBA-like storage when this crate needs to carry them through
-//!   `image-slash-star` buffers.
+//!   Pillow raster buffers.
 //! - CMYK is stored in an RGBA buffer as `C`, `M`, `Y`, `K` channels.
 //! - HSV and YCbCr are stored in RGB buffers using their channel names in order.
 //!
 //! # Output Conventions
 //!
-//! Conversion helpers return concrete `image-slash-star` image buffers or
-//! [`image_slash_star::DynamicImage`] values with tightly packed rows. Color
+//! Conversion helpers return concrete Pillow image buffers or
+//! [`crate::raster::DynamicImage`] values with tightly packed rows. Color
 //! resolver helpers return `(r, g, b, a)` tuples even when the destination mode
 //! will later use only one or two channels.
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use image_slash_star::{ColorType, DynamicImage, RgbImage};
+use crate::raster::{ColorType, DynamicImage, RgbImage};
 
-/// Maps a `image-slash-star` color type to the nearest Pillow mode string.
+/// Maps a codec color type to the nearest Pillow mode string.
 ///
 /// # Returns
 ///
@@ -81,7 +81,7 @@ pub fn rgb_to_luma_u8(r: u8, g: u8, b: u8) -> u8 {
 /// The conversion uses Pillow's rounded BT.601 fixed-point formula, not the
 /// `image` crate's sRGB luminance weights. The returned image has the same
 /// dimensions as `img` and one byte per pixel.
-pub fn pil_grayscale(img: &DynamicImage) -> Result<image_slash_star::GrayImage, PilError> {
+pub fn pil_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     pil_grayscale_inner(img, true)
 }
 
@@ -90,14 +90,14 @@ pub fn pil_grayscale(img: &DynamicImage) -> Result<image_slash_star::GrayImage, 
 /// `Image.convert("1")` uses the BT.601 coefficients without the rounding bias
 /// used by `"L"` conversion. The returned buffer is still an 8-bit grayscale
 /// image; callers perform the final binary thresholding step.
-pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<image_slash_star::GrayImage, PilError> {
+pub fn pil_grayscale_truncate(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     pil_grayscale_inner(img, false)
 }
 
 fn pil_grayscale_inner(
     img: &DynamicImage,
     round: bool,
-) -> Result<image_slash_star::GrayImage, PilError> {
+) -> Result<crate::raster::GrayImage, PilError> {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
     let dims = CheckedDims::new(w, h, 1)?;
@@ -118,7 +118,7 @@ fn pil_grayscale_inner(
         i += 3;
     }
 
-    image_slash_star::GrayImage::from_raw(w, h, gray)
+    crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("pil_grayscale buffer mismatch".to_string()))
 }
 
@@ -126,7 +126,7 @@ fn pil_grayscale_inner(
 ///
 /// The input is stored as RGBA where channels mean `C`, `M`, `Y`, and `K`.
 /// Output dimensions match the input and each output pixel is an `L` byte.
-pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<image_slash_star::GrayImage, PilError> {
+pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage, PilError> {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
     let dims = CheckedDims::new(w, h, 1)?;
@@ -142,7 +142,7 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<image_slash_star::GrayIma
         let b = (nk as i32 - muldiv255(y_, nk) as i32).clamp(0, 255) as u8;
         gray[i] = rgb_to_luma_u8(r, g, b);
     }
-    image_slash_star::GrayImage::from_raw(w, h, gray)
+    crate::raster::GrayImage::from_raw(w, h, gray)
         .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
 }
 
@@ -352,12 +352,10 @@ pub fn palette_to_text(palette: &[u8], mode: &str) -> String {
 ///
 /// The luma channel uses [`pil_grayscale`]. The alpha channel is set to fully
 /// opaque (`255`) for every pixel.
-pub fn pil_grayscale_alpha(
-    img: &DynamicImage,
-) -> Result<image_slash_star::GrayAlphaImage, PilError> {
+pub fn pil_grayscale_alpha(img: &DynamicImage) -> Result<crate::raster::GrayAlphaImage, PilError> {
     let gray = pil_grayscale(img)?;
     let (w, h) = gray.dimensions();
-    let mut ga = image_slash_star::GrayAlphaImage::new(w, h);
+    let mut ga = crate::raster::GrayAlphaImage::new(w, h);
     for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
         gap[0] = gp[0];
         gap[1] = 255;
@@ -393,7 +391,7 @@ pub fn cmyk_to_rgb(img: &DynamicImage) -> DynamicImage {
         let r = (nk as i32 - muldiv255(c, nk) as i32).clamp(0, 255) as u8;
         let g = (nk as i32 - muldiv255(m, nk) as i32).clamp(0, 255) as u8;
         let b = (nk as i32 - muldiv255(y, nk) as i32).clamp(0, 255) as u8;
-        *op = image_slash_star::Rgb([r, g, b]);
+        *op = crate::raster::Rgb([r, g, b]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -424,7 +422,7 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 
         if s_in == 0.0 {
             let g = v.round().clamp(0.0, 255.0) as u8;
-            *op = image_slash_star::Rgb([g, g, g]);
+            *op = crate::raster::Rgb([g, g, g]);
         } else {
             let fs = s_in / 255.0; // normalized saturation
             let h = h_in * 6.0 / 255.0; // 0-6 sector mapping
@@ -447,7 +445,7 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
                 4 => (ut, up, uv),
                 _ => (uv, up, uq),
             };
-            *op = image_slash_star::Rgb([r, g, b]);
+            *op = crate::raster::Rgb([r, g, b]);
         }
     }
     DynamicImage::ImageRgb8(out)
@@ -459,10 +457,10 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
 /// Output uses Pillow's scaling formula: `L = (I + 32768) / 256`, clamped to a
 /// byte.
 #[allow(dead_code)]
-pub(crate) fn i32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
+pub(crate) fn i32_to_l(img: &DynamicImage) -> crate::raster::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let mut gray = image_slash_star::GrayImage::new(w, h);
+    let mut gray = crate::raster::GrayImage::new(w, h);
     for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
         let i = i32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
         let l = ((i as i64 + 32768) / 256).clamp(0, 255) as u8;
@@ -476,10 +474,10 @@ pub(crate) fn i32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
 /// The input is RGBA storage interpreted as little-endian `f32` pixels. Output
 /// clamps each value to `0..=255` and truncates to a byte.
 #[allow(dead_code)]
-pub(crate) fn f32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
+pub(crate) fn f32_to_l(img: &DynamicImage) -> crate::raster::GrayImage {
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    let mut gray = image_slash_star::GrayImage::new(w, h);
+    let mut gray = crate::raster::GrayImage::new(w, h);
     for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
         let f = f32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
         let l = (f.clamp(0.0, 255.0)) as u8;
@@ -501,7 +499,7 @@ pub(crate) fn f32_to_l(img: &DynamicImage) -> image_slash_star::GrayImage {
 pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = image_slash_star::RgbImage::new(w, h);
+    let mut out = crate::raster::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
         let r = ip[0];
         let g = ip[1];
@@ -543,7 +541,7 @@ pub fn rgb_to_hsv(img: &DynamicImage) -> DynamicImage {
 
             (uh, us)
         };
-        *op = image_slash_star::Rgb([uh, us, v]);
+        *op = crate::raster::Rgb([uh, us, v]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -584,7 +582,7 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
 
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let mut out = image_slash_star::RgbImage::new(w, h);
+    let mut out = crate::raster::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
         let r = ip[0] as usize;
         let g = ip[1] as usize;
@@ -594,7 +592,7 @@ pub fn rgb_to_ycbcr(img: &DynamicImage) -> DynamicImage {
         let cb = (((cb_r[r] + cb_g[g] + cb_b[b]) >> 6) + 128) as u8;
         let cr = (((cb_b[r] + cr_g[g] + cr_b[b]) >> 6) + 128) as u8; // Cr_R = Cb_B
 
-        *op = image_slash_star::Rgb([y, cb, cr]);
+        *op = crate::raster::Rgb([y, cb, cr]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -708,7 +706,7 @@ pub fn ycbcr_to_rgb(img: &DynamicImage) -> DynamicImage {
         let g = y_ + ((G_CB[cb as usize] + G_CR[cr as usize]) >> 6);
         let b = y_ + (B_CB[cb as usize] >> 6);
 
-        *op = image_slash_star::Rgb([
+        *op = crate::raster::Rgb([
             r.clamp(0, 255) as u8,
             g.clamp(0, 255) as u8,
             b.clamp(0, 255) as u8,
@@ -729,7 +727,7 @@ pub fn i_to_rgb(img: &DynamicImage) -> DynamicImage {
         // I mode packs int32 as RGBA bytes (little-endian)
         let val = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
         let clamped = val.clamp(0, 255) as u8;
-        *op = image_slash_star::Rgb([clamped, clamped, clamped]);
+        *op = crate::raster::Rgb([clamped, clamped, clamped]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -746,7 +744,7 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
         let val = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
         // PIL: F→X casts float to int via truncation
         let clamped = val.clamp(0.0, 255.0) as u8;
-        *op = image_slash_star::Rgb([clamped, clamped, clamped]);
+        *op = crate::raster::Rgb([clamped, clamped, clamped]);
     }
     DynamicImage::ImageRgb8(out)
 }
@@ -759,7 +757,7 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     let luma = img.to_luma8();
     let (w, h) = luma.dimensions();
-    let mut out = image_slash_star::RgbImage::new(w, h);
+    let mut out = crate::raster::RgbImage::new(w, h);
     for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
         let idx = ip[0] as usize;
         if let Some(pal) = palette {

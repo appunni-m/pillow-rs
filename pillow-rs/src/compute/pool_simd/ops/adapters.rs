@@ -9,7 +9,7 @@
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransposeMethod};
-use image_slash_star::{
+use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
 use std::sync::Arc;

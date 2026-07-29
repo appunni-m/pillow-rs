@@ -7,7 +7,7 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, PixelMode};
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 
 /// Find the mode (most common value) and its count from a histogram.
 /// Uses PIL's strict `>` tie-breaking (lower value wins on tie).

@@ -20,7 +20,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use image_slash_star::DynamicImage;
+use crate::raster::DynamicImage;
 use std::collections::HashSet;
 use std::sync::{Mutex, MutexGuard};
 

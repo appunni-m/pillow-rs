@@ -10,7 +10,7 @@
 
 use crate::draw::{DrawCanvas, bresenham_line, plot, round_down, round_up, scanline_polygon_fill};
 use crate::error::PilError;
-use image_slash_star::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
 enum NativeDrawCanvas {
     L(GrayImage),
@@ -62,16 +62,16 @@ impl DrawCanvas for NativeDrawCanvas {
     fn put_rgba(&mut self, x: u32, y: u32, color: [u8; 4]) {
         match self {
             Self::L(pixels) => {
-                pixels.put_pixel(x, y, image_slash_star::Luma([color[0]]));
+                pixels.put_pixel(x, y, crate::raster::Luma([color[0]]));
             }
             Self::LA(pixels) => {
-                pixels.put_pixel(x, y, image_slash_star::LumaA([color[0], color[3]]));
+                pixels.put_pixel(x, y, crate::raster::LumaA([color[0], color[3]]));
             }
             Self::RGB(pixels) => {
-                pixels.put_pixel(x, y, image_slash_star::Rgb([color[0], color[1], color[2]]));
+                pixels.put_pixel(x, y, crate::raster::Rgb([color[0], color[1], color[2]]));
             }
             Self::RGBA(pixels) => {
-                pixels.put_pixel(x, y, image_slash_star::Rgba(color));
+                pixels.put_pixel(x, y, crate::raster::Rgba(color));
             }
         }
     }
@@ -632,13 +632,13 @@ fn clip_intervals(node: Option<&ClipNode>, mut x0: i32, y: i32, mut x1: i32) -> 
             (x0 <= x1).then_some((x0, x1)).into_iter().collect()
         }
         ClipNode::And(left, right) => {
-            let left = clip_intervals(Some(left), x0, y as i32, x1);
-            let right = clip_intervals(Some(right), x0, y as i32, x1);
+            let left = clip_intervals(Some(left), x0, y, x1);
+            let right = clip_intervals(Some(right), x0, y, x1);
             intersect_intervals(&left, &right)
         }
         ClipNode::Or(left, right) => {
-            let mut intervals = clip_intervals(Some(left), x0, y as i32, x1);
-            intervals.extend(clip_intervals(Some(right), x0, y as i32, x1));
+            let mut intervals = clip_intervals(Some(left), x0, y, x1);
+            intervals.extend(clip_intervals(Some(right), x0, y, x1));
             union_intervals(intervals)
         }
     }

@@ -3,7 +3,7 @@
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
-use image_slash_star::{
+use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
 use std::sync::Arc;
@@ -108,17 +108,17 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     // Determine pixel stride based on color type (PIL uses image8 for L/LA/P with pixelsize,
     // image32 for RGB/RGBA/CMYK with 4-byte stride)
     let (pixels, w, h, stride) = match img.color() {
-        image_slash_star::ColorType::L8 => {
+        crate::raster::ColorType::L8 => {
             let luma = img.to_luma8();
             let (w, h) = luma.dimensions();
             (luma.into_raw(), w as i32, h as i32, 1usize)
         }
-        image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => {
+        crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
             let la = img.to_luma_alpha8();
             let (w, h) = la.dimensions();
             (la.into_raw(), w as i32, h as i32, 2usize)
         }
-        image_slash_star::ColorType::Rgb8 => {
+        crate::raster::ColorType::Rgb8 => {
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             (rgb.into_raw(), w as i32, h as i32, 3usize)
@@ -214,8 +214,8 @@ pub fn op_paste(
     let source_rgba = src_img.to_rgba8();
     let mut destination = img.to_rgba8();
     enum PasteMask {
-        Luma(image_slash_star::GrayImage),
-        Alpha(image_slash_star::RgbaImage),
+        Luma(crate::raster::GrayImage),
+        Alpha(crate::raster::RgbaImage),
     }
     let mask_pixels = match mask {
         Some(mask_image) => {
@@ -273,7 +273,7 @@ pub fn op_paste(
             destination.put_pixel(
                 dest_x,
                 dest_y,
-                image_slash_star::Rgba([
+                crate::raster::Rgba([
                     blend(source_pixel[0], destination_pixel[0]),
                     blend(source_pixel[1], destination_pixel[1]),
                     blend(source_pixel[2], destination_pixel[2]),
@@ -298,7 +298,7 @@ pub fn op_alpha_composite(
     }
 
     // LA mode: composite on native LA canvas, return LA (PIL behavior)
-    if matches!(img.color(), image_slash_star::ColorType::La8) {
+    if matches!(img.color(), crate::raster::ColorType::La8) {
         let mut dest_la = img.to_luma_alpha8();
         let src_la = src_img.to_luma_alpha8();
         let (sw, sh) = src_la.dimensions();
@@ -316,7 +316,7 @@ pub fn op_alpha_composite(
                     .round()
                     .clamp(0.0, 255.0) as u8;
                 let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-                dest_la.put_pixel(px, py, image_slash_star::LumaA([l, a]));
+                dest_la.put_pixel(px, py, crate::raster::LumaA([l, a]));
             }
         }
         return Ok(DynamicImage::ImageLumaA8(dest_la));
@@ -345,7 +345,7 @@ pub fn op_alpha_composite(
                 .round()
                 .clamp(0.0, 255.0) as u8;
             let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-            dest_rgba.put_pixel(px, py, image_slash_star::Rgba([r, g, b, a]));
+            dest_rgba.put_pixel(px, py, crate::raster::Rgba([r, g, b, a]));
         }
     }
     Ok(DynamicImage::ImageRgba8(dest_rgba))
@@ -454,7 +454,7 @@ pub fn op_blend_module(
                 out.put_pixel(
                     x,
                     y,
-                    image_slash_star::Rgba([
+                    crate::raster::Rgba([
                         (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
                         (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
                         (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
@@ -479,7 +479,7 @@ pub fn op_blend_module(
             out.put_pixel(
                 x,
                 y,
-                image_slash_star::Rgb([
+                crate::raster::Rgb([
                     (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
                     (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
                     (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
@@ -500,7 +500,7 @@ fn composite_mask(mask: &Arc<Image>, mask_alpha: bool) -> Result<GrayImage, PilE
 
     let rgba = materialized.to_rgba8();
     Ok(GrayImage::from_fn(rgba.width(), rgba.height(), |x, y| {
-        image_slash_star::Luma([rgba.get_pixel(x, y)[3]])
+        crate::raster::Luma([rgba.get_pixel(x, y)[3]])
     }))
 }
 
@@ -541,7 +541,7 @@ pub fn op_composite_module(
                     gray2.get_pixel(x, y)[0],
                     mask_gray.get_pixel(x, y)[0],
                 );
-                out.put_pixel(x, y, image_slash_star::Luma([value]));
+                out.put_pixel(x, y, crate::raster::Luma([value]));
             }
         }
         return Ok(DynamicImage::ImageLuma8(out));
@@ -551,7 +551,7 @@ pub fn op_composite_module(
 
     // RGBA and four-byte compatibility modes (CMYK/I/F) blend every stored
     // band. In particular, RGBA alpha is output data, not merely metadata.
-    if matches!(img.color(), image_slash_star::ColorType::Rgba8) {
+    if matches!(img.color(), crate::raster::ColorType::Rgba8) {
         let rgba1 = img.to_rgba8();
         let rgba2 = other_img.to_rgba8();
         let mut out = rgba2.clone();
@@ -565,7 +565,7 @@ pub fn op_composite_module(
                 out.put_pixel(
                     x,
                     y,
-                    image_slash_star::Rgba([
+                    crate::raster::Rgba([
                         composite_blend(p1[0], p2[0], m),
                         composite_blend(p1[1], p2[1], m),
                         composite_blend(p1[2], p2[2], m),
@@ -577,7 +577,7 @@ pub fn op_composite_module(
         return Ok(DynamicImage::ImageRgba8(out));
     }
     // LA mode: composite both L and A channels natively
-    if matches!(img.color(), image_slash_star::ColorType::La8) {
+    if matches!(img.color(), crate::raster::ColorType::La8) {
         let la1 = img.to_luma_alpha8();
         let la2 = other_img.to_luma_alpha8();
         let mut out = la2.clone();
@@ -591,7 +591,7 @@ pub fn op_composite_module(
                 out.put_pixel(
                     x,
                     y,
-                    image_slash_star::LumaA([
+                    crate::raster::LumaA([
                         composite_blend(p1[0], p2[0], m),
                         composite_blend(p1[1], p2[1], m),
                     ]),
@@ -613,7 +613,7 @@ pub fn op_composite_module(
             out.put_pixel(
                 x,
                 y,
-                image_slash_star::Rgb([
+                crate::raster::Rgb([
                     composite_blend(p1[0], p2[0], m),
                     composite_blend(p1[1], p2[1], m),
                     composite_blend(p1[2], p2[2], m),
@@ -628,9 +628,9 @@ pub fn op_composite_module(
 
 pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let n_bands = match img.color() {
-        image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
-        image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
-        image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
+        crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
+        crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
+        crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
         _ => 4,
     };
     // PIL requires EXACTLY 256 * n_bands lut entries
@@ -712,9 +712,9 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
 
 pub fn op_point(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let n_bands = match img.color() {
-        image_slash_star::ColorType::L8 | image_slash_star::ColorType::L16 => 1,
-        image_slash_star::ColorType::La8 | image_slash_star::ColorType::La16 => 2,
-        image_slash_star::ColorType::Rgb8 | image_slash_star::ColorType::Rgb16 => 3,
+        crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
+        crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
+        crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
         _ => 4,
     };
     // PIL requires EXACTLY 256 * n_bands lut entries
@@ -910,22 +910,22 @@ pub fn op_put_pixel(
     }
     match img.clone() {
         DynamicImage::ImageLuma8(mut l) => {
-            l.put_pixel(x, y, image_slash_star::Luma([color.0]));
+            l.put_pixel(x, y, crate::raster::Luma([color.0]));
             Ok(DynamicImage::ImageLuma8(l))
         }
         DynamicImage::ImageLumaA8(mut la) => {
-            la.put_pixel(x, y, image_slash_star::LumaA([color.0, color.3]));
+            la.put_pixel(x, y, crate::raster::LumaA([color.0, color.3]));
             Ok(DynamicImage::ImageLumaA8(la))
         }
         DynamicImage::ImageRgb8(mut rgb) => {
-            rgb.put_pixel(x, y, image_slash_star::Rgb([color.0, color.1, color.2]));
+            rgb.put_pixel(x, y, crate::raster::Rgb([color.0, color.1, color.2]));
             Ok(DynamicImage::ImageRgb8(rgb))
         }
         DynamicImage::ImageRgba8(mut rgba) => {
             rgba.put_pixel(
                 x,
                 y,
-                image_slash_star::Rgba([color.0, color.1, color.2, color.3]),
+                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             );
             Ok(DynamicImage::ImageRgba8(rgba))
         }
@@ -993,7 +993,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
         let rgb = crate::color::cmyk_to_rgb(img).to_rgb8();
         let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
         for (output, input) in rgba.pixels_mut().zip(rgb.pixels()) {
-            *output = image_slash_star::Rgba([input[0], input[1], input[2], alpha]);
+            *output = crate::raster::Rgba([input[0], input[1], input[2], alpha]);
         }
         return DynamicImage::ImageRgba8(rgba);
     }
@@ -1009,7 +1009,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
         return DynamicImage::ImageLumaA8(la);
     }
     let out = match img.color() {
-        image_slash_star::ColorType::L8 => {
+        crate::raster::ColorType::L8 => {
             let luma = img.to_luma8();
             let mut la = GrayAlphaImage::new(luma.width(), luma.height());
             for (o, i) in la.pixels_mut().zip(luma.pixels()) {
@@ -1018,7 +1018,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
             }
             DynamicImage::ImageLumaA8(la)
         }
-        image_slash_star::ColorType::La8 => {
+        crate::raster::ColorType::La8 => {
             let rgba = img.to_rgba8();
             let mut la = GrayAlphaImage::new(rgba.width(), rgba.height());
             for (o, i) in la.pixels_mut().zip(rgba.pixels()) {
@@ -1027,7 +1027,7 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
             }
             DynamicImage::ImageLumaA8(la)
         }
-        image_slash_star::ColorType::Rgb8 => {
+        crate::raster::ColorType::Rgb8 => {
             let rgb = img.to_rgb8();
             let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
             for (o, i) in rgba.pixels_mut().zip(rgb.pixels()) {
@@ -1164,12 +1164,14 @@ pub fn op_color3dlut(
     let rgba = RgbaImage::from_raw(w, h, out)
         .ok_or_else(|| PilError::InternalError("color3dlut output size mismatch".into()))?;
     match target_mode {
-        PixelMode::RGB => Ok(DynamicImage::ImageRgb8(
-            image_slash_star::RgbImage::from_fn(w, h, |x, y| {
+        PixelMode::RGB => Ok(DynamicImage::ImageRgb8(crate::raster::RgbImage::from_fn(
+            w,
+            h,
+            |x, y| {
                 let pixel = rgba.get_pixel(x, y);
-                image_slash_star::Rgb([pixel[0], pixel[1], pixel[2]])
-            }),
-        )),
+                crate::raster::Rgb([pixel[0], pixel[1], pixel[2]])
+            },
+        ))),
         PixelMode::RGBA | PixelMode::CMYK => Ok(DynamicImage::ImageRgba8(rgba)),
         _ => Err(PilError::InternalError(
             "validated color3dlut target mode was not RGB, RGBA, or CMYK".into(),
@@ -1283,7 +1285,7 @@ pub fn op_effect_mandelbrot(
     y1: f64,
     quality: u32,
 ) -> Result<DynamicImage, PilError> {
-    let mut gray = image_slash_star::GrayImage::new(w, h);
+    let mut gray = crate::raster::GrayImage::new(w, h);
     let dx = (x1 - x0) / w as f64;
     let dy = (y1 - y0) / h as f64;
     for py in 0..h {
@@ -1303,7 +1305,7 @@ pub fn op_effect_mandelbrot(
                 iter += 1;
             }
             let val = (iter * 255 / quality.max(1)) as u8;
-            gray.put_pixel(px, py, image_slash_star::Luma([val]));
+            gray.put_pixel(px, py, crate::raster::Luma([val]));
         }
     }
     Ok(DynamicImage::ImageLuma8(gray))
@@ -1312,7 +1314,7 @@ pub fn op_effect_mandelbrot(
 #[cfg(test)]
 mod tests {
     use super::{DarwinRand, op_effect_noise};
-    use image_slash_star::{DynamicImage, GrayImage};
+    use crate::raster::{DynamicImage, GrayImage};
 
     #[test]
     fn darwin_rand_matches_pillow_oracle_sequence() {

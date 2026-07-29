@@ -10,7 +10,7 @@
 //!
 //! Core modules do not depend on Python or JavaScript runtime types. Public
 //! functions model Pillow behavior where practical, but their contracts are
-//! expressed in Rust terms: [`Image`] values, [`image_slash_star::DynamicImage`]
+//! expressed in Rust terms: [`Image`] values, [`crate::raster::DynamicImage`]
 //! buffers, [`FreeTypeFont`] values, and [`PilError`] failures.
 //!
 //! # Allocation Safety
@@ -128,6 +128,8 @@ mod par;
 /// See [`pipeline::PipelineOp`] for the operation descriptor carried through
 /// lazy image pipelines.
 mod pipeline;
+/// Pillow-owned materialized pixel storage and raster primitives.
+mod raster;
 pub use crate::color::getcolor;
 pub use crate::color::palette_getcolor;
 pub use crate::color::palette_getcolor_append;
@@ -219,6 +221,37 @@ pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]
 pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
+pub use crate::raster::ConvertBuffer;
+pub use crate::raster::DynamicImage;
+pub use crate::raster::EncodableLayout;
+pub use crate::raster::Enlargeable;
+pub use crate::raster::EnumeratePixels;
+pub use crate::raster::EnumeratePixelsMut;
+pub use crate::raster::EnumerateRows;
+pub use crate::raster::EnumerateRowsMut;
+pub use crate::raster::ExtendedColorType;
+pub use crate::raster::FromColor;
+pub use crate::raster::FromPrimitive;
+pub use crate::raster::GenericImage;
+pub use crate::raster::GenericImageView;
+pub use crate::raster::GrayAlphaImage;
+pub use crate::raster::GrayImage;
+pub use crate::raster::ImageBuffer;
+pub use crate::raster::Luma;
+pub use crate::raster::LumaA;
+pub use crate::raster::Pixel;
+pub use crate::raster::Pixels;
+pub use crate::raster::PixelsMut;
+pub use crate::raster::Primitive;
+pub use crate::raster::Rect;
+pub use crate::raster::Rgb;
+pub use crate::raster::Rgb32FImage;
+pub use crate::raster::RgbImage;
+pub use crate::raster::Rgba;
+pub use crate::raster::Rgba32FImage;
+pub use crate::raster::RgbaImage;
+pub use crate::raster::Rows;
+pub use crate::raster::RowsMut;
 
 /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
 pub fn imagefont_from_bytes(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
