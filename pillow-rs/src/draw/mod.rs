@@ -1028,13 +1028,14 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
     ) -> Result<(), PilError> {
-        self.text_with_options(
+        self.text_with_options_inner(
             x,
             y,
             text,
             font,
             fill,
             &crate::font::ImageFontTextOptions::default(),
+            false,
         )
     }
 
@@ -1057,6 +1058,19 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
+        self.text_with_options_inner(x, y, text, font, fill, options, true)
+    }
+
+    fn text_with_options_inner(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+        rgba_blend_rgb: bool,
+    ) -> Result<(), PilError> {
         let mode = self.effective_mode();
         let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
         let mut options = options.clone();
@@ -1077,7 +1091,9 @@ impl Draw {
         let draw_y = y.saturating_add(offset.1);
 
         match mode.as_str() {
-            "RGB" | "RGBA" => self.text_compose_rgba(draw_x, draw_y, w, h, &pixels, fill),
+            "RGB" | "RGBA" => {
+                self.text_compose_rgba(draw_x, draw_y, w, h, &pixels, fill, rgba_blend_rgb)
+            }
             _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
         }
     }
@@ -1085,9 +1101,9 @@ impl Draw {
     /// RGBA compositing for text (used for RGB and RGBA modes).
     ///
     /// Pixels from the font renderer have the glyph coverage in the alpha channel
-    /// and the fill color in the RGB channels. For RGB mode this follows BLEND.
-    /// For RGBA mode, PIL draws constant RGB channels and applies coverage through
-    /// alpha only, matching current `ImageDraw.text` oracle outputs.
+    /// and the fill color in the RGB channels. Pillow's mask paste path blends
+    /// each stored channel by glyph coverage. RGB output keeps alpha fixed at
+    /// 255; RGBA output blends the alpha channel too.
     fn text_compose_rgba(
         &mut self,
         x: i32,
@@ -1096,6 +1112,7 @@ impl Draw {
         h: u32,
         pixels: &[u8],
         fill: (u8, u8, u8, u8),
+        rgba_blend_rgb: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
@@ -1118,7 +1135,7 @@ impl Draw {
                     } else {
                         255
                     };
-                    let (r, g, b) = if mode == "RGBA" {
+                    let (r, g, b) = if mode == "RGBA" && !rgba_blend_rgb {
                         (fill.0, fill.1, fill.2)
                     } else {
                         (
@@ -1356,7 +1373,7 @@ impl Draw {
             }
             _ => {
                 // Fallback: RGBA pipeline
-                self.text_compose_rgba(x, y, w, h, pixels, fill)
+                self.text_compose_rgba(x, y, w, h, pixels, fill, false)
             }
         }
     }

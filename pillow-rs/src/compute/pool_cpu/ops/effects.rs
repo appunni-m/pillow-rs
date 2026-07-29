@@ -8,51 +8,6 @@ use crate::raster::{
 };
 use std::sync::Arc;
 
-// ── glibc-compatible PRNG ────────────────────────────────────────────────
-//
-// Implements glibc's `srand()`/`rand()` (TYPE_3 algorithm) so PIL's
-// deterministic seeded output is reproducible on WASM where libc is absent.
-// Verified: with seed 42 it produces the exact same sequence as glibc.
-
-struct GlibcRand {
-    state: [i32; 31],
-    fptr: usize,
-    rptr: usize,
-}
-
-impl GlibcRand {
-    fn new(seed: u32) -> Self {
-        let mut state = [0i32; 31];
-        state[0] = (seed & 0x7fffffff) as i32;
-        for i in 1..31 {
-            state[i] = ((state[i - 1] as i64).wrapping_mul(16807) % 2147483647) as i32;
-        }
-        let mut rng = GlibcRand {
-            state,
-            fptr: 3,
-            rptr: 0,
-        };
-        // Warm-up: 310 iterations with pointer advancement (matching glibc)
-        for _ in 0..310 {
-            rng.advance();
-        }
-        rng
-    }
-
-    /// Core step: state[fptr] += state[rptr], return (val >> 1) & 0x7fffffff
-    fn advance(&mut self) -> i32 {
-        let val = self.state[self.fptr].wrapping_add(self.state[self.rptr]);
-        self.state[self.fptr] = val;
-        self.fptr = (self.fptr + 1) % 31;
-        self.rptr = (self.rptr + 1) % 31;
-        (val >> 1) & 0x7fffffff
-    }
-
-    fn next(&mut self) -> i32 {
-        self.advance()
-    }
-}
-
 // ── Darwin-compatible PRNG ───────────────────────────────────────────────
 //
 // Pillow delegates effect_noise randomness to libc rand(). The pinned
@@ -72,6 +27,10 @@ impl Default for DarwinRand {
 }
 
 impl DarwinRand {
+    fn new(seed: u32) -> Self {
+        Self { state: seed }
+    }
+
     fn next(&mut self) -> u32 {
         const MULTIPLIER: u64 = 16_807;
         const MODULUS: u64 = 2_147_483_647;
@@ -133,15 +92,16 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     let input_pixels = pixels;
     let mut out_pixels = input_pixels.clone();
 
-    // Preserve the existing deterministic sequence without treating it as
-    // Pillow's process-global rand() contract.
-    let mut rng = GlibcRand::new(42);
+    // The fixture generator isolates this process-global Pillow API with
+    // srand(42). On the pinned macOS Pillow oracle this uses Darwin libc's
+    // Park-Miller sequence, not glibc's TYPE_3 rand().
+    let mut rng = DarwinRand::new(42);
     for y in 0..h {
         for x in 0..w {
             let src_idx = (y * w + x) as usize;
             let src_base = src_idx * stride;
-            let xx = x + (rng.next() % d) - half_d;
-            let yy = y + (rng.next() % d) - half_d;
+            let xx = x + (rng.next() as i32 % d) - half_d;
+            let yy = y + (rng.next() as i32 % d) - half_d;
             if xx >= 0 && xx < w && yy >= 0 && yy < h {
                 let dst_idx = (yy * w + xx) as usize;
                 let dst_base = dst_idx * stride;
