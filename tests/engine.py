@@ -129,6 +129,7 @@ def get_call_style(module, target, owner=None):
         if target == "merge":              return "merge_mod"
         return "classmethod"
     if module == "ImageFont":
+        if target in {"MAX_STRING_LENGTH"}:          return "module_property"
         if owner == "ImageFont":                  return "font_base_method"
         if owner == "TransposedFont":             return "transposed_font_method"
         if target in FONT_METHOD_TARGETS:          return "font_method"
@@ -877,6 +878,7 @@ CALL_STYLE = {
     ),
     "palette_method":lambda b, img, img2, tgt, p: _palette_method(b, img, tgt, p),
     "module_function":       lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, **p),
+    "module_property":       lambda b, img, img2, tgt, p: _call_mod(b, tgt),
     "single_chops":          lambda b, img, img2, tgt, p: _call_mod(b, tgt, prefer_chops=True)(img, **p),
     "module_function_dual":  lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, img2, **p),
     "module_function_triple":lambda b, img, img2, tgt, p: _call_mod(b, tgt)(img, img2, create_input(b, "L", p.pop("mask_img", None)), **p),

@@ -1,0 +1,13 @@
+{
+  "format_version": 2,
+  "operation": {
+    "module": "ImageFont",
+    "target": "MAX_STRING_LENGTH"
+  },
+  "cases": [
+    {
+      "id": "ImageFont_MAX_STRING_LENGTH",
+      "params": {}
+    }
+  ]
+}
