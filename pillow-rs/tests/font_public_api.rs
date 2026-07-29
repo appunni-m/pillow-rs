@@ -1522,7 +1522,7 @@ fn assert_gap_analysis_tracks_stroke_filled_status() {
 
 fn assert_blocked_public_parameters_have_active_dependency_blockers() {
     let interface_map_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pillow-rs-freetype/tests/data/interface_map.json");
+        .join("../../fontdone/tests/data/interface_map.json");
     let interface_map_text = fs::read_to_string(&interface_map_path).unwrap_or_else(|err| {
         panic!(
             "{} must be readable to justify ImageFont stroke_width blockers: {err}",
@@ -1611,7 +1611,7 @@ fn freetype_interface_symbol<'a>(interface_map: &'a Value, symbol: &str) -> Opti
 
 fn assert_freetype_stroke_fixture_has_success_case(file_name: &str, subject: &str) {
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pillow-rs-freetype/tests/fixtures/inputs/public-api")
+        .join("../../fontdone/tests/fixtures/inputs/public-api")
         .join(file_name);
     let fixture_text = fs::read_to_string(&fixture_path).unwrap_or_else(|err| {
         panic!(
@@ -1661,7 +1661,7 @@ fn assert_freetype_stroke_blocking_cases_are_exact() {
 
 fn freetype_stroke_success_case_ids(file_name: &str) -> BTreeSet<String> {
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../pillow-rs-freetype/tests/fixtures/inputs/public-api")
+        .join("../../fontdone/tests/fixtures/inputs/public-api")
         .join(file_name);
     let fixture_text = fs::read_to_string(&fixture_path).unwrap_or_else(|err| {
         panic!(

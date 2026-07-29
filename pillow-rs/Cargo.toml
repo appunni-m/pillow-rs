@@ -10,7 +10,7 @@ name = "pillow_rs"
 
 [features]
 default = ["gpu", "image-codecs-all", "parallel"]
-gpu = ["wgpu", "pollster", "bytemuck"]
+gpu = ["wgpu", "pollster"]
 parallel = ["rayon"]
 image-codecs-all = [
     "image-jpeg",
@@ -50,13 +50,13 @@ required-features = ["test-api"]
 
 [dependencies]
 image-slash-star = { path = "../../image-slash-star", default-features = false }
-fontdone = { path = "../pillow-rs-freetype" }
+fontdone = { path = "../../fontdone" }
 log = "0.4"
 thiserror = "2"
 csscolorparser = "0.8"
 wgpu = { version = "24", optional = true }
 pollster = { version = "0.3", optional = true }
-bytemuck = { version = "1", features = ["derive"], optional = true }
+bytemuck = { version = "1", features = ["derive"] }
 
 # AS PER DESIGN — DO NOT REMOVE:
 # rayon provides safe parallelism for pixel loops via the par_rows!/par_pixels!

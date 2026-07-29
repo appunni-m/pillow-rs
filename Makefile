@@ -15,7 +15,7 @@ MANIFEST     := manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
-FONTDONE_SRC := pillow-rs-freetype
+FONTDONE_SRC := ../fontdone
 FIXTURES_DIR := tests/fixtures
 FIXTURES_SUITE1_DIR := tests/fixtures_2
 REPORT       := /tmp/report.json
@@ -411,7 +411,7 @@ pillow-rs-clean: ## Clean pillow-rs artifacts
 	$(MAKE) -C $(CORE_SRC) clean
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
-fontdone-help: ## Show pillow-rs-freetype targets
+fontdone-help: ## Show fontdone targets
 	$(MAKE) -C $(FONTDONE_SRC) help
 
 fontdone-build: ## Build fontdone

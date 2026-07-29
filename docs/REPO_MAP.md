@@ -19,8 +19,8 @@ and refreshed with `make repo-map-update`.
   installs as repository source.
 - Keep fixture generators and parity harnesses documented as maintained system
   components, not one-off scripts.
-- `pillow-rs-freetype/freetype/` is a version-pinned C FreeType oracle for
-  fixture generation and diagnosis only. Runtime code must not call it.
+- `../fontdone/freetype/` is a version-pinned C FreeType oracle for fixture
+  generation and diagnosis only. Runtime code must not call it.
 
 ## Primary Source Of Truth
 
@@ -43,44 +43,43 @@ and refreshed with `make repo-map-update`.
 - `pillow-rs-py/`: PyO3 binding crate. `src/lib.rs` exposes Rust to Python;
   `python/pillow_rs/` must stay a thin Python surface.
 - `pillow-rs-js/`: wasm-bindgen binding crate plus browser/node test runners.
-- `pillow-rs-freetype/`: monorepo path for the standalone `freetype` package:
-  pure Rust FreeType-compatible implementation and parity harness.
-  `PROJECT_GOALS.md`, `Makefile`, `src/`, `tests/`, `scripts/`, license files,
-  and selected `doc/` files are the maintained surface.
+- `../fontdone/`: sibling standalone package for the pure Rust
+  FreeType-compatible implementation and parity harness. `pillow-rs` depends
+  on it through the `fontdone` crate.
 
 ## FreeType Map
 
-- `pillow-rs-freetype/PROJECT_GOALS.md`: project-level parity goal and
+- `../fontdone/PROJECT_GOALS.md`: project-level parity goal and
   non-negotiable constraints.
-- `pillow-rs-freetype/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
+- `../fontdone/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
   text and migration attribution for the standalone package.
-- `pillow-rs-freetype/src/font.rs`: public face/font API and high-level
+- `../fontdone/src/font.rs`: public face/font API and high-level
   FreeType-compatible behavior.
-- `pillow-rs-freetype/src/scaler.rs`: size scaling and glyph load pipeline.
-- `pillow-rs-freetype/src/outline.rs`: outline geometry, bbox, cbox, and point
+- `../fontdone/src/scaler.rs`: size scaling and glyph load pipeline.
+- `../fontdone/src/outline.rs`: outline geometry, bbox, cbox, and point
   representation.
-- `pillow-rs-freetype/src/render.rs` and `src/grays.rs`: bitmap render paths.
-- `pillow-rs-freetype/src/tt/`: TrueType parsing, glyph loading, metrics, and
+- `../fontdone/src/render.rs` and `src/grays.rs`: bitmap render paths.
+- `../fontdone/src/tt/`: TrueType parsing, glyph loading, metrics, and
   native bytecode hinting.
-- `pillow-rs-freetype/src/autohint/`: autohinter implementation and script
+- `../fontdone/src/autohint/`: autohinter implementation and script
   coverage.
-- `pillow-rs-freetype/tests/coverage_matrix_tests.rs`: fixture matrix parity
+- `../fontdone/tests/coverage_matrix_tests.rs`: fixture matrix parity
   harness.
-- `pillow-rs-freetype/tests/no_runtime_ffi.rs`: guard against runtime FFI
+- `../fontdone/tests/no_runtime_ffi.rs`: guard against runtime FFI
   shortcuts.
-- `pillow-rs-freetype/tests/fixtures/*_matrix.json`: versioned oracle matrices.
+- `../fontdone/tests/fixtures/*_matrix.json`: versioned oracle matrices.
   Do not edit these to make tests pass.
-- `pillow-rs-freetype/scripts/`: maintained generators, benchmark tools, and
+- `../fontdone/scripts/`: maintained generators, benchmark tools, and
   failure classifiers.
-- `pillow-rs-freetype/doc/GENERATOR_SYSTEM.md`: fixture generation contract.
-- `pillow-rs-freetype/doc/FONT_FIXTURE_COVERAGE_PLAN.md`: maintained plan for
+- `../fontdone/doc/GENERATOR_SYSTEM.md`: fixture generation contract.
+- `../fontdone/doc/FONT_FIXTURE_COVERAGE_PLAN.md`: maintained plan for
   compact font fixtures, explicit public inputs, legacy-font retirement, and
   100% Rust structural coverage.
-- `pillow-rs-freetype/doc/FONT_FIXTURE_INVENTORY.md`: content-deduplicated active
+- `../fontdone/doc/FONT_FIXTURE_INVENTORY.md`: content-deduplicated active
   and deprecated font inventory with selected glyph and coverage ownership.
-- `pillow-rs-freetype/doc/PARITY_FAILURE_CLASSIFICATION.md`: failure bucket
+- `../fontdone/doc/PARITY_FAILURE_CLASSIFICATION.md`: failure bucket
   taxonomy.
-- `pillow-rs-freetype/doc/PERFORMANCE_BENCHMARKING.md`: Rust-vs-C FreeType
+- `../fontdone/doc/PERFORMANCE_BENCHMARKING.md`: Rust-vs-C FreeType
   benchmark method and reporting.
 
 ## Harness And Fixture Map
@@ -90,7 +89,7 @@ and refreshed with `make repo-map-update`.
 - `scripts/coverage/`: manifest coverage computation and validation.
 - `scripts/bench/`: root benchmark specification, runners, aggregation, and
   baseline comparison.
-- `pillow-rs-freetype/tests/coverage_matrix_tests.rs`: FreeType matrix runner.
+- `../fontdone/tests/coverage_matrix_tests.rs`: FreeType matrix runner.
 
 ## Cleanup Rules
 
@@ -103,7 +102,7 @@ before commit:
 - `pillow-rs-js/node_modules/`
 - `pillow-rs-js/pkg/`
 - `pillow-rs-js/pkg_node/`
-- `pillow-rs-freetype/freetype/build*/`
+- `../fontdone/freetype/build*/`
 
 Historical planning documents may be useful as archaeology, but implementation
 work should be guided by current Makefiles, `CLAUDE.md`, this map, and active
@@ -310,125 +309,6 @@ generated reports, build outputs, and package installs.
 |       |   `-- utils.rs
 |       |-- par.rs
 |       `-- pipeline.rs
-|-- pillow-rs-freetype/
-|   |-- AGENTS.md
-|   |-- CONTRIBUTING.md
-|   |-- Cargo.lock
-|   |-- Cargo.toml
-|   |-- FTL.TXT
-|   |-- LICENSE
-|   |-- Makefile
-|   |-- NOTICE.md
-|   |-- PROJECT_GOALS.md
-|   |-- README.md
-|   |-- deny.toml
-|   |-- examples/
-|   |   |-- bench_ops.rs
-|   |   |-- debug_glyph.rs
-|   |   `-- trace_glyph.rs
-|   |-- scripts/
-|   |   |-- audit_api_abi.py
-|   |   |-- bench_freetype.py
-|   |   |-- bench_ft_ops.c
-|   |   |-- build_autohint_script_fixtures.py
-|   |   |-- build_cff_fixtures.py
-|   |   |-- build_cmap_fixtures.py
-|   |   |-- build_cpal_palette_fixtures.py
-|   |   |-- build_ft.sh
-|   |   |-- build_ftmm_future_variable_fixtures.py
-|   |   |-- build_fvar_fixtures.py
-|   |   |-- build_gasp_fixtures.py
-|   |   |-- build_gzip_fixtures.py
-|   |   |-- build_hinter_edge_fixtures.py
-|   |   |-- build_metric_fixtures.py
-|   |   |-- build_mvar_fixtures.py
-|   |   |-- build_name_fixtures.py
-|   |   |-- build_post_fixtures.py
-|   |   |-- build_render_fixtures.py
-|   |   |-- build_sbit_fixtures.py
-|   |   |-- build_sfnt_fixtures.py
-|   |   |-- build_type1_fixtures.py
-|   |   |-- build_unified_oracle.py
-|   |   |-- check_public_api_inputs.py
-|   |   |-- extract_blues.py
-|   |   |-- fetch_ft.sh
-|   |   |-- gen_unified_oracle.c
-|   |   |-- generate_malformed_bdf_fixtures.py
-|   |   |-- generate_public_constants.py
-|   |   |-- generate_winfnt_fixtures.py
-|   |   `-- report_pending_route_buckets.py
-|   |-- src/
-|   |   |-- api.rs
-|   |   |-- autohint/
-|   |   |   |-- ALGORITHMS.md
-|   |   |   |-- blue_strings.rs
-|   |   |   |-- cjk.rs
-|   |   |   |-- coverage.rs
-|   |   |   |-- globals.rs
-|   |   |   |-- globals_data.rs
-|   |   |   |-- latin.rs
-|   |   |   |-- loader.rs
-|   |   |   |-- mod.rs
-|   |   |   |-- script.rs
-|   |   |   `-- types.rs
-|   |   |-- casts.rs
-|   |   |-- error.rs
-|   |   |-- ffi/
-|   |   |   |-- constants.rs
-|   |   |   |-- convert.rs
-|   |   |   |-- generated_constants.rs
-|   |   |   |-- handles.rs
-|   |   |   |-- mod.rs
-|   |   |   `-- types.rs
-|   |   |-- fixed.rs
-|   |   |-- font.rs
-|   |   |-- grays.rs
-|   |   |-- lib.rs
-|   |   |-- outline.rs
-|   |   |-- render.rs
-|   |   |-- scaler.rs
-|   |   |-- tables.rs
-|   |   `-- tt/
-|   |       |-- cff.rs
-|   |       |-- cmap.rs
-|   |       |-- fvar.rs
-|   |       |-- gasp.rs
-|   |       |-- glyf.rs
-|   |       |-- gvar.rs
-|   |       |-- hdmx.rs
-|   |       |-- head.rs
-|   |       |-- hhea.rs
-|   |       |-- hinter/
-|   |       |   |-- exec.rs
-|   |       |   |-- gs.rs
-|   |       |   |-- iup.rs
-|   |       |   |-- mod.rs
-|   |       |   |-- tables.rs
-|   |       |   `-- zone.rs
-|   |       |-- hmtx.rs
-|   |       |-- hvar.rs
-|   |       |-- kern.rs
-|   |       |-- loca.rs
-|   |       |-- maxp.rs
-|   |       |-- mod.rs
-|   |       |-- mvar.rs
-|   |       |-- name.rs
-|   |       |-- os2.rs
-|   |       |-- post.rs
-|   |       |-- sbit.rs
-|   |       |-- varstore.rs
-|   |       |-- vhea.rs
-|   |       `-- vmtx.rs
-|   `-- tests/
-|       |-- data/
-|       |   |-- interface_map.json
-|       |   `-- perf_operation_matrix.json
-|       |-- direct_ft_compare.rs
-|       |-- manifest.yaml
-|       |-- pipe_trace.rs
-|       |-- support/
-|       |   `-- generated_constant_lookup.rs
-|       `-- unified_fixture_parity.rs
 |-- pillow-rs-js/
 |   |-- Cargo.toml
 |   |-- bench_page/
