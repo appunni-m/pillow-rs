@@ -158,13 +158,20 @@ def get_call_style(module, target, owner=None):
 # ── Input creation ──────────────────────────────────────────────
 
 REFERENCE_IMAGE = Path(__file__).parent / "test_reference.png"
-FONT_FIXTURE_DIR = (
+FONT_FIXTURE_DIRS = (
     Path(__file__).parent.parent
-    / "pillow-rs-freetype"
+    / "pillow-rs"
+    / "tests"
+    / "fixtures"
+    / "font"
+    / "input"
+    / "fonts",
+    Path(__file__).parent.parent.parent
+    / "fontdone"
     / "tests"
     / "fixtures"
     / "input"
-    / "fonts"
+    / "fonts",
 )
 # Additional directories to search for named reference images.
 # Populated at test time by test_parity.py for fixtures_2 support.
@@ -193,13 +200,12 @@ def _resolve_font_path(font):
     if not isinstance(font, (str, Path)):
         return font
     path = Path(font)
-    fixture_path = FONT_FIXTURE_DIR / path.name
-    if str(path).startswith("/usr/share/fonts/") and fixture_path.is_file():
-        return fixture_path.relative_to(Path(__file__).parent.parent).as_posix()
     if path.is_file():
         return str(path)
-    if fixture_path.is_file():
-        return fixture_path.relative_to(Path(__file__).parent.parent).as_posix()
+    for fixture_dir in FONT_FIXTURE_DIRS:
+        fixture_path = fixture_dir / path.name
+        if fixture_path.is_file():
+            return str(fixture_path)
     return str(path)
 
 
