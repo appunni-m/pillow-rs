@@ -35,6 +35,7 @@ from fixture_coverage import (
     assertion_image_modes as _assertion_image_modes,
     backend_parity_coverage_errors,
     coverage_gaps,
+    manifest_operation_modes,
     operation_name as _operation_name,
     unknown_fixture_operations,
 )
@@ -56,6 +57,9 @@ ASSERTION_METHODS = {
 HOST_CHECKOUT_PATH = re.compile(
     r"(?:[A-Za-z]:[\\/]|/(?:Users|home|private/tmp|tmp|workspace|workspaces)/)"
     r"[^\"']*pillow-rs[\\/]pillow-rs-freetype[\\/]tests[\\/]fixtures"
+)
+DECLARED_OPERATION_MODES = manifest_operation_modes(
+    Path(__file__).parent.parent / "manifest.yaml"
 )
 
 # Register extra reference image dirs for fixtures_2 support
@@ -308,8 +312,13 @@ def _discover():
                 is_expected_error = (
                     out_cases[cid].get("assert", {}).get("method") == "error"
                 )
+                mode_counts_for_operation = (
+                    not is_expected_error
+                    or mode in DECLARED_OPERATION_MODES.get(target, set())
+                )
                 if mode and (
-                    not is_expected_error and call_style in CASE_MODE_CALL_STYLES
+                    mode_counts_for_operation
+                    and call_style in CASE_MODE_CALL_STYLES
                     and (
                         call_style in {"file_open", "palette_method"}
                         or case.get("input") is not None

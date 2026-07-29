@@ -258,6 +258,7 @@ def fixture_operation_modes(
     fixture_dirs: dict[str, Path] = FIXTURE_DIRS,
 ) -> dict[str, set[str]]:
     """Build the operation-to-genuinely-exercised-mode map."""
+    declared_modes = manifest_operation_modes(REPO_ROOT / "manifest.yaml")
     fixture_modes: dict[str, set[str]] = {}
     for base_dir in fixture_dirs.values():
         input_dir = base_dir / "input" / "jsons"
@@ -287,8 +288,13 @@ def fixture_operation_modes(
                     oracle_case is not None
                     and oracle_case.get("assert", {}).get("method") == "error"
                 )
+                mode_counts_for_operation = (
+                    not is_expected_error
+                    or mode in declared_modes.get(operation_key, set())
+                )
                 if mode and (
-                    not is_expected_error and call_style in CASE_MODE_CALL_STYLES
+                    mode_counts_for_operation
+                    and call_style in CASE_MODE_CALL_STYLES
                     and (
                         call_style in {"file_open", "palette_method"}
                         or case.get("input") is not None

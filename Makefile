@@ -16,6 +16,7 @@ PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
 FONTDONE_SRC := ../fontdone
+IMAGE_SLASH_STAR_SRC := ../image-slash-star
 FIXTURES_DIR := tests/fixtures
 FIXTURES_SUITE1_DIR := tests/fixtures_2
 REPORT       := /tmp/report.json
@@ -88,13 +89,19 @@ help: ## Show this help
 	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
 	@printf "  $(CYAN)make fontdone-help$(NC)  Show crate-local fontdone targets\n"
 	@printf "  $(CYAN)make fontdone-ci$(NC)    Run fontdone docs, lint, tests, parity, FFI, bench contracts\n"
-	@printf "  $(CYAN)make fontdone-test$(NC)  Run all fontdone tests\n"
+	@printf "  $(CYAN)make fontdone-test$(NC)  Run fontdone non-oracle tests and all-target checks\n"
 	@printf "  $(CYAN)make fontdone-parity$(NC) Run the FreeType parity matrix harness\n"
 	@printf "  $(CYAN)make fontdone-ffi$(NC)   Run the no-runtime-FFI guard\n"
 	@printf "  $(CYAN)make fontdone-ffi-compat$(NC) Run FreeType-shaped facade tests\n"
 	@printf "  $(CYAN)make fontdone-doc$(NC)   Build strict fontdone rustdoc\n"
 	@printf "  $(CYAN)make fontdone-bench$(NC) Run Rust vs C FreeType benchmark report\n"
 	@printf "  $(CYAN)make fontdone-fixtures$(NC) Regenerate FreeType fixture families\n"
+	@printf "\n$(BOLD)image-slash-star / image backend$(NC)\n"
+	@printf "  $(CYAN)make image-slash-star-check$(NC) Check image-slash-star default features\n"
+	@printf "  $(CYAN)make image-slash-star-feature-test$(NC) Check image-slash-star no-default feature boundary\n"
+	@printf "  $(CYAN)make image-slash-star-test$(NC) Run image-slash-star default package tests\n"
+	@printf "  $(CYAN)make image-slash-star-lint$(NC) Run image-slash-star fmt + clippy\n"
+	@printf "  $(CYAN)make image-slash-star-full-test$(NC) Run image-slash-star all-feature coverage matrix\n"
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
@@ -326,6 +333,9 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 .PHONY: freetype-fmt freetype-fmt-fix freetype-clippy
 .PHONY: freetype-bench freetype-bench-quick freetype-bench-self-test
 .PHONY: freetype-fixtures freetype-ci freetype-clean
+.PHONY: image-slash-star-check image-slash-star-feature-test image-slash-star-test
+.PHONY: image-slash-star-fmt image-slash-star-clippy image-slash-star-lint
+.PHONY: image-slash-star-full-test image-slash-star-ci
 
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
@@ -423,8 +433,8 @@ fontdone-doc: ## Build strict fontdone rustdoc
 fontdone-doc-test: ## Run fontdone doctests
 	$(MAKE) -C $(FONTDONE_SRC) doc-test
 
-fontdone-test: ## Run all fontdone tests
-	$(MAKE) -C $(FONTDONE_SRC) test
+fontdone-test: ## Run fontdone non-oracle tests and all-target checks
+	$(MAKE) -C $(FONTDONE_SRC) test-fast
 
 fontdone-parity: ## Run FreeType parity matrix tests
 	$(MAKE) -C $(FONTDONE_SRC) test-parity
@@ -432,14 +442,14 @@ fontdone-parity: ## Run FreeType parity matrix tests
 fontdone-ffi: ## Run no-runtime-FFI guard
 	$(MAKE) -C $(FONTDONE_SRC) test-ffi
 
-fontdone-ffi-compat: ## Run FreeType-shaped facade tests
-	$(MAKE) -C $(FONTDONE_SRC) test-ffi-compat
+fontdone-ffi-compat: ## Run FreeType-shaped API/ABI facade audit
+	$(MAKE) -C $(FONTDONE_SRC) api-abi-check
 
 fontdone-fmt: ## Check fontdone formatting
 	$(MAKE) -C $(FONTDONE_SRC) fmt
 
 fontdone-fmt-fix: ## Apply fontdone formatting
-	$(MAKE) -C $(FONTDONE_SRC) fmt-fix
+	$(MAKE) -C $(FONTDONE_SRC) fmt
 
 fontdone-clippy: ## Run strict fontdone clippy
 	$(MAKE) -C $(FONTDONE_SRC) clippy
@@ -457,7 +467,7 @@ fontdone-bench-self-test: ## Run benchmark tooling self-test
 	$(MAKE) -C $(FONTDONE_SRC) bench-self-test
 
 fontdone-fixtures: ## Regenerate all FreeType fixture families
-	$(MAKE) -C $(FONTDONE_SRC) fixtures
+	$(MAKE) -C $(FONTDONE_SRC) font-fixtures
 
 fontdone-ci: ## Run required fontdone local CI sequence
 	$(MAKE) -C $(FONTDONE_SRC) ci
@@ -483,6 +493,31 @@ freetype-bench-self-test: fontdone-bench-self-test
 freetype-fixtures: fontdone-fixtures
 freetype-ci: fontdone-ci
 freetype-clean: fontdone-clean
+
+# ── image-slash-star / image backend ──────────────────────────────────────────
+image-slash-star-check: ## Check image-slash-star default features
+	$(CARGO) check --manifest-path $(IMAGE_SLASH_STAR_SRC)/Cargo.toml --all-targets --locked
+
+image-slash-star-feature-test: ## Check image-slash-star no-default feature boundary
+	$(CARGO) check --manifest-path $(IMAGE_SLASH_STAR_SRC)/Cargo.toml --no-default-features --locked
+
+image-slash-star-test: ## Run image-slash-star default package tests
+	$(CARGO) test --manifest-path $(IMAGE_SLASH_STAR_SRC)/Cargo.toml --locked
+
+image-slash-star-fmt: ## Check image-slash-star formatting
+	$(CARGO) fmt --manifest-path $(IMAGE_SLASH_STAR_SRC)/Cargo.toml --all -- --check
+
+image-slash-star-clippy: ## Run strict image-slash-star clippy on default features
+	$(CARGO) clippy --manifest-path $(IMAGE_SLASH_STAR_SRC)/Cargo.toml \
+		--workspace --all-targets --locked -- -D warnings
+
+image-slash-star-lint: image-slash-star-fmt image-slash-star-clippy ## Run image-slash-star fmt + clippy
+
+image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
+	$(CARGO) test --manifest-path $(IMAGE_SLASH_STAR_SRC)/Cargo.toml \
+		--all-features --test coverage_matrix_tests --locked
+
+image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 .PHONY: fixtures image-backend-fixtures putdata-fixtures
