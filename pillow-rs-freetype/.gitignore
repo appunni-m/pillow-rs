@@ -1,5 +1,0 @@
-/target/
-/freetype/
-/tests/fixtures/*.json
-/tests/fixtures/outputs/
-*.profraw

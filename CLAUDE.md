@@ -25,7 +25,7 @@ Use skills instead of repeating long procedure in this file.
 - `coding-guidelines`: Rust naming, formatting, clippy, or code review style.
 - `systematic-debugging`: stuck bugs, C-vs-Rust first divergence tracing,
   porting algorithms, root cause analysis, and pipeline instrumentation.
-- `.claude/skills/freetype-parity`: any `pillow-rs-freetype` parity, fixture,
+- `.claude/skills/freetype-parity`: any external `fontdone` parity, fixture,
   harness, native TrueType, autohinter, rasterizer, metrics, bbox/cbox, or
   subagent-split task.
 - `.claude/skills/fix-pil-parity`: PIL/RSPIL fixture parity outside the
@@ -45,8 +45,8 @@ Workspace crates:
 - `pillow-rs/`: pure Rust image logic. No binding dependencies.
 - `pillow-rs-py/`: PyO3 wrapper. Keep it thin.
 - `pillow-rs-js/`: wasm-bindgen wrapper. Keep it thin.
-- `pillow-rs-freetype/`: pure Rust FreeType-compatible implementation and
-  parity harness. Cargo package/crate name: `fontdone`.
+- `../fontdone/`: sibling standalone pure Rust FreeType-compatible
+  implementation and parity harness. Cargo package/crate name: `fontdone`.
 
 Core crates never touch Python objects, JS objects, file paths, or network.
 Core takes Rust primitives and returns Rust primitives. I/O and conversion live
@@ -59,7 +59,7 @@ that document with `make repo-map-update` and verify it with
 
 ## Non-Negotiable Rules
 
-- No runtime FFI shortcuts in core or `pillow-rs-freetype`: no `freetype-sys`,
+- No runtime FFI shortcuts in core or `../fontdone`: no `freetype-sys`,
   `bindgen`, `cc`, `extern "C"`, `dlopen`, or native FreeType calls.
 - C/Pillow/FreeType references are read-only oracles for fixture generation,
   diagnosis, and trace comparison.
@@ -67,8 +67,8 @@ that document with `make repo-map-update` and verify it with
   thresholds to make tests pass.
 - Never commit temporary debug prints. Permanent traces must use guarded
   `log::trace!` patterns.
-- Never work on legacy `pillow-rs-font`; keep effort focused on
-  `pillow-rs-freetype`.
+- Never work on legacy `pillow-rs-font`; keep FreeType effort focused on the
+  sibling `../fontdone` repository.
 - Do not use destructive git commands like `git reset --hard` or broad
   checkouts unless the user explicitly asks.
 - Do not revert user changes. Work with them or ask only if they make progress
@@ -141,10 +141,10 @@ if log::log_enabled!(target: "autohint::pipeline", log::Level::Trace) {
 }
 ```
 
-## pillow-rs-freetype Goal
+## fontdone Goal
 
 The project goal is 100% pure-Rust parity with the version-matched C FreeType
-oracle across every public endpoint exposed by `pillow-rs-freetype`.
+oracle across every public endpoint exposed by `fontdone`.
 
 Parity means:
 
@@ -165,7 +165,7 @@ only reflect already-correct core behavior through the ABI surface.
 ## Harness And Fixtures
 
 - Fixture generators are part of the system. Add or update documented
-  generators under `pillow-rs-freetype/scripts/` or `doc/`.
+  generators under `../fontdone/scripts/` or `../fontdone/doc/`.
 - Do not create one-off scripts that future agents cannot reproduce.
 - Prefer exact comparisons: pixel bytes for masks, bytes/hashes for bitmap
   output, exact 26.6 values for metrics and geometry.
@@ -274,14 +274,14 @@ the harness and wrapper boundaries honest while parity failures remain visible.
 For narrow FreeType lanes, prefer the crate-local Makefile targets:
 
 ```bash
-make -C pillow-rs-freetype test-harness
-make -C pillow-rs-freetype test-generator
-make -C pillow-rs-freetype test-render-mode
-make -C pillow-rs-freetype test-fixed
-make -C pillow-rs-freetype test-interface
-make -C pillow-rs-freetype test-ffi
-make -C pillow-rs-freetype test-ffi-compat
-make -C pillow-rs-freetype test-perf
+make -C ../fontdone test-harness
+make -C ../fontdone test-generator
+make -C ../fontdone test-render-mode
+make -C ../fontdone test-fixed
+make -C ../fontdone test-interface
+make -C ../fontdone test-ffi
+make -C ../fontdone test-ffi-compat
+make -C ../fontdone test-perf
 ```
 
 Run the narrow failing Makefile target first, then the broader harness target.
@@ -309,7 +309,7 @@ Final reports should include:
 - Commit or working tree status.
 - Files changed and why.
 - Test commands and results.
-- Current parity counts when working on `pillow-rs-freetype`.
+- Current parity counts when working on `fontdone`.
 - Remaining risks or failures, classified by bucket.
 
 Keep status reports factual. If no subagents are active, say so directly.

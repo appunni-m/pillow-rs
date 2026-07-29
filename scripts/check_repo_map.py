@@ -39,10 +39,6 @@ INCLUDED_PREFIXES = (
     "pillow-rs-js/tests/",
     "pillow-rs-py/python/",
     "pillow-rs-py/src/",
-    "pillow-rs-freetype/examples/",
-    "pillow-rs-freetype/scripts/",
-    "pillow-rs-freetype/src/",
-    "pillow-rs-freetype/tests/",
     "scripts/",
     "tests/",
 )
@@ -50,17 +46,6 @@ INCLUDED_PREFIXES = (
 INCLUDED_EXACT = {
     "docs/REPO_MAP.md",
     "pillow-rs/Cargo.toml",
-    "pillow-rs-freetype/AGENTS.md",
-    "pillow-rs-freetype/CONTRIBUTING.md",
-    "pillow-rs-freetype/Cargo.lock",
-    "pillow-rs-freetype/Cargo.toml",
-    "pillow-rs-freetype/FTL.TXT",
-    "pillow-rs-freetype/LICENSE",
-    "pillow-rs-freetype/Makefile",
-    "pillow-rs-freetype/NOTICE.md",
-    "pillow-rs-freetype/PROJECT_GOALS.md",
-    "pillow-rs-freetype/README.md",
-    "pillow-rs-freetype/deny.toml",
     "pillow-rs-js/Cargo.toml",
     "pillow-rs-js/package.json",
     "pillow-rs-js/package-lock.json",
@@ -69,8 +54,6 @@ INCLUDED_EXACT = {
 }
 
 EXCLUDED_PREFIXES = (
-    "pillow-rs-freetype/freetype/",
-    "pillow-rs-freetype/tests/fixtures/",
     "scripts/bench/bench_reference_images/",
     "tests/coverage/",
     "tests/fixtures/",
