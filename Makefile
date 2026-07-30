@@ -16,11 +16,16 @@ PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
 FONTDONE_SRC := ../fontdone
-IMAGE_SLASH_STAR_SRC := ../image-slash-star
+IMAGE_SLASH_STAR_SRC := $(abspath ../image-slash-star)
+IMAGE_SLASH_STAR_AVIF_LIB_DIR ?= $(shell p="$$(find "$(IMAGE_SLASH_STAR_SRC)/.oracle-venv" -name 'libavif*' -type f -print -quit 2>/dev/null)"; if [ -n "$$p" ]; then dirname "$$p"; fi)
 FIXTURES_DIR := tests/fixtures
 FIXTURES_SUITE1_DIR := tests/fixtures_2
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
+
+ifneq ($(strip $(IMAGE_SLASH_STAR_AVIF_LIB_DIR)),)
+export IMAGE_SLASH_STAR_AVIF_LIB_DIR
+endif
 
 # Colors for help output
 BOLD := \033[1m
