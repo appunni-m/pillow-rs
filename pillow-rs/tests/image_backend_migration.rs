@@ -540,19 +540,14 @@ fn manifest_error_rows_preserve_structured_failures() {
                     row.id
                 );
                 assert!(!image.is_materialized(), "{} verify changed state", row.id);
-                let first = image
-                    .tobytes()
-                    .expect_err("fixture must fail during implicit loading");
-                let second = peer
-                    .tobytes()
-                    .expect_err("clone must observe cached loading failure");
-                assert_eq!(
-                    first.to_string(),
-                    second.to_string(),
-                    "{} stable error",
-                    row.id
-                );
-                assert!(!image.is_materialized(), "{} failure is not pixels", row.id);
+                // Pillow 12.2.0's PNG `verify()` checks IDAT CRCs, but the
+                // ordinary lazy load path can still decode the same image.
+                // Keep those paths separate: verification failure must not
+                // poison the materialization cache shared by clones.
+                let first = image.tobytes().expect("verify failure must not poison load");
+                let second = peer.tobytes().expect("clone must still load pixels");
+                assert_eq!(first, second, "{} stable decoded pixels", row.id);
+                assert!(image.is_materialized(), "{} load did not cache pixels", row.id);
             }
             _ => panic!("{} has an unsupported error expectation", row.id),
         }

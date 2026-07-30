@@ -49,7 +49,7 @@ name = "image_backend_migration"
 required-features = ["test-api"]
 
 [dependencies]
-image-slash-star = { git = "https://github.com/appunni-m/image-slash-star.git", rev = "e3405194e4884f09070c1686a6e84e209bf98e11", default-features = false }
+image-slash-star = { git = "https://github.com/appunni-m/image-slash-star.git", rev = "d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a", default-features = false }
 fontdone = { path = "../../fontdone" }
 log = "0.4"
 thiserror = "2"
