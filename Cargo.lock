@@ -504,7 +504,7 @@ dependencies = [
 [[package]]
 name = "image-slash-star"
 version = "0.1.0"
-source = "git+https://github.com/appunni-m/image-slash-star.git?rev=e3405194e4884f09070c1686a6e84e209bf98e11#e3405194e4884f09070c1686a6e84e209bf98e11"
+source = "git+https://github.com/appunni-m/image-slash-star.git?rev=d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a#d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a"
 dependencies = [
  "bytemuck",
 ]
