@@ -223,6 +223,32 @@ def run(args: argparse.Namespace) -> int:
         child = json.loads(child_output.read_text(encoding="utf-8"))
         child_output.unlink()
 
+        # Exercise the legacy FreeTypeFont core variants that the PyO3
+        # binding bypasses (getlength, getmask2_with_start, native_getvaraxes,
+        # native_getvarnames, native_setvaraxes, native_setvarname, ...)
+        # through a maintained Rust integration test under the same
+        # instrumented toolchain, so the report merges those regions too.
+        subprocess.run(
+            [
+                "cargo",
+                "+nightly",
+                "test",
+                "--manifest-path",
+                str(ROOT / "pillow-rs" / "Cargo.toml"),
+                "--test",
+                "font_native_public_api",
+            ],
+            env={
+                **os.environ,
+                "RUSTUP_TOOLCHAIN": "nightly",
+                "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
+                "LLVM_PROFILE_FILE": str(args.profile),
+                "CARGO_TARGET_DIR": str(LLVM_COV_TARGET),
+            },
+            cwd=ROOT,
+            check=True,
+        )
+
         llvm_version = subprocess.run(
             ["cargo", "+nightly", "llvm-cov", "--version"],
             capture_output=True,
