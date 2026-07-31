@@ -123,13 +123,90 @@ def benchmark(result: dict[str, Any]) -> None:
             exact(comparison, {"baseline_subject", "subject_id", "metric", "baseline_value", "subject_value", "unit", "ratio"}, f"{prefix}.comparisons[{comparison_index}]")
 
 
+def status_report(result: dict[str, Any]) -> None:
+    """Validate the generated aggregate without accepting open-ended fields."""
+
+    exact(
+        result,
+        {
+            "schema",
+            "manifest",
+            "target_profiles",
+            "evidence",
+            "completeness",
+            "operations",
+            "stale_or_incompatible_evidence",
+        },
+        "status",
+    )
+    if result["schema"] != "migration-parity/status-report@1":
+        raise ValueError("status.schema: unsupported schema")
+    exact(result["manifest"], {"path", "schema", "sha256"}, "status.manifest")
+    for index, target in enumerate(result["target_profiles"]):
+        exact(
+            target,
+            {"target_profile", "target_id", "revision", "dirty", "runtime", "backend", "features"},
+            f"status.target_profiles[{index}]",
+        )
+    for index, item in enumerate(result["evidence"]):
+        exact(item, {"lane", "run_id", "snapshot_id"}, f"status.evidence[{index}]")
+        if item["lane"] not in {"parity", "coverage", "benchmark"}:
+            raise ValueError(f"status.evidence[{index}].lane: invalid lane")
+    dimensions = {
+        "inventory_representation",
+        "operation_contracts",
+        "parity_input_mapping",
+        "coverage_input_mapping",
+        "benchmark_input_mapping",
+        "parity_outcome",
+        "function_coverage",
+        "line_coverage",
+        "branch_coverage",
+        "region_coverage",
+        "benchmark_budget_outcome",
+        "documentation_freshness",
+    }
+    for index, item in enumerate(result["completeness"]):
+        exact(
+            item,
+            {"dimension", "target_profile", "numerator", "denominator", "evidence_id"},
+            f"status.completeness[{index}]",
+        )
+        if item["dimension"] not in dimensions:
+            raise ValueError(f"status.completeness[{index}].dimension: invalid dimension")
+        if not isinstance(item["numerator"], int) or not isinstance(item["denominator"], int):
+            raise ValueError(f"status.completeness[{index}]: counts must be integers")
+        if item["numerator"] < 0 or item["denominator"] < 0 or item["numerator"] > item["denominator"]:
+            raise ValueError(f"status.completeness[{index}]: invalid counts")
+    for index, item in enumerate(result["operations"]):
+        prefix = f"status.operations[{index}]"
+        exact(
+            item,
+            {"surface", "operation", "target_profile", "classification", "support", "requirements", "parity", "coverage", "benchmark"},
+            prefix,
+        )
+        if item["support"] not in {"supported", "partial", "unsupported"}:
+            raise ValueError(f"{prefix}.support: invalid support")
+        for lane in ("parity", "coverage", "benchmark"):
+            lane_prefix = f"{prefix}.{lane}"
+            exact(item[lane], {"applicability", "input_ids", "outcome", "evidence_id", "details"}, lane_prefix)
+            if item[lane]["outcome"] not in {"pass", "fail", "not_run", "not_proven", "not_applicable"}:
+                raise ValueError(f"{lane_prefix}.outcome: invalid outcome")
+            if not isinstance(item[lane]["details"], list) or not all(isinstance(value, str) for value in item[lane]["details"]):
+                raise ValueError(f"{lane_prefix}.details: expected string array")
+    for index, item in enumerate(result["stale_or_incompatible_evidence"]):
+        exact(item, {"lane", "run_id", "reason", "identity_diff"}, f"status.stale_or_incompatible_evidence[{index}]")
+        if not isinstance(item["identity_diff"], list) or not all(isinstance(value, str) for value in item["identity_diff"]):
+            raise ValueError(f"status.stale_or_incompatible_evidence[{index}].identity_diff: expected string array")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("lane", choices=("parity", "coverage", "benchmark"))
+    parser.add_argument("lane", choices=("parity", "coverage", "benchmark", "status"))
     parser.add_argument("result", type=Path)
     args = parser.parse_args()
     result = json.loads(args.result.read_text(encoding="utf-8"))
-    {"parity": parity, "coverage": coverage, "benchmark": benchmark}[args.lane](result)
+    {"parity": parity, "coverage": coverage, "benchmark": benchmark, "status": status_report}[args.lane](result)
     print(f"{args.lane} result schema valid")
     return 0
 

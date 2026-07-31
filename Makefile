@@ -29,6 +29,7 @@ MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
 MIGRATION_BENCHMARK_OUTPUT ?= build/migration-parity/benchmark-result.json
 MIGRATION_BENCHMARK_PARITY_OUTPUT ?= build/migration-parity/benchmark-parity-result.json
 MIGRATION_BENCHMARK_ARGS ?=
+MIGRATION_STATUS_OUTPUT ?= build/migration-parity/status-report.json
 
 ifneq ($(strip $(IMAGE_SLASH_STAR_AVIF_LIB_DIR)),)
 export IMAGE_SLASH_STAR_AVIF_LIB_DIR
@@ -91,6 +92,8 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Run correctness-gated benchmark workloads\n"
+	@printf "  $(CYAN)make migration-parity-aggregate$(NC) Join compatible parity, coverage, and benchmark evidence\n"
+	@printf "  $(CYAN)make migration-parity-docs$(NC) Generate specification and evidence documentation\n"
 	@printf "  $(CYAN)make migration-parity-inventory$(NC) Print the canonical selected-scope endpoint inventory\n"
 	@printf "  $(CYAN)make migration-parity-inventory-check$(NC) Verify endpoint authority expansion and alias accounting\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs Font + fontdone unified parity\n"
@@ -128,6 +131,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for manifest and input builds\n"
 	@printf "  $(CYAN)make migration-parity-case-review$(NC) Review duplicate and nuanced case selection\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
+	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Verify strict aggregate/result interfaces\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
 	@printf "  $(CYAN)make imagefont-getmask2-fixtures$(NC) Generate independent ImageFont.getmask2 fixtures\n"
@@ -364,7 +368,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-benchmark
+.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -432,6 +436,21 @@ migration-parity-benchmark: ## Run correctness-gated benchmark workloads
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-aggregate: ## Join compatible parity, coverage, and benchmark evidence
+	set +e; \
+	$(PYTHON) scripts/aggregate_migration_parity.py \
+		--parity $(MIGRATION_PARITY_OUTPUT) \
+		--coverage $(MIGRATION_COVERAGE_OUTPUT) \
+		--benchmark $(MIGRATION_BENCHMARK_OUTPUT) \
+		--output $(MIGRATION_STATUS_OUTPUT); \
+	status=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	$(PYTHON) scripts/validate_migration_parity_result.py status $(MIGRATION_STATUS_OUTPUT)
+
+migration-parity-docs: migration-parity-aggregate ## Generate specification and evidence documentation
+	$(PYTHON) scripts/generate_migration_parity_docs.py \
+		--status $(MIGRATION_STATUS_OUTPUT)
 
 font-tests: ## Run Font public API parity tests
 	$(MAKE) migration-parity-test
@@ -584,7 +603,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check image-backend-fixtures putdata-fixtures
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check migration-parity-evidence-check image-backend-fixtures putdata-fixtures
 .PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
@@ -616,11 +635,15 @@ migration-parity-fixtures-check: migration-parity-inventory-check ## Verify auth
 	$(PYTHON) scripts/build_migration_parity_manifest.py --output "$$tmp/manifest.yaml"; \
 	diff -u pillow-rs/tests/fixtures/manifest.yaml "$$tmp/manifest.yaml"; \
 	$(MAKE) migration-parity-inputs-check
+	$(MAKE) migration-parity-evidence-check
 
 .PHONY: migration-parity-inputs-check
 migration-parity-inputs-check: ## Verify deterministic input regeneration
 	$(PYTHON) scripts/check_migration_parity_inputs.py
 	$(PYTHON) -m unittest tests.test_migration_parity_cases
+
+migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
+	$(PYTHON) -m unittest tests.test_migration_parity_evidence
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
