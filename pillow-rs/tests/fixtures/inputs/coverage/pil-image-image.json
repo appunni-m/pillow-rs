@@ -1013,6 +1013,8 @@
           "PIL.Image.Image.putdata.nuanced.one-mode",
           "PIL.Image.Image.putpixel.nuanced.p-index",
           "PIL.Image.Image.putpixel.nuanced.p-tuple",
+          "PIL.Image.Image.putpixel.nuanced.p-palette-exact-match",
+          "PIL.Image.Image.putpixel.nuanced.p-palette-append",
           "PIL.Image.Image.putpixel.nuanced.p-rgba-tuple-error",
           "PIL.Image.Image.putdata.nuanced.p-indices",
           "PIL.Image.Image.putdata.nuanced.rgba-flat",
