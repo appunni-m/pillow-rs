@@ -65,7 +65,7 @@ build-release:
 	$(CARGO) build --release --locked
 
 .PHONY: test
-test: test-core font-tests
+test: test-core
 
 .PHONY: test-core
 test-core:
@@ -122,24 +122,22 @@ backend-support-matrix:
 
 .PHONY: migration-parity-test
 migration-parity-test:
-	FONT_ORACLE_PYTHON=$(FONT_ORACLE_PYTHON) \
-		$(CARGO) test --all-features --test font_public_api --locked -- --nocapture
+	$(MAKE) -C .. migration-parity-test
 
 .PHONY: font-tests
 font-tests: migration-parity-test
 
 .PHONY: font-tests-release
 font-tests-release:
-	FONT_ORACLE_PYTHON=$(FONT_ORACLE_PYTHON) \
-		$(CARGO) test --release --all-features --test font_public_api --locked -- --nocapture
+	$(MAKE) -C .. migration-parity-test
 
 .PHONY: font-tests-coverage
 font-tests-coverage:
-	bash ../scripts/coverage/run_font_rust_coverage.sh
+	$(MAKE) -C .. migration-parity-coverage
 
 .PHONY: font-tests-coverage-with-freetype
 font-tests-coverage-with-freetype:
-	bash ../scripts/coverage/run_font_rust_with_freetype_coverage.sh
+	$(MAKE) -C .. migration-parity-coverage
 
 .PHONY: imagingft-tests
 imagingft-tests: font-tests
