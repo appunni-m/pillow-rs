@@ -301,6 +301,8 @@ def run_native_cases() -> tuple[int, int, int]:
         ("getcolors-l-maxcolors", lambda: Image.new("L", (4, 4)).getcolors(1)),
         ("getcolors-p", lambda: Image.new("P", (4, 4)).getcolors()),
         ("getcolors-1", lambda: Image.new("1", (4, 4)).getcolors()),
+        ("getcolors-la-varied", lambda: _getcolors_la_varied()),
+        ("getcolors-maxcolors-overflow", lambda: _getcolors_overflow()),
         # tobitmap wide images need the per-byte bit indexing.
         ("tobitmap-1-wide", lambda: _tobitmap_wide("1")),
         ("tobitmap-l-wide", lambda: _tobitmap_wide("L")),
@@ -314,6 +316,12 @@ def run_native_cases() -> tuple[int, int, int]:
         ("getprojection-content", lambda: Image.new("L", (8, 8), 0).point(lambda v: 255).getprojection()),
         # stat on an empty image exercises the zero-count band branch.
         ("stat-empty", lambda: _stat_of(Image.new("L", (0, 0)))),
+        # Malformed JPEG APP1 shapes drive the EXIF scanner error branches.
+        ("exif-valid-app1", lambda: _exif_probe("valid")),
+        ("exif-short-app1", lambda: _exif_probe("short-app1")),
+        ("exif-no-exif-prefix", lambda: _exif_probe("no-exif-prefix")),
+        ("exif-truncated-segment", lambda: _exif_probe("truncated-segment")),
+        ("exif-empty-app1-len", lambda: _exif_probe("empty-app1-len")),
     ]
     for name, call in probes:
         probe(name, call)
@@ -427,6 +435,71 @@ def _tobitmap_wide(mode: str) -> None:
         if x % 3 == 0:
             image.putpixel((x, 0), 255)
     image.tobitmap()
+
+
+def _getcolors_la_varied() -> None:
+    image = Image.new("LA", (4, 4), 0)
+    values = [(1, 2), (2, 1), (1, 2), (3, 4)]
+    for index, value in enumerate(values):
+        image.putpixel((index % 4, index // 4), value)
+    image.getcolors()
+
+
+def _getcolors_overflow() -> None:
+    image = Image.new("L", (32, 32), 0)
+    for y in range(32):
+        for x in range(32):
+            image.putpixel((x, y), (x + y) % 256)
+    image.getcolors(2)
+
+
+def _exif_probe(name: str) -> None:
+    import os
+    import struct
+    import tempfile
+
+    base = open("/tmp/orient6.jpg", "rb").read()
+    start = 2
+    app1 = None
+    while start + 4 <= len(base):
+        if base[start] != 0xFF:
+            break
+        marker = base[start + 1]
+        if marker == 0xD8 or 0xD0 <= marker <= 0xD7 or marker == 0x01:
+            start += 2
+            continue
+        if marker == 0xD9:
+            break
+        length = struct.unpack(">H", base[start + 2 : start + 4])[0]
+        if marker == 0xE1:
+            app1 = (start, length)
+            break
+        start += 2 + length
+    if app1 is None:
+        return
+    seg_start, seg_len = app1
+    payload = base[seg_start + 4 : seg_start + 2 + seg_len]
+    variants = {
+        "valid": base,
+        "short-app1": base[:seg_start] + b"\xff\xe1\x00\x02\x00" + base[seg_start + 2 + seg_len :],
+        "no-exif-prefix": base[: seg_start + 4] + b"XXXX" + base[seg_start + 8 :],
+        "truncated-segment": (
+            base[:seg_start] + b"\xff\xe1\x00\x40" + payload[:4] + base[seg_start + 2 + seg_len :]
+        ),
+        "empty-app1-len": base[:seg_start] + b"\xff\xe1\x00\x00" + base[seg_start + 2 + seg_len :],
+    }
+    directory = tempfile.mkdtemp()
+    path = os.path.join(directory, name + ".jpg")
+    with open(path, "wb") as handle:
+        handle.write(variants[name])
+    try:
+        image = Image.open(path)
+        _ = image.getexif()
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)
+        if os.path.isdir(directory):
+            os.rmdir(directory)
 
 
 def _noise_rgba(w: int, h: int, seed: int) -> Image:
