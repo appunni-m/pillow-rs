@@ -170,7 +170,9 @@ class Image:
         rust_image = self._rust_image.resize(size, resample)
         return Image(rust_image)
 
-    def crop(self, box: Tuple[int, int, int, int]) -> "Image":
+    def crop(self, box: Optional[Tuple[int, int, int, int]] = None) -> "Image":
+        if box is None:
+            return self.copy()
         left, top, right, bottom = box
         rust_image = self._rust_image.crop_box(left, top, right, bottom)
         return Image(rust_image)
