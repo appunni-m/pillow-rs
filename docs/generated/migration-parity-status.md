@@ -15,7 +15,7 @@ lane: parity
 
 - Compatible evidence IDs: `migration-parity-db7fb82474a44a9ab737d803a1c793ab`
 - Operation outcomes: pass=204
-- Stale/incompatible artifacts: 2
+- Stale/incompatible artifacts: 1
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
