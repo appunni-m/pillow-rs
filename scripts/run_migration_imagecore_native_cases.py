@@ -202,6 +202,13 @@ def run_native_cases() -> tuple[int, int, int]:
                 [Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4))],
             ),
         ),
+        (
+            "merge-cmyk",
+            lambda: pillow_rs.merge(
+                "CMYK",
+                [Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4))],
+            ),
+        ),
         # Gradient mode validation.
         ("linear-gradient-ok", lambda: pillow_rs.linear_gradient("L")),
         ("linear-gradient-bad-mode", lambda: pillow_rs.linear_gradient("BOGUS")),
