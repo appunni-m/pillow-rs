@@ -642,10 +642,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
                 | (0xff << 24);
             let mid_value = mid
                 .map(|mid| {
-                    (mid.0 as u32)
-                        | ((mid.1 as u32) << 8)
-                        | ((mid.2 as u32) << 16)
-                        | (0xff << 24)
+                    (mid.0 as u32) | ((mid.1 as u32) << 8) | ((mid.2 as u32) << 16) | (0xff << 24)
                 })
                 .unwrap_or(bk);
             vec![
@@ -1457,15 +1454,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     whitepoint,
                 } = op
                 {
-                    op_colorize(
-                        img,
-                        black,
-                        white,
-                        *mid,
-                        *blackpoint,
-                        *midpoint,
-                        *whitepoint,
-                    )
+                    op_colorize(img, black, white, *mid, *blackpoint, *midpoint, *whitepoint)
                 } else {
                     Err(PilError::ValueError("expected Colorize op".into()))
                 }

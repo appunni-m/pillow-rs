@@ -281,11 +281,7 @@ pub fn op_colorize(
     for y in 0..h {
         for x in 0..w {
             let g = gray.get_pixel(x, y)[0] as usize;
-            out.put_pixel(
-                x,
-                y,
-                crate::raster::Rgb([lut[0][g], lut[1][g], lut[2][g]]),
-            );
+            out.put_pixel(x, y, crate::raster::Rgb([lut[0][g], lut[1][g], lut[2][g]]));
         }
     }
     // Colorize always outputs RGB (PIL behavior)
