@@ -514,7 +514,17 @@
           "PIL.ImageDraw.ImageDraw.circle.nuanced.bbox",
           "PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline",
           "PIL.ImageDraw.ImageDraw.line.nuanced.wide",
-          "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve"
+          "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve",
+          "PIL.ImageDraw.ImageDraw.arc.nuanced.fill-width",
+          "PIL.ImageDraw.ImageDraw.chord.nuanced.fill-outline",
+          "PIL.ImageDraw.ImageDraw.pieslice.nuanced.fill-outline-width",
+          "PIL.ImageDraw.ImageDraw.ellipse.nuanced.fill-outline-width",
+          "PIL.ImageDraw.ImageDraw.rectangle.nuanced.fill-outline-width",
+          "PIL.ImageDraw.ImageDraw.polygon.nuanced.outline-width",
+          "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.rotated-hexagon",
+          "PIL.ImageDraw.ImageDraw.point.nuanced.la-canvas",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.stroked-rgba",
+          "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.centered-anchored"
         ],
         "command_ids": []
       },
