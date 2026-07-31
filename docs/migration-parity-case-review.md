@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1249
-- Unique active workflow signatures: 1249
+- Active parity workflows: 1259
+- Unique active workflow signatures: 1259
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 80
+- Deliberate nuanced workflows: 90
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -27,7 +27,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 12 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 223 |
+| `PIL.ImageDraw.ImageDraw` | 233 |
 | `PIL.ImageEnhance` | 16 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
@@ -97,7 +97,17 @@ are not copied into the active lane by name.
 - `PIL.ImageColor.getrgb.nuanced.hsl-syntax`
 - `PIL.ImageColor.getrgb.nuanced.named-css-color`
 - `PIL.ImageColor.getrgb.nuanced.rgba-syntax`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-one-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-la`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgba-rgba-mask`
+- `PIL.ImageDraw.ImageDraw.circle.nuanced.bbox`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.wide`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve`
 - `PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline`
+- `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor`
 - `PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor`
 - `PIL.ImageFilter.Kernel.nuanced.bad-size`

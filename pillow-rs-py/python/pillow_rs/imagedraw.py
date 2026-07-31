@@ -120,6 +120,16 @@ class Draw:
 
     def bitmap(self, xy, bitmap, fill=None):
         """Draw a bitmap. Pixel iteration done in Rust."""
+        # PIL validates the fill arity against the canvas mode in
+        # ``Draw._getink`` before touching the bitmap.
+        if isinstance(fill, (tuple, list)):
+            n = len(fill)
+            if len(self._orig_mode) == 1 and self._orig_mode != "P" and n != 1:
+                raise TypeError("color must be int or single-element tuple")
+            if len(self._orig_mode) == 2 and n not in (1, 2):
+                raise TypeError(
+                    "color must be int, or tuple of one or two elements"
+                )
         self._draw.bitmap((float(xy[0]), float(xy[1])), bitmap._rust_image, fill)
         self._sync()
 
