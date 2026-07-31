@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 0bbb44ffa8992bb7a5772f65deabf1ebdee9611e59d672477088c25d6705c39e
+manifest_sha256: 39f4312f9296204ac99195b4beaa811ddec2c505565944a98b1b2b598fae63f0
 statement_status: declared
 ```
 
@@ -18,8 +18,8 @@ statement_status: declared
 - Target profiles: `python-cpu`
 - Public surfaces: 22
 - Operations: 204
-- Requirements: 1780
-- Indexed parity cases: 1325
+- Requirements: 1782
+- Indexed parity cases: 1327
 - Indexed coverage plans: 22
 - Indexed benchmark workloads: 203
 
@@ -203,7 +203,7 @@ statement_status: declared
 | `PIL.ImageOps` | `crop` | `function` | `PIL.ImageOps.crop` | `pillow_rs.ImageOps.crop` | 8 |
 | `PIL.ImageOps` | `deform` | `function` | `PIL.ImageOps.deform` | `pillow_rs.ImageOps.deform` | 5 |
 | `PIL.ImageOps` | `equalize` | `function` | `PIL.ImageOps.equalize` | `pillow_rs.ImageOps.equalize` | 8 |
-| `PIL.ImageOps` | `exif_transpose` | `function` | `PIL.ImageOps.exif_transpose` | `pillow_rs.ImageOps.exif_transpose` | 4 |
+| `PIL.ImageOps` | `exif_transpose` | `function` | `PIL.ImageOps.exif_transpose` | `pillow_rs.ImageOps.exif_transpose` | 6 |
 | `PIL.ImageOps` | `expand` | `function` | `PIL.ImageOps.expand` | `pillow_rs.ImageOps.expand` | 9 |
 | `PIL.ImageOps` | `fit` | `function` | `PIL.ImageOps.fit` | `pillow_rs.ImageOps.fit` | 11 |
 | `PIL.ImageOps` | `flip` | `function` | `PIL.ImageOps.flip` | `pillow_rs.ImageOps.flip` | 7 |

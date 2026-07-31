@@ -375,11 +375,16 @@ def run(args: argparse.Namespace) -> int:
                 for command_id in plan["selectors"]["command_ids"]:
                     if command_id in command_totals:
                         continue
-                    if command_id != "coverage-font-native":
-                        raise ValueError(f"unknown coverage command: {command_id}")
-                    from run_migration_font_native_cases import run_native_cases
+                    if command_id == "coverage-font-native":
+                        from run_migration_font_native_cases import run_native_cases
 
-                    passed, _skipped, failed = run_native_cases()
+                        passed, _skipped, failed = run_native_cases()
+                    elif command_id == "coverage-imageops-native":
+                        from run_migration_imageops_native_cases import run_native_cases
+
+                        passed, _skipped, failed = run_native_cases()
+                    else:
+                        raise ValueError(f"unknown coverage command: {command_id}")
                     command_totals[command_id] = (passed, failed)
         finally:
             cov.stop()

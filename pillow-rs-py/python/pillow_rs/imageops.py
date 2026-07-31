@@ -121,14 +121,18 @@ def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255,
 
 
 def exif_transpose(image: Image, *, in_place=False):
-    image.load()
+    # Capture EXIF before load(): the core retains encoded EXIF only on the
+    # lazy Bytes source, and Pillow's exif_transpose reads orientation before
+    # any pixels are needed.
     exif_data = image.getexif()
+    image.load()
     orientation = _core.exif_get_orientation(exif_data) if isinstance(exif_data, bytes) else None
     orientation = orientation or 1
 
     method_map = {
-        2: "FLIP_LEFT_RIGHT", 3: "ROTATE_180", 4: "FLIP_TOP_BOTTOM",
-        5: "TRANSPOSE", 6: "ROTATE_270", 7: "TRANSVERSE", 8: "ROTATE_90",
+        # Pillow's Image.Transpose IntEnum values; the target facade converts
+        # the integer back to its canonical transpose name.
+        2: 0, 3: 3, 4: 1, 5: 5, 6: 4, 7: 6, 8: 2,
     }
     method = method_map.get(orientation)
 
