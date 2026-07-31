@@ -20,22 +20,55 @@ class Draw:
         """Install the native-mode image restored by Rust core."""
         self._image._rust_image = self._draw.image
 
+    @staticmethod
+    def _box(xy):
+        """Normalize Pillow's flat or nested two-corner coordinate form."""
+        try:
+            if len(xy) == 2 and len(xy[0]) == 2 and len(xy[1]) == 2:
+                return (int(xy[0][0]), int(xy[0][1]), int(xy[1][0]), int(xy[1][1]))
+            if len(xy) == 4:
+                return (int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3]))
+        except (IndexError, TypeError):
+            pass
+        raise TypeError("coordinate list must contain exactly 2 coordinates")
+
+    @staticmethod
+    def _points(xy):
+        """Normalize flat and paired point sequences with Pillow errors."""
+        try:
+            values = list(xy)
+        except TypeError as exc:
+            raise TypeError("coordinate list must contain at least 2 coordinates") from exc
+        if not values:
+            raise TypeError("coordinate list must contain at least 2 coordinates")
+        if isinstance(values[0], (list, tuple)):
+            if len(values) < 2 or any(len(point) != 2 for point in values):
+                raise TypeError("coordinate list must contain at least 2 coordinates")
+            return tuple((int(point[0]), int(point[1])) for point in values)
+        if len(values) < 4 or len(values) % 2:
+            raise TypeError("coordinate list must contain at least 2 coordinates")
+        return tuple((int(values[index]), int(values[index + 1])) for index in range(0, len(values), 2))
+
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
-        self._draw.line(xy, fill, width if width > 0 else 1)
+        if len(xy) < 2 or (
+            len(xy) == 2
+            and not isinstance(xy[0], (list, tuple))
+            and not isinstance(xy[1], (list, tuple))
+        ):
+            return None
+        self._draw.line(self._points(xy), fill, width if width > 0 else 1)
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
-        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        self._draw.rectangle((x0, y0, x1, y1), fill, outline, width)
+        self._draw.rectangle(self._box(xy), fill, outline, width)
         self._sync()
 
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):
-        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        self._draw.ellipse((x0, y0, x1, y1), fill, outline, width)
+        self._draw.ellipse(self._box(xy), fill, outline, width)
         self._sync()
 
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
-        self._draw.polygon(xy, fill, outline, width)
+        self._draw.polygon(self._points(xy), fill, outline, width)
         self._sync()
 
     def point(self, xy, fill=None):
@@ -43,18 +76,15 @@ class Draw:
         self._sync()
 
     def arc(self, xy, start, end, fill=None, width=1):
-        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        self._draw.arc((x0, y0, x1, y1), float(start), float(end), fill, width)
+        self._draw.arc(self._box(xy), float(start), float(end), fill, width)
         self._sync()
 
     def chord(self, xy, start, end, fill=None, outline=None, width=1):
-        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        self._draw.chord((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
+        self._draw.chord(self._box(xy), float(start), float(end), fill, outline, width)
         self._sync()
 
     def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
-        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
-        self._draw.pieslice((x0, y0, x1, y1), float(start), float(end), fill, outline, width)
+        self._draw.pieslice(self._box(xy), float(start), float(end), fill, outline, width)
         self._sync()
 
     def circle(self, xy, radius, fill=None, outline=None, width=1):
@@ -142,6 +172,8 @@ class Draw:
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
+        if not isinstance(n_sides, int) or n_sides <= 2:
+            raise ValueError("n_sides should be an int > 2")
         self._draw.regular_polygon(bounding_circle, n_sides, float(rotation), fill, outline, width)
         self._sync()
 
