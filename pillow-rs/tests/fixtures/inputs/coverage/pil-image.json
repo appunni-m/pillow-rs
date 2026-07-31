@@ -267,7 +267,9 @@
           "PIL.Image.effect_mandelbrot.nuanced.quality-200",
           "PIL.Image.eval.nuanced.rgb-replicated-lut"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-imagecore-native"
+        ]
       },
       "component_ids": [
         "image-core"

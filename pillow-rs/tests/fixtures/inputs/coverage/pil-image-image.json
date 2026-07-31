@@ -1056,7 +1056,9 @@
           "PIL.Image.Image.filter.nuanced.f-mode",
           "PIL.Image.Image.filter.nuanced.invalid-filter"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-imagecore-native"
+        ]
       },
       "component_ids": [
         "image-core"

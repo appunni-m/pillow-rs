@@ -7,7 +7,7 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 468f0f498c581dba1f41791236c09f12d5ccbe34f104683f3dd1490626c5f5a3
+manifest_sha256: 15e3f63c503499b2ca04a683ba4e1621adfd9d853f26c6d02a233eb401f7d4b2
 lane: coverage
 ```
 
