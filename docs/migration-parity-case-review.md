@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1310
-- Unique active workflow signatures: 1310
+- Active parity workflows: 1317
+- Unique active workflow signatures: 1317
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 141
+- Deliberate nuanced workflows: 148
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 108 |
-| `PIL.Image.Image` | 491 |
+| `PIL.Image.Image` | 498 |
 | `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 12 |
 | `PIL.ImageDraw` | 3 |
@@ -104,13 +104,20 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.rgb-int-fill`
 - `PIL.Image.Image.paste.nuanced.rgb-two-tuple-error`
 - `PIL.Image.Image.putdata.nuanced.clipped-values`
+- `PIL.Image.Image.putdata.nuanced.cmyk-tuples`
 - `PIL.Image.Image.putdata.nuanced.f-mode`
 - `PIL.Image.Image.putdata.nuanced.i-mode`
+- `PIL.Image.Image.putdata.nuanced.la-tuples`
+- `PIL.Image.Image.putdata.nuanced.rgba-tuples`
 - `PIL.Image.Image.putdata.nuanced.scale-offset`
 - `PIL.Image.Image.putpixel.nuanced.p-index`
 - `PIL.Image.Image.putpixel.nuanced.p-tuple`
 - `PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
+- `PIL.Image.Image.save.nuanced.f-png-error`
+- `PIL.Image.Image.save.nuanced.i-bmp-error`
+- `PIL.Image.Image.save.nuanced.i-png`
+- `PIL.Image.Image.save.nuanced.p-png`
 - `PIL.Image.Image.transform.nuanced.p-affine-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-tuple-fill`
