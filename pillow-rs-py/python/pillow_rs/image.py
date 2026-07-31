@@ -857,18 +857,29 @@ class Image:
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
         """General affine/perspective/mesh transform."""
-        if method == 0 or method == "AFFINE" or (isinstance(data, list) and len(data) == 6 and not isinstance(data[0], (list, tuple))):
+        if isinstance(method, str):
+            # PIL requires the integer transform-method enum; names like
+            # "AFFINE" raise before any geometry is computed.
+            raise ValueError("unknown transformation method")
+        if isinstance(resample, str):
+            raise ValueError(
+                f"Unknown resampling filter ({resample}). "
+                "Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) "
+                "or Image.Resampling.BICUBIC (3)"
+            )
+        if method == 0:
+            if data is None:
+                raise ValueError("missing method data")
             return Image(self._rust_image.transform(size, "AFFINE", data, resample, fill, fillcolor))
-        is_mesh = method == "MESH" or (isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)))
+        is_mesh = method == 4
         if is_mesh:
-            # PIL's MESH data is a list of (bbox, quad) tuples, or a single tuple
+            if data is None:
+                raise ValueError("missing method data")
             if isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)):
                 mesh_flat = _core.mesh_flatten(data)
             else:
                 mesh_flat = _core.mesh_flatten([data])
             return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
-        if data is None:
-            raise ValueError("missing method data")
         raise ValueError("unknown transformation method")
 
     def verify(self):

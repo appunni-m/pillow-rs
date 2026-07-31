@@ -854,7 +854,7 @@ impl PyImage {
         match method {
             "AFFINE" => {
                 let matrix = data.ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err("AFFINE requires data")
+                    pyo3::exceptions::PyValueError::new_err("missing method data")
                 })?;
                 let transformed = if mode == "P" {
                     if let Some(index) = parse_palette_transform_fill(fillcolor)? {

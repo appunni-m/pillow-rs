@@ -27379,7 +27379,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -27441,15 +27441,17 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             },
             "data": {
               "kind": "literal",
               "value": [
-                0,
-                1,
-                2,
-                3
+                1.0,
+                0.0,
+                0.0,
+                0.0,
+                1.0,
+                0.0
               ]
             }
           }
@@ -27512,11 +27514,11 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             },
             "resample": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -27578,7 +27580,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             },
             "fill": {
               "kind": "literal",
@@ -27644,7 +27646,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             },
             "fillcolor": {
               "kind": "literal",
@@ -27710,7 +27712,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -27772,7 +27774,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -27834,7 +27836,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -27896,7 +27898,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -27958,7 +27960,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -28020,7 +28022,7 @@
             },
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -29114,6 +29116,249 @@
             "expand": {
               "kind": "literal",
               "value": true
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.p-affine-scalar-fill",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0,
+                0,
+                1,
+                0
+              ]
+            },
+            "resample": {
+              "kind": "literal",
+              "value": 3
+            },
+            "fillcolor": {
+              "kind": "literal",
+              "value": 5
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.p-affine-tuple-fill",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0,
+                0,
+                1,
+                0
+              ]
+            },
+            "fillcolor": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.rgb-affine-tuple-fill",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0,
+                0,
+                1,
+                0
+              ]
+            },
+            "fillcolor": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30
+              ]
             }
           }
         }

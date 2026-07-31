@@ -62,7 +62,7 @@ impl Image {
     ) -> Result<Image, PilError> {
         if matrix.len() != 6 {
             return Err(PilError::ValueError(
-                "Affine transform requires 6 coefficients [a,b,c,d,e,f]".into(),
+                "wrong number of matrix entries".into(),
             ));
         }
         let (dst_w, dst_h) = size;
