@@ -2891,13 +2891,7 @@ fn ops_colorize(
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
             pillow_rs::imageops_colorize(
-                &inner,
-                black,
-                white,
-                mid,
-                blackpoint,
-                midpoint,
-                whitepoint,
+                &inner, black, white, mid, blackpoint, midpoint, whitepoint,
             )
         })
     })
