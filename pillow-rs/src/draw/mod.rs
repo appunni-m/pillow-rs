@@ -1117,7 +1117,9 @@ impl Draw {
         h: u32,
         pixels: &[u8],
         fill: (u8, u8, u8, u8),
-        rgba_blend_rgb: bool,
+        // Pillow writes the fill RGB directly on RGBA canvases regardless of
+        // the entry-point flag; the flag is retained for call-site parity.
+        _rgba_blend_rgb: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
@@ -1156,7 +1158,9 @@ impl Draw {
                     } else {
                         255
                     };
-                    let (r, g, b) = if mode == "RGBA" && !rgba_blend_rgb {
+                    let (r, g, b) = if mode == "RGBA" {
+                        // Pillow's RGBA text writes the fill RGB directly and
+                        // blends only the alpha channel with glyph coverage.
                         (fill.0, fill.1, fill.2)
                     } else {
                         (
@@ -1169,7 +1173,18 @@ impl Draw {
                 }
             }
         }
-        self.set_image(canvas);
+        if matches!(mode.as_str(), "YCbCr" | "HSV") {
+            // Three-band canvases store no alpha; rebuild as RGB tagged with
+            // the source mode so the result keeps Pillow's 3-byte layout.
+            self.image = Image::from_dynamic(
+                crate::raster::DynamicImage::ImageRgb8(
+                    crate::raster::DynamicImage::ImageRgba8(canvas).to_rgb8(),
+                ),
+                Some(mode),
+            );
+        } else {
+            self.set_image(canvas);
+        }
         Ok(())
     }
 
@@ -1205,8 +1220,13 @@ impl Draw {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
                         if off + 3 < pixels.len() && pixels[off + 3] > 0 {
-                            let dx = (x as u32 + px).min(img_w - 1);
-                            let dy = (y as u32 + py).min(img_h - 1);
+                            let dx = x as i64 + px as i64;
+                            let dy = y as i64 + py as i64;
+                            if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h)
+                            {
+                                continue;
+                            }
+                            let (dx, dy) = (dx as u32, dy as u32);
                             luma.put_pixel(dx, dy, crate::raster::Luma([ink]));
                         }
                     }
@@ -1232,8 +1252,12 @@ impl Draw {
                         if cov == 0 {
                             continue;
                         }
-                        let dx = (x as u32 + px).min(img_w - 1);
-                        let dy = (y as u32 + py).min(img_h - 1);
+                        let dx = x as i64 + px as i64;
+                        let dy = y as i64 + py as i64;
+                        if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h) {
+                            continue;
+                        }
+                        let (dx, dy) = (dx as u32, dy as u32);
                         let bg = luma.get_pixel(dx, dy)[0];
                         let result = pil_blend(ink, bg, cov);
                         luma.put_pixel(dx, dy, crate::raster::Luma([result]));
@@ -1262,8 +1286,12 @@ impl Draw {
                         if cov == 0 {
                             continue;
                         }
-                        let dx = (x as u32 + px).min(img_w - 1);
-                        let dy = (y as u32 + py).min(img_h - 1);
+                        let dx = x as i64 + px as i64;
+                        let dy = y as i64 + py as i64;
+                        if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h) {
+                            continue;
+                        }
+                        let (dx, dy) = (dx as u32, dy as u32);
                         let bg = la.get_pixel(dx, dy);
                         let l_cov = if bg[1] == 0 { 255 } else { cov };
                         let new_l = pil_blend(ink_l, bg[0], l_cov);
@@ -1298,8 +1326,12 @@ impl Draw {
                         if cov == 0 {
                             continue;
                         }
-                        let dx = (x as u32 + px).min(img_w - 1);
-                        let dy = (y as u32 + py).min(img_h - 1);
+                        let dx = x as i64 + px as i64;
+                        let dy = y as i64 + py as i64;
+                        if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h) {
+                            continue;
+                        }
+                        let (dx, dy) = (dx as u32, dy as u32);
                         let bg = rgba.get_pixel(dx, dy);
                         let new_pix = if cov == 255 {
                             Rgba(ink)
@@ -1339,8 +1371,13 @@ impl Draw {
                         for px in 0..w.min(w_i) {
                             let off = ((py * w + px) * 4) as usize;
                             if off + 3 < pixels.len() && pixels[off + 3] > 0 {
-                                let dx = (x as u32 + px).min(img_w - 1);
-                                let dy = (y as u32 + py).min(img_h - 1);
+                                let dx = x as i64 + px as i64;
+                                let dy = y as i64 + py as i64;
+                                if dx < 0 || dy < 0 || dx >= i64::from(w_i) || dy >= i64::from(h_i)
+                                {
+                                    continue;
+                                }
+                                let (dx, dy) = (dx as u32, dy as u32);
                                 indices.put_pixel(dx, dy, crate::raster::Luma([ink]));
                             }
                         }
@@ -1361,8 +1398,16 @@ impl Draw {
                         for px in 0..w {
                             let off = ((py * w + px) * 4) as usize;
                             if off + 3 < pixels.len() && pixels[off + 3] > 0 {
-                                let dx = (x as u32 + px).min(img_w - 1);
-                                let dy = (y as u32 + py).min(img_h - 1);
+                                let dx = x as i64 + px as i64;
+                                let dy = y as i64 + py as i64;
+                                if dx < 0
+                                    || dy < 0
+                                    || dx >= i64::from(img_w)
+                                    || dy >= i64::from(img_h)
+                                {
+                                    continue;
+                                }
+                                let (dx, dy) = (dx as u32, dy as u32);
                                 luma.put_pixel(dx, dy, crate::raster::Luma([ink]));
                             }
                         }
@@ -1383,8 +1428,13 @@ impl Draw {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
                         if off + 3 < pixels.len() && pixels[off + 3] > 0 {
-                            let dx = (x as u32 + px).min(img_w - 1);
-                            let dy = (y as u32 + py).min(img_h - 1);
+                            let dx = x as i64 + px as i64;
+                            let dy = y as i64 + py as i64;
+                            if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h)
+                            {
+                                continue;
+                            }
+                            let (dx, dy) = (dx as u32, dy as u32);
                             rgba.put_pixel(dx, dy, Rgba(ink));
                         }
                     }
