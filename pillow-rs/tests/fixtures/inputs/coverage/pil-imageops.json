@@ -229,7 +229,14 @@
           "PIL.ImageOps.solarize.mode.l",
           "PIL.ImageOps.solarize.mode.la",
           "PIL.ImageOps.solarize.mode.rgba",
-          "PIL.ImageOps.fit.nuanced.fractional-centering"
+          "PIL.ImageOps.fit.nuanced.fractional-centering",
+          "PIL.ImageOps.colorize.nuanced.two-color",
+          "PIL.ImageOps.colorize.nuanced.three-color",
+          "PIL.ImageOps.colorize.nuanced.mapped-points",
+          "PIL.ImageOps.colorize.nuanced.mode-one",
+          "PIL.ImageOps.colorize.nuanced.invalid-points",
+          "PIL.ImageOps.colorize.nuanced.invalid-mid-points",
+          "PIL.ImageOps.invert.nuanced.p-mode"
         ],
         "command_ids": []
       },

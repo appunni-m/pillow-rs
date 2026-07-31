@@ -623,8 +623,15 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         // ── Sharpness: factor * 1000 as u32 ──
         PipelineOp::Sharpness { factor } => vec![(factor * 1000.0) as u32],
 
-        // ── Colorize: pack black and white as u32 RGBA (0xAABBGGRR) ──
-        PipelineOp::Colorize { black, white } => {
+        // ── Colorize: pack black/white/mid as u32 RGBA (0xAABBGGRR) ──
+        PipelineOp::Colorize {
+            black,
+            white,
+            mid,
+            blackpoint,
+            midpoint,
+            whitepoint,
+        } => {
             let bk = (black.0 as u32)
                 | ((black.1 as u32) << 8)
                 | ((black.2 as u32) << 16)
@@ -633,7 +640,22 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
                 | ((white.1 as u32) << 8)
                 | ((white.2 as u32) << 16)
                 | (0xff << 24);
-            vec![bk, wh]
+            let mid_value = mid
+                .map(|mid| {
+                    (mid.0 as u32)
+                        | ((mid.1 as u32) << 8)
+                        | ((mid.2 as u32) << 16)
+                        | (0xff << 24)
+                })
+                .unwrap_or(bk);
+            vec![
+                bk,
+                wh,
+                mid_value,
+                *blackpoint as u32,
+                *midpoint as u32,
+                *whitepoint as u32,
+            ]
         }
 
         // ── Constant: value ──
@@ -1426,8 +1448,24 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
              op: &PipelineOp,
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Colorize { black, white } = op {
-                    op_colorize(img, black, white)
+                if let PipelineOp::Colorize {
+                    black,
+                    white,
+                    mid,
+                    blackpoint,
+                    midpoint,
+                    whitepoint,
+                } = op
+                {
+                    op_colorize(
+                        img,
+                        black,
+                        white,
+                        *mid,
+                        *blackpoint,
+                        *midpoint,
+                        *whitepoint,
+                    )
                 } else {
                     Err(PilError::ValueError("expected Colorize op".into()))
                 }

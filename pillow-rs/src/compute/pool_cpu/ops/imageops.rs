@@ -202,23 +202,90 @@ pub fn op_grayscale(img: &DynamicImage) -> Result<DynamicImage, PilError> {
 
 /// Colorize: map grayscale values to a two-color gradient.
 /// Always outputs RGB (PIL behavior).
+///
+/// PIL builds a 256-entry LUT per channel in ``ImageOps.colorize`` using
+/// floor integer division (``//``), then applies it via ``ImageOps._lut``.
+/// The mapping supports optional three-color ``mid`` plus blackpoint /
+/// midpoint / whitepoint positions; this is replicated exactly so negative
+/// color deltas round the same way.
+pub fn colorize_lut(
+    black: &(u8, u8, u8),
+    white: &(u8, u8, u8),
+    mid: Option<(u8, u8, u8)>,
+    blackpoint: u8,
+    midpoint: u8,
+    whitepoint: u8,
+) -> [[u8; 256]; 3] {
+    let mut lut = [[0u8; 256]; 3];
+    for channel in 0..3 {
+        let black_c = [black.0, black.1, black.2][channel] as i32;
+        let white_c = [white.0, white.1, white.2][channel] as i32;
+        let mid_c = mid.map(|m| [m.0, m.1, m.2][channel] as i32);
+        let bp = blackpoint as i32;
+        let mp = midpoint as i32;
+        let wp = whitepoint as i32;
+        for (index, slot) in lut[channel].iter_mut().enumerate() {
+            let index = index as i32;
+            let value = if index < bp {
+                black_c
+            } else if let Some(mid_c) = mid_c {
+                if index < mp {
+                    let span = mp - bp;
+                    let step = if span == 0 {
+                        0
+                    } else {
+                        ((index - bp) * (mid_c - black_c)).div_euclid(span)
+                    };
+                    black_c + step
+                } else if index < wp {
+                    let span = wp - mp;
+                    let step = if span == 0 {
+                        0
+                    } else {
+                        ((index - mp) * (white_c - mid_c)).div_euclid(span)
+                    };
+                    mid_c + step
+                } else {
+                    white_c
+                }
+            } else if index < wp {
+                let span = wp - bp;
+                let step = if span == 0 {
+                    0
+                } else {
+                    ((index - bp) * (white_c - black_c)).div_euclid(span)
+                };
+                black_c + step
+            } else {
+                white_c
+            };
+            *slot = value.clamp(0, 255) as u8;
+        }
+    }
+    lut
+}
+
 pub fn op_colorize(
     img: &DynamicImage,
     black: &(u8, u8, u8),
     white: &(u8, u8, u8),
+    mid: Option<(u8, u8, u8)>,
+    blackpoint: u8,
+    midpoint: u8,
+    whitepoint: u8,
 ) -> Result<DynamicImage, PilError> {
     let gray = img.to_luma8();
     let (w, h) = gray.dimensions();
     let mut out = crate::raster::RgbImage::new(w, h);
-    let &(br, bg, bb) = black;
-    let &(wr, wg, wb) = white;
+    let lut = colorize_lut(black, white, mid, blackpoint, midpoint, whitepoint);
     for y in 0..h {
         for x in 0..w {
-            let g = gray.get_pixel(x, y)[0] as f64 / 255.0;
-            let r = (br as f64 + g * (wr as f64 - br as f64)) as u8;
-            let gv = (bg as f64 + g * (wg as f64 - bg as f64)) as u8;
-            let b = (bb as f64 + g * (wb as f64 - bb as f64)) as u8;
-            out.put_pixel(x, y, crate::raster::Rgb([r, gv, b]));
+            let g = gray.get_pixel(x, y)[0] as usize;
+            out.put_pixel(
+                x,
+                y,
+                crate::raster::Rgb([lut[0][g], lut[1][g], lut[2][g]]),
+            );
         }
     }
     // Colorize always outputs RGB (PIL behavior)

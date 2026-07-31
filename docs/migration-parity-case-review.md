@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1214
-- Unique active workflow signatures: 1214
+- Active parity workflows: 1221
+- Unique active workflow signatures: 1221
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 45
+- Deliberate nuanced workflows: 52
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -38,7 +38,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 47 |
 | `PIL.ImageFont.ImageFont` | 10 |
 | `PIL.ImageFont.TransposedFont` | 10 |
-| `PIL.ImageOps` | 90 |
+| `PIL.ImageOps` | 97 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 6 |
 | `PIL.ImageSequence` | 2 |
@@ -102,7 +102,14 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unicode-multiline`
 - `PIL.ImageFont.FreeTypeFont.getlength.nuanced.kerning-pair`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.multiline-stroked`
+- `PIL.ImageOps.colorize.nuanced.invalid-mid-points`
+- `PIL.ImageOps.colorize.nuanced.invalid-points`
+- `PIL.ImageOps.colorize.nuanced.mapped-points`
+- `PIL.ImageOps.colorize.nuanced.mode-one`
+- `PIL.ImageOps.colorize.nuanced.three-color`
+- `PIL.ImageOps.colorize.nuanced.two-color`
 - `PIL.ImageOps.fit.nuanced.fractional-centering`
+- `PIL.ImageOps.invert.nuanced.p-mode`
 
 These cases cover high-risk behavior families that a broad default
 matrix does not distinguish: Unicode/combining/multiline font text,

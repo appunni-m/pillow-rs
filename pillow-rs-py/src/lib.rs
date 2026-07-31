@@ -2882,10 +2882,24 @@ fn ops_colorize(
     image: &Bound<'_, PyImage>,
     black: (u8, u8, u8),
     white: (u8, u8, u8),
+    mid: Option<(u8, u8, u8)>,
+    blackpoint: u8,
+    midpoint: u8,
+    whitepoint: u8,
 ) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_colorize(&inner, black, white))
+        py.allow_threads(|| {
+            pillow_rs::imageops_colorize(
+                &inner,
+                black,
+                white,
+                mid,
+                blackpoint,
+                midpoint,
+                whitepoint,
+            )
+        })
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
