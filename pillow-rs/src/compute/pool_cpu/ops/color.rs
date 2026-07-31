@@ -155,22 +155,45 @@ pub fn op_convert(
             Ok(DynamicImage::ImageRgba8(out))
         }
         ColorMode::CMYK => {
-            // PIL's default CMYK conversion: simple inverse (no K computation).
-            // C = 255 - R, M = 255 - G, Y = 255 - B, K = 0.
-            // This matches PIL's ImagingConvertCMYK with INVERSE=1: it inverts
-            // RGB values and stores the result as RGBA where K is always 0.
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            let mut out = crate::raster::RgbaImage::new(w, h);
-            for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
-                *op = crate::raster::Rgba([
-                    255u8.wrapping_sub(ip[0]),
-                    255u8.wrapping_sub(ip[1]),
-                    255u8.wrapping_sub(ip[2]),
-                    0u8,
-                ]);
+            // Pillow's Convert.c routes luma sources ("L", "LA") through the
+            // gray branch: C=M=Y=0 and K=255-gray.  Every other source goes
+            // through the RGB inverse: C=255-R, M=255-G, Y=255-B, K=0
+            // (ImagingConvertCMYK with INVERSE=1).
+            if matches!(
+                img,
+                DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
+            ) {
+                let (w, h) = img.dimensions();
+                // "1" mode is stored as raw 0/1 bytes; Pillow converts it to
+                // "L" first (1 -> 255) before the gray->K branch.
+                let gray = if explicit_mode == Some("1") {
+                    let mut out = crate::raster::GrayImage::new(w, h);
+                    for (op, ip) in out.pixels_mut().zip(img.to_luma8().pixels()) {
+                        op[0] = if ip[0] != 0 { 255 } else { 0 };
+                    }
+                    crate::raster::DynamicImage::ImageLuma8(out)
+                } else {
+                    crate::raster::DynamicImage::ImageLuma8(crate::color::pil_grayscale(img)?)
+                };
+                let mut out = crate::raster::RgbaImage::new(w, h);
+                for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
+                    *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp.2[0])]);
+                }
+                Ok(DynamicImage::ImageRgba8(out))
+            } else {
+                let rgb = img.to_rgb8();
+                let (w, h) = rgb.dimensions();
+                let mut out = crate::raster::RgbaImage::new(w, h);
+                for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+                    *op = crate::raster::Rgba([
+                        255u8.wrapping_sub(ip[0]),
+                        255u8.wrapping_sub(ip[1]),
+                        255u8.wrapping_sub(ip[2]),
+                        0u8,
+                    ]);
+                }
+                Ok(DynamicImage::ImageRgba8(out))
             }
-            Ok(DynamicImage::ImageRgba8(out))
         }
         ColorMode::HSV => {
             // Convert to HSV: RGB→HSV using PIL's exact algorithm.

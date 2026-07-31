@@ -331,6 +331,22 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage,
         .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
 }
 
+/// Maps an RGB buffer to Pillow's default CMYK inverse: C=255-R, M=255-G,
+/// Y=255-B, K=0.
+pub fn rgb_to_cmyk_inverse(rgb: &crate::raster::RgbImage) -> crate::raster::RgbaImage {
+    let (w, h) = rgb.dimensions();
+    let mut out = crate::raster::RgbaImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgb.pixels()) {
+        *op = crate::raster::Rgba([
+            255u8.wrapping_sub(ip[0]),
+            255u8.wrapping_sub(ip[1]),
+            255u8.wrapping_sub(ip[2]),
+            0u8,
+        ]);
+    }
+    out
+}
+
 /// Resolves `Image.new` color input into core RGBA storage.
 ///
 /// Binding crates normalize host-language values into the optional Rust

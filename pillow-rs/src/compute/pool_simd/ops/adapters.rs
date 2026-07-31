@@ -35,6 +35,7 @@ fn color_mode_to_u32(cm: &ColorMode) -> u32 {
         ColorMode::LA => 1,
         ColorMode::RGB => 2,
         ColorMode::RGBA => 3,
+        ColorMode::CMYK => 4,
         _ => 3, // fallback
     }
 }
