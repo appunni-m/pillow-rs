@@ -54,6 +54,10 @@ def run_native_cases() -> tuple[int, int, int]:
         ("shape-curve-outline", lambda: _shape_curve()),
         ("bitmap-i-canvas", lambda: _bitmap("I")),
         ("bitmap-f-canvas", lambda: _bitmap("F")),
+        ("bitmap-i-canvas-mask255", lambda: _bitmap("I", mask_value=255)),
+        ("bitmap-f-canvas-mask255", lambda: _bitmap("F", mask_value=255)),
+        ("bitmap-rgb-mask255", lambda: _bitmap("RGB", mask_value=255)),
+        ("bitmap-p-mask255", lambda: _bitmap("P", mask_value=255)),
         ("polygon-horizontal-runs", lambda: _polygon_horizontal()),
         ("polygon-out-of-bounds", lambda: _polygon_oob()),
         ("line-out-of-bounds", lambda: _line_oob()),
@@ -76,8 +80,8 @@ def run_native_cases() -> tuple[int, int, int]:
         draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
         draw.shape(outline, fill=255)
 
-    def _bitmap(mode: str) -> None:
-        mask = Image.new("L", (8, 8), 128)
+    def _bitmap(mode: str, mask_value: int = 128) -> None:
+        mask = Image.new("L", (8, 8), mask_value)
         draw = ImageDraw.Draw(Image.new(mode, (16, 16), 0))
         draw.bitmap((2, 2), mask, fill=255)
 
