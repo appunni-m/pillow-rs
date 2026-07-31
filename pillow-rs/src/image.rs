@@ -1835,6 +1835,43 @@ impl Image {
         Some(rgba)
     }
 
+    /// Converts the retained RGB palette to a Pillow ``getpalette(rawmode)``
+    /// layout.
+    ///
+    /// Pillow's C `getpalette` accepts ``"RGB"``, ``"RGBA"``/``"RGBX"`` (alpha
+    /// forced to 255) and the single-channel selectors ``"R"``/``"G"``/``"B"``;
+    /// every other rawmode raises ``ValueError: unrecognized raw mode``.
+    pub fn getpalette_rawmode(&self, rawmode: &str) -> Result<Option<Vec<u8>>, PilError> {
+        let Some(palette) = self.getpalette_trimmed() else {
+            return Ok(None);
+        };
+        match rawmode {
+            "RGB" => Ok(Some(palette)),
+            "RGBA" | "RGBX" => {
+                let mut out = Vec::with_capacity(palette.len() / 3 * 4);
+                for color in palette.chunks_exact(3) {
+                    out.extend_from_slice(color);
+                    out.push(255);
+                }
+                Ok(Some(out))
+            }
+            "R" | "G" | "B" => {
+                let channel = match rawmode {
+                    "R" => 0,
+                    "G" => 1,
+                    _ => 2,
+                };
+                Ok(Some(
+                    palette
+                        .chunks_exact(3)
+                        .map(|color| color[channel])
+                        .collect(),
+                ))
+            }
+            _ => Err(PilError::ValueError("unrecognized raw mode".into())),
+        }
+    }
+
     /// Attaches a palette without changing the image's sample bytes.
     ///
     /// Pillow reinterprets `L` samples as palette indices (`P`) and `LA`

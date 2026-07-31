@@ -485,6 +485,10 @@ impl PyImage {
         self.inner.getpalette_rgba()
     }
 
+    fn getpalette_rawmode(&self, rawmode: &str) -> PyResult<Option<Vec<u8>>> {
+        self.inner.getpalette_rawmode(rawmode).map_err(map_error)
+    }
+
     fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
     }
