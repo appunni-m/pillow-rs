@@ -380,6 +380,7 @@ generated reports, build outputs, and package installs.
 |   |-- generate_migration_parity_docs.py
 |   |-- lint.sh
 |   |-- migration_parity_inventory.py
+|   |-- report_migration_parity_region_coverage.py
 |   |-- review_migration_parity_cases.py
 |   |-- run_migration_benchmark.py
 |   |-- run_migration_coverage.py
