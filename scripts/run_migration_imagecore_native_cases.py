@@ -191,6 +191,40 @@ def run_native_cases() -> tuple[int, int, int]:
         ("effect-noise", lambda: pillow_rs.effect_noise((4, 4), 16)),
         # new-image wrapper mode error translation.
         ("new-image-bad-mode", lambda: pillow_rs.Image.new("BOGUS", (4, 4))),
+        # Quantize internals need high-diversity inputs; the parity corpus
+        # deliberately uses low-diversity images because the method/kmeans/
+        # palette/dither arguments are a documented ledger divergence.
+        ("quantize-rgb-gradient-16", lambda: pillow_rs.Image.linear_gradient("L").convert("RGB").quantize(16)),
+        ("quantize-rgb-gradient-2", lambda: pillow_rs.Image.linear_gradient("L").convert("RGB").quantize(2)),
+        ("quantize-rgb-gradient-256", lambda: pillow_rs.Image.linear_gradient("L").convert("RGB").quantize(256)),
+        ("quantize-rgba-gradient-16", lambda: _rgba_gradient().quantize(16)),
+        ("quantize-rgba-gradient-256", lambda: _rgba_gradient().quantize(256)),
+        ("quantize-bad-colors-zero", lambda: pillow_rs.Image.new("RGB", (4, 4)).quantize(0)),
+        ("quantize-bad-colors-high", lambda: pillow_rs.Image.new("RGB", (4, 4)).quantize(257)),
+        ("quantize-p-mode", lambda: pillow_rs.Image.new("P", (8, 8)).quantize(16)),
+        # Diverse pixel populations exercise the median-cut split and octree
+        # sorting internals that low-diversity inputs short-circuit.
+        ("quantize-rgb-noise-32", lambda: _noise_rgb(32, 32, 7).quantize(32)),
+        ("quantize-rgb-noise-64", lambda: _noise_rgb(32, 32, 7).quantize(64)),
+        ("quantize-rgb-noise-128", lambda: _noise_rgb(32, 32, 11).quantize(128)),
+        ("quantize-rgb-noise-256", lambda: _noise_rgb(32, 32, 11).quantize(256)),
+        ("quantize-rgb-noise-8", lambda: _noise_rgb(32, 32, 5).quantize(8)),
+        ("quantize-rgba-noise-64", lambda: _noise_rgba(32, 32, 13).quantize(64)),
+        ("quantize-rgba-noise-256", lambda: _noise_rgba(32, 32, 13).quantize(256)),
+        ("quantize-rgba-noise-2", lambda: _noise_rgba(32, 32, 3).quantize(2)),
+        # Channel-dominant populations select the R and B split axes (the
+        # noise probes always pick G because its luminance weight dominates).
+        ("quantize-r-dominant", lambda: _channel_dominant(0, 0).quantize(16)),
+        ("quantize-b-dominant", lambda: _channel_dominant(2, 1).quantize(16)),
+        ("quantize-r-dominant-skewed", lambda: _skewed_dominant(0).quantize(16)),
+        ("quantize-b-dominant-skewed", lambda: _skewed_dominant(2).quantize(16)),
+        # Large pixel populations exceed the histogram's unique-entry
+        # threshold and drive the adaptive rebuild/reinsert path.
+        ("quantize-rgb-big-noise", lambda: _noise_rgb(512, 512, 17).quantize(256)),
+        ("quantize-rgba-big-noise", lambda: _noise_rgba(512, 512, 19).quantize(256)),
+        # Degenerate populations exercise the empty/single-color guards.
+        ("quantize-empty", lambda: Image.frombytes("RGB", (0, 0), b"").quantize(16)),
+        ("quantize-single-color", lambda: Image.new("RGB", (8, 8), (10, 20, 30)).quantize(16)),
     ]
     for name, call in probes:
         probe(name, call)
@@ -211,6 +245,52 @@ def _pixel_access(image: Image) -> None:
 
 def _thumbnail_int(image: Image) -> None:
     image.thumbnail((4, 4), resample=1)
+
+
+def _rgba_gradient() -> Image:
+    base = Image.linear_gradient("L").convert("RGBA")
+    return base
+
+
+def _noise_rgb(w: int, h: int, seed: int) -> Image:
+    import random
+
+    rng = random.Random(seed)
+    data = bytes(rng.randrange(256) for _ in range(w * h * 3))
+    return Image.frombytes("RGB", (w, h), data)
+
+
+def _noise_rgba(w: int, h: int, seed: int) -> Image:
+    import random
+
+    rng = random.Random(seed)
+    data = bytes(rng.randrange(256) for _ in range(w * h * 4))
+    return Image.frombytes("RGBA", (w, h), data)
+
+
+def _channel_dominant(wide: int, narrow: int) -> Image:
+    """Image with full spread on one channel and near-constant others."""
+
+    values = []
+    for i in range(256 * 16):
+        pixel = [0, 0, 0]
+        pixel[wide] = i % 256
+        pixel[(wide + 1) % 3] = i % 5
+        pixel[(wide + 2) % 3] = i % 7
+        values.extend(pixel)
+    return Image.frombytes("RGB", (64, 64), bytes(values))
+
+
+def _skewed_dominant(wide: int) -> Image:
+    """Mostly one color with a small spread, skewing the median split."""
+
+    values = []
+    for i in range(256 * 16):
+        pixel = [10, 10, 10]
+        if i % 16 == 0:
+            pixel[wide] = i % 256
+        values.extend(pixel)
+    return Image.frombytes("RGB", (64, 64), bytes(values))
 
 
 def main() -> int:
