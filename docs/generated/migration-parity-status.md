@@ -7,19 +7,19 @@ lane inputs, and it does not turn missing evidence into a pass.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: dd739ebe46ccc6cdd1ab01c610082db2fbdd7efd2d347efa4c3f8852a1f3d937
+manifest_sha256: dd171a9c7823b663abcfb46c9953694a67e888448de5027682b84b963347517f
 lane: parity
 ```
 
 ## Evidence state
 
-- Compatible evidence IDs: `migration-parity-6d8c5fbee63747f3955354195df8bacc`
-- Operation outcomes: pass=204
-- Stale/incompatible artifacts: 1
+- Compatible evidence IDs: none
+- Operation outcomes: not_proven=204
+- Stale/incompatible artifacts: 3
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `parity_outcome` | `python-cpu` | 1181 | 1181 | `migration-parity-6d8c5fbee63747f3955354195df8bacc` |
+| `parity_outcome` | `python-cpu` | 0 | 1181 | `not_proven` |
 
 ## Interpretation
 
