@@ -103,6 +103,10 @@ def run_native_cases() -> tuple[int, int, int]:
             lambda: pillow_rs.Image.frombuffer("L", (2, 2), b"\x00\x01\x02\x03"),
         ),
         ("eval-classmethod", lambda: pillow_rs.Image.eval(pillow_rs.Image.new("L", (4, 4)), lambda v: v)),
+        # LUT callable clamping: Pillow's _imaging.c::_point saturates function
+        # outputs to [0, 255] (CLIP8); out-of-range values exercise that arm.
+        ("eval-clamp-high", lambda: pillow_rs.Image.eval(pillow_rs.Image.new("L", (4, 4)), lambda v: v + 100)),
+        ("point-clamp-low", lambda: pillow_rs.Image.new("L", (4, 4)).point(lambda v: v - 100)),
         # save error surfaces.
         ("save-path-object", lambda: pillow_rs.Image.new("RGB", (4, 4)).save("/tmp/imagecore-save2.png", format="PNG")),
         ("save-bad-format", lambda: pillow_rs.Image.new("RGB", (4, 4)).save("/tmp/x.png", format="NOT_A_FORMAT")),

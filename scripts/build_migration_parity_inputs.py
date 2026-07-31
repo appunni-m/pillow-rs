@@ -723,6 +723,17 @@ class WorkflowBuilder:
 
         for scenario_key, descriptor in self.scenario_values.items():
             if scenario_key == parameter_id:
+                if (
+                    self.primary_surface == "PIL.Image"
+                    and self.primary_operation == "eval"
+                    and parameter_id == "args"
+                    and descriptor.get("kind") == "literal"
+                    and descriptor.get("value")
+                    == ["clamp-shift-callable"]
+                ):
+                    # Exercise Pillow's CLIP8 saturation with a callable whose
+                    # outputs leave the [0, 255] LUT range.
+                    return self.builtin("args-callable", "clamp-shift-callable")
                 return descriptor
 
         if parameter_id == "font" and self.scenario_font is not None:
@@ -2737,6 +2748,16 @@ def build_nuanced_cases(
             "mode": "RGB",
             "values": {
                 "args": literal(list(range(256))),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "behavior.default",
+            "name": "clamp-shift-callable",
+            "mode": "RGB",
+            "values": {
+                "args": literal(["clamp-shift-callable"]),
             },
         },
         {
