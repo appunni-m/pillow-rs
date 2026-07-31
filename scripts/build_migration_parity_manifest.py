@@ -217,6 +217,11 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
         include("record")
     if re.search(r"callable|handler|deformer", lower):
         include("handle")
+        # A callable cannot be serialized as a JSON literal.  Active input
+        # workflows represent this public value with a fixed named builtin
+        # asset, so keep the source-neutral descriptor inside the fixed
+        # manifest vocabulary as well as the public handle type.
+        include("any_json")
     if "_ink" in lower:
         include("integer")
         include("string")

@@ -133,6 +133,22 @@ class MigrationParityCaseReviewTests(unittest.TestCase):
     def test_callable_case_is_explicitly_source_neutral(self) -> None:
         requirement = "PIL.Image.Image.point.parameter-combination.legacy-001"
         case = self.by_id[self.requirement_to_case[requirement]]
+        point = next(
+            operation
+            for surface in self.manifest["surfaces"]
+            if surface["id"] == "PIL.Image.Image"
+            for operation in surface["operations"]
+            if operation["id"] == "point"
+        )
+        lut = next(
+            parameter
+            for parameter in point["source"]["parameters"]
+            if parameter["id"] == "lut"
+        )
+        self.assertEqual(
+            set(lut["value_types"]) & {"handle", "any_json"},
+            {"handle", "any_json"},
+        )
         argument = next(
             step["arguments"]["lut"]
             for step in case["steps"]

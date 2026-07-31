@@ -7631,6 +7631,7 @@ surfaces:
         - sequence
         - record
         - handle
+        - any_json
         - enum
         omission:
           kind: required
@@ -11078,6 +11079,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - handle
+        - any_json
         - enum
         omission:
           kind: required
