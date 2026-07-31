@@ -605,6 +605,53 @@
           "variant_layout_engine": "UNKNOWN"
         }
       }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.invalid_name_error",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "NOPE"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.non_variable_error",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [100.0]
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.non_variable_error",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }

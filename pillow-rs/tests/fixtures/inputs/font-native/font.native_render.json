@@ -121,6 +121,141 @@
           "anchor": "lx"
         }
       }
+    },
+    {
+      "case_id": "font.native_render.dejavusans20_av_stroke_filled",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "stroke_width": 1.0,
+          "stroke_filled": true
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.dejavusans20_av_stroke_anchor_mm",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "stroke_width": 2.0,
+          "anchor": "mm"
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.dejavusans20_av_ink",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "ink": 255
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.dejavusans20_av_fractional_stroke",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "stroke_width": 0.5
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.embedded_strike_stroke",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "stroke_width": 1.0
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.sbit_bgra_format8",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-bgra-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.sbit_gray4_format8",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-composite-gray4-success-format8.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.native_render.sbit_unsupported_format",
+      "operation": "native_render",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-unsupported-image-format.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
     }
   ]
 }

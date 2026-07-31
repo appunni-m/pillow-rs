@@ -91,6 +91,21 @@
           "size": 20
         }
       }
+    },
+    {
+      "case_id": "font.getname.missing_subfamily_fallback",
+      "operation": "getname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-missing-subfamily.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
     }
   ]
 }
