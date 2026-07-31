@@ -175,13 +175,16 @@ def run_case(case: dict[str, Any]) -> str:
         font.get_variation_names()
     elif operation in {"set_variation_by_axes", "native_setvaraxes"}:
         font.set_variation_by_axes(params.get("axes", [100.0]))
-    elif operation in {"set_variation_by_name", "native_setvarname"}:
+    elif operation == "set_variation_by_name":
         name = params.get("name", "Bold")
         if isinstance(name, list):
             name = bytes(name).decode("utf-8", "replace")
         elif isinstance(name, bytes):
             name = name.decode("utf-8", "replace")
         font.set_variation_by_name(str(name))
+    elif operation == "native_setvarname":
+        # The native adapter takes a 1-based instance index, not a name.
+        font._rust_font.setvarname(params.get("instance_index", 0))
     elif operation in {"native_getlength_26dot6"}:
         font._rust_font.getlength(text)
     elif operation in {"native_getsize"}:

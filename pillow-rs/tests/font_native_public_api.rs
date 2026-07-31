@@ -120,7 +120,16 @@ fn execute(case: &Value) {
                 let _ = font.getmask(text)?;
             }
             "getmask2" => {
-                let _ = font.getmask2(text)?;
+                if params.get("stroke_width").is_some()
+                    || params.get("mode").is_some()
+                    || params.get("anchor").is_some()
+                    || params.get("ink").is_some()
+                    || params.get("start").is_some()
+                {
+                    let _ = font.getmask2_with_options(text, &text_options(params))?;
+                } else {
+                    let _ = font.getmask2(text)?;
+                }
             }
             "getmask2_with_start" => {
                 let _ = font.getmask2_with_start(text, start_value(params))?;
@@ -158,9 +167,17 @@ fn execute(case: &Value) {
                     .unwrap_or_default();
                 font.set_variation_by_axes(&axes)?;
             }
-            "set_variation_by_name" | "native_setvarname" => {
+            "set_variation_by_name" => {
                 let name = params["name"].as_str().unwrap_or("Bold");
                 font.set_variation_by_name(name.as_bytes())?;
+            }
+            "native_setvarname" => {
+                // The native adapter takes a 1-based instance index, unlike
+                // the public named lookup.  The corpus drives both the
+                // negative/out-of-range guards and the empty-subfamily-name
+                // branch (`variable-name-missing-subfamily.ttf` instance 5).
+                let index = params["instance_index"].as_i64().unwrap_or(0);
+                font.native_setvarname(index)?;
             }
             "native_getlength_26dot6" => {
                 let _ = font.native_getlength_26dot6(text)?;
@@ -237,6 +254,110 @@ fn legacy_core_variants_are_reachable() {
     );
     let too_long = "A".repeat(1_000_001);
     let _ = font.getlength(&too_long);
+    // Every remaining entry point applies the same text-length guard; drive
+    // each one so the legacy validation regions are measured.
+    let _ = font.native_getlength_26dot6(&too_long);
+    let _ = font.native_getsize(&too_long);
+    let _ = font.getbbox(&too_long);
+    let _ = font.getmask(&too_long);
+    let _ = font.getmask2(&too_long);
+    let _ = font.getmask2_with_start(&too_long, (0.0, 0.0));
+    let _ = font.getlength_with_options(&too_long, &ImageFontTextOptions::default());
+    let _ = font.getbbox_with_options(&too_long, &ImageFontTextOptions::default());
+    let _ = font.getmask_with_options(&too_long, &ImageFontTextOptions::default());
+    let _ = font.getmask2_with_options(&too_long, &ImageFontTextOptions::default());
+    // Happy paths of the `_with_options` legacy variants.
+    let _ = font.getlength_with_options("AV", &ImageFontTextOptions::default());
+    let _ = font.getbbox_with_options("AV", &ImageFontTextOptions::default());
+    let _ = font.getmask_with_options("AV", &ImageFontTextOptions::default());
+    // Unsupported layout arguments error before rendering.
+    let _ = font.getlength_with_options(
+        "A",
+        &ImageFontTextOptions {
+            direction: Some("rtl".to_owned()),
+            ..ImageFontTextOptions::default()
+        },
+    );
+    let _ = font.getbbox_with_options(
+        "A",
+        &ImageFontTextOptions {
+            features: Some(vec!["liga".to_owned()]),
+            ..ImageFontTextOptions::default()
+        },
+    );
+    let _ = font.getmask_with_options(
+        "A",
+        &ImageFontTextOptions {
+            language: Some("en".to_owned()),
+            ..ImageFontTextOptions::default()
+        },
+    );
+    // RGBA mode is rejected by the core mask path before rendering.
+    let _ = font.getmask2_with_options(
+        "A",
+        &ImageFontTextOptions {
+            mode: Some("RGBA".to_owned()),
+            ..ImageFontTextOptions::default()
+        },
+    );
+    // Anchor matrix branches of `anchored_bbox`.
+    for anchor in [
+        "la", "lt", "lm", "ls", "lb", "ld", "ma", "mt", "mm", "ms", "mb", "md", "ra", "rt", "rm",
+        "rs", "rb", "rd",
+    ] {
+        let _ = font.getbbox_with_options(
+            "AV",
+            &ImageFontTextOptions {
+                anchor: Some(anchor.to_owned()),
+                ..ImageFontTextOptions::default()
+            },
+        );
+    }
+    let _ = font.getbbox_with_options(
+        "AV",
+        &ImageFontTextOptions {
+            anchor: Some("zz".to_owned()),
+            ..ImageFontTextOptions::default()
+        },
+    );
+    let _ = font.getbbox_with_options(
+        "AV",
+        &ImageFontTextOptions {
+            anchor: Some("z".to_owned()),
+            ..ImageFontTextOptions::default()
+        },
+    );
+    // Stroked empty text keeps the stroke-derived square canvas.
+    let _ = font.getmask2_with_options(
+        "",
+        &ImageFontTextOptions {
+            stroke_width: 1.5,
+            ..ImageFontTextOptions::default()
+        },
+    );
+    // The monochrome stroked target mirrors Pillow's `mode="1"` load flags.
+    let _ = font.getmask2_with_options(
+        "A",
+        &ImageFontTextOptions {
+            mode: Some("1".to_owned()),
+            stroke_width: 1.0,
+            ..ImageFontTextOptions::default()
+        },
+    );
+    // native_render routes through the same core option surface.
+    let _ = font.native_render(
+        "AV",
+        &ImageFontTextOptions {
+            stroke_width: 1.0,
+            ..ImageFontTextOptions::default()
+        },
+    );
+    // A non-variable face fails the `fvar` lookup inside `variation_tables`.
+    let _ = font.get_variation_names();
+    let _ = font.native_getvarnames();
+    let _ = font.native_getvaraxes();
+    let _ = font.native_setvarname(1);
+    let _ = font.set_variation_by_name(b"Missing");
     // Negative fractional start collapses the mask canvas ("bad image size").
     let _ = font.getmask2_with_start("A", (-100.0, -100.0));
     // The stroked mask path has its own collapse check.
@@ -268,5 +389,32 @@ fn legacy_core_variants_are_reachable() {
         20.0,
     ) {
         let _ = short_axis.set_variation_by_axes(&[100.0, 200.0]);
+    }
+
+    // CBLC/CBDT bitmap-only strikes render plain masks from hmtx-backed
+    // whitespace glyphs, and stroking them raises Pillow's `invalid argument`.
+    let sbit_cbdt =
+        std::fs::read(fixture_root().join("assets/font/fonts/sbit-cblc-cbdt-gray-format1.ttf"))
+            .unwrap();
+    if let Ok(color_bitmap) = FreeTypeFont::from_bytes(sbit_cbdt, 20.0) {
+        let _ = color_bitmap.getmask2("A");
+        let _ = color_bitmap.getmask2_with_options(
+            "A",
+            &ImageFontTextOptions {
+                stroke_width: 1.5,
+                ..ImageFontTextOptions::default()
+            },
+        );
+    }
+    let sbit_gray =
+        std::fs::read(fixture_root().join("assets/font/fonts/sbit-gray-format1.ttf")).unwrap();
+    if let Ok(scalable_bitmap) = FreeTypeFont::from_bytes(sbit_gray, 20.0) {
+        let _ = scalable_bitmap.getmask2_with_options(
+            "\u{e000}",
+            &ImageFontTextOptions {
+                stroke_width: 1.5,
+                ..ImageFontTextOptions::default()
+            },
+        );
     }
 }
