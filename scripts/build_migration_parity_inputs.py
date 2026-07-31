@@ -2165,6 +2165,30 @@ def build_nuanced_cases(
             "mode": "1",
         },
         {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "la-mode",
+            "mode": "LA",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-mode",
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "one-mode",
+            "mode": "1",
+            "values": {
+                "data": literal([0, 1, 0, 1, 0, 1, 0, 1, 0]),
+            },
+        },
+        {
             "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
