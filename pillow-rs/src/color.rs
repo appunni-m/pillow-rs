@@ -60,13 +60,68 @@ pub fn color_type_to_mode(ct: ColorType) -> &'static str {
 ///
 /// Returns [`crate::PilError::ValueError`] when the string cannot be parsed.
 pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
+    if s.len() > 100 {
+        return Err(crate::error::PilError::ValueError(
+            "color specifier is too long".to_owned(),
+        ));
+    }
+    let lowered = s.to_ascii_lowercase();
+    // Pillow's regexes and colormap lookup operate on the lowercased string
+    // without trimming, so leading/trailing whitespace is always rejected.
+    if lowered.starts_with(char::is_whitespace) || lowered.ends_with(char::is_whitespace) {
+        return Err(crate::error::PilError::ValueError(format!(
+            "unknown color specifier: '{lowered}'"
+        )));
+    }
     if let Some(rgba) = parse_legacy_rgba_function(s) {
         return Ok(rgba);
     }
-    let c = csscolorparser::parse(s)
-        .map_err(|e| crate::error::PilError::ValueError(format!("Invalid color string: {}", e)))?;
+    // Pillow 12.2.0 `ImageColor.getcolor` accepts only its anchored integer
+    // `rgba(...)` form; float-alpha and wrong-arity rgba strings are rejected
+    // before the css fallback (which is more permissive).
+    if lowered.starts_with("rgba(") {
+        return Err(crate::error::PilError::ValueError(format!(
+            "unknown color specifier: '{lowered}'"
+        )));
+    }
+    // `rgb(...)` must have exactly three integer or percent components.
+    if lowered.starts_with("rgb(") && !legacy_rgb_components_valid(&lowered) {
+        return Err(crate::error::PilError::ValueError(format!(
+            "unknown color specifier: '{lowered}'"
+        )));
+    }
+    // CSS extra names Pillow's colormap does not define.
+    if lowered == "transparent" || lowered == "currentcolor" {
+        return Err(crate::error::PilError::ValueError(format!(
+            "unknown color specifier: '{lowered}'"
+        )));
+    }
+    let c = csscolorparser::parse(s).map_err(|_| {
+        crate::error::PilError::ValueError(format!("unknown color specifier: '{lowered}'"))
+    })?;
     let rgba = c.to_rgba8();
     Ok((rgba[0], rgba[1], rgba[2], rgba[3]))
+}
+
+/// Validates Pillow's anchored integer/percent `rgb(r, g, b)` forms.
+fn legacy_rgb_components_valid(lowered: &str) -> bool {
+    let Some(rest) = lowered
+        .strip_prefix("rgb(")
+        .and_then(|r| r.strip_suffix(')'))
+    else {
+        return false;
+    };
+    let parts: Vec<&str> = rest.split(',').map(str::trim).collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    parts.iter().all(|part| {
+        if let Some(percent) = part.strip_suffix('%') {
+            !percent.is_empty() && percent.bytes().all(|b| b.is_ascii_digit())
+        } else {
+            !part.is_empty() && part.bytes().all(|b| b.is_ascii_digit())
+        }
+    })
 }
 
 /// Parse Pillow's legacy ``rgba(r, g, b, a)`` integer form.
@@ -76,8 +131,9 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
 /// fourth component as a 0..1/percentage CSS alpha and clamps values such as
 /// 128, so the legacy integer form must be handled before delegating.
 fn parse_legacy_rgba_function(s: &str) -> Option<(u8, u8, u8, u8)> {
-    let trimmed = s.trim();
-    let lower = trimmed.to_ascii_lowercase();
+    // Pillow's regex is anchored on the lowercased string without trimming,
+    // so leading/trailing whitespace is rejected.
+    let lower = s.to_ascii_lowercase();
     let rest = lower.strip_prefix("rgba(")?.strip_suffix(')')?;
     let parts: Vec<&str> = rest.split(',').collect();
     if parts.len() != 4 {

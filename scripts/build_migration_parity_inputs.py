@@ -2137,6 +2137,54 @@ def build_nuanced_cases(
             "surface": "PIL.ImageColor",
             "operation": "getcolor",
             "requirement_suffix": "parameter.mode",
+            "name": "named-hsv",
+            "values": {
+                "color": literal("red"),
+                "mode": literal("HSV"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-i",
+            "values": {
+                "color": literal("blue"),
+                "mode": literal("I"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-float-alpha",
+            "values": {"color": literal("rgba(255, 0, 0, 0.5)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-short",
+            "values": {"color": literal("rgba(1,2,3)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-transparent",
+            "values": {"color": literal("transparent")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rgb-percent",
+            "values": {"color": literal("rgb(100%, 50%, 0%)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
             "name": "hex-rgba",
             "values": {
                 "color": literal("#ff000080"),
@@ -3447,6 +3495,10 @@ def build_inputs(
             # `Draw.shape` requires a real Outline built through the
             # move/line/close protocol the parity generator does not emit.
             command_ids = ["coverage-imagedraw-native"]
+        elif "image-color" in component_ids:
+            # The getcolor mode matrix and rejected function-form variants
+            # are not selected by the parity plan.
+            command_ids = ["coverage-imagecolor-native"]
         else:
             command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
