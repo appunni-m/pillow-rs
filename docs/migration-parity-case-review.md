@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1303
-- Unique active workflow signatures: 1303
+- Active parity workflows: 1310
+- Unique active workflow signatures: 1310
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 134
+- Deliberate nuanced workflows: 141
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 108 |
-| `PIL.Image.Image` | 489 |
+| `PIL.Image.Image` | 491 |
 | `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 12 |
 | `PIL.ImageDraw` | 3 |
@@ -43,7 +43,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImagePalette.ImagePalette` | 6 |
 | `PIL.ImageSequence` | 2 |
 | `PIL.ImageStat` | 4 |
-| `PIL.ImageStat.Stat` | 27 |
+| `PIL.ImageStat.Stat` | 32 |
 
 ## Deprecated corpus accounting
 
@@ -107,6 +107,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putdata.nuanced.f-mode`
 - `PIL.Image.Image.putdata.nuanced.i-mode`
 - `PIL.Image.Image.putdata.nuanced.scale-offset`
+- `PIL.Image.Image.putpixel.nuanced.p-index`
+- `PIL.Image.Image.putpixel.nuanced.p-tuple`
 - `PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
 - `PIL.Image.Image.transform.nuanced.p-affine-scalar-fill`
@@ -192,6 +194,11 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.colorize.nuanced.two-color`
 - `PIL.ImageOps.fit.nuanced.fractional-centering`
 - `PIL.ImageOps.invert.nuanced.p-mode`
+- `PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode`
+- `PIL.ImageStat.Stat.extrema.nuanced.f-mode`
+- `PIL.ImageStat.Stat.extrema.nuanced.i-mode`
+- `PIL.ImageStat.Stat.extrema.nuanced.one-mode`
+- `PIL.ImageStat.Stat.extrema.nuanced.p-mode`
 
 These cases cover high-risk behavior families that a broad default
 matrix does not distinguish: Unicode/combining/multiline font text,

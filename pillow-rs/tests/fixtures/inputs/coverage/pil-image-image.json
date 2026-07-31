@@ -1010,6 +1010,8 @@
           "PIL.Image.Image.putdata.nuanced.f-mode",
           "PIL.Image.Image.putdata.nuanced.clipped-values",
           "PIL.Image.Image.putdata.nuanced.scale-offset",
+          "PIL.Image.Image.putpixel.nuanced.p-index",
+          "PIL.Image.Image.putpixel.nuanced.p-tuple",
           "PIL.Image.Image.paste.nuanced.l-from-rgb",
           "PIL.Image.Image.paste.nuanced.rgb-from-rgba",
           "PIL.Image.Image.paste.nuanced.p-from-l",

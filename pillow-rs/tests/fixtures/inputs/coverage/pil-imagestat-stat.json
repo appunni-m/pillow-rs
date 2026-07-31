@@ -70,7 +70,12 @@
           "PIL.ImageStat.Stat.sum2.mode.rgba",
           "PIL.ImageStat.Stat.var.behavior.default",
           "PIL.ImageStat.Stat.var.mode.l",
-          "PIL.ImageStat.Stat.var.mode.rgba"
+          "PIL.ImageStat.Stat.var.mode.rgba",
+          "PIL.ImageStat.Stat.extrema.nuanced.p-mode",
+          "PIL.ImageStat.Stat.extrema.nuanced.i-mode",
+          "PIL.ImageStat.Stat.extrema.nuanced.f-mode",
+          "PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode",
+          "PIL.ImageStat.Stat.extrema.nuanced.one-mode"
         ],
         "command_ids": []
       },
