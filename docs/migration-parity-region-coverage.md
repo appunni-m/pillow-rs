@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: abb25ed0681baf2d7404711e52bfadb954c2b449d7eec4e6facfce7b76f8201d
-coverage_run_id: migration-coverage-193cdd4062a943338833fc6cadf506d6
+coverage_run_id: migration-coverage-47b9839546af43cdb476c6ab67e9b170
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%

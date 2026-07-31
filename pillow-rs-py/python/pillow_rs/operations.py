@@ -84,6 +84,10 @@ def alpha_composite(im1: Image, im2: Image) -> Image:
     PIL: ``Image.alpha_composite(im1, im2)`` composites im2 over im1
     and returns a new RGBA image.
     """
+    # Pillow's module-level function requires matching sizes; only the
+    # in-place method composites cropped regions.
+    if im1.size != im2.size:
+        raise ValueError("images do not match")
     result = im1.copy()
     result.alpha_composite(im2)
     return result
