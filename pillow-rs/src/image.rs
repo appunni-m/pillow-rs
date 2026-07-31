@@ -1333,6 +1333,9 @@ impl Image {
             let min_val = sorted[0];
             let max_val = sorted[sorted.len() - 1];
             if (max_val - min_val).abs() < f64::EPSILON {
+                // Pillow's I/F histogram is empty when every value is equal
+                // (max == min), so its Stat min/max fall back to the histogram
+                // defaults of 255 and 0 for every band.
                 return Ok(vec![vec![
                     n_pixels as f64,
                     0.0,
@@ -1342,7 +1345,7 @@ impl Image {
                     0.0,
                     0.0,
                     0.0,
-                    0.0,
+                    255.0,
                     0.0,
                 ]]);
             }

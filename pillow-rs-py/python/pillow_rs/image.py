@@ -452,10 +452,14 @@ class Image:
         first band = value, remaining bands = 0.
         Mode-aware expansion handled in Rust.
         """
+        if isinstance(value, str):
+            if len(self.mode) == 1:
+                raise TypeError("color must be int or single-element tuple")
+            raise TypeError("color must be int or tuple")
         if isinstance(value, (int, list, tuple)):
             self._rust_image.putpixel_mode(xy, value)
         else:
-            self._rust_image.putpixel_mode(xy, value)
+            raise TypeError("color must be int or single-element tuple")
 
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
