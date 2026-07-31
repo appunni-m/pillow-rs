@@ -294,7 +294,7 @@
             },
             "preserve_tone": {
               "kind": "literal",
-              "value": false
+              "value": true
             }
           }
         }
@@ -2267,7 +2267,109 @@
             },
             "in_place": {
               "kind": "literal",
-              "value": false
+              "value": true
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.exif_transpose.input-family.jpeg-exif",
+      "surface": "PIL.ImageOps",
+      "operation": "exif_transpose",
+      "covers": [
+        "PIL.ImageOps.exif_transpose.input-family.jpeg-exif"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/exif-orientation6.jpg",
+          "sha256": "5d2ff2bc69a2854df3858dd8c4525776bcee4c915b37cc3af3920ff3c337058b",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "exif_transpose",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.exif_transpose.input-family.jpeg-exif-in-place",
+      "surface": "PIL.ImageOps",
+      "operation": "exif_transpose",
+      "covers": [
+        "PIL.ImageOps.exif_transpose.input-family.jpeg-exif-in-place"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/exif-orientation6.jpg",
+          "sha256": "5d2ff2bc69a2854df3858dd8c4525776bcee4c915b37cc3af3920ff3c337058b",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "exif_transpose",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "in_place": {
+              "kind": "literal",
+              "value": true
             }
           }
         }

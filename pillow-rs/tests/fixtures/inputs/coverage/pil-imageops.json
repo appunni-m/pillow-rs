@@ -61,6 +61,8 @@
         "PIL.ImageOps.exif_transpose.behavior.default",
         "PIL.ImageOps.exif_transpose.parameter.image",
         "PIL.ImageOps.exif_transpose.parameter.in-place",
+        "PIL.ImageOps.exif_transpose.input-family.jpeg-exif",
+        "PIL.ImageOps.exif_transpose.input-family.jpeg-exif-in-place",
         "PIL.ImageOps.expand.behavior.default",
         "PIL.ImageOps.expand.parameter.image",
         "PIL.ImageOps.expand.parameter.border",
@@ -178,6 +180,8 @@
           "PIL.ImageOps.equalize.mode.rgba",
           "PIL.ImageOps.exif_transpose.behavior.default",
           "PIL.ImageOps.exif_transpose.parameter.in-place",
+          "PIL.ImageOps.exif_transpose.input-family.jpeg-exif",
+          "PIL.ImageOps.exif_transpose.input-family.jpeg-exif-in-place",
           "PIL.ImageOps.expand.behavior.default",
           "PIL.ImageOps.expand.parameter.border",
           "PIL.ImageOps.expand.parameter.fill",
@@ -238,7 +242,9 @@
           "PIL.ImageOps.colorize.nuanced.invalid-mid-points",
           "PIL.ImageOps.invert.nuanced.p-mode"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-imageops-native"
+        ]
       },
       "component_ids": [
         "image-ops"

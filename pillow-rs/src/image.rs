@@ -1993,14 +1993,75 @@ impl Image {
         vec![]
     }
 
-    /// Returns EXIF metadata bytes.
+    /// Returns EXIF metadata bytes retained from the encoded source.
     ///
-    /// Core does not currently parse EXIF metadata from encoded containers, so
-    /// this returns an empty byte vector.
+    /// JPEG sources carry the EXIF payload in their APP1 segment; TIFF
+    /// sources are themselves a TIFF IFD0 container.  Other formats currently
+    /// expose no EXIF bytes, matching Pillow's empty `Exif` object for images
+    /// without embedded metadata.
     pub fn getexif(&self) -> Vec<u8> {
-        // Return empty vec — no EXIF data extracted. PIL returns empty Exif dict {}.
-        // Full EXIF extraction would need TIFF/EXIF parsing from JPEG/HEIF headers.
+        if let Image::Bytes { source, .. } = self {
+            match source.info().format {
+                ImageFormat::Jpeg => {
+                    if let Some(exif) = Self::extract_jpeg_exif(source.bytes()) {
+                        return exif;
+                    }
+                }
+                ImageFormat::Tiff => {
+                    // Pillow builds its `Exif` object from the TIFF IFD0
+                    // itself; the raw container bytes are the same IFD
+                    // payload the orientation parser consumes.
+                    return source.bytes().to_vec();
+                }
+                _ => {}
+            }
+        }
         Vec::new()
+    }
+
+    /// Extracts the Exif APP1 payload from a JPEG byte stream.
+    ///
+    /// Scans the sequential marker list for `0xFFE1` and returns the segment
+    /// payload when it starts with the Exif signature.  This mirrors Pillow's
+    /// `JpegImagePlugin` APP1 handling, which retains the payload starting at
+    /// the `Exif\0\0` signature.
+    fn extract_jpeg_exif(data: &[u8]) -> Option<Vec<u8>> {
+        if data.len() < 4 || data[0] != 0xFF || data[1] != 0xD8 {
+            return None;
+        }
+        let mut offset = 2usize;
+        while offset + 4 <= data.len() {
+            if data[offset] != 0xFF {
+                return None;
+            }
+            let marker = data[offset + 1];
+            // Standalone markers (RST0-7, TEM) and the SOI marker carry no
+            // length field.
+            if marker == 0xD8 || (0xD0..=0xD7).contains(&marker) || marker == 0x01 {
+                offset += 2;
+                continue;
+            }
+            if marker == 0xD9 {
+                return None;
+            }
+            let length = usize::from(u16::from_be_bytes([data[offset + 2], data[offset + 3]]));
+            if length < 2 {
+                return None;
+            }
+            let segment_end = offset + 2 + length;
+            if segment_end > data.len() {
+                return None;
+            }
+            if marker == 0xE1 {
+                let payload = &data[offset + 4..segment_end];
+                if payload.len() > 6 && payload.starts_with(b"Exif\x00\x00") {
+                    return Some(payload.to_vec());
+                }
+                return None;
+            }
+            offset = segment_end;
+        }
+        None
     }
 
     /// Returns XMP metadata fields.

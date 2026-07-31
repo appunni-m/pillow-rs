@@ -6331,7 +6331,7 @@
             },
             "embedded_color": {
               "kind": "literal",
-              "value": false
+              "value": true
             }
           }
         }
@@ -7732,7 +7732,7 @@
             },
             "embedded_color": {
               "kind": "literal",
-              "value": false
+              "value": true
             }
           }
         }
@@ -14473,7 +14473,7 @@
             },
             "embedded_color": {
               "kind": "literal",
-              "value": false
+              "value": true
             }
           }
         }
@@ -15954,7 +15954,7 @@
             },
             "embedded_color": {
               "kind": "literal",
-              "value": false
+              "value": true
             }
           }
         }
@@ -16630,7 +16630,7 @@
             },
             "embedded_color": {
               "kind": "literal",
-              "value": false
+              "value": true
             }
           }
         }

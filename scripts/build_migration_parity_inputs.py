@@ -263,6 +263,7 @@ class WorkflowBuilder:
     scenario_bitmap_mode: str | None = None
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
+    scenario_asset: str | None = None
 
     @property
     def mode(self) -> str:
@@ -368,6 +369,24 @@ class WorkflowBuilder:
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
+        if self.scenario_asset is not None:
+            # Stimulus workflows that open an encoded container (for example
+            # the JPEG-with-EXIF `ImageOps.exif_transpose` cases) build the
+            # primary image from a committed asset instead of `Image.new`.
+            fp_descriptor = self.ref(
+                f"{label}-asset",
+                self.scenario_asset,
+                "image/jpeg",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "open",
+                receiver=None,
+                arguments={"fp": fp_descriptor},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         size = [16, 16]
         if self.edge == "zero-width":
             size = [0, 16]
@@ -1074,6 +1093,22 @@ class WorkflowBuilder:
             arguments[parameter_id] = self.descriptor_for(
                 parameter, variant_value=variant_value
             )
+        if self.requirement["dimension"] == "parameter" and focus is not None:
+            focused = operation["source"]["parameters"]
+            focused_parameter = next(
+                (item for item in focused if item["id"] == focus),
+                None,
+            )
+            if (
+                focused_parameter is not None
+                and set(focused_parameter["value_types"]) == {"boolean"}
+                and focused_parameter["omission"].get("kind") == "literal"
+                and focused_parameter["omission"].get("value") is False
+            ):
+                # A focused boolean parameter must exercise its non-default
+                # value; the generic fallback would otherwise re-emit the
+                # omission default and never reach the True branch.
+                arguments[focus] = literal(True)
         return arguments
 
     def build(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
@@ -1139,10 +1174,25 @@ def build_parity_case(
     scenario_bitmap_mode: str | None = None,
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
+    scenario_asset: str | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
     canonical_case_id = f"{prefix}.{slug(suffix)}"
+    if (
+        surface == "PIL.ImageOps"
+        and operation["id"] == "exif_transpose"
+        and "jpeg-exif" in requirement["id"]
+    ):
+        # The EXIF orientation branches are only reachable when the workflow
+        # opens a container that actually carries an EXIF payload, so the
+        # canonical input-family cases open the committed JPEG fixture.
+        scenario_asset = scenario_asset or "image/exif-orientation6.jpg"
+        if requirement["id"].endswith("in-place"):
+            scenario_values = {
+                **(scenario_values or {}),
+                "in_place": literal(True),
+            }
     builder = WorkflowBuilder(
         operations=operations,
         primary_surface=surface,
@@ -1159,6 +1209,7 @@ def build_parity_case(
         scenario_bitmap_mode=scenario_bitmap_mode,
         scenario_im_mode=scenario_im_mode,
         scenario_mask_mode=scenario_mask_mode,
+        scenario_asset=scenario_asset,
     )
     assets, steps, observations = builder.build()
     return {
@@ -2905,12 +2956,15 @@ def build_inputs(
             )
         )
         selected_cases = list(dict.fromkeys(selected_cases))
-        command_ids = (
-            ["coverage-font-native"]
-            if "image-font" in component_ids
-            and surface_id == "PIL.ImageFont.FreeTypeFont"
-            else []
-        )
+        if "image-font" in component_ids and surface_id == "PIL.ImageFont.FreeTypeFont":
+            command_ids = ["coverage-font-native"]
+        elif "image-ops" in component_ids:
+            # The EXIF parsers and the core colorize guards are unreachable
+            # through the public Pillow surface; exercise them through the
+            # maintained native coverage command.
+            command_ids = ["coverage-imageops-native"]
+        else:
+            command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
         coverage_path = output_root / coverage_relative
         write_json(

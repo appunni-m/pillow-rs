@@ -405,6 +405,11 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
     if shape == "none":
         return None
     if shape == "image":
+        if value is None:
+            # Pillow's nullable image results (for example
+            # `ImageOps.exif_transpose` with `in_place=True`) serialize as
+            # null; the comparison policy still applies to non-null values.
+            return None
         try:
             raw = bytes(value.tobytes())
         except Exception:
@@ -736,6 +741,13 @@ def compare_value(source: Any, target: Any, policy: dict[str, Any], path: str) -
             return []
         return [_diff(path, "bytes_mismatch", source, target, "exact byte value mismatch")]
     if kind == "image":
+        metadata_mode = policy.get("metadata_mode", "exact")
+        if metadata_mode == "ignored" and isinstance(source, dict) and isinstance(target, dict):
+            left = source.get("bytes")
+            right = target.get("bytes")
+            if left == right:
+                return []
+            return [_diff(path, "image_mismatch", source, target, "image pixel bytes mismatch")]
         if source == target:
             return []
         return [_diff(path, "image_mismatch", source, target, "declared image comparison mismatch")]

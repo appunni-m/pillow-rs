@@ -87,6 +87,12 @@ commands:
   - migration-parity-font-native-coverage
   cwd: .
   timeout_seconds: 600
+- id: coverage-imageops-native
+  argv:
+  - make
+  - migration-parity-imageops-native-coverage
+  cwd: .
+  timeout_seconds: 600
 - id: benchmark
   argv:
   - make
@@ -2850,13 +2856,21 @@ surfaces:
           - 0
           - 0
       result:
-        shape: none
+        shape: image
         observations:
         - path: value
           value_types:
+          - image
           - 'null'
           comparison:
-            kind: exact
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: ignored
+            reason: >-
+              JPEG decode metadata (format/info) legitimately differs between
+              the Pillow and Rust decoder paths; the public contract compares
+              the transposed pixels exactly.
         error:
           fields:
           - class
@@ -26754,6 +26768,22 @@ surfaces:
     - id: PIL.ImageOps.exif_transpose.parameter.in-place
       dimension: parameter
       description: Public parameter in_place with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.exif_transpose.input-family.jpeg-exif
+      dimension: input_family
+      description: Transpose an image whose JPEG container carries EXIF orientation 6.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageOps.exif_transpose.input-family.jpeg-exif-in-place
+      dimension: input_family
+      description: In-place transpose of an image whose JPEG container carries EXIF orientation 6.
       lanes:
       - parity
       - coverage
