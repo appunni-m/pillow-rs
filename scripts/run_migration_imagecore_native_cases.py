@@ -184,11 +184,37 @@ def run_native_cases() -> tuple[int, int, int]:
                 [Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4))],
             ),
         ),
+        (
+            "merge-l",
+            lambda: pillow_rs.merge("L", [Image.new("L", (4, 4))]),
+        ),
+        (
+            "merge-la",
+            lambda: pillow_rs.merge(
+                "LA",
+                [Image.new("L", (4, 4)), Image.new("L", (4, 4))],
+            ),
+        ),
+        (
+            "merge-rgba",
+            lambda: pillow_rs.merge(
+                "RGBA",
+                [Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("L", (4, 4))],
+            ),
+        ),
         # Gradient mode validation.
         ("linear-gradient-ok", lambda: pillow_rs.linear_gradient("L")),
         ("linear-gradient-bad-mode", lambda: pillow_rs.linear_gradient("BOGUS")),
         ("radial-gradient-ok", lambda: pillow_rs.radial_gradient("L")),
         ("radial-gradient-bad-mode", lambda: pillow_rs.radial_gradient("BOGUS")),
+        ("linear-gradient-one", lambda: pillow_rs.linear_gradient("1")),
+        ("linear-gradient-p", lambda: pillow_rs.linear_gradient("P")),
+        ("linear-gradient-i", lambda: pillow_rs.linear_gradient("I")),
+        ("linear-gradient-f", lambda: pillow_rs.linear_gradient("F")),
+        ("radial-gradient-one", lambda: pillow_rs.radial_gradient("1")),
+        ("radial-gradient-p", lambda: pillow_rs.radial_gradient("P")),
+        ("radial-gradient-i", lambda: pillow_rs.radial_gradient("I")),
+        ("radial-gradient-f", lambda: pillow_rs.radial_gradient("F")),
         # Deterministic effect surfaces.
         ("effect-mandelbrot", lambda: pillow_rs.effect_mandelbrot((4, 4), [-1, -1, 1, 1], 1)),
         ("effect-mandelbrot-bad-extent", lambda: pillow_rs.effect_mandelbrot((4, 4), (1, 2), 1)),
