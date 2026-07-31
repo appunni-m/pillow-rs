@@ -32,9 +32,9 @@ manifest truth.
 | --- | --- | --- |
 | Active specification | `migration-parity/manifest@2`; 22 surfaces, 204 operations, 1,780 requirements | MAN-001..MAN-018 are structurally addressed by the fixed generator, but the external auditor still reports SKL-006 and the historical denominator decisions DEC-001..DEC-007 remain explicit. |
 | Active inputs | 1,181 unique input-only parity workflows; indexed parity, coverage, and benchmark documents; no expected outputs in active inputs | INP-001..INP-014 are addressed for the rebuilt corpus. `scripts/validate_migration_parity_contract.py` now rejects unknown fields, duplicate IDs, broken references, missing required arguments, invalid descriptors, and expected-output fields. Every legacy fixture root and oracle harness now lives under `deprecated/migration-parity-v0/` and is not an active input. |
-| Live parity | Full clean-checkout run required 1,181 cases and measured 725 pass / 456 fail / 0 infrastructure errors | RUN-001, RUN-004, RUN-006, RUN-007, and RUN-009 have maintained producers/boundaries; behavioral failures are real target gaps, not suppressed results. RUN-008 remains a classification/anti-cheat follow-up for separate regression tests that intentionally retain oracle fixtures. |
-| Coverage | Strict `coverage-input@1` plans and `coverage-result@1` producer exist; no managed snapshot has been ingested | COV-001 and COV-002 are producer/schema work only until the Coverage MCP command is explicitly approved and a fresh snapshot is recorded. Rust dimensions remain `not_proven`. |
-| Benchmark | 203 deterministic workloads and suites plus correctness-gated `benchmark-result@1` producer; smoke measurement is available for passing workloads | BEN-001, BEN-002, and BEN-004 have producers. No performance budget is declared in the current manifest, so budget outcomes remain `not_proven`/empty rather than being inferred from timings. |
+| Live parity | The current committed run executes all 1,181 indexed cases: 1,181 pass / 0 fail / 0 infrastructure errors / 0 not-run | RUN-001, RUN-004, RUN-006, RUN-007, and RUN-009 have maintained producers/boundaries. The result is live source-vs-target evidence, not a fixture replay. RUN-008 remains a classification/anti-cheat follow-up for separate regression tests that intentionally retain oracle fixtures. |
+| Coverage | All 22 indexed plans execute locally: 1,169 passed / 0 failed. The target coverage report is produced, but no managed snapshot has been ingested, so aggregate coverage outcomes remain `not_proven` | COV-001 and COV-002 now have strict producers and regression checks. Managed proof still requires explicit Coverage MCP approval and a fresh snapshot. Rust dimensions remain `not_proven`; local Python dimensions are diagnostic until ingestion. |
+| Benchmark | 203 deterministic workloads are selected; 156 are measured and 47 are explicitly not-run by the correctness gate. No workload has an inferred performance budget | BEN-001, BEN-002, and BEN-004 have producers. No performance budget is declared in the current manifest, so budget outcomes remain `not_proven`/empty rather than being inferred from timings. |
 | Aggregate/docs | Strict `status-report@1` join and generated specification/evidence pages are maintained | RUN-010 and DOC-003/DOC-004 have a generated path; freshness and incompatible evidence are still visible and must be rerun after each manifest or target revision change. |
 | Skill/auditor | Local skill commit is byte-identical to the installed cache; the strict auditor reports two errors for the valid callable handle case | SKL-001..SKL-006 remain external skill defects; do not weaken the project manifest to make the auditor pass. |
 
@@ -56,14 +56,14 @@ and strict result-interface unit tests remain active.
 | Deprecated project surfaces | 12 |
 | Expanded deprecated inventory rows, including nested class members | 199 |
 | Earlier top-level-only accounting used by project documentation | 173 |
-| Operations in the current generated draft | 206 |
+| Operations in the active fixed manifest | 204 |
 | Legacy project input documents in `deprecated/migration-parity-v0/fixtures/python/suite0` | 186 |
 | Unique operation keys in those documents | 179 |
 | Cases in those documents | 823 |
 | Additional legacy input documents in `deprecated/migration-parity-v0/fixtures/python/suite1` | 172 |
-| Current Font input documents | 42 |
-| Current Font cases claimed by the draft manifest | 445 |
-| Current active Font assets | 118 |
+| Active indexed parity input documents | 22 |
+| Active indexed coverage input documents | 22 |
+| Active indexed benchmark input documents | 22 |
 | Source inventory paths resolved against Pillow 12.2.0 | 198 of 199 |
 | Target paths resolved against the current `pillow_rs` facade | 190 of 199 |
 
