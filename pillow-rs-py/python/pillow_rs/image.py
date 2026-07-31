@@ -508,7 +508,13 @@ class Image:
         """Reduce colors using median cut algorithm."""
         if isinstance(palette, Image) and self.mode != "P":
             raise ValueError("bad mode for palette image")
-        result = Image(self._rust_image.quantize(colors, dither != 0))
+        if method is None:
+            method = 2 if self.mode == "RGBA" else 0
+        if kmeans < 0:
+            raise ValueError("kmeans must not be negative")
+        result = Image(
+            self._rust_image.quantize(colors, int(method), dither != 0)
+        )
         # PIL: quantize returns a P-mode image with palette attached
         p = result._rust_image.palette()
         if p:

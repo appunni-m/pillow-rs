@@ -2501,6 +2501,39 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "fast-octree-rgb",
+            "mode": "RGB",
+            "values": {
+                "colors": literal(8),
+                "method": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "libimagequant-unavailable",
+            "mode": "RGB",
+            "values": {
+                "colors": literal(8),
+                "method": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "rgba-mediancut-invalid",
+            "mode": "RGBA",
+            "values": {
+                "colors": literal(8),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "rotate",
             "requirement_suffix": "parameter.angle",
             "name": "fractional-expanded",

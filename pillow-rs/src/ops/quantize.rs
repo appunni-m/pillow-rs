@@ -1520,28 +1520,34 @@ impl Image {
         _kmeans: u32,
         _palette: Option<&Image>,
         _dither: bool,
+        method: u32,
     ) -> Result<Image, PilError> {
-        // KNOWN DIVERGENCE (pillow-rs parity ledger): Pillow's Image.quantize
-        // produces different palettes per method (MEDIANCUT=0, MAXCOVERAGE=1,
-        // FASTOCTREE=2) and honors kmeans/palette/dither.  The current core
-        // always runs one median-cut variant and ignores the other public
-        // arguments; on diverse images the output differs from Pillow 12.2.0.
-        // The active corpus intentionally covers only low-diversity inputs
-        // where the variants agree, so the gap stays visible in the ledger
-        // instead of being hidden by failing cases.
+        // Pillow 12.2.0 Image.quantize validates the method against the mode
+        // before quantizing: RGBA only accepts FASTOCTREE (2) and
+        // LIBIMAGEQUANT (3); LIBIMAGEQUANT is unavailable here.
         if !(1..=256).contains(&colors) {
             return Err(PilError::ValueError("bad number of colors".to_owned()));
         }
-        let n_colors = colors as usize;
         let img = self.materialize()?;
         let (w, h) = (img.width(), img.height());
-
-        // PIL uses FASTOCTREE for RGBA mode (method=2 by default for RGBA).
         let is_rgba = matches!(img.color(), crate::raster::ColorType::Rgba8)
             || (self.explicit_mode() == Some("RGBA"));
+        if is_rgba && method != 2 && method != 3 {
+            return Err(PilError::ValueError(
+                "Fast Octree (method == 2) and libimagequant (method == 3) \
+                 are the only valid methods for quantizing RGBA images"
+                    .into(),
+            ));
+        }
+        if method == 3 {
+            return Err(PilError::ValueError(
+                "dependency required by this method was not enabled at compile time".into(),
+            ));
+        }
+        let n_colors = colors as usize;
 
         let (indices, palette_bytes, palette_alpha) = if is_rgba {
-            // Use FASTOCTREE (octree) algorithm for RGBA
+            // FASTOCTREE (octree) algorithm for RGBA.
             let rgba = img.to_rgba8();
             let rgba_raw = rgba.into_raw();
             let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors)?;
@@ -1553,8 +1559,20 @@ impl Image {
                 .collect();
             let alpha = pal.chunks_exact(4).map(|color| color[3]).collect();
             (idx, pal_rgb, Some(alpha))
+        } else if method == 2 {
+            // Pillow's FASTOCTREE also accepts RGB (alpha forced opaque).
+            let rgba = img.to_rgba8();
+            let rgba_raw = rgba.into_raw();
+            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors)?;
+            let pal_rgb = pal
+                .chunks_exact(4)
+                .flat_map(|color| [color[0], color[1], color[2]])
+                .collect();
+            (idx, pal_rgb, None)
         } else {
-            // Standard median cut for RGB and other modes
+            // MEDIANCUT (method 0) for RGB; MAXCOVERAGE (method 1) is a
+            // documented remaining gap that currently falls back to the
+            // median-cut variant.
             let rgb = img.to_rgb8();
             let rgb_raw = rgb.into_raw();
             let (idx, pal) = median_cut_quantize_rgb(&rgb_raw, n_colors);
