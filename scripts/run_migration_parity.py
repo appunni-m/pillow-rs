@@ -479,6 +479,9 @@ def run_case(
     case: dict[str, Any],
     operation_index: dict[tuple[str, str], dict[str, Any]],
     tempdir: Path,
+    *,
+    timing_steps: set[str] | None = None,
+    timing_sink: list[int] | None = None,
 ) -> dict[str, Any]:
     assets = AssetStore(case.get("assets", []), FIXTURE_ROOT / "assets", tempdir)
     bindings: dict[str, Any] = {}
@@ -497,9 +500,16 @@ def run_case(
             opdef = operation_definition(
                 operation_index, step["surface"], step["operation"]
             )
+            started_ns = (
+                time.perf_counter_ns()
+                if timing_steps and step_id in timing_steps
+                else None
+            )
             value = call_workflow_step(
                 side, step, opdef, bindings, assets
             )
+            if started_ns is not None and timing_sink is not None:
+                timing_sink.append(time.perf_counter_ns() - started_ns)
             bindings[step_id] = value
             step_results[step_id] = {"step_id": step_id, "status": "ok", "_value": value}
         except BaseException as exc:  # public failures are part of the contract
@@ -908,11 +918,29 @@ def run_side(args: argparse.Namespace) -> int:
     operation_index = build_operation_index(manifest)
     handshake = side_identity(args.side)
     results: list[dict[str, Any]] = []
+    timings: dict[str, list[int]] = {}
     with tempfile.TemporaryDirectory(prefix=f"migration-parity-{args.side}-") as temporary:
         tempdir = Path(temporary)
         for case in cases:
-            results.append(run_case(args.side, case, operation_index, tempdir))
-    sys.stdout.write(json.dumps({"identity": handshake, "results": results}, separators=(",", ":")) + "\n")
+            sink: list[int] = []
+            result: dict[str, Any] | None = None
+            for _ in range(args.repeat):
+                result = run_case(
+                    args.side,
+                    case,
+                    operation_index,
+                    tempdir,
+                    timing_steps=set(args.timing_step),
+                    timing_sink=sink if args.timings else None,
+                )
+            assert result is not None
+            results.append(result)
+            if args.timings:
+                timings[case["case_id"]] = sink
+    envelope: dict[str, Any] = {"identity": handshake, "results": results}
+    if args.timings:
+        envelope["timings_ns"] = timings
+    sys.stdout.write(json.dumps(envelope, separators=(",", ":")) + "\n")
     return 0
 
 
@@ -926,6 +954,9 @@ def main() -> int:
     parser.add_argument("--timeout", type=int, default=3600)
     parser.add_argument("--side", choices=("source", "target"))
     parser.add_argument("--identity", choices=("source", "target"))
+    parser.add_argument("--repeat", type=int, default=1)
+    parser.add_argument("--timings", action="store_true")
+    parser.add_argument("--timing-step", action="append", default=["call"])
     args = parser.parse_args()
     if args.side:
         return run_side(args)
