@@ -5676,6 +5676,85 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.Image.alpha_composite.nuanced.mismatched-sizes",
+      "surface": "PIL.Image",
+      "operation": "alpha_composite",
+      "covers": [
+        "PIL.Image.alpha_composite.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-im1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-im2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "alpha_composite",
+          "receiver": null,
+          "arguments": {
+            "im1": {
+              "kind": "binding",
+              "step_id": "setup-im1-1"
+            },
+            "im2": {
+              "kind": "binding",
+              "step_id": "setup-im2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

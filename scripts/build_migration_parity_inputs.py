@@ -406,6 +406,8 @@ class WorkflowBuilder:
             and label not in {"image", "mask"}
         ):
             size = [8, 8]
+        elif self.edge == "second-smaller-than-first" and label == "im2":
+            size = [8, 8]
         elif self.edge == "mask-size-mismatch" and label == "mask":
             size = [8, 8]
         step_id = self.add_step(
@@ -3121,6 +3123,21 @@ def build_nuanced_cases(
                 "im": literal([1, 2]),
                 "box": literal([1, 1, 5, 5]),
             },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "mismatched-sizes",
+            "mode": "RGBA",
+            "edge": "second-smaller-than-first",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-dest-mode-error",
+            "mode": "RGB",
         },
         {
             "surface": "PIL.Image.Image",
