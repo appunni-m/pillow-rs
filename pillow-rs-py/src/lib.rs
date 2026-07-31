@@ -627,6 +627,13 @@ impl PyImage {
         self.inner.histogram().map_err(map_error)
     }
 
+    fn histogram_with_mask(&self, mask: Option<&Bound<'_, PyImage>>) -> PyResult<Vec<u32>> {
+        let mask_inner = mask.map(|m| m.borrow().inner.clone());
+        self.inner
+            .histogram_with_mask(mask_inner.as_ref())
+            .map_err(map_error)
+    }
+
     fn gaussian_blur(&self, radius: Option<f64>) -> PyResult<PyImage> {
         let rs = self
             .inner
@@ -807,6 +814,13 @@ impl PyImage {
 
     fn entropy(&mut self) -> PyResult<f64> {
         self.inner.entropy().map_err(map_error)
+    }
+
+    fn entropy_with_mask(&mut self, mask: Option<&Bound<'_, PyImage>>) -> PyResult<f64> {
+        let mask_inner = mask.map(|m| m.borrow().inner.clone());
+        self.inner
+            .entropy_with_mask(mask_inner.as_ref())
+            .map_err(map_error)
     }
 
     fn seek(&mut self, frame: u32) -> PyResult<()> {

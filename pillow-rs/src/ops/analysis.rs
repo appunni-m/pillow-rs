@@ -121,7 +121,26 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization fails.
     pub fn histogram(&self) -> Result<Vec<u32>, PilError> {
+        self.histogram_with_mask(None)
+    }
+
+    /// Computes a per-band histogram restricted to pixels where an optional
+    /// mask is non-zero, matching Pillow's masked-histogram semantics.
+    pub fn histogram_with_mask(&self, mask: Option<&Image>) -> Result<Vec<u32>, PilError> {
         let img = self.materialize()?;
+        let mask_luma = if let Some(mask) = mask {
+            let mask_img = mask.materialize()?;
+            if (mask_img.width(), mask_img.height()) != (img.width(), img.height()) {
+                return Err(PilError::ValueError("images do not match".into()));
+            }
+            let mode = mask.mode()?;
+            if mode != "1" && mode != "L" {
+                return Err(PilError::ValueError("bad transparency mask".into()));
+            }
+            Some(mask_img.to_luma8())
+        } else {
+            None
+        };
         let n_bands = match img.color() {
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
@@ -129,34 +148,64 @@ impl Image {
             _ => 4,
         };
         let mut hist = vec![0u32; 256 * n_bands];
+        let mask_px = mask_luma.as_ref();
+        let masked_pixel = |x: u32, y: u32| -> bool {
+            match mask_px {
+                Some(mask_img) => {
+                    let px = mask_img.get_pixel(x, y);
+                    px[0] != 0
+                }
+                None => true,
+            }
+        };
         // Use mode-aware pixel reading to avoid to_rgba8() remapping channels
         match img.color() {
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
                 let la = img.to_luma_alpha8();
-                for px in la.pixels() {
-                    hist[px[0] as usize] += 1;
-                    hist[256 + px[1] as usize] += 1;
+                for (y, row) in la.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked_pixel(x as u32, y as u32) {
+                            continue;
+                        }
+                        hist[px[0] as usize] += 1;
+                        hist[256 + px[1] as usize] += 1;
+                    }
                 }
             }
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
                 let luma = img.to_luma8();
-                for px in luma.pixels() {
-                    hist[px[0] as usize] += 1;
+                for (y, row) in luma.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked_pixel(x as u32, y as u32) {
+                            continue;
+                        }
+                        hist[px[0] as usize] += 1;
+                    }
                 }
             }
             crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => {
                 let rgb = img.to_rgb8();
-                for px in rgb.pixels() {
-                    hist[px[0] as usize] += 1;
-                    hist[256 + px[1] as usize] += 1;
-                    hist[512 + px[2] as usize] += 1;
+                for (y, row) in rgb.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked_pixel(x as u32, y as u32) {
+                            continue;
+                        }
+                        hist[px[0] as usize] += 1;
+                        hist[256 + px[1] as usize] += 1;
+                        hist[512 + px[2] as usize] += 1;
+                    }
                 }
             }
             _ => {
                 let rgba = img.to_rgba8();
-                for px in rgba.pixels() {
-                    for b in 0..n_bands {
-                        hist[b * 256 + px[b] as usize] += 1;
+                for (y, row) in rgba.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked_pixel(x as u32, y as u32) {
+                            continue;
+                        }
+                        for b in 0..n_bands {
+                            hist[b * 256 + px[b] as usize] += 1;
+                        }
                     }
                 }
             }

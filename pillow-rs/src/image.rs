@@ -2768,7 +2768,36 @@ impl Image {
     ///
     /// Returns [`PilError`] when materialization fails.
     pub fn entropy(&self) -> Result<f64, PilError> {
+        self.entropy_with_mask(None)
+    }
+
+    /// Computes entropy over pixels where an optional mask is non-zero,
+    /// matching Pillow's masked-entropy semantics.
+    pub fn entropy_with_mask(&self, mask: Option<&Image>) -> Result<f64, PilError> {
         let img = self.materialized_shared()?;
+        let mask_luma = if let Some(mask) = mask {
+            let mask_img = mask.materialize()?;
+            if (mask_img.width(), mask_img.height()) != (img.width(), img.height()) {
+                return Err(PilError::ValueError("images do not match".into()));
+            }
+            let mode = mask.mode()?;
+            if mode != "1" && mode != "L" {
+                return Err(PilError::ValueError("bad transparency mask".into()));
+            }
+            Some(mask_img.to_luma8())
+        } else {
+            None
+        };
+        let mask_px = mask_luma.as_ref();
+        let masked = |x: u32, y: u32| -> bool {
+            match mask_px {
+                Some(m) => {
+                    let px = m.get_pixel(x, y);
+                    px[0] != 0
+                }
+                None => true,
+            }
+        };
         let n_bands = match img.color() {
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
@@ -2780,27 +2809,43 @@ impl Image {
         match img.color() {
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => {
                 let la = img.to_luma_alpha8();
-                for px in la.pixels() {
-                    hists[0][px[0] as usize] += 1;
-                    hists[1][px[1] as usize] += 1;
+                for (y, row) in la.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked(x as u32, y as u32) {
+                            continue;
+                        }
+                        hists[0][px[0] as usize] += 1;
+                        hists[1][px[1] as usize] += 1;
+                    }
                 }
             }
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
                 let luma = img.to_luma8();
-                for px in luma.pixels() {
-                    hists[0][px[0] as usize] += 1;
+                for (y, row) in luma.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked(x as u32, y as u32) {
+                            continue;
+                        }
+                        hists[0][px[0] as usize] += 1;
+                    }
                 }
             }
             _ => {
                 let rgba = img.to_rgba8();
-                for px in rgba.pixels() {
-                    for b in 0..n_bands {
-                        hists[b][px[b] as usize] += 1;
+                for (y, row) in rgba.rows().enumerate() {
+                    for (x, px) in row.enumerate() {
+                        if !masked(x as u32, y as u32) {
+                            continue;
+                        }
+                        for b in 0..n_bands {
+                            hists[b][px[b] as usize] += 1;
+                        }
                     }
                 }
             }
         }
-        let total = (img.width() * img.height() * n_bands as u32) as f64;
+        let counted: u32 = hists.iter().map(|band| band.iter().sum::<u32>()).sum();
+        let total = counted as f64;
         let mut entropy = 0.0f64;
         for band_hist in &hists {
             for &h in band_hist {
