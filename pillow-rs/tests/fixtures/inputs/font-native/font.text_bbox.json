@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "operation": "text_bbox",
+  "cases": [
+    {
+      "case_id": "font.text_bbox.default_hello",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "load_default"
+          }
+        },
+        "params": {
+          "size": 10,
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.dejavusans_empty",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.dejavusans_space",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": " "
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.dejavusans_jq",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ"
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.bytes_latin1_c3a9",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text_bytes_hex": "c3a9"
+        }
+      }
+    },
+    {
+      "case_id": "font.text_bbox.invalid_maxp_too_many_instruction_defs",
+      "operation": "text_bbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A"
+        }
+      }
+    }
+  ]
+}

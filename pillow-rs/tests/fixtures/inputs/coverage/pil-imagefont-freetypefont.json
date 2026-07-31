@@ -107,12 +107,22 @@
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.multiline-stroked",
           "PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font",
           "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.variable-font",
+          "PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.named-instances",
+          "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.named-instances",
+          "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-direction",
+          "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-features",
+          "PIL.ImageFont.FreeTypeFont.getlength.nuanced.unsupported-language",
+          "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-stroke",
+          "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start",
+          "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font",
           "PIL.ImageFont.FreeTypeFont.font_variant.nuanced.variable-font-size",
           "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.invalid-anchor"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-font-native"
+        ]
       },
       "component_ids": [
         "image-font"

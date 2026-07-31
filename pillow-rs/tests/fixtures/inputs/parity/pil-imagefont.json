@@ -790,6 +790,203 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.nuanced.malformed-cff-table",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.font"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/cff-malformed-short-header.otf",
+          "sha256": "ed5828a8809be41e6dcdd5b8b3f4c23276fd4b4b182cd5584d39d7aa56d80ae4",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.nuanced.malformed-cff-name-index",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.font"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/cff-malformed-name-index-offsets-out-of-order.otf",
+          "sha256": "7805c9993290f0bce9d0012763b2b27f02556f06b704cf7deb539ac5e429b2ab",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.nuanced.fractional-size",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20.5
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.nuanced.negative-fractional-size",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": -5.5
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.nuanced.oversized-size",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 50000
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

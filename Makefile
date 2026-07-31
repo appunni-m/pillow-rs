@@ -68,6 +68,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
 	@printf "  $(CYAN)make migration-parity-coverage-rust$(NC) Run merged Python+Rust coverage with a temporary instrumented extension\n"
+	@printf "  $(CYAN)make migration-parity-font-native-coverage$(NC) Run the font-native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-region-coverage$(NC) Report region coverage per public operation\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Run correctness-gated benchmark workloads\n"
 	@printf "  $(CYAN)make migration-parity-aggregate$(NC) Join compatible parity, coverage, and benchmark evidence\n"
@@ -218,7 +219,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-region-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
+.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -275,6 +276,9 @@ migration-parity-coverage-rust: ## Run merged Python+Rust coverage with a tempor
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-font-native-coverage: ## Run the font-native coverage-only corpus
+	$(PYTHON) scripts/run_migration_font_native_cases.py
 
 migration-parity-region-coverage: ## Report region coverage per public operation
 	$(PYTHON) scripts/report_migration_parity_region_coverage.py

@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1231
-- Unique active workflow signatures: 1231
+- Active parity workflows: 1244
+- Unique active workflow signatures: 1244
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 62
+- Deliberate nuanced workflows: 75
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -34,8 +34,8 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageEnhance.Contrast` | 1 |
 | `PIL.ImageEnhance.Sharpness` | 1 |
 | `PIL.ImageFilter` | 101 |
-| `PIL.ImageFont` | 20 |
-| `PIL.ImageFont.FreeTypeFont` | 53 |
+| `PIL.ImageFont` | 25 |
+| `PIL.ImageFont.FreeTypeFont` | 61 |
 | `PIL.ImageFont.ImageFont` | 10 |
 | `PIL.ImageFont.TransposedFont` | 13 |
 | `PIL.ImageOps` | 97 |
@@ -100,17 +100,30 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor`
 - `PIL.ImageFilter.Kernel.nuanced.three-by-three-edge`
 - `PIL.ImageFont.FreeTypeFont.font_variant.nuanced.variable-font-size`
+- `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.named-instances`
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font`
+- `PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.named-instances`
 - `PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.variable-font`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.invalid-anchor`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unicode-multiline`
+- `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-direction`
+- `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-features`
 - `PIL.ImageFont.FreeTypeFont.getlength.nuanced.kerning-pair`
+- `PIL.ImageFont.FreeTypeFont.getlength.nuanced.unsupported-language`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-stroke`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.multiline-stroked`
 - `PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font`
 - `PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font`
 - `PIL.ImageFont.TransposedFont.getbbox.nuanced.rotate-270`
 - `PIL.ImageFont.TransposedFont.getlength.nuanced.rotate-90-length-error`
 - `PIL.ImageFont.TransposedFont.getmask.nuanced.rotate-90`
+- `PIL.ImageFont.truetype.nuanced.fractional-size`
+- `PIL.ImageFont.truetype.nuanced.malformed-cff-name-index`
+- `PIL.ImageFont.truetype.nuanced.malformed-cff-table`
+- `PIL.ImageFont.truetype.nuanced.negative-fractional-size`
+- `PIL.ImageFont.truetype.nuanced.oversized-size`
 - `PIL.ImageFont.truetype.nuanced.zero-size`
 - `PIL.ImageOps.colorize.nuanced.invalid-mid-points`
 - `PIL.ImageOps.colorize.nuanced.invalid-points`

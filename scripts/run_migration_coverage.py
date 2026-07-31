@@ -308,6 +308,7 @@ def build_plan_result(
     case_results: dict[str, dict[str, Any]],
     component_index: dict[str, dict[str, Any]],
     files: dict[Path, dict[str, Any]],
+    command_totals: dict[str, tuple[int, int]] | None = None,
 ) -> dict[str, Any]:
     selected_ids = list(plan["selectors"]["parity_case_ids"])
     tests_failed = sum(
@@ -315,6 +316,12 @@ def build_plan_result(
         for case_id in selected_ids
         if coverage_case_failed(case_results[case_id]["observations"])
     )
+    command_totals = command_totals or {}
+    tests_passed = len(selected_ids) - tests_failed
+    for command_id in plan["selectors"]["command_ids"]:
+        command_passed, command_failed = command_totals.get(command_id, (0, 0))
+        tests_passed += command_passed
+        tests_failed += command_failed
     return {
         "plan_id": plan["plan_id"],
         "target_profile": plan["target_profile"],
@@ -325,7 +332,7 @@ def build_plan_result(
         },
         "execution": {
             "status": "completed",
-            "tests_passed": len(selected_ids) - tests_failed,
+            "tests_passed": tests_passed,
             "tests_failed": tests_failed,
         },
         "components": build_components(plan, component_index, files),
@@ -363,6 +370,17 @@ def run(args: argparse.Namespace) -> int:
                 case_results[case_id] = run_case(
                     "target", cases_by_id[case_id], operation_index, tempdir
                 )
+            command_totals: dict[str, tuple[int, int]] = {}
+            for plan in plans:
+                for command_id in plan["selectors"]["command_ids"]:
+                    if command_id in command_totals:
+                        continue
+                    if command_id != "coverage-font-native":
+                        raise ValueError(f"unknown coverage command: {command_id}")
+                    from run_migration_font_native_cases import run_native_cases
+
+                    passed, _skipped, failed = run_native_cases()
+                    command_totals[command_id] = (passed, failed)
         finally:
             cov.stop()
             cov.save()
@@ -402,6 +420,7 @@ def run(args: argparse.Namespace) -> int:
             case_results,
             component_index,
             files,
+            command_totals,
         )
         for plan in plans
     ]

@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "operation": "load_default_imagefont",
+  "cases": [
+    {
+      "case_id": "font.load_default_imagefont.default_bitmap",
+      "operation": "load_default_imagefont",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {}
+      }
+    }
+  ]
+}

@@ -81,6 +81,12 @@ commands:
   - migration-parity-coverage-rust
   cwd: .
   timeout_seconds: 7200
+- id: coverage-font-native
+  argv:
+  - make
+  - migration-parity-font-native-coverage
+  cwd: .
+  timeout_seconds: 600
 - id: benchmark
   argv:
   - make

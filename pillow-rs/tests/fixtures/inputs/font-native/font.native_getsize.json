@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "operation": "native_getsize",
+  "cases": [
+    {
+      "case_id": "font.native_getsize.dejavusans20_av",
+      "operation": "native_getsize",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getsize.dejavusans20_jq",
+      "operation": "native_getsize",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ"
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getsize.dejavusans20_empty",
+      "operation": "native_getsize",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": ""
+        }
+      }
+    }
+  ]
+}

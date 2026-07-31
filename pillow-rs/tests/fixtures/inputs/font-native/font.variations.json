@@ -1,0 +1,610 @@
+{
+  "version": 1,
+  "operation": "variations",
+  "cases": [
+    {
+      "case_id": "font.variations.get_variation_axes.variable_named_instances",
+      "operation": "get_variation_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_axes.windows_non_en_us_fallback",
+      "operation": "get_variation_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_axes.platform1_fallback",
+      "operation": "get_variation_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_axes.non_variable_error",
+      "operation": "get_variation_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.variable_named_instances",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.windows_non_en_us_fallback",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.platform1_fallback",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.non_variable_error",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.regular",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Regular",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.thin",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Thin",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.condensed_bold",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Condensed Bold",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.thin_bytes",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name_bytes_hex": "5468696e",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.repeat_same_name",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Regular",
+          "repeat_count": 2,
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.missing_error",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Nope",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_name.non_variable_error",
+      "operation": "set_variation_by_name",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "name": "Regular",
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.weight_only",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [400],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.width_weight_min",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [75, 100],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.width_weight_out_of_range",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [50, 900],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.huge_coordinate",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [1e20],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.large_coordinate",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [1e10],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.negative_huge_coordinate",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [-1e20],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.below_fixed_min_coordinate",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [-32769],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.empty_reset",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.non_variable_error",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [400],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.set_variation_by_axes.fvar_axis_size_short_error",
+      "operation": "set_variation_by_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/fvar-axis-size-short.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "axes": [
+            400
+          ],
+          "text": "AV"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_axes.fvar_axis_size_short_error",
+      "operation": "get_variation_axes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/fvar-axis-size-short.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.get_variation_names.fvar_instance_array_short_error",
+      "operation": "get_variation_names",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/fvar-instance-array-short.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.size_override",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_size": 22
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.same_size",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.zero_size_error",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_size": 0
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.alternate_font",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          },
+          "variant_font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.index_zero",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_index": 0
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.index_out_of_range_error",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_index": 1
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.encoding_unic",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_encoding": "unic"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.layout_engine_basic",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_layout_engine": "BASIC"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.layout_engine_raqm_falls_back_basic",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_layout_engine": "RAQM"
+        }
+      }
+    },
+    {
+      "case_id": "font.variations.font_variant.layout_engine_unknown_string_accepted",
+      "operation": "font_variant",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "variant_layout_engine": "UNKNOWN"
+        }
+      }
+    }
+  ]
+}

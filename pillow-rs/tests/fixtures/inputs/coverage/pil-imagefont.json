@@ -53,7 +53,12 @@
           "PIL.ImageFont.truetype.parameter.index",
           "PIL.ImageFont.truetype.parameter.encoding",
           "PIL.ImageFont.truetype.parameter.layout-engine",
-          "PIL.ImageFont.truetype.nuanced.zero-size"
+          "PIL.ImageFont.truetype.nuanced.zero-size",
+          "PIL.ImageFont.truetype.nuanced.malformed-cff-table",
+          "PIL.ImageFont.truetype.nuanced.malformed-cff-name-index",
+          "PIL.ImageFont.truetype.nuanced.fractional-size",
+          "PIL.ImageFont.truetype.nuanced.negative-fractional-size",
+          "PIL.ImageFont.truetype.nuanced.oversized-size"
         ],
         "command_ids": []
       },
