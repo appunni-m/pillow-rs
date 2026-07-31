@@ -138,6 +138,7 @@ pub use crate::color::palette_getcolor_append;
 pub use crate::color::palette_getcolor_validate;
 pub use crate::color::palette_to_text;
 pub use crate::color::parse_color_str;
+pub use crate::color::parse_color_str_unclamped;
 pub use crate::color::resolve_new_color;
 pub use crate::compute::Backend;
 pub use crate::compute::active_backends;
