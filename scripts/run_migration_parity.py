@@ -384,6 +384,11 @@ def call_workflow_step(
         # ``image`` while the Pillow public constructor spells it ``im``.
         # This is a target binding conversion, not a changed input workflow.
         keywords["image"] = keywords.pop("im")
+    if side == "target" and step["surface"] == "PIL.Image.Image" and operation == "filter" and "filter" in keywords:
+        # Pillow names this public parameter ``filter``; the thin target
+        # facade avoids shadowing the Python built-in and calls it
+        # ``filter_type``.  The workflow and manifest retain the oracle name.
+        keywords["filter_type"] = keywords.pop("filter")
     return callable_value(*positional, **keywords)
 
 
