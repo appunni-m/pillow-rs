@@ -589,24 +589,12 @@ pub fn color_saturation(pixels: &mut [u32], mode: u32, factor_fp: u32) {
 /// Colorize: map luma to two-color gradient (black -> white).
 /// black_rgb / white_rgb packed as 0x00_BB_GGRR (no alpha).
 /// For L/LA: luma = R. For RGB/RGBA: luma = BT.601.
-/// out = black + (white - black) * luma / 255 per channel, clamped 0..255.
+/// Apply the Pillow ``ImageOps.colorize`` LUT per pixel.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn colorize(pixels: &mut [u32], mode: u32, black_rgb: u32, white_rgb: u32) {
+pub fn colorize(pixels: &mut [u32], mode: u32, lut: &[[u8; 256]; 3]) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
-
-    let black_r = (black_rgb & 0xFF) as i32;
-    let black_g = ((black_rgb >> 8) & 0xFF) as i32;
-    let black_b = ((black_rgb >> 16) & 0xFF) as i32;
-    let white_r = (white_rgb & 0xFF) as i32;
-    let white_g = ((white_rgb >> 8) & 0xFF) as i32;
-    let white_b = ((white_rgb >> 16) & 0xFF) as i32;
-
-    // Precompute deltas
-    let dr = white_r - black_r;
-    let dg = white_g - black_g;
-    let db = white_b - black_b;
 
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
@@ -620,9 +608,10 @@ pub fn colorize(pixels: &mut [u32], mode: u32, black_rgb: u32, white_rgb: u32) {
             r as i32
         };
 
-        let out_r = (black_r + dr * luma / 255).clamp(0, 255) as u32;
-        let out_g_raw = (black_g + dg * luma / 255).clamp(0, 255) as u32;
-        let out_b_raw = (black_b + db * luma / 255).clamp(0, 255) as u32;
+        let index = luma.clamp(0, 255) as usize;
+        let out_r = lut[0][index] as u32;
+        let out_g_raw = lut[1][index] as u32;
+        let out_b_raw = lut[2][index] as u32;
 
         let out_g = if has_gb { out_g_raw } else { g };
         let out_b = if has_gb { out_b_raw } else { b };

@@ -317,10 +317,24 @@ pub fn simd_colorize(
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Colorize { black, white } = op {
-        let black_rgb = (black.0 as u32) | ((black.1 as u32) << 8) | ((black.2 as u32) << 16);
-        let white_rgb = (white.0 as u32) | ((white.1 as u32) << 8) | ((white.2 as u32) << 16);
-        super::scalar::colorize(&mut pixels, mode_code, black_rgb, white_rgb);
+    if let PipelineOp::Colorize {
+        black,
+        white,
+        mid,
+        blackpoint,
+        midpoint,
+        whitepoint,
+    } = op
+    {
+        let lut = crate::compute::pool_cpu::ops::imageops::colorize_lut(
+            black,
+            white,
+            *mid,
+            *blackpoint,
+            *midpoint,
+            *whitepoint,
+        );
+        super::scalar::colorize(&mut pixels, mode_code, &lut);
     }
     dynimg_from_rgba(pixels, w, h)
 }

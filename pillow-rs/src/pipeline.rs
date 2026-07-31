@@ -197,6 +197,14 @@ pub enum PipelineOp {
         black: (u8, u8, u8),
         /// RGB color mapped from white.
         white: (u8, u8, u8),
+        /// Optional RGB color mapped from the midpoint.
+        mid: Option<(u8, u8, u8)>,
+        /// Gray value mapped to `black`.
+        blackpoint: u8,
+        /// Gray value mapped to `mid`.
+        midpoint: u8,
+        /// Gray value mapped to `white`.
+        whitepoint: u8,
     },
     /// Resize to fit within a bounding box.
     Contain {

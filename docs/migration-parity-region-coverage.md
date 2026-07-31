@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: dd171a9c7823b663abcfb46c9953694a67e888448de5027682b84b963347517f
-coverage_run_id: migration-coverage-a9bef42398dd4803946fb6799676a84e
+coverage_run_id: migration-coverage-99f399b843c642f4ba0a8c3af141ef01
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%
@@ -29,24 +29,6 @@ component's measured coverage by design.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
-| `PIL.ImageOps.autocontrast` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.colorize` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.contain` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.cover` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.crop` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.deform` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.equalize` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.exif_transpose` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.expand` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.fit` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.flip` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.grayscale` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.invert` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.mirror` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.pad` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.posterize` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.scale` | `image-ops` | 134/323 | 41.5% |
-| `PIL.ImageOps.solarize` | `image-ops` | 134/323 | 41.5% |
 | `PIL.ImageFont.FreeTypeFont` | `image-font` | 1147/2486 | 46.1% |
 | `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 1147/2486 | 46.1% |
 | `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 1147/2486 | 46.1% |
@@ -73,6 +55,24 @@ component's measured coverage by design.
 | `PIL.ImageFont.load_default_imagefont` | `image-font` | 1147/2486 | 46.1% |
 | `PIL.ImageFont.load_path` | `image-font` | 1147/2486 | 46.1% |
 | `PIL.ImageFont.truetype` | `image-font` | 1147/2486 | 46.1% |
+| `PIL.ImageOps.autocontrast` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.colorize` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.contain` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.cover` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.crop` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.deform` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.equalize` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.exif_transpose` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.expand` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.fit` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.flip` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.grayscale` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.invert` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.mirror` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.pad` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.posterize` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.scale` | `image-ops` | 155/335 | 46.3% |
+| `PIL.ImageOps.solarize` | `image-ops` | 155/335 | 46.3% |
 | `PIL.ImageSequence.Iterator` | `image-sequence` | 1856/3319 | 55.9% |
 | `PIL.ImageDraw.Draw` | `image-draw` | 1184/2101 | 56.4% |
 | `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 1184/2101 | 56.4% |
@@ -225,7 +225,7 @@ component's measured coverage by design.
 | `image-font` | `pillow-rs/src/lib.rs` | 60/217 | 27.6% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 871/1444 | 60.3% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
-| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 134/323 | 41.5% |
+| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 155/335 | 46.3% |
 | `image-ops` | `pillow-rs-py/python/pillow_rs/imageops.py` | 0/0 | n/a |
 | `image-palette` | `pillow-rs/src/color.rs` | 614/929 | 66.1% |
 | `image-palette` | `pillow-rs-py/python/pillow_rs/imagepalette.py` | 0/0 | n/a |

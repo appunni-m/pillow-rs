@@ -143,13 +143,36 @@ pub fn colorize(
     image: &Image,
     black: (u8, u8, u8),
     white: (u8, u8, u8),
+    mid: Option<(u8, u8, u8)>,
+    blackpoint: u8,
+    midpoint: u8,
+    whitepoint: u8,
 ) -> Result<Image, PilError> {
     let mode = image.mode()?;
     if mode != "L" {
         // PIL raises AssertionError for non-L modes
         return Err(PilError::AssertionError(String::new()));
     }
-    Ok(Image::push_op(image, PipelineOp::Colorize { black, white }))
+    if let Some(_) = mid {
+        // PIL: assert 0 <= blackpoint <= midpoint <= whitepoint <= 255
+        if !(blackpoint <= midpoint && midpoint <= whitepoint) {
+            return Err(PilError::AssertionError(String::new()));
+        }
+    } else if blackpoint > whitepoint {
+        // PIL: assert 0 <= blackpoint <= whitepoint <= 255
+        return Err(PilError::AssertionError(String::new()));
+    }
+    Ok(Image::push_op(
+        image,
+        PipelineOp::Colorize {
+            black,
+            white,
+            mid,
+            blackpoint,
+            midpoint,
+            whitepoint,
+        },
+    ))
 }
 
 /// Adds a border around an image.
