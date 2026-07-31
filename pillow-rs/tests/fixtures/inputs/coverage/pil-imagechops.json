@@ -215,7 +215,9 @@
           "PIL.ImageChops.subtract_modulo.behavior.default",
           "PIL.ImageChops.subtract_modulo.mode.l",
           "PIL.ImageChops.subtract_modulo.mode.la",
-          "PIL.ImageChops.subtract_modulo.mode.rgba"
+          "PIL.ImageChops.subtract_modulo.mode.rgba",
+          "PIL.ImageChops.invert.nuanced.la",
+          "PIL.ImageChops.invert.nuanced.rgba"
         ],
         "command_ids": []
       },

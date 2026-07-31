@@ -17,7 +17,8 @@
         "parity_case_ids": [
           "PIL.ImageColor.getcolor.behavior.default",
           "PIL.ImageColor.getcolor.mode.l",
-          "PIL.ImageColor.getrgb.behavior.default"
+          "PIL.ImageColor.getrgb.behavior.default",
+          "PIL.ImageColor.getrgb.nuanced.named-css-color"
         ],
         "command_ids": []
       },

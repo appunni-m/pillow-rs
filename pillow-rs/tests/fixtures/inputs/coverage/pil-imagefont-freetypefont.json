@@ -101,7 +101,10 @@
           "PIL.ImageFont.FreeTypeFont.getmetrics.behavior.default",
           "PIL.ImageFont.FreeTypeFont.getname.behavior.default",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.behavior.default",
-          "PIL.ImageFont.FreeTypeFont.set_variation_by_name.behavior.default"
+          "PIL.ImageFont.FreeTypeFont.set_variation_by_name.behavior.default",
+          "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unicode-multiline",
+          "PIL.ImageFont.FreeTypeFont.getlength.nuanced.kerning-pair",
+          "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.multiline-stroked"
         ],
         "command_ids": []
       },

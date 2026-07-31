@@ -228,7 +228,8 @@
           "PIL.ImageOps.solarize.parameter.threshold",
           "PIL.ImageOps.solarize.mode.l",
           "PIL.ImageOps.solarize.mode.la",
-          "PIL.ImageOps.solarize.mode.rgba"
+          "PIL.ImageOps.solarize.mode.rgba",
+          "PIL.ImageOps.fit.nuanced.fractional-centering"
         ],
         "command_ids": []
       },

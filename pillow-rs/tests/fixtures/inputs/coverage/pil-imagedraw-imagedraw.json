@@ -501,7 +501,10 @@
           "PIL.ImageDraw.ImageDraw.textlength.parameter.embedded-color",
           "PIL.ImageDraw.ImageDraw.textlength.parameter.font-size",
           "PIL.ImageDraw.ImageDraw.textlength.mode.rgba",
-          "PIL.ImageDraw.ImageDraw.textlength.mode.l"
+          "PIL.ImageDraw.ImageDraw.textlength.mode.l",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor",
+          "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing",
+          "PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor"
         ],
         "command_ids": []
       },

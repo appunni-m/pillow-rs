@@ -985,7 +985,17 @@
           "PIL.Image.Image.verify.mode.l",
           "PIL.Image.Image.verify.mode.la",
           "PIL.Image.Image.verify.mode.rgba",
-          "PIL.Image.Image.width.behavior.default"
+          "PIL.Image.Image.width.behavior.default",
+          "PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos",
+          "PIL.Image.Image.rotate.nuanced.fractional-expanded",
+          "PIL.Image.Image.convert.nuanced.alpha-conversion",
+          "PIL.Image.Image.getbbox.nuanced.nonzero-rgb",
+          "PIL.Image.Image.getbbox.nuanced.green-only-rgb",
+          "PIL.Image.Image.getbbox.nuanced.blue-only-rgb",
+          "PIL.Image.Image.getbbox.nuanced.alpha-only-rgba",
+          "PIL.Image.Image.getbbox.nuanced.transparent-alpha-rgba",
+          "PIL.Image.Image.getextrema.nuanced.nonzero-rgba",
+          "PIL.Image.Image.histogram.nuanced.nonzero-rgba"
         ],
         "command_ids": []
       },

@@ -234,7 +234,8 @@
           "PIL.ImageFilter.UnsharpMask.parameter.threshold",
           "PIL.ImageFilter.UnsharpMask.mode.l",
           "PIL.ImageFilter.UnsharpMask.mode.la",
-          "PIL.ImageFilter.UnsharpMask.mode.rgba"
+          "PIL.ImageFilter.UnsharpMask.mode.rgba",
+          "PIL.ImageFilter.Kernel.nuanced.three-by-three-edge"
         ],
         "command_ids": []
       },
