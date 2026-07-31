@@ -67,13 +67,16 @@ def git_dirty() -> bool:
 def load_manifest(path: Path) -> dict[str, Any]:
     import yaml
 
+    from validate_migration_parity_contract import validate_manifest
+
     manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != "migration-parity/manifest@2":
-        raise ValueError("manifest must declare migration-parity/manifest@2")
-    return manifest
+    return validate_manifest(manifest, manifest_path=path)
 
 
 def load_parity_cases(manifest: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, str]]:
+    from validate_migration_parity_contract import validate_inputs
+
+    validate_inputs(manifest, FIXTURE_ROOT)
     cases: dict[str, dict[str, Any]] = {}
     inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["parity"]:

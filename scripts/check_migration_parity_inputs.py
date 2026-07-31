@@ -12,11 +12,13 @@ from build_migration_parity_inputs import (
     build_inputs,
     load_manifest,
 )
+from validate_migration_parity_contract import validate_inputs
 
 
 def main() -> None:
     manifest = load_manifest(DEFAULT_MANIFEST)
     active_root = FIXTURE_ROOT
+    validate_inputs(manifest, active_root)
     with tempfile.TemporaryDirectory(prefix="migration-parity-inputs-") as directory:
         generated_root = Path(directory)
         build_inputs(manifest, generated_root, FIXTURE_ROOT / "assets")

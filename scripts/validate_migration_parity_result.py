@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -15,105 +16,319 @@ def exact(value: Any, keys: set[str], label: str) -> None:
         raise ValueError(f"{label}: expected keys {sorted(keys)}, got {actual}")
 
 
+def non_negative_int(value: Any, label: str) -> None:
+    if type(value) is not int or value < 0:
+        raise ValueError(f"{label}: expected non-negative integer")
+
+
+def string(value: Any, label: str, *, nullable: bool = False, allow_empty: bool = False) -> None:
+    if nullable and value is None:
+        return
+    if not isinstance(value, str) or (not value and not allow_empty):
+        raise ValueError(f"{label}: expected non-empty string")
+
+
+def unique(values: list[Any], label: str) -> None:
+    try:
+        if len(values) != len(set(values)):
+            raise ValueError(f"{label}: duplicate ID")
+    except TypeError as exc:
+        raise ValueError(f"{label}: IDs must be scalar values") from exc
+
+
+def id_array(value: Any, label: str) -> list[str]:
+    if not isinstance(value, list):
+        raise ValueError(f"{label}: expected string array")
+    result = []
+    for index, item in enumerate(value):
+        string(item, f"{label}[{index}]")
+        result.append(item)
+    unique(result, label)
+    return result
+
+
 def identity(value: dict[str, Any]) -> None:
     exact(value, {"run_id", "started_at", "finished_at", "manifest", "inputs", "assets", "oracles", "targets", "command"}, "identity")
+    string(value["run_id"], "identity.run_id")
+    string(value["started_at"], "identity.started_at")
+    string(value["finished_at"], "identity.finished_at")
     exact(value["manifest"], {"path", "schema", "sha256"}, "identity.manifest")
+    string(value["manifest"]["path"], "identity.manifest.path")
+    string(value["manifest"]["schema"], "identity.manifest.schema")
+    if not re.fullmatch(r"[0-9a-f]{64}", value["manifest"]["sha256"]):
+        raise ValueError("identity.manifest.sha256: expected lowercase sha256")
+    input_paths: list[str] = []
     for index, item in enumerate(value["inputs"]):
         exact(item, {"path", "schema", "sha256"}, f"identity.inputs[{index}]")
+        string(item["path"], f"identity.inputs[{index}].path")
+        string(item["schema"], f"identity.inputs[{index}].schema")
+        if not re.fullmatch(r"[0-9a-f]{64}", item["sha256"]):
+            raise ValueError(f"identity.inputs[{index}].sha256: expected lowercase sha256")
+        input_paths.append(item["path"])
+    unique(input_paths, "identity.inputs")
+    asset_keys: list[tuple[Any, ...]] = []
     for index, item in enumerate(value["assets"]):
         exact(item, {"input_path", "item_id", "asset_id", "kind", "locator", "sha256"}, f"identity.assets[{index}]")
+        for field in ("input_path", "item_id", "asset_id", "kind"):
+            string(item[field], f"identity.assets[{index}].{field}")
+        string(item["locator"], f"identity.assets[{index}].locator", nullable=True)
+        if item["sha256"] is not None and not re.fullmatch(r"[0-9a-f]{64}", item["sha256"]):
+            raise ValueError(f"identity.assets[{index}].sha256: expected lowercase sha256 or null")
+        asset_keys.append((item["input_path"], item["item_id"], item["asset_id"]))
+    unique(asset_keys, "identity.assets")
+    oracle_ids: list[str] = []
     for index, item in enumerate(value["oracles"]):
         exact(item, {"oracle_id", "name", "version", "runtime"}, f"identity.oracles[{index}]")
+        for field in ("oracle_id", "name", "version", "runtime"):
+            string(item[field], f"identity.oracles[{index}].{field}")
+        oracle_ids.append(item["oracle_id"])
+    unique(oracle_ids, "identity.oracles")
+    target_keys: list[tuple[str, str]] = []
     for index, item in enumerate(value["targets"]):
         exact(item, {"target_profile", "target_id", "revision", "dirty", "runtime", "backend", "features"}, f"identity.targets[{index}]")
+        for field in ("target_profile", "target_id", "revision", "runtime", "backend"):
+            string(item[field], f"identity.targets[{index}].{field}")
+        if not isinstance(item["dirty"], bool):
+            raise ValueError(f"identity.targets[{index}].dirty: expected boolean")
+        if not isinstance(item["features"], list) or not all(isinstance(feature, str) and feature for feature in item["features"]):
+            raise ValueError(f"identity.targets[{index}].features: expected string array")
+        target_keys.append((item["target_profile"], item["target_id"]))
+    unique(target_keys, "identity.targets")
     exact(value["command"], {"command_id", "argv", "cwd", "timeout_seconds"}, "identity.command")
+    string(value["command"]["command_id"], "identity.command.command_id")
+    if not isinstance(value["command"]["argv"], list) or not value["command"]["argv"] or not all(isinstance(arg, str) and arg for arg in value["command"]["argv"]):
+        raise ValueError("identity.command.argv: expected non-empty string array")
+    string(value["command"]["cwd"], "identity.command.cwd")
+    if type(value["command"]["timeout_seconds"]) is not int or value["command"]["timeout_seconds"] <= 0:
+        raise ValueError("identity.command.timeout_seconds: expected positive integer")
 
 
 def infrastructure_errors(value: list[dict[str, Any]]) -> None:
+    if not isinstance(value, list):
+        raise ValueError("infrastructure_errors: expected array")
     for index, item in enumerate(value):
         exact(item, {"scope", "id", "kind", "message"}, f"infrastructure_errors[{index}]")
+        if item["scope"] not in {"oracle", "target", "collector", "runner", "artifact", "aggregation"}:
+            raise ValueError(f"infrastructure_errors[{index}].scope: invalid scope")
+        string(item["id"], f"infrastructure_errors[{index}].id", nullable=True)
+        string(item["kind"], f"infrastructure_errors[{index}].kind")
+        string(item["message"], f"infrastructure_errors[{index}].message")
 
 
 def workflow(value: dict[str, Any], label: str) -> None:
     exact(value, {"case_id", "status", "observations"}, label)
+    string(value["case_id"], f"{label}.case_id")
     if value["status"] not in {"completed", "not_run"}:
         raise ValueError(f"{label}.status: invalid workflow status")
+    if not isinstance(value["observations"], list):
+        raise ValueError(f"{label}.observations: expected array")
+    observation_ids: list[str] = []
     for index, observation in enumerate(value["observations"]):
         prefix = f"{label}.observations[{index}]"
+        if not isinstance(observation, dict) or observation.get("status") not in {"ok", "error", "not_run"}:
+            raise ValueError(f"{prefix}.status: invalid observation status")
         exact(observation, {"step_id", "status", "value"} if observation["status"] == "ok" else {"step_id", "status", "error"} if observation["status"] == "error" else {"step_id", "status", "reason"}, prefix)
+        string(observation["step_id"], f"{prefix}.step_id")
+        observation_ids.append(observation["step_id"])
+        if observation["status"] == "ok":
+            if "value" not in observation:
+                raise ValueError(f"{prefix}.value: missing value")
         if observation["status"] == "error":
             exact(observation["error"], {"class", "kind", "message", "stage", "code"}, f"{prefix}.error")
+            for field in ("class", "kind", "message", "stage"):
+                string(observation["error"][field], f"{prefix}.error.{field}", allow_empty=field == "message")
+            string(observation["error"]["code"], f"{prefix}.error.code", nullable=True)
+        if observation["status"] == "not_run":
+            string(observation["reason"], f"{prefix}.reason")
+    unique(observation_ids, f"{label}.observations")
 
 
 def parity(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "summary", "comparisons", "infrastructure_errors"}, "parity")
     if result["schema"] != "migration-parity/parity-result@1":
         raise ValueError("parity.schema: unsupported schema")
+    if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
+        raise ValueError("parity.status: invalid artifact status")
     identity(result["identity"])
     exact(result["summary"], {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}, "parity.summary")
+    for field in result["summary"]:
+        non_negative_int(result["summary"][field], f"parity.summary.{field}")
     if result["summary"]["selected"] != len(result["comparisons"]):
         raise ValueError("parity.summary.selected does not equal comparison count")
+    if result["summary"]["executed"] + result["summary"]["not_run"] != result["summary"]["selected"]:
+        raise ValueError("parity.summary: selected must equal executed plus not_run")
+    if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["executed"]:
+        raise ValueError("parity.summary: executed must equal passed plus failed plus not_run")
+    if result["summary"]["infrastructure_errors"] != len(result["infrastructure_errors"]):
+        raise ValueError("parity.summary.infrastructure_errors does not equal error count")
     infrastructure_errors(result["infrastructure_errors"])
+    comparison_ids: list[tuple[str, str]] = []
     for index, comparison in enumerate(result["comparisons"]):
         prefix = f"parity.comparisons[{index}]"
         exact(comparison, {"case_id", "target_profile", "requirements", "source", "target", "outcome", "diffs"}, prefix)
+        string(comparison["case_id"], f"{prefix}.case_id")
+        string(comparison["target_profile"], f"{prefix}.target_profile")
+        requirements = id_array(comparison["requirements"], f"{prefix}.requirements")
+        if comparison["outcome"] not in {"pass", "fail", "not_run"}:
+            raise ValueError(f"{prefix}.outcome: invalid outcome")
         workflow(comparison["source"], f"{prefix}.source")
         workflow(comparison["target"], f"{prefix}.target")
+        if comparison["source"]["case_id"] != comparison["case_id"] or comparison["target"]["case_id"] != comparison["case_id"]:
+            raise ValueError(f"{prefix}: workflow case IDs do not match comparison")
+        comparison_ids.append((comparison["case_id"], comparison["target_profile"]))
+        if not isinstance(comparison["diffs"], list):
+            raise ValueError(f"{prefix}.diffs: expected array")
         for diff_index, diff in enumerate(comparison["diffs"]):
             exact(diff, {"step_id", "path", "kind", "source", "target", "message"}, f"{prefix}.diffs[{diff_index}]")
+            for field in ("step_id", "path", "kind", "message"):
+                string(diff[field], f"{prefix}.diffs[{diff_index}].{field}")
+    unique(comparison_ids, "parity.comparisons")
 
 
 def coverage(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "collector", "summary", "plans", "infrastructure_errors"}, "coverage")
     if result["schema"] != "migration-parity/coverage-result@1":
         raise ValueError("coverage.schema: unsupported schema")
+    if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid", "not_ingested"}:
+        raise ValueError("coverage.status: invalid artifact status")
     identity(result["identity"])
     exact(result["collector"], {"name", "version", "snapshot_id", "artifact_ingested"}, "coverage.collector")
+    string(result["collector"]["name"], "coverage.collector.name")
+    string(result["collector"]["version"], "coverage.collector.version")
+    string(result["collector"]["snapshot_id"], "coverage.collector.snapshot_id", nullable=True)
+    if not isinstance(result["collector"]["artifact_ingested"], bool):
+        raise ValueError("coverage.collector.artifact_ingested: expected boolean")
     exact(result["summary"], {"plans_selected", "plans_executed", "plans_not_run", "tests_passed", "tests_failed"}, "coverage.summary")
+    for field in result["summary"]:
+        non_negative_int(result["summary"][field], f"coverage.summary.{field}")
+    if result["summary"]["plans_executed"] + result["summary"]["plans_not_run"] != result["summary"]["plans_selected"]:
+        raise ValueError("coverage.summary: selected must equal executed plus not_run")
     infrastructure_errors(result["infrastructure_errors"])
+    plan_ids: list[str] = []
     for index, plan in enumerate(result["plans"]):
         prefix = f"coverage.plans[{index}]"
         exact(plan, {"plan_id", "target_profile", "requirements", "selected", "execution", "components"}, prefix)
+        string(plan["plan_id"], f"{prefix}.plan_id")
+        string(plan["target_profile"], f"{prefix}.target_profile")
+        id_array(plan["requirements"], f"{prefix}.requirements")
+        plan_ids.append(plan["plan_id"])
         exact(plan["selected"], {"parity_case_ids", "command_ids"}, f"{prefix}.selected")
+        id_array(plan["selected"]["parity_case_ids"], f"{prefix}.selected.parity_case_ids")
+        id_array(plan["selected"]["command_ids"], f"{prefix}.selected.command_ids")
         exact(plan["execution"], {"status", "tests_passed", "tests_failed"}, f"{prefix}.execution")
+        if plan["execution"]["status"] not in {"completed", "failed", "not_run"}:
+            raise ValueError(f"{prefix}.execution.status: invalid status")
+        non_negative_int(plan["execution"]["tests_passed"], f"{prefix}.execution.tests_passed")
+        non_negative_int(plan["execution"]["tests_failed"], f"{prefix}.execution.tests_failed")
         for component_index, component in enumerate(plan["components"]):
             cprefix = f"{prefix}.components[{component_index}]"
             exact(component, {"component_id", "files", "thresholds"}, cprefix)
+            string(component["component_id"], f"{cprefix}.component_id")
             for file_index, file in enumerate(component["files"]):
                 fprefix = f"{cprefix}.files[{file_index}]"
                 exact(file, {"path", "dimensions"}, fprefix)
+                string(file["path"], f"{fprefix}.path")
                 for dimension_index, dimension in enumerate(file["dimensions"]):
-                    exact(dimension, {"dimension", "covered", "total", "uncovered"}, f"{fprefix}.dimensions[{dimension_index}]")
+                    dpath = f"{fprefix}.dimensions[{dimension_index}]"
+                    exact(dimension, {"dimension", "covered", "total", "uncovered"}, dpath)
+                    string(dimension["dimension"], f"{dpath}.dimension")
+                    non_negative_int(dimension["covered"], f"{dpath}.covered")
+                    non_negative_int(dimension["total"], f"{dpath}.total")
+                    if dimension["covered"] > dimension["total"]:
+                        raise ValueError(f"{dpath}: covered exceeds total")
+                    if not isinstance(dimension["uncovered"], list):
+                        raise ValueError(f"{dpath}.uncovered: expected array")
             for threshold_index, threshold in enumerate(component["thresholds"]):
                 exact(threshold, {"dimension", "minimum_percent", "covered", "total", "outcome"}, f"{cprefix}.thresholds[{threshold_index}]")
+                if threshold["dimension"] not in {"function", "line", "branch", "region"}:
+                    raise ValueError(f"{cprefix}.thresholds[{threshold_index}].dimension: invalid dimension")
+                if type(threshold["minimum_percent"]) is not int or not 0 <= threshold["minimum_percent"] <= 100:
+                    raise ValueError(f"{cprefix}.thresholds[{threshold_index}].minimum_percent: invalid threshold")
+                non_negative_int(threshold["covered"], f"{cprefix}.thresholds[{threshold_index}].covered")
+                non_negative_int(threshold["total"], f"{cprefix}.thresholds[{threshold_index}].total")
+                if threshold["covered"] > threshold["total"]:
+                    raise ValueError(f"{cprefix}.thresholds[{threshold_index}]: covered exceeds total")
+                if threshold["outcome"] not in {"pass", "fail", "not_proven"}:
+                    raise ValueError(f"{cprefix}.thresholds[{threshold_index}].outcome: invalid outcome")
+    unique(plan_ids, "coverage.plans")
+    if result["summary"]["plans_selected"] != len(result["plans"]):
+        raise ValueError("coverage.summary.plans_selected does not equal plan count")
+    if result["summary"]["tests_passed"] + result["summary"]["tests_failed"] < result["summary"]["plans_executed"]:
+        raise ValueError("coverage.summary: test counts cannot be below executed plan count")
 
 
 def benchmark(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "environment", "summary", "workloads", "suites", "infrastructure_errors"}, "benchmark")
     if result["schema"] != "migration-parity/benchmark-result@1":
         raise ValueError("benchmark.schema: unsupported schema")
+    if result["status"] not in {"completed", "infrastructure_failed", "cancelled", "invalid"}:
+        raise ValueError("benchmark.status: invalid artifact status")
     identity(result["identity"])
     exact(result["environment"], {"machine_id", "os", "architecture", "cpu", "memory_bytes", "power_mode", "toolchain"}, "benchmark.environment")
+    for field in ("machine_id", "os", "architecture", "cpu", "power_mode", "toolchain"):
+        string(result["environment"][field], f"benchmark.environment.{field}")
+    non_negative_int(result["environment"]["memory_bytes"], "benchmark.environment.memory_bytes")
     exact(result["summary"], {"workloads_selected", "workloads_measured", "workloads_not_run", "budgets_passed", "budgets_failed", "budgets_not_proven"}, "benchmark.summary")
+    for field in result["summary"]:
+        non_negative_int(result["summary"][field], f"benchmark.summary.{field}")
+    if result["summary"]["workloads_measured"] + result["summary"]["workloads_not_run"] != result["summary"]["workloads_selected"]:
+        raise ValueError("benchmark.summary: selected must equal measured plus not_run")
     infrastructure_errors(result["infrastructure_errors"])
+    workload_ids: list[str] = []
     for index, workload in enumerate(result["workloads"]):
         prefix = f"benchmark.workloads[{index}]"
         exact(workload, {"workload_id", "requirements", "measurement_policy", "correctness", "subjects", "budgets"}, prefix)
+        string(workload["workload_id"], f"{prefix}.workload_id")
+        workload_ids.append(workload["workload_id"])
+        id_array(workload["requirements"], f"{prefix}.requirements")
+        if not isinstance(workload["measurement_policy"], dict):
+            raise ValueError(f"{prefix}.measurement_policy: expected object")
         exact(workload["correctness"], {"gate", "outcome", "evidence_id"}, f"{prefix}.correctness")
+        if workload["correctness"]["gate"] not in {"parity_pass", "source_target_match", "successful_execution", "not_applicable"}:
+            raise ValueError(f"{prefix}.correctness.gate: invalid gate")
+        if workload["correctness"]["outcome"] not in {"pass", "fail", "not_proven"}:
+            raise ValueError(f"{prefix}.correctness.outcome: invalid outcome")
+        string(workload["correctness"]["evidence_id"], f"{prefix}.correctness.evidence_id", nullable=True)
+        subject_ids: list[str] = []
         for subject_index, subject in enumerate(workload["subjects"]):
             sprefix = f"{prefix}.subjects[{subject_index}]"
             exact(subject, {"kind", "id", "status", "measurements"}, sprefix)
+            if subject["kind"] not in {"oracle", "target_profile"}:
+                raise ValueError(f"{sprefix}.kind: invalid subject kind")
+            string(subject["id"], f"{sprefix}.id")
+            subject_ids.append(subject["id"])
+            if subject["status"] not in {"completed", "failed", "not_run"}:
+                raise ValueError(f"{sprefix}.status: invalid status")
             for measurement_index, measurement in enumerate(subject["measurements"]):
                 mprefix = f"{sprefix}.measurements[{measurement_index}]"
                 exact(measurement, {"metric", "unit", "sample_count", "statistics", "raw_samples_ref"}, mprefix)
+                string(measurement["metric"], f"{mprefix}.metric")
+                string(measurement["unit"], f"{mprefix}.unit")
+                non_negative_int(measurement["sample_count"], f"{mprefix}.sample_count")
                 exact(measurement["statistics"], {"min", "median", "mean", "p95", "p99", "max", "total", "weighted_mean", "standard_deviation"}, f"{mprefix}.statistics")
+                for field, value in measurement["statistics"].items():
+                    if value is not None and not isinstance(value, (int, float)):
+                        raise ValueError(f"{mprefix}.statistics.{field}: expected number or null")
+                string(measurement["raw_samples_ref"], f"{mprefix}.raw_samples_ref", nullable=True)
+        unique(subject_ids, f"{prefix}.subjects")
         for budget_index, budget in enumerate(workload["budgets"]):
             exact(budget, {"requirement_id", "subject_id", "baseline_subject", "metric", "statistic", "operator", "required", "observed", "unit", "outcome"}, f"{prefix}.budgets[{budget_index}]")
+            for field in ("requirement_id", "subject_id", "baseline_subject", "metric", "statistic", "operator", "unit"):
+                string(budget[field], f"{prefix}.budgets[{budget_index}].{field}", nullable=field in {"baseline_subject"})
+            if not isinstance(budget["required"], (int, float)) or not isinstance(budget["observed"], (int, float)):
+                raise ValueError(f"{prefix}.budgets[{budget_index}]: required and observed must be numeric")
+            if budget["operator"] not in {"less_than_or_equal", "greater_than_or_equal"}:
+                raise ValueError(f"{prefix}.budgets[{budget_index}].operator: invalid operator")
+            if budget["outcome"] not in {"pass", "fail", "not_proven"}:
+                raise ValueError(f"{prefix}.budgets[{budget_index}].outcome: invalid outcome")
     for index, suite in enumerate(result["suites"]):
         prefix = f"benchmark.suites[{index}]"
         exact(suite, {"suite_id", "members", "subjects", "comparisons"}, prefix)
         for member_index, member in enumerate(suite["members"]):
             exact(member, {"workload_id", "weight"}, f"{prefix}.members[{member_index}]")
+            string(member["workload_id"], f"{prefix}.members[{member_index}].workload_id")
+            if not isinstance(member["weight"], (int, float)) or member["weight"] <= 0:
+                raise ValueError(f"{prefix}.members[{member_index}].weight: expected positive number")
         for subject_index, subject in enumerate(suite["subjects"]):
             sprefix = f"{prefix}.subjects[{subject_index}]"
             exact(subject, {"kind", "id", "status", "measurements"}, sprefix)
