@@ -72,6 +72,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-imageops-native-coverage$(NC) Run the image-ops native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-imagesequence-native-coverage$(NC) Run the image-sequence native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-imagecore-native-coverage$(NC) Run the image-core native coverage-only corpus\n"
+	@printf "  $(CYAN)make migration-parity-imagedraw-native-coverage$(NC) Run the image-draw native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-region-coverage$(NC) Report region coverage per public operation\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Run correctness-gated benchmark workloads\n"
 	@printf "  $(CYAN)make migration-parity-aggregate$(NC) Join compatible parity, coverage, and benchmark evidence\n"
@@ -291,6 +292,9 @@ migration-parity-imagesequence-native-coverage: ## Run the image-sequence native
 
 migration-parity-imagecore-native-coverage: ## Run the image-core native coverage-only corpus
 	$(PYTHON) scripts/run_migration_imagecore_native_cases.py
+
+migration-parity-imagedraw-native-coverage: ## Run the image-draw native coverage-only corpus
+	$(PYTHON) scripts/run_migration_imagedraw_native_cases.py
 
 migration-parity-region-coverage: ## Report region coverage per public operation
 	$(PYTHON) scripts/report_migration_parity_region_coverage.py

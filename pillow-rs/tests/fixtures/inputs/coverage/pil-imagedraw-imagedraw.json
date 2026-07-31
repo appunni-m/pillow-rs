@@ -529,6 +529,12 @@
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.canvas-hsv-int-fill",
           "PIL.ImageDraw.ImageDraw.point.nuanced.flat-points",
           "PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius-zero-fallback",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-i",
+          "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-f",
+          "PIL.ImageDraw.ImageDraw.line.nuanced.width-three",
+          "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.triangle",
+          "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.pentagon-rotated",
+          "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.heptagon-rotated",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.canvas-l",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.canvas-1",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.canvas-la",
@@ -552,7 +558,9 @@
           "PIL.ImageDraw.ImageDraw.text.nuanced.stroked-rgba",
           "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.centered-anchored"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-imagedraw-native"
+        ]
       },
       "component_ids": [
         "image-draw"

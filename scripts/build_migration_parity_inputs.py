@@ -1773,6 +1773,74 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-i",
+            "mode": "I",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-f",
+            "mode": "F",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "width-three",
+            "values": {
+                "xy": literal([0, 0, 12, 8]),
+                "fill": literal([255, 255, 255]),
+                "width": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "regular_polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "triangle",
+            "values": {
+                "bounding_circle": literal([8, 8, 6]),
+                "n_sides": literal(3),
+                "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "regular_polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "pentagon-rotated",
+            "values": {
+                "bounding_circle": literal([8, 8, 6]),
+                "n_sides": literal(5),
+                "rotation": literal(30),
+                "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "regular_polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "heptagon-rotated",
+            "values": {
+                "bounding_circle": literal([8, 8, 6]),
+                "n_sides": literal(7),
+                "rotation": literal(15),
+                "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rectangle",
             "requirement_suffix": "behavior.default",
             "name": "canvas-l",
@@ -3375,6 +3443,10 @@ def build_inputs(
             # resize/crop/rotate/convert wrappers) have no Pillow oracle
             # endpoint; exercise them through the maintained native command.
             command_ids = ["coverage-imagecore-native"]
+        elif "image-draw" in component_ids:
+            # `Draw.shape` requires a real Outline built through the
+            # move/line/close protocol the parity generator does not emit.
+            command_ids = ["coverage-imagedraw-native"]
         else:
             command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
