@@ -2214,6 +2214,28 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
+            "name": "p-palette-exact-match",
+            "mode": "P",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([0, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-palette-append",
+            "mode": "P",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([15, 25, 35]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
             "name": "p-rgba-tuple-error",
             "mode": "P",
             "values": {
