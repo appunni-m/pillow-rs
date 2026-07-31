@@ -23,6 +23,7 @@ TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
 MIGRATION_PARITY_ARGS ?=
 MIGRATION_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result.json
+MIGRATION_RUST_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result-rust.json
 MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
 MIGRATION_BENCHMARK_OUTPUT ?= build/migration-parity/benchmark-result.json
 MIGRATION_BENCHMARK_PARITY_OUTPUT ?= build/migration-parity/benchmark-parity-result.json
@@ -66,6 +67,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
+	@printf "  $(CYAN)make migration-parity-coverage-rust$(NC) Run merged Python+Rust coverage with a temporary instrumented extension\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Run correctness-gated benchmark workloads\n"
 	@printf "  $(CYAN)make migration-parity-aggregate$(NC) Join compatible parity, coverage, and benchmark evidence\n"
 	@printf "  $(CYAN)make migration-parity-docs$(NC) Generate specification and evidence documentation\n"
@@ -215,7 +217,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
+.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-benchmark migration-parity-aggregate migration-parity-docs
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -263,6 +265,16 @@ migration-parity-coverage: ## Run target coverage from indexed coverage plans
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
 
+migration-parity-coverage-rust: ## Run merged Python+Rust coverage with a temporary instrumented extension
+	set +e; \
+	$(PYTHON) scripts/run_migration_rust_coverage.py \
+		--output $(MIGRATION_RUST_COVERAGE_OUTPUT); \
+	status=$$?; \
+	$(PYTHON) scripts/validate_migration_parity_result.py coverage $(MIGRATION_RUST_COVERAGE_OUTPUT); \
+	validator=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	exit $$validator
+
 migration-parity-benchmark: ## Run correctness-gated benchmark workloads
 	set +e; \
 	$(PYTHON) scripts/run_migration_benchmark.py \
@@ -276,10 +288,12 @@ migration-parity-benchmark: ## Run correctness-gated benchmark workloads
 	exit $$validator
 
 migration-parity-aggregate: ## Join compatible parity, coverage, and benchmark evidence
+	@coverage_evidence="$(MIGRATION_COVERAGE_OUTPUT)"; \
+	if [ -f "$(MIGRATION_RUST_COVERAGE_OUTPUT)" ]; then coverage_evidence="$(MIGRATION_RUST_COVERAGE_OUTPUT)"; fi; \
 	set +e; \
 	$(PYTHON) scripts/aggregate_migration_parity.py \
 		--parity $(MIGRATION_PARITY_OUTPUT) \
-		--coverage $(MIGRATION_COVERAGE_OUTPUT) \
+		--coverage "$$coverage_evidence" \
 		--benchmark $(MIGRATION_BENCHMARK_OUTPUT) \
 		--output $(MIGRATION_STATUS_OUTPUT); \
 	status=$$?; \

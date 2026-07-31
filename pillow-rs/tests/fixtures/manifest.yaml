@@ -75,6 +75,12 @@ commands:
   - migration-parity-coverage
   cwd: .
   timeout_seconds: 3600
+- id: coverage-rust
+  argv:
+  - make
+  - migration-parity-coverage-rust
+  cwd: .
+  timeout_seconds: 7200
 - id: benchmark
   argv:
   - make
