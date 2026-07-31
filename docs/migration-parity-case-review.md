@@ -49,8 +49,8 @@ arguments, and observations remain part of the signature.
 
 | corpus | rows | unique stimuli | duplicate rows removed |
 | --- | ---: | ---: | ---: |
-| fixtures | 823 | 775 | 48 |
-| fixtures_2 | 769 | 718 | 51 |
+| suite0 | 823 | 775 | 48 |
+| suite1 | 769 | 718 | 51 |
 | combined | 1592 | 1432 | 160 |
 
 The old corpora are migration evidence only. Their duplicate rows
