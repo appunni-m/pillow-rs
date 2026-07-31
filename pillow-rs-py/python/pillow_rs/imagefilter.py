@@ -4,17 +4,54 @@ from . import _core
 from .image import Image
 
 
-# Built-in kernel filters (applied via Image.filter(name))
-BLUR = "BLUR"
-CONTOUR = "CONTOUR"
-DETAIL = "DETAIL"
-EDGE_ENHANCE = "EDGE_ENHANCE"
-EDGE_ENHANCE_MORE = "EDGE_ENHANCE_MORE"
-EMBOSS = "EMBOSS"
-FIND_EDGES = "FIND_EDGES"
-SHARPEN = "SHARPEN"
-SMOOTH = "SMOOTH"
-SMOOTH_MORE = "SMOOTH_MORE"
+# Built-in kernel filters. Pillow exposes each one as a callable public class,
+# not as a string selector. The target keeps the same class shape while the
+# Rust core receives the stable kernel name at application time.
+class _BuiltinFilter:
+    kernel_name = ""
+
+    def _apply(self, rust_image):
+        return Image(rust_image.filter(self.kernel_name))
+
+
+class BLUR(_BuiltinFilter):
+    kernel_name = "BLUR"
+
+
+class CONTOUR(_BuiltinFilter):
+    kernel_name = "CONTOUR"
+
+
+class DETAIL(_BuiltinFilter):
+    kernel_name = "DETAIL"
+
+
+class EDGE_ENHANCE(_BuiltinFilter):
+    kernel_name = "EDGE_ENHANCE"
+
+
+class EDGE_ENHANCE_MORE(_BuiltinFilter):
+    kernel_name = "EDGE_ENHANCE_MORE"
+
+
+class EMBOSS(_BuiltinFilter):
+    kernel_name = "EMBOSS"
+
+
+class FIND_EDGES(_BuiltinFilter):
+    kernel_name = "FIND_EDGES"
+
+
+class SHARPEN(_BuiltinFilter):
+    kernel_name = "SHARPEN"
+
+
+class SMOOTH(_BuiltinFilter):
+    kernel_name = "SMOOTH"
+
+
+class SMOOTH_MORE(_BuiltinFilter):
+    kernel_name = "SMOOTH_MORE"
 
 
 class GaussianBlur:
@@ -184,9 +221,14 @@ class Color3DLUT:
 
     def _apply(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
-        result = rust_image.color3dlut(
-            self.size, self.table, self.channels, self.mode
-        )
+        try:
+            result = rust_image.color3dlut(
+                self.size, self.table, self.channels, self.mode
+            )
+        except ValueError as exc:
+            if str(exc) == "image has wrong mode":
+                raise ValueError("unrecognized image mode") from exc
+            raise
         return Image(result)
 
     def __repr__(self):

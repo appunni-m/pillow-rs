@@ -20125,20 +20125,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.BLUR
-      signature: 'BLUR: str public value'
+      signature: BLUR()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.BLUR.behavior.default
-        - PIL.ImageFilter.BLUR.mode.1
-        - PIL.ImageFilter.BLUR.mode.cmyk
-        - PIL.ImageFilter.BLUR.mode.l
-        - PIL.ImageFilter.BLUR.mode.la
-        - PIL.ImageFilter.BLUR.mode.rgb
-        - PIL.ImageFilter.BLUR.mode.rgba
-        - PIL.ImageFilter.BLUR.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.BLUR.behavior.default
       dimension: success_path
@@ -20369,18 +20358,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.CONTOUR
-      signature: 'CONTOUR: str public value'
+      signature: CONTOUR()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.CONTOUR.behavior.default
-        - PIL.ImageFilter.CONTOUR.mode.l
-        - PIL.ImageFilter.CONTOUR.mode.la
-        - PIL.ImageFilter.CONTOUR.mode.rgb
-        - PIL.ImageFilter.CONTOUR.mode.rgba
-        - PIL.ImageFilter.CONTOUR.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.CONTOUR.behavior.default
       dimension: success_path
@@ -20652,18 +20632,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.DETAIL
-      signature: 'DETAIL: str public value'
+      signature: DETAIL()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.DETAIL.behavior.default
-        - PIL.ImageFilter.DETAIL.mode.l
-        - PIL.ImageFilter.DETAIL.mode.la
-        - PIL.ImageFilter.DETAIL.mode.rgb
-        - PIL.ImageFilter.DETAIL.mode.rgba
-        - PIL.ImageFilter.DETAIL.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.DETAIL.behavior.default
       dimension: success_path
@@ -20762,19 +20733,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.EDGE_ENHANCE
-      signature: 'EDGE_ENHANCE: str public value'
+      signature: EDGE_ENHANCE()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.EDGE_ENHANCE.behavior.default
-        - PIL.ImageFilter.EDGE_ENHANCE.mode.1
-        - PIL.ImageFilter.EDGE_ENHANCE.mode.l
-        - PIL.ImageFilter.EDGE_ENHANCE.mode.la
-        - PIL.ImageFilter.EDGE_ENHANCE.mode.rgb
-        - PIL.ImageFilter.EDGE_ENHANCE.mode.rgba
-        - PIL.ImageFilter.EDGE_ENHANCE.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.EDGE_ENHANCE.behavior.default
       dimension: success_path
@@ -20881,18 +20842,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.EDGE_ENHANCE_MORE
-      signature: 'EDGE_ENHANCE_MORE: str public value'
+      signature: EDGE_ENHANCE_MORE()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default
-        - PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.l
-        - PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.la
-        - PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgb
-        - PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgba
-        - PIL.ImageFilter.EDGE_ENHANCE_MORE.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default
       dimension: success_path
@@ -20991,18 +20943,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.EMBOSS
-      signature: 'EMBOSS: str public value'
+      signature: EMBOSS()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.EMBOSS.behavior.default
-        - PIL.ImageFilter.EMBOSS.mode.l
-        - PIL.ImageFilter.EMBOSS.mode.la
-        - PIL.ImageFilter.EMBOSS.mode.rgb
-        - PIL.ImageFilter.EMBOSS.mode.rgba
-        - PIL.ImageFilter.EMBOSS.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.EMBOSS.behavior.default
       dimension: success_path
@@ -21101,18 +21044,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.FIND_EDGES
-      signature: 'FIND_EDGES: str public value'
+      signature: FIND_EDGES()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.FIND_EDGES.behavior.default
-        - PIL.ImageFilter.FIND_EDGES.mode.l
-        - PIL.ImageFilter.FIND_EDGES.mode.la
-        - PIL.ImageFilter.FIND_EDGES.mode.rgb
-        - PIL.ImageFilter.FIND_EDGES.mode.rgba
-        - PIL.ImageFilter.FIND_EDGES.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.FIND_EDGES.behavior.default
       dimension: success_path
@@ -22086,23 +22020,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.SHARPEN
-      signature: 'SHARPEN: str public value'
+      signature: SHARPEN()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.SHARPEN.behavior.default
-        - PIL.ImageFilter.SHARPEN.mode.1
-        - PIL.ImageFilter.SHARPEN.mode.cmyk
-        - PIL.ImageFilter.SHARPEN.mode.hsv
-        - PIL.ImageFilter.SHARPEN.mode.i
-        - PIL.ImageFilter.SHARPEN.mode.l
-        - PIL.ImageFilter.SHARPEN.mode.la
-        - PIL.ImageFilter.SHARPEN.mode.rgb
-        - PIL.ImageFilter.SHARPEN.mode.rgba
-        - PIL.ImageFilter.SHARPEN.mode.ycbcr
-        - PIL.ImageFilter.SHARPEN.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.SHARPEN.behavior.default
       dimension: success_path
@@ -22241,18 +22161,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.SMOOTH
-      signature: 'SMOOTH: str public value'
+      signature: SMOOTH()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.SMOOTH.behavior.default
-        - PIL.ImageFilter.SMOOTH.mode.l
-        - PIL.ImageFilter.SMOOTH.mode.la
-        - PIL.ImageFilter.SMOOTH.mode.rgb
-        - PIL.ImageFilter.SMOOTH.mode.rgba
-        - PIL.ImageFilter.SMOOTH.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.SMOOTH.behavior.default
       dimension: success_path
@@ -22351,18 +22262,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageFilter.SMOOTH_MORE
-      signature: 'SMOOTH_MORE: str public value'
+      signature: SMOOTH_MORE()
       support:
-        status: partial
-        reason: The target exposes a selector value rather than the source callable public type; filter
-          application is observable but direct type behavior is not equivalent.
-        missing_requirements:
-        - PIL.ImageFilter.SMOOTH_MORE.behavior.default
-        - PIL.ImageFilter.SMOOTH_MORE.mode.l
-        - PIL.ImageFilter.SMOOTH_MORE.mode.la
-        - PIL.ImageFilter.SMOOTH_MORE.mode.rgb
-        - PIL.ImageFilter.SMOOTH_MORE.mode.rgba
-        - PIL.ImageFilter.SMOOTH_MORE.performance.standard
+        status: supported
     requirements:
     - id: PIL.ImageFilter.SMOOTH_MORE.behavior.default
       dimension: success_path
