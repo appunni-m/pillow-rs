@@ -223,13 +223,10 @@ pub(crate) fn duplicate(image: &Image) -> Image {
 ///
 /// # Errors
 ///
-/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
-/// or another error while determining the image mode.
+/// Returns [`PilError`] while determining the image mode or materializing
+/// the pipeline result.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
-    if matches!(mode.as_str(), "LA" | "RGBA") {
-        return Err(PilError::OsError(format!("not supported for mode {mode}")));
-    }
 
     let mut result = Image::push_op(image, PipelineOp::InvertChops);
     if mode == "P"

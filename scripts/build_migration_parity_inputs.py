@@ -256,6 +256,7 @@ class WorkflowBuilder:
     scenario_values: dict[str, dict[str, Any]] = field(default_factory=dict)
     scenario_mode: str | None = None
     scenario_edge: str | None = None
+    scenario_pixel: Any | None = None
 
     @property
     def mode(self) -> str:
@@ -404,6 +405,19 @@ class WorkflowBuilder:
                 arguments={
                     "xy": literal([0, 0]),
                     "value": literal(pixel_value),
+                },
+                step_id=self.next_step_id("setup-varied-pixel"),
+            )
+        elif self.edge == "nonzero-pixel" and label == "image":
+            if self.scenario_pixel is None:
+                raise ValueError("nonzero-pixel edge requires a scenario pixel")
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 3]),
+                    "value": literal(self.scenario_pixel),
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
@@ -1048,6 +1062,7 @@ def build_parity_case(
     scenario_values: dict[str, dict[str, Any]] | None = None,
     scenario_mode: str | None = None,
     scenario_edge: str | None = None,
+    scenario_pixel: Any | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1061,6 +1076,7 @@ def build_parity_case(
         scenario_values=scenario_values or {},
         scenario_mode=scenario_mode,
         scenario_edge=scenario_edge,
+        scenario_pixel=scenario_pixel,
     )
     assets, steps, observations = builder.build()
     return {
@@ -1194,6 +1210,85 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "nonzero-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "green-only-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 200, 30],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "blue-only-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 0, 50],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "alpha-only-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 128],
+            "values": {"alpha_only": literal(True)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "transparent-alpha-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 0],
+            "values": {"alpha_only": literal(True)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getextrema",
+            "requirement_suffix": "behavior.default",
+            "name": "nonzero-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 200, 30, 255],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "behavior.default",
+            "name": "nonzero-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [5, 250, 128, 255],
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "invert",
+            "requirement_suffix": "behavior.default",
+            "name": "la",
+            "mode": "LA",
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "invert",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba",
+            "mode": "RGBA",
+        },
+        {
             "surface": "PIL.ImageOps",
             "operation": "fit",
             "requirement_suffix": "parameter.size",
@@ -1252,6 +1347,7 @@ def build_nuanced_cases(
                 scenario_values=spec.get("values"),
                 scenario_mode=spec.get("mode"),
                 scenario_edge=spec.get("edge"),
+                scenario_pixel=spec.get("pixel"),
             )
         )
     return cases
@@ -1329,11 +1425,13 @@ def build_inputs(
         )
         existing_signatures = {case_signature(case) for case in parity_cases}
         added_nuanced_cases = 0
+        appended_nuanced: list[dict[str, Any]] = []
         for nuanced_case in nuanced_cases:
             signature = case_signature(nuanced_case)
             if signature not in existing_signatures:
                 parity_cases.append(nuanced_case)
                 existing_signatures.add(signature)
+                appended_nuanced.append(nuanced_case)
                 added_nuanced_cases += 1
         counts.setdefault("nuanced_parity_cases", 0)
         counts["nuanced_parity_cases"] += added_nuanced_cases
@@ -1356,6 +1454,14 @@ def build_inputs(
             case_by_requirement[requirement_id]
             for requirement_id in coverage_requirements
         ]
+        selected_cases.extend(
+            case["case_id"]
+            for case in appended_nuanced
+            if any(
+                requirement_id in coverage_requirements
+                for requirement_id in case["covers"]
+            )
+        )
         selected_cases = list(dict.fromkeys(selected_cases))
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
         coverage_path = output_root / coverage_relative

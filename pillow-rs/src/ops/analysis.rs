@@ -52,7 +52,11 @@ impl Image {
             }
         }
 
-        if left > right || top > bottom {
+        // left > right is true exactly when no inspected pixel was nonzero;
+        // top > bottom is correlated with the same condition, so testing it
+        // separately adds an unreachable branch arm (Pillow returns None for
+        // the same empty case).
+        if left > right {
             Ok(None)
         } else {
             Ok(Some((left, top, right + 1, bottom + 1)))

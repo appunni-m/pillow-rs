@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1181
-- Unique active workflow signatures: 1181
+- Active parity workflows: 1190
+- Unique active workflow signatures: 1190
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 12
+- Deliberate nuanced workflows: 21
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,8 +23,8 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 100 |
-| `PIL.Image.Image` | 438 |
-| `PIL.ImageChops` | 74 |
+| `PIL.Image.Image` | 445 |
+| `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 4 |
 | `PIL.ImageDraw` | 3 |
 | `PIL.ImageDraw.ImageDraw` | 223 |
@@ -59,8 +59,17 @@ are not copied into the active lane by name.
 ## Nuanced workflows
 
 - `PIL.Image.Image.convert.nuanced.alpha-conversion`
+- `PIL.Image.Image.getbbox.nuanced.alpha-only-rgba`
+- `PIL.Image.Image.getbbox.nuanced.blue-only-rgb`
+- `PIL.Image.Image.getbbox.nuanced.green-only-rgb`
+- `PIL.Image.Image.getbbox.nuanced.nonzero-rgb`
+- `PIL.Image.Image.getbbox.nuanced.transparent-alpha-rgba`
+- `PIL.Image.Image.getextrema.nuanced.nonzero-rgba`
+- `PIL.Image.Image.histogram.nuanced.nonzero-rgba`
 - `PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
+- `PIL.ImageChops.invert.nuanced.la`
+- `PIL.ImageChops.invert.nuanced.rgba`
 - `PIL.ImageColor.getrgb.nuanced.named-css-color`
 - `PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor`

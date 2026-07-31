@@ -82,13 +82,13 @@ def llvm_shape(file_entry: dict[str, Any]) -> dict[str, Any]:
     # [line, col, count, has_count, is_region_entry, is_gap_region] and
     # branches are [line, col, src_line, src_col, true_count, false_count, ...].
     # A zero true/false count means that branch arm was not executed.
-    missing_lines = sorted(
-        {
-            int(segment[0])
-            for segment in file_entry.get("segments", [])
-            if len(segment) > 3 and segment[3] and int(segment[2]) == 0
-        }
-    )
+    line_counts: dict[int, int] = {}
+    for segment in file_entry.get("segments", []):
+        if len(segment) <= 3 or not segment[3]:
+            continue
+        line = int(segment[0])
+        line_counts[line] = max(line_counts.get(line, 0), int(segment[2]))
+    missing_lines = sorted(line for line, count in line_counts.items() if count == 0)
     missing_branches = sorted(
         {
             int(branch[0])
