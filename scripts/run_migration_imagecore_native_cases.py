@@ -249,6 +249,44 @@ def run_native_cases() -> tuple[int, int, int]:
         ("transform-mesh-missing-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, None)),
         ("open-path-object", lambda: Image.open("/tmp/imagecore-save3.png")),
         ("open-missing-path", lambda: Image.open("/tmp/does-not-exist-anywhere.png")),
+        # putdata packed/component storage paths per mode.
+        ("putdata-l-packed", lambda: _putdata("L", [0x0A0B0C0D0E0F1011, 0x1213141516171819, 0x2021222324252627, 0x28292A2B2C2D2E2F])),
+        ("putdata-rgb-tuple", lambda: _putdata("RGB", [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)])),
+        ("putdata-rgb-packed", lambda: _putdata("RGB", [0x010203, 0x040506, 0x070809, 0x0A0B0C])),
+        ("putdata-rgba-tuple", lambda: _putdata("RGBA", [(255, 0, 0, 255), (0, 255, 0, 128), (0, 0, 255, 64), (255, 255, 0, 0)])),
+        ("putdata-rgba-packed", lambda: _putdata("RGBA", [0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F10])),
+        ("putdata-la-tuple", lambda: _putdata("LA", [(100, 200), (50, 100), (0, 255), (255, 0)])),
+        ("putdata-la-packed", lambda: _putdata("LA", [0x0102, 0x0304, 0x0506, 0x0708])),
+        ("putdata-cmyk-tuple", lambda: _putdata("CMYK", [(100, 50, 25, 200), (0, 0, 0, 0), (255, 255, 255, 255), (10, 20, 30, 40)])),
+        ("putdata-cmyk-packed", lambda: _putdata("CMYK", [0x01020304, 0x05060708, 0x090A0B0C, 0x0D0E0F10])),
+        ("putdata-i-packed", lambda: _putdata("I", [1, -2, 300, -400])),
+        ("putdata-f-packed", lambda: _putdata("F", [0x3F800000, 0x40000000, 0x40400000, 0x40800000])),
+        ("putdata-p-int", lambda: _putdata("P", [1, 2, 3, 4])),
+        ("putdata-pa-tuple", lambda: _putdata("PA", [(1, 255), (2, 128), (3, 0), (4, 64)])),
+        ("putdata-la-bad-components", lambda: _putdata("LA", [(1, 2, 3), (4, 5, 6), (7, 8, 9), (10, 11, 12)])),
+        ("putdata-rgb-bad-components", lambda: _putdata("RGB", [(1, 2), (3, 4), (5, 6), (7, 8)])),
+        ("putdata-l-tuple", lambda: _putdata("L", [(1, 2), (3, 4), (5, 6), (7, 8)])),
+        # ImageStat paths: I/F histogram fallback and list statistics.
+        (
+            "stat-i-histogram",
+            lambda: _stat_of(Image.frombytes("I", (2, 2), _i32_bytes([1, -2, 300, -400]))),
+        ),
+        (
+            "stat-f-histogram",
+            lambda: _stat_of(
+                Image.frombytes("F", (2, 2), _f32_bytes([0.5, 1.5, -2.0, 10.0]))
+            ),
+        ),
+        ("stat-i-constant", lambda: _stat_of(Image.frombytes("I", (2, 2), _i32_bytes([7, 7, 7, 7])))),
+        ("stat-rgb", lambda: _stat_of(Image.new("RGB", (4, 4)))),
+        ("stat-from-list", lambda: _stat_list([1.0, 2.0, 3.0])),
+        ("stat-from-empty-list", lambda: _stat_list([])),
+        ("stat-bad-type", lambda: _stat_bad("nope")),
+        # Compute backend toggles route the pipeline evaluation paths.
+        ("backend-enable-cpu", lambda: pillow_rs.enable_backend("cpu")),
+        ("backend-disable-cpu", lambda: pillow_rs.disable_backend("cpu")),
+        ("backend-unknown", lambda: pillow_rs.enable_backend("NOPE")),
+        ("backend-eval-image", lambda: _backend_image()),
     ]
     for name, call in probes:
         probe(name, call)
@@ -308,6 +346,52 @@ def _noise_rgb(w: int, h: int, seed: int) -> Image:
     rng = random.Random(seed)
     data = bytes(rng.randrange(256) for _ in range(w * h * 3))
     return Image.frombytes("RGB", (w, h), data)
+
+
+def _putdata(mode: str, values) -> None:
+    Image.new(mode, (2, 2)).putdata(values)
+
+
+def _i32_bytes(values) -> bytes:
+    import struct
+
+    return struct.pack("<4i", *values)
+
+
+def _f32_bytes(values) -> bytes:
+    import struct
+
+    return struct.pack("<4f", *values)
+
+
+def _stat_of(image: Image) -> None:
+    import pillow_rs
+
+    stat = pillow_rs.ImageStat.Stat(image)
+    _ = (stat.count, stat.sum, stat.mean, stat.extrema)
+
+
+def _stat_list(values) -> None:
+    import pillow_rs
+
+    stat = pillow_rs.ImageStat.Stat(list(values))
+    _ = (stat.count, stat.sum, stat.mean, stat.extrema)
+
+
+def _stat_bad(value) -> None:
+    import pillow_rs
+
+    pillow_rs.ImageStat.Stat(value)
+
+
+def _backend_image() -> None:
+    import pillow_rs
+
+    if pillow_rs.enable_backend("cpu"):
+        try:
+            pillow_rs.Image.new("L", (4, 4)).point(lambda v: v).tobytes()
+        finally:
+            pillow_rs.disable_backend("cpu")
 
 
 def _noise_rgba(w: int, h: int, seed: int) -> Image:
