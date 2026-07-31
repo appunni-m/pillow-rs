@@ -3292,6 +3292,7 @@ surfaces:
         value_types:
         - 'null'
         - enum
+        - integer
         omission:
           kind: literal
           value: null

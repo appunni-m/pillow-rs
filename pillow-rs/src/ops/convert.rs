@@ -34,6 +34,17 @@ fn is_nonstandard_mode(mode: &str) -> bool {
     matches!(mode, "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P")
 }
 
+/// Extracts the Y band of a YCbCr image as luma bytes.
+///
+/// Pillow's C converter (`src/libImaging/Convert.c`) maps YCbCr to L and "1"
+/// through the Y channel directly rather than through the RGB luminance.
+fn ycbcr_luma8(img: &crate::raster::DynamicImage) -> crate::raster::GrayImage {
+    let rgb = img.to_rgb8();
+    crate::raster::GrayImage::from_fn(rgb.width(), rgb.height(), |x, y| {
+        crate::raster::Luma([rgb.get_pixel(x, y)[0]])
+    })
+}
+
 fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
     match s {
         Some("NONE") | Some("none") => Some(DitherMethod::None),
@@ -113,26 +124,26 @@ impl Image {
                 // If the target is a standard mode, return the converted image directly.
                 // For mode "L" etc., derive from the RGB result.
                 let result = if mode == "L" || mode == "LA" {
-                    if mode == "L" {
+                    if mode == "L" && src_mode == "YCbCr" {
+                        // Pillow's C converter maps YCbCr to L through the Y
+                        // band directly, not through the RGB luma.
+                        DynamicImage::ImageLuma8(ycbcr_luma8(&img))
+                    } else if mode == "L" {
                         DynamicImage::ImageLuma8(color::pil_grayscale(&converted)?)
                     } else {
                         DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&converted)?)
                     }
                 } else if mode == "RGBA" {
                     DynamicImage::ImageRgba8(converted.to_rgba8())
-                } else if mode == "1" {
-                    // PIL: convert("1") uses truncated grayscale then threshold at 128
-                    let gray = color::pil_grayscale_truncate(&converted)?;
-                    let (w, h) = gray.dimensions();
-                    let mut out = crate::raster::GrayImage::new(w, h);
-                    for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                        op[0] = if gp[0] >= 128 { 255 } else { 0 };
-                    }
-                    DynamicImage::ImageLuma8(out)
                 } else {
                     converted
                 };
-                return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
+                if mode != "1" {
+                    return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
+                }
+                // Binary mode "1" falls through to the shared threshold/dither
+                // path below, which re-derives the grayscale from the
+                // non-standard source and applies Pillow's dither policy.
             }
         }
 
@@ -175,7 +186,14 @@ impl Image {
                     // (299*R + 587*G + 114*B) / 1000 to exactly match PIL behavior.
                     // The pre-computed grayscale uses >> 16 which differs for 5 out
                     // of 16M RGB values.
-                    let is_rgb = matches!(img.color(), crate::raster::ColorType::Rgb8);
+                    // Non-standard sources (HSV/YCbCr) are stored in RGB
+                    // containers but their byte values are not RGB; their
+                    // true luminance is in the pre-computed `gray`.
+                    let source_is_nonstandard = self
+                        .explicit_mode()
+                        .is_some_and(|mode| is_nonstandard_mode(mode));
+                    let is_rgb = matches!(img.color(), crate::raster::ColorType::Rgb8)
+                        && !source_is_nonstandard;
                     let mut errors = vec![0i32; (w + 1) as usize];
                     let wu = w as usize;
                     if is_rgb {

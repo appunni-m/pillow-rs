@@ -340,8 +340,6 @@ class Image:
         colors: int = 256,
     ) -> "Image":
         allowed_modes = {"1", "L", "LA", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F", "P"}
-        if mode is not None and mode not in allowed_modes:
-            raise ValueError("illegal conversion")
         if isinstance(palette, Image):
             palette = None
         if mode is None:
@@ -354,6 +352,15 @@ class Image:
                 return self.copy()
         elif mode == self.mode and matrix is None:
             return self.copy()
+        if matrix is not None:
+            # Pillow 12.2.0 `Image.convert` only allows matrix conversions to
+            # L or RGB; anything else fails before the C converter runs.
+            if mode not in ("L", "RGB"):
+                raise ValueError("illegal conversion")
+        elif mode not in allowed_modes:
+            # Without a matrix, unknown target modes fail in the C converter
+            # with this message.
+            raise ValueError("image has wrong mode")
         if isinstance(dither, str) and matrix is None:
             raise TypeError("'str' object cannot be interpreted as an integer")
         matrix_list = list(matrix) if matrix is not None else None

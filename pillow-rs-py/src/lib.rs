@@ -291,10 +291,33 @@ impl PyImage {
         &self,
         mode: &str,
         matrix: Option<Vec<f64>>,
-        dither: Option<String>,
+        dither: Option<&Bound<'_, PyAny>>,
         palette: Option<String>,
         colors: Option<u32>,
     ) -> PyResult<PyImage> {
+        let dither = match dither {
+            None => None,
+            Some(value) => {
+                if let Ok(int_value) = value.extract::<u32>() {
+                    // Pillow's `convert(dither=...)` treats any non-zero
+                    // integer as Floyd-Steinberg and zero as no dithering.
+                    Some(
+                        if int_value == 0 {
+                            "NONE"
+                        } else {
+                            "FLOYDSTEINBERG"
+                        }
+                        .to_string(),
+                    )
+                } else if let Ok(string_value) = value.extract::<String>() {
+                    Some(string_value)
+                } else {
+                    return Err(pyo3::exceptions::PyTypeError::new_err(
+                        "'int' object cannot be converted to 'PyString'",
+                    ));
+                }
+            }
+        };
         let rs = self
             .inner
             .convert(mode, matrix, dither.as_deref(), palette.as_deref(), colors)
