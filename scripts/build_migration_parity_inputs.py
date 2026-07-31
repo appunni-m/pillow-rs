@@ -2479,6 +2479,28 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "name": "odd-size-factor-three",
+            "mode": "RGB",
+            "values": {
+                "size": literal([17, 11]),
+                "factor": literal([3, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "name": "non-square-factors",
+            "mode": "RGB",
+            "values": {
+                "size": literal([17, 11]),
+                "factor": literal([2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "rotate",
             "requirement_suffix": "parameter.angle",
             "name": "fractional-expanded",

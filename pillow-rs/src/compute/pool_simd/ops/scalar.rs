@@ -3887,8 +3887,15 @@ pub fn thumbnail(
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn reduce(pixels: &[u32], w: u32, h: u32, mode: u32, factor: u32) -> (Vec<u32>, u32, u32) {
-    if factor < 2 || w < factor || h < factor {
+pub fn reduce(
+    pixels: &[u32],
+    w: u32,
+    h: u32,
+    mode: u32,
+    x_factor: u32,
+    y_factor: u32,
+) -> (Vec<u32>, u32, u32) {
+    if (x_factor < 2 && y_factor < 2) || w < x_factor || h < y_factor {
         // Cannot reduce — return copy with alpha clamping
         let has_a = mode == 1 || mode == 3;
         let out: Vec<u32> = pixels
@@ -3904,11 +3911,12 @@ pub fn reduce(pixels: &[u32], w: u32, h: u32, mode: u32, factor: u32) -> (Vec<u3
 
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
-    let f = factor;
-    let new_w = w / f;
-    let new_h = h / f;
+    let fx = x_factor;
+    let fy = y_factor;
+    // Pillow Reduce.c computes ceil(w/xscale) x ceil(h/yscale).
+    let new_w = w.div_ceil(fx);
+    let new_h = h.div_ceil(fy);
     let mut out = vec![0u32; (new_w * new_h) as usize];
-    let area = (f * f) as u64;
 
     for y in 0..new_h {
         for x in 0..new_w {
@@ -3916,24 +3924,34 @@ pub fn reduce(pixels: &[u32], w: u32, h: u32, mode: u32, factor: u32) -> (Vec<u3
             let mut sum_g = 0u64;
             let mut sum_b = 0u64;
             let mut sum_a = 0u64;
+            let mut count = 0u64;
 
-            for dy in 0..f {
-                let row = (y * f + dy) * w;
-                for dx in 0..f {
-                    let p = pixels[(row + x * f + dx) as usize];
+            for dy in 0..fy {
+                let sy = y * fy + dy;
+                if sy >= h {
+                    break;
+                }
+                let row = sy * w;
+                for dx in 0..fx {
+                    let sx = x * fx + dx;
+                    if sx >= w {
+                        break;
+                    }
+                    let p = pixels[(row + sx) as usize];
                     sum_r += (p & 0xFF) as u64;
                     sum_g += ((p >> 8) & 0xFF) as u64;
                     sum_b += ((p >> 16) & 0xFF) as u64;
                     sum_a += (p >> 24) as u64;
+                    count += 1;
                 }
             }
 
-            // Round to nearest: (sum + half_of_area) / area
-            let half = area / 2;
-            let out_r = ((sum_r + half) / area) as u32;
-            let out_g_raw = ((sum_g + half) / area) as u32;
-            let out_b_raw = ((sum_b + half) / area) as u32;
-            let out_a_raw = ((sum_a + half) / area) as u32;
+            // Round to nearest over the actual block size.
+            let half = count / 2;
+            let out_r = ((sum_r + half) / count) as u32;
+            let out_g_raw = ((sum_g + half) / count) as u32;
+            let out_b_raw = ((sum_b + half) / count) as u32;
+            let out_a_raw = ((sum_a + half) / count) as u32;
 
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };

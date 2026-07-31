@@ -734,8 +734,8 @@ impl PyImage {
         self.inner.putalpha(alpha).map_err(map_error)
     }
 
-    fn reduce(&self, factor: u32) -> PyResult<PyImage> {
-        let rs = self.inner.reduce(factor).map_err(map_error)?;
+    fn reduce(&self, x_factor: u32, y_factor: u32) -> PyResult<PyImage> {
+        let rs = self.inner.reduce(x_factor, y_factor).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 

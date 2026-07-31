@@ -565,11 +565,21 @@ class Image:
     def reduce(self, factor, box=None):
         """Reduce image by integer factor."""
         if isinstance(factor, (tuple, list)):
-            if len(factor) != 2 or factor[0] != factor[1]:
-                raise ValueError("illegal reduction factor")
-            factor = factor[0]
+            if len(factor) != 2:
+                raise TypeError(
+                    f"argument 1 must be sequence of length 2, not {len(factor)}"
+                )
+            x_factor, y_factor = int(factor[0]), int(factor[1])
+        elif isinstance(factor, int):
+            x_factor = y_factor = factor
+        else:
+            raise TypeError(
+                f"'{type(factor).__name__}' object cannot be interpreted as an integer"
+            )
+        if x_factor <= 0 or y_factor <= 0:
+            raise ValueError("scale must be > 0")
         source = self if box is None else self.crop(tuple(box))
-        return Image(source._rust_image.reduce(factor))
+        return Image(source._rust_image.reduce(x_factor, y_factor))
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""

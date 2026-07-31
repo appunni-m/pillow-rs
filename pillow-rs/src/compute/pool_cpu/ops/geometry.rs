@@ -956,46 +956,127 @@ fn raw_to_dynimage(bytes: &[u8], w: u32, h: u32, channels: usize) -> DynamicImag
     }
 }
 
-/// Execute a Reduce operation.
-/// Averages each factor×factor block per-channel, preserving mode.
-pub fn execute_reduce(img: &DynamicImage, factor: u32) -> Result<DynamicImage, PilError> {
-    if factor < 2 {
+/// Execute a Reduce operation matching Pillow's `Reduce.c`.
+///
+/// Pillow computes ceil(w/xscale) x ceil(h/yscale) output pixels, averages
+/// complete xscale×yscale blocks for the inner region, then fills the right
+/// column, bottom row, and bottom-right corner from partial blocks using the
+/// same multiplier/amend rounding (`(sum + amend) * multiplier >> 24`).
+pub fn execute_reduce(
+    img: &DynamicImage,
+    x_factor: u32,
+    y_factor: u32,
+) -> Result<DynamicImage, PilError> {
+    if x_factor < 2 && y_factor < 2 {
         return Ok(img.clone());
     }
-    let f = factor;
-    // PIL reduce: average each factor×factor block per-channel, preserving mode
+    let fx = x_factor.max(1);
+    let fy = y_factor.max(1);
     let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
-    let new_w = w / f;
-    let new_h = h / f;
+    let new_w = w.div_ceil(fx);
+    let new_h = h.div_ceil(fy);
     let raw = img.as_bytes().to_vec();
     let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
-    for y in 0..new_h {
-        for x in 0..new_w {
+
+    let division_multiplier = |divider: u32| -> u64 {
+        // division_UINT32(divider, 8): 2^32 / (256 * divider), truncated.
+        ((1u128 << 32) / (u128::from(divider) * 256)) as u64
+    };
+    let block_average = |sum: u64, divider: u32, amend: u32| -> u8 {
+        let m = division_multiplier(divider);
+        (((sum + u64::from(amend)) * m) >> 24) as u8
+    };
+
+    // Main region: complete fx×fy blocks (floor division loop bounds).
+    let main_w = w / fx;
+    let main_h = h / fy;
+    let block_area = fx * fy;
+    let amend = block_area / 2;
+    for y in 0..main_h {
+        for x in 0..main_w {
             let mut sums = vec![0u64; channels];
-            let mut count = 0u32;
-            for dy in 0..f {
-                for dx in 0..f {
-                    let px = x * f + dx;
-                    let py = y * f + dy;
-                    if px < w && py < h {
-                        let src_idx = (py * w + px) as usize * channels;
-                        for c in 0..channels {
-                            sums[c] += raw[src_idx + c] as u64;
-                        }
-                        count += 1;
+            for dy in 0..fy {
+                for dx in 0..fx {
+                    let src_idx = ((y * fy + dy) * w + x * fx + dx) as usize * channels;
+                    for c in 0..channels {
+                        sums[c] += raw[src_idx + c] as u64;
                     }
                 }
             }
-            if count > 0 {
-                let half = count as u64 / 2;
-                let dst_idx = (y * new_w + x) as usize * channels;
-                for c in 0..channels {
-                    out[dst_idx + c] = ((sums[c] + half) / count as u64) as u8;
-                }
+            let dst_idx = (y * new_w + x) as usize * channels;
+            for c in 0..channels {
+                out[dst_idx + c] = block_average(sums[c], block_area, amend);
             }
         }
     }
+
+    // Right column (partial x): scale = (w % fx) * fy.
+    if w % fx != 0 {
+        let scale = (w % fx) * fy;
+        let m = division_multiplier(scale);
+        let amend = scale / 2;
+        let x = main_w;
+        for y in 0..main_h {
+            let mut sums = vec![0u64; channels];
+            for dy in 0..fy {
+                for dx in 0..(w % fx) {
+                    let src_idx = ((y * fy + dy) * w + main_w * fx + dx) as usize * channels;
+                    for c in 0..channels {
+                        sums[c] += raw[src_idx + c] as u64;
+                    }
+                }
+            }
+            let dst_idx = (y * new_w + x) as usize * channels;
+            for c in 0..channels {
+                out[dst_idx + c] = (((sums[c] + u64::from(amend)) * m) >> 24) as u8;
+            }
+        }
+    }
+
+    // Bottom row (partial y): scale = fx * (h % fy).
+    if h % fy != 0 {
+        let scale = fx * (h % fy);
+        let m = division_multiplier(scale);
+        let amend = scale / 2;
+        let y = main_h;
+        for x in 0..main_w {
+            let mut sums = vec![0u64; channels];
+            for dy in 0..(h % fy) {
+                for dx in 0..fx {
+                    let src_idx = ((main_h * fy + dy) * w + x * fx + dx) as usize * channels;
+                    for c in 0..channels {
+                        sums[c] += raw[src_idx + c] as u64;
+                    }
+                }
+            }
+            let dst_idx = (y * new_w + x) as usize * channels;
+            for c in 0..channels {
+                out[dst_idx + c] = (((sums[c] + u64::from(amend)) * m) >> 24) as u8;
+            }
+        }
+    }
+
+    // Bottom-right corner: scale = (w % fx) * (h % fy).
+    if w % fx != 0 && h % fy != 0 {
+        let scale = (w % fx) * (h % fy);
+        let m = division_multiplier(scale);
+        let amend = scale / 2;
+        let mut sums = vec![0u64; channels];
+        for dy in 0..(h % fy) {
+            for dx in 0..(w % fx) {
+                let src_idx = ((main_h * fy + dy) * w + main_w * fx + dx) as usize * channels;
+                for c in 0..channels {
+                    sums[c] += raw[src_idx + c] as u64;
+                }
+            }
+        }
+        let dst_idx = (main_h * new_w + main_w) as usize * channels;
+        for c in 0..channels {
+            out[dst_idx + c] = (((sums[c] + u64::from(amend)) * m) >> 24) as u8;
+        }
+    }
+
     let result = raw_bytes_to_image(new_w, new_h, out, channels)?;
     Ok(result)
 }

@@ -780,7 +780,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         }
 
         // ── Reduce: factor ──
-        PipelineOp::Reduce { factor } => vec![*factor],
+        PipelineOp::Reduce { x_factor, .. } => vec![*x_factor],
 
         // ── Thumbnail: dst_w, dst_h ──
         PipelineOp::Thumbnail { w, h, .. } => vec![*w, *h],
@@ -1090,8 +1090,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
              op: &PipelineOp,
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Reduce { factor } = op {
-                    execute_reduce(img, *factor)
+                if let PipelineOp::Reduce { x_factor, y_factor } = op {
+                    execute_reduce(img, *x_factor, *y_factor)
                 } else {
                     Err(PilError::ValueError("expected Reduce op".into()))
                 }

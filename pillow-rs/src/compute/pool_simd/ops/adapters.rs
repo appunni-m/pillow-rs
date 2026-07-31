@@ -1035,8 +1035,9 @@ pub fn simd_reduce(
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(mode);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Reduce { factor } = op {
-        let (result, nw, nh) = super::scalar::reduce(&pixels, w, h, mode_code, *factor);
+    if let PipelineOp::Reduce { x_factor, y_factor } = op {
+        let (result, nw, nh) =
+            super::scalar::reduce(&pixels, w, h, mode_code, *x_factor, *y_factor);
         dynimg_from_rgba(result, nw, nh)
     } else {
         Err(PilError::ValueError("expected Reduce op".into()))
