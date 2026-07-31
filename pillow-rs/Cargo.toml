@@ -36,14 +36,6 @@ test-api = []
 name = "backend_support_matrix"
 required-features = ["test-api"]
 
-[[test]]
-name = "backend_parity"
-required-features = ["test-api"]
-
-[[test]]
-name = "image_backend_migration"
-required-features = ["test-api"]
-
 [dependencies]
 image-slash-star = { git = "https://github.com/appunni-m/image-slash-star.git", rev = "d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a", default-features = false }
 fontdone = { path = "../../fontdone" }

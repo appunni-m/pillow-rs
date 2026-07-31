@@ -6,10 +6,8 @@
 
 CARGO := cargo
 PYTHON := python3
-FONT_ORACLE_PYTHON ?= $(abspath ../.oracle-venv/bin/python)
-IMAGINGFT_ORACLE_PYTHON ?= $(FONT_ORACLE_PYTHON)
-MANIFEST := ../manifest.yaml
-FIXTURES_DIR := ../tests/fixtures
+MANIFEST := tests/fixtures/manifest.yaml
+FIXTURES_DIR := tests/fixtures
 
 .DEFAULT_GOAL := help
 
@@ -22,28 +20,14 @@ help:
 	@printf "\nTest:\n"
 	@printf "  make test             Run all Rust tests\n"
 	@printf "  make test-core        Run unit tests (src/)\n"
-	@printf "  make test-backend-parity Run forced-backend Pillow parity tests\n"
-	@printf "  make test-color3dlut-oracle Run shared Pillow Color3DLUT oracle through Rust\n"
-	@printf "  make test-eval-oracle Run shared Pillow Image.eval oracle through Rust\n"
-	@printf "  make test-image-open-oracle Run shared Pillow Image.open oracle through Rust\n"
-	@printf "  make test-apply-transparency-oracle Run Pillow Image.apply_transparency oracle through Rust\n"
-	@printf "  make test-tobytes-oracle Run shared Pillow Image.tobytes oracle through Rust\n"
-	@printf "  make test-imagefont-getmask2-oracle Run shared Pillow ImageFont.getmask2 oracle through Rust\n"
-	@printf "  make test-transposed-font-oracle Run shared Pillow TransposedFont oracle through Rust\n"
-	@printf "  make test-fromarray-descriptor-oracle Run shared Pillow fromarray descriptor oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make migration-parity-test Run canonical live-oracle migration parity\n"
-	@printf "  make font-tests        Run Font public API parity tests\n"
-	@printf "  make font-tests-release Run Font public API parity tests (release)\n"
-	@printf "  make font-tests-coverage Run Font public API parity tests with coverage\n"
-	@printf "  make font-tests-coverage-with-freetype Run Font public API parity tests with fontdone coverage\n"
-	@printf "  make imagingft-tests   Compatibility alias for font-tests\n"
-	@printf "  make test-imagingft           Run legacy ImagingFT matrix parity tests\n"
-	@printf "  make test-imagingft-release   Run legacy ImagingFT matrix parity tests (release)\n"
+	@printf "  make migration-parity-coverage Run target coverage from indexed plans\n"
+	@printf "  make migration-parity-benchmark Run correctness-gated benchmarks\n"
 	@printf "\nFixtures:\n"
-	@printf "  make fixtures         Explain Font fixture generation policy\n"
+	@printf "  make fixtures         Delegate to project migration-parity inputs\n"
 	@printf "  make fixtures-check   Validate Font public-api raw input fixtures\n"
-	@printf "  make fixtures-clean   Remove generated fixture outputs\n"
+	@printf "  make fixtures-clean   Refuse to mutate active input specifications\n"
 	@printf "\nLint:\n"
 	@printf "  make fmt              Check rustfmt\n"
 	@printf "  make fmt-fix          Apply rustfmt\n"
@@ -71,51 +55,6 @@ test: test-core
 test-core:
 	$(CARGO) test --lib --locked
 
-.PHONY: test-backend-parity
-test-backend-parity:
-	$(CARGO) test --all-features --test backend_parity --locked -- --nocapture
-
-.PHONY: test-paste-oracle
-test-paste-oracle:
-	$(CARGO) test --all-features --test backend_parity --locked paste_is_exact_on_portable_cpu_backend -- --exact --nocapture
-	$(CARGO) test --all-features --test backend_parity --locked paste_validation_matches_exact_pillow_errors -- --exact --nocapture
-
-.PHONY: test-drawing-oracle
-test-drawing-oracle:
-	$(CARGO) test --all-features --test backend_parity --locked drawing_is_exact_and_backend_capabilities_are_truthful -- --exact --nocapture
-
-.PHONY: test-imagefont-getmask2-oracle
-test-imagefont-getmask2-oracle:
-	$(CARGO) test --all-features --test imagefont_getmask2_oracle --locked -- --nocapture
-
-.PHONY: test-transposed-font-oracle
-test-transposed-font-oracle:
-	$(CARGO) test --all-features --test transposed_font_oracle --locked -- --nocapture
-
-.PHONY: test-fromarray-descriptor-oracle
-test-fromarray-descriptor-oracle:
-	$(CARGO) test --all-features --test fromarray_descriptor_oracle --locked -- --nocapture
-
-.PHONY: test-color3dlut-oracle
-test-color3dlut-oracle:
-	$(CARGO) test --all-features --test color3dlut_oracle --locked -- --nocapture
-
-.PHONY: test-eval-oracle
-test-eval-oracle:
-	$(CARGO) test --all-features --test eval_oracle --locked -- --nocapture
-
-.PHONY: test-image-open-oracle
-test-image-open-oracle:
-	$(CARGO) test --all-features --test image_open_oracle --locked -- --nocapture
-
-.PHONY: test-tobytes-oracle
-test-tobytes-oracle:
-	$(CARGO) test --all-features --test tobytes_oracle --locked -- --nocapture
-
-.PHONY: test-apply-transparency-oracle
-test-apply-transparency-oracle:
-	$(CARGO) test --all-features --test apply_transparency_oracle --locked -- --nocapture
-
 .PHONY: backend-support-matrix
 backend-support-matrix:
 	$(CARGO) run --quiet --all-features --example backend_support_matrix --locked
@@ -124,49 +63,25 @@ backend-support-matrix:
 migration-parity-test:
 	$(MAKE) -C .. migration-parity-test
 
-.PHONY: font-tests
-font-tests: migration-parity-test
-
-.PHONY: font-tests-release
-font-tests-release:
-	$(MAKE) -C .. migration-parity-test
-
-.PHONY: font-tests-coverage
-font-tests-coverage:
+.PHONY: migration-parity-coverage
+migration-parity-coverage:
 	$(MAKE) -C .. migration-parity-coverage
 
-.PHONY: font-tests-coverage-with-freetype
-font-tests-coverage-with-freetype:
-	$(MAKE) -C .. migration-parity-coverage
-
-.PHONY: imagingft-tests
-imagingft-tests: font-tests
-
-.PHONY: imagingft-tests-release
-imagingft-tests-release: font-tests-release
-
-.PHONY: imagingft-tests-coverage
-imagingft-tests-coverage: font-tests-coverage
-
-.PHONY: test-imagingft
-test-imagingft: font-tests
-
-.PHONY: test-imagingft-release
-test-imagingft-release: font-tests-release
+.PHONY: migration-parity-benchmark
+migration-parity-benchmark:
+	$(MAKE) -C .. migration-parity-benchmark
 
 .PHONY: fixtures
 fixtures:
-	@printf "Run 'make -C .. migration-parity-fixtures' to rebuild project accounting and active Font inputs.\n"
+	$(MAKE) -C .. migration-parity-fixtures
 
 .PHONY: fixtures-check
 fixtures-check:
-	@! rg -n '"(error|expect_error|expectation|expected|hash|oracle|output|outputs|pixels_hex|raw_path|sha256|status)"' \
-		tests/fixtures/inputs/font
+	$(MAKE) -C .. migration-parity-inputs-check
 
 .PHONY: fixtures-clean
 fixtures-clean:
-	rm -rf $(FIXTURES_DIR)/outputs/
-	mkdir -p $(FIXTURES_DIR)/outputs/{jsons,images,raws}
+	@printf "Active migration-parity inputs are immutable specifications; no outputs are cleaned.\n"
 
 .PHONY: public-api-boundary
 public-api-boundary:

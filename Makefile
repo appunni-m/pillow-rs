@@ -7,19 +7,17 @@
 PYTHON       ?= $(shell if [ -x .venv/bin/python ]; then printf '%s' .venv/bin/python; else printf '%s' python3; fi)
 PIP          := $(PYTHON) -m pip
 MATURIN      := $(PYTHON) -m maturin
-IMAGE_ORACLE_PYTHON ?= $(abspath .oracle-venv/bin/python)
 NODE         := node
 CARGO        := cargo
 WASM_PACK    := wasm-pack
-MANIFEST     := manifest.yaml
+MANIFEST     := pillow-rs/tests/fixtures/manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
 FONTDONE_SRC := ../fontdone
 IMAGE_SLASH_STAR_SRC := $(abspath ../image-slash-star)
 IMAGE_SLASH_STAR_AVIF_LIB_DIR ?= $(shell p="$$(find "$(IMAGE_SLASH_STAR_SRC)/.oracle-venv" -name 'libavif*' -type f -print -quit 2>/dev/null)"; if [ -n "$$p" ]; then dirname "$$p"; fi)
-FIXTURES_DIR := tests/fixtures
-FIXTURES_SUITE1_DIR := tests/fixtures_2
+FIXTURES_DIR := pillow-rs/tests/fixtures
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
@@ -57,36 +55,13 @@ help: ## Show this help
 	@printf "  $(CYAN)make build-wasm-release$(NC) Build WASM package (release)\n"
 	@printf "  $(CYAN)make build-all$(NC)      Build Python + WASM\n"
 	@printf "\n$(BOLD)Test$(NC)\n"
-	@printf "  $(CYAN)make test$(NC)           Run all PIL parity tests\n"
-	@printf "  $(CYAN)make test-suite0$(NC)    Run suite0 only (core functions, fast)\n"
-	@printf "  $(CYAN)make test-suite1$(NC)    Run suite1 only\n"
-	@printf "  $(CYAN)make test-suite2$(NC)    Run suite2 only\n"
-	@printf "  $(CYAN)make test-putdata$(NC)   Run Image.putdata public and fixture parity\n"
-	@printf "  $(CYAN)make test-imagefont-getmask2$(NC) Run independent ImageFont.getmask2 Pillow fixtures\n"
-	@printf "  $(CYAN)make test-imagefont-facade$(NC) Run Pillow-oracle ImageFont Python facade tests\n"
-	@printf "  $(CYAN)make test-point$(NC)     Run Image.point Pillow-oracle fixture parity\n"
-	@printf "  $(CYAN)make test-eval$(NC)      Run Image.eval Pillow-oracle fixture parity\n"
-	@printf "  $(CYAN)make test-palette-save$(NC) Run ImagePalette.save Pillow-oracle parity\n"
-	@printf "  $(CYAN)make test-image-io$(NC)  Run Image open/save Pillow-oracle parity\n"
-	@printf "  $(CYAN)make test-tobytes$(NC)   Run Image.tobytes Pillow-oracle parity\n"
-	@printf "  $(CYAN)make test-compact-values$(NC) Run compact exact-value fixture parity\n"
-	@printf "  $(CYAN)make test-core$(NC)      Run Rust core tests\n"
+	@printf "  $(CYAN)make test$(NC)           Run the canonical live source/target parity lane\n"
+	@printf "  $(CYAN)make test-core$(NC)      Run Rust core unit tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
-	@printf "  $(CYAN)make js-oracle-contract$(NC) Validate the shared exact Pillow corpus in Node\n"
-	@printf "  $(CYAN)make js-image-open-oracle$(NC) Run Image.open corpus through WASM\n"
-	@printf "  $(CYAN)make js-tobytes-oracle$(NC) Run Image.tobytes corpus through WASM\n"
-	@printf "  $(CYAN)make apply-transparency-oracle$(NC) Run exact Pillow Image.apply_transparency fixtures through all ABIs\n"
-	@printf "  $(CYAN)make paste-oracle$(NC) Run exact Pillow Image.paste fixtures through all ABIs\n"
-	@printf "  $(CYAN)make drawing-oracle$(NC) Run exact Pillow ImageDraw fixtures through all ABIs\n"
-	@printf "  $(CYAN)make imagefont-getmask2-oracle$(NC) Run exact Pillow ImageFont.getmask2 fixtures through all ABIs\n"
-	@printf "  $(CYAN)make transposed-font-oracle$(NC) Run exact Pillow TransposedFont paths through all ABIs\n"
-	@printf "  $(CYAN)make fromarray-descriptor-oracle$(NC) Run exact Pillow fromarray descriptors through all ABIs\n"
-	@printf "  $(CYAN)make rust-image-open-oracle$(NC) Run Image.open corpus through Rust API\n"
+	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify the fixed manifest and indexed inputs\n"
+	@printf "  $(CYAN)make migration-parity-case-review$(NC) Verify duplicate selection and nuanced cases\n"
+	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
-	@printf "  $(CYAN)make image-backend-test$(NC) Run image backend migration parity\n"
-	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
-	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
-	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
@@ -100,12 +75,6 @@ help: ## Show this help
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
 	@printf "  $(CYAN)make pillow-rs-test$(NC) Run all pillow-rs Rust tests\n"
-	@printf "  $(CYAN)make font-tests$(NC)                  Run Font public API parity tests\n"
-	@printf "  $(CYAN)make font-tests-release$(NC)          Run Font public API parity tests (release)\n"
-	@printf "  $(CYAN)make font-tests-coverage-with-freetype$(NC) Run Font parity coverage including fontdone\n"
-	@printf "  $(CYAN)make imagingft-tests$(NC)              Compatibility alias for font-tests\n"
-	@printf "  $(CYAN)make pillow-rs-imagingft$(NC)           Run legacy ImagingFT matrix parity tests\n"
-	@printf "  $(CYAN)make pillow-rs-imagingft-release$(NC)  Run legacy ImagingFT matrix parity tests (release)\n"
 	@printf "  $(CYAN)make pillow-rs-lint$(NC) Run pillow-rs fmt + clippy\n"
 	@printf "  $(CYAN)make pillow-rs-ci$(NC)   Run pillow-rs CI sequence\n"
 	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
@@ -125,21 +94,14 @@ help: ## Show this help
 	@printf "  $(CYAN)make image-slash-star-lint$(NC) Run image-slash-star fmt + clippy\n"
 	@printf "  $(CYAN)make image-slash-star-full-test$(NC) Run image-slash-star all-feature coverage matrix\n"
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
-	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
+	@printf "  $(CYAN)make fixtures$(NC)       Build the active manifest and input specifications\n"
 	@printf "  $(CYAN)make migration-parity-manifest$(NC) Build the fixed project-wide manifest from frozen authority\n"
 	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build deterministic parity/coverage/benchmark inputs\n"
 	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for manifest and input builds\n"
 	@printf "  $(CYAN)make migration-parity-case-review$(NC) Review duplicate and nuanced case selection\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Verify strict aggregate/result interfaces\n"
-	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
-	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
-	@printf "  $(CYAN)make imagefont-getmask2-fixtures$(NC) Generate independent ImageFont.getmask2 fixtures\n"
-	@printf "  $(CYAN)make compact-value-fixtures$(NC) Regenerate compact typed sequence oracles\n"
-	@printf "  $(CYAN)make fixture-coverage-check$(NC) Validate semantic fixture/manifest coverage\n"
-	@printf "  $(CYAN)make fixtures-suite0$(NC) Generate suite0 fixtures only\n"
-	@printf "  $(CYAN)make fixtures-suite1$(NC) Generate suite1 fixtures only\n"
-	@printf "  $(CYAN)make fixtures-clean$(NC) Remove fixture outputs\n"
+	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build parity, coverage, and benchmark inputs\n"
 	@printf "\n$(BOLD)Lint$(NC)\n"
 	@printf "  $(CYAN)make fmt$(NC)            Check Rust formatting\n"
 	@printf "  $(CYAN)make fmt-fix$(NC)        Fix Rust formatting\n"
@@ -216,136 +178,21 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-suite0 test-suite1 test-suite2 test-putdata test-imagefont-getmask2 test-imagefont-facade test-point test-eval test-palette-save test-image-io test-tobytes test-compact-values
-.PHONY: test-core test-wasm test-all rust-color3dlut-oracle rust-eval-oracle rust-image-open-oracle rust-tobytes-oracle js-oracle-contract js-color3dlut-oracle
-.PHONY: js-eval-oracle js-image-open-oracle js-tobytes-oracle apply-transparency-oracle paste-oracle drawing-oracle imagefont-getmask2-oracle transposed-font-oracle fromarray-descriptor-oracle
+.PHONY: test test-core test-wasm test-all
 .PHONY: backend-support-matrix
 
-test: fixtures ## Run all PIL parity tests
-	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT) --strict-covers
+test: migration-parity-fixtures-check migration-parity-test ## Run the complete live source/target parity lane
 
-test-suite0: fixtures-suite0 ## Run suite0 only (core functions)
-	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT) \
-		--strict-covers -k "not suite1 and not suite2 and not suite3"
-
-test-suite1: fixtures-suite1 ## Run suite1 only
-	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT) --strict-covers -k "suite1"
-
-test-suite2: ## Run suite2 only
-	$(PYTHON) -m pytest tests/ -q --tb=short --timeout=$(TIMEOUT) \
-		--json-report --json-report-file=$(REPORT) --strict-covers -k "suite2"
-
-test-putdata: putdata-fixtures ## Run Image.putdata public and fixture parity
-	$(PYTHON) -m pytest tests/test_putdata_parity.py tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "putdata"
-
-test-imagefont-getmask2: imagefont-getmask2-fixtures ## Run independent ImageFont.getmask2 Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImageFont and getmask2"
-
-test-imagefont-facade: ## Run Pillow-oracle ImageFont Python facade parity
-	$(PYTHON) -m pytest tests/test_imagefont_facade_oracle.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers
-
-test-point: point-fixtures ## Run exact Image.point Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "Image.point"
-
-test-eval: eval-fixtures ## Run exact Image.eval Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImageModule.eval"
-
-test-palette-save: palette-save-fixtures ## Run exact ImagePalette.save Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "ImagePalette.save"
-
-test-image-io: image-io-fixtures ## Run exact Image open/save Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
-		-k "ImageModule.open or Image.open or Image.save"
-
-test-tobytes: tobytes-fixtures ## Run exact Image.tobytes Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers -k "Image.tobytes"
-
-test-compact-values: compact-value-fixtures ## Run compact sequence-value parity
-	$(PYTHON) -m pytest tests/test_parity.py \
-		-q --tb=short --timeout=$(TIMEOUT) --strict-covers \
-		-k "getdata or get_flattened_data"
-
-test-core: ## Run Rust core tests (pillow-rs unit + Font public API)
-	$(MAKE) -C $(CORE_SRC) test
-
-rust-color3dlut-oracle: color3dlut-fixtures ## Run Color3DLUT corpus through Rust API
-	$(MAKE) -C $(CORE_SRC) test-color3dlut-oracle
-
-rust-eval-oracle: eval-fixtures ## Run Image.eval corpus through Rust API
-	$(MAKE) -C $(CORE_SRC) test-eval-oracle
-
-rust-image-open-oracle: image-io-fixtures ## Run Image.open corpus through Rust API
-	$(MAKE) -C $(CORE_SRC) test-image-open-oracle
-
-rust-tobytes-oracle: tobytes-fixtures ## Run Image.tobytes corpus through Rust API
-	$(MAKE) -C $(CORE_SRC) test-tobytes-oracle
+test-core: ## Run Rust core unit tests
+	$(MAKE) -C $(CORE_SRC) test-core
 
 backend-support-matrix: ## Emit registry-derived CPU/SIMD/GPU support JSON
 	$(MAKE) -C $(CORE_SRC) backend-support-matrix
 
-test-wasm: ## Run WASM/JS tests
-	cd $(JS_SRC) && npm run test:codecs
+test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages and validate their package boundary
 	cd $(JS_SRC) && npm run test:package
 
-js-oracle-contract: fixtures ## Validate shared Pillow input/output pairs from Node
-	cd $(JS_SRC) && npm run test:oracle-contract
-
-js-color3dlut-oracle: color3dlut-fixtures build-wasm-core ## Run Color3DLUT corpus through WASM
-	cd $(JS_SRC) && npm run test:color3dlut-oracle
-
-js-eval-oracle: eval-fixtures build-wasm-core ## Run Image.eval corpus through WASM
-	cd $(JS_SRC) && npm run test:eval-oracle
-
-js-image-open-oracle: image-io-fixtures build-wasm-extra ## Run Image.open corpus through WASM
-	cd $(JS_SRC) && npm run test:image-open-oracle
-
-js-tobytes-oracle: tobytes-fixtures build-wasm-core ## Run Image.tobytes corpus through WASM
-	cd $(JS_SRC) && npm run test:tobytes-oracle
-
-apply-transparency-oracle: build-wasm-extra ## Run exact Pillow Image.apply_transparency fixtures through Rust/Python/WASM
-	$(MAKE) -C $(CORE_SRC) test-apply-transparency-oracle
-	$(PYTHON) -m pytest tests/test_apply_transparency_oracle.py -q
-	cd $(JS_SRC) && npm run test:apply-transparency-oracle
-
-paste-oracle: build-wasm-extra ## Run exact Pillow Image.paste fixtures through Rust/Python/WASM
-	$(MAKE) -C $(CORE_SRC) test-paste-oracle
-	$(PYTHON) -m pytest tests/test_paste_oracle.py -q
-	cd $(JS_SRC) && npm run test:paste-oracle
-
-drawing-oracle: build-wasm-extra ## Run exact Pillow ImageDraw fixtures through Rust/Python/WASM
-	$(MAKE) -C $(CORE_SRC) test-drawing-oracle
-	$(PYTHON) -m pytest tests/test_drawing_oracle.py -q
-	cd $(JS_SRC) && npm run test:drawing-oracle
-
-imagefont-getmask2-oracle: imagefont-getmask2-fixtures build-wasm-extra ## Run exact Pillow ImageFont.getmask2 fixtures through Rust/Python/WASM
-	$(MAKE) -C $(CORE_SRC) test-imagefont-getmask2-oracle
-	$(PYTHON) -m pytest tests/test_parity.py tests/test_imagefont_oracle.py -q -k "ImageFont and getmask2 or default_font_name"
-	cd $(JS_SRC) && npm run test:imagefont-getmask2-oracle
-
-transposed-font-oracle: build-wasm-extra ## Run exact Pillow TransposedFont paths through Rust/Python/WASM
-	$(PYTHON) scripts/generate_transposed_font_oracle.py
-	$(MAKE) -C $(CORE_SRC) test-transposed-font-oracle
-	$(PYTHON) -m pytest tests/test_transposed_font_oracle.py -q --strict-covers
-	cd $(JS_SRC) && npm run test:transposed-font-oracle
-
-fromarray-descriptor-oracle: build-wasm-core ## Run exact Pillow fromarray descriptors through Rust/Python/WASM
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fromarray_descriptor_oracle.py
-	$(MAKE) -C $(CORE_SRC) test-fromarray-descriptor-oracle
-	$(PYTHON) -m pytest tests/test_fromarray_descriptor_oracle.py -q --strict-covers
-	cd $(JS_SRC) && npm run test:fromarray-descriptor-oracle
-
-test-all: test-core test test-wasm ## Run core + Python + WASM tests
+test-all: test-core test test-wasm ## Run core + live parity + WASM package checks
 
 .PHONY: parity
 parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified parity
@@ -381,19 +228,10 @@ pillow-rs-help: ## Show pillow-rs crate targets
 pillow-rs-test: ## Run all pillow-rs Rust tests
 	$(MAKE) -C $(CORE_SRC) test
 
-image-backend-test: ## Run all image backend migration and forced-backend parity tests
-	$(CARGO) test -p pillow-rs --all-features \
-		--test image_backend_migration --test backend_parity --locked
-
-image-backend-migration-test: ## Run image codec/backend migration fixtures
-	$(CARGO) test -p pillow-rs --all-features \
-		--test image_backend_migration --locked
-
-image-backend-parity-test: ## Run Pillow-exact paste/drawing/transparency backend parity
-	$(CARGO) test -p pillow-rs --all-features --test backend_parity --locked -- --nocapture
-
-image-backend-feature-test: ## Verify disabled image codec feature forwarding
-	$(CARGO) test -p pillow-rs --no-default-features --test image_feature_gates --locked
+image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test:
+	@printf "This legacy image-backend parity target is archived under deprecated/migration-parity-v0.\n"
+	@printf "Use 'make migration-parity-test' with the active manifest-driven inputs.\n"
+	@exit 2
 
 pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
@@ -452,23 +290,13 @@ migration-parity-docs: migration-parity-aggregate ## Generate specification and 
 	$(PYTHON) scripts/generate_migration_parity_docs.py \
 		--status $(MIGRATION_STATUS_OUTPUT)
 
-font-tests: ## Run Font public API parity tests
+font-tests font-tests-release imagingft-tests imagingft-tests-release:
 	$(MAKE) migration-parity-test
 
-font-tests-release: ## Run Font public API parity tests (release)
-	$(MAKE) -C $(CORE_SRC) font-tests-release
-
-imagingft-tests: ## Compatibility alias for Font public API parity tests
-	$(MAKE) -C $(CORE_SRC) imagingft-tests
-
-imagingft-tests-release: ## Compatibility alias for Font public API parity tests (release)
-	$(MAKE) -C $(CORE_SRC) imagingft-tests-release
-
-pillow-rs-imagingft: ## Run legacy ImagingFT matrix parity tests
-	$(MAKE) -C $(CORE_SRC) test-imagingft
-
-pillow-rs-imagingft-release: ## Run legacy ImagingFT matrix parity tests (release)
-	$(MAKE) -C $(CORE_SRC) test-imagingft-release
+pillow-rs-imagingft pillow-rs-imagingft-release:
+	@printf "The legacy ImagingFT matrix is archived under deprecated/migration-parity-v0.\n"
+	@printf "Use 'make migration-parity-test' with the active manifest-driven inputs.\n"
+	@exit 2
 
 pillow-rs-fixtures-clean: ## Remove imagingft fixture outputs
 	$(MAKE) -C $(CORE_SRC) fixtures-clean
@@ -610,7 +438,7 @@ image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-
 .PHONY: fixture-coverage-check
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
-fixtures: fixtures-suite0 fixtures-suite1 ## Generate all test fixtures
+fixtures: migration-parity-fixtures ## Build the active manifest and input specifications
 
 migration-parity-inventory: ## Print canonical selected-scope endpoint inventory
 	$(PYTHON) scripts/migration_parity_inventory.py
@@ -645,87 +473,13 @@ migration-parity-inputs-check: ## Verify deterministic input regeneration
 migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
 	$(PYTHON) -m unittest tests.test_migration_parity_evidence
 
-image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py
-
-putdata-fixtures: ## Generate semantic Image.putdata inputs and exact Pillow oracles
-	$(PYTHON) scripts/generate_putdata_fixture_inputs.py
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.putdata
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.putdata
-
-imagefont-getmask2-fixtures: ## Generate independent ImageFont.getmask2 inputs and exact Pillow oracles
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_imagefont_getmask2_fixture_inputs.py
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImageFont.getmask2
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImageFont.getmask2
-
-compact-value-fixtures: ## Regenerate compact exact getdata/flattened-data oracles
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
-		--fixture Image.getdata --fixture Image.get_flattened_data
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 \
-		--fixture Image.getdata --fixture Image.get_flattened_data
-
-color3dlut-fixtures: ## Regenerate independent-path Color3DLUT Pillow oracles
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
-		--fixture ImageFilter.Color3DLUT
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 \
-		--fixture ImageFilter.Color3DLUT
-
-point-fixtures: ## Regenerate Image.point Pillow oracles
-	$(PYTHON) scripts/generate_point_fixture_inputs.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0
-	$(PYTHON) scripts/generate_point_fixture_inputs.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.point
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture Image.point
-
-eval-fixtures: ## Regenerate Image.eval Pillow oracles
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_eval_error_oracle.py
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImageModule.eval
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImageModule.eval
-
-palette-save-fixtures: ## Regenerate independent ImagePalette.save inputs and oracles
-	$(PYTHON) scripts/generate_palette_save_fixture_inputs.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0
-	$(PYTHON) scripts/generate_palette_save_fixture_inputs.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture ImagePalette.save
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1 --fixture ImagePalette.save
-
-image-io-fixtures: ## Regenerate independent suite0 Image open/save oracles
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 \
-		--fixture ImageModule.open --fixture Image.save
-
-tobytes-fixtures: ## Regenerate independent suite0 Image.tobytes oracles
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py \
-		--fixtures-dir $(FIXTURES_DIR) --suite 0 --fixture Image.tobytes
-
-test-color3dlut: color3dlut-fixtures ## Run exact Color3DLUT Pillow parity
-	$(PYTHON) -m pytest tests/test_parity.py -q -k Color3DLUT
-
-fixture-coverage-check: fixtures ## Validate semantic fixture/manifest coverage
-	PYTHONPATH=tests $(IMAGE_ORACLE_PYTHON) tests/fixture_coverage.py
-
-fixtures-suite0: ## Generate suite0 fixtures
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_DIR) --suite 0
-
-fixtures-suite1: ## Generate suite1 fixtures
-	$(IMAGE_ORACLE_PYTHON) scripts/generate_fixtures.py --fixtures-dir $(FIXTURES_SUITE1_DIR) --suite 1
-
-fixtures-clean: ## Remove fixture outputs
-	chmod -R u+w $(FIXTURES_DIR)/outputs/ 2>/dev/null || true
-	rm -rf $(FIXTURES_DIR)/outputs/
-	mkdir -p $(FIXTURES_DIR)/outputs/{jsons,images,raws}
+image-backend-fixtures putdata-fixtures imagefont-getmask2-fixtures \
+	compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures \
+	palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut \
+	fixture-coverage-check fixtures-suite0 fixtures-suite1 fixtures-clean:
+	@printf "This legacy fixture target is archived under deprecated/migration-parity-v0.\n"
+	@printf "Use 'make migration-parity-fixtures' and the live migration lanes.\n"
+	@exit 2
 
 # ── Lint ──────────────────────────────────────────────────────────────────────
 .PHONY: fmt fmt-fix clippy clippy-core lint
@@ -749,86 +503,33 @@ clippy-core: ## Run clippy on core only
 lint: fmt clippy ## Run fmt + clippy
 
 # ── Coverage ──────────────────────────────────────────────────────────────────
-.PHONY: coverage coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust
-.PHONY: coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust coverage-transposed-font-rust
-.PHONY: coverage-font-rust coverage-font-rust-with-freetype coverage-imagingft-rust font-tests-coverage font-tests-coverage-with-freetype imagingft-tests-coverage
-.PHONY: coverage-validate coverage-report coverage-wasm
+.PHONY: coverage coverage-validate coverage-report coverage-wasm
 
-coverage: ## Run tests + compute coverage
-	@[ -f "$(REPORT)" ] || { echo "No test report found. Run: make test"; exit 1; }
-	$(PYTHON) scripts/coverage/compute_coverage.py $(MANIFEST) $(REPORT)
+coverage: migration-parity-coverage ## Run the canonical target coverage lane
 
-coverage-python-abi-rust: ## Run Pillow parity through PyO3 and export Rust LLVM coverage
-	PYTHON=$(PYTHON) MATURIN=$(MATURIN) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
-		bash scripts/coverage/run_python_abi_rust_coverage.sh
+coverage-validate: migration-parity-coverage ## Validate the canonical coverage result
 
-coverage-point-rust: ## Run Image.point Pillow parity and export Rust LLVM branch coverage
-	PYTHON=$(PYTHON) TIMEOUT=$(TIMEOUT) \
-		bash scripts/coverage/run_point_rust_coverage.sh
+coverage-report: migration-parity-docs ## Regenerate the migration-parity evidence documentation
 
-coverage-image-open-rust: ## Run Image.open Pillow parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_image_open_rust_coverage.sh
+coverage-wasm:
+	@printf "No WASM coverage profile is declared in the active manifest.\n"
+	@printf "Add a reviewed target profile and coverage plan before enabling this lane.\n"
+	@exit 2
 
-coverage-apply-transparency-rust: ## Run Image.apply_transparency parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_apply_transparency_rust_coverage.sh
-
-coverage-paste-rust: ## Run Image.paste parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_paste_rust_coverage.sh
-
-coverage-drawing-rust: ## Run ImageDraw parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_drawing_rust_coverage.sh
-
-coverage-imagefont-getmask2-rust: ## Run ImageFont.getmask2 parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_imagefont_getmask2_rust_coverage.sh
-
-coverage-font-rust: ## Run Font public API parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_font_rust_coverage.sh
-
-coverage-font-rust-with-freetype: ## Run Font public API parity and export Rust LLVM branch coverage including fontdone
-	bash scripts/coverage/run_font_rust_with_freetype_coverage.sh
-
-coverage-imagingft-rust: ## Compatibility alias for Font public API Rust coverage
-	bash scripts/coverage/run_imagingft_rust_coverage.sh
-
-font-tests-coverage: ## Run Font public API parity via coverage and export Rust LLVM branch coverage
-	bash scripts/coverage/run_font_rust_coverage.sh
-
-font-tests-coverage-with-freetype: ## Run Font public API parity coverage including fontdone
-	bash scripts/coverage/run_font_rust_with_freetype_coverage.sh
-
-imagingft-tests-coverage: ## Compatibility alias for Font public API Rust coverage
-	bash scripts/coverage/run_imagingft_rust_coverage.sh
-
-coverage-transposed-font-rust: ## Run TransposedFont parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_transposed_font_rust_coverage.sh
-
-coverage-image-backend-rust: ## Run exact backend parity and export Rust LLVM branch coverage
-	bash scripts/coverage/run_image_backend_rust_coverage.sh
-
-coverage-python-wrapper: ## Run Pillow parity and export Python wrapper branch coverage
-	PYTHON=$(PYTHON) TIMEOUT=$(TIMEOUT) REPORT=$(REPORT) \
-		bash scripts/coverage/run_python_wrapper_coverage.sh
-
-coverage-validate: ## Validate coverage against manifest (exit 1 on gaps)
-	$(PYTHON) scripts/coverage/validate_coverage.py $(MANIFEST)
-
-coverage-report: ## Generate docs/COVERAGE.md
-	$(PYTHON) scripts/coverage/generate_multi_backend_coverage.py
-
-coverage-wasm: ## Generate WASM coverage report
-	$(PYTHON) scripts/coverage/generate_wasm_coverage.py
+coverage-python-abi-rust coverage-python-wrapper coverage-image-backend-rust \
+	coverage-point-rust coverage-image-open-rust coverage-apply-transparency-rust \
+	coverage-paste-rust coverage-drawing-rust coverage-imagefont-getmask2-rust \
+	coverage-transposed-font-rust coverage-font-rust coverage-font-rust-with-freetype \
+	coverage-imagingft-rust font-tests-coverage font-tests-coverage-with-freetype \
+	imagingft-tests-coverage:
+	@printf "This legacy coverage target is archived under deprecated/migration-parity-v0.\n"
+	@printf "Use 'make migration-parity-coverage' with indexed coverage plans.\n"
+	@exit 2
 
 # ── Benchmark ─────────────────────────────────────────────────────────────────
 .PHONY: bench bench-incr bench-priority
 
-bench: ## Full benchmark suite
-	bash scripts/bench/bench_all.sh full
-
-bench-incr: ## Incremental benchmark (only changed functions)
-	bash scripts/bench/bench_all.sh incremental
-
-bench-priority: ## Priority tier benchmark (12 ops)
-	bash scripts/bench/bench_all.sh --group priority
+bench bench-incr bench-priority: migration-parity-benchmark ## Run the fixed correctness-gated benchmark lane
 
 # ── Documentation ─────────────────────────────────────────────────────────────
 .PHONY: repo-map-check repo-map-update
@@ -842,7 +543,7 @@ repo-map-update: ## Refresh docs/REPO_MAP.md generated tree
 # ── CI ────────────────────────────────────────────────────────────────────────
 .PHONY: ci verify
 
-ci: repo-map-check fmt clippy pillow-rs-test-core font-tests test coverage-validate ## Full CI pipeline
+ci: repo-map-check fmt clippy pillow-rs-test-core migration-parity-fixtures-check migration-parity-test migration-parity-coverage ## Full CI pipeline
 	@echo "=== done ==="
 
 verify: ci fontdone-parity ## Full workspace CI plus FreeType parity
@@ -855,8 +556,6 @@ clean: ## Remove build artifacts and caches
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 	rm -rf .pytest_cache
 	rm -f $(REPORT)
-	chmod -R u+w $(FIXTURES_DIR)/outputs/ 2>/dev/null || true
-	rm -rf $(FIXTURES_DIR)/outputs/
 
 clean-all: clean ## clean + cargo clean
 	$(CARGO) clean
@@ -864,8 +563,10 @@ clean-all: clean ## clean + cargo clean
 # ── Stubs ─────────────────────────────────────────────────────────────────────
 .PHONY: stubs
 
-stubs: ## Check for missing Rust stubs vs manifest
-	$(PYTHON) scripts/generate_stubs.py $(MANIFEST)
+stubs:
+	@printf "The old stub generator is archived under deprecated/migration-parity-v0.\n"
+	@printf "Use the fixed manifest inventory and implementation checks instead.\n"
+	@exit 2
 
 # ── Release ───────────────────────────────────────────────────────────────────
 .PHONY: release-pypi release-npm release-crates

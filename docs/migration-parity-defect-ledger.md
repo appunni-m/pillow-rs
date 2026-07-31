@@ -31,7 +31,7 @@ manifest truth.
 | Area | Current state | Defect-ledger interpretation |
 | --- | --- | --- |
 | Active specification | `migration-parity/manifest@2`; 22 surfaces, 204 operations, 1,780 requirements | MAN-001..MAN-018 are structurally addressed by the fixed generator, but the external auditor still reports SKL-006 and the historical denominator decisions DEC-001..DEC-007 remain explicit. |
-| Active inputs | 1,181 unique input-only parity workflows; indexed parity, coverage, and benchmark documents; no expected outputs in active inputs | INP-001..INP-014 are addressed for the rebuilt corpus. Legacy fixture roots and the obsolete Rust Font harness now live under `tests/deprecated/` and are not active inputs. |
+| Active inputs | 1,181 unique input-only parity workflows; indexed parity, coverage, and benchmark documents; no expected outputs in active inputs | INP-001..INP-014 are addressed for the rebuilt corpus. Every legacy fixture root and oracle harness now lives under `deprecated/migration-parity-v0/` and is not an active input. |
 | Live parity | Full clean-checkout run required 1,181 cases and measured 725 pass / 456 fail / 0 infrastructure errors | RUN-001, RUN-004, RUN-006, RUN-007, and RUN-009 have maintained producers/boundaries; behavioral failures are real target gaps, not suppressed results. RUN-008 remains a classification/anti-cheat follow-up for separate regression tests that intentionally retain oracle fixtures. |
 | Coverage | Strict `coverage-input@1` plans and `coverage-result@1` producer exist; no managed snapshot has been ingested | COV-001 and COV-002 are producer/schema work only until the Coverage MCP command is explicitly approved and a fresh snapshot is recorded. Rust dimensions remain `not_proven`. |
 | Benchmark | 203 deterministic workloads and suites plus correctness-gated `benchmark-result@1` producer; smoke measurement is available for passing workloads | BEN-001, BEN-002, and BEN-004 have producers. No performance budget is declared in the current manifest, so budget outcomes remain `not_proven`/empty rather than being inferred from timings. |
@@ -43,11 +43,11 @@ are intentionally ignored by Git. The checked-in documentation pages are
 specification/evidence views only; they are regenerated from the manifest,
 inputs, and compatible results.
 
-The obsolete Rust migration harness is archived at
-`pillow-rs/tests/deprecated/font_public_api.rs` with its support modules. The
-active `tests/test_*_oracle.py` and backend integration tests are retained as
-implementation regression tests; they are not indexed migration inputs and do
-not contribute to the migration-parity result.
+The obsolete Rust migration harness, Python oracle tests, WASM oracle tests,
+backend fixture consumers, old manifest, expected-output corpora, and legacy
+coverage/benchmark tooling are archived under
+`deprecated/migration-parity-v0/`. Only the manifest-driven migration tests
+and strict result-interface unit tests remain active.
 
 ## Verified inventory facts
 
@@ -57,10 +57,10 @@ not contribute to the migration-parity result.
 | Expanded deprecated inventory rows, including nested class members | 199 |
 | Earlier top-level-only accounting used by project documentation | 173 |
 | Operations in the current generated draft | 206 |
-| Legacy project input documents in `tests/deprecated/fixtures` | 186 |
+| Legacy project input documents in `deprecated/migration-parity-v0/fixtures/python/suite0` | 186 |
 | Unique operation keys in those documents | 179 |
 | Cases in those documents | 823 |
-| Additional legacy input documents in `tests/deprecated/fixtures_2` | 172 |
+| Additional legacy input documents in `deprecated/migration-parity-v0/fixtures/python/suite1` | 172 |
 | Current Font input documents | 42 |
 | Current Font cases claimed by the draft manifest | 445 |
 | Current active Font assets | 118 |
@@ -105,7 +105,7 @@ details to model explicitly, not reasons to omit the endpoints.
 | MIG-003 | high | The migrator copies 35 legacy Font documents into 42 helper-oriented active documents but does not migrate the 823 project cases or the 172 suite-two documents. | Map every retained legacy input to a new case, an explicit duplicate, or a documented retirement record. |
 | MIG-004 | high | There is no checked-in old-to-new migration map for project fixtures, Font fixtures, operation identities, case IDs, assets, and intentionally retired outputs. | Add a deterministic mapping report and make the drift check verify it. |
 | MIG-005 | high | The migrator writes directly into active roots and deletes existing generated subtrees with `shutil.rmtree` before the replacement has validated. | Generate into a temporary staging directory, validate fully, and replace only the exact generated roots after success. |
-| MIG-006 | high | The archive state is split between a committed project-fixture move and uncommitted Font deletions/untracked replacements. | Complete one reviewable archive migration with preserved history and an explicit status report. |
+| MIG-006 | high | Legacy parity material was previously split across several `tests/deprecated/` trees and active roots, making the archive boundary ambiguous. | Consolidate every retired project parity/oracle/input/tooling tree under `deprecated/migration-parity-v0/` with a checked-in mapping and no active imports. |
 | MIG-007 | medium | Input assets are copied recursively without an active manifest index proving that each copied asset is referenced and each referenced asset exists. | Add asset reachability, digest, duplicate, and orphan checks. |
 | MIG-008 | medium | The old generated outputs remain useful only as migration evidence, but their relationship to new live-oracle cases is undocumented. | Record provenance and mapping under `deprecated/`; never use those outputs as active oracle evidence. |
 | MIG-009 | medium | The reproducibility target diffs only the draft manifest, Font inputs, and Font assets. It does not validate project-wide inputs, coverage plans, benchmark workloads, schemas, or docs. | Expand the drift command to cover every generated specification artifact. |
@@ -140,7 +140,7 @@ details to model explicitly, not reasons to omit the endpoints.
 | RUN-005 | high | Current errors have `class`, `kind`, `message`, and `stage` but no optional/declared code and no manifest-controlled exact/normalized/ignored message policy. | Serialize the fixed error fields and apply only declared normalization. |
 | RUN-006 | high | Comparison is whole-JSON equality for objects; it does not use per-observation comparison policies from the operation contract. | Compare each declared observation generically with exact typed policies. |
 | RUN-007 | high | Source and target identity protection only checks that two caller-provided strings differ. It does not execute public identity handshakes or record immutable revisions. | Add identity commands, handshake assertions, and result provenance. |
-| RUN-008 | high | Existing Python parity still discovers archived fixture roots and reads stored expected outputs. It is not the new live-oracle evidence path. | Keep it deprecated or migrate its input semantics; active parity must execute Pillow and `pillow_rs` independently from the same input workflow. |
+| RUN-008 | high | The retired Python parity harness discovered fixture roots and read stored expected outputs. | Archived under `deprecated/migration-parity-v0/python/`; the active runner executes Pillow and `pillow_rs` independently from the same input workflow. Add a no-archive-import gate to prevent regression. |
 | RUN-009 | high | Active Rust Font tests still contain paths to sibling `fontdone` fixtures. That prevents the Pillow parity specification from being self-contained. | Copy/migrate required stimuli into the active indexed asset root and verify digests. |
 | RUN-010 | high | There is no aggregate `status-report@1`, compatibility join, stale-evidence check, or rule preventing missing cases from disappearing from summaries. | Implement strict aggregation over compatible lane results with complete manifest accounting. |
 | RUN-011 | medium | The comparator has no structured artifact contract for large image, mask, bytes, trace, or encoded-file evidence. | Implement the fixed artifact references and integrity checks from the evidence contract. |

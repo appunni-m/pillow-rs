@@ -25,18 +25,14 @@ ROOT_FILES = {
     "Makefile",
     "README.md",
     "deny.toml",
-    "manifest.yaml",
     "rust-toolchain.toml",
     "rustfmt.toml",
-    "scripts/bench/bench_reference_images/gen.py",
 }
 
 INCLUDED_PREFIXES = (
     ".claude/skills/",
     "pillow-rs/src/",
-    "pillow-rs-js/bench_page/",
     "pillow-rs-js/src/",
-    "pillow-rs-js/tests/",
     "pillow-rs-py/python/",
     "pillow-rs-py/src/",
     "scripts/",
@@ -51,13 +47,11 @@ INCLUDED_EXACT = {
     "pillow-rs-js/package-lock.json",
     "pillow-rs-py/Cargo.toml",
     "pillow-rs-py/pyproject.toml",
+    "pillow-rs/tests/fixtures/manifest.yaml",
 }
 
 EXCLUDED_PREFIXES = (
-    "scripts/bench/bench_reference_images/",
-    "tests/coverage/",
     "tests/fixtures/",
-    "tests/fixtures_2/",
 )
 
 EXCLUDED_SUFFIXES = (

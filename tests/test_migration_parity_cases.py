@@ -115,8 +115,8 @@ class MigrationParityCaseReviewTests(unittest.TestCase):
         combined: dict[str, list[str]] = defaultdict(list)
         total = 0
         for root in (
-            ROOT / "tests/deprecated/fixtures/input/jsons",
-            ROOT / "tests/deprecated/fixtures_2/input/jsons",
+            ROOT / "deprecated/migration-parity-v0/fixtures/python/suite0/input/jsons",
+            ROOT / "deprecated/migration-parity-v0/fixtures/python/suite1/input/jsons",
         ):
             for path in sorted(root.glob("*.json")):
                 document = json.loads(path.read_text())
