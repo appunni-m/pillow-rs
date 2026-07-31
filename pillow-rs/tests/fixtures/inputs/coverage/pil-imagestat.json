@@ -17,7 +17,8 @@
           "PIL.ImageStat.Stat.behavior.default",
           "PIL.ImageStat.Stat.parameter.mask",
           "PIL.ImageStat.Stat.mode.l",
-          "PIL.ImageStat.Stat.mode.rgba"
+          "PIL.ImageStat.Stat.mode.rgba",
+          "PIL.ImageStat.Stat.nuanced.from-histogram-list"
         ],
         "command_ids": []
       },
