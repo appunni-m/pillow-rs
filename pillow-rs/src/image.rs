@@ -729,6 +729,10 @@ impl Image {
                 mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
                 ..
             } => true,
+            PipelineOp::PutAlphaData {
+                mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
+                ..
+            } => true,
             PipelineOp::CompositeModule { other, .. } => other.has_palette_mode(),
             PipelineOp::PutPixel {
                 palette_index: true,
@@ -1019,6 +1023,9 @@ impl Image {
             && matches!(
                 &op,
                 PipelineOp::PutAlpha {
+                    mode: crate::pipeline::PixelMode::P,
+                    ..
+                } | PipelineOp::PutAlphaData {
                     mode: crate::pipeline::PixelMode::P,
                     ..
                 }
@@ -2651,6 +2658,42 @@ impl Image {
             // Pillow Image.putalpha promotes P to PA without expanding palette
             // indices. CMYK is converted through RGB and therefore becomes
             // ordinary RGBA rather than retaining a CMYK side-channel tag.
+            *explicit_mode = match mode {
+                crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA => {
+                    Some("PA".to_owned())
+                }
+                crate::pipeline::PixelMode::CMYK => None,
+                _ => explicit_mode.clone(),
+            };
+        }
+        *self = new_self;
+        Ok(())
+    }
+
+    /// Replaces the alpha channel from an `L` mask image, matching Pillow's
+    /// image-backed ``Image.putalpha``.
+    pub fn putalpha_data(&mut self, mask: &Image) -> Result<(), PilError> {
+        let mask_img = mask.materialize()?;
+        let mask_mode = mask.mode()?;
+        if mask_mode != "1" && mask_mode != "L" {
+            return Err(PilError::ValueError("illegal image mode".into()));
+        }
+        if (mask_img.width(), mask_img.height()) != (self.size()?.0, self.size()?.1) {
+            return Err(PilError::ValueError("images do not match".into()));
+        }
+        let mask_luma = mask_img.to_luma8();
+        let mode_name = self.mode()?;
+        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
+        })?;
+        let mut new_self = Image::push_op(
+            self,
+            PipelineOp::PutAlphaData {
+                mask: Arc::new(crate::raster::DynamicImage::ImageLuma8(mask_luma)),
+                mode,
+            },
+        );
+        if let Image::Pipeline { explicit_mode, .. } = &mut new_self {
             *explicit_mode = match mode {
                 crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA => {
                     Some("PA".to_owned())

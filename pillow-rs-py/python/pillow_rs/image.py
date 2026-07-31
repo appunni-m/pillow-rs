@@ -549,13 +549,15 @@ class Image:
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
         if isinstance(alpha, Image):
-            if self.mode == "L" and alpha.mode in ("L", "1"):
-                # The core currently exposes scalar putalpha only. Preserve
-                # Pillow's successful L+L status until image-backed alpha
-                # promotion is implemented in the core.
-                self._explicit_mode = "LA"
-                return None
-            raise ValueError("illegal image mode")
+            if alpha.mode not in ("L", "1"):
+                raise ValueError("illegal image mode")
+            mask = alpha.convert("L") if alpha.mode == "1" else alpha
+            # The core promotes to the matching alpha mode (LA/PA/RGBA) and
+            # installs the mask as the alpha band, mirroring Pillow.
+            self._rust_image.putalpha_data(mask._rust_image)
+            self._explicit_mode = self._rust_image.explicit_mode()
+            self.__dict__.pop("_palette", None)
+            return None
         if isinstance(alpha, int):
             self._rust_image.putalpha(alpha)
         else:

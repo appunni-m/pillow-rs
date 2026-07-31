@@ -1078,6 +1078,68 @@ pub fn op_put_alpha(img: &DynamicImage, alpha: u8, mode: PixelMode) -> DynamicIm
     out
 }
 
+/// Replaces the alpha channel from an L-mask, matching Pillow's image-backed
+/// `putalpha` (P: index retained, CMYK: promoted through RGB to RGBA).
+pub fn op_put_alpha_data(
+    img: &DynamicImage,
+    mask: &crate::raster::DynamicImage,
+    mode: PixelMode,
+) -> DynamicImage {
+    if mode == PixelMode::CMYK {
+        let rgb = crate::color::cmyk_to_rgb(img).to_rgb8();
+        let mut rgba = RgbaImage::new(rgb.width(), rgb.height());
+        for ((output, input), mask_px) in rgba
+            .pixels_mut()
+            .zip(rgb.pixels())
+            .zip(mask.to_luma8().pixels())
+        {
+            *output = crate::raster::Rgba([input[0], input[1], input[2], mask_px.0[0]]);
+        }
+        return DynamicImage::ImageRgba8(rgba);
+    }
+    if matches!(mode, PixelMode::P | PixelMode::PA) {
+        let luma = img.to_luma8();
+        let mut la = GrayAlphaImage::new(luma.width(), luma.height());
+        for ((output, input), mask_px) in la
+            .pixels_mut()
+            .zip(luma.pixels())
+            .zip(mask.to_luma8().pixels())
+        {
+            output[0] = input[0];
+            output[1] = mask_px.0[0];
+        }
+        return DynamicImage::ImageLumaA8(la);
+    }
+    match img.color() {
+        crate::raster::ColorType::L8 => {
+            let luma = img.to_luma8();
+            let mut la = GrayAlphaImage::new(luma.width(), luma.height());
+            for ((o, i), mask_px) in la
+                .pixels_mut()
+                .zip(luma.pixels())
+                .zip(mask.to_luma8().pixels())
+            {
+                o[0] = i[0];
+                o[1] = mask_px.0[0];
+            }
+            DynamicImage::ImageLumaA8(la)
+        }
+        _ => {
+            let rgba = img.to_rgba8();
+            let mut out = RgbaImage::new(rgba.width(), rgba.height());
+            for ((o, i), mask_px) in out
+                .pixels_mut()
+                .zip(rgba.pixels())
+                .zip(mask.to_luma8().pixels())
+            {
+                *o = *i;
+                o[3] = mask_px.0[0];
+            }
+            DynamicImage::ImageRgba8(out)
+        }
+    }
+}
+
 // ── Color3DLUT — trilinear interpolation (matching PIL's _imaging C code) ──
 
 fn table_index_3d(x: usize, y: usize, z: usize, sx: usize, sxy: usize) -> usize {
