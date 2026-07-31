@@ -322,6 +322,16 @@ def run_native_cases() -> tuple[int, int, int]:
         ("exif-no-exif-prefix", lambda: _exif_probe("no-exif-prefix")),
         ("exif-truncated-segment", lambda: _exif_probe("truncated-segment")),
         ("exif-empty-app1-len", lambda: _exif_probe("empty-app1-len")),
+        # remap_palette source variants and PA surfaces.
+        ("remap-l-grayscale", lambda: _remap("L")),
+        ("remap-p-with-alpha", lambda: _remap("P")),
+        ("remap-rgba-palette-source", lambda: _remap_rgba_source()),
+        ("pa-putdata", lambda: Image.new("PA", (2, 2)).putdata([(1, 255), (2, 128), (3, 0), (4, 64)])),
+        ("pa-getpixel", lambda: Image.new("PA", (2, 2)).getpixel((0, 0))),
+        ("pa-convert-rgba", lambda: Image.new("PA", (4, 4), 0).convert("RGBA")),
+        # stat median on multi-band images.
+        ("stat-rgba-median", lambda: _stat_of(Image.new("RGBA", (4, 4), (1, 2, 3, 4)))),
+        ("stat-la-median", lambda: _stat_of(Image.new("LA", (4, 4), (1, 2)))),
     ]
     for name, call in probes:
         probe(name, call)
@@ -500,6 +510,17 @@ def _exif_probe(name: str) -> None:
             os.unlink(path)
         if os.path.isdir(directory):
             os.rmdir(directory)
+
+
+def _remap(mode: str) -> None:
+    image = Image.new(mode, (4, 4), 0)
+    image.remap_palette([0, 1, 2, 3])
+
+
+def _remap_rgba_source() -> None:
+    image = Image.new("P", (4, 4), 0)
+    source = bytes((index % 256 for index in range(800)))
+    image.remap_palette([0, 1, 2], source)
 
 
 def _noise_rgba(w: int, h: int, seed: int) -> Image:
