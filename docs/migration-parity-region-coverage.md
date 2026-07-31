@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 0bbb44ffa8992bb7a5772f65deabf1ebdee9611e59d672477088c25d6705c39e
-coverage_run_id: migration-coverage-33b3fc6d1e5f4f658531f8e400a982bc
+coverage_run_id: migration-coverage-ada1a1b2bf774f1a9e5fef021e338460
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%
@@ -25,7 +25,7 @@ component's measured coverage by design.
 
 ## Operations below 90% region coverage
 
-165 of 204 coverage-required operations are below 90%.
+145 of 204 coverage-required operations are below 90%.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -140,26 +140,6 @@ component's measured coverage by design.
 | `PIL.Image.new` | `image-core` | 4134/6940 | 59.6% |
 | `PIL.Image.open` | `image-core` | 4134/6940 | 59.6% |
 | `PIL.Image.radial_gradient` | `image-core` | 4134/6940 | 59.6% |
-| `PIL.ImageFilter.BLUR` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.BoxBlur` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.CONTOUR` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.Color3DLUT` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.DETAIL` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.EDGE_ENHANCE` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.EDGE_ENHANCE_MORE` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.EMBOSS` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.FIND_EDGES` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.GaussianBlur` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.Kernel` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.MaxFilter` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.MedianFilter` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.MinFilter` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.ModeFilter` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.RankFilter` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.SHARPEN` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.SMOOTH` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.SMOOTH_MORE` | `image-filter` | 59/96 | 61.5% |
-| `PIL.ImageFilter.UnsharpMask` | `image-filter` | 59/96 | 61.5% |
 | `PIL.ImageColor.getcolor` | `image-color` | 614/929 | 66.1% |
 | `PIL.ImageColor.getrgb` | `image-color` | 614/929 | 66.1% |
 | `PIL.ImagePalette.ImagePalette` | `image-palette` | 614/929 | 66.1% |
@@ -218,8 +198,6 @@ component's measured coverage by design.
 | `image-core` | `pillow-rs/src/ops/rotate.rs` | 8/8 | 100.0% |
 | `image-draw` | `pillow-rs/src/draw/mod.rs` | 1184/2101 | 56.4% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
-| `image-filter` | `pillow-rs/src/ops/filter.rs` | 59/96 | 61.5% |
-| `image-filter` | `pillow-rs-py/python/pillow_rs/imagefilter.py` | 0/0 | n/a |
 | `image-font` | `pillow-rs/src/lib.rs` | 94/217 | 43.3% |
 | `image-font` | `pillow-rs/src/font/mod.rs` | 169/271 | 62.4% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 509/554 | 91.9% |
