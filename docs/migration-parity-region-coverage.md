@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 0bbb44ffa8992bb7a5772f65deabf1ebdee9611e59d672477088c25d6705c39e
-coverage_run_id: migration-coverage-33de51a2ab594e75b48d413a3ef8ba73
+coverage_run_id: migration-coverage-33b3fc6d1e5f4f658531f8e400a982bc
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%
@@ -168,32 +168,32 @@ component's measured coverage by design.
 | `PIL.ImagePalette.ImagePalette.getdata` | `image-palette` | 614/929 | 66.1% |
 | `PIL.ImagePalette.ImagePalette.save` | `image-palette` | 614/929 | 66.1% |
 | `PIL.ImagePalette.ImagePalette.tobytes` | `image-palette` | 614/929 | 66.1% |
-| `PIL.ImageFont.FreeTypeFont` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.get_variation_names` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.getbbox` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.getlength` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.getmask` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.getmask2` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.getmetrics` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.getname` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.set_variation_by_axes` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.FreeTypeFont.set_variation_by_name` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.ImageFont` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.ImageFont.getbbox` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.ImageFont.getlength` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.ImageFont.getmask` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.MAX_STRING_LENGTH` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.TransposedFont` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.TransposedFont.getbbox` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.TransposedFont.getlength` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.TransposedFont.getmask` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.load` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.load_default` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.load_default_imagefont` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.load_path` | `image-font` | 1916/2486 | 77.1% |
-| `PIL.ImageFont.truetype` | `image-font` | 1916/2486 | 77.1% |
+| `PIL.ImageFont.FreeTypeFont` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.get_variation_names` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.getbbox` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.getlength` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.getmask` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.getmask2` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.getmetrics` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.getname` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.set_variation_by_axes` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.FreeTypeFont.set_variation_by_name` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.ImageFont` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.ImageFont.getbbox` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.ImageFont.getlength` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.ImageFont.getmask` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.MAX_STRING_LENGTH` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.TransposedFont` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.TransposedFont.getbbox` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.TransposedFont.getlength` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.TransposedFont.getmask` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.load` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.load_default` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.load_default_imagefont` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.load_path` | `image-font` | 2165/2486 | 87.1% |
+| `PIL.ImageFont.truetype` | `image-font` | 2165/2486 | 87.1% |
 
 ## Per-file region coverage for involved components
 
@@ -220,10 +220,10 @@ component's measured coverage by design.
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
 | `image-filter` | `pillow-rs/src/ops/filter.rs` | 59/96 | 61.5% |
 | `image-filter` | `pillow-rs-py/python/pillow_rs/imagefilter.py` | 0/0 | n/a |
-| `image-font` | `pillow-rs/src/font/mod.rs` | 104/271 | 38.4% |
 | `image-font` | `pillow-rs/src/lib.rs` | 94/217 | 43.3% |
-| `image-font` | `pillow-rs/src/font/imagingft.rs` | 1209/1444 | 83.7% |
+| `image-font` | `pillow-rs/src/font/mod.rs` | 169/271 | 62.4% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 509/554 | 91.9% |
+| `image-font` | `pillow-rs/src/font/imagingft.rs` | 1393/1444 | 96.5% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
 | `image-ops` | `pillow-rs/src/ops/imageops.rs` | 155/335 | 46.3% |
 | `image-ops` | `pillow-rs-py/python/pillow_rs/imageops.py` | 0/0 | n/a |
