@@ -538,10 +538,46 @@ class Image:
         return PixelAccess(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
-        """Alpha composite im over self. Returns None (mutates in-place)."""
-        if self.mode not in ("RGBA", "LA") or im.mode != self.mode:
-            raise ValueError("image has wrong mode")
-        self._rust_image.alpha_composite(im._rust_image)
+        """Alpha composite im over self. Returns None (mutates in-place).
+
+        Mirrors Pillow's in-place ``Image.alpha_composite``: the overlay is
+        cropped to the source bounds and the composited result is pasted back
+        at the destination offset, so mismatched sizes compose over the
+        overlapping region instead of raising.
+        """
+        if not isinstance(source, (list, tuple)):
+            raise ValueError("Source must be a list or tuple")
+        if not isinstance(dest, (list, tuple)):
+            raise ValueError("Destination must be a list or tuple")
+        if len(source) == 4:
+            overlay_crop_box = tuple(source)
+        elif len(source) == 2:
+            overlay_crop_box = tuple(source) + im.size
+        else:
+            raise ValueError("Source must be a sequence of length 2 or 4")
+        if not len(dest) == 2:
+            raise ValueError("Destination must be a sequence of length 2")
+        if min(source) < 0:
+            raise ValueError("Source must be non-negative")
+
+        # Overlay image, cropped when it is not the whole image.
+        if overlay_crop_box == (0, 0) + im.size:
+            overlay = im
+        else:
+            overlay = im.crop(overlay_crop_box)
+
+        # Target box for the paste.
+        box = tuple(dest) + (dest[0] + overlay.width, dest[1] + overlay.height)
+
+        # Destination region; the whole image when the box covers it.
+        if box == (0, 0) + self.size:
+            background = self
+        else:
+            background = self.crop(box)
+
+        result = background.copy()
+        result._rust_image.alpha_composite(overlay._rust_image)
+        self.paste(result, box)
 
     def getcolors(self, maxcolors=256):
         """Return list of [count, color] pairs or None if too many colors."""

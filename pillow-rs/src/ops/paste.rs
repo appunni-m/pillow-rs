@@ -248,6 +248,17 @@ impl Image {
         dest: (i32, i32),
         src: (i32, i32),
     ) -> Result<(), PilError> {
+        // Pillow 12.2.0 `libImaging/AlphaComposite.c::ImagingAlphaComposite`
+        // validates the destination mode first, then requires the source mode
+        // and dimensions to match exactly.
+        let dest_mode = self.mode()?;
+        if dest_mode != "RGBA" && dest_mode != "LA" {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        let source_mode = source.mode()?;
+        if source_mode != dest_mode {
+            return Err(PilError::ValueError("images do not match".into()));
+        }
         let (w1, h1) = self.size()?;
         let (w2, h2) = source.size()?;
         if (w1, h1) != (w2, h2) {
