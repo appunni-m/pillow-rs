@@ -384,9 +384,11 @@ generated reports, build outputs, and package installs.
 |   |-- run_migration_benchmark.py
 |   |-- run_migration_coverage.py
 |   |-- run_migration_parity.py
+|   |-- validate_migration_parity_contract.py
 |   `-- validate_migration_parity_result.py
 `-- tests/
     |-- test_migration_parity_cases.py
+    |-- test_migration_parity_contract.py
     |-- test_migration_parity_evidence.py
     `-- test_migration_parity_inventory.py
 ```
