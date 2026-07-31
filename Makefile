@@ -22,6 +22,8 @@ FIXTURES_DIR := tests/fixtures
 FIXTURES_SUITE1_DIR := tests/fixtures_2
 REPORT       := /tmp/report.json
 TIMEOUT      := 300
+MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
+MIGRATION_PARITY_ARGS ?=
 
 ifneq ($(strip $(IMAGE_SLASH_STAR_AVIF_LIB_DIR)),)
 export IMAGE_SLASH_STAR_AVIF_LIB_DIR
@@ -80,6 +82,8 @@ help: ## Show this help
 	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
 	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
+	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
+	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-inventory$(NC) Print the canonical selected-scope endpoint inventory\n"
 	@printf "  $(CYAN)make migration-parity-inventory-check$(NC) Verify endpoint authority expansion and alias accounting\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs Font + fontdone unified parity\n"
@@ -353,7 +357,8 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
+.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity
+.PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -383,7 +388,14 @@ pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
 
 migration-parity-test: ## Run canonical input-only parity against live Pillow
-	$(MAKE) -C $(CORE_SRC) migration-parity-test
+	$(PYTHON) scripts/run_migration_parity.py --output $(MIGRATION_PARITY_OUTPUT) $(MIGRATION_PARITY_ARGS)
+
+migration-parity-oracle-identity: ## Verify the pinned Pillow oracle identity
+	$(PYTHON) scripts/run_migration_parity.py --identity source
+
+migration-parity-target-identity: ## Verify the public pillow-rs target identity
+	PYTHONPATH=$(abspath $(PY_SRC)/python):$$PYTHONPATH \
+		$(PYTHON) scripts/run_migration_parity.py --identity target
 
 font-tests: ## Run Font public API parity tests
 	$(MAKE) migration-parity-test
