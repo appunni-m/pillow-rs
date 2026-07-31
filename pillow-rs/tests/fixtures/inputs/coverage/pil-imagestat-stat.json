@@ -75,7 +75,8 @@
           "PIL.ImageStat.Stat.extrema.nuanced.i-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.f-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode",
-          "PIL.ImageStat.Stat.extrema.nuanced.one-mode"
+          "PIL.ImageStat.Stat.extrema.nuanced.one-mode",
+          "PIL.ImageStat.Stat.extrema.nuanced.la-mode"
         ],
         "command_ids": []
       },

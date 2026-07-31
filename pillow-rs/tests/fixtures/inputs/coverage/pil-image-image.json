@@ -1010,6 +1010,7 @@
           "PIL.Image.Image.putdata.nuanced.f-mode",
           "PIL.Image.Image.putdata.nuanced.clipped-values",
           "PIL.Image.Image.putdata.nuanced.scale-offset",
+          "PIL.Image.Image.putdata.nuanced.one-mode",
           "PIL.Image.Image.putpixel.nuanced.p-index",
           "PIL.Image.Image.putpixel.nuanced.p-tuple",
           "PIL.Image.Image.putpixel.nuanced.p-rgba-tuple-error",
