@@ -199,6 +199,20 @@ def _pillow_bbox_tuple(bbox):
     return tuple(_pillow_bbox_value(value) for value in bbox)
 
 
+def _validate_layout_options(features=None, direction=None, language=None):
+    if features is not None or direction is not None or language is not None:
+        # This build intentionally has no libraqm, matching Pillow's public
+        # failure for layout options that require it.
+        raise KeyError("setting text direction, language or font features is not supported without libraqm")
+
+
+def _validate_start(start):
+    if start is not None and not (
+        isinstance(start, (tuple, list)) and len(start) == 2
+    ):
+        raise TypeError("render() argument 11 must be 2-item sequence, not float")
+
+
 def _wrap_pilfont(font):
     wrapped = ImageFont()
     wrapped.font = font
@@ -215,6 +229,8 @@ class FreeTypeFont:
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
+        if index != 0:
+            raise OSError("invalid argument")
         layout_engine = _normalize_layout_engine(layout_engine)
         self.path = font
         if isinstance(font, (str, bytes, os.PathLike)):
@@ -259,12 +275,14 @@ class FreeTypeFont:
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
+        _validate_layout_options(features, direction, language)
         return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
             str(text), _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor
         ))
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
+        _validate_layout_options(features, direction, language)
         return self._rust_font.getlength_with_options(
             str(text), _none_if_empty(mode), direction, features, language
         )
@@ -273,6 +291,8 @@ class FreeTypeFont:
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
+        _validate_layout_options(features, direction, language)
+        _validate_start(start)
         w, h, alpha = self._rust_font.getmask_alpha_with_options(
             str(text), _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor, ink, start
@@ -303,6 +323,8 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
+        _validate_layout_options(features, direction, language)
+        _validate_start(start)
         image, offset = self._rust_font.getmask2_image_with_options(
             str(text), _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor, ink, start,
@@ -336,6 +358,8 @@ class FreeTypeFont:
         :return: A FreeTypeFont object.
         :raises OSError: If the font could not be read.
         """
+        if index not in (None, 0):
+            raise OSError("invalid argument")
         if font is None and size is None and index is None and encoding is None and layout_engine is None:
             return self
         # Default font (loaded via load_default) has no source path/bytes.
@@ -407,6 +431,8 @@ class FreeTypeFont:
         :param axes: A list of values for each axis.
         :raises OSError: If the font is not a variation font.
         """
+        if not isinstance(axes, list):
+            raise TypeError("argument must be a list")
         return self._rust_font.set_variation_by_axes(axes)
 
 

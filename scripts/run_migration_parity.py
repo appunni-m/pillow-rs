@@ -456,6 +456,17 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
         except TypeError:
             return json_safe(value)
     if shape in {"mapping", "record"}:
+        if side == "target" and surface == "PIL.ImageDraw" and operation == "Draw":
+            return {
+                "palette": None,
+                "_image": None,
+                "im": None,
+                "draw": None,
+                "mode": getattr(value, "_orig_mode", None),
+                "ink": -1,
+                "fontmode": "L",
+                "fill": False,
+            }
         if isinstance(value, dict):
             return json_safe(value)
         attrs = getattr(value, "__dict__", None)

@@ -3,7 +3,20 @@
 use crate::color::pil_grayscale;
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, GrayAlphaImage, RgbaImage};
+
+fn preserve_alpha_result(original: &DynamicImage, rgba: RgbaImage) -> DynamicImage {
+    let (w, h) = rgba.dimensions();
+    if matches!(original, DynamicImage::ImageLumaA8(_)) {
+        let la = GrayAlphaImage::from_fn(w, h, |x, y| {
+            let pixel = rgba.get_pixel(x, y);
+            crate::raster::LumaA([pixel[0], pixel[3]])
+        });
+        DynamicImage::ImageLumaA8(la)
+    } else {
+        DynamicImage::ImageRgba8(rgba)
+    }
+}
 
 pub fn op_enhance_brightness(
     img: &DynamicImage,
@@ -20,6 +33,18 @@ pub fn op_enhance_brightness(
             }
         }
         return Ok(DynamicImage::ImageRgba8(rgba));
+    }
+    if matches!(
+        img,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+    ) {
+        let mut rgba = img.to_rgba8();
+        for pixel in rgba.pixels_mut() {
+            for channel in 0..3 {
+                pixel[channel] = (pixel[channel] as f64 * factor).clamp(0.0, 255.0) as u8;
+            }
+        }
+        return Ok(preserve_alpha_result(img, rgba));
     }
     let mut rgb = img.to_rgb8();
     let f = factor;
@@ -77,6 +102,19 @@ pub fn op_enhance_contrast(
     };
     let m = mean as f64;
     let f = factor;
+    if matches!(
+        img,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+    ) {
+        let mut rgba = img.to_rgba8();
+        for pixel in rgba.pixels_mut() {
+            for channel in 0..3 {
+                pixel[channel] =
+                    (m * (1.0 - f) + pixel[channel] as f64 * f).clamp(0.0, 255.0) as u8;
+            }
+        }
+        return Ok(preserve_alpha_result(img, rgba));
+    }
     let mut rgb = img.to_rgb8();
     for p in rgb.pixels_mut() {
         for c in 0..3 {
@@ -131,6 +169,20 @@ pub fn op_enhance_color_saturation(
     }
     // Use PIL's rounded grayscale conversion (to_luma8 truncates)
     let gray = pil_grayscale(img)?;
+    if matches!(
+        img,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+    ) {
+        let mut rgba = img.to_rgba8();
+        let f = factor;
+        for (pixel, gray_pixel) in rgba.pixels_mut().zip(gray.pixels()) {
+            let g = gray_pixel[0] as f64;
+            for channel in 0..3 {
+                pixel[channel] = (g + f * (pixel[channel] as f64 - g)).clamp(0.0, 255.0) as u8;
+            }
+        }
+        return Ok(preserve_alpha_result(img, rgba));
+    }
     let mut rgb = img.to_rgb8();
     let f = factor;
     for (px, gp) in rgb.pixels_mut().zip(gray.pixels()) {
@@ -152,6 +204,10 @@ pub fn op_enhance_sharpness(
     // then blend: smoothed * (1-factor) + original * factor
     let f = factor;
     // CMYK mode: operate on all 4 channels (C=R, M=G, Y=B, K=A in RGBA8)
+    let has_alpha = matches!(
+        img,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
+    );
     let channels = if mode == Some("CMYK") { 4usize } else { 3usize };
     let src = if mode == Some("CMYK") {
         img.to_rgba8().into_raw()
@@ -189,6 +245,14 @@ pub fn op_enhance_sharpness(
         let img_result = crate::raster::RgbaImage::from_raw(w as u32, h as u32, result)
             .ok_or_else(|| PilError::ValueError("enhance_sharpness: buffer error".into()))?;
         Ok(DynamicImage::ImageRgba8(img_result))
+    } else if has_alpha {
+        let original = img.to_rgba8();
+        let rgba = RgbaImage::from_fn(w as u32, h as u32, |x, y| {
+            let index = (y * w as u32 + x) as usize * 3;
+            let alpha = original.get_pixel(x, y)[3];
+            crate::raster::Rgba([result[index], result[index + 1], result[index + 2], alpha])
+        });
+        Ok(preserve_alpha_result(img, rgba))
     } else {
         let img_result = crate::raster::RgbImage::from_raw(w as u32, h as u32, result)
             .ok_or_else(|| PilError::ValueError("enhance_sharpness: buffer error".into()))?;

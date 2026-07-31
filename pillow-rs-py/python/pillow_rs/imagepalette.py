@@ -5,14 +5,28 @@ from . import _core
 class ImagePalette:
     """Color palette for palette-mapped images."""
 
-    def __init__(self, mode="RGB"):
+    def __init__(self, mode="RGB", palette=None, size=0):
         self.mode = mode
-        self.palette = bytearray()
+        self.rawmode = None
+        self._colors = None
+        self._palette = bytearray() if palette is None else palette
+        self.dirty = None
+
+    @property
+    def palette(self):
+        return self._palette
+
+    @palette.setter
+    def palette(self, value):
+        self._palette = value
 
     def copy(self):
         """Return a copy of the palette."""
         p = ImagePalette(self.mode)
-        p.palette = bytearray(self.palette)
+        p.rawmode = self.rawmode
+        p._colors = self._colors.copy() if self._colors is not None else None
+        p._palette = bytearray(self._palette) if isinstance(self._palette, (bytes, bytearray)) else self._palette
+        p.dirty = self.dirty
         return p
 
     def getcolor(self, color, image=None):
