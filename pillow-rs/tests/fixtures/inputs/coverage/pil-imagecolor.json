@@ -1,0 +1,34 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagecolor.coverage-plan",
+      "covers": [
+        "PIL.ImageColor.getcolor.behavior.default",
+        "PIL.ImageColor.getcolor.parameter.color",
+        "PIL.ImageColor.getcolor.parameter.mode",
+        "PIL.ImageColor.getcolor.mode.l",
+        "PIL.ImageColor.getcolor.mode.rgb",
+        "PIL.ImageColor.getrgb.behavior.default",
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageColor.getcolor.behavior-default",
+          "PIL.ImageColor.getcolor.parameter-color",
+          "PIL.ImageColor.getcolor.parameter-mode",
+          "PIL.ImageColor.getcolor.mode-l",
+          "PIL.ImageColor.getcolor.mode-rgb",
+          "PIL.ImageColor.getrgb.behavior-default",
+          "PIL.ImageColor.getrgb.parameter-color"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-color"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

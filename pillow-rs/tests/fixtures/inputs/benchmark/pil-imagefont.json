@@ -1,0 +1,333 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagefont.freetypefont.standard",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.FreeTypeFont.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.imagefont.standard",
+      "covers": [
+        "PIL.ImageFont.ImageFont.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.ImageFont.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.transposedfont.standard",
+      "covers": [
+        "PIL.ImageFont.TransposedFont.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.TransposedFont.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.load.standard",
+      "covers": [
+        "PIL.ImageFont.load.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.load.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.load-default.standard",
+      "covers": [
+        "PIL.ImageFont.load_default.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.load_default.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.load-default-imagefont.standard",
+      "covers": [
+        "PIL.ImageFont.load_default_imagefont.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.load_default_imagefont.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.load-path.standard",
+      "covers": [
+        "PIL.ImageFont.load_path.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.load_path.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefont.truetype.standard",
+      "covers": [
+        "PIL.ImageFont.truetype.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFont.truetype.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagefont.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageFont.",
+      "members": [
+        {
+          "workload_id": "pil-imagefont.freetypefont.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.imagefont.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.transposedfont.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.load.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.load-default.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.load-default-imagefont.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.load-path.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefont.truetype.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

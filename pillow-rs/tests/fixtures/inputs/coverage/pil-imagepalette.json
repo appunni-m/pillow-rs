@@ -1,0 +1,26 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagepalette.coverage-plan",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.behavior.default",
+        "PIL.ImagePalette.ImagePalette.parameter.mode",
+        "PIL.ImagePalette.ImagePalette.parameter.palette"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImagePalette.ImagePalette.behavior-default",
+          "PIL.ImagePalette.ImagePalette.parameter-mode",
+          "PIL.ImagePalette.ImagePalette.parameter-palette"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-palette"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

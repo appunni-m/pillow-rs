@@ -1,0 +1,68 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imageenhance.coverage-plan",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.behavior.default",
+        "PIL.ImageEnhance.Brightness.parameter.image",
+        "PIL.ImageEnhance.Brightness.mode.l",
+        "PIL.ImageEnhance.Brightness.mode.la",
+        "PIL.ImageEnhance.Brightness.mode.rgb",
+        "PIL.ImageEnhance.Brightness.mode.rgba",
+        "PIL.ImageEnhance.Color.behavior.default",
+        "PIL.ImageEnhance.Color.parameter.image",
+        "PIL.ImageEnhance.Color.mode.l",
+        "PIL.ImageEnhance.Color.mode.la",
+        "PIL.ImageEnhance.Color.mode.rgb",
+        "PIL.ImageEnhance.Color.mode.rgba",
+        "PIL.ImageEnhance.Contrast.behavior.default",
+        "PIL.ImageEnhance.Contrast.parameter.image",
+        "PIL.ImageEnhance.Contrast.mode.l",
+        "PIL.ImageEnhance.Contrast.mode.la",
+        "PIL.ImageEnhance.Contrast.mode.rgb",
+        "PIL.ImageEnhance.Contrast.mode.rgba",
+        "PIL.ImageEnhance.Sharpness.behavior.default",
+        "PIL.ImageEnhance.Sharpness.parameter.image",
+        "PIL.ImageEnhance.Sharpness.mode.l",
+        "PIL.ImageEnhance.Sharpness.mode.la",
+        "PIL.ImageEnhance.Sharpness.mode.rgb",
+        "PIL.ImageEnhance.Sharpness.mode.rgba"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageEnhance.Brightness.behavior-default",
+          "PIL.ImageEnhance.Brightness.parameter-image",
+          "PIL.ImageEnhance.Brightness.mode-l",
+          "PIL.ImageEnhance.Brightness.mode-la",
+          "PIL.ImageEnhance.Brightness.mode-rgb",
+          "PIL.ImageEnhance.Brightness.mode-rgba",
+          "PIL.ImageEnhance.Color.behavior-default",
+          "PIL.ImageEnhance.Color.parameter-image",
+          "PIL.ImageEnhance.Color.mode-l",
+          "PIL.ImageEnhance.Color.mode-la",
+          "PIL.ImageEnhance.Color.mode-rgb",
+          "PIL.ImageEnhance.Color.mode-rgba",
+          "PIL.ImageEnhance.Contrast.behavior-default",
+          "PIL.ImageEnhance.Contrast.parameter-image",
+          "PIL.ImageEnhance.Contrast.mode-l",
+          "PIL.ImageEnhance.Contrast.mode-la",
+          "PIL.ImageEnhance.Contrast.mode-rgb",
+          "PIL.ImageEnhance.Contrast.mode-rgba",
+          "PIL.ImageEnhance.Sharpness.behavior-default",
+          "PIL.ImageEnhance.Sharpness.parameter-image",
+          "PIL.ImageEnhance.Sharpness.mode-l",
+          "PIL.ImageEnhance.Sharpness.mode-la",
+          "PIL.ImageEnhance.Sharpness.mode-rgb",
+          "PIL.ImageEnhance.Sharpness.mode-rgba"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-enhance"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

@@ -1,0 +1,853 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagechops.add.standard",
+      "covers": [
+        "PIL.ImageChops.add.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.add.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.add-modulo.standard",
+      "covers": [
+        "PIL.ImageChops.add_modulo.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.add_modulo.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.blend.standard",
+      "covers": [
+        "PIL.ImageChops.blend.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.blend.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.composite.standard",
+      "covers": [
+        "PIL.ImageChops.composite.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.composite.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.constant.standard",
+      "covers": [
+        "PIL.ImageChops.constant.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.constant.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.darker.standard",
+      "covers": [
+        "PIL.ImageChops.darker.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.darker.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.difference.standard",
+      "covers": [
+        "PIL.ImageChops.difference.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.difference.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.duplicate.standard",
+      "covers": [
+        "PIL.ImageChops.duplicate.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.duplicate.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.hard-light.standard",
+      "covers": [
+        "PIL.ImageChops.hard_light.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.hard_light.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.invert.standard",
+      "covers": [
+        "PIL.ImageChops.invert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.invert.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.lighter.standard",
+      "covers": [
+        "PIL.ImageChops.lighter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.lighter.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.logical-and.standard",
+      "covers": [
+        "PIL.ImageChops.logical_and.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.logical_and.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.logical-or.standard",
+      "covers": [
+        "PIL.ImageChops.logical_or.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.logical_or.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.logical-xor.standard",
+      "covers": [
+        "PIL.ImageChops.logical_xor.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.logical_xor.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.multiply.standard",
+      "covers": [
+        "PIL.ImageChops.multiply.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.multiply.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.offset.standard",
+      "covers": [
+        "PIL.ImageChops.offset.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.offset.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.overlay.standard",
+      "covers": [
+        "PIL.ImageChops.overlay.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.overlay.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.screen.standard",
+      "covers": [
+        "PIL.ImageChops.screen.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.screen.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.soft-light.standard",
+      "covers": [
+        "PIL.ImageChops.soft_light.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.soft_light.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.subtract.standard",
+      "covers": [
+        "PIL.ImageChops.subtract.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.subtract.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagechops.subtract-modulo.standard",
+      "covers": [
+        "PIL.ImageChops.subtract_modulo.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageChops.subtract_modulo.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagechops.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageChops.",
+      "members": [
+        {
+          "workload_id": "pil-imagechops.add.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.add-modulo.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.blend.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.composite.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.constant.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.darker.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.difference.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.duplicate.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.hard-light.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.invert.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.lighter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.logical-and.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.logical-or.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.logical-xor.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.multiply.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.offset.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.overlay.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.screen.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.soft-light.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.subtract.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagechops.subtract-modulo.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

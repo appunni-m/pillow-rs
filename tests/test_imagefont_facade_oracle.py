@@ -8,8 +8,14 @@ from PIL import ImageDraw as PILImageDraw
 from PIL import ImageFont as PILImageFont
 
 
-FONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/font/input/fonts"
-PILFONT_ROOT = Path(__file__).resolve().parents[1] / "pillow-rs/tests/fixtures/font/input/pilfont"
+FONT_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "pillow-rs/tests/fixtures/assets/font/fonts"
+)
+PILFONT_ROOT = (
+    Path(__file__).resolve().parents[1]
+    / "pillow-rs/tests/fixtures/assets/font/pilfont"
+)
 DEJAVU = FONT_ROOT / "DejaVuSans.ttf"
 VARIABLE = FONT_ROOT / "variable-named-instances.ttf"
 VARIABLE_WINDOWS_FALLBACK = FONT_ROOT / "variable-name-windows-fallback.ttf"

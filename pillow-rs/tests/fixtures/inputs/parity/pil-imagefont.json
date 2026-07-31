@@ -1,0 +1,1274 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.parameter-font",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.parameter.font"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.parameter-size",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.parameter-index",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.parameter.index"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "index": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.parameter-encoding",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.parameter.encoding"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "encoding": {
+              "kind": "literal",
+              "value": "value"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.parameter-layout-engine",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.parameter.layout-engine"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "layout_engine": {
+              "kind": "literal",
+              "value": "NEAREST"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "FreeTypeFont",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "FreeTypeFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.ImageFont.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "ImageFont",
+      "covers": [
+        "PIL.ImageFont.ImageFont.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "ImageFont",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.ImageFont.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "ImageFont",
+      "covers": [
+        "PIL.ImageFont.ImageFont.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "ImageFont",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.MAX_STRING_LENGTH.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "MAX_STRING_LENGTH",
+      "covers": [
+        "PIL.ImageFont.MAX_STRING_LENGTH.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "MAX_STRING_LENGTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.TransposedFont.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "TransposedFont",
+      "covers": [
+        "PIL.ImageFont.TransposedFont.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "TransposedFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-1"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.TransposedFont.parameter-font",
+      "surface": "PIL.ImageFont",
+      "operation": "TransposedFont",
+      "covers": [
+        "PIL.ImageFont.TransposedFont.parameter.font"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "TransposedFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-1"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.TransposedFont.parameter-orientation",
+      "surface": "PIL.ImageFont",
+      "operation": "TransposedFont",
+      "covers": [
+        "PIL.ImageFont.TransposedFont.parameter.orientation"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "setup-orientation-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "TransposedFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-1"
+            },
+            "orientation": {
+              "kind": "binding",
+              "step_id": "setup-orientation-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.TransposedFont.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "TransposedFont",
+      "covers": [
+        "PIL.ImageFont.TransposedFont.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "TransposedFont",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-1"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "load",
+      "covers": [
+        "PIL.ImageFont.load.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load.parameter-filename",
+      "surface": "PIL.ImageFont",
+      "operation": "load",
+      "covers": [
+        "PIL.ImageFont.load.parameter.filename"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "load",
+      "covers": [
+        "PIL.ImageFont.load.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_default.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "load_default",
+      "covers": [
+        "PIL.ImageFont.load_default.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_default",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_default.parameter-size",
+      "surface": "PIL.ImageFont",
+      "operation": "load_default",
+      "covers": [
+        "PIL.ImageFont.load_default.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_default",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_default.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "load_default",
+      "covers": [
+        "PIL.ImageFont.load_default.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_default",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_default_imagefont.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "load_default_imagefont",
+      "covers": [
+        "PIL.ImageFont.load_default_imagefont.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_default_imagefont",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_default_imagefont.parameter-combination-legacy-001",
+      "surface": "PIL.ImageFont",
+      "operation": "load_default_imagefont",
+      "covers": [
+        "PIL.ImageFont.load_default_imagefont.parameter-combination.legacy-001"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_default_imagefont",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_default_imagefont.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "load_default_imagefont",
+      "covers": [
+        "PIL.ImageFont.load_default_imagefont.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_default_imagefont",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_path.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "load_path",
+      "covers": [
+        "PIL.ImageFont.load_path.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_path",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_path.parameter-filename",
+      "surface": "PIL.ImageFont",
+      "operation": "load_path",
+      "covers": [
+        "PIL.ImageFont.load_path.parameter.filename"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_path",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_path.parameter-combination-legacy-001",
+      "surface": "PIL.ImageFont",
+      "operation": "load_path",
+      "covers": [
+        "PIL.ImageFont.load_path.parameter-combination.legacy-001"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_path",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.load_path.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "load_path",
+      "covers": [
+        "PIL.ImageFont.load_path.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "load_path",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.behavior-default",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.parameter-font",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.font"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.parameter-size",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.parameter-index",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.index"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "index": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.parameter-encoding",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.encoding"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "encoding": {
+              "kind": "literal",
+              "value": "value"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.parameter-layout-engine",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.parameter.layout-engine"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "layout_engine": {
+              "kind": "literal",
+              "value": "NEAREST"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.truetype.performance-standard",
+      "surface": "PIL.ImageFont",
+      "operation": "truetype",
+      "covers": [
+        "PIL.ImageFont.truetype.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}

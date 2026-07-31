@@ -1,0 +1,66 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagepalette-imagepalette.coverage-plan",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.copy.behavior.default",
+        "PIL.ImagePalette.ImagePalette.copy.mode.l",
+        "PIL.ImagePalette.ImagePalette.copy.mode.p",
+        "PIL.ImagePalette.ImagePalette.copy.mode.rgb",
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default",
+        "PIL.ImagePalette.ImagePalette.getcolor.parameter.color",
+        "PIL.ImagePalette.ImagePalette.getcolor.parameter.image",
+        "PIL.ImagePalette.ImagePalette.getcolor.mode.l",
+        "PIL.ImagePalette.ImagePalette.getcolor.mode.p",
+        "PIL.ImagePalette.ImagePalette.getcolor.mode.rgb",
+        "PIL.ImagePalette.ImagePalette.getdata.behavior.default",
+        "PIL.ImagePalette.ImagePalette.getdata.mode.l",
+        "PIL.ImagePalette.ImagePalette.getdata.mode.p",
+        "PIL.ImagePalette.ImagePalette.getdata.mode.rgb",
+        "PIL.ImagePalette.ImagePalette.save.behavior.default",
+        "PIL.ImagePalette.ImagePalette.save.parameter.fp",
+        "PIL.ImagePalette.ImagePalette.save.mode.l",
+        "PIL.ImagePalette.ImagePalette.save.mode.p",
+        "PIL.ImagePalette.ImagePalette.save.mode.rgb",
+        "PIL.ImagePalette.ImagePalette.tobytes.behavior.default",
+        "PIL.ImagePalette.ImagePalette.tobytes.mode.l",
+        "PIL.ImagePalette.ImagePalette.tobytes.mode.p",
+        "PIL.ImagePalette.ImagePalette.tobytes.mode.rgb"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImagePalette.ImagePalette.copy.behavior-default",
+          "PIL.ImagePalette.ImagePalette.copy.mode-l",
+          "PIL.ImagePalette.ImagePalette.copy.mode-p",
+          "PIL.ImagePalette.ImagePalette.copy.mode-rgb",
+          "PIL.ImagePalette.ImagePalette.getcolor.behavior-default",
+          "PIL.ImagePalette.ImagePalette.getcolor.parameter-color",
+          "PIL.ImagePalette.ImagePalette.getcolor.parameter-image",
+          "PIL.ImagePalette.ImagePalette.getcolor.mode-l",
+          "PIL.ImagePalette.ImagePalette.getcolor.mode-p",
+          "PIL.ImagePalette.ImagePalette.getcolor.mode-rgb",
+          "PIL.ImagePalette.ImagePalette.getdata.behavior-default",
+          "PIL.ImagePalette.ImagePalette.getdata.mode-l",
+          "PIL.ImagePalette.ImagePalette.getdata.mode-p",
+          "PIL.ImagePalette.ImagePalette.getdata.mode-rgb",
+          "PIL.ImagePalette.ImagePalette.save.behavior-default",
+          "PIL.ImagePalette.ImagePalette.save.parameter-fp",
+          "PIL.ImagePalette.ImagePalette.save.mode-l",
+          "PIL.ImagePalette.ImagePalette.save.mode-p",
+          "PIL.ImagePalette.ImagePalette.save.mode-rgb",
+          "PIL.ImagePalette.ImagePalette.tobytes.behavior-default",
+          "PIL.ImagePalette.ImagePalette.tobytes.mode-l",
+          "PIL.ImagePalette.ImagePalette.tobytes.mode-p",
+          "PIL.ImagePalette.ImagePalette.tobytes.mode-rgb"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-palette"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

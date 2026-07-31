@@ -1,0 +1,24 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imageenhance-sharpness.coverage-plan",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.behavior.default",
+        "PIL.ImageEnhance.Sharpness.enhance.parameter.factor"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageEnhance.Sharpness.enhance.behavior-default",
+          "PIL.ImageEnhance.Sharpness.enhance.parameter-factor"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-enhance"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

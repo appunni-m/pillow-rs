@@ -1,0 +1,46 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagefont-transposedfont.coverage-plan",
+      "covers": [
+        "PIL.ImageFont.TransposedFont.getbbox.behavior.default",
+        "PIL.ImageFont.TransposedFont.getbbox.parameter.text",
+        "PIL.ImageFont.TransposedFont.getbbox.parameter.args",
+        "PIL.ImageFont.TransposedFont.getbbox.parameter.kwargs",
+        "PIL.ImageFont.TransposedFont.getlength.behavior.default",
+        "PIL.ImageFont.TransposedFont.getlength.parameter.text",
+        "PIL.ImageFont.TransposedFont.getlength.parameter.args",
+        "PIL.ImageFont.TransposedFont.getlength.parameter.kwargs",
+        "PIL.ImageFont.TransposedFont.getmask.behavior.default",
+        "PIL.ImageFont.TransposedFont.getmask.parameter.text",
+        "PIL.ImageFont.TransposedFont.getmask.parameter.mode",
+        "PIL.ImageFont.TransposedFont.getmask.parameter.args",
+        "PIL.ImageFont.TransposedFont.getmask.parameter.kwargs"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageFont.TransposedFont.getbbox.behavior-default",
+          "PIL.ImageFont.TransposedFont.getbbox.parameter-text",
+          "PIL.ImageFont.TransposedFont.getbbox.parameter-args",
+          "PIL.ImageFont.TransposedFont.getbbox.parameter-kwargs",
+          "PIL.ImageFont.TransposedFont.getlength.behavior-default",
+          "PIL.ImageFont.TransposedFont.getlength.parameter-text",
+          "PIL.ImageFont.TransposedFont.getlength.parameter-args",
+          "PIL.ImageFont.TransposedFont.getlength.parameter-kwargs",
+          "PIL.ImageFont.TransposedFont.getmask.behavior-default",
+          "PIL.ImageFont.TransposedFont.getmask.parameter-text",
+          "PIL.ImageFont.TransposedFont.getmask.parameter-mode",
+          "PIL.ImageFont.TransposedFont.getmask.parameter-args",
+          "PIL.ImageFont.TransposedFont.getmask.parameter-kwargs"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-font"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

@@ -1,0 +1,813 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagefilter.blur.standard",
+      "covers": [
+        "PIL.ImageFilter.BLUR.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.BLUR.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.boxblur.standard",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.BoxBlur.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.contour.standard",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.CONTOUR.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.color3dlut.standard",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.Color3DLUT.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.detail.standard",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.DETAIL.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.edge-enhance.standard",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.EDGE_ENHANCE.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.edge-enhance-more.standard",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.emboss.standard",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.EMBOSS.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.find-edges.standard",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.FIND_EDGES.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.gaussianblur.standard",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.GaussianBlur.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.kernel.standard",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.Kernel.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.maxfilter.standard",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.MaxFilter.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.medianfilter.standard",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.MedianFilter.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.minfilter.standard",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.MinFilter.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.modefilter.standard",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.ModeFilter.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.rankfilter.standard",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.RankFilter.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.sharpen.standard",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.SHARPEN.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.smooth.standard",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.SMOOTH.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.smooth-more.standard",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.SMOOTH_MORE.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter.unsharpmask.standard",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.UnsharpMask.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagefilter.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageFilter.",
+      "members": [
+        {
+          "workload_id": "pil-imagefilter.blur.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.boxblur.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.contour.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.color3dlut.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.detail.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.edge-enhance.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.edge-enhance-more.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.emboss.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.find-edges.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.gaussianblur.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.kernel.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.maxfilter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.medianfilter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.minfilter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.modefilter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.rankfilter.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.sharpen.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.smooth.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.smooth-more.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter.unsharpmask.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

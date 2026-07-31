@@ -151,7 +151,8 @@ The current live Font fixture corpus has exact runtime-oracle parity for the row
 
 - 445 input-only rows execute.
 - 445 rows match live Pillow 12.2.0 exactly.
-- Inputs under `pillow-rs/tests/fixtures/font/inputs/public-api` do not contain stored oracle output, expected error payloads, pixel hashes, or self-comparison data.
+- Inputs under `pillow-rs/tests/fixtures/inputs/font` do not contain stored
+  oracle output, expected error payloads, pixel hashes, or self-comparison data.
 - The oracle script fails unless the repo-local venv is Pillow 12.2.0.
 - `make -C pillow-rs font-tests` passes.
 - Latest measured code Coverage MCP command
@@ -550,7 +551,9 @@ These are acceptable only as test/binding adapters around Pillow behavior. They 
 
 ## Live fixture corpus
 
-Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-api`:
+Current active input files under `pillow-rs/tests/fixtures/inputs/font` are
+rebuilt from the deprecated `font_public_api_v0` corpus by
+`make migration-parity-fixtures`:
 
 | Input file | Cases |
 |---|---:|
@@ -561,34 +564,41 @@ Current active input files under `pillow-rs/tests/fixtures/font/inputs/public-ap
 | `font.TransposedFont.getbbox.json` | 3 |
 | `font.TransposedFont.getlength.json` | 3 |
 | `font.TransposedFont.getmask.json` | 6 |
-| `font.constructor.json` | 11 |
-| `font.get_transposed_mask.json` | 11 |
-| `font.getbbox.json` | 38 |
+| `font.draw_text.json` | 7 |
+| `font.font_size.json` | 2 |
+| `font.font_variant.json` | 10 |
+| `font.get_transposed_mask.json` | 12 |
+| `font.get_variation_axes.json` | 5 |
+| `font.get_variation_names.json` | 5 |
+| `font.getbbox.json` | 40 |
 | `font.getbbox_binary.json` | 10 |
 | `font.getlength.json` | 26 |
 | `font.getmask.json` | 52 |
 | `font.getmask2.json` | 64 |
 | `font.getmask2_with_start.json` | 24 |
 | `font.getmetrics.json` | 8 |
-| `font.getname.json` | 6 |
+| `font.getname.json` | 20 |
 | `font.has_variations.json` | 4 |
-| `font.layout_failure.json` | 1 |
 | `font.load.json` | 25 |
+| `font.load_default.json` | 2 |
 | `font.load_default_imagefont.json` | 1 |
-| `font.load_failure.json` | 16 |
 | `font.load_path.json` | 1 |
 | `font.native_face_attrs.json` | 2 |
 | `font.native_getlength_26dot6.json` | 3 |
 | `font.native_getsize.json` | 3 |
+| `font.native_getvaraxes.json` | 4 |
+| `font.native_getvarnames.json` | 4 |
 | `font.native_render.json` | 7 |
-| `font.native_variations.json` | 17 |
-| `font.render_text.json` | 7 |
+| `font.native_setvaraxes.json` | 3 |
+| `font.native_setvarname.json` | 6 |
 | `font.render_text_binary.json` | 10 |
+| `font.set_variation_by_axes.json` | 10 |
+| `font.set_variation_by_name.json` | 7 |
 | `font.text_bbox.json` | 6 |
 | `font.transposed_bbox.json` | 7 |
-| `font.unsupported_operation.json` | 1 |
+| `font.truetype.json` | 7 |
+| `font.unsupported_magic.json` | 1 |
 | `font.validate_transposed_length.json` | 5 |
-| `font.variations.json` | 37 |
 | total | 445 |
 
 ## Direct `pillow-rs/src/font` coverage status

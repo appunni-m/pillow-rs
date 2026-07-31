@@ -32,6 +32,7 @@ help:
 	@printf "  make test-transposed-font-oracle Run shared Pillow TransposedFont oracle through Rust\n"
 	@printf "  make test-fromarray-descriptor-oracle Run shared Pillow fromarray descriptor oracle through Rust\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
+	@printf "  make migration-parity-test Run canonical live-oracle migration parity\n"
 	@printf "  make font-tests        Run Font public API parity tests\n"
 	@printf "  make font-tests-release Run Font public API parity tests (release)\n"
 	@printf "  make font-tests-coverage Run Font public API parity tests with coverage\n"
@@ -119,10 +120,13 @@ test-apply-transparency-oracle:
 backend-support-matrix:
 	$(CARGO) run --quiet --all-features --example backend_support_matrix --locked
 
-.PHONY: font-tests
-font-tests:
+.PHONY: migration-parity-test
+migration-parity-test:
 	FONT_ORACLE_PYTHON=$(FONT_ORACLE_PYTHON) \
 		$(CARGO) test --all-features --test font_public_api --locked -- --nocapture
+
+.PHONY: font-tests
+font-tests: migration-parity-test
 
 .PHONY: font-tests-release
 font-tests-release:
@@ -154,14 +158,12 @@ test-imagingft-release: font-tests-release
 
 .PHONY: fixtures
 fixtures:
-	@printf "Font public-api fixtures are input-only and are not generated.\n"
+	@printf "Run 'make -C .. migration-parity-fixtures' to rebuild project accounting and active Font inputs.\n"
 
 .PHONY: fixtures-check
 fixtures-check:
 	@! rg -n '"(error|expect_error|expectation|expected|hash|oracle|output|outputs|pixels_hex|raw_path|sha256|status)"' \
-		tests/fixtures/font/inputs/public-api
-	@! rg -n '^[[:space:]]*(error|expect_error|expectation|expected|hash|output|outputs|pixels_hex|raw_path|sha256|status):' \
-		tests/fixtures/font/font_manifest.yaml
+		tests/fixtures/inputs/font
 
 .PHONY: fixtures-clean
 fixtures-clean:

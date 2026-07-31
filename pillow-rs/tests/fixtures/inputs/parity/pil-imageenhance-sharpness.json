@@ -1,0 +1,206 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImageEnhance.Sharpness.enhance.behavior-default",
+      "surface": "PIL.ImageEnhance.Sharpness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-sharpness-2",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Sharpness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Sharpness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-sharpness-2"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Sharpness.enhance.parameter-factor",
+      "surface": "PIL.ImageEnhance.Sharpness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-sharpness-2",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Sharpness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Sharpness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-sharpness-2"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Sharpness.enhance.performance-standard",
+      "surface": "PIL.ImageEnhance.Sharpness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-sharpness-2",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Sharpness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Sharpness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-sharpness-2"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}

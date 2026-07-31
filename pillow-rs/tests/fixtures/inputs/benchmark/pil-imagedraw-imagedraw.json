@@ -1,0 +1,773 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagedraw-imagedraw.arc.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.arc.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.arc.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.bitmap.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.bitmap.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.bitmap.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.chord.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.chord.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.chord.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.circle.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.circle.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.circle.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.ellipse.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.ellipse.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.ellipse.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.getfont.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.getfont.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.getfont.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.line.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.line.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.line.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.multiline-text.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.multiline_text.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.multiline-textbbox.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.multiline_textbbox.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.pieslice.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.pieslice.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.pieslice.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.point.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.point.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.point.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.polygon.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.polygon.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.polygon.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.rectangle.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.rectangle.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.rectangle.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.regular-polygon.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.regular_polygon.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.rounded-rectangle.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.rounded_rectangle.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.rounded_rectangle.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.shape.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.shape.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.shape.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.text.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.text.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.text.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.textbbox.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.textbbox.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.textbbox.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw-imagedraw.textlength.standard",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.textlength.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.ImageDraw.textlength.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagedraw-imagedraw.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageDraw.ImageDraw.",
+      "members": [
+        {
+          "workload_id": "pil-imagedraw-imagedraw.arc.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.bitmap.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.chord.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.circle.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.ellipse.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.getfont.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.line.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.multiline-text.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.multiline-textbbox.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.pieslice.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.point.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.polygon.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.rectangle.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.regular-polygon.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.rounded-rectangle.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.shape.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.text.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.textbbox.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw-imagedraw.textlength.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

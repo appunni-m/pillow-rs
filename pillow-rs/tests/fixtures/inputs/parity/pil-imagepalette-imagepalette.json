@@ -1,0 +1,1085 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.copy.behavior-default",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "copy",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.copy.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "copy",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.copy.mode-l",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "copy",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.copy.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "copy",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.copy.mode-p",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "copy",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.copy.mode.p"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "copy",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.copy.mode-rgb",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "copy",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.copy.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "copy",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.copy.performance-standard",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "copy",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.copy.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "copy",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.behavior-default",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.parameter-color",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.parameter-image",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.parameter.image"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "setup-image-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            },
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.mode-l",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.mode-p",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.mode.p"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.mode-rgb",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.performance-standard",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getdata.behavior-default",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getdata",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getdata.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getdata.mode-l",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getdata",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getdata.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getdata.mode-p",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getdata",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getdata.mode.p"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getdata.mode-rgb",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getdata",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getdata.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getdata.performance-standard",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getdata",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getdata.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.save.behavior-default",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "save",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.save.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.save.parameter-fp",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "save",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.save.parameter.fp"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.save.mode-l",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "save",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.save.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.save.mode-p",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "save",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.save.mode.p"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.save.mode-rgb",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "save",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.save.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.save.performance-standard",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "save",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.save.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.tobytes.behavior-default",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.tobytes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.tobytes.mode-l",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.tobytes.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.tobytes.mode-p",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.tobytes.mode.p"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.tobytes.mode-rgb",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.tobytes.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.tobytes.performance-standard",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.tobytes.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}

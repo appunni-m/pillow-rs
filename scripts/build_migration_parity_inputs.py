@@ -1,0 +1,944 @@
+#!/usr/bin/env python3
+"""Build fixed parity, coverage, and benchmark input documents.
+
+Every manifest requirement receives a deterministic input mapping. Parity
+cases contain public workflows only and never contain expected source or target
+outputs. Coverage plans select those cases, and benchmark workloads reuse
+correctness-gated parity cases.
+
+This is the initial project-wide definition generator. Runtime execution may
+classify semantic defects in individual stimuli, but static completeness never
+hides an endpoint or requirement.
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import json
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
+FIXTURE_ROOT = WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures"
+DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
+DEFAULT_OUTPUT_ROOT = FIXTURE_ROOT
+TARGET_PROFILE = "python-cpu"
+
+
+def slug(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "-", value).strip("-").lower()
+
+
+def literal(value: Any) -> dict[str, Any]:
+    return {"kind": "literal", "value": value}
+
+
+def binding(step_id: str) -> dict[str, str]:
+    return {"kind": "binding", "step_id": step_id}
+
+
+def asset_value(asset_id: str) -> dict[str, str]:
+    return {"kind": "asset", "asset_id": asset_id}
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def operation_key(surface: str, operation: str) -> tuple[str, str]:
+    return surface, operation
+
+
+def operation_prefix(surface: str, operation: str) -> str:
+    return f"{surface}.{operation}"
+
+
+def load_manifest(path: Path) -> dict[str, Any]:
+    manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if manifest.get("schema") != "migration-parity/manifest@2":
+        raise ValueError(f"{path}: expected migration-parity/manifest@2")
+    return manifest
+
+
+def operation_index(
+    manifest: dict[str, Any],
+) -> dict[tuple[str, str], dict[str, Any]]:
+    index: dict[tuple[str, str], dict[str, Any]] = {}
+    for surface in manifest["surfaces"]:
+        for operation in surface["operations"]:
+            key = operation_key(surface["id"], operation["id"])
+            if key in index:
+                raise ValueError(f"duplicate manifest operation: {key}")
+            index[key] = operation
+    return index
+
+
+def parameter_index(operation: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        parameter["id"]: parameter
+        for parameter in operation["source"]["parameters"]
+    }
+
+
+def requirement_focus(
+    requirement: dict[str, Any],
+    parameters: dict[str, dict[str, Any]],
+) -> str | None:
+    if requirement["dimension"] != "parameter":
+        return None
+    marker = ".parameter."
+    suffix = requirement["id"].split(marker, 1)[1]
+    for parameter_id in parameters:
+        if slug(parameter_id) == suffix:
+            return parameter_id
+    raise ValueError(
+        f"{requirement['id']}: parameter requirement has no parameter"
+    )
+
+
+def requirement_mode(requirement: dict[str, Any]) -> str | None:
+    if requirement["dimension"] != "mode":
+        return None
+    value = requirement["id"].rsplit(".", 1)[1]
+    return {
+        "1": "1",
+        "cmyk": "CMYK",
+        "f": "F",
+        "hsv": "HSV",
+        "i": "I",
+        "l": "L",
+        "la": "LA",
+        "p": "P",
+        "pa": "PA",
+        "rgb": "RGB",
+        "rgba": "RGBA",
+        "ycbcr": "YCbCr",
+    }.get(value, value.upper())
+
+
+def requirement_format(requirement: dict[str, Any]) -> str | None:
+    if requirement["dimension"] != "format":
+        return None
+    return requirement["id"].rsplit(".", 1)[1].upper()
+
+
+def requirement_edge(requirement: dict[str, Any]) -> str | None:
+    if requirement["dimension"] not in {"boundary", "error_path"}:
+        return None
+    marker = ".edge."
+    return requirement["id"].split(marker, 1)[1] if marker in requirement["id"] else None
+
+
+def requirement_variant(requirement: dict[str, Any]) -> dict[str, Any]:
+    if requirement["dimension"] != "parameter_combination":
+        return {}
+    marker = "Deprecated-authority parameter combination: "
+    description = requirement["description"]
+    if not description.startswith(marker):
+        raise ValueError(f"{requirement['id']}: missing variant encoding")
+    value = json.loads(description.removeprefix(marker))
+    if not isinstance(value, dict):
+        raise ValueError(f"{requirement['id']}: variant must be an object")
+    return value
+
+
+inspect_missing = object()
+
+
+@dataclass
+class WorkflowBuilder:
+    operations: dict[tuple[str, str], dict[str, Any]]
+    primary_surface: str
+    primary_operation: str
+    requirement: dict[str, Any]
+    assets_root: Path
+    assets: list[dict[str, Any]] = field(default_factory=list)
+    steps: list[dict[str, Any]] = field(default_factory=list)
+    _asset_ids: set[str] = field(default_factory=set)
+    _step_counter: int = 0
+    _image_steps: dict[str, str] = field(default_factory=dict)
+    _font_step: str | None = None
+    _outline_step: str | None = None
+
+    @property
+    def mode(self) -> str:
+        return requirement_mode(self.requirement) or "RGB"
+
+    @property
+    def image_format(self) -> str:
+        return requirement_format(self.requirement) or "PNG"
+
+    @property
+    def edge(self) -> str | None:
+        return requirement_edge(self.requirement)
+
+    def next_step_id(self, prefix: str) -> str:
+        self._step_counter += 1
+        return f"{prefix}-{self._step_counter}"
+
+    def add_asset(self, asset: dict[str, Any]) -> str:
+        asset_id = asset["id"]
+        if asset_id not in self._asset_ids:
+            self.assets.append(asset)
+            self._asset_ids.add(asset_id)
+        return asset_id
+
+    def builtin(self, asset_id: str, name: str) -> dict[str, str]:
+        self.add_asset({"id": asset_id, "kind": "builtin", "name": name})
+        return asset_value(asset_id)
+
+    def missing(self, asset_id: str, path: str) -> dict[str, str]:
+        self.add_asset({"id": asset_id, "kind": "missing", "path": path})
+        return asset_value(asset_id)
+
+    def inline_bytes(
+        self,
+        asset_id: str,
+        data: bytes,
+        media_type: str,
+    ) -> dict[str, str]:
+        self.add_asset(
+            {
+                "id": asset_id,
+                "kind": "inline",
+                "encoding": "base64",
+                "data": base64.b64encode(data).decode("ascii"),
+                "sha256": hashlib.sha256(data).hexdigest(),
+                "media_type": media_type,
+            }
+        )
+        return asset_value(asset_id)
+
+    def ref(
+        self,
+        asset_id: str,
+        path: str,
+        media_type: str,
+    ) -> dict[str, str]:
+        full_path = self.assets_root / path
+        if not full_path.is_file():
+            raise ValueError(f"missing active stimulus asset: {path}")
+        self.add_asset(
+            {
+                "id": asset_id,
+                "kind": "ref",
+                "path": path,
+                "sha256": sha256(full_path),
+                "media_type": media_type,
+            }
+        )
+        return asset_value(asset_id)
+
+    def add_step(
+        self,
+        surface: str,
+        operation: str,
+        *,
+        receiver: dict[str, Any] | None,
+        arguments: dict[str, dict[str, Any]],
+        step_id: str | None = None,
+    ) -> str:
+        key = operation_key(surface, operation)
+        if key not in self.operations:
+            raise ValueError(f"workflow references unknown operation {key}")
+        actual_id = step_id or self.next_step_id(slug(operation))
+        self.steps.append(
+            {
+                "step_id": actual_id,
+                "surface": surface,
+                "operation": operation,
+                "receiver": receiver,
+                "arguments": arguments,
+            }
+        )
+        return actual_id
+
+    def ensure_image(self, mode: str | None = None, label: str = "image") -> str:
+        requested_mode = mode or self.mode
+        cache_key = f"{label}:{requested_mode}"
+        if cache_key in self._image_steps:
+            return self._image_steps[cache_key]
+        size = [16, 16]
+        if self.edge == "zero-width":
+            size = [0, 16]
+        elif self.edge == "zero-height":
+            size = [16, 0]
+        step_id = self.add_step(
+            "PIL.Image",
+            "new",
+            receiver=None,
+            arguments={
+                "mode": literal(requested_mode),
+                "size": literal(size),
+                "color": literal(0),
+            },
+            step_id=self.next_step_id(f"setup-{label}"),
+        )
+        self._image_steps[cache_key] = step_id
+        return step_id
+
+    def ensure_font(self) -> str:
+        if self._font_step is not None:
+            return self._font_step
+        font = self.ref(
+            "font",
+            "font/fonts/DejaVuSans.ttf",
+            "font/ttf",
+        )
+        self._font_step = self.add_step(
+            "PIL.ImageFont",
+            "truetype",
+            receiver=None,
+            arguments={"font": font, "size": literal(20)},
+            step_id=self.next_step_id("setup-font"),
+        )
+        return self._font_step
+
+    def ensure_outline(self) -> str:
+        if self._outline_step is None:
+            self._outline_step = self.add_step(
+                "PIL.ImageDraw",
+                "Outline",
+                receiver=None,
+                arguments={},
+                step_id=self.next_step_id("setup-outline"),
+            )
+        return self._outline_step
+
+    def receiver_for(self, surface: str) -> dict[str, str] | None:
+        if surface == "PIL.Image.Image":
+            return binding(self.ensure_image())
+        if surface == "PIL.ImageDraw.ImageDraw":
+            image_step = self.ensure_image()
+            draw_step = self.add_step(
+                "PIL.ImageDraw",
+                "Draw",
+                receiver=None,
+                arguments={"im": binding(image_step)},
+                step_id=self.next_step_id("setup-draw"),
+            )
+            return binding(draw_step)
+        if surface.startswith("PIL.ImageEnhance."):
+            class_name = surface.rsplit(".", 1)[1]
+            image_step = self.ensure_image()
+            enhance_step = self.add_step(
+                "PIL.ImageEnhance",
+                class_name,
+                receiver=None,
+                arguments={"image": binding(image_step)},
+                step_id=self.next_step_id(f"setup-{slug(class_name)}"),
+            )
+            return binding(enhance_step)
+        if surface == "PIL.ImageFont.FreeTypeFont":
+            return binding(self.ensure_font())
+        if surface == "PIL.ImageFont.ImageFont":
+            font_step = self.add_step(
+                "PIL.ImageFont",
+                "ImageFont",
+                receiver=None,
+                arguments={},
+                step_id=self.next_step_id("setup-imagefont"),
+            )
+            return binding(font_step)
+        if surface == "PIL.ImageFont.TransposedFont":
+            font_step = self.ensure_font()
+            transposed = self.add_step(
+                "PIL.ImageFont",
+                "TransposedFont",
+                receiver=None,
+                arguments={"font": binding(font_step)},
+                step_id=self.next_step_id("setup-transposed-font"),
+            )
+            return binding(transposed)
+        if surface == "PIL.ImagePalette.ImagePalette":
+            palette = self.add_step(
+                "PIL.ImagePalette",
+                "ImagePalette",
+                receiver=None,
+                arguments={},
+                step_id=self.next_step_id("setup-palette"),
+            )
+            return binding(palette)
+        if surface == "PIL.ImageStat.Stat":
+            image_step = self.ensure_image()
+            stat = self.add_step(
+                "PIL.ImageStat",
+                "Stat",
+                receiver=None,
+                arguments={"image_or_list": binding(image_step)},
+                step_id=self.next_step_id("setup-stat"),
+            )
+            return binding(stat)
+        return None
+
+    def concrete_variant(self, parameter_id: str, value: Any) -> Any:
+        if not isinstance(value, str):
+            return value
+        symbolic = {
+            "default": None,
+            "int": 1,
+            "float": 1.0,
+            "hex_string": "#204080",
+            "rgb_tuple": [32, 64, 128],
+            "rgba_tuple": [32, 64, 128, 255],
+            "la_tuple": [64, 255],
+            "tuple": [1, 2, 3],
+            "4tuple": [1, 0, 0, 1],
+            "12tuple": [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0],
+            "list": [0, 1, 2, 3],
+            "sequence": [0, 1, 2, 3],
+            "box": [0, 0, 8, 8],
+            "line": [[1, 1], [14, 14]],
+            "polygon": [[2, 2], [14, 2], [8, 14]],
+            "numpy": {
+                "protocol": "array-interface",
+                "shape": [2, 2, 3],
+                "typestr": "|u1",
+                "data_base64": "AAAAAAAAAAAAAAAA",
+            },
+            "path": "path",
+            "bytes": "bytes",
+        }
+        return symbolic.get(value, value)
+
+    def edge_override(
+        self,
+        parameter_id: str,
+        value_types: set[str],
+    ) -> Any | None:
+        edge = self.edge or ""
+        name = parameter_id.lower()
+        if not edge:
+            return None
+        if "mode" in name and "invalid" in edge:
+            return "NOT_A_MODE"
+        if name in {"size"} and edge in {"zero-width", "zero-height"}:
+            return [0, 16] if edge == "zero-width" else [16, 0]
+        if ("text" in name or "data" in name) and "empty" in edge:
+            return ""
+        if "negative" in edge and (
+            "integer" in value_types or "number" in value_types
+        ):
+            return -1
+        if "unsupported" in edge and (
+            "string" in value_types or "enum" in value_types
+        ):
+            return "UNSUPPORTED"
+        return None
+
+    def descriptor_for(
+        self,
+        parameter: dict[str, Any],
+        *,
+        variant_value: Any = inspect_missing,
+    ) -> dict[str, Any]:
+        parameter_id = parameter["id"]
+        value_types = set(parameter["value_types"])
+        name = parameter_id.lower()
+
+        if variant_value is not inspect_missing:
+            if variant_value == "image":
+                return binding(
+                    self.ensure_image(label=slug(parameter_id))
+                )
+            value = self.concrete_variant(parameter_id, variant_value)
+            if value == "path":
+                return self.builtin(
+                    f"{slug(parameter_id)}-path",
+                    "temporary-output-path",
+                )
+            if value == "bytes":
+                return self.inline_bytes(
+                    f"{slug(parameter_id)}-bytes",
+                    b"\x00\x01\x02\x03",
+                    "application/octet-stream",
+                )
+            enum_values = {
+                "NEAREST": 0,
+                "LANCZOS": 1,
+                "BILINEAR": 2,
+                "BICUBIC": 3,
+                "BOX": 4,
+                "HAMMING": 5,
+            }
+            if (
+                isinstance(value, str)
+                and value in enum_values
+                and "integer" in value_types
+                and "string" not in value_types
+                and "enum" not in value_types
+            ):
+                value = enum_values[value]
+            if value is not None:
+                return literal(value)
+
+        override = self.edge_override(parameter_id, value_types)
+        if override is not None:
+            return literal(override)
+
+        if name in {
+            "image",
+            "im",
+            "im1",
+            "im2",
+            "image1",
+            "image2",
+            "bitmap",
+            "palette",
+        } or "image" in value_types:
+            return binding(self.ensure_image(label=slug(parameter_id)))
+        if name == "mask":
+            return binding(self.ensure_image(mode="L", label="mask"))
+        if name == "font":
+            if "font" in value_types and "path" not in value_types:
+                return binding(self.ensure_font())
+            return self.ref(
+                "font",
+                "font/fonts/DejaVuSans.ttf",
+                "font/ttf",
+            )
+        if name in {"filename"}:
+            if self.primary_surface.startswith("PIL.ImageFont"):
+                return self.ref(
+                    "pilfont",
+                    "font/pilfont/courb08.pil",
+                    "application/x-pilfont",
+                )
+            return self.builtin("input-path", "encoded-png-input-path")
+        if name == "fp":
+            if self.primary_operation == "open":
+                if "nonexistent" in (self.edge or ""):
+                    return self.missing(
+                        "missing-input",
+                        "missing/does-not-exist.png",
+                    )
+                return self.builtin(
+                    "encoded-input",
+                    f"encoded-{self.image_format.lower()}-input",
+                )
+            return self.builtin("output", "temporary-output-path")
+        if name in {"shape"} and self.primary_surface.startswith(
+            "PIL.ImageDraw"
+        ):
+            return binding(self.ensure_outline())
+        if name in {"obj"}:
+            return literal(
+                {
+                    "protocol": "array-interface",
+                    "shape": [2, 2, 3],
+                    "typestr": "|u1",
+                    "data_base64": "AAAAAAAAAAAAAAAA",
+                }
+            )
+        if name in {"deformer"}:
+            return literal(
+                {
+                    "protocol": "getmesh",
+                    "mesh": [[[0, 0, 16, 16], [0, 0, 0, 16, 16, 16, 16, 0]]],
+                }
+            )
+        if name in {"lut", "table", "kernel"}:
+            if name == "kernel":
+                return literal([0, 0, 0, 0, 1, 0, 0, 0, 0])
+            if name == "table":
+                return literal([0.0] * 24)
+            return literal(list(range(256)))
+        if name in {"matrix"}:
+            return literal([1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0])
+        if name in {"dest_map"}:
+            return literal(list(range(256)))
+        if name in {"data"} and "sequence" in value_types:
+            return literal([0, 1, 2, 3])
+        if name in {"text"}:
+            return literal("" if "empty" in (self.edge or "") else "Hello")
+        if name in {"mode"}:
+            return literal(self.mode)
+        if name in {"format"}:
+            return literal(self.image_format)
+        if name in {"size"}:
+            if self.primary_operation == "Color3DLUT":
+                return literal(2)
+            if "sequence" not in value_types:
+                return literal(20 if "number" in value_types else 3)
+            return literal([16, 16])
+        if name in {"xy", "center", "translate", "dest", "source"}:
+            return literal([0, 0])
+        if name in {"box"}:
+            return literal([0, 0, 8, 8])
+        if name in {"bands"}:
+            return literal([])
+        if name in {"color", "fill", "fillcolor", "outline", "stroke_fill"}:
+            if value_types == {"null"}:
+                return literal(None)
+            if "integer" in value_types or "number" in value_types:
+                return literal(0)
+            if "string" in value_types:
+                return literal("#204080")
+            if "sequence" in value_types:
+                return literal([32, 64, 128])
+            return literal(None)
+        if name in {"factor", "alpha", "scale", "sigma", "angle", "radius"}:
+            if "image" in value_types:
+                return binding(
+                    self.ensure_image(label=slug(parameter_id))
+                )
+            if "sequence" in value_types and "number" not in value_types:
+                return literal([2, 2])
+            if "integer" in value_types and "number" not in value_types:
+                return literal(2)
+            return literal(1.0)
+        if name in {
+            "width",
+            "height",
+            "colors",
+            "distance",
+            "bits",
+            "threshold",
+            "percent",
+            "rank",
+            "n_sides",
+            "frame",
+            "index",
+            "size_index",
+            "stroke_width",
+        }:
+            return literal(1)
+        if name in {"method", "resample", "dither", "orientation", "layout_engine"}:
+            if "integer" in value_types and not (
+                {"string", "enum"} & value_types
+            ):
+                return literal(0)
+            return literal("NEAREST")
+        if name in {"args"}:
+            return literal(["identity"])
+        if name in {"kwargs", "params"}:
+            return literal({})
+        if "boolean" in value_types:
+            return literal(False)
+        if "integer" in value_types:
+            return literal(1)
+        if "number" in value_types:
+            return literal(1.0)
+        if "string" in value_types or "enum" in value_types or "path" in value_types:
+            return literal("value")
+        if "bytes" in value_types:
+            if any(
+                token in (self.edge or "")
+                for token in ("corrupt", "invalid", "truncated")
+            ):
+                return self.inline_bytes(
+                    f"{slug(parameter_id)}-invalid",
+                    b"\x00invalid",
+                    "application/octet-stream",
+                )
+            return self.inline_bytes(
+                f"{slug(parameter_id)}-bytes",
+                b"\x00\x01\x02\x03",
+                "application/octet-stream",
+            )
+        if "sequence" in value_types:
+            return literal([])
+        if "mapping" in value_types or "record" in value_types:
+            return literal({})
+        if "stream" in value_types:
+            return self.builtin(
+                f"{slug(parameter_id)}-stream",
+                "in-memory-byte-stream",
+            )
+        if "font" in value_types:
+            return binding(self.ensure_font())
+        if "handle" in value_types:
+            return binding(self.ensure_outline())
+        if "null" in value_types:
+            return literal(None)
+        return literal(1)
+
+    def primary_arguments(
+        self,
+        operation: dict[str, Any],
+    ) -> dict[str, dict[str, Any]]:
+        parameters = parameter_index(operation)
+        focus = requirement_focus(self.requirement, parameters)
+        variant = requirement_variant(self.requirement)
+        arguments: dict[str, dict[str, Any]] = {}
+        for parameter in operation["source"]["parameters"]:
+            parameter_id = parameter["id"]
+            if parameter["style"] == "receiver":
+                continue
+            omission = parameter["omission"]
+            required = omission["kind"] == "required"
+            if (
+                parameter_id in variant
+                and variant[parameter_id] == "default"
+                and not required
+            ):
+                continue
+            selected = required or parameter_id == focus or parameter_id in variant
+            if (
+                self.primary_surface == "PIL.Image"
+                and self.primary_operation == "eval"
+                and parameter_id == "args"
+            ):
+                selected = True
+            if not selected:
+                continue
+            variant_value = variant.get(parameter_id, inspect_missing)
+            arguments[parameter_id] = self.descriptor_for(
+                parameter, variant_value=variant_value
+            )
+        return arguments
+
+    def build(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+        operation = self.operations[
+            operation_key(self.primary_surface, self.primary_operation)
+        ]
+        receiver = self.receiver_for(self.primary_surface)
+        arguments = self.primary_arguments(operation)
+        call_id = self.add_step(
+            self.primary_surface,
+            self.primary_operation,
+            receiver=receiver,
+            arguments=arguments,
+            step_id="call",
+        )
+        return self.assets, self.steps, call_id
+
+def build_parity_case(
+    surface: str,
+    operation: dict[str, Any],
+    requirement: dict[str, Any],
+    operations: dict[tuple[str, str], dict[str, Any]],
+    assets_root: Path,
+) -> dict[str, Any]:
+    prefix = operation_prefix(surface, operation["id"])
+    suffix = requirement["id"].removeprefix(prefix + ".")
+    case_id = f"{prefix}.{slug(suffix)}"
+    builder = WorkflowBuilder(
+        operations=operations,
+        primary_surface=surface,
+        primary_operation=operation["id"],
+        requirement=requirement,
+        assets_root=assets_root,
+    )
+    assets, steps, call_id = builder.build()
+    return {
+        "case_id": case_id,
+        "surface": surface,
+        "operation": operation["id"],
+        "covers": [requirement["id"]],
+        "target_profiles": [TARGET_PROFILE],
+        "assets": assets,
+        "steps": steps,
+        "observations": [call_id],
+    }
+
+
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=False) + "\n",
+        encoding="utf-8",
+    )
+
+
+def build_inputs(
+    manifest: dict[str, Any],
+    output_root: Path,
+    active_assets_root: Path,
+) -> dict[str, int]:
+    operations = operation_index(manifest)
+    indexed = {
+        lane: set(paths)
+        for lane, paths in manifest["input_index"].items()
+    }
+    generated = {"parity": set(), "coverage": set(), "benchmark": set()}
+    case_by_requirement: dict[str, str] = {}
+    counts = {
+        "parity_cases": 0,
+        "coverage_plans": 0,
+        "benchmark_workloads": 0,
+        "benchmark_suites": 0,
+    }
+
+    for surface in manifest["surfaces"]:
+        surface_id = surface["id"]
+        storage_slug = surface["storage_slug"]
+        parity_cases: list[dict[str, Any]] = []
+        coverage_requirements: list[str] = []
+        benchmark_requirements: list[
+            tuple[dict[str, Any], dict[str, Any]]
+        ] = []
+        component_ids: list[str] = []
+
+        for operation in surface["operations"]:
+            for component_id in operation["coverage"].get("component_ids", []):
+                if component_id not in component_ids:
+                    component_ids.append(component_id)
+            for requirement in operation["requirements"]:
+                if "parity" in requirement["lanes"]:
+                    case = build_parity_case(
+                        surface_id,
+                        operation,
+                        requirement,
+                        operations,
+                        active_assets_root,
+                    )
+                    if requirement["id"] in case_by_requirement:
+                        raise ValueError(
+                            f"requirement mapped twice: {requirement['id']}"
+                        )
+                    case_by_requirement[requirement["id"]] = case["case_id"]
+                    parity_cases.append(case)
+                if "coverage" in requirement["lanes"]:
+                    coverage_requirements.append(requirement["id"])
+                if "benchmark" in requirement["lanes"]:
+                    benchmark_requirements.append((operation, requirement))
+
+        parity_relative = f"inputs/parity/{storage_slug}.json"
+        parity_path = output_root / parity_relative
+        write_json(
+            parity_path,
+            {
+                "schema": "migration-parity/parity-input@1",
+                "cases": parity_cases,
+            },
+        )
+        generated["parity"].add(parity_relative)
+        counts["parity_cases"] += len(parity_cases)
+
+        selected_cases = [
+            case_by_requirement[requirement_id]
+            for requirement_id in coverage_requirements
+        ]
+        coverage_relative = f"inputs/coverage/{storage_slug}.json"
+        coverage_path = output_root / coverage_relative
+        write_json(
+            coverage_path,
+            {
+                "schema": "migration-parity/coverage-input@1",
+                "plans": [
+                    {
+                        "plan_id": f"{storage_slug}.coverage-plan",
+                        "covers": coverage_requirements,
+                        "target_profile": TARGET_PROFILE,
+                        "selectors": {
+                            "parity_case_ids": selected_cases,
+                            "command_ids": [],
+                        },
+                        "component_ids": component_ids,
+                        "command_id": "coverage",
+                    }
+                ],
+            },
+        )
+        generated["coverage"].add(coverage_relative)
+        counts["coverage_plans"] += 1
+
+        workloads: list[dict[str, Any]] = []
+        members: list[dict[str, Any]] = []
+        for operation, requirement in benchmark_requirements:
+            case_id = case_by_requirement.get(requirement["id"])
+            if case_id is None:
+                raise ValueError(
+                    f"benchmark requirement lacks correctness case: "
+                    f"{requirement['id']}"
+                )
+            workload_id = (
+                f"{storage_slug}.{slug(operation['id'])}.standard"
+            )
+            workloads.append(
+                {
+                    "workload_id": workload_id,
+                    "covers": [requirement["id"]],
+                    "subjects": [
+                        {"kind": "oracle", "id": "pillow"},
+                        {"kind": "target_profile", "id": TARGET_PROFILE},
+                    ],
+                    "input": {
+                        "kind": "parity_case",
+                        "case_id": case_id,
+                    },
+                    "measurement": {
+                        "boundary": "observed_steps",
+                        "step_ids": ["call"],
+                        "metrics": operation["benchmark"]["metrics"],
+                        "warmup_iterations": 5,
+                        "measurement_iterations": 20,
+                        "samples": 5,
+                        "concurrency": 1,
+                        "cache_state": "warm",
+                        "correctness_gate": "parity_pass",
+                    },
+                }
+            )
+            members.append({"workload_id": workload_id, "weight": 1})
+        benchmark_relative = f"inputs/benchmark/{storage_slug}.json"
+        benchmark_path = output_root / benchmark_relative
+        suites = (
+            [
+                {
+                    "suite_id": f"{storage_slug}.benchmark-suite",
+                    "description": (
+                        f"Equal-weight public workloads for {surface_id}."
+                    ),
+                    "members": members,
+                }
+            ]
+            if members
+            else []
+        )
+        write_json(
+            benchmark_path,
+            {
+                "schema": "migration-parity/benchmark-input@1",
+                "workloads": workloads,
+                "suites": suites,
+            },
+        )
+        generated["benchmark"].add(benchmark_relative)
+        counts["benchmark_workloads"] += len(workloads)
+        counts["benchmark_suites"] += len(suites)
+
+    for lane in ("parity", "coverage", "benchmark"):
+        if generated[lane] != indexed[lane]:
+            raise ValueError(
+                f"{lane} input index drift: "
+                f"missing={sorted(indexed[lane] - generated[lane])}, "
+                f"extra={sorted(generated[lane] - indexed[lane])}"
+            )
+    return counts
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=DEFAULT_MANIFEST,
+        help="Fixed manifest@2 path.",
+    )
+    parser.add_argument(
+        "--output-root",
+        type=Path,
+        default=DEFAULT_OUTPUT_ROOT,
+        help="Fixture root receiving indexed input documents.",
+    )
+    args = parser.parse_args()
+    manifest = load_manifest(args.manifest.resolve())
+    counts = build_inputs(
+        manifest,
+        args.output_root.resolve(),
+        FIXTURE_ROOT / "assets",
+    )
+    print(json.dumps(counts, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

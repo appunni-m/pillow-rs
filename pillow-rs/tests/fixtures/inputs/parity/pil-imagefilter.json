@@ -1,0 +1,4260 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImageFilter.BLUR.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.mode-1",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.mode.1"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.mode-cmyk",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BLUR.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "BLUR",
+      "covers": [
+        "PIL.ImageFilter.BLUR.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.parameter-radius",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.parameter.radius"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.BoxBlur.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "BoxBlur",
+      "covers": [
+        "PIL.ImageFilter.BoxBlur.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "BoxBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.CONTOUR.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "CONTOUR",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "CONTOUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.CONTOUR.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "CONTOUR",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "CONTOUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.CONTOUR.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "CONTOUR",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "CONTOUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.CONTOUR.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "CONTOUR",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "CONTOUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.CONTOUR.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "CONTOUR",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "CONTOUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.CONTOUR.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "CONTOUR",
+      "covers": [
+        "PIL.ImageFilter.CONTOUR.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "CONTOUR",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-table",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.parameter.table"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-channels",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.parameter.channels"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "channels": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-target-mode",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.parameter.target-mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "target_mode": {
+              "kind": "literal",
+              "value": "value"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-kwargs",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.parameter.kwargs"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            },
+            "kwargs": {
+              "kind": "literal",
+              "value": {}
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.mode-cmyk",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.DETAIL.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "DETAIL",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.DETAIL.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "DETAIL",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.DETAIL.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "DETAIL",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.DETAIL.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "DETAIL",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.DETAIL.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "DETAIL",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.DETAIL.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "DETAIL",
+      "covers": [
+        "PIL.ImageFilter.DETAIL.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-1",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.mode.1"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE_MORE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE_MORE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE_MORE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE_MORE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE_MORE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "EDGE_ENHANCE_MORE",
+      "covers": [
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EDGE_ENHANCE_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EMBOSS.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "EMBOSS",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EMBOSS",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EMBOSS.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "EMBOSS",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EMBOSS",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EMBOSS.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "EMBOSS",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EMBOSS",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EMBOSS.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "EMBOSS",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EMBOSS",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EMBOSS.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "EMBOSS",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EMBOSS",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.EMBOSS.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "EMBOSS",
+      "covers": [
+        "PIL.ImageFilter.EMBOSS.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "EMBOSS",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.FIND_EDGES.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "FIND_EDGES",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "FIND_EDGES",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "FIND_EDGES",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "FIND_EDGES",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "FIND_EDGES",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "FIND_EDGES",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "FIND_EDGES",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "FIND_EDGES",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "FIND_EDGES",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "FIND_EDGES",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.FIND_EDGES.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "FIND_EDGES",
+      "covers": [
+        "PIL.ImageFilter.FIND_EDGES.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "FIND_EDGES",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.parameter-radius",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.parameter.radius"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.GaussianBlur.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "GaussianBlur",
+      "covers": [
+        "PIL.ImageFilter.GaussianBlur.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.parameter-kernel",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.parameter.kernel"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.parameter-scale",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.parameter.scale"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "scale": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.parameter-offset",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.parameter.offset"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            },
+            "offset": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Kernel.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MaxFilter.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "MaxFilter",
+      "covers": [
+        "PIL.ImageFilter.MaxFilter.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MedianFilter.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "MedianFilter",
+      "covers": [
+        "PIL.ImageFilter.MedianFilter.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.MinFilter.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "MinFilter",
+      "covers": [
+        "PIL.ImageFilter.MinFilter.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.ModeFilter.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "ModeFilter",
+      "covers": [
+        "PIL.ImageFilter.ModeFilter.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "ModeFilter",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.parameter-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.parameter-rank",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.parameter.rank"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.RankFilter.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-1",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.1"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-cmyk",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-hsv",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.hsv"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-i",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.i"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.mode-ycbcr",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.mode.ycbcr"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SHARPEN.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "SHARPEN",
+      "covers": [
+        "PIL.ImageFilter.SHARPEN.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SHARPEN",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH_MORE",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH_MORE",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH_MORE",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH_MORE",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH_MORE",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "SMOOTH_MORE",
+      "covers": [
+        "PIL.ImageFilter.SMOOTH_MORE.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "SMOOTH_MORE",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.behavior-default",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.parameter-radius",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.parameter.radius"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.parameter-percent",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.parameter.percent"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {
+            "percent": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.parameter-threshold",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.parameter.threshold"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {
+            "threshold": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode-l",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode-la",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode-rgb",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode-rgba",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.UnsharpMask.performance-standard",
+      "surface": "PIL.ImageFilter",
+      "operation": "UnsharpMask",
+      "covers": [
+        "PIL.ImageFilter.UnsharpMask.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "UnsharpMask",
+          "receiver": null,
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}

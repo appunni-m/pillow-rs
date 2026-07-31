@@ -1,0 +1,72 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagefont.coverage-plan",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.behavior.default",
+        "PIL.ImageFont.FreeTypeFont.parameter.font",
+        "PIL.ImageFont.FreeTypeFont.parameter.size",
+        "PIL.ImageFont.FreeTypeFont.parameter.index",
+        "PIL.ImageFont.FreeTypeFont.parameter.encoding",
+        "PIL.ImageFont.FreeTypeFont.parameter.layout-engine",
+        "PIL.ImageFont.ImageFont.behavior.default",
+        "PIL.ImageFont.MAX_STRING_LENGTH.behavior.default",
+        "PIL.ImageFont.TransposedFont.behavior.default",
+        "PIL.ImageFont.TransposedFont.parameter.font",
+        "PIL.ImageFont.TransposedFont.parameter.orientation",
+        "PIL.ImageFont.load.behavior.default",
+        "PIL.ImageFont.load.parameter.filename",
+        "PIL.ImageFont.load_default.behavior.default",
+        "PIL.ImageFont.load_default.parameter.size",
+        "PIL.ImageFont.load_default_imagefont.behavior.default",
+        "PIL.ImageFont.load_default_imagefont.parameter-combination.legacy-001",
+        "PIL.ImageFont.load_path.behavior.default",
+        "PIL.ImageFont.load_path.parameter.filename",
+        "PIL.ImageFont.load_path.parameter-combination.legacy-001",
+        "PIL.ImageFont.truetype.behavior.default",
+        "PIL.ImageFont.truetype.parameter.font",
+        "PIL.ImageFont.truetype.parameter.size",
+        "PIL.ImageFont.truetype.parameter.index",
+        "PIL.ImageFont.truetype.parameter.encoding",
+        "PIL.ImageFont.truetype.parameter.layout-engine"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageFont.FreeTypeFont.behavior-default",
+          "PIL.ImageFont.FreeTypeFont.parameter-font",
+          "PIL.ImageFont.FreeTypeFont.parameter-size",
+          "PIL.ImageFont.FreeTypeFont.parameter-index",
+          "PIL.ImageFont.FreeTypeFont.parameter-encoding",
+          "PIL.ImageFont.FreeTypeFont.parameter-layout-engine",
+          "PIL.ImageFont.ImageFont.behavior-default",
+          "PIL.ImageFont.MAX_STRING_LENGTH.behavior-default",
+          "PIL.ImageFont.TransposedFont.behavior-default",
+          "PIL.ImageFont.TransposedFont.parameter-font",
+          "PIL.ImageFont.TransposedFont.parameter-orientation",
+          "PIL.ImageFont.load.behavior-default",
+          "PIL.ImageFont.load.parameter-filename",
+          "PIL.ImageFont.load_default.behavior-default",
+          "PIL.ImageFont.load_default.parameter-size",
+          "PIL.ImageFont.load_default_imagefont.behavior-default",
+          "PIL.ImageFont.load_default_imagefont.parameter-combination-legacy-001",
+          "PIL.ImageFont.load_path.behavior-default",
+          "PIL.ImageFont.load_path.parameter-filename",
+          "PIL.ImageFont.load_path.parameter-combination-legacy-001",
+          "PIL.ImageFont.truetype.behavior-default",
+          "PIL.ImageFont.truetype.parameter-font",
+          "PIL.ImageFont.truetype.parameter-size",
+          "PIL.ImageFont.truetype.parameter-index",
+          "PIL.ImageFont.truetype.parameter-encoding",
+          "PIL.ImageFont.truetype.parameter-layout-engine"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-font"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

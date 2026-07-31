@@ -1,0 +1,32 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagestat.coverage-plan",
+      "covers": [
+        "PIL.ImageStat.Stat.behavior.default",
+        "PIL.ImageStat.Stat.parameter.image-or-list",
+        "PIL.ImageStat.Stat.parameter.mask",
+        "PIL.ImageStat.Stat.mode.l",
+        "PIL.ImageStat.Stat.mode.rgb",
+        "PIL.ImageStat.Stat.mode.rgba"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageStat.Stat.behavior-default",
+          "PIL.ImageStat.Stat.parameter-image-or-list",
+          "PIL.ImageStat.Stat.parameter-mask",
+          "PIL.ImageStat.Stat.mode-l",
+          "PIL.ImageStat.Stat.mode-rgb",
+          "PIL.ImageStat.Stat.mode-rgba"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-stat"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

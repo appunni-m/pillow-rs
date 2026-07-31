@@ -1,0 +1,53 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imageenhance-sharpness.enhance.standard",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.enhance.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageEnhance.Sharpness.enhance.performance-standard"
+      },
+      "measurement": {
+        "boundary": "observed_steps",
+        "step_ids": [
+          "call"
+        ],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imageenhance-sharpness.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageEnhance.Sharpness.",
+      "members": [
+        {
+          "workload_id": "pil-imageenhance-sharpness.enhance.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

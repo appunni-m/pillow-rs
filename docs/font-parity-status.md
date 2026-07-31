@@ -1,14 +1,25 @@
 # PIL.ImageFont Public-API Parity Status
 
-Last updated: 2026-07-27 (Asia/Kolkata) after enforcing that the target is the
-full `PIL.ImageFont` module surface. `libraqm` shaping is the only explicit
-out-of-scope area; `ImageFont.FreeTypeFont`/`_imagingft` remains in scope
-because Pillow exposes it through `PIL.ImageFont`.
+Last updated: 2026-07-31 (Asia/Kolkata) after migrating the full
+`PIL.ImageFont` corpus to the canonical migration-parity schema.
+`libraqm` shaping is the only explicit out-of-scope area;
+`ImageFont.FreeTypeFont`/`_imagingft` remains in scope because Pillow exposes
+it through `PIL.ImageFont`.
 
 ## Oracle and fixture contract
 
 - Active `PIL.ImageFont` parity fixtures live under
-  `pillow-rs/tests/fixtures/font/inputs/public-api`.
+  `pillow-rs/tests/fixtures/inputs/font`; assets live under
+  `pillow-rs/tests/fixtures/assets/font`.
+- `pillow-rs/tests/fixtures/manifest.yaml` is the single active manifest. The
+  bespoke v0 manifest, inputs, and source assets are retained under
+  `pillow-rs/tests/deprecated/font_public_api_v0` and are migration evidence
+  only.
+- The same active manifest derives its project-wide denominator from
+  `pillow-rs/tests/deprecated/project_manifest_v0/manifest.yaml`. It accounts
+  for all 12 legacy surfaces and all 173 catalogued public names. Font is the
+  one runnable surface; the other 11 surfaces and 164 names remain explicit
+  pending debt and are not counted as passing parity.
 - The legacy imagingft corpus is not active; remaining imagingft files are under
   `deprecated/imagingft/`.
 - Input JSON files are input-only. They must not contain expected output,
@@ -21,13 +32,13 @@ because Pillow exposes it through `PIL.ImageFont`.
   `PIL.ImageFont.core` is `_imagingft` and that `PIL._imagingft` is a native
   extension before producing results. Bitmap `ImageFont.ImageFont` rows stay on
   Pillow's Python/PILfont path.
-- Rust test results are compared against Pillow through `Result`-style
-  status/value/error payloads. Success payloads include exact bytes; error
-  payloads include kind and message.
-- `pillow-rs/tests/font_public_api.rs` now fails if the manifest oracle section
-  drifts away from `expected_path: PIL.ImageFont`, `rust_runtime:
-  pillow_rs::ImageFont`, or the rule that `_imagingft` is only an
-  implementation assertion for FreeTypeFont-backed rows.
+- Rust test results are compared through a shared strict `Result` envelope
+  containing `case_id`, `status`, and either `value` or a public error with
+  class, kind, message, and stage. Success payloads include exact bytes.
+- `pillow-rs/tests/font_public_api.rs` now fails if the manifest source/target
+  identity drifts, the live oracle handshake reports a different Python,
+  Pillow, FreeType, or native-core identity, or `_imagingft` stops being the
+  verified implementation path for FreeTypeFont-backed rows.
 - The public-surface verifier also reads every live non-underscore
   `PIL.ImageFont` module name. Behavioral classes/functions/enums must be
   explicitly classified, and public imports/constants/types such as
@@ -57,7 +68,8 @@ module/class surfaces in scope:
   - `set_variation_by_axes`
   - `set_variation_by_name`
 
-`font_manifest.yaml` now classifies the full active `PIL.ImageFont` surface,
+`pillow-rs/tests/fixtures/manifest.yaml` classifies the full active
+`PIL.ImageFont` surface,
 not only `FreeTypeFont`. Bitmap `ImageFont.ImageFont` rows execute through
 `pillow-rs/src/font/pilfont.rs`; FreeType rows execute through the
 `pillow_rs::ImageFont` handle and `_imagingft`-compatible path. The active test
@@ -74,10 +86,10 @@ to an active `PIL.ImageFont` fixture or a documented ImageFont blocker.
 they must match Pillow's no-libraqm `KeyError`/message behavior rather than
 being skipped.
 
-The active test now enforces `font_manifest.yaml.required_operations` as the
-exact union of live `PIL.ImageFont` public operations reported by the pinned
-oracle and the explicit repo helper/consumer operations maintained around that
-surface. This prevents hidden manifest drift in either direction.
+The active test enforces the manifest operation registry as the exact union of
+live `PIL.ImageFont` public operations reported by the pinned oracle and the
+explicit repo helper/consumer operations maintained around that surface. This
+prevents hidden manifest/runner drift in either direction.
 It also enforces the manifest `out_of_scope` list exactly: the only permitted
 public-surface exclusion is successful libraqm shaping; `direction`,
 `features`, and `language` no-libraqm error rows remain active parity rows.
@@ -315,21 +327,22 @@ movement is `runnable=4`, `passed=4`, `pending=0`. Route audit movement is
 
 ## Coverage MCP status
 
-Managed command: `font-tests-coverage-with-freetype`
+Managed command: `font-tests-coverage-with-freetype-pillow-12-2`
 
-- Run: `150b677f-c229-4846-8c18-4705aa8d4bcd`
-- Snapshot: `2a895073-ef7f-474a-ae79-f4fdc34c81b4`
+- Run: `9bc62ebb-7b42-49d5-91b7-efe5d6140656`
+- Snapshot: `3b3fee62-b125-46ee-a513-c4abfcb7152d`
 - Status: passed
+- Harness tests: `6 passed`, `0 failed`
 - Coverage artifact: ingested
-- Commit measured: `665da57df87b79b316ea86cee8ccfb59c6a39392`
+- Checkout base commit: `0c0c50f51cdcc753ff758b911ba5e0a62b9933fe`
 
 Target file metrics:
 
 | File | Lines | Branches | Functions | Regions |
 |---|---:|---:|---:|---:|
 | `pillow-rs/src/font/default_aileron.rs` | `17/17` (`100.00%`) | n/a | `3/3` (`100.00%`) | `24/24` (`100.00%`) |
-| `pillow-rs/src/font/imagingft.rs` | `1618/1643` (`98.48%`) | `268/278` (`96.40%`) | `159/171` (`92.98%`) | `2591/2687` (`96.43%`) |
-| `pillow-rs/src/font/mod.rs` | `374/374` (`100.00%`) | n/a | `78/78` (`100.00%`) | `487/487` (`100.00%`) |
+| `pillow-rs/src/font/imagingft.rs` | `1739/1761` (`98.75%`) | `251/256` (`98.05%`) | `173/185` (`93.51%`) | `2712/2799` (`96.89%`) |
+| `pillow-rs/src/font/mod.rs` | `391/391` (`100.00%`) | n/a | `84/84` (`100.00%`) | `506/506` (`100.00%`) |
 | `pillow-rs/src/font/pilfont.rs` | `715/737` (`97.01%`) | `142/142` (`100.00%`) | `58/78` (`74.36%`) | `1014/1094` (`92.69%`) |
 
 Current full-module scope note:

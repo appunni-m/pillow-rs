@@ -1,0 +1,28 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagedraw.coverage-plan",
+      "covers": [
+        "PIL.ImageDraw.Draw.behavior.default",
+        "PIL.ImageDraw.Draw.parameter.im",
+        "PIL.ImageDraw.Draw.parameter.mode",
+        "PIL.ImageDraw.Outline.behavior.default"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageDraw.Draw.behavior-default",
+          "PIL.ImageDraw.Draw.parameter-im",
+          "PIL.ImageDraw.Draw.parameter-mode",
+          "PIL.ImageDraw.Outline.behavior-default"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-draw"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}
