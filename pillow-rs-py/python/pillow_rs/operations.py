@@ -121,6 +121,13 @@ def fromarray(obj, mode=None):
     raise NotImplementedError(f"fromarray: unsupported object type ({type(obj).__name__})")
 
 
+def frombytes(mode, size, data, decoder_name="raw", *args):
+    """Create an image from raw bytes using Pillow's decoder contract."""
+    if decoder_name != "raw":
+        raise OSError(f"decoder {decoder_name} not available")
+    return Image.frombytes(mode, size, data)
+
+
 def linear_gradient(mode: str) -> Image:
     """Generate 256x256 linear gradient from black to white, top to bottom."""
     from . import _core

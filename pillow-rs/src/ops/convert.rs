@@ -77,6 +77,17 @@ impl Image {
         // PIL: convert() without mode arg keeps same mode for most types,
         // but converts P→RGB (palette images default to RGB when no mode given).
         let src_mode = self.mode()?;
+
+        // Matrix-based conversion must be executed even when the requested
+        // mode equals the source mode. Pillow applies the matrix before its
+        // same-mode fast path; returning a copy first silently discarded the
+        // matrix and made RGB->RGB conversion diverge.
+        if let Some(mat) = matrix {
+            let img = self.materialize()?;
+            return convert_with_matrix(&img, mode, &mat)
+                .map(|result| Image::from_dynamic(result, explicit_mode_for(mode)));
+        }
+
         if mode == src_mode && src_mode != "P" {
             return Ok(self.copy());
         }
@@ -86,14 +97,6 @@ impl Image {
         } else {
             mode
         };
-
-        // Matrix-based conversion must be executed immediately since it modifies
-        // pixel values directly and can't be represented as a simple mode convert.
-        if let Some(mat) = matrix {
-            let img = self.materialize()?;
-            return convert_with_matrix(&img, mode, &mat)
-                .map(|result| Image::from_dynamic(result, explicit_mode_for(mode)));
-        }
 
         // Handle conversion from non-standard modes (CMYK, HSV, YCbCr, I, F, P).
         // These modes store pixel data in standard DynamicImage containers but with
@@ -319,16 +322,23 @@ fn convert_with_matrix(
 ) -> Result<crate::raster::DynamicImage, PilError> {
     match (matrix.len(), target_mode) {
         (4, "RGB") => {
-            let luma = img.to_luma8();
-            let (w, h) = luma.dimensions();
-            let pixels: Vec<u8> = luma
-                .iter()
-                .flat_map(|&l| {
-                    let lf = l as f64;
+            // Pillow's four-coefficient RGB matrix path applies one affine
+            // channel expression and leaves the remaining channels at zero.
+            // Treat the source as RGB here; reducing it to luma loses the
+            // matrix offset and diverges for the accepted RGB->RGB form.
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let pixels: Vec<u8> = rgb
+                .pixels()
+                .flat_map(|p| {
                     [
-                        (matrix[0] * lf).clamp(0.0, 255.0) as u8,
-                        (matrix[1] * lf).clamp(0.0, 255.0) as u8,
-                        (matrix[2] * lf).clamp(0.0, 255.0) as u8,
+                        (matrix[0] * p[0] as f64
+                            + matrix[1] * p[1] as f64
+                            + matrix[2] * p[2] as f64
+                            + matrix[3])
+                            .clamp(0.0, 255.0) as u8,
+                        0,
+                        0,
                     ]
                 })
                 .collect();

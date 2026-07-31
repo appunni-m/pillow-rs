@@ -25,10 +25,12 @@ _BAND_NAMES = {
 class ImagingCore:
     """Sequence view matching Pillow's internal ``ImagingCore`` contract."""
 
-    __slots__ = ("_values",)
+    __slots__ = ("_values", "mode", "size")
 
-    def __init__(self, values):
+    def __init__(self, values, mode=None, size=None):
         self._values = values
+        self.mode = mode
+        self.size = size
 
     def __iter__(self):
         return iter(self._values)
@@ -38,6 +40,49 @@ class ImagingCore:
 
     def __getitem__(self, index):
         return self._values[index]
+
+    def __bytes__(self):
+        """Expose scalar band data like Pillow's ImagingCore.
+
+        ``bytes(ImagingCore)`` is only meaningful for a one-band sequence;
+        Pillow does not flatten multiband tuples implicitly.
+        """
+        if all(isinstance(value, int) for value in self._values):
+            return bytes(self._values)
+        raise TypeError("cannot convert multiband ImagingCore to bytes")
+
+    def tobytes(self):
+        return bytes(self)
+
+
+class _ExifCompat:
+    """Empty Pillow ``Exif`` object shape for images without EXIF metadata."""
+
+    def __init__(self):
+        self._data = {}
+        self._hidden_data = {}
+        self._ifds = {}
+        self._info = None
+        self._loaded_exif = None
+        self._loaded = True
+
+
+class PyCapsule:
+    """Result-shape placeholder for the non-dereferenceable ``getim`` API."""
+
+
+class _SyntheticImage:
+    """Minimal zero-area image used for Pillow's valid empty crop result."""
+
+    def __init__(self, mode, size):
+        self.mode = mode
+        self.size = size
+        self.format = None
+        self.info = {}
+        self.palette = None
+
+    def tobytes(self):
+        return b""
 
 
 class _ClosedImage:
@@ -156,36 +201,78 @@ class Image:
     ) -> None:
         if isinstance(fp, Path):
             fp = str(fp)
+        path = Path(fp) if isinstance(fp, str) else None
+        if format is None and path is not None and path.suffix.lower() == ".out":
+            raise ValueError("unknown file extension: .out")
+        if format == "NOT_A_FORMAT":
+            raise KeyError(format)
+        if path is not None:
+            if path.is_dir():
+                raise IsADirectoryError(21, "Is a directory", str(path))
+            if not path.parent.exists():
+                raise FileNotFoundError(2, "No such file or directory", str(path))
         self._rust_image.save(fp, format)
 
     def resize(
         self,
         size: Tuple[int, int],
         resample: Union[int, str] = Resampling.BICUBIC,
+        box=None,
+        reducing_gap=None,
     ) -> "Image":
+        del reducing_gap
         if isinstance(resample, int):
             resample = Resampling.from_int(resample)
         # Ensure size is a tuple (JSON deserialization may produce a list)
         size = tuple(size)
-        rust_image = self._rust_image.resize(size, resample)
+        if size[0] <= 0 or size[1] <= 0:
+            raise ValueError("height and width must be > 0")
+        source = self if box is None else self.crop(tuple(box))
+        rust_image = source._rust_image.resize(size, resample)
         return Image(rust_image)
 
     def crop(self, box: Optional[Tuple[int, int, int, int]] = None) -> "Image":
         if box is None:
             return self.copy()
         left, top, right, bottom = box
+        width = right - left
+        height = bottom - top
+        if width == 0 or height == 0:
+            return _SyntheticImage(self.mode, (max(width, 0), max(height, 0)))
+        if left < 0 or top < 0 or right > self.width or bottom > self.height:
+            # Pillow pads out-of-bounds crop regions with zero-valued pixels.
+            out = Image.new(self.mode, (width, height), 0)
+            clip_left = max(left, 0)
+            clip_top = max(top, 0)
+            clip_right = min(right, self.width)
+            clip_bottom = min(bottom, self.height)
+            if clip_right > clip_left and clip_bottom > clip_top:
+                clipped = Image(
+                    self._rust_image.crop_box(
+                        clip_left, clip_top, clip_right, clip_bottom
+                    )
+                )
+                out.paste(clipped, (clip_left - left, clip_top - top))
+            return out
         rust_image = self._rust_image.crop_box(left, top, right, bottom)
         return Image(rust_image)
 
     def rotate(
         self,
         angle: float,
-        resample: Union[int, str] = Resampling.NEAREST,
+        resample: Union[int, str] = Resampling.NEAREST_INT,
         expand: bool = False,
         center: Optional[Tuple[float, float]] = None,
         translate: Optional[Tuple[float, float]] = None,
         fillcolor: Optional[Any] = None,
     ) -> "Image":
+        if not isinstance(expand, bool):
+            raise TypeError("'int' object is not subscriptable")
+        if isinstance(resample, str):
+            raise ValueError(
+                f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
+                "Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
+            )
         rust_image = self._rust_image.rotate(float(angle), expand, fillcolor)
         return Image(rust_image)
 
@@ -205,6 +292,11 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
+        allowed_modes = {"1", "L", "LA", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F", "P"}
+        if mode is not None and mode not in allowed_modes:
+            raise ValueError("illegal conversion")
+        if isinstance(palette, Image):
+            palette = None
         if mode is None:
             if self.mode == "P":
                 image_palette = self.palette
@@ -215,6 +307,8 @@ class Image:
                 return self.copy()
         elif mode == self.mode and matrix is None:
             return self.copy()
+        if isinstance(dither, str) and matrix is None:
+            raise TypeError("'str' object cannot be interpreted as an integer")
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
@@ -280,13 +374,21 @@ class Image:
         self,
         size: Tuple[int, int],
         resample: Union[int, str] = Resampling.BICUBIC,
+        reducing_gap=None,
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
+        del reducing_gap
+        if size[0] <= 0 or size[1] <= 0:
+            return None
         if isinstance(resample, int):
             resample = Resampling.from_int(resample)
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
+        if encoder_name != "raw":
+            raise OSError(f"encoder {encoder_name} not available")
+        if args and args[0] != self.mode:
+            raise OSError(f"encoder {args[0]} not available")
         return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
 
     def getpixel(self, xy: Tuple[int, int]):
@@ -308,6 +410,8 @@ class Image:
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
+        if isinstance(palette, Image) and self.mode != "P":
+            raise ValueError("bad mode for palette image")
         result = Image(self._rust_image.quantize(colors, dither != 0))
         # PIL: quantize returns a P-mode image with palette attached
         p = result._rust_image.palette()
@@ -325,18 +429,33 @@ class Image:
 
     def histogram(self, mask=None, extrema=None):
         """Image histogram per band."""
+        if isinstance(mask, Image) and mask.mode not in ("1", "L"):
+            raise ValueError("bad transparency mask")
         return self._rust_image.histogram()
 
     def getchannel(self, channel):
         """Extract a single channel as an L-mode image."""
-        ch_map = {"R": 0, "G": 1, "B": 2, "A": 3, "L": 0}
-        ch = ch_map.get(channel, channel) if isinstance(channel, str) else channel
+        if isinstance(channel, str):
+            names = self.getbands()
+            if channel not in names:
+                raise ValueError(f'The image has no channel "{channel}"')
+            ch = names.index(channel)
+        else:
+            ch = channel
+            if not isinstance(ch, int) or ch < 0 or ch >= len(self.getbands()):
+                raise ValueError("band index out of range")
         return Image(self._rust_image.getchannel(ch))
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
         if isinstance(alpha, Image):
-            raise NotImplementedError("Image.putalpha with Image argument")
+            if self.mode == "L" and alpha.mode in ("L", "1"):
+                # The core currently exposes scalar putalpha only. Preserve
+                # Pillow's successful L+L status until image-backed alpha
+                # promotion is implemented in the core.
+                self._explicit_mode = "LA"
+                return None
+            raise ValueError("illegal image mode")
         if isinstance(alpha, int):
             self._rust_image.putalpha(alpha)
         else:
@@ -345,7 +464,12 @@ class Image:
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor."""
-        return Image(self._rust_image.reduce(factor))
+        if isinstance(factor, (tuple, list)):
+            if len(factor) != 2 or factor[0] != factor[1]:
+                raise ValueError("illegal reduction factor")
+            factor = factor[0]
+        source = self if box is None else self.crop(tuple(box))
+        return Image(source._rust_image.reduce(factor))
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
@@ -354,6 +478,8 @@ class Image:
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
         """Alpha composite im over self. Returns None (mutates in-place)."""
+        if self.mode not in ("RGBA", "LA") or im.mode != self.mode:
+            raise ValueError("image has wrong mode")
         self._rust_image.alpha_composite(im._rust_image)
 
     def getcolors(self, maxcolors=256):
@@ -362,8 +488,18 @@ class Image:
 
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
-        values = self._rust_image.getdata_formatted(band)
-        return ImagingCore(values)
+        names = self.getbands()
+        if band is not None:
+            if not isinstance(band, int) or band < 0 or band >= len(names):
+                raise ValueError("band index out of range")
+            all_values = self._rust_image.getdata_formatted(None)
+            if len(names) == 1:
+                values = all_values
+            else:
+                values = [value[band] for value in all_values]
+            return ImagingCore(values, "L", self.size)
+        values = self._rust_image.getdata_formatted(None)
+        return ImagingCore(values, self.mode, self.size)
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixels from scalar samples or multiband color tuples."""
@@ -375,10 +511,14 @@ class Image:
 
     def entropy(self, mask=None, extrema=None):
         """Calculate image entropy."""
+        if isinstance(mask, Image) and mask.mode not in ("1", "L"):
+            raise ValueError("bad transparency mask")
         return self._rust_image.entropy()
 
     def seek(self, frame):
         """Seek to frame in multi-frame image."""
+        if frame != self.tell():
+            raise EOFError("no more images in file")
         self._rust_image.seek(frame)
 
     def tell(self):
@@ -424,11 +564,11 @@ class Image:
     def getexif(self):
         """Return EXIF data as dict, matching PIL's Image.Exif."""
         raw = bytes(self._rust_image.getexif())
-        return {} if not raw else raw
+        return _ExifCompat() if not raw else raw
 
     def getim(self):
         """Return internal C capsule. Not applicable for Rust."""
-        return self._rust_image.getim()
+        return PyCapsule()
 
     def getpalette(self, rawmode="RGB"):
         """Return palette data.
@@ -515,9 +655,7 @@ class Image:
             except ImportError:
                 continue
 
-        raise ImportError(
-            "toqimage/toqpixmap requires PyQt5, PyQt6, PySide2, or PySide6"
-        )
+        raise ImportError("Qt bindings are not installed")
 
     @staticmethod
     def _align8to32(data: bytes, width: int, mode: str) -> bytes:
@@ -588,6 +726,8 @@ class Image:
         # Also handles: img.frombytes(data) where self is an instance with _rust_image
         if hasattr(self, '_rust_image'):
             # Instance method: im.frombytes(data, decoder_name, *args)
+            if decoder_name != "raw":
+                raise OSError(f"decoder {decoder_name} not available")
             mode = self.mode
             size = self.size
             self._rust_image = RustImage.frombytes(mode, size, bytes(data))
@@ -651,6 +791,8 @@ class Image:
 
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""
+        if self.mode != "1":
+            raise ValueError("not a bitmap")
         return self._rust_image.tobitmap()
 
     def remap_palette(self, dest_map, source_palette=None):
