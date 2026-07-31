@@ -1661,8 +1661,8 @@ surfaces:
             reason: null
     targets:
     - target_id: pillow-rs-python
-      path: pillow_rs.Image.frombytes
-      signature: frombytes(self, data, decoder_name='raw', *args)
+      path: pillow_rs.frombytes
+      signature: frombytes(mode, size, data, decoder_name='raw', *args)
       support:
         status: supported
     requirements:
@@ -3770,7 +3770,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.Image.crop
-      signature: 'crop(self, box: Tuple[int, int, int, int]) -> ''Image'''
+      signature: 'crop(self, box: Optional[Tuple[int, int, int, int]] = None) -> ''Image'''
       support:
         status: supported
     requirements:
@@ -9017,7 +9017,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.Image.resize
-      signature: 'resize(self, size: Tuple[int, int], resample: Union[int, str] = ''BICUBIC'') -> ''Image'''
+      signature: 'resize(self, size: Tuple[int, int], resample: Union[int, str] = ''BICUBIC'', box=None,
+        reducing_gap=None) -> ''Image'''
       support:
         status: supported
     requirements:
@@ -9332,9 +9333,9 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.Image.rotate
-      signature: 'rotate(self, angle: float, resample: Union[int, str] = ''NEAREST'', expand: bool = False,
-        center: Optional[Tuple[float, float]] = None, translate: Optional[Tuple[float, float]] = None,
-        fillcolor: Optional[Any] = None) -> ''Image'''
+      signature: 'rotate(self, angle: float, resample: Union[int, str] = 0, expand: bool = False, center:
+        Optional[Tuple[float, float]] = None, translate: Optional[Tuple[float, float]] = None, fillcolor:
+        Optional[Any] = None) -> ''Image'''
       support:
         status: supported
     requirements:
@@ -10457,7 +10458,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.Image.thumbnail
-      signature: 'thumbnail(self, size: Tuple[int, int], resample: Union[int, str] = ''BICUBIC'') -> None'
+      signature: 'thumbnail(self, size: Tuple[int, int], resample: Union[int, str] = ''BICUBIC'', reducing_gap=None)
+        -> None'
       support:
         status: supported
     requirements:
@@ -18030,7 +18032,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageDraw.Draw.rounded_rectangle
-      signature: rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1)
+      signature: rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1, *, corners=None)
       support:
         status: supported
     requirements:

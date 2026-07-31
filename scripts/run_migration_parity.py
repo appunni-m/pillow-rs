@@ -526,6 +526,10 @@ def run_case(
             step_results[step_id] = {"step_id": step_id, "status": "ok", "_value": value}
         except BaseException as exc:  # public failures are part of the contract
             error = public_error(exc)
+            # Both adapters receive equivalent temporary assets, but each
+            # side runs in an isolated directory. Normalize that harness
+            # detail before comparing public I/O errors.
+            error["message"] = error["message"].replace(str(tempdir), "<temporary>")
             if (
                 side == "target"
                 and step["surface"].startswith("PIL.ImageDraw")
