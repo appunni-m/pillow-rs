@@ -18,7 +18,15 @@
           "PIL.ImageColor.getcolor.behavior.default",
           "PIL.ImageColor.getcolor.mode.l",
           "PIL.ImageColor.getrgb.behavior.default",
-          "PIL.ImageColor.getrgb.nuanced.named-css-color"
+          "PIL.ImageColor.getrgb.nuanced.named-css-color",
+          "PIL.ImageColor.getrgb.nuanced.rgba-syntax",
+          "PIL.ImageColor.getrgb.nuanced.hsl-syntax",
+          "PIL.ImageColor.getrgb.nuanced.hex-with-alpha",
+          "PIL.ImageColor.getcolor.nuanced.named-l",
+          "PIL.ImageColor.getcolor.nuanced.hex-rgba",
+          "PIL.ImageColor.getcolor.nuanced.rgb-syntax-l",
+          "PIL.ImageColor.getcolor.nuanced.named-one",
+          "PIL.ImageColor.getcolor.nuanced.hex-la-alpha"
         ],
         "command_ids": []
       },

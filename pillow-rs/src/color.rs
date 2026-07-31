@@ -60,10 +60,54 @@ pub fn color_type_to_mode(ct: ColorType) -> &'static str {
 ///
 /// Returns [`crate::PilError::ValueError`] when the string cannot be parsed.
 pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
+    if let Some(rgba) = parse_legacy_rgba_function(s) {
+        return Ok(rgba);
+    }
     let c = csscolorparser::parse(s)
         .map_err(|e| crate::error::PilError::ValueError(format!("Invalid color string: {}", e)))?;
     let rgba = c.to_rgba8();
     Ok((rgba[0], rgba[1], rgba[2], rgba[3]))
+}
+
+/// Parse Pillow's legacy ``rgba(r, g, b, a)`` integer form.
+///
+/// Pillow's ``getrgb`` matches ``rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)``
+/// and uses the alpha integer directly (0..255).  The css parser treats the
+/// fourth component as a 0..1/percentage CSS alpha and clamps values such as
+/// 128, so the legacy integer form must be handled before delegating.
+fn parse_legacy_rgba_function(s: &str) -> Option<(u8, u8, u8, u8)> {
+    let trimmed = s.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    let rest = lower.strip_prefix("rgba(")?.strip_suffix(')')?;
+    let parts: Vec<&str> = rest.split(',').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    let mut values = [0u8; 4];
+    for (index, part) in parts.iter().enumerate() {
+        let text = part.trim();
+        if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        values[index] = text.parse().ok()?;
+    }
+    Some((values[0], values[1], values[2], values[3]))
+}
+
+/// Whether Pillow's ``ImageColor.getrgb`` returns a four-tuple for this
+/// color string.  Pillow emits alpha only for 4/8-digit hex (``#rgba``,
+/// ``#rrggbbaa``) and for ``rgba(...)`` syntax; every other accepted form
+/// returns a three-tuple even when the parsed value happens to be opaque.
+pub fn color_has_explicit_alpha(s: &str) -> bool {
+    let lower = s.trim().to_ascii_lowercase();
+    if lower.starts_with("rgba(") {
+        return true;
+    }
+    if let Some(hex) = lower.strip_prefix('#') {
+        let digits = hex.chars().filter(|c| c.is_ascii_hexdigit()).count();
+        return digits == 4 || digits == 8;
+    }
+    false
 }
 
 #[inline]
@@ -226,29 +270,79 @@ pub fn resolve_new_color(
 /// duplicated into the RGB fields so callers can store the channel appropriate
 /// for their target buffer. For `"1"`, the first field is thresholded to
 /// either `0` or `255`.
+/// A Pillow-compatible ``ImageColor.getcolor`` result.
+///
+/// Pillow returns a scalar graylevel for base-L modes, ``(graylevel, alpha)``
+/// for ``LA``, ``(r, g, b[, a])`` for color modes, and a 0..255 HSV triple
+/// for ``HSV``.  The shape is part of the public behavior, so the core keeps
+/// it explicit instead of folding it into a fixed four-tuple.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColorValue {
+    Gray(u8),
+    GrayAlpha(u8, u8),
+    Rgb(u8, u8, u8),
+    Rgba(u8, u8, u8, u8),
+    Hsv(u8, u8, u8),
+}
+
+/// Convert one RGB pixel to Pillow's ``colorsys.rgb_to_hsv`` 0..255 triple.
+///
+/// Pillow calls ``colorsys.rgb_to_hsv(r/255, g/255, b/255)`` and truncates
+/// each 0..1 float to an integer with ``int(h*255)``; the float arithmetic
+/// (including the ``% 1.0`` hue wrap) is replicated exactly here.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "int() truncation of the 0..1 colorsys floats is the public contract"
+)]
+fn rgb_to_hsv_u8(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
+    let rf = f64::from(r) / 255.0;
+    let gf = f64::from(g) / 255.0;
+    let bf = f64::from(b) / 255.0;
+    let maxc = rf.max(gf).max(bf);
+    let minc = rf.min(gf).min(bf);
+    let v = maxc;
+    if minc == maxc {
+        return (0, 0, (v * 255.0) as u8);
+    }
+    let s = (maxc - minc) / maxc;
+    let rc = (maxc - rf) / (6.0 * (maxc - minc));
+    let gc = (maxc - gf) / (6.0 * (maxc - minc));
+    let bc = (maxc - bf) / (6.0 * (maxc - minc));
+    let h = if rf == maxc {
+        bc - gc
+    } else if gf == maxc {
+        2.0 + rc - bc
+    } else {
+        4.0 + gc - rc
+    };
+    let h = (h / 6.0).rem_euclid(1.0);
+    ((h * 255.0) as u8, (s * 255.0) as u8, (v * 255.0) as u8)
+}
+
 pub fn getcolor(
     r: u8,
     g: u8,
     b: u8,
+    a: u8,
     mode: &str,
-) -> Result<(u8, u8, u8, u8), crate::error::PilError> {
-    match mode {
-        "L" | "1" => {
-            let luma = rgb_to_luma_u8(r, g, b);
-            if mode == "1" {
-                Ok((if luma >= 128 { 255 } else { 0 }, 0, 0, 255))
-            } else {
-                Ok((luma, luma, luma, 255))
-            }
-        }
-        "RGB" => Ok((r, g, b, 255)),
-        "RGBA" => Ok((r, g, b, 255)),
-        "LA" => {
-            let luma = rgb_to_luma_u8(r, g, b);
-            Ok((luma, luma, luma, 255))
-        }
-        _ => Ok((r, g, b, 255)),
+) -> Result<ColorValue, crate::error::PilError> {
+    let luma = rgb_to_luma_u8(r, g, b);
+    if mode == "HSV" {
+        let (h, s, v) = rgb_to_hsv_u8(r, g, b);
+        return Ok(ColorValue::Hsv(h, s, v));
     }
+    if matches!(mode, "L" | "LA" | "1" | "I" | "F" | "I;16" | "I;16B") {
+        return if mode == "LA" {
+            Ok(ColorValue::GrayAlpha(luma, a))
+        } else {
+            Ok(ColorValue::Gray(luma))
+        };
+    }
+    if mode.ends_with('A') {
+        return Ok(ColorValue::Rgba(r, g, b, a));
+    }
+    Ok(ColorValue::Rgb(r, g, b))
 }
 
 /// Searches a flat RGB palette for an exact color match.

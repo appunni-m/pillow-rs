@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1190
-- Unique active workflow signatures: 1190
+- Active parity workflows: 1214
+- Unique active workflow signatures: 1214
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 21
+- Deliberate nuanced workflows: 45
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,9 +23,9 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 100 |
-| `PIL.Image.Image` | 445 |
+| `PIL.Image.Image` | 461 |
 | `PIL.ImageChops` | 76 |
-| `PIL.ImageColor` | 4 |
+| `PIL.ImageColor` | 12 |
 | `PIL.ImageDraw` | 3 |
 | `PIL.ImageDraw.ImageDraw` | 223 |
 | `PIL.ImageEnhance` | 16 |
@@ -59,6 +59,22 @@ are not copied into the active lane by name.
 ## Nuanced workflows
 
 - `PIL.Image.Image.convert.nuanced.alpha-conversion`
+- `PIL.Image.Image.convert.nuanced.cmyk-to-l`
+- `PIL.Image.Image.convert.nuanced.cmyk-to-rgb`
+- `PIL.Image.Image.convert.nuanced.f-to-rgb`
+- `PIL.Image.Image.convert.nuanced.hsv-to-rgb`
+- `PIL.Image.Image.convert.nuanced.i-to-rgb`
+- `PIL.Image.Image.convert.nuanced.l-to-rgb`
+- `PIL.Image.Image.convert.nuanced.l-to-rgba`
+- `PIL.Image.Image.convert.nuanced.la-to-rgb`
+- `PIL.Image.Image.convert.nuanced.p-to-rgb`
+- `PIL.Image.Image.convert.nuanced.rgb-to-cmyk`
+- `PIL.Image.Image.convert.nuanced.rgb-to-f`
+- `PIL.Image.Image.convert.nuanced.rgb-to-hsv`
+- `PIL.Image.Image.convert.nuanced.rgb-to-i`
+- `PIL.Image.Image.convert.nuanced.rgb-to-ycbcr`
+- `PIL.Image.Image.convert.nuanced.rgba-to-l`
+- `PIL.Image.Image.convert.nuanced.ycbcr-to-rgb`
 - `PIL.Image.Image.getbbox.nuanced.alpha-only-rgba`
 - `PIL.Image.Image.getbbox.nuanced.blue-only-rgb`
 - `PIL.Image.Image.getbbox.nuanced.green-only-rgb`
@@ -70,7 +86,15 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
 - `PIL.ImageChops.invert.nuanced.la`
 - `PIL.ImageChops.invert.nuanced.rgba`
+- `PIL.ImageColor.getcolor.nuanced.hex-la-alpha`
+- `PIL.ImageColor.getcolor.nuanced.hex-rgba`
+- `PIL.ImageColor.getcolor.nuanced.named-l`
+- `PIL.ImageColor.getcolor.nuanced.named-one`
+- `PIL.ImageColor.getcolor.nuanced.rgb-syntax-l`
+- `PIL.ImageColor.getrgb.nuanced.hex-with-alpha`
+- `PIL.ImageColor.getrgb.nuanced.hsl-syntax`
 - `PIL.ImageColor.getrgb.nuanced.named-css-color`
+- `PIL.ImageColor.getrgb.nuanced.rgba-syntax`
 - `PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor`
 - `PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor`
