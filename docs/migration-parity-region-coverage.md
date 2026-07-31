@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 39f4312f9296204ac99195b4beaa811ddec2c505565944a98b1b2b598fae63f0
-coverage_run_id: migration-coverage-7c5712eb82c74b5f8ed1917ebbb26edb
+coverage_run_id: migration-coverage-b4998acb86ff4fb4a8bdf2c4929bccb4
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%
@@ -29,27 +29,6 @@ component's measured coverage by design.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
-| `PIL.ImageDraw.Draw` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 1307/2101 | 62.2% |
-| `PIL.ImageDraw.Outline` | `image-draw` | 1307/2101 | 62.2% |
 | `PIL.ImageSequence.Iterator` | `image-sequence` | 2202/3425 | 64.3% |
 | `PIL.ImageColor.getcolor` | `image-color` | 614/929 | 66.1% |
 | `PIL.ImageColor.getrgb` | `image-color` | 614/929 | 66.1% |
@@ -130,6 +109,27 @@ component's measured coverage by design.
 | `PIL.Image.new` | `image-core` | 4769/7049 | 67.7% |
 | `PIL.Image.open` | `image-core` | 4769/7049 | 67.7% |
 | `PIL.Image.radial_gradient` | `image-core` | 4769/7049 | 67.7% |
+| `PIL.ImageDraw.Draw` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 1516/2105 | 72.0% |
+| `PIL.ImageDraw.Outline` | `image-draw` | 1516/2105 | 72.0% |
 | `PIL.ImageFont.FreeTypeFont` | `image-font` | 2212/2514 | 88.0% |
 | `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 2212/2514 | 88.0% |
 | `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 2212/2514 | 88.0% |
@@ -178,7 +178,7 @@ component's measured coverage by design.
 | `image-core` | `pillow-rs-py/python/pillow_rs/image.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs-py/python/pillow_rs/operations.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs/src/ops/rotate.rs` | 8/8 | 100.0% |
-| `image-draw` | `pillow-rs/src/draw/mod.rs` | 1307/2101 | 62.2% |
+| `image-draw` | `pillow-rs/src/draw/mod.rs` | 1516/2105 | 72.0% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
 | `image-font` | `pillow-rs/src/lib.rs` | 99/217 | 45.6% |
 | `image-font` | `pillow-rs/src/font/mod.rs` | 169/271 | 62.4% |

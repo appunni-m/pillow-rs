@@ -2766,6 +2766,13 @@ fn parse_draw_color(
             "color must be int, or tuple of one or two elements",
         ));
     }
+    // Pillow's `Draw._getink` accepts a one-item tuple for single-channel
+    // modes; the value becomes the channel ink.
+    if matches!(mode, Some("L") | Some("1") | Some("P")) {
+        if let Ok((value,)) = v.extract::<(u8,)>() {
+            return Ok((value, value, value, 255));
+        }
+    }
     if mode == Some("LA") {
         if let Ok((luma, alpha)) = v.extract::<(u8, u8)>() {
             return Ok((luma, luma, luma, alpha));
