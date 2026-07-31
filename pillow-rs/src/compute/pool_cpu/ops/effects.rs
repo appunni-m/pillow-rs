@@ -324,6 +324,7 @@ pub fn op_merge(
     let _n_expected = match mode {
         ColorMode::RGB => 3,
         ColorMode::RGBA => 4,
+        ColorMode::CMYK => 4,
         ColorMode::LA => 2,
         ColorMode::L | ColorMode::Mode1 => 1,
         _ => {
@@ -358,6 +359,18 @@ pub fn op_merge(
             Ok(DynamicImage::ImageRgb8(img))
         }
         ColorMode::RGBA => {
+            let mut rgba = vec![0u8; n * 4];
+            for i in 0..n {
+                rgba[i * 4] = band_pixels[0][i];
+                rgba[i * 4 + 1] = band_pixels[1][i];
+                rgba[i * 4 + 2] = band_pixels[2][i];
+                rgba[i * 4 + 3] = band_pixels[3][i];
+            }
+            let img = RgbaImage::from_raw(w, h, rgba)
+                .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
+            Ok(DynamicImage::ImageRgba8(img))
+        }
+        ColorMode::CMYK => {
             let mut rgba = vec![0u8; n * 4];
             for i in 0..n {
                 rgba[i * 4] = band_pixels[0][i];

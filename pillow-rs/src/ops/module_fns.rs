@@ -24,6 +24,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     let n_expected = match mode {
         "RGB" => 3,
         "RGBA" => 4,
+        "CMYK" => 4,
         "LA" => 2,
         "L" => 1,
         _ => {
@@ -39,13 +40,22 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     }
 
     let mode_enum = parse_mode(mode)?;
-    Ok(Image::push_op(
+    let mut result = Image::push_op(
         &bands[0],
         PipelineOp::Merge {
             mode: mode_enum,
             bands: bands.to_vec(),
         },
-    ))
+    );
+    if let Image::Pipeline {
+        explicit_mode: tag, ..
+    } = &mut result
+    {
+        if mode == "CMYK" {
+            *tag = Some("CMYK".to_string());
+        }
+    }
+    Ok(result)
 }
 
 /// Blends two same-sized images by linear interpolation.
