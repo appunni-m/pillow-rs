@@ -2,11 +2,12 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImagePalette.ImagePalette.behavior-default",
+      "case_id": "PIL.ImagePalette.ImagePalette.behavior.default",
       "surface": "PIL.ImagePalette",
       "operation": "ImagePalette",
       "covers": [
-        "PIL.ImagePalette.ImagePalette.behavior.default"
+        "PIL.ImagePalette.ImagePalette.behavior.default",
+        "PIL.ImagePalette.ImagePalette.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -26,7 +27,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImagePalette.ImagePalette.parameter-mode",
+      "case_id": "PIL.ImagePalette.ImagePalette.parameter.mode",
       "surface": "PIL.ImagePalette",
       "operation": "ImagePalette",
       "covers": [
@@ -55,7 +56,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImagePalette.ImagePalette.parameter-palette",
+      "case_id": "PIL.ImagePalette.ImagePalette.parameter.palette",
       "surface": "PIL.ImagePalette",
       "operation": "ImagePalette",
       "covers": [
@@ -100,30 +101,6 @@
               "step_id": "setup-palette-1"
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImagePalette.ImagePalette.performance-standard",
-      "surface": "PIL.ImagePalette",
-      "operation": "ImagePalette",
-      "covers": [
-        "PIL.ImagePalette.ImagePalette.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImagePalette",
-          "operation": "ImagePalette",
-          "receiver": null,
-          "arguments": {}
         }
       ],
       "observations": [

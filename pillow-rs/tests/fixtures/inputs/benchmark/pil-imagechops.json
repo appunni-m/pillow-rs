@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.add.performance-standard"
+        "case_id": "PIL.ImageChops.add.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.add_modulo.performance-standard"
+        "case_id": "PIL.ImageChops.add_modulo.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.blend.performance-standard"
+        "case_id": "PIL.ImageChops.blend.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.composite.performance-standard"
+        "case_id": "PIL.ImageChops.composite.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.constant.performance-standard"
+        "case_id": "PIL.ImageChops.constant.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.darker.performance-standard"
+        "case_id": "PIL.ImageChops.darker.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.difference.performance-standard"
+        "case_id": "PIL.ImageChops.difference.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.duplicate.performance-standard"
+        "case_id": "PIL.ImageChops.duplicate.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.hard_light.performance-standard"
+        "case_id": "PIL.ImageChops.hard_light.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -342,7 +342,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.invert.performance-standard"
+        "case_id": "PIL.ImageChops.invert.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -378,7 +378,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.lighter.performance-standard"
+        "case_id": "PIL.ImageChops.lighter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -414,7 +414,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.logical_and.performance-standard"
+        "case_id": "PIL.ImageChops.logical_and.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -450,7 +450,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.logical_or.performance-standard"
+        "case_id": "PIL.ImageChops.logical_or.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -486,7 +486,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.logical_xor.performance-standard"
+        "case_id": "PIL.ImageChops.logical_xor.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -522,7 +522,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.multiply.performance-standard"
+        "case_id": "PIL.ImageChops.multiply.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -558,7 +558,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.offset.performance-standard"
+        "case_id": "PIL.ImageChops.offset.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -594,7 +594,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.overlay.performance-standard"
+        "case_id": "PIL.ImageChops.overlay.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -630,7 +630,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.screen.performance-standard"
+        "case_id": "PIL.ImageChops.screen.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -666,7 +666,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.soft_light.performance-standard"
+        "case_id": "PIL.ImageChops.soft_light.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -702,7 +702,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.subtract.performance-standard"
+        "case_id": "PIL.ImageChops.subtract.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -738,7 +738,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.subtract_modulo.performance-standard"
+        "case_id": "PIL.ImageChops.subtract_modulo.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

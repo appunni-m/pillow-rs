@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.count.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.count.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.extrema.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.extrema.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.mean.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.mean.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.median.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.median.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.rms.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.rms.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.stddev.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.stddev.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.sum.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.sum.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.sum2.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.sum2.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageStat.Stat.var.performance-standard"
+        "case_id": "PIL.ImageStat.Stat.var.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

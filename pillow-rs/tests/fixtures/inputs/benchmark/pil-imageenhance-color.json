@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageEnhance.Color.enhance.performance-standard"
+        "case_id": "PIL.ImageEnhance.Color.enhance.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

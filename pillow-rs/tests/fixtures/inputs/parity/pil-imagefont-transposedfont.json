@@ -2,11 +2,13 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getbbox.behavior-default",
+      "case_id": "PIL.ImageFont.TransposedFont.getbbox.behavior.default",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getbbox",
       "covers": [
-        "PIL.ImageFont.TransposedFont.getbbox.behavior.default"
+        "PIL.ImageFont.TransposedFont.getbbox.behavior.default",
+        "PIL.ImageFont.TransposedFont.getbbox.parameter.text",
+        "PIL.ImageFont.TransposedFont.getbbox.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -70,75 +72,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getbbox.parameter-text",
-      "surface": "PIL.ImageFont.TransposedFont",
-      "operation": "getbbox",
-      "covers": [
-        "PIL.ImageFont.TransposedFont.getbbox.parameter.text"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "font",
-          "kind": "ref",
-          "path": "font/fonts/DejaVuSans.ttf",
-          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
-          "media_type": "font/ttf"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "setup-font-1",
-          "surface": "PIL.ImageFont",
-          "operation": "truetype",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "asset",
-              "asset_id": "font"
-            },
-            "size": {
-              "kind": "literal",
-              "value": 20
-            }
-          }
-        },
-        {
-          "step_id": "setup-transposed-font-2",
-          "surface": "PIL.ImageFont",
-          "operation": "TransposedFont",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "binding",
-              "step_id": "setup-font-1"
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.TransposedFont",
-          "operation": "getbbox",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-transposed-font-2"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.TransposedFont.getbbox.parameter-args",
+      "case_id": "PIL.ImageFont.TransposedFont.getbbox.parameter.args",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getbbox",
       "covers": [
@@ -212,7 +146,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getbbox.parameter-kwargs",
+      "case_id": "PIL.ImageFont.TransposedFont.getbbox.parameter.kwargs",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getbbox",
       "covers": [
@@ -284,79 +218,13 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getbbox.performance-standard",
-      "surface": "PIL.ImageFont.TransposedFont",
-      "operation": "getbbox",
-      "covers": [
-        "PIL.ImageFont.TransposedFont.getbbox.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "font",
-          "kind": "ref",
-          "path": "font/fonts/DejaVuSans.ttf",
-          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
-          "media_type": "font/ttf"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "setup-font-1",
-          "surface": "PIL.ImageFont",
-          "operation": "truetype",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "asset",
-              "asset_id": "font"
-            },
-            "size": {
-              "kind": "literal",
-              "value": 20
-            }
-          }
-        },
-        {
-          "step_id": "setup-transposed-font-2",
-          "surface": "PIL.ImageFont",
-          "operation": "TransposedFont",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "binding",
-              "step_id": "setup-font-1"
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.TransposedFont",
-          "operation": "getbbox",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-transposed-font-2"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.TransposedFont.getlength.behavior-default",
+      "case_id": "PIL.ImageFont.TransposedFont.getlength.behavior.default",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getlength",
       "covers": [
-        "PIL.ImageFont.TransposedFont.getlength.behavior.default"
+        "PIL.ImageFont.TransposedFont.getlength.behavior.default",
+        "PIL.ImageFont.TransposedFont.getlength.parameter.text",
+        "PIL.ImageFont.TransposedFont.getlength.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -420,75 +288,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getlength.parameter-text",
-      "surface": "PIL.ImageFont.TransposedFont",
-      "operation": "getlength",
-      "covers": [
-        "PIL.ImageFont.TransposedFont.getlength.parameter.text"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "font",
-          "kind": "ref",
-          "path": "font/fonts/DejaVuSans.ttf",
-          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
-          "media_type": "font/ttf"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "setup-font-1",
-          "surface": "PIL.ImageFont",
-          "operation": "truetype",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "asset",
-              "asset_id": "font"
-            },
-            "size": {
-              "kind": "literal",
-              "value": 20
-            }
-          }
-        },
-        {
-          "step_id": "setup-transposed-font-2",
-          "surface": "PIL.ImageFont",
-          "operation": "TransposedFont",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "binding",
-              "step_id": "setup-font-1"
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.TransposedFont",
-          "operation": "getlength",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-transposed-font-2"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.TransposedFont.getlength.parameter-args",
+      "case_id": "PIL.ImageFont.TransposedFont.getlength.parameter.args",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getlength",
       "covers": [
@@ -562,7 +362,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getlength.parameter-kwargs",
+      "case_id": "PIL.ImageFont.TransposedFont.getlength.parameter.kwargs",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getlength",
       "covers": [
@@ -634,79 +434,13 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getlength.performance-standard",
-      "surface": "PIL.ImageFont.TransposedFont",
-      "operation": "getlength",
-      "covers": [
-        "PIL.ImageFont.TransposedFont.getlength.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "font",
-          "kind": "ref",
-          "path": "font/fonts/DejaVuSans.ttf",
-          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
-          "media_type": "font/ttf"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "setup-font-1",
-          "surface": "PIL.ImageFont",
-          "operation": "truetype",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "asset",
-              "asset_id": "font"
-            },
-            "size": {
-              "kind": "literal",
-              "value": 20
-            }
-          }
-        },
-        {
-          "step_id": "setup-transposed-font-2",
-          "surface": "PIL.ImageFont",
-          "operation": "TransposedFont",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "binding",
-              "step_id": "setup-font-1"
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.TransposedFont",
-          "operation": "getlength",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-transposed-font-2"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.TransposedFont.getmask.behavior-default",
+      "case_id": "PIL.ImageFont.TransposedFont.getmask.behavior.default",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getmask",
       "covers": [
-        "PIL.ImageFont.TransposedFont.getmask.behavior.default"
+        "PIL.ImageFont.TransposedFont.getmask.behavior.default",
+        "PIL.ImageFont.TransposedFont.getmask.parameter.text",
+        "PIL.ImageFont.TransposedFont.getmask.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -770,75 +504,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter-text",
-      "surface": "PIL.ImageFont.TransposedFont",
-      "operation": "getmask",
-      "covers": [
-        "PIL.ImageFont.TransposedFont.getmask.parameter.text"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "font",
-          "kind": "ref",
-          "path": "font/fonts/DejaVuSans.ttf",
-          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
-          "media_type": "font/ttf"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "setup-font-1",
-          "surface": "PIL.ImageFont",
-          "operation": "truetype",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "asset",
-              "asset_id": "font"
-            },
-            "size": {
-              "kind": "literal",
-              "value": 20
-            }
-          }
-        },
-        {
-          "step_id": "setup-transposed-font-2",
-          "surface": "PIL.ImageFont",
-          "operation": "TransposedFont",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "binding",
-              "step_id": "setup-font-1"
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.TransposedFont",
-          "operation": "getmask",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-transposed-font-2"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter-mode",
+      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter.mode",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getmask",
       "covers": [
@@ -910,7 +576,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter-args",
+      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter.args",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getmask",
       "covers": [
@@ -984,7 +650,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter-kwargs",
+      "case_id": "PIL.ImageFont.TransposedFont.getmask.parameter.kwargs",
       "surface": "PIL.ImageFont.TransposedFont",
       "operation": "getmask",
       "covers": [
@@ -1047,74 +713,6 @@
             "kwargs": {
               "kind": "literal",
               "value": {}
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.TransposedFont.getmask.performance-standard",
-      "surface": "PIL.ImageFont.TransposedFont",
-      "operation": "getmask",
-      "covers": [
-        "PIL.ImageFont.TransposedFont.getmask.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "font",
-          "kind": "ref",
-          "path": "font/fonts/DejaVuSans.ttf",
-          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
-          "media_type": "font/ttf"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "setup-font-1",
-          "surface": "PIL.ImageFont",
-          "operation": "truetype",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "asset",
-              "asset_id": "font"
-            },
-            "size": {
-              "kind": "literal",
-              "value": 20
-            }
-          }
-        },
-        {
-          "step_id": "setup-transposed-font-2",
-          "surface": "PIL.ImageFont",
-          "operation": "TransposedFont",
-          "receiver": null,
-          "arguments": {
-            "font": {
-              "kind": "binding",
-              "step_id": "setup-font-1"
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.TransposedFont",
-          "operation": "getmask",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-transposed-font-2"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
             }
           }
         }

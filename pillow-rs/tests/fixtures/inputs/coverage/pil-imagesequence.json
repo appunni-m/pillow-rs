@@ -12,10 +12,8 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageSequence.Iterator.behavior-default",
-          "PIL.ImageSequence.Iterator.parameter-im",
-          "PIL.ImageSequence.Iterator.mode-l",
-          "PIL.ImageSequence.Iterator.mode-rgb"
+          "PIL.ImageSequence.Iterator.behavior.default",
+          "PIL.ImageSequence.Iterator.mode.l"
         ],
         "command_ids": []
       },

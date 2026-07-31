@@ -174,6 +174,7 @@ this repository. They belong in a later `codegen-marketplace` fix.
 | SKL-003 | high | The plugin contains prose contracts and one auditor but no separately versioned machine-readable schemas for manifest, all three inputs, all four results, or aggregate joins. | Add machine-readable schemas or equivalent reusable validators plus conformance fixtures for every interface. |
 | SKL-004 | high | The skill has no executable regression test suite for valid, invalid, unknown-field, unsupported-version, and malformed-discriminant documents. | Add tests that prove the auditor always reports findings and never crashes on untrusted input. |
 | SKL-005 | medium | Local marketplace commit `2eff258` is installed and byte-identical to the cache, but the marketplace checkout is one commit ahead of `origin/main`. | Push the reviewed commit before relying on it outside this machine. |
+| SKL-006 | high | The auditor rejects a valid fixed `builtin` asset used for a deterministic non-JSON public handle: `Image.point`'s callable variant is declared as a `handle`, but `validate_value_descriptor` only treats assets as `any_json`, `bytes`, `path`, `image`, `font`, or `stream`. | Extend the fixed builtin/value registry (with conformance tests) so a declared callable/handle builtin is type-checkable; do not replace the callable with an expected-output literal or silently drop the requirement. |
 
 ## J. Open contract decisions that block a truthful final spec
 

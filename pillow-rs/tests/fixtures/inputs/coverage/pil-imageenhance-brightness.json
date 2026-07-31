@@ -10,8 +10,7 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageEnhance.Brightness.enhance.behavior-default",
-          "PIL.ImageEnhance.Brightness.enhance.parameter-factor"
+          "PIL.ImageEnhance.Brightness.enhance.behavior.default"
         ],
         "command_ids": []
       },

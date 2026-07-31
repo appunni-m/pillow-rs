@@ -15,13 +15,9 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageColor.getcolor.behavior-default",
-          "PIL.ImageColor.getcolor.parameter-color",
-          "PIL.ImageColor.getcolor.parameter-mode",
-          "PIL.ImageColor.getcolor.mode-l",
-          "PIL.ImageColor.getcolor.mode-rgb",
-          "PIL.ImageColor.getrgb.behavior-default",
-          "PIL.ImageColor.getrgb.parameter-color"
+          "PIL.ImageColor.getcolor.behavior.default",
+          "PIL.ImageColor.getcolor.mode.l",
+          "PIL.ImageColor.getrgb.behavior.default"
         ],
         "command_ids": []
       },

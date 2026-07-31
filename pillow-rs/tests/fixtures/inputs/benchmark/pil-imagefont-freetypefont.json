@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.font_variant.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.font_variant.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.getlength.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.getlength.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.getmask.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.getmetrics.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.getmetrics.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.getname.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.getname.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -342,7 +342,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -378,7 +378,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

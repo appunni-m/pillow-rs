@@ -2,11 +2,14 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImageSequence.Iterator.behavior-default",
+      "case_id": "PIL.ImageSequence.Iterator.behavior.default",
       "surface": "PIL.ImageSequence",
       "operation": "Iterator",
       "covers": [
-        "PIL.ImageSequence.Iterator.behavior.default"
+        "PIL.ImageSequence.Iterator.behavior.default",
+        "PIL.ImageSequence.Iterator.parameter.im",
+        "PIL.ImageSequence.Iterator.mode.rgb",
+        "PIL.ImageSequence.Iterator.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -54,59 +57,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageSequence.Iterator.parameter-im",
-      "surface": "PIL.ImageSequence",
-      "operation": "Iterator",
-      "covers": [
-        "PIL.ImageSequence.Iterator.parameter.im"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageSequence",
-          "operation": "Iterator",
-          "receiver": null,
-          "arguments": {
-            "im": {
-              "kind": "binding",
-              "step_id": "setup-im-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageSequence.Iterator.mode-l",
+      "case_id": "PIL.ImageSequence.Iterator.mode.l",
       "surface": "PIL.ImageSequence",
       "operation": "Iterator",
       "covers": [
@@ -126,110 +77,6 @@
             "mode": {
               "kind": "literal",
               "value": "L"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageSequence",
-          "operation": "Iterator",
-          "receiver": null,
-          "arguments": {
-            "im": {
-              "kind": "binding",
-              "step_id": "setup-im-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageSequence.Iterator.mode-rgb",
-      "surface": "PIL.ImageSequence",
-      "operation": "Iterator",
-      "covers": [
-        "PIL.ImageSequence.Iterator.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageSequence",
-          "operation": "Iterator",
-          "receiver": null,
-          "arguments": {
-            "im": {
-              "kind": "binding",
-              "step_id": "setup-im-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageSequence.Iterator.performance-standard",
-      "surface": "PIL.ImageSequence",
-      "operation": "Iterator",
-      "covers": [
-        "PIL.ImageSequence.Iterator.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
             },
             "size": {
               "kind": "literal",

@@ -113,8 +113,10 @@ help: ## Show this help
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
 	@printf "  $(CYAN)make migration-parity-manifest$(NC) Build the fixed project-wide manifest from frozen authority\n"
-	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for the manifest build during migration\n"
-	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority and manifest regeneration\n"
+	@printf "  $(CYAN)make migration-parity-inputs$(NC) Build deterministic parity/coverage/benchmark inputs\n"
+	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for manifest and input builds\n"
+	@printf "  $(CYAN)make migration-parity-case-review$(NC) Review duplicate and nuanced case selection\n"
+	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority, manifest, and input regeneration\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
 	@printf "  $(CYAN)make imagefont-getmask2-fixtures$(NC) Generate independent ImageFont.getmask2 fixtures\n"
@@ -534,7 +536,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-fixtures migration-parity-fixtures-check image-backend-fixtures putdata-fixtures
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check image-backend-fixtures putdata-fixtures
 .PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
@@ -552,13 +554,25 @@ migration-parity-inventory-check: ## Verify endpoint authority expansion and ali
 migration-parity-manifest: ## Build fixed project-wide manifest from frozen authority
 	$(PYTHON) scripts/build_migration_parity_manifest.py
 
-migration-parity-fixtures: migration-parity-manifest ## Compatibility alias during migration
+migration-parity-inputs: ## Build deterministic parity, coverage, and benchmark inputs
+	$(PYTHON) scripts/build_migration_parity_inputs.py
+
+migration-parity-fixtures: migration-parity-manifest migration-parity-inputs ## Compatibility alias during migration
+
+migration-parity-case-review: migration-parity-inputs ## Review duplicate and nuanced active case selection
+	$(PYTHON) scripts/review_migration_parity_cases.py
 
 migration-parity-fixtures-check: migration-parity-inventory-check ## Verify authority and manifest regeneration
 	@tmp="$$(mktemp -d)"; \
 	trap 'rm -rf "$$tmp"' EXIT; \
 	$(PYTHON) scripts/build_migration_parity_manifest.py --output "$$tmp/manifest.yaml"; \
-	diff -u pillow-rs/tests/fixtures/manifest.yaml "$$tmp/manifest.yaml"
+	diff -u pillow-rs/tests/fixtures/manifest.yaml "$$tmp/manifest.yaml"; \
+	$(MAKE) migration-parity-inputs-check
+
+.PHONY: migration-parity-inputs-check
+migration-parity-inputs-check: ## Verify deterministic input regeneration
+	$(PYTHON) scripts/check_migration_parity_inputs.py
+	$(PYTHON) -m unittest tests.test_migration_parity_cases
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py

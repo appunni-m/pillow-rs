@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageEnhance.Brightness.performance-standard"
+        "case_id": "PIL.ImageEnhance.Brightness.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageEnhance.Color.performance-standard"
+        "case_id": "PIL.ImageEnhance.Color.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageEnhance.Contrast.performance-standard"
+        "case_id": "PIL.ImageEnhance.Contrast.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageEnhance.Sharpness.performance-standard"
+        "case_id": "PIL.ImageEnhance.Sharpness.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

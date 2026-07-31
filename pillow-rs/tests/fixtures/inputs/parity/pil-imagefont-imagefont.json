@@ -2,11 +2,13 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImageFont.ImageFont.getbbox.behavior-default",
+      "case_id": "PIL.ImageFont.ImageFont.getbbox.behavior.default",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getbbox",
       "covers": [
-        "PIL.ImageFont.ImageFont.getbbox.behavior.default"
+        "PIL.ImageFont.ImageFont.getbbox.behavior.default",
+        "PIL.ImageFont.ImageFont.getbbox.parameter.text",
+        "PIL.ImageFont.ImageFont.getbbox.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -41,46 +43,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getbbox.parameter-text",
-      "surface": "PIL.ImageFont.ImageFont",
-      "operation": "getbbox",
-      "covers": [
-        "PIL.ImageFont.ImageFont.getbbox.parameter.text"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-imagefont-1",
-          "surface": "PIL.ImageFont",
-          "operation": "ImageFont",
-          "receiver": null,
-          "arguments": {}
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.ImageFont",
-          "operation": "getbbox",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-imagefont-1"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.ImageFont.getbbox.parameter-args",
+      "case_id": "PIL.ImageFont.ImageFont.getbbox.parameter.args",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getbbox",
       "covers": [
@@ -125,7 +88,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getbbox.parameter-kwargs",
+      "case_id": "PIL.ImageFont.ImageFont.getbbox.parameter.kwargs",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getbbox",
       "covers": [
@@ -168,50 +131,13 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getbbox.performance-standard",
-      "surface": "PIL.ImageFont.ImageFont",
-      "operation": "getbbox",
-      "covers": [
-        "PIL.ImageFont.ImageFont.getbbox.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-imagefont-1",
-          "surface": "PIL.ImageFont",
-          "operation": "ImageFont",
-          "receiver": null,
-          "arguments": {}
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.ImageFont",
-          "operation": "getbbox",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-imagefont-1"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.ImageFont.getlength.behavior-default",
+      "case_id": "PIL.ImageFont.ImageFont.getlength.behavior.default",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getlength",
       "covers": [
-        "PIL.ImageFont.ImageFont.getlength.behavior.default"
+        "PIL.ImageFont.ImageFont.getlength.behavior.default",
+        "PIL.ImageFont.ImageFont.getlength.parameter.text",
+        "PIL.ImageFont.ImageFont.getlength.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -246,46 +172,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getlength.parameter-text",
-      "surface": "PIL.ImageFont.ImageFont",
-      "operation": "getlength",
-      "covers": [
-        "PIL.ImageFont.ImageFont.getlength.parameter.text"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-imagefont-1",
-          "surface": "PIL.ImageFont",
-          "operation": "ImageFont",
-          "receiver": null,
-          "arguments": {}
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.ImageFont",
-          "operation": "getlength",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-imagefont-1"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.ImageFont.getlength.parameter-args",
+      "case_id": "PIL.ImageFont.ImageFont.getlength.parameter.args",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getlength",
       "covers": [
@@ -330,7 +217,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getlength.parameter-kwargs",
+      "case_id": "PIL.ImageFont.ImageFont.getlength.parameter.kwargs",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getlength",
       "covers": [
@@ -373,50 +260,13 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getlength.performance-standard",
-      "surface": "PIL.ImageFont.ImageFont",
-      "operation": "getlength",
-      "covers": [
-        "PIL.ImageFont.ImageFont.getlength.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-imagefont-1",
-          "surface": "PIL.ImageFont",
-          "operation": "ImageFont",
-          "receiver": null,
-          "arguments": {}
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.ImageFont",
-          "operation": "getlength",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-imagefont-1"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.ImageFont.getmask.behavior-default",
+      "case_id": "PIL.ImageFont.ImageFont.getmask.behavior.default",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getmask",
       "covers": [
-        "PIL.ImageFont.ImageFont.getmask.behavior.default"
+        "PIL.ImageFont.ImageFont.getmask.behavior.default",
+        "PIL.ImageFont.ImageFont.getmask.parameter.text",
+        "PIL.ImageFont.ImageFont.getmask.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -451,46 +301,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter-text",
-      "surface": "PIL.ImageFont.ImageFont",
-      "operation": "getmask",
-      "covers": [
-        "PIL.ImageFont.ImageFont.getmask.parameter.text"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-imagefont-1",
-          "surface": "PIL.ImageFont",
-          "operation": "ImageFont",
-          "receiver": null,
-          "arguments": {}
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.ImageFont",
-          "operation": "getmask",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-imagefont-1"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter-mode",
+      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter.mode",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getmask",
       "covers": [
@@ -533,7 +344,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter-args",
+      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter.args",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getmask",
       "covers": [
@@ -578,7 +389,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter-kwargs",
+      "case_id": "PIL.ImageFont.ImageFont.getmask.parameter.kwargs",
       "surface": "PIL.ImageFont.ImageFont",
       "operation": "getmask",
       "covers": [
@@ -612,45 +423,6 @@
             "kwargs": {
               "kind": "literal",
               "value": {}
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFont.ImageFont.getmask.performance-standard",
-      "surface": "PIL.ImageFont.ImageFont",
-      "operation": "getmask",
-      "covers": [
-        "PIL.ImageFont.ImageFont.getmask.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-imagefont-1",
-          "surface": "PIL.ImageFont",
-          "operation": "ImageFont",
-          "receiver": null,
-          "arguments": {}
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFont.ImageFont",
-          "operation": "getmask",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-imagefont-1"
-          },
-          "arguments": {
-            "text": {
-              "kind": "literal",
-              "value": "Hello"
             }
           }
         }

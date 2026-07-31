@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.copy.performance-standard"
+        "case_id": "PIL.ImagePalette.ImagePalette.copy.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.getcolor.performance-standard"
+        "case_id": "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.getdata.performance-standard"
+        "case_id": "PIL.ImagePalette.ImagePalette.getdata.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.save.performance-standard"
+        "case_id": "PIL.ImagePalette.ImagePalette.save.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.tobytes.performance-standard"
+        "case_id": "PIL.ImagePalette.ImagePalette.tobytes.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

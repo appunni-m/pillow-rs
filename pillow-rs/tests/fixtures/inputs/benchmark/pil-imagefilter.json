@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.BLUR.performance-standard"
+        "case_id": "PIL.ImageFilter.BLUR.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.BoxBlur.performance-standard"
+        "case_id": "PIL.ImageFilter.BoxBlur.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.CONTOUR.performance-standard"
+        "case_id": "PIL.ImageFilter.CONTOUR.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.Color3DLUT.performance-standard"
+        "case_id": "PIL.ImageFilter.Color3DLUT.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.DETAIL.performance-standard"
+        "case_id": "PIL.ImageFilter.DETAIL.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.EDGE_ENHANCE.performance-standard"
+        "case_id": "PIL.ImageFilter.EDGE_ENHANCE.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance-standard"
+        "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.EMBOSS.performance-standard"
+        "case_id": "PIL.ImageFilter.EMBOSS.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.FIND_EDGES.performance-standard"
+        "case_id": "PIL.ImageFilter.FIND_EDGES.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -342,7 +342,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.GaussianBlur.performance-standard"
+        "case_id": "PIL.ImageFilter.GaussianBlur.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -378,7 +378,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.Kernel.performance-standard"
+        "case_id": "PIL.ImageFilter.Kernel.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -414,7 +414,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.MaxFilter.performance-standard"
+        "case_id": "PIL.ImageFilter.MaxFilter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -450,7 +450,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.MedianFilter.performance-standard"
+        "case_id": "PIL.ImageFilter.MedianFilter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -486,7 +486,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.MinFilter.performance-standard"
+        "case_id": "PIL.ImageFilter.MinFilter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -522,7 +522,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.ModeFilter.performance-standard"
+        "case_id": "PIL.ImageFilter.ModeFilter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -558,7 +558,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.RankFilter.performance-standard"
+        "case_id": "PIL.ImageFilter.RankFilter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -594,7 +594,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.SHARPEN.performance-standard"
+        "case_id": "PIL.ImageFilter.SHARPEN.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -630,7 +630,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.SMOOTH.performance-standard"
+        "case_id": "PIL.ImageFilter.SMOOTH.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -666,7 +666,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.SMOOTH_MORE.performance-standard"
+        "case_id": "PIL.ImageFilter.SMOOTH_MORE.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -702,7 +702,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFilter.UnsharpMask.performance-standard"
+        "case_id": "PIL.ImageFilter.UnsharpMask.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

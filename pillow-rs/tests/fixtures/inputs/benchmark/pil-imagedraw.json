@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.Draw.performance-standard"
+        "case_id": "PIL.ImageDraw.Draw.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.Outline.performance-standard"
+        "case_id": "PIL.ImageDraw.Outline.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

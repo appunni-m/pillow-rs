@@ -18,6 +18,7 @@ import base64
 import hashlib
 import json
 import re
+from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,89 @@ def operation_key(surface: str, operation: str) -> tuple[str, str]:
 
 def operation_prefix(surface: str, operation: str) -> str:
     return f"{surface}.{operation}"
+
+
+def case_signature(case: dict[str, Any]) -> str:
+    """Return the behavior-bearing identity of a parity workflow.
+
+    Case IDs and requirement membership are labels, not stimuli.  They must
+    not prevent exact duplicate workflows from being merged.  Every other
+    field remains part of the signature so that omission/default semantics,
+    asset identity, setup order, and observations stay distinct.
+    """
+
+    return json.dumps(
+        {
+            key: case[key]
+            for key in (
+                "surface",
+                "operation",
+                "target_profiles",
+                "assets",
+                "steps",
+                "observations",
+            )
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def requirement_priority(requirement_id: str, prefix: str) -> tuple[int, int, str]:
+    """Choose a human-readable stable label for a merged workflow."""
+
+    suffix = requirement_id.removeprefix(prefix + ".")
+    if suffix == "behavior.default":
+        rank = 0
+    elif suffix.startswith("parameter-combination."):
+        rank = 1
+    elif suffix.startswith("edge."):
+        rank = 2
+    elif suffix.startswith("mode.") or suffix.startswith("format."):
+        rank = 3
+    elif suffix.startswith("parameter."):
+        rank = 4
+    elif suffix.startswith("performance."):
+        rank = 6
+    else:
+        rank = 5
+    return rank, len(suffix), suffix
+
+
+def merge_duplicate_cases(
+    candidates: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], dict[str, str], int]:
+    """Merge exact workflow duplicates while retaining every requirement map."""
+
+    grouped: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for candidate in candidates:
+        grouped[case_signature(candidate)].append(candidate)
+
+    merged: list[dict[str, Any]] = []
+    requirement_to_case: dict[str, str] = {}
+    for group in grouped.values():
+        first = group[0]
+        prefix = operation_prefix(first["surface"], first["operation"])
+        requirement_ids = [
+            requirement_id
+            for candidate in group
+            for requirement_id in candidate["covers"]
+        ]
+        unique_requirement_ids = list(dict.fromkeys(requirement_ids))
+        canonical_requirement = min(
+            unique_requirement_ids,
+            key=lambda item: requirement_priority(item, prefix),
+        )
+        canonical_case = {
+            **first,
+            "case_id": canonical_requirement,
+            "covers": unique_requirement_ids,
+        }
+        merged.append(canonical_case)
+        for requirement_id in unique_requirement_ids:
+            requirement_to_case[requirement_id] = canonical_case["case_id"]
+
+    return merged, requirement_to_case, len(candidates) - len(merged)
 
 
 def load_manifest(path: Path) -> dict[str, Any]:
@@ -166,10 +250,13 @@ class WorkflowBuilder:
     _image_steps: dict[str, str] = field(default_factory=dict)
     _font_step: str | None = None
     _outline_step: str | None = None
+    scenario_values: dict[str, dict[str, Any]] = field(default_factory=dict)
+    scenario_mode: str | None = None
+    scenario_edge: str | None = None
 
     @property
     def mode(self) -> str:
-        return requirement_mode(self.requirement) or "RGB"
+        return self.scenario_mode or requirement_mode(self.requirement) or "RGB"
 
     @property
     def image_format(self) -> str:
@@ -177,7 +264,7 @@ class WorkflowBuilder:
 
     @property
     def edge(self) -> str | None:
-        return requirement_edge(self.requirement)
+        return self.scenario_edge or requirement_edge(self.requirement)
 
     def next_step_id(self, prefix: str) -> str:
         self._step_counter += 1
@@ -262,6 +349,12 @@ class WorkflowBuilder:
 
     def ensure_image(self, mode: str | None = None, label: str = "image") -> str:
         requested_mode = mode or self.mode
+        if self.edge == "single-band-image":
+            requested_mode = "L"
+        if self.edge == "webp-alpha-mismatch" and label == "image":
+            requested_mode = "RGBA"
+        if self.edge == "mode-mismatch" and label not in {"image", "mask"}:
+            requested_mode = "L" if requested_mode != "L" else "RGB"
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
@@ -270,6 +363,15 @@ class WorkflowBuilder:
             size = [0, 16]
         elif self.edge == "zero-height":
             size = [16, 0]
+        elif self.edge == "zero-size":
+            size = [0, 0]
+        elif (
+            self.edge == "source-larger-than-dest"
+            and label not in {"image", "mask"}
+        ):
+            size = [32, 32]
+        elif self.edge == "mask-size-mismatch" and label == "mask":
+            size = [8, 8]
         step_id = self.add_step(
             "PIL.Image",
             "new",
@@ -282,6 +384,26 @@ class WorkflowBuilder:
             step_id=self.next_step_id(f"setup-{label}"),
         )
         self._image_steps[cache_key] = step_id
+        if self.edge == "too-many-colors" and label == "image":
+            pixel_value: Any
+            if requested_mode in {"L", "P", "1"}:
+                pixel_value = 1
+            elif requested_mode in {"LA"}:
+                pixel_value = [1, 255]
+            elif requested_mode in {"RGBA"}:
+                pixel_value = [1, 2, 3, 255]
+            else:
+                pixel_value = [1, 2, 3]
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([0, 0]),
+                    "value": literal(pixel_value),
+                },
+                step_id=self.next_step_id("setup-varied-pixel"),
+            )
         return step_id
 
     def ensure_font(self) -> str:
@@ -378,6 +500,33 @@ class WorkflowBuilder:
             return binding(stat)
         return None
 
+    def ensure_filter_instance(self, filter_name: str) -> str:
+        """Construct a public ImageFilter object for an Image.filter call."""
+
+        key = operation_key("PIL.ImageFilter", filter_name)
+        operation = self.operations.get(key)
+        if operation is None:
+            raise ValueError(f"unknown ImageFilter operation: {filter_name}")
+        arguments = self.required_arguments(operation)
+        return self.add_step(
+            "PIL.ImageFilter",
+            filter_name,
+            receiver=None,
+            arguments=arguments,
+            step_id=self.next_step_id(f"setup-filter-{slug(filter_name)}"),
+        )
+
+    def required_arguments(
+        self, operation: dict[str, Any]
+    ) -> dict[str, dict[str, Any]]:
+        arguments: dict[str, dict[str, Any]] = {}
+        for parameter in operation["source"]["parameters"]:
+            if parameter["style"] == "receiver":
+                continue
+            if parameter["omission"]["kind"] == "required":
+                arguments[parameter["id"]] = self.descriptor_for(parameter)
+        return arguments
+
     def concrete_variant(self, parameter_id: str, value: Any) -> Any:
         if not isinstance(value, str):
             return value
@@ -387,6 +536,7 @@ class WorkflowBuilder:
             "float": 1.0,
             "hex_string": "#204080",
             "rgb_tuple": [32, 64, 128],
+            "color_tuple": [32, 64, 128],
             "rgba_tuple": [32, 64, 128, 255],
             "la_tuple": [64, 255],
             "tuple": [1, 2, 3],
@@ -405,6 +555,12 @@ class WorkflowBuilder:
             },
             "path": "path",
             "bytes": "bytes",
+            "deformer": {
+                "protocol": "getmesh",
+                "mesh": [
+                    [[0, 0, 16, 16], [0, 0, 0, 16, 16, 16, 16, 0]]
+                ],
+            },
         }
         return symbolic.get(value, value)
 
@@ -419,12 +575,67 @@ class WorkflowBuilder:
             return None
         if "mode" in name and "invalid" in edge:
             return "NOT_A_MODE"
+        if name == "matrix" and edge == "invalid-matrix-size":
+            return [1, 2, 3]
+        if name == "channel" and edge == "invalid-channel":
+            return "Z"
+        if name == "band" and edge == "invalid-band":
+            return 99
+        if name == "bands" and edge == "mode-band-mismatch":
+            return ["L"]
+        if name == "format" and edge.startswith("webp-"):
+            return "WEBP"
+        if name == "format" and edge == "unsupported-format":
+            return "NOT_A_FORMAT"
+        if edge == "too-many-colors" and name == "maxcolors":
+            return 1
+        if edge in {"out-of-bounds", "negative-coords"} and name == "xy":
+            return [16, 16] if edge == "out-of-bounds" else [-1, -1]
+        if edge == "out-of-bounds" and name == "box":
+            return [0, 0, 32, 32]
+        if edge == "negative-coords" and name == "box":
+            return [-2, -2, 8, 8]
+        if edge == "zero-size-crop" and name == "box":
+            return [0, 0, 0, 0]
+        if edge == "full-image-crop" and name == "box":
+            return [0, 0, 16, 16]
+        if edge in {"upscale", "larger-than-image"} and name == "size":
+            return [32, 32]
+        if edge in {"downscale"} and name == "size":
+            return [4, 4]
+        if edge in {"same-size-noop", "angle-zero"} and name == "size":
+            return [16, 16]
+        if edge == "angle-zero" and name == "angle":
+            return 0
+        if edge == "angle-negative" and name == "angle":
+            return -90
+        if edge == "angle-360" and name == "angle":
+            return 360
+        if edge == "zero-size" and name == "size":
+            return [0, 0]
+        if edge == "zero-dimension" and name == "size":
+            return [0, 0]
         if name in {"size"} and edge in {"zero-width", "zero-height"}:
             return [0, 16] if edge == "zero-width" else [16, 0]
         if ("text" in name or "data" in name) and "empty" in edge:
             return ""
-        if "negative" in edge and (
+        if (
+            "negative" in edge
+            and name
+            not in {
+                "image",
+                "im",
+                "im1",
+                "im2",
+                "image1",
+                "image2",
+                "mask",
+                "bitmap",
+                "palette",
+            }
+            and (
             "integer" in value_types or "number" in value_types
+            )
         ):
             return -1
         if "unsupported" in edge and (
@@ -443,10 +654,41 @@ class WorkflowBuilder:
         value_types = set(parameter["value_types"])
         name = parameter_id.lower()
 
+        for scenario_key, descriptor in self.scenario_values.items():
+            if scenario_key == parameter_id:
+                return descriptor
+
         if variant_value is not inspect_missing:
+            if (
+                parameter_id == "filter"
+                and isinstance(variant_value, str)
+                and operation_key("PIL.ImageFilter", variant_value)
+                in self.operations
+            ):
+                return binding(self.ensure_filter_instance(variant_value))
             if variant_value == "image":
                 return binding(
                     self.ensure_image(label=slug(parameter_id))
+                )
+            if parameter_id == "font" and variant_value == "path":
+                return self.ref(
+                    "font",
+                    "font/fonts/DejaVuSans.ttf",
+                    "font/ttf",
+                )
+            if parameter_id == "font" and variant_value == "bytes":
+                font_path = self.assets_root / "font/fonts/DejaVuSans.ttf"
+                return self.inline_bytes(
+                    "font-bytes",
+                    font_path.read_bytes(),
+                    "font/ttf",
+                )
+            if parameter_id == "font" and variant_value == "stream":
+                return self.builtin("font-stream", "font-byte-stream")
+            if variant_value == "callable":
+                return self.builtin(
+                    f"{slug(parameter_id)}-callable",
+                    "identity-callable",
                 )
             value = self.concrete_variant(parameter_id, variant_value)
             if value == "path":
@@ -482,6 +724,31 @@ class WorkflowBuilder:
         override = self.edge_override(parameter_id, value_types)
         if override is not None:
             return literal(override)
+
+        if name == "fp" and self.edge:
+            if self.edge in {
+                "invalid-bytes",
+                "empty-bytes",
+                "webp-corrupt-vp8-bitstream",
+                "webp-truncated-riff",
+                "webp-invalid-riff-header",
+            }:
+                edge_bytes = {
+                    "invalid-bytes": b"\x00invalid",
+                    "empty-bytes": b"",
+                    "webp-corrupt-vp8-bitstream": b"RIFF\x10\x00\x00\x00WEBPVP8 \x00\x00\x00\x00",
+                    "webp-truncated-riff": b"RIFF\x08\x00\x00\x00WEBP",
+                    "webp-invalid-riff-header": b"NOTRIFF",
+                }[self.edge]
+                return self.inline_bytes(
+                    f"{slug(self.edge)}-input",
+                    edge_bytes,
+                    "application/octet-stream",
+                )
+            if self.edge == "invalid-path":
+                return self.missing("invalid-input-path", "missing/invalid-output")
+            if self.edge == "read-only-directory":
+                return self.builtin("read-only-directory", "read-only-directory")
 
         if name in {
             "image",
@@ -528,6 +795,8 @@ class WorkflowBuilder:
             "PIL.ImageDraw"
         ):
             return binding(self.ensure_outline())
+        if name == "filter":
+            return binding(self.ensure_filter_instance("BLUR"))
         if name in {"obj"}:
             return literal(
                 {
@@ -563,6 +832,19 @@ class WorkflowBuilder:
         if name in {"format"}:
             return literal(self.image_format)
         if name in {"size"}:
+            if self.primary_surface == "PIL.ImageFilter":
+                if self.primary_operation == "Kernel":
+                    return literal([3, 3])
+                if self.primary_operation == "Color3DLUT":
+                    return literal(2)
+                if self.primary_operation in {
+                    "MaxFilter",
+                    "MinFilter",
+                    "MedianFilter",
+                    "ModeFilter",
+                    "RankFilter",
+                }:
+                    return literal(3)
             if self.primary_operation == "Color3DLUT":
                 return literal(2)
             if "sequence" not in value_types:
@@ -681,6 +963,18 @@ class WorkflowBuilder:
             ):
                 continue
             selected = required or parameter_id == focus or parameter_id in variant
+            if parameter_id in self.scenario_values:
+                selected = True
+            if self.requirement["dimension"] == "format" and parameter_id == "format":
+                selected = True
+            if self.requirement["dimension"] == "mode" and parameter_id == "mode":
+                selected = True
+            if (
+                self.requirement["dimension"] in {"boundary", "error_path"}
+                and self.edge
+                and parameter["style"] != "receiver"
+            ):
+                selected = True
             if (
                 self.primary_surface == "PIL.Image"
                 and self.primary_operation == "eval"
@@ -695,7 +989,7 @@ class WorkflowBuilder:
             )
         return arguments
 
-    def build(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], str]:
+    def build(self) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
         operation = self.operations[
             operation_key(self.primary_surface, self.primary_operation)
         ]
@@ -708,7 +1002,37 @@ class WorkflowBuilder:
             arguments=arguments,
             step_id="call",
         )
-        return self.assets, self.steps, call_id
+        observations = [call_id]
+
+        if self.primary_surface == "PIL.ImageFilter" and operation["kind"] == "type":
+            image_step = self.ensure_image()
+            filtered = self.add_step(
+                "PIL.Image.Image",
+                "filter",
+                receiver=binding(image_step),
+                arguments={"filter": binding(call_id)},
+                step_id="apply-filter",
+            )
+            observations.append(filtered)
+
+        if self.primary_surface == "PIL.ImageEnhance" and operation["kind"] == "type":
+            method_surface = f"PIL.ImageEnhance.{self.primary_operation}"
+            method_operation = self.operations.get(
+                operation_key(method_surface, "enhance")
+            )
+            if method_operation is not None:
+                image_step = self.ensure_image()
+                enhance_args = self.required_arguments(method_operation)
+                enhanced = self.add_step(
+                    method_surface,
+                    "enhance",
+                    receiver=binding(call_id),
+                    arguments=enhance_args,
+                    step_id="apply-enhance",
+                )
+                observations.append(enhanced)
+
+        return self.assets, self.steps, observations
 
 def build_parity_case(
     surface: str,
@@ -716,28 +1040,218 @@ def build_parity_case(
     requirement: dict[str, Any],
     operations: dict[tuple[str, str], dict[str, Any]],
     assets_root: Path,
+    *,
+    case_id: str | None = None,
+    scenario_values: dict[str, dict[str, Any]] | None = None,
+    scenario_mode: str | None = None,
+    scenario_edge: str | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
-    case_id = f"{prefix}.{slug(suffix)}"
+    canonical_case_id = f"{prefix}.{slug(suffix)}"
     builder = WorkflowBuilder(
         operations=operations,
         primary_surface=surface,
         primary_operation=operation["id"],
         requirement=requirement,
         assets_root=assets_root,
+        scenario_values=scenario_values or {},
+        scenario_mode=scenario_mode,
+        scenario_edge=scenario_edge,
     )
-    assets, steps, call_id = builder.build()
+    assets, steps, observations = builder.build()
     return {
-        "case_id": case_id,
+        "case_id": case_id or canonical_case_id,
         "surface": surface,
         "operation": operation["id"],
         "covers": [requirement["id"]],
         "target_profiles": [TARGET_PROFILE],
         "assets": assets,
         "steps": steps,
-        "observations": [call_id],
+        "observations": observations,
     }
+
+
+def build_nuanced_cases(
+    manifest: dict[str, Any],
+    operations: dict[tuple[str, str], dict[str, Any]],
+    assets_root: Path,
+    surface_id: str,
+) -> list[dict[str, Any]]:
+    """Add a small reviewed set of high-signal interaction stimuli.
+
+    These cases are intentionally not generated once per requirement.  They
+    exercise values that broad parameter/default matrices routinely miss:
+    Unicode and multiline text, nontrivial geometry, resampling/rotation,
+    valid color syntax, and a real filter kernel.  They reuse existing
+    requirements; coverage selection remains tied to the canonical case for
+    each requirement while parity executes these additional workflows.
+    """
+
+    specs: tuple[dict[str, Any], ...] = (
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "unicode-multiline",
+            "values": {"text": literal("A\u0301\nAV🙂")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getlength",
+            "requirement_suffix": "parameter.text",
+            "name": "kerning-pair",
+            "values": {"text": literal("AV")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
+            "name": "multiline-stroked",
+            "values": {
+                "text": literal("A\nV"),
+                "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.text",
+            "name": "unicode-anchor",
+            "values": {
+                "text": literal("A\u0301🙂"),
+                "anchor": literal("mm"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_text",
+            "requirement_suffix": "parameter.text",
+            "name": "three-line-spacing",
+            "values": {
+                "text": literal("A\nB\nC"),
+                "spacing": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "unicode-anchor",
+            "values": {
+                "text": literal("A\u0301🙂"),
+                "anchor": literal("mm"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "named-css-color",
+            "values": {"color": literal("rebeccapurple")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.color",
+            "name": "hex-rgb-color",
+            "values": {
+                "color": literal("#204080"),
+                "mode": literal("RGB"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.size",
+            "name": "noninteger-ratio-lanczos",
+            "values": {
+                "size": literal([17, 9]),
+                "resample": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.angle",
+            "name": "fractional-expanded",
+            "values": {
+                "angle": literal(33.5),
+                "expand": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "alpha-conversion",
+            "values": {
+                "mode": literal("LA"),
+                "dither": literal("NONE"),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.size",
+            "name": "fractional-centering",
+            "values": {
+                "size": literal([13, 7]),
+                "centering": literal([0.25, 0.75]),
+                "resample": literal("BICUBIC"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "requirement_suffix": "behavior.default",
+            "name": "three-by-three-edge",
+            "values": {
+                "size": literal([3, 3]),
+                "kernel": literal([0, -1, 0, -1, 5, -1, 0, -1, 0]),
+            },
+            "mode": "RGB",
+        },
+    )
+
+    requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+    for surface in manifest["surfaces"]:
+        for operation in surface["operations"]:
+            prefix = operation_prefix(surface["id"], operation["id"])
+            requirements[(surface["id"], operation["id"])] = {
+                item["id"].removeprefix(prefix + "."): item
+                for item in operation["requirements"]
+            }
+
+    cases: list[dict[str, Any]] = []
+    for spec in specs:
+        if spec["surface"] != surface_id:
+            continue
+        key = (spec["surface"], spec["operation"])
+        operation = operations.get(key)
+        if operation is None:
+            raise ValueError(f"nuanced case references unknown operation: {key}")
+        requirement = requirements[key].get(spec["requirement_suffix"])
+        if requirement is None:
+            raise ValueError(
+                f"nuanced case requirement missing: {key}"
+                f".{spec['requirement_suffix']}"
+            )
+        prefix = operation_prefix(*key)
+        cases.append(
+            build_parity_case(
+                spec["surface"],
+                operation,
+                requirement,
+                operations,
+                assets_root,
+                case_id=f"{prefix}.nuanced.{slug(spec['name'])}",
+                scenario_values=spec.get("values"),
+                scenario_mode=spec.get("mode"),
+                scenario_edge=spec.get("edge"),
+            )
+        )
+    return cases
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -771,6 +1285,7 @@ def build_inputs(
         surface_id = surface["id"]
         storage_slug = surface["storage_slug"]
         parity_cases: list[dict[str, Any]] = []
+        parity_candidates: list[dict[str, Any]] = []
         coverage_requirements: list[str] = []
         benchmark_requirements: list[
             tuple[dict[str, Any], dict[str, Any]]
@@ -790,16 +1305,35 @@ def build_inputs(
                         operations,
                         active_assets_root,
                     )
-                    if requirement["id"] in case_by_requirement:
-                        raise ValueError(
-                            f"requirement mapped twice: {requirement['id']}"
-                        )
-                    case_by_requirement[requirement["id"]] = case["case_id"]
-                    parity_cases.append(case)
+                    parity_candidates.append(case)
                 if "coverage" in requirement["lanes"]:
                     coverage_requirements.append(requirement["id"])
                 if "benchmark" in requirement["lanes"]:
                     benchmark_requirements.append((operation, requirement))
+
+        parity_cases, local_case_by_requirement, duplicate_count = (
+            merge_duplicate_cases(parity_candidates)
+        )
+        for requirement_id, case_id in local_case_by_requirement.items():
+            if requirement_id in case_by_requirement:
+                raise ValueError(f"requirement mapped twice: {requirement_id}")
+            case_by_requirement[requirement_id] = case_id
+        nuanced_cases = build_nuanced_cases(
+            manifest,
+            operations,
+            active_assets_root,
+            surface_id,
+        )
+        existing_signatures = {case_signature(case) for case in parity_cases}
+        added_nuanced_cases = 0
+        for nuanced_case in nuanced_cases:
+            signature = case_signature(nuanced_case)
+            if signature not in existing_signatures:
+                parity_cases.append(nuanced_case)
+                existing_signatures.add(signature)
+                added_nuanced_cases += 1
+        counts.setdefault("nuanced_parity_cases", 0)
+        counts["nuanced_parity_cases"] += added_nuanced_cases
 
         parity_relative = f"inputs/parity/{storage_slug}.json"
         parity_path = output_root / parity_relative
@@ -812,11 +1346,14 @@ def build_inputs(
         )
         generated["parity"].add(parity_relative)
         counts["parity_cases"] += len(parity_cases)
+        counts.setdefault("duplicate_parity_cases", 0)
+        counts["duplicate_parity_cases"] += duplicate_count
 
         selected_cases = [
             case_by_requirement[requirement_id]
             for requirement_id in coverage_requirements
         ]
+        selected_cases = list(dict.fromkeys(selected_cases))
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
         coverage_path = output_root / coverage_relative
         write_json(

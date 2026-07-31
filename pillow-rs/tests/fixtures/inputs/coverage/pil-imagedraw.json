@@ -12,10 +12,9 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageDraw.Draw.behavior-default",
-          "PIL.ImageDraw.Draw.parameter-im",
-          "PIL.ImageDraw.Draw.parameter-mode",
-          "PIL.ImageDraw.Outline.behavior-default"
+          "PIL.ImageDraw.Draw.behavior.default",
+          "PIL.ImageDraw.Draw.parameter.mode",
+          "PIL.ImageDraw.Outline.behavior.default"
         ],
         "command_ids": []
       },

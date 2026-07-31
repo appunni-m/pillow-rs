@@ -11,9 +11,9 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImagePalette.ImagePalette.behavior-default",
-          "PIL.ImagePalette.ImagePalette.parameter-mode",
-          "PIL.ImagePalette.ImagePalette.parameter-palette"
+          "PIL.ImagePalette.ImagePalette.behavior.default",
+          "PIL.ImagePalette.ImagePalette.parameter.mode",
+          "PIL.ImagePalette.ImagePalette.parameter.palette"
         ],
         "command_ids": []
       },

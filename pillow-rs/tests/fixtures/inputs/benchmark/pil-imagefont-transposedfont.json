@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.TransposedFont.getbbox.performance-standard"
+        "case_id": "PIL.ImageFont.TransposedFont.getbbox.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.TransposedFont.getlength.performance-standard"
+        "case_id": "PIL.ImageFont.TransposedFont.getlength.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.TransposedFont.getmask.performance-standard"
+        "case_id": "PIL.ImageFont.TransposedFont.getmask.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

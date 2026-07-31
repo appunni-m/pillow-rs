@@ -21,19 +21,16 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageFont.ImageFont.getbbox.behavior-default",
-          "PIL.ImageFont.ImageFont.getbbox.parameter-text",
-          "PIL.ImageFont.ImageFont.getbbox.parameter-args",
-          "PIL.ImageFont.ImageFont.getbbox.parameter-kwargs",
-          "PIL.ImageFont.ImageFont.getlength.behavior-default",
-          "PIL.ImageFont.ImageFont.getlength.parameter-text",
-          "PIL.ImageFont.ImageFont.getlength.parameter-args",
-          "PIL.ImageFont.ImageFont.getlength.parameter-kwargs",
-          "PIL.ImageFont.ImageFont.getmask.behavior-default",
-          "PIL.ImageFont.ImageFont.getmask.parameter-text",
-          "PIL.ImageFont.ImageFont.getmask.parameter-mode",
-          "PIL.ImageFont.ImageFont.getmask.parameter-args",
-          "PIL.ImageFont.ImageFont.getmask.parameter-kwargs"
+          "PIL.ImageFont.ImageFont.getbbox.behavior.default",
+          "PIL.ImageFont.ImageFont.getbbox.parameter.args",
+          "PIL.ImageFont.ImageFont.getbbox.parameter.kwargs",
+          "PIL.ImageFont.ImageFont.getlength.behavior.default",
+          "PIL.ImageFont.ImageFont.getlength.parameter.args",
+          "PIL.ImageFont.ImageFont.getlength.parameter.kwargs",
+          "PIL.ImageFont.ImageFont.getmask.behavior.default",
+          "PIL.ImageFont.ImageFont.getmask.parameter.mode",
+          "PIL.ImageFont.ImageFont.getmask.parameter.args",
+          "PIL.ImageFont.ImageFont.getmask.parameter.kwargs"
         ],
         "command_ids": []
       },

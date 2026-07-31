@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.alpha_composite.performance-standard"
+        "case_id": "PIL.Image.Image.alpha_composite.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.apply_transparency.performance-standard"
+        "case_id": "PIL.Image.Image.apply_transparency.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.close.performance-standard"
+        "case_id": "PIL.Image.Image.close.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.convert.performance-standard"
+        "case_id": "PIL.Image.Image.convert.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.copy.performance-standard"
+        "case_id": "PIL.Image.Image.copy.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.crop.performance-standard"
+        "case_id": "PIL.Image.Image.crop.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.draft.performance-standard"
+        "case_id": "PIL.Image.Image.draft.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.effect_spread.performance-standard"
+        "case_id": "PIL.Image.Image.effect_spread.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.entropy.performance-standard"
+        "case_id": "PIL.Image.Image.entropy.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -342,7 +342,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.filter.performance-standard"
+        "case_id": "PIL.Image.Image.filter.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -378,7 +378,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.format.performance-standard"
+        "case_id": "PIL.Image.Image.format.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -414,7 +414,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.frombytes.performance-standard"
+        "case_id": "PIL.Image.Image.frombytes.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -450,7 +450,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.get_child_images.performance-standard"
+        "case_id": "PIL.Image.Image.get_child_images.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -486,7 +486,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.get_flattened_data.performance-standard"
+        "case_id": "PIL.Image.Image.get_flattened_data.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -522,7 +522,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getbands.performance-standard"
+        "case_id": "PIL.Image.Image.getbands.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -558,7 +558,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getbbox.performance-standard"
+        "case_id": "PIL.Image.Image.getbbox.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -594,7 +594,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getchannel.performance-standard"
+        "case_id": "PIL.Image.Image.getchannel.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -630,7 +630,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getcolors.performance-standard"
+        "case_id": "PIL.Image.Image.getcolors.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -666,7 +666,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getdata.performance-standard"
+        "case_id": "PIL.Image.Image.getdata.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -702,7 +702,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getexif.performance-standard"
+        "case_id": "PIL.Image.Image.getexif.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -738,7 +738,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getextrema.performance-standard"
+        "case_id": "PIL.Image.Image.getextrema.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -774,7 +774,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getim.performance-standard"
+        "case_id": "PIL.Image.Image.getim.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -810,7 +810,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getpalette.performance-standard"
+        "case_id": "PIL.Image.Image.getpalette.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -846,7 +846,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getpixel.performance-standard"
+        "case_id": "PIL.Image.Image.getpixel.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -882,7 +882,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getprojection.performance-standard"
+        "case_id": "PIL.Image.Image.getprojection.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -918,7 +918,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.getxmp.performance-standard"
+        "case_id": "PIL.Image.Image.getxmp.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -954,7 +954,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.height.performance-standard"
+        "case_id": "PIL.Image.Image.height.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -990,7 +990,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.histogram.performance-standard"
+        "case_id": "PIL.Image.Image.histogram.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1026,7 +1026,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.info.performance-standard"
+        "case_id": "PIL.Image.Image.info.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1062,7 +1062,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.load.performance-standard"
+        "case_id": "PIL.Image.Image.load.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1098,7 +1098,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.mode.performance-standard"
+        "case_id": "PIL.Image.Image.mode.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1134,7 +1134,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.paste.performance-standard"
+        "case_id": "PIL.Image.Image.paste.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1170,7 +1170,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.point.performance-standard"
+        "case_id": "PIL.Image.Image.point.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1206,7 +1206,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.putalpha.performance-standard"
+        "case_id": "PIL.Image.Image.putalpha.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1242,7 +1242,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.putdata.performance-standard"
+        "case_id": "PIL.Image.Image.putdata.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1278,7 +1278,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.putpalette.performance-standard"
+        "case_id": "PIL.Image.Image.putpalette.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1314,7 +1314,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.putpixel.performance-standard"
+        "case_id": "PIL.Image.Image.putpixel.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1350,7 +1350,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.quantize.performance-standard"
+        "case_id": "PIL.Image.Image.quantize.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1386,7 +1386,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.reduce.performance-standard"
+        "case_id": "PIL.Image.Image.reduce.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1422,7 +1422,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.remap_palette.performance-standard"
+        "case_id": "PIL.Image.Image.remap_palette.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1458,7 +1458,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.resize.performance-standard"
+        "case_id": "PIL.Image.Image.resize.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1494,7 +1494,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.rotate.performance-standard"
+        "case_id": "PIL.Image.Image.rotate.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1530,7 +1530,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.save.performance-standard"
+        "case_id": "PIL.Image.Image.save.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1566,7 +1566,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.seek.performance-standard"
+        "case_id": "PIL.Image.Image.seek.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1602,7 +1602,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.show.performance-standard"
+        "case_id": "PIL.Image.Image.show.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1638,7 +1638,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.size.performance-standard"
+        "case_id": "PIL.Image.Image.size.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1674,7 +1674,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.split.performance-standard"
+        "case_id": "PIL.Image.Image.split.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1710,7 +1710,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.tell.performance-standard"
+        "case_id": "PIL.Image.Image.tell.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1746,7 +1746,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.thumbnail.performance-standard"
+        "case_id": "PIL.Image.Image.thumbnail.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1782,7 +1782,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.tobitmap.performance-standard"
+        "case_id": "PIL.Image.Image.tobitmap.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1818,7 +1818,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.tobytes.performance-standard"
+        "case_id": "PIL.Image.Image.tobytes.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1854,7 +1854,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.toqimage.performance-standard"
+        "case_id": "PIL.Image.Image.toqimage.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1890,7 +1890,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.toqpixmap.performance-standard"
+        "case_id": "PIL.Image.Image.toqpixmap.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1926,7 +1926,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.transform.performance-standard"
+        "case_id": "PIL.Image.Image.transform.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1962,7 +1962,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.transpose.performance-standard"
+        "case_id": "PIL.Image.Image.transpose.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -1998,7 +1998,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.verify.performance-standard"
+        "case_id": "PIL.Image.Image.verify.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -2034,7 +2034,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.Image.Image.width.performance-standard"
+        "case_id": "PIL.Image.Image.width.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

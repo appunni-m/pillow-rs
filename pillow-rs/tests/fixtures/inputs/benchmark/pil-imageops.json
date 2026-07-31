@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.autocontrast.performance-standard"
+        "case_id": "PIL.ImageOps.autocontrast.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.colorize.performance-standard"
+        "case_id": "PIL.ImageOps.colorize.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.contain.performance-standard"
+        "case_id": "PIL.ImageOps.contain.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.cover.performance-standard"
+        "case_id": "PIL.ImageOps.cover.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.crop.performance-standard"
+        "case_id": "PIL.ImageOps.crop.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.deform.performance-standard"
+        "case_id": "PIL.ImageOps.deform.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.equalize.performance-standard"
+        "case_id": "PIL.ImageOps.equalize.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.exif_transpose.performance-standard"
+        "case_id": "PIL.ImageOps.exif_transpose.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.expand.performance-standard"
+        "case_id": "PIL.ImageOps.expand.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -342,7 +342,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.fit.performance-standard"
+        "case_id": "PIL.ImageOps.fit.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -378,7 +378,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.flip.performance-standard"
+        "case_id": "PIL.ImageOps.flip.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -414,7 +414,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.grayscale.performance-standard"
+        "case_id": "PIL.ImageOps.grayscale.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -450,7 +450,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.invert.performance-standard"
+        "case_id": "PIL.ImageOps.invert.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -486,7 +486,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.mirror.performance-standard"
+        "case_id": "PIL.ImageOps.mirror.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -522,7 +522,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.pad.performance-standard"
+        "case_id": "PIL.ImageOps.pad.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -558,7 +558,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.posterize.performance-standard"
+        "case_id": "PIL.ImageOps.posterize.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -594,7 +594,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.scale.performance-standard"
+        "case_id": "PIL.ImageOps.scale.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -630,7 +630,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageOps.solarize.performance-standard"
+        "case_id": "PIL.ImageOps.solarize.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

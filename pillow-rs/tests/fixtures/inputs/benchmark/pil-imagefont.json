@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.FreeTypeFont.performance-standard"
+        "case_id": "PIL.ImageFont.FreeTypeFont.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.ImageFont.performance-standard"
+        "case_id": "PIL.ImageFont.ImageFont.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.TransposedFont.performance-standard"
+        "case_id": "PIL.ImageFont.TransposedFont.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.load.performance-standard"
+        "case_id": "PIL.ImageFont.load.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.load_default.performance-standard"
+        "case_id": "PIL.ImageFont.load_default.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.load_default_imagefont.performance-standard"
+        "case_id": "PIL.ImageFont.load_default_imagefont.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.load_path.performance-standard"
+        "case_id": "PIL.ImageFont.load_path.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageFont.truetype.performance-standard"
+        "case_id": "PIL.ImageFont.truetype.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

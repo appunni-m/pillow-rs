@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImagePalette.ImagePalette.performance-standard"
+        "case_id": "PIL.ImagePalette.ImagePalette.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

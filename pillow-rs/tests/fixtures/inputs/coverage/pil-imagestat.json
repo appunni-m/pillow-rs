@@ -14,12 +14,10 @@
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageStat.Stat.behavior-default",
-          "PIL.ImageStat.Stat.parameter-image-or-list",
-          "PIL.ImageStat.Stat.parameter-mask",
-          "PIL.ImageStat.Stat.mode-l",
-          "PIL.ImageStat.Stat.mode-rgb",
-          "PIL.ImageStat.Stat.mode-rgba"
+          "PIL.ImageStat.Stat.behavior.default",
+          "PIL.ImageStat.Stat.parameter.mask",
+          "PIL.ImageStat.Stat.mode.l",
+          "PIL.ImageStat.Stat.mode.rgba"
         ],
         "command_ids": []
       },

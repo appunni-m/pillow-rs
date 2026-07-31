@@ -18,7 +18,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.arc.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.arc.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -54,7 +54,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.bitmap.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.bitmap.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -90,7 +90,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.chord.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.chord.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -126,7 +126,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.circle.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.circle.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -162,7 +162,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.ellipse.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.ellipse.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -198,7 +198,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.getfont.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.getfont.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -234,7 +234,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.line.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.line.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -270,7 +270,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -306,7 +306,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -342,7 +342,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.pieslice.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.pieslice.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -378,7 +378,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.point.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.point.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -414,7 +414,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.polygon.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.polygon.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -450,7 +450,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.rectangle.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.rectangle.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -486,7 +486,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -522,7 +522,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.rounded_rectangle.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.rounded_rectangle.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -558,7 +558,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.shape.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.shape.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -594,7 +594,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.text.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.text.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -630,7 +630,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.textbbox.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.textbbox.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",
@@ -666,7 +666,7 @@
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageDraw.ImageDraw.textlength.performance-standard"
+        "case_id": "PIL.ImageDraw.ImageDraw.textlength.behavior.default"
       },
       "measurement": {
         "boundary": "observed_steps",

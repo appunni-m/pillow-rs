@@ -2,11 +2,15 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImageColor.getcolor.behavior-default",
+      "case_id": "PIL.ImageColor.getcolor.behavior.default",
       "surface": "PIL.ImageColor",
       "operation": "getcolor",
       "covers": [
-        "PIL.ImageColor.getcolor.behavior.default"
+        "PIL.ImageColor.getcolor.behavior.default",
+        "PIL.ImageColor.getcolor.parameter.color",
+        "PIL.ImageColor.getcolor.parameter.mode",
+        "PIL.ImageColor.getcolor.mode.rgb",
+        "PIL.ImageColor.getcolor.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -35,73 +39,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageColor.getcolor.parameter-color",
-      "surface": "PIL.ImageColor",
-      "operation": "getcolor",
-      "covers": [
-        "PIL.ImageColor.getcolor.parameter.color"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageColor",
-          "operation": "getcolor",
-          "receiver": null,
-          "arguments": {
-            "color": {
-              "kind": "literal",
-              "value": "#204080"
-            },
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageColor.getcolor.parameter-mode",
-      "surface": "PIL.ImageColor",
-      "operation": "getcolor",
-      "covers": [
-        "PIL.ImageColor.getcolor.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageColor",
-          "operation": "getcolor",
-          "receiver": null,
-          "arguments": {
-            "color": {
-              "kind": "literal",
-              "value": "#204080"
-            },
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageColor.getcolor.mode-l",
+      "case_id": "PIL.ImageColor.getcolor.mode.l",
       "surface": "PIL.ImageColor",
       "operation": "getcolor",
       "covers": [
@@ -134,77 +72,13 @@
       ]
     },
     {
-      "case_id": "PIL.ImageColor.getcolor.mode-rgb",
-      "surface": "PIL.ImageColor",
-      "operation": "getcolor",
-      "covers": [
-        "PIL.ImageColor.getcolor.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageColor",
-          "operation": "getcolor",
-          "receiver": null,
-          "arguments": {
-            "color": {
-              "kind": "literal",
-              "value": "#204080"
-            },
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageColor.getcolor.performance-standard",
-      "surface": "PIL.ImageColor",
-      "operation": "getcolor",
-      "covers": [
-        "PIL.ImageColor.getcolor.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageColor",
-          "operation": "getcolor",
-          "receiver": null,
-          "arguments": {
-            "color": {
-              "kind": "literal",
-              "value": "#204080"
-            },
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageColor.getrgb.behavior-default",
+      "case_id": "PIL.ImageColor.getrgb.behavior.default",
       "surface": "PIL.ImageColor",
       "operation": "getrgb",
       "covers": [
-        "PIL.ImageColor.getrgb.behavior.default"
+        "PIL.ImageColor.getrgb.behavior.default",
+        "PIL.ImageColor.getrgb.parameter.color",
+        "PIL.ImageColor.getrgb.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -229,7 +103,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageColor.getrgb.parameter-color",
+      "case_id": "PIL.ImageColor.getrgb.nuanced.named-css-color",
       "surface": "PIL.ImageColor",
       "operation": "getrgb",
       "covers": [
@@ -248,36 +122,7 @@
           "arguments": {
             "color": {
               "kind": "literal",
-              "value": "#204080"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageColor.getrgb.performance-standard",
-      "surface": "PIL.ImageColor",
-      "operation": "getrgb",
-      "covers": [
-        "PIL.ImageColor.getrgb.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageColor",
-          "operation": "getrgb",
-          "receiver": null,
-          "arguments": {
-            "color": {
-              "kind": "literal",
-              "value": "#204080"
+              "value": "rebeccapurple"
             }
           }
         }

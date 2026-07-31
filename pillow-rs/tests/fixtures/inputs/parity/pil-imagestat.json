@@ -2,11 +2,14 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImageStat.Stat.behavior-default",
+      "case_id": "PIL.ImageStat.Stat.behavior.default",
       "surface": "PIL.ImageStat",
       "operation": "Stat",
       "covers": [
-        "PIL.ImageStat.Stat.behavior.default"
+        "PIL.ImageStat.Stat.behavior.default",
+        "PIL.ImageStat.Stat.parameter.image-or-list",
+        "PIL.ImageStat.Stat.mode.rgb",
+        "PIL.ImageStat.Stat.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -54,59 +57,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageStat.Stat.parameter-image-or-list",
-      "surface": "PIL.ImageStat",
-      "operation": "Stat",
-      "covers": [
-        "PIL.ImageStat.Stat.parameter.image-or-list"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-or-list-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageStat",
-          "operation": "Stat",
-          "receiver": null,
-          "arguments": {
-            "image_or_list": {
-              "kind": "binding",
-              "step_id": "setup-image-or-list-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageStat.Stat.parameter-mask",
+      "case_id": "PIL.ImageStat.Stat.parameter.mask",
       "surface": "PIL.ImageStat",
       "operation": "Stat",
       "covers": [
@@ -185,7 +136,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageStat.Stat.mode-l",
+      "case_id": "PIL.ImageStat.Stat.mode.l",
       "surface": "PIL.ImageStat",
       "operation": "Stat",
       "covers": [
@@ -237,59 +188,7 @@
       ]
     },
     {
-      "case_id": "PIL.ImageStat.Stat.mode-rgb",
-      "surface": "PIL.ImageStat",
-      "operation": "Stat",
-      "covers": [
-        "PIL.ImageStat.Stat.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-or-list-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageStat",
-          "operation": "Stat",
-          "receiver": null,
-          "arguments": {
-            "image_or_list": {
-              "kind": "binding",
-              "step_id": "setup-image-or-list-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageStat.Stat.mode-rgba",
+      "case_id": "PIL.ImageStat.Stat.mode.rgba",
       "surface": "PIL.ImageStat",
       "operation": "Stat",
       "covers": [
@@ -309,58 +208,6 @@
             "mode": {
               "kind": "literal",
               "value": "RGBA"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageStat",
-          "operation": "Stat",
-          "receiver": null,
-          "arguments": {
-            "image_or_list": {
-              "kind": "binding",
-              "step_id": "setup-image-or-list-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageStat.Stat.performance-standard",
-      "surface": "PIL.ImageStat",
-      "operation": "Stat",
-      "covers": [
-        "PIL.ImageStat.Stat.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-or-list-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
             },
             "size": {
               "kind": "literal",

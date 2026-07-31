@@ -2,11 +2,13 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.ImageFilter.BLUR.behavior-default",
+      "case_id": "PIL.ImageFilter.BLUR.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "BLUR",
       "covers": [
-        "PIL.ImageFilter.BLUR.behavior.default"
+        "PIL.ImageFilter.BLUR.behavior.default",
+        "PIL.ImageFilter.BLUR.mode.rgb",
+        "PIL.ImageFilter.BLUR.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -19,14 +21,53 @@
           "operation": "BLUR",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BLUR.mode-1",
+      "case_id": "PIL.ImageFilter.BLUR.mode.1",
       "surface": "PIL.ImageFilter",
       "operation": "BLUR",
       "covers": [
@@ -43,14 +84,53 @@
           "operation": "BLUR",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BLUR.mode-cmyk",
+      "case_id": "PIL.ImageFilter.BLUR.mode.cmyk",
       "surface": "PIL.ImageFilter",
       "operation": "BLUR",
       "covers": [
@@ -67,14 +147,53 @@
           "operation": "BLUR",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BLUR.mode-l",
+      "case_id": "PIL.ImageFilter.BLUR.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "BLUR",
       "covers": [
@@ -91,14 +210,53 @@
           "operation": "BLUR",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BLUR.mode-la",
+      "case_id": "PIL.ImageFilter.BLUR.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "BLUR",
       "covers": [
@@ -115,38 +273,53 @@
           "operation": "BLUR",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.BLUR.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "BLUR",
-      "covers": [
-        "PIL.ImageFilter.BLUR.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "BLUR",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BLUR.mode-rgba",
+      "case_id": "PIL.ImageFilter.BLUR.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "BLUR",
       "covers": [
@@ -163,42 +336,60 @@
           "operation": "BLUR",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.BLUR.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "BLUR",
-      "covers": [
-        "PIL.ImageFilter.BLUR.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "BLUR",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BoxBlur.behavior-default",
+      "case_id": "PIL.ImageFilter.BoxBlur.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "BoxBlur",
       "covers": [
-        "PIL.ImageFilter.BoxBlur.behavior.default"
+        "PIL.ImageFilter.BoxBlur.behavior.default",
+        "PIL.ImageFilter.BoxBlur.parameter.radius",
+        "PIL.ImageFilter.BoxBlur.mode.rgb",
+        "PIL.ImageFilter.BoxBlur.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -216,43 +407,53 @@
               "value": 1.0
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.BoxBlur.parameter-radius",
-      "surface": "PIL.ImageFilter",
-      "operation": "BoxBlur",
-      "covers": [
-        "PIL.ImageFilter.BoxBlur.parameter.radius"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "BoxBlur",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
-            "radius": {
+            "mode": {
               "kind": "literal",
-              "value": 1.0
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BoxBlur.mode-l",
+      "case_id": "PIL.ImageFilter.BoxBlur.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "BoxBlur",
       "covers": [
@@ -274,14 +475,53 @@
               "value": 1.0
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BoxBlur.mode-la",
+      "case_id": "PIL.ImageFilter.BoxBlur.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "BoxBlur",
       "covers": [
@@ -303,43 +543,53 @@
               "value": 1.0
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.BoxBlur.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "BoxBlur",
-      "covers": [
-        "PIL.ImageFilter.BoxBlur.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "BoxBlur",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
-            "radius": {
+            "mode": {
               "kind": "literal",
-              "value": 1.0
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.BoxBlur.mode-rgba",
+      "case_id": "PIL.ImageFilter.BoxBlur.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "BoxBlur",
       "covers": [
@@ -361,47 +611,59 @@
               "value": 1.0
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.BoxBlur.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "BoxBlur",
-      "covers": [
-        "PIL.ImageFilter.BoxBlur.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "BoxBlur",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
-            "radius": {
+            "mode": {
               "kind": "literal",
-              "value": 1.0
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.CONTOUR.behavior-default",
+      "case_id": "PIL.ImageFilter.CONTOUR.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "CONTOUR",
       "covers": [
-        "PIL.ImageFilter.CONTOUR.behavior.default"
+        "PIL.ImageFilter.CONTOUR.behavior.default",
+        "PIL.ImageFilter.CONTOUR.mode.rgb",
+        "PIL.ImageFilter.CONTOUR.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -414,14 +676,53 @@
           "operation": "CONTOUR",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.CONTOUR.mode-l",
+      "case_id": "PIL.ImageFilter.CONTOUR.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "CONTOUR",
       "covers": [
@@ -438,14 +739,53 @@
           "operation": "CONTOUR",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.CONTOUR.mode-la",
+      "case_id": "PIL.ImageFilter.CONTOUR.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "CONTOUR",
       "covers": [
@@ -462,38 +802,53 @@
           "operation": "CONTOUR",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.CONTOUR.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "CONTOUR",
-      "covers": [
-        "PIL.ImageFilter.CONTOUR.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "CONTOUR",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.CONTOUR.mode-rgba",
+      "case_id": "PIL.ImageFilter.CONTOUR.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "CONTOUR",
       "covers": [
@@ -510,42 +865,61 @@
           "operation": "CONTOUR",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.CONTOUR.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "CONTOUR",
-      "covers": [
-        "PIL.ImageFilter.CONTOUR.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "CONTOUR",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Color3DLUT.behavior-default",
+      "case_id": "PIL.ImageFilter.Color3DLUT.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "Color3DLUT",
       "covers": [
-        "PIL.ImageFilter.Color3DLUT.behavior.default"
+        "PIL.ImageFilter.Color3DLUT.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.parameter.size",
+        "PIL.ImageFilter.Color3DLUT.parameter.table",
+        "PIL.ImageFilter.Color3DLUT.mode.rgb",
+        "PIL.ImageFilter.Color3DLUT.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -592,130 +966,53 @@
               ]
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-size",
-      "surface": "PIL.ImageFilter",
-      "operation": "Color3DLUT",
-      "covers": [
-        "PIL.ImageFilter.Color3DLUT.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Color3DLUT",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
             "size": {
               "kind": "literal",
-              "value": 2
-            },
-            "table": {
-              "kind": "literal",
               "value": [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
+                16,
+                16
               ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-table",
-      "surface": "PIL.ImageFilter",
-      "operation": "Color3DLUT",
-      "covers": [
-        "PIL.ImageFilter.Color3DLUT.parameter.table"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Color3DLUT",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": 2
-            },
-            "table": {
-              "kind": "literal",
-              "value": [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-channels",
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter.channels",
       "surface": "PIL.ImageFilter",
       "operation": "Color3DLUT",
       "covers": [
@@ -770,14 +1067,53 @@
               "value": 1
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-target-mode",
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter.target-mode",
       "surface": "PIL.ImageFilter",
       "operation": "Color3DLUT",
       "covers": [
@@ -832,14 +1168,53 @@
               "value": "value"
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Color3DLUT.parameter-kwargs",
+      "case_id": "PIL.ImageFilter.Color3DLUT.parameter.kwargs",
       "surface": "PIL.ImageFilter",
       "operation": "Color3DLUT",
       "covers": [
@@ -894,72 +1269,53 @@
               "value": {}
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Color3DLUT.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "Color3DLUT",
-      "covers": [
-        "PIL.ImageFilter.Color3DLUT.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Color3DLUT",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
             "size": {
               "kind": "literal",
-              "value": 2
-            },
-            "table": {
-              "kind": "literal",
               "value": [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
+                16,
+                16
               ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Color3DLUT.mode-rgba",
+      "case_id": "PIL.ImageFilter.Color3DLUT.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "Color3DLUT",
       "covers": [
@@ -1010,14 +1366,53 @@
               ]
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Color3DLUT.mode-cmyk",
+      "case_id": "PIL.ImageFilter.Color3DLUT.mode.cmyk",
       "surface": "PIL.ImageFilter",
       "operation": "Color3DLUT",
       "covers": [
@@ -1068,76 +1463,59 @@
               ]
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Color3DLUT.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "Color3DLUT",
-      "covers": [
-        "PIL.ImageFilter.Color3DLUT.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Color3DLUT",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
             "size": {
               "kind": "literal",
-              "value": 2
-            },
-            "table": {
-              "kind": "literal",
               "value": [
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0,
-                0.0
+                16,
+                16
               ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.DETAIL.behavior-default",
+      "case_id": "PIL.ImageFilter.DETAIL.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "DETAIL",
       "covers": [
-        "PIL.ImageFilter.DETAIL.behavior.default"
+        "PIL.ImageFilter.DETAIL.behavior.default",
+        "PIL.ImageFilter.DETAIL.mode.rgb",
+        "PIL.ImageFilter.DETAIL.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1150,14 +1528,53 @@
           "operation": "DETAIL",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.DETAIL.mode-l",
+      "case_id": "PIL.ImageFilter.DETAIL.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "DETAIL",
       "covers": [
@@ -1174,14 +1591,53 @@
           "operation": "DETAIL",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.DETAIL.mode-la",
+      "case_id": "PIL.ImageFilter.DETAIL.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "DETAIL",
       "covers": [
@@ -1198,38 +1654,53 @@
           "operation": "DETAIL",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.DETAIL.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "DETAIL",
-      "covers": [
-        "PIL.ImageFilter.DETAIL.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "DETAIL",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.DETAIL.mode-rgba",
+      "case_id": "PIL.ImageFilter.DETAIL.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "DETAIL",
       "covers": [
@@ -1246,42 +1717,59 @@
           "operation": "DETAIL",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.DETAIL.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "DETAIL",
-      "covers": [
-        "PIL.ImageFilter.DETAIL.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "DETAIL",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.behavior-default",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE",
       "covers": [
-        "PIL.ImageFilter.EDGE_ENHANCE.behavior.default"
+        "PIL.ImageFilter.EDGE_ENHANCE.behavior.default",
+        "PIL.ImageFilter.EDGE_ENHANCE.mode.rgb",
+        "PIL.ImageFilter.EDGE_ENHANCE.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1294,14 +1782,53 @@
           "operation": "EDGE_ENHANCE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-1",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode.1",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE",
       "covers": [
@@ -1318,14 +1845,53 @@
           "operation": "EDGE_ENHANCE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-l",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE",
       "covers": [
@@ -1342,14 +1908,53 @@
           "operation": "EDGE_ENHANCE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-la",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE",
       "covers": [
@@ -1366,38 +1971,53 @@
           "operation": "EDGE_ENHANCE",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "EDGE_ENHANCE",
-      "covers": [
-        "PIL.ImageFilter.EDGE_ENHANCE.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "EDGE_ENHANCE",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode-rgba",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE",
       "covers": [
@@ -1414,42 +2034,59 @@
           "operation": "EDGE_ENHANCE",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "EDGE_ENHANCE",
-      "covers": [
-        "PIL.ImageFilter.EDGE_ENHANCE.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "EDGE_ENHANCE",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior-default",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE_MORE",
       "covers": [
-        "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default"
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.behavior.default",
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgb",
+        "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1462,14 +2099,53 @@
           "operation": "EDGE_ENHANCE_MORE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-l",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE_MORE",
       "covers": [
@@ -1486,14 +2162,53 @@
           "operation": "EDGE_ENHANCE_MORE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-la",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE_MORE",
       "covers": [
@@ -1510,38 +2225,53 @@
           "operation": "EDGE_ENHANCE_MORE",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "EDGE_ENHANCE_MORE",
-      "covers": [
-        "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "EDGE_ENHANCE_MORE",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode-rgba",
+      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "EDGE_ENHANCE_MORE",
       "covers": [
@@ -1558,42 +2288,59 @@
           "operation": "EDGE_ENHANCE_MORE",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "EDGE_ENHANCE_MORE",
-      "covers": [
-        "PIL.ImageFilter.EDGE_ENHANCE_MORE.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "EDGE_ENHANCE_MORE",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EMBOSS.behavior-default",
+      "case_id": "PIL.ImageFilter.EMBOSS.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "EMBOSS",
       "covers": [
-        "PIL.ImageFilter.EMBOSS.behavior.default"
+        "PIL.ImageFilter.EMBOSS.behavior.default",
+        "PIL.ImageFilter.EMBOSS.mode.rgb",
+        "PIL.ImageFilter.EMBOSS.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1606,14 +2353,53 @@
           "operation": "EMBOSS",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EMBOSS.mode-l",
+      "case_id": "PIL.ImageFilter.EMBOSS.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "EMBOSS",
       "covers": [
@@ -1630,14 +2416,53 @@
           "operation": "EMBOSS",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EMBOSS.mode-la",
+      "case_id": "PIL.ImageFilter.EMBOSS.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "EMBOSS",
       "covers": [
@@ -1654,38 +2479,53 @@
           "operation": "EMBOSS",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.EMBOSS.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "EMBOSS",
-      "covers": [
-        "PIL.ImageFilter.EMBOSS.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "EMBOSS",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.EMBOSS.mode-rgba",
+      "case_id": "PIL.ImageFilter.EMBOSS.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "EMBOSS",
       "covers": [
@@ -1702,42 +2542,59 @@
           "operation": "EMBOSS",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.EMBOSS.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "EMBOSS",
-      "covers": [
-        "PIL.ImageFilter.EMBOSS.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "EMBOSS",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.FIND_EDGES.behavior-default",
+      "case_id": "PIL.ImageFilter.FIND_EDGES.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "FIND_EDGES",
       "covers": [
-        "PIL.ImageFilter.FIND_EDGES.behavior.default"
+        "PIL.ImageFilter.FIND_EDGES.behavior.default",
+        "PIL.ImageFilter.FIND_EDGES.mode.rgb",
+        "PIL.ImageFilter.FIND_EDGES.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1750,14 +2607,53 @@
           "operation": "FIND_EDGES",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-l",
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "FIND_EDGES",
       "covers": [
@@ -1774,14 +2670,53 @@
           "operation": "FIND_EDGES",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-la",
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "FIND_EDGES",
       "covers": [
@@ -1798,38 +2733,53 @@
           "operation": "FIND_EDGES",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "FIND_EDGES",
-      "covers": [
-        "PIL.ImageFilter.FIND_EDGES.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "FIND_EDGES",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.FIND_EDGES.mode-rgba",
+      "case_id": "PIL.ImageFilter.FIND_EDGES.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "FIND_EDGES",
       "covers": [
@@ -1846,42 +2796,59 @@
           "operation": "FIND_EDGES",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.FIND_EDGES.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "FIND_EDGES",
-      "covers": [
-        "PIL.ImageFilter.FIND_EDGES.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "FIND_EDGES",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.GaussianBlur.behavior-default",
+      "case_id": "PIL.ImageFilter.GaussianBlur.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "GaussianBlur",
       "covers": [
-        "PIL.ImageFilter.GaussianBlur.behavior.default"
+        "PIL.ImageFilter.GaussianBlur.behavior.default",
+        "PIL.ImageFilter.GaussianBlur.mode.rgb",
+        "PIL.ImageFilter.GaussianBlur.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1894,14 +2861,53 @@
           "operation": "GaussianBlur",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.GaussianBlur.parameter-radius",
+      "case_id": "PIL.ImageFilter.GaussianBlur.parameter.radius",
       "surface": "PIL.ImageFilter",
       "operation": "GaussianBlur",
       "covers": [
@@ -1923,14 +2929,53 @@
               "value": 1.0
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.GaussianBlur.mode-l",
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "GaussianBlur",
       "covers": [
@@ -1947,14 +2992,53 @@
           "operation": "GaussianBlur",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.GaussianBlur.mode-la",
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "GaussianBlur",
       "covers": [
@@ -1971,38 +3055,53 @@
           "operation": "GaussianBlur",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.GaussianBlur.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "GaussianBlur",
-      "covers": [
-        "PIL.ImageFilter.GaussianBlur.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "GaussianBlur",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.GaussianBlur.mode-rgba",
+      "case_id": "PIL.ImageFilter.GaussianBlur.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "GaussianBlur",
       "covers": [
@@ -2019,42 +3118,61 @@
           "operation": "GaussianBlur",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.GaussianBlur.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "GaussianBlur",
-      "covers": [
-        "PIL.ImageFilter.GaussianBlur.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "GaussianBlur",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Kernel.behavior-default",
+      "case_id": "PIL.ImageFilter.Kernel.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
-        "PIL.ImageFilter.Kernel.behavior.default"
+        "PIL.ImageFilter.Kernel.behavior.default",
+        "PIL.ImageFilter.Kernel.parameter.size",
+        "PIL.ImageFilter.Kernel.parameter.kernel",
+        "PIL.ImageFilter.Kernel.mode.rgb",
+        "PIL.ImageFilter.Kernel.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -2070,8 +3188,8 @@
             "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                3,
+                3
               ]
             },
             "kernel": {
@@ -2089,30 +3207,17 @@
               ]
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Kernel.parameter-size",
-      "surface": "PIL.ImageFilter",
-      "operation": "Kernel",
-      "covers": [
-        "PIL.ImageFilter.Kernel.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Kernel",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
             "size": {
               "kind": "literal",
               "value": [
@@ -2120,75 +3225,35 @@
                 16
               ]
             },
-            "kernel": {
+            "color": {
               "kind": "literal",
-              "value": [
-                0,
-                0,
-                0,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0
-              ]
+              "value": 0
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Kernel.parameter-kernel",
-      "surface": "PIL.ImageFilter",
-      "operation": "Kernel",
-      "covers": [
-        "PIL.ImageFilter.Kernel.parameter.kernel"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Kernel",
-          "receiver": null,
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
           "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "kernel": {
-              "kind": "literal",
-              "value": [
-                0,
-                0,
-                0,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0
-              ]
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Kernel.parameter-scale",
+      "case_id": "PIL.ImageFilter.Kernel.parameter.scale",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -2208,8 +3273,8 @@
             "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                3,
+                3
               ]
             },
             "kernel": {
@@ -2231,14 +3296,53 @@
               "value": 1.0
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Kernel.parameter-offset",
+      "case_id": "PIL.ImageFilter.Kernel.parameter.offset",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -2258,8 +3362,8 @@
             "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                3,
+                3
               ]
             },
             "kernel": {
@@ -2281,14 +3385,53 @@
               "value": 1
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Kernel.mode-l",
+      "case_id": "PIL.ImageFilter.Kernel.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -2308,8 +3451,8 @@
             "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                3,
+                3
               ]
             },
             "kernel": {
@@ -2327,14 +3470,53 @@
               ]
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Kernel.mode-la",
+      "case_id": "PIL.ImageFilter.Kernel.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -2354,8 +3536,8 @@
             "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                3,
+                3
               ]
             },
             "kernel": {
@@ -2373,30 +3555,17 @@
               ]
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Kernel.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "Kernel",
-      "covers": [
-        "PIL.ImageFilter.Kernel.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Kernel",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
             "size": {
               "kind": "literal",
               "value": [
@@ -2404,29 +3573,35 @@
                 16
               ]
             },
-            "kernel": {
+            "color": {
               "kind": "literal",
-              "value": [
-                0,
-                0,
-                0,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0
-              ]
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.Kernel.mode-rgba",
+      "case_id": "PIL.ImageFilter.Kernel.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -2446,8 +3621,8 @@
             "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                3,
+                3
               ]
             },
             "kernel": {
@@ -2465,30 +3640,17 @@
               ]
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.Kernel.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "Kernel",
-      "covers": [
-        "PIL.ImageFilter.Kernel.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "Kernel",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
             "size": {
               "kind": "literal",
               "value": [
@@ -2496,33 +3658,41 @@
                 16
               ]
             },
-            "kernel": {
+            "color": {
               "kind": "literal",
-              "value": [
-                0,
-                0,
-                0,
-                0,
-                1,
-                0,
-                0,
-                0,
-                0
-              ]
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MaxFilter.behavior-default",
+      "case_id": "PIL.ImageFilter.MaxFilter.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "MaxFilter",
       "covers": [
-        "PIL.ImageFilter.MaxFilter.behavior.default"
+        "PIL.ImageFilter.MaxFilter.behavior.default",
+        "PIL.ImageFilter.MaxFilter.mode.rgb",
+        "PIL.ImageFilter.MaxFilter.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -2535,14 +3705,53 @@
           "operation": "MaxFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MaxFilter.parameter-size",
+      "case_id": "PIL.ImageFilter.MaxFilter.parameter.size",
       "surface": "PIL.ImageFilter",
       "operation": "MaxFilter",
       "covers": [
@@ -2564,14 +3773,53 @@
               "value": 3
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MaxFilter.mode-l",
+      "case_id": "PIL.ImageFilter.MaxFilter.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "MaxFilter",
       "covers": [
@@ -2588,14 +3836,53 @@
           "operation": "MaxFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MaxFilter.mode-la",
+      "case_id": "PIL.ImageFilter.MaxFilter.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "MaxFilter",
       "covers": [
@@ -2612,38 +3899,53 @@
           "operation": "MaxFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.MaxFilter.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "MaxFilter",
-      "covers": [
-        "PIL.ImageFilter.MaxFilter.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "MaxFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MaxFilter.mode-rgba",
+      "case_id": "PIL.ImageFilter.MaxFilter.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "MaxFilter",
       "covers": [
@@ -2660,42 +3962,59 @@
           "operation": "MaxFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.MaxFilter.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "MaxFilter",
-      "covers": [
-        "PIL.ImageFilter.MaxFilter.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "MaxFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MedianFilter.behavior-default",
+      "case_id": "PIL.ImageFilter.MedianFilter.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "MedianFilter",
       "covers": [
-        "PIL.ImageFilter.MedianFilter.behavior.default"
+        "PIL.ImageFilter.MedianFilter.behavior.default",
+        "PIL.ImageFilter.MedianFilter.mode.rgb",
+        "PIL.ImageFilter.MedianFilter.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -2708,14 +4027,53 @@
           "operation": "MedianFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MedianFilter.parameter-size",
+      "case_id": "PIL.ImageFilter.MedianFilter.parameter.size",
       "surface": "PIL.ImageFilter",
       "operation": "MedianFilter",
       "covers": [
@@ -2737,14 +4095,53 @@
               "value": 3
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MedianFilter.mode-l",
+      "case_id": "PIL.ImageFilter.MedianFilter.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "MedianFilter",
       "covers": [
@@ -2761,14 +4158,53 @@
           "operation": "MedianFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MedianFilter.mode-la",
+      "case_id": "PIL.ImageFilter.MedianFilter.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "MedianFilter",
       "covers": [
@@ -2785,38 +4221,53 @@
           "operation": "MedianFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.MedianFilter.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "MedianFilter",
-      "covers": [
-        "PIL.ImageFilter.MedianFilter.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "MedianFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MedianFilter.mode-rgba",
+      "case_id": "PIL.ImageFilter.MedianFilter.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "MedianFilter",
       "covers": [
@@ -2833,42 +4284,59 @@
           "operation": "MedianFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.MedianFilter.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "MedianFilter",
-      "covers": [
-        "PIL.ImageFilter.MedianFilter.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "MedianFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MinFilter.behavior-default",
+      "case_id": "PIL.ImageFilter.MinFilter.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "MinFilter",
       "covers": [
-        "PIL.ImageFilter.MinFilter.behavior.default"
+        "PIL.ImageFilter.MinFilter.behavior.default",
+        "PIL.ImageFilter.MinFilter.mode.rgb",
+        "PIL.ImageFilter.MinFilter.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -2881,14 +4349,53 @@
           "operation": "MinFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MinFilter.parameter-size",
+      "case_id": "PIL.ImageFilter.MinFilter.parameter.size",
       "surface": "PIL.ImageFilter",
       "operation": "MinFilter",
       "covers": [
@@ -2910,14 +4417,53 @@
               "value": 3
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MinFilter.mode-l",
+      "case_id": "PIL.ImageFilter.MinFilter.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "MinFilter",
       "covers": [
@@ -2934,14 +4480,53 @@
           "operation": "MinFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MinFilter.mode-la",
+      "case_id": "PIL.ImageFilter.MinFilter.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "MinFilter",
       "covers": [
@@ -2958,38 +4543,53 @@
           "operation": "MinFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.MinFilter.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "MinFilter",
-      "covers": [
-        "PIL.ImageFilter.MinFilter.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "MinFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.MinFilter.mode-rgba",
+      "case_id": "PIL.ImageFilter.MinFilter.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "MinFilter",
       "covers": [
@@ -3006,42 +4606,59 @@
           "operation": "MinFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.MinFilter.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "MinFilter",
-      "covers": [
-        "PIL.ImageFilter.MinFilter.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "MinFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.ModeFilter.behavior-default",
+      "case_id": "PIL.ImageFilter.ModeFilter.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "ModeFilter",
       "covers": [
-        "PIL.ImageFilter.ModeFilter.behavior.default"
+        "PIL.ImageFilter.ModeFilter.behavior.default",
+        "PIL.ImageFilter.ModeFilter.mode.rgb",
+        "PIL.ImageFilter.ModeFilter.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3054,14 +4671,53 @@
           "operation": "ModeFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.ModeFilter.parameter-size",
+      "case_id": "PIL.ImageFilter.ModeFilter.parameter.size",
       "surface": "PIL.ImageFilter",
       "operation": "ModeFilter",
       "covers": [
@@ -3083,14 +4739,53 @@
               "value": 3
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.ModeFilter.mode-l",
+      "case_id": "PIL.ImageFilter.ModeFilter.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "ModeFilter",
       "covers": [
@@ -3107,14 +4802,53 @@
           "operation": "ModeFilter",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.ModeFilter.mode-la",
+      "case_id": "PIL.ImageFilter.ModeFilter.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "ModeFilter",
       "covers": [
@@ -3131,38 +4865,53 @@
           "operation": "ModeFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.ModeFilter.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "ModeFilter",
-      "covers": [
-        "PIL.ImageFilter.ModeFilter.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "ModeFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.ModeFilter.mode-rgba",
+      "case_id": "PIL.ImageFilter.ModeFilter.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "ModeFilter",
       "covers": [
@@ -3179,42 +4928,61 @@
           "operation": "ModeFilter",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.ModeFilter.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "ModeFilter",
-      "covers": [
-        "PIL.ImageFilter.ModeFilter.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "ModeFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.RankFilter.behavior-default",
+      "case_id": "PIL.ImageFilter.RankFilter.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "RankFilter",
       "covers": [
-        "PIL.ImageFilter.RankFilter.behavior.default"
+        "PIL.ImageFilter.RankFilter.behavior.default",
+        "PIL.ImageFilter.RankFilter.parameter.size",
+        "PIL.ImageFilter.RankFilter.parameter.rank",
+        "PIL.ImageFilter.RankFilter.mode.rgb",
+        "PIL.ImageFilter.RankFilter.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3236,80 +5004,53 @@
               "value": 1
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.RankFilter.parameter-size",
-      "surface": "PIL.ImageFilter",
-      "operation": "RankFilter",
-      "covers": [
-        "PIL.ImageFilter.RankFilter.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "RankFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
             "size": {
               "kind": "literal",
-              "value": 3
+              "value": [
+                16,
+                16
+              ]
             },
-            "rank": {
+            "color": {
               "kind": "literal",
-              "value": 1
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.RankFilter.parameter-rank",
-      "surface": "PIL.ImageFilter",
-      "operation": "RankFilter",
-      "covers": [
-        "PIL.ImageFilter.RankFilter.parameter.rank"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "RankFilter",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": 3
-            },
-            "rank": {
-              "kind": "literal",
-              "value": 1
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.RankFilter.mode-l",
+      "case_id": "PIL.ImageFilter.RankFilter.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "RankFilter",
       "covers": [
@@ -3335,14 +5076,53 @@
               "value": 1
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.RankFilter.mode-la",
+      "case_id": "PIL.ImageFilter.RankFilter.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "RankFilter",
       "covers": [
@@ -3368,47 +5148,53 @@
               "value": 1
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.RankFilter.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "RankFilter",
-      "covers": [
-        "PIL.ImageFilter.RankFilter.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "RankFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
             "size": {
               "kind": "literal",
-              "value": 3
+              "value": [
+                16,
+                16
+              ]
             },
-            "rank": {
+            "color": {
               "kind": "literal",
-              "value": 1
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.RankFilter.mode-rgba",
+      "case_id": "PIL.ImageFilter.RankFilter.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "RankFilter",
       "covers": [
@@ -3434,51 +5220,59 @@
               "value": 1
             }
           }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.RankFilter.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "RankFilter",
-      "covers": [
-        "PIL.ImageFilter.RankFilter.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "RankFilter",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
           "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
             "size": {
               "kind": "literal",
-              "value": 3
+              "value": [
+                16,
+                16
+              ]
             },
-            "rank": {
+            "color": {
               "kind": "literal",
-              "value": 1
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
             }
           }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.behavior-default",
+      "case_id": "PIL.ImageFilter.SHARPEN.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
-        "PIL.ImageFilter.SHARPEN.behavior.default"
+        "PIL.ImageFilter.SHARPEN.behavior.default",
+        "PIL.ImageFilter.SHARPEN.mode.rgb",
+        "PIL.ImageFilter.SHARPEN.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3491,14 +5285,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-1",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.1",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3515,14 +5348,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-cmyk",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.cmyk",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3539,14 +5411,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-hsv",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.hsv",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3563,14 +5474,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-i",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.i",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3587,14 +5537,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-l",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3611,14 +5600,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-la",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3635,38 +5663,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "SHARPEN",
-      "covers": [
-        "PIL.ImageFilter.SHARPEN.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "SHARPEN",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-rgba",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3683,14 +5726,53 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SHARPEN.mode-ycbcr",
+      "case_id": "PIL.ImageFilter.SHARPEN.mode.ycbcr",
       "surface": "PIL.ImageFilter",
       "operation": "SHARPEN",
       "covers": [
@@ -3707,42 +5789,59 @@
           "operation": "SHARPEN",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.SHARPEN.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "SHARPEN",
-      "covers": [
-        "PIL.ImageFilter.SHARPEN.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "SHARPEN",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "YCbCr"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH.behavior-default",
+      "case_id": "PIL.ImageFilter.SMOOTH.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH",
       "covers": [
-        "PIL.ImageFilter.SMOOTH.behavior.default"
+        "PIL.ImageFilter.SMOOTH.behavior.default",
+        "PIL.ImageFilter.SMOOTH.mode.rgb",
+        "PIL.ImageFilter.SMOOTH.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3755,14 +5854,53 @@
           "operation": "SMOOTH",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH.mode-l",
+      "case_id": "PIL.ImageFilter.SMOOTH.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH",
       "covers": [
@@ -3779,14 +5917,53 @@
           "operation": "SMOOTH",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH.mode-la",
+      "case_id": "PIL.ImageFilter.SMOOTH.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH",
       "covers": [
@@ -3803,38 +5980,53 @@
           "operation": "SMOOTH",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.SMOOTH.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "SMOOTH",
-      "covers": [
-        "PIL.ImageFilter.SMOOTH.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "SMOOTH",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH.mode-rgba",
+      "case_id": "PIL.ImageFilter.SMOOTH.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH",
       "covers": [
@@ -3851,42 +6043,59 @@
           "operation": "SMOOTH",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.SMOOTH.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "SMOOTH",
-      "covers": [
-        "PIL.ImageFilter.SMOOTH.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "SMOOTH",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH_MORE.behavior-default",
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH_MORE",
       "covers": [
-        "PIL.ImageFilter.SMOOTH_MORE.behavior.default"
+        "PIL.ImageFilter.SMOOTH_MORE.behavior.default",
+        "PIL.ImageFilter.SMOOTH_MORE.mode.rgb",
+        "PIL.ImageFilter.SMOOTH_MORE.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3899,14 +6108,53 @@
           "operation": "SMOOTH_MORE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-l",
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH_MORE",
       "covers": [
@@ -3923,14 +6171,53 @@
           "operation": "SMOOTH_MORE",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-la",
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH_MORE",
       "covers": [
@@ -3947,38 +6234,53 @@
           "operation": "SMOOTH_MORE",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "SMOOTH_MORE",
-      "covers": [
-        "PIL.ImageFilter.SMOOTH_MORE.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "SMOOTH_MORE",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode-rgba",
+      "case_id": "PIL.ImageFilter.SMOOTH_MORE.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "SMOOTH_MORE",
       "covers": [
@@ -3995,42 +6297,59 @@
           "operation": "SMOOTH_MORE",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.SMOOTH_MORE.performance-standard",
-      "surface": "PIL.ImageFilter",
-      "operation": "SMOOTH_MORE",
-      "covers": [
-        "PIL.ImageFilter.SMOOTH_MORE.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "SMOOTH_MORE",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.behavior-default",
+      "case_id": "PIL.ImageFilter.UnsharpMask.behavior.default",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
-        "PIL.ImageFilter.UnsharpMask.behavior.default"
+        "PIL.ImageFilter.UnsharpMask.behavior.default",
+        "PIL.ImageFilter.UnsharpMask.mode.rgb",
+        "PIL.ImageFilter.UnsharpMask.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -4043,14 +6362,53 @@
           "operation": "UnsharpMask",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.parameter-radius",
+      "case_id": "PIL.ImageFilter.UnsharpMask.parameter.radius",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
@@ -4072,14 +6430,53 @@
               "value": 1.0
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.parameter-percent",
+      "case_id": "PIL.ImageFilter.UnsharpMask.parameter.percent",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
@@ -4101,14 +6498,53 @@
               "value": 1
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.parameter-threshold",
+      "case_id": "PIL.ImageFilter.UnsharpMask.parameter.threshold",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
@@ -4130,14 +6566,53 @@
               "value": 1
             }
           }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.mode-l",
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode.l",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
@@ -4154,14 +6629,53 @@
           "operation": "UnsharpMask",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.mode-la",
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode.la",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
@@ -4178,38 +6692,53 @@
           "operation": "UnsharpMask",
           "receiver": null,
           "arguments": {}
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.ImageFilter.UnsharpMask.mode-rgb",
-      "surface": "PIL.ImageFilter",
-      "operation": "UnsharpMask",
-      "covers": [
-        "PIL.ImageFilter.UnsharpMask.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
+        },
         {
-          "step_id": "call",
-          "surface": "PIL.ImageFilter",
-          "operation": "UnsharpMask",
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.mode-rgba",
+      "case_id": "PIL.ImageFilter.UnsharpMask.mode.rgba",
       "surface": "PIL.ImageFilter",
       "operation": "UnsharpMask",
       "covers": [
@@ -4226,18 +6755,57 @@
           "operation": "UnsharpMask",
           "receiver": null,
           "arguments": {}
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     },
     {
-      "case_id": "PIL.ImageFilter.UnsharpMask.performance-standard",
+      "case_id": "PIL.ImageFilter.Kernel.nuanced.three-by-three-edge",
       "surface": "PIL.ImageFilter",
-      "operation": "UnsharpMask",
+      "operation": "Kernel",
       "covers": [
-        "PIL.ImageFilter.UnsharpMask.performance.standard"
+        "PIL.ImageFilter.Kernel.behavior.default"
       ],
       "target_profiles": [
         "python-cpu"
@@ -4247,13 +6815,74 @@
         {
           "step_id": "call",
           "surface": "PIL.ImageFilter",
-          "operation": "UnsharpMask",
+          "operation": "Kernel",
           "receiver": null,
-          "arguments": {}
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                3
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                0,
+                -1,
+                0,
+                -1,
+                5,
+                -1,
+                0,
+                -1,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "apply-filter"
       ]
     }
   ]

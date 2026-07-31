@@ -2,11 +2,15 @@
   "schema": "migration-parity/parity-input@1",
   "cases": [
     {
-      "case_id": "PIL.Image.alpha_composite.behavior-default",
+      "case_id": "PIL.Image.alpha_composite.behavior.default",
       "surface": "PIL.Image",
       "operation": "alpha_composite",
       "covers": [
-        "PIL.Image.alpha_composite.behavior.default"
+        "PIL.Image.alpha_composite.behavior.default",
+        "PIL.Image.alpha_composite.parameter.im1",
+        "PIL.Image.alpha_composite.parameter.im2",
+        "PIL.Image.alpha_composite.parameter-combination.legacy-001",
+        "PIL.Image.alpha_composite.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -81,165 +85,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.alpha_composite.parameter-im1",
-      "surface": "PIL.Image",
-      "operation": "alpha_composite",
-      "covers": [
-        "PIL.Image.alpha_composite.parameter.im1"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "alpha_composite",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.alpha_composite.parameter-im2",
-      "surface": "PIL.Image",
-      "operation": "alpha_composite",
-      "covers": [
-        "PIL.Image.alpha_composite.parameter.im2"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "alpha_composite",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.alpha_composite.mode-la",
+      "case_id": "PIL.Image.alpha_composite.mode.la",
       "surface": "PIL.Image",
       "operation": "alpha_composite",
       "covers": [
@@ -318,7 +164,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.alpha_composite.mode-rgba",
+      "case_id": "PIL.Image.alpha_composite.mode.rgba",
       "surface": "PIL.Image",
       "operation": "alpha_composite",
       "covers": [
@@ -397,169 +243,16 @@
       ]
     },
     {
-      "case_id": "PIL.Image.alpha_composite.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "alpha_composite",
-      "covers": [
-        "PIL.Image.alpha_composite.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "alpha_composite",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.alpha_composite.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "alpha_composite",
-      "covers": [
-        "PIL.Image.alpha_composite.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "alpha_composite",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.blend.behavior-default",
+      "case_id": "PIL.Image.blend.behavior.default",
       "surface": "PIL.Image",
       "operation": "blend",
       "covers": [
-        "PIL.Image.blend.behavior.default"
+        "PIL.Image.blend.behavior.default",
+        "PIL.Image.blend.parameter.im1",
+        "PIL.Image.blend.parameter.im2",
+        "PIL.Image.blend.parameter.alpha",
+        "PIL.Image.blend.mode.rgb",
+        "PIL.Image.blend.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -638,256 +331,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.blend.parameter-im1",
-      "surface": "PIL.Image",
-      "operation": "blend",
-      "covers": [
-        "PIL.Image.blend.parameter.im1"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "blend",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            },
-            "alpha": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.blend.parameter-im2",
-      "surface": "PIL.Image",
-      "operation": "blend",
-      "covers": [
-        "PIL.Image.blend.parameter.im2"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "blend",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            },
-            "alpha": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.blend.parameter-alpha",
-      "surface": "PIL.Image",
-      "operation": "blend",
-      "covers": [
-        "PIL.Image.blend.parameter.alpha"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "blend",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            },
-            "alpha": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.blend.mode-cmyk",
+      "case_id": "PIL.Image.blend.mode.cmyk",
       "surface": "PIL.Image",
       "operation": "blend",
       "covers": [
@@ -970,7 +414,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.blend.mode-l",
+      "case_id": "PIL.Image.blend.mode.l",
       "surface": "PIL.Image",
       "operation": "blend",
       "covers": [
@@ -1053,7 +497,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.blend.mode-la",
+      "case_id": "PIL.Image.blend.mode.la",
       "surface": "PIL.Image",
       "operation": "blend",
       "covers": [
@@ -1136,90 +580,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.blend.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "blend",
-      "covers": [
-        "PIL.Image.blend.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "blend",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            },
-            "alpha": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.blend.mode-rgba",
+      "case_id": "PIL.Image.blend.mode.rgba",
       "surface": "PIL.Image",
       "operation": "blend",
       "covers": [
@@ -1302,7 +663,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.blend.parameter-combination-legacy-001",
+      "case_id": "PIL.Image.blend.parameter-combination.legacy-001",
       "surface": "PIL.Image",
       "operation": "blend",
       "covers": [
@@ -1385,94 +746,17 @@
       ]
     },
     {
-      "case_id": "PIL.Image.blend.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "blend",
-      "covers": [
-        "PIL.Image.blend.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-im1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-im2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "blend",
-          "receiver": null,
-          "arguments": {
-            "im1": {
-              "kind": "binding",
-              "step_id": "setup-im1-1"
-            },
-            "im2": {
-              "kind": "binding",
-              "step_id": "setup-im2-2"
-            },
-            "alpha": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.composite.behavior-default",
+      "case_id": "PIL.Image.composite.behavior.default",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
-        "PIL.Image.composite.behavior.default"
+        "PIL.Image.composite.behavior.default",
+        "PIL.Image.composite.parameter.image1",
+        "PIL.Image.composite.parameter.image2",
+        "PIL.Image.composite.parameter.mask",
+        "PIL.Image.composite.mode.rgb",
+        "PIL.Image.composite.parameter-combination.legacy-001",
+        "PIL.Image.composite.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -1574,325 +858,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.parameter-image1",
-      "surface": "PIL.Image",
-      "operation": "composite",
-      "covers": [
-        "PIL.Image.composite.parameter.image1"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-image2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-mask-3",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "composite",
-          "receiver": null,
-          "arguments": {
-            "image1": {
-              "kind": "binding",
-              "step_id": "setup-image1-1"
-            },
-            "image2": {
-              "kind": "binding",
-              "step_id": "setup-image2-2"
-            },
-            "mask": {
-              "kind": "binding",
-              "step_id": "setup-mask-3"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.composite.parameter-image2",
-      "surface": "PIL.Image",
-      "operation": "composite",
-      "covers": [
-        "PIL.Image.composite.parameter.image2"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-image2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-mask-3",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "composite",
-          "receiver": null,
-          "arguments": {
-            "image1": {
-              "kind": "binding",
-              "step_id": "setup-image1-1"
-            },
-            "image2": {
-              "kind": "binding",
-              "step_id": "setup-image2-2"
-            },
-            "mask": {
-              "kind": "binding",
-              "step_id": "setup-mask-3"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.composite.parameter-mask",
-      "surface": "PIL.Image",
-      "operation": "composite",
-      "covers": [
-        "PIL.Image.composite.parameter.mask"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-image2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-mask-3",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "composite",
-          "receiver": null,
-          "arguments": {
-            "image1": {
-              "kind": "binding",
-              "step_id": "setup-image1-1"
-            },
-            "image2": {
-              "kind": "binding",
-              "step_id": "setup-image2-2"
-            },
-            "mask": {
-              "kind": "binding",
-              "step_id": "setup-mask-3"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.composite.mode-1",
+      "case_id": "PIL.Image.composite.mode.1",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
@@ -1998,7 +964,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.mode-cmyk",
+      "case_id": "PIL.Image.composite.mode.cmyk",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
@@ -2104,7 +1070,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.mode-l",
+      "case_id": "PIL.Image.composite.mode.l",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
@@ -2210,7 +1176,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.mode-la",
+      "case_id": "PIL.Image.composite.mode.la",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
@@ -2316,7 +1282,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.mode-p",
+      "case_id": "PIL.Image.composite.mode.p",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
@@ -2422,113 +1388,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "composite",
-      "covers": [
-        "PIL.Image.composite.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-image2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-mask-3",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "composite",
-          "receiver": null,
-          "arguments": {
-            "image1": {
-              "kind": "binding",
-              "step_id": "setup-image1-1"
-            },
-            "image2": {
-              "kind": "binding",
-              "step_id": "setup-image2-2"
-            },
-            "mask": {
-              "kind": "binding",
-              "step_id": "setup-mask-3"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.composite.mode-rgba",
+      "case_id": "PIL.Image.composite.mode.rgba",
       "surface": "PIL.Image",
       "operation": "composite",
       "covers": [
@@ -2634,422 +1494,15 @@
       ]
     },
     {
-      "case_id": "PIL.Image.composite.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "composite",
-      "covers": [
-        "PIL.Image.composite.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-image2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-mask-3",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "composite",
-          "receiver": null,
-          "arguments": {
-            "image1": {
-              "kind": "binding",
-              "step_id": "setup-image1-1"
-            },
-            "image2": {
-              "kind": "binding",
-              "step_id": "setup-image2-2"
-            },
-            "mask": {
-              "kind": "binding",
-              "step_id": "setup-mask-3"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.composite.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "composite",
-      "covers": [
-        "PIL.Image.composite.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image1-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-image2-2",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "setup-mask-3",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "composite",
-          "receiver": null,
-          "arguments": {
-            "image1": {
-              "kind": "binding",
-              "step_id": "setup-image1-1"
-            },
-            "image2": {
-              "kind": "binding",
-              "step_id": "setup-image2-2"
-            },
-            "mask": {
-              "kind": "binding",
-              "step_id": "setup-mask-3"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_mandelbrot.behavior-default",
+      "case_id": "PIL.Image.effect_mandelbrot.behavior.default",
       "surface": "PIL.Image",
       "operation": "effect_mandelbrot",
       "covers": [
-        "PIL.Image.effect_mandelbrot.behavior.default"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_mandelbrot",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "extent": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "quality": {
-              "kind": "literal",
-              "value": 1
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_mandelbrot.parameter-size",
-      "surface": "PIL.Image",
-      "operation": "effect_mandelbrot",
-      "covers": [
-        "PIL.Image.effect_mandelbrot.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_mandelbrot",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "extent": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "quality": {
-              "kind": "literal",
-              "value": 1
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_mandelbrot.parameter-extent",
-      "surface": "PIL.Image",
-      "operation": "effect_mandelbrot",
-      "covers": [
-        "PIL.Image.effect_mandelbrot.parameter.extent"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_mandelbrot",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "extent": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "quality": {
-              "kind": "literal",
-              "value": 1
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_mandelbrot.parameter-quality",
-      "surface": "PIL.Image",
-      "operation": "effect_mandelbrot",
-      "covers": [
-        "PIL.Image.effect_mandelbrot.parameter.quality"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_mandelbrot",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "extent": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "quality": {
-              "kind": "literal",
-              "value": 1
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_mandelbrot.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "effect_mandelbrot",
-      "covers": [
-        "PIL.Image.effect_mandelbrot.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_mandelbrot",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "extent": {
-              "kind": "literal",
-              "value": 1.0
-            },
-            "quality": {
-              "kind": "literal",
-              "value": 1
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_mandelbrot.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "effect_mandelbrot",
-      "covers": [
+        "PIL.Image.effect_mandelbrot.behavior.default",
+        "PIL.Image.effect_mandelbrot.parameter.size",
+        "PIL.Image.effect_mandelbrot.parameter.extent",
+        "PIL.Image.effect_mandelbrot.parameter.quality",
+        "PIL.Image.effect_mandelbrot.parameter-combination.legacy-001",
         "PIL.Image.effect_mandelbrot.performance.standard"
       ],
       "target_profiles": [
@@ -3086,11 +1539,15 @@
       ]
     },
     {
-      "case_id": "PIL.Image.effect_noise.behavior-default",
+      "case_id": "PIL.Image.effect_noise.behavior.default",
       "surface": "PIL.Image",
       "operation": "effect_noise",
       "covers": [
-        "PIL.Image.effect_noise.behavior.default"
+        "PIL.Image.effect_noise.behavior.default",
+        "PIL.Image.effect_noise.parameter.size",
+        "PIL.Image.effect_noise.parameter.sigma",
+        "PIL.Image.effect_noise.mode.l",
+        "PIL.Image.effect_noise.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3122,115 +1579,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.effect_noise.parameter-size",
-      "surface": "PIL.Image",
-      "operation": "effect_noise",
-      "covers": [
-        "PIL.Image.effect_noise.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_noise",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "sigma": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_noise.parameter-sigma",
-      "surface": "PIL.Image",
-      "operation": "effect_noise",
-      "covers": [
-        "PIL.Image.effect_noise.parameter.sigma"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_noise",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "sigma": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_noise.mode-l",
-      "surface": "PIL.Image",
-      "operation": "effect_noise",
-      "covers": [
-        "PIL.Image.effect_noise.mode.l"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_noise",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "sigma": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.effect_noise.parameter-combination-legacy-001",
+      "case_id": "PIL.Image.effect_noise.parameter-combination.legacy-001",
       "surface": "PIL.Image",
       "operation": "effect_noise",
       "covers": [
@@ -3266,47 +1615,16 @@
       ]
     },
     {
-      "case_id": "PIL.Image.effect_noise.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "effect_noise",
-      "covers": [
-        "PIL.Image.effect_noise.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "effect_noise",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "sigma": {
-              "kind": "literal",
-              "value": 1.0
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.eval.behavior-default",
+      "case_id": "PIL.Image.eval.behavior.default",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
-        "PIL.Image.eval.behavior.default"
+        "PIL.Image.eval.behavior.default",
+        "PIL.Image.eval.parameter.image",
+        "PIL.Image.eval.parameter.args",
+        "PIL.Image.eval.mode.rgb",
+        "PIL.Image.eval.parameter-combination.legacy-001",
+        "PIL.Image.eval.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -3360,123 +1678,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.parameter-image",
-      "surface": "PIL.Image",
-      "operation": "eval",
-      "covers": [
-        "PIL.Image.eval.parameter.image"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "eval",
-          "receiver": null,
-          "arguments": {
-            "image": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "args": {
-              "kind": "literal",
-              "value": [
-                "identity"
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.eval.parameter-args",
-      "surface": "PIL.Image",
-      "operation": "eval",
-      "covers": [
-        "PIL.Image.eval.parameter.args"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "eval",
-          "receiver": null,
-          "arguments": {
-            "image": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "args": {
-              "kind": "literal",
-              "value": [
-                "identity"
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.eval.mode-1",
+      "case_id": "PIL.Image.eval.mode.1",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
@@ -3534,7 +1736,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.mode-cmyk",
+      "case_id": "PIL.Image.eval.mode.cmyk",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
@@ -3592,7 +1794,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.mode-l",
+      "case_id": "PIL.Image.eval.mode.l",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
@@ -3650,7 +1852,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.mode-la",
+      "case_id": "PIL.Image.eval.mode.la",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
@@ -3708,7 +1910,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.mode-p",
+      "case_id": "PIL.Image.eval.mode.p",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
@@ -3766,65 +1968,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "eval",
-      "covers": [
-        "PIL.Image.eval.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "eval",
-          "receiver": null,
-          "arguments": {
-            "image": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "args": {
-              "kind": "literal",
-              "value": [
-                "identity"
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.eval.mode-rgba",
+      "case_id": "PIL.Image.eval.mode.rgba",
       "surface": "PIL.Image",
       "operation": "eval",
       "covers": [
@@ -3882,396 +2026,13 @@
       ]
     },
     {
-      "case_id": "PIL.Image.eval.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "eval",
-      "covers": [
-        "PIL.Image.eval.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "eval",
-          "receiver": null,
-          "arguments": {
-            "image": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "args": {
-              "kind": "literal",
-              "value": [
-                "identity"
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.eval.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "eval",
-      "covers": [
-        "PIL.Image.eval.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "eval",
-          "receiver": null,
-          "arguments": {
-            "image": {
-              "kind": "binding",
-              "step_id": "setup-image-1"
-            },
-            "args": {
-              "kind": "literal",
-              "value": [
-                "identity"
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.behavior-default",
+      "case_id": "PIL.Image.fromarray.behavior.default",
       "surface": "PIL.Image",
       "operation": "fromarray",
       "covers": [
-        "PIL.Image.fromarray.behavior.default"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.parameter-obj",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
-        "PIL.Image.fromarray.parameter.obj"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
-        "PIL.Image.fromarray.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            },
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.mode-l",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
-        "PIL.Image.fromarray.mode.l"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
-        "PIL.Image.fromarray.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.mode-rgba",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
-        "PIL.Image.fromarray.mode.rgba"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
-        "PIL.Image.fromarray.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "fromarray",
-          "receiver": null,
-          "arguments": {
-            "obj": {
-              "kind": "literal",
-              "value": {
-                "protocol": "array-interface",
-                "shape": [
-                  2,
-                  2,
-                  3
-                ],
-                "typestr": "|u1",
-                "data_base64": "AAAAAAAAAAAAAAAA"
-              }
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.fromarray.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "fromarray",
-      "covers": [
+        "PIL.Image.fromarray.behavior.default",
+        "PIL.Image.fromarray.parameter.obj",
+        "PIL.Image.fromarray.parameter-combination.legacy-001",
         "PIL.Image.fromarray.performance.standard"
       ],
       "target_profiles": [
@@ -4306,11 +2067,143 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombuffer.behavior-default",
+      "case_id": "PIL.Image.fromarray.mode.rgb",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.mode",
+        "PIL.Image.fromarray.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "array-interface",
+                "shape": [
+                  2,
+                  2,
+                  3
+                ],
+                "typestr": "|u1",
+                "data_base64": "AAAAAAAAAAAAAAAA"
+              }
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.mode.l",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "array-interface",
+                "shape": [
+                  2,
+                  2,
+                  3
+                ],
+                "typestr": "|u1",
+                "data_base64": "AAAAAAAAAAAAAAAA"
+              }
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.mode.rgba",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.mode.rgba"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "array-interface",
+                "shape": [
+                  2,
+                  2,
+                  3
+                ],
+                "typestr": "|u1",
+                "data_base64": "AAAAAAAAAAAAAAAA"
+              }
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombuffer.behavior.default",
       "surface": "PIL.Image",
       "operation": "frombuffer",
       "covers": [
-        "PIL.Image.frombuffer.behavior.default"
+        "PIL.Image.frombuffer.behavior.default",
+        "PIL.Image.frombuffer.parameter.mode",
+        "PIL.Image.frombuffer.parameter.size",
+        "PIL.Image.frombuffer.parameter.data",
+        "PIL.Image.frombuffer.parameter-combination.legacy-001",
+        "PIL.Image.frombuffer.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -4355,154 +2248,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombuffer.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "frombuffer",
-      "covers": [
-        "PIL.Image.frombuffer.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombuffer",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombuffer.parameter-size",
-      "surface": "PIL.Image",
-      "operation": "frombuffer",
-      "covers": [
-        "PIL.Image.frombuffer.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombuffer",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombuffer.parameter-data",
-      "surface": "PIL.Image",
-      "operation": "frombuffer",
-      "covers": [
-        "PIL.Image.frombuffer.parameter.data"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombuffer",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombuffer.parameter-decoder-name",
+      "case_id": "PIL.Image.frombuffer.parameter.decoder-name",
       "surface": "PIL.Image",
       "operation": "frombuffer",
       "covers": [
@@ -4555,7 +2301,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombuffer.parameter-args",
+      "case_id": "PIL.Image.frombuffer.parameter.args",
       "surface": "PIL.Image",
       "operation": "frombuffer",
       "covers": [
@@ -4610,109 +2356,16 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombuffer.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "frombuffer",
-      "covers": [
-        "PIL.Image.frombuffer.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombuffer",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombuffer.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "frombuffer",
-      "covers": [
-        "PIL.Image.frombuffer.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombuffer",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombytes.behavior-default",
+      "case_id": "PIL.Image.frombytes.behavior.default",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
-        "PIL.Image.frombytes.behavior.default"
+        "PIL.Image.frombytes.behavior.default",
+        "PIL.Image.frombytes.parameter.mode",
+        "PIL.Image.frombytes.parameter.size",
+        "PIL.Image.frombytes.parameter.data",
+        "PIL.Image.frombytes.mode.rgb",
+        "PIL.Image.frombytes.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -4757,154 +2410,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "frombytes",
-      "covers": [
-        "PIL.Image.frombytes.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombytes",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombytes.parameter-size",
-      "surface": "PIL.Image",
-      "operation": "frombytes",
-      "covers": [
-        "PIL.Image.frombytes.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombytes",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombytes.parameter-data",
-      "surface": "PIL.Image",
-      "operation": "frombytes",
-      "covers": [
-        "PIL.Image.frombytes.parameter.data"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombytes",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombytes.parameter-decoder-name",
+      "case_id": "PIL.Image.frombytes.parameter.decoder-name",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -4957,7 +2463,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.parameter-args",
+      "case_id": "PIL.Image.frombytes.parameter.args",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5012,7 +2518,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.mode-1",
+      "case_id": "PIL.Image.frombytes.mode.1",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5061,7 +2567,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.mode-cmyk",
+      "case_id": "PIL.Image.frombytes.mode.cmyk",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5110,7 +2616,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.mode-l",
+      "case_id": "PIL.Image.frombytes.mode.l",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5159,7 +2665,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.mode-la",
+      "case_id": "PIL.Image.frombytes.mode.la",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5208,7 +2714,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.mode-p",
+      "case_id": "PIL.Image.frombytes.mode.p",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5257,56 +2763,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "frombytes",
-      "covers": [
-        "PIL.Image.frombytes.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombytes",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.frombytes.mode-rgba",
+      "case_id": "PIL.Image.frombytes.mode.rgba",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5355,7 +2812,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.parameter-combination-legacy-001",
+      "case_id": "PIL.Image.frombytes.parameter-combination.legacy-001",
       "surface": "PIL.Image",
       "operation": "frombytes",
       "covers": [
@@ -5404,60 +2861,14 @@
       ]
     },
     {
-      "case_id": "PIL.Image.frombytes.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "frombytes",
-      "covers": [
-        "PIL.Image.frombytes.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "data-bytes",
-          "kind": "inline",
-          "encoding": "base64",
-          "data": "AAECAw==",
-          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
-          "media_type": "application/octet-stream"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "frombytes",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "data": {
-              "kind": "asset",
-              "asset_id": "data-bytes"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.linear_gradient.behavior-default",
+      "case_id": "PIL.Image.linear_gradient.behavior.default",
       "surface": "PIL.Image",
       "operation": "linear_gradient",
       "covers": [
-        "PIL.Image.linear_gradient.behavior.default"
+        "PIL.Image.linear_gradient.behavior.default",
+        "PIL.Image.linear_gradient.parameter.mode",
+        "PIL.Image.linear_gradient.parameter-combination.legacy-001",
+        "PIL.Image.linear_gradient.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -5482,36 +2893,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.linear_gradient.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "linear_gradient",
-      "covers": [
-        "PIL.Image.linear_gradient.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "linear_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.linear_gradient.mode-l",
+      "case_id": "PIL.Image.linear_gradient.mode.l",
       "surface": "PIL.Image",
       "operation": "linear_gradient",
       "covers": [
@@ -5540,69 +2922,16 @@
       ]
     },
     {
-      "case_id": "PIL.Image.linear_gradient.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "linear_gradient",
-      "covers": [
-        "PIL.Image.linear_gradient.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "linear_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.linear_gradient.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "linear_gradient",
-      "covers": [
-        "PIL.Image.linear_gradient.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "linear_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.merge.behavior-default",
+      "case_id": "PIL.Image.merge.behavior.default",
       "surface": "PIL.Image",
       "operation": "merge",
       "covers": [
-        "PIL.Image.merge.behavior.default"
+        "PIL.Image.merge.behavior.default",
+        "PIL.Image.merge.parameter.mode",
+        "PIL.Image.merge.parameter.bands",
+        "PIL.Image.merge.mode.rgb",
+        "PIL.Image.merge.parameter-combination.legacy-001",
+        "PIL.Image.merge.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -5654,119 +2983,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.merge.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "merge",
-      "covers": [
-        "PIL.Image.merge.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-bands-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "merge",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "bands": {
-              "kind": "binding",
-              "step_id": "setup-bands-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.merge.parameter-bands",
-      "surface": "PIL.Image",
-      "operation": "merge",
-      "covers": [
-        "PIL.Image.merge.parameter.bands"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-bands-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "merge",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "bands": {
-              "kind": "binding",
-              "step_id": "setup-bands-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.merge.mode-l",
+      "case_id": "PIL.Image.merge.mode.l",
       "surface": "PIL.Image",
       "operation": "merge",
       "covers": [
@@ -5822,7 +3039,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.merge.mode-la",
+      "case_id": "PIL.Image.merge.mode.la",
       "surface": "PIL.Image",
       "operation": "merge",
       "covers": [
@@ -5878,63 +3095,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.merge.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "merge",
-      "covers": [
-        "PIL.Image.merge.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-bands-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "merge",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "bands": {
-              "kind": "binding",
-              "step_id": "setup-bands-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.merge.mode-rgba",
+      "case_id": "PIL.Image.merge.mode.rgba",
       "surface": "PIL.Image",
       "operation": "merge",
       "covers": [
@@ -5990,63 +3151,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.merge.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "merge",
-      "covers": [
-        "PIL.Image.merge.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-bands-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "merge",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "bands": {
-              "kind": "binding",
-              "step_id": "setup-bands-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.merge.edge-mode-band-mismatch",
+      "case_id": "PIL.Image.merge.edge.mode-band-mismatch",
       "surface": "PIL.Image",
       "operation": "merge",
       "covers": [
@@ -6058,29 +3163,6 @@
       "assets": [],
       "steps": [
         {
-          "step_id": "setup-bands-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
           "step_id": "call",
           "surface": "PIL.Image",
           "operation": "merge",
@@ -6091,64 +3173,10 @@
               "value": "RGB"
             },
             "bands": {
-              "kind": "binding",
-              "step_id": "setup-bands-1"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.merge.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "merge",
-      "covers": [
-        "PIL.Image.merge.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-bands-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
               "kind": "literal",
               "value": [
-                16,
-                16
+                "L"
               ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "merge",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "bands": {
-              "kind": "binding",
-              "step_id": "setup-bands-1"
             }
           }
         }
@@ -6158,11 +3186,16 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.behavior-default",
+      "case_id": "PIL.Image.new.behavior.default",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
-        "PIL.Image.new.behavior.default"
+        "PIL.Image.new.behavior.default",
+        "PIL.Image.new.parameter.mode",
+        "PIL.Image.new.parameter.size",
+        "PIL.Image.new.mode.rgb",
+        "PIL.Image.new.parameter-combination.legacy-009",
+        "PIL.Image.new.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -6194,79 +3227,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "new",
-      "covers": [
-        "PIL.Image.new.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.new.parameter-size",
-      "surface": "PIL.Image",
-      "operation": "new",
-      "covers": [
-        "PIL.Image.new.parameter.size"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.new.parameter-color",
+      "case_id": "PIL.Image.new.parameter.color",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6306,7 +3267,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-1",
+      "case_id": "PIL.Image.new.mode.1",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6342,7 +3303,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-cmyk",
+      "case_id": "PIL.Image.new.mode.cmyk",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6378,7 +3339,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-f",
+      "case_id": "PIL.Image.new.mode.f",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6414,7 +3375,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-hsv",
+      "case_id": "PIL.Image.new.mode.hsv",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6450,7 +3411,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-i",
+      "case_id": "PIL.Image.new.mode.i",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6486,7 +3447,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-l",
+      "case_id": "PIL.Image.new.mode.l",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6522,7 +3483,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-la",
+      "case_id": "PIL.Image.new.mode.la",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6558,43 +3519,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "new",
-      "covers": [
-        "PIL.Image.new.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.new.mode-rgba",
+      "case_id": "PIL.Image.new.mode.rgba",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6630,7 +3555,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-ycbcr",
+      "case_id": "PIL.Image.new.mode.ycbcr",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6666,7 +3591,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.mode-p",
+      "case_id": "PIL.Image.new.mode.p",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6702,7 +3627,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-001",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-001",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6738,7 +3663,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-002",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-002",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6774,7 +3699,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-003",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-003",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6810,7 +3735,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-004",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-004",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6850,7 +3775,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-005",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-005",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6890,7 +3815,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-006",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-006",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6934,7 +3859,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-007",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-007",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -6977,7 +3902,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-008",
+      "case_id": "PIL.Image.new.parameter-combination.legacy-008",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -7022,43 +3947,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.parameter-combination-legacy-009",
-      "surface": "PIL.Image",
-      "operation": "new",
-      "covers": [
-        "PIL.Image.new.parameter-combination.legacy-009"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.new.edge-zero-width",
+      "case_id": "PIL.Image.new.edge.zero-width",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -7085,6 +3974,10 @@
                 0,
                 16
               ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
             }
           }
         }
@@ -7094,7 +3987,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.edge-zero-height",
+      "case_id": "PIL.Image.new.edge.zero-height",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -7121,6 +4014,10 @@
                 16,
                 0
               ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
             }
           }
         }
@@ -7130,7 +4027,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.new.edge-invalid-mode",
+      "case_id": "PIL.Image.new.edge.invalid-mode",
       "surface": "PIL.Image",
       "operation": "new",
       "covers": [
@@ -7157,42 +4054,10 @@
                 16,
                 16
               ]
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.new.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "new",
-      "covers": [
-        "PIL.Image.new.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
             },
-            "size": {
+            "color": {
               "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
+              "value": 0
             }
           }
         }
@@ -7202,11 +4067,15 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.behavior-default",
+      "case_id": "PIL.Image.open.behavior.default",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
-        "PIL.Image.open.behavior.default"
+        "PIL.Image.open.behavior.default",
+        "PIL.Image.open.parameter.fp",
+        "PIL.Image.open.format.png",
+        "PIL.Image.open.parameter-combination.legacy-003",
+        "PIL.Image.open.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -7237,46 +4106,12 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.parameter-fp",
+      "case_id": "PIL.Image.open.mode.rgb",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
-        "PIL.Image.open.parameter.fp"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "open",
-          "receiver": null,
-          "arguments": {
-            "fp": {
-              "kind": "asset",
-              "asset_id": "encoded-input"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.open.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "open",
-      "covers": [
-        "PIL.Image.open.parameter.mode"
+        "PIL.Image.open.parameter.mode",
+        "PIL.Image.open.mode.rgb"
       ],
       "target_profiles": [
         "python-cpu"
@@ -7311,7 +4146,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.parameter-formats",
+      "case_id": "PIL.Image.open.parameter.formats",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7350,7 +4185,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-l",
+      "case_id": "PIL.Image.open.mode.l",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7376,6 +4211,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "L"
             }
           }
         }
@@ -7385,7 +4224,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-la",
+      "case_id": "PIL.Image.open.mode.la",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7411,6 +4250,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
             }
           }
         }
@@ -7420,42 +4263,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-rgb",
-      "surface": "PIL.Image",
-      "operation": "open",
-      "covers": [
-        "PIL.Image.open.mode.rgb"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "open",
-          "receiver": null,
-          "arguments": {
-            "fp": {
-              "kind": "asset",
-              "asset_id": "encoded-input"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.open.mode-rgba",
+      "case_id": "PIL.Image.open.mode.rgba",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7481,6 +4289,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
             }
           }
         }
@@ -7490,7 +4302,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-1",
+      "case_id": "PIL.Image.open.mode.1",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7516,6 +4328,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "1"
             }
           }
         }
@@ -7525,7 +4341,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-p",
+      "case_id": "PIL.Image.open.mode.p",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7551,6 +4367,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "P"
             }
           }
         }
@@ -7560,7 +4380,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-cmyk",
+      "case_id": "PIL.Image.open.mode.cmyk",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7586,6 +4406,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
             }
           }
         }
@@ -7595,7 +4419,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-i",
+      "case_id": "PIL.Image.open.mode.i",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7621,6 +4445,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "I"
             }
           }
         }
@@ -7630,7 +4458,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.mode-f",
+      "case_id": "PIL.Image.open.mode.f",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7656,6 +4484,10 @@
             "fp": {
               "kind": "asset",
               "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "F"
             }
           }
         }
@@ -7665,42 +4497,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.format-png",
-      "surface": "PIL.Image",
-      "operation": "open",
-      "covers": [
-        "PIL.Image.open.format.png"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "open",
-          "receiver": null,
-          "arguments": {
-            "fp": {
-              "kind": "asset",
-              "asset_id": "encoded-input"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.open.format-jpeg",
+      "case_id": "PIL.Image.open.format.jpeg",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7735,7 +4532,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.format-gif",
+      "case_id": "PIL.Image.open.format.gif",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7770,7 +4567,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.format-bmp",
+      "case_id": "PIL.Image.open.format.bmp",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7805,7 +4602,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.format-tiff",
+      "case_id": "PIL.Image.open.format.tiff",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7840,7 +4637,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.format-webp",
+      "case_id": "PIL.Image.open.format.webp",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7875,7 +4672,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.format-ico",
+      "case_id": "PIL.Image.open.format.ico",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7910,7 +4707,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.parameter-combination-legacy-001",
+      "case_id": "PIL.Image.open.parameter-combination.legacy-001",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7945,7 +4742,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.parameter-combination-legacy-002",
+      "case_id": "PIL.Image.open.parameter-combination.legacy-002",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -7983,42 +4780,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.parameter-combination-legacy-003",
-      "surface": "PIL.Image",
-      "operation": "open",
-      "covers": [
-        "PIL.Image.open.parameter-combination.legacy-003"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "open",
-          "receiver": null,
-          "arguments": {
-            "fp": {
-              "kind": "asset",
-              "asset_id": "encoded-input"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.open.edge-nonexistent-file",
+      "case_id": "PIL.Image.open.edge.nonexistent-file",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -8044,6 +4806,14 @@
             "fp": {
               "kind": "asset",
               "asset_id": "missing-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "value"
             }
           }
         }
@@ -8053,7 +4823,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.edge-invalid-bytes",
+      "case_id": "PIL.Image.open.edge.invalid-bytes",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -8064,9 +4834,12 @@
       ],
       "assets": [
         {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
+          "id": "invalid-bytes-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AGludmFsaWQ=",
+          "sha256": "753a57bab8eb2776f2b2fd6cda639d8bdb057e1c9e9817d73b5124daf3b50b33",
+          "media_type": "application/octet-stream"
         }
       ],
       "steps": [
@@ -8078,7 +4851,15 @@
           "arguments": {
             "fp": {
               "kind": "asset",
-              "asset_id": "encoded-input"
+              "asset_id": "invalid-bytes-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "NOT_A_MODE"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "value"
             }
           }
         }
@@ -8088,7 +4869,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.edge-empty-bytes",
+      "case_id": "PIL.Image.open.edge.empty-bytes",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -8099,9 +4880,12 @@
       ],
       "assets": [
         {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
+          "id": "empty-bytes-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
         }
       ],
       "steps": [
@@ -8113,7 +4897,15 @@
           "arguments": {
             "fp": {
               "kind": "asset",
-              "asset_id": "encoded-input"
+              "asset_id": "empty-bytes-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "value"
             }
           }
         }
@@ -8123,7 +4915,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.edge-webp-corrupt-vp8-bitstream",
+      "case_id": "PIL.Image.open.edge.webp-corrupt-vp8-bitstream",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -8134,9 +4926,12 @@
       ],
       "assets": [
         {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
+          "id": "webp-corrupt-vp8-bitstream-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "UklGRhAAAABXRUJQVlA4IAAAAAA=",
+          "sha256": "4152f56fb29e36b805a629a143e9f1c5fdb9152b452989ab49a1f601d285a60a",
+          "media_type": "application/octet-stream"
         }
       ],
       "steps": [
@@ -8148,7 +4943,15 @@
           "arguments": {
             "fp": {
               "kind": "asset",
-              "asset_id": "encoded-input"
+              "asset_id": "webp-corrupt-vp8-bitstream-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "value"
             }
           }
         }
@@ -8158,7 +4961,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.edge-webp-truncated-riff",
+      "case_id": "PIL.Image.open.edge.webp-truncated-riff",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -8169,9 +4972,12 @@
       ],
       "assets": [
         {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
+          "id": "webp-truncated-riff-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "UklGRggAAABXRUJQ",
+          "sha256": "7b65c08c786a00aeee67ffca197e61c996788cc56fd30f255e6877fe7796046c",
+          "media_type": "application/octet-stream"
         }
       ],
       "steps": [
@@ -8183,7 +4989,15 @@
           "arguments": {
             "fp": {
               "kind": "asset",
-              "asset_id": "encoded-input"
+              "asset_id": "webp-truncated-riff-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "value"
             }
           }
         }
@@ -8193,7 +5007,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.edge-webp-invalid-riff-header",
+      "case_id": "PIL.Image.open.edge.webp-invalid-riff-header",
       "surface": "PIL.Image",
       "operation": "open",
       "covers": [
@@ -8204,9 +5018,12 @@
       ],
       "assets": [
         {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
+          "id": "webp-invalid-riff-header-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "Tk9UUklGRg==",
+          "sha256": "3d0be2524109bccf5b2b3c8d9ea6250ea80632c8b22f03cc40f05ba508608995",
+          "media_type": "application/octet-stream"
         }
       ],
       "steps": [
@@ -8218,7 +5035,15 @@
           "arguments": {
             "fp": {
               "kind": "asset",
-              "asset_id": "encoded-input"
+              "asset_id": "webp-invalid-riff-header-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "NOT_A_MODE"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "value"
             }
           }
         }
@@ -8228,46 +5053,14 @@
       ]
     },
     {
-      "case_id": "PIL.Image.open.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "open",
-      "covers": [
-        "PIL.Image.open.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [
-        {
-          "id": "encoded-input",
-          "kind": "builtin",
-          "name": "encoded-png-input"
-        }
-      ],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "open",
-          "receiver": null,
-          "arguments": {
-            "fp": {
-              "kind": "asset",
-              "asset_id": "encoded-input"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.radial_gradient.behavior-default",
+      "case_id": "PIL.Image.radial_gradient.behavior.default",
       "surface": "PIL.Image",
       "operation": "radial_gradient",
       "covers": [
-        "PIL.Image.radial_gradient.behavior.default"
+        "PIL.Image.radial_gradient.behavior.default",
+        "PIL.Image.radial_gradient.parameter.mode",
+        "PIL.Image.radial_gradient.parameter-combination.legacy-001",
+        "PIL.Image.radial_gradient.performance.standard"
       ],
       "target_profiles": [
         "python-cpu"
@@ -8292,36 +5085,7 @@
       ]
     },
     {
-      "case_id": "PIL.Image.radial_gradient.parameter-mode",
-      "surface": "PIL.Image",
-      "operation": "radial_gradient",
-      "covers": [
-        "PIL.Image.radial_gradient.parameter.mode"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "radial_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.radial_gradient.mode-l",
+      "case_id": "PIL.Image.radial_gradient.mode.l",
       "surface": "PIL.Image",
       "operation": "radial_gradient",
       "covers": [
@@ -8341,64 +5105,6 @@
             "mode": {
               "kind": "literal",
               "value": "L"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.radial_gradient.parameter-combination-legacy-001",
-      "surface": "PIL.Image",
-      "operation": "radial_gradient",
-      "covers": [
-        "PIL.Image.radial_gradient.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "radial_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.radial_gradient.performance-standard",
-      "surface": "PIL.Image",
-      "operation": "radial_gradient",
-      "covers": [
-        "PIL.Image.radial_gradient.performance.standard"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "call",
-          "surface": "PIL.Image",
-          "operation": "radial_gradient",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
             }
           }
         }
