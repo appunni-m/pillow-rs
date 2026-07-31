@@ -553,14 +553,25 @@ impl PyImage {
         self.inner.thumbnail(size, filter).map_err(map_error)
     }
 
-    fn quantize(&self, colors: Option<i32>, dither: Option<bool>) -> PyResult<PyImage> {
+    fn quantize(
+        &self,
+        colors: Option<i32>,
+        method: Option<i32>,
+        dither: Option<bool>,
+    ) -> PyResult<PyImage> {
         let colors = colors.unwrap_or(256);
         if !(1..=256).contains(&colors) {
             return Err(PyValueError::new_err("bad number of colors"));
         }
         let rs = self
             .inner
-            .quantize(colors as u32, 0, None, dither.unwrap_or(true))
+            .quantize(
+                colors as u32,
+                0,
+                None,
+                dither.unwrap_or(true),
+                method.unwrap_or(0) as u32,
+            )
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
