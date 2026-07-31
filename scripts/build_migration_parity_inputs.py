@@ -261,6 +261,7 @@ class WorkflowBuilder:
     scenario_font_size: float | None = None
     scenario_transposed_orientation: Any | None = None
     scenario_bitmap_mode: str | None = None
+    scenario_im_mode: str | None = None
 
     @property
     def mode(self) -> str:
@@ -825,6 +826,13 @@ class WorkflowBuilder:
                         label="bitmap",
                     )
                 )
+            if name == "im" and self.scenario_im_mode is not None:
+                return binding(
+                    self.ensure_image(
+                        mode=self.scenario_im_mode,
+                        label="im",
+                    )
+                )
             return binding(self.ensure_image(label=slug(parameter_id)))
         if name == "mask":
             return binding(self.ensure_image(mode="L", label="mask"))
@@ -1121,6 +1129,7 @@ def build_parity_case(
     scenario_font_size: float | None = None,
     scenario_transposed_orientation: Any | None = None,
     scenario_bitmap_mode: str | None = None,
+    scenario_im_mode: str | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1139,6 +1148,7 @@ def build_parity_case(
         scenario_font_size=scenario_font_size,
         scenario_transposed_orientation=scenario_transposed_orientation,
         scenario_bitmap_mode=scenario_bitmap_mode,
+        scenario_im_mode=scenario_im_mode,
     )
     assets, steps, observations = builder.build()
     return {
@@ -1804,6 +1814,204 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-l",
+            "mode": "L",
+            "values": {
+                "im": literal(255),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-rgb",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-rgba",
+            "mode": "RGBA",
+            "values": {
+                "im": literal([255, 0, 0, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-la",
+            "mode": "LA",
+            "values": {
+                "im": literal([255, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-p",
+            "mode": "P",
+            "values": {
+                "im": literal(5),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-cmyk",
+            "mode": "CMYK",
+            "values": {
+                "im": literal([0, 255, 0, 0]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-i",
+            "mode": "I",
+            "values": {
+                "im": literal(100),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-one",
+            "mode": "1",
+            "values": {
+                "im": literal(1),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-int-fill",
+            "mode": "RGB",
+            "values": {
+                "im": literal(255),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "f-int-fill",
+            "mode": "F",
+            "values": {
+                "im": literal(100),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "l-two-tuple-error",
+            "mode": "L",
+            "values": {
+                "im": literal([255, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "la-four-tuple-error",
+            "mode": "LA",
+            "values": {
+                "im": literal([255, 0, 0, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-two-tuple-error",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "i-two-tuple-error",
+            "mode": "I",
+            "values": {
+                "im": literal([1, 2]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "offset-source",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "l-from-rgb",
+            "mode": "L",
+            "im_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-from-rgba",
+            "mode": "RGB",
+            "im_mode": "RGBA",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "p-from-l",
+            "mode": "P",
+            "im_mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "offset-dest",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "convert",
             "requirement_suffix": "parameter.mode",
             "name": "alpha-conversion",
@@ -2218,6 +2426,7 @@ def build_nuanced_cases(
                 scenario_font_size=spec.get("font_size"),
                 scenario_transposed_orientation=spec.get("orientation"),
                 scenario_bitmap_mode=spec.get("bitmap_mode"),
+                scenario_im_mode=spec.get("im_mode"),
             )
         )
     return cases
