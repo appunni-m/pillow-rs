@@ -41,10 +41,6 @@ name = "backend_parity"
 required-features = ["test-api"]
 
 [[test]]
-name = "font_public_api"
-required-features = ["test-api"]
-
-[[test]]
 name = "image_backend_migration"
 required-features = ["test-api"]
 

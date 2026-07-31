@@ -31,8 +31,8 @@ manifest truth.
 | Area | Current state | Defect-ledger interpretation |
 | --- | --- | --- |
 | Active specification | `migration-parity/manifest@2`; 22 surfaces, 204 operations, 1,780 requirements | MAN-001..MAN-018 are structurally addressed by the fixed generator, but the external auditor still reports SKL-006 and the historical denominator decisions DEC-001..DEC-007 remain explicit. |
-| Active inputs | 1,181 unique input-only parity workflows; indexed parity, coverage, and benchmark documents; no expected outputs in active inputs | INP-001..INP-014 are addressed for the rebuilt corpus. Legacy fixture roots remain under `tests/deprecated/` and are not active inputs. |
-| Live parity | Full clean-checkout run required 1,181 cases and measured 725 pass / 456 fail / 0 infrastructure errors | RUN-001, RUN-004, RUN-006, and RUN-007 have maintained producers; behavioral failures are real target gaps, not suppressed results. RUN-008 and RUN-009 remain archive/anti-cheat follow-up work. |
+| Active inputs | 1,181 unique input-only parity workflows; indexed parity, coverage, and benchmark documents; no expected outputs in active inputs | INP-001..INP-014 are addressed for the rebuilt corpus. Legacy fixture roots and the obsolete Rust Font harness now live under `tests/deprecated/` and are not active inputs. |
+| Live parity | Full clean-checkout run required 1,181 cases and measured 725 pass / 456 fail / 0 infrastructure errors | RUN-001, RUN-004, RUN-006, RUN-007, and RUN-009 have maintained producers/boundaries; behavioral failures are real target gaps, not suppressed results. RUN-008 remains a classification/anti-cheat follow-up for separate regression tests that intentionally retain oracle fixtures. |
 | Coverage | Strict `coverage-input@1` plans and `coverage-result@1` producer exist; no managed snapshot has been ingested | COV-001 and COV-002 are producer/schema work only until the Coverage MCP command is explicitly approved and a fresh snapshot is recorded. Rust dimensions remain `not_proven`. |
 | Benchmark | 203 deterministic workloads and suites plus correctness-gated `benchmark-result@1` producer; smoke measurement is available for passing workloads | BEN-001, BEN-002, and BEN-004 have producers. No performance budget is declared in the current manifest, so budget outcomes remain `not_proven`/empty rather than being inferred from timings. |
 | Aggregate/docs | Strict `status-report@1` join and generated specification/evidence pages are maintained | RUN-010 and DOC-003/DOC-004 have a generated path; freshness and incompatible evidence are still visible and must be rerun after each manifest or target revision change. |
@@ -42,6 +42,12 @@ The active result interfaces are generated under `build/migration-parity/` and
 are intentionally ignored by Git. The checked-in documentation pages are
 specification/evidence views only; they are regenerated from the manifest,
 inputs, and compatible results.
+
+The obsolete Rust migration harness is archived at
+`pillow-rs/tests/deprecated/font_public_api.rs` with its support modules. The
+active `tests/test_*_oracle.py` and backend integration tests are retained as
+implementation regression tests; they are not indexed migration inputs and do
+not contribute to the migration-parity result.
 
 ## Verified inventory facts
 
