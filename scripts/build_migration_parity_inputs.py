@@ -2459,6 +2459,26 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": "box-filter",
+            "values": {
+                "size": literal([7, 5]),
+                "resample": literal(4),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": "hamming-filter",
+            "values": {
+                "size": literal([7, 5]),
+                "resample": literal(5),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "rotate",
             "requirement_suffix": "parameter.angle",
             "name": "fractional-expanded",
