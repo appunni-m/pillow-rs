@@ -214,6 +214,27 @@ def threshold_outcome(
     )
 
 
+def coverage_case_failed(observations: list[dict[str, Any]]) -> bool:
+    """Return whether a workflow failed to execute its coverage contract.
+
+    Public errors are valid observations in the migration spec.  When a
+    workflow intentionally exercises an error, the runner blocks dependent
+    steps and records them as ``not_run``; those blocked steps do not make the
+    case a coverage execution failure.  A not-run observation with no earlier
+    public error still indicates an incomplete workflow and remains failed.
+    """
+    if not observations:
+        return True
+    saw_public_error = False
+    for observation in observations:
+        status = observation["status"]
+        if status == "error":
+            saw_public_error = True
+        elif status == "not_run" and not saw_public_error:
+            return True
+    return False
+
+
 def build_plan_result(
     plan: dict[str, Any],
     plan_input_path: str,
@@ -225,10 +246,7 @@ def build_plan_result(
     tests_failed = sum(
         1
         for case_id in selected_ids
-        if any(
-            observation["status"] == "not_run"
-            for observation in case_results[case_id]["observations"]
-        )
+        if coverage_case_failed(case_results[case_id]["observations"])
     )
     components: list[dict[str, Any]] = []
     for component_id in plan["component_ids"]:

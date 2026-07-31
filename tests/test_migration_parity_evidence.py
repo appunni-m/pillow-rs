@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from scripts.aggregate_migration_parity import aggregate
+from scripts.run_migration_coverage import coverage_case_failed
 from scripts.validate_migration_parity_result import status_report
 
 
@@ -17,6 +18,17 @@ MANIFEST = ROOT / "pillow-rs" / "tests" / "fixtures" / "manifest.yaml"
 
 
 class MigrationParityEvidenceTests(unittest.TestCase):
+    def test_expected_public_error_does_not_fail_coverage_case(self) -> None:
+        observations = [
+            {"step_id": "call", "status": "error"},
+            {"step_id": "dependent", "status": "not_run"},
+        ]
+        self.assertFalse(coverage_case_failed(observations))
+
+    def test_unblocked_not_run_fails_coverage_case(self) -> None:
+        observations = [{"step_id": "call", "status": "not_run"}]
+        self.assertTrue(coverage_case_failed(observations))
+
     def test_empty_join_is_complete_schema_and_not_proven(self) -> None:
         with tempfile.TemporaryDirectory(prefix="migration-status-test-") as directory:
             output = Path(directory) / "status.json"
