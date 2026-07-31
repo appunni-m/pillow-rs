@@ -446,7 +446,7 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
-        elif self.edge == "nonzero-pixel" and label == "image":
+        elif self.edge == "nonzero-pixel" and label in {"image", "image1"}:
             if self.scenario_pixel is None:
                 raise ValueError("nonzero-pixel edge requires a scenario pixel")
             self.add_step(
@@ -3475,6 +3475,44 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "rgba",
             "mode": "RGBA",
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "add",
+            "requirement_suffix": "behavior.default",
+            "name": "scale-offset",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {
+                "scale": literal(2),
+                "offset": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "subtract",
+            "requirement_suffix": "behavior.default",
+            "name": "scale-offset",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {
+                "scale": literal(2),
+                "offset": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "extrapolate-alpha",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {
+                "alpha": literal(2),
+            },
         },
         {
             "surface": "PIL.ImageOps",
