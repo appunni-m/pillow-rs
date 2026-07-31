@@ -3203,6 +3203,11 @@ def build_inputs(
             # manifest endpoint; exercise it through the maintained native
             # coverage command.
             command_ids = ["coverage-imagesequence-native"]
+        elif "image-core" in component_ids:
+            # Module-level helpers (fromarray variants, merge, gradients,
+            # resize/crop/rotate/convert wrappers) have no Pillow oracle
+            # endpoint; exercise them through the maintained native command.
+            command_ids = ["coverage-imagecore-native"]
         else:
             command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
