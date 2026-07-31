@@ -1257,6 +1257,152 @@
           "text_repeat": 1000001
         }
       }
+    },
+    {
+      "case_id": "font.getmask2.sbit_gray_stroked_outline_private_base",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_gray_stroked_outline_private_neighborhood",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue001",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_gray_stroked_empty_outline_whitespace_canvas",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue014",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_gray_stroked_latin_base",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_cblc_cbdt_stroked_bitmap_glyph_invalid_argument",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-cblc-cbdt-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "\ue000",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_cblc_cbdt_stroked_whitespace_glyph_invalid_argument",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-cblc-cbdt-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "stroke_width": 1.5,
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.getmask2.sbit_cblc_cbdt_plain_whitespace_metrics",
+      "operation": "getmask2",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/sbit-cblc-cbdt-gray-format1.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "start": [
+            0.0,
+            0.0
+          ]
+        }
+      }
     }
   ]
 }

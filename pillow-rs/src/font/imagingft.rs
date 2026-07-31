@@ -763,7 +763,15 @@ pub(crate) fn getmask2_with_options(
     } else {
         mask_from_run_with_start(font, text, load_flags, start)?
     };
-    let bbox = bbox_from_run_with_flags(font, text, load_flags)?;
+    let bbox = bbox_from_run_with_flags(
+        font,
+        text,
+        if options.stroke_width != 0.0 {
+            load_flags | ffi::FT_LOAD_NO_BITMAP
+        } else {
+            load_flags
+        },
+    )?;
     let (left, top, _, _) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
     let left = left - options.stroke_width;
     let top = top - options.stroke_width;
@@ -1169,21 +1177,31 @@ fn stroked_mask_from_run_with_start(
     let run = glyph_run(ttf, text, load_flags)?;
     let face = &ttf.engine.face;
     let mut rendered = Vec::new();
-    let mut x_min = 0;
-    let mut x_max = 0;
-    let mut y_min = 0;
-    let mut y_max = 0;
+    let mut render_x_min = 0;
+    let mut first_y_max = 0;
 
+    // Pillow 12.2.0 `_imagingft.c::font_render_impl` loads with
+    // `FT_LOAD_NO_BITMAP` whenever `stroke_width != 0`, so scalable faces
+    // render stroked outlines instead of embedded strikes.  Bitmap-only
+    // CBLC/CBDT faces still return their strike (or a synthesized whitespace
+    // bitmap) because `TT_Load_Glyph` only honors `FT_LOAD_NO_BITMAP` for
+    // scalable faces (`truetype/ttgload.c:2401-2404`).
+    let stroked_load_flags = load_flags | ffi::FT_LOAD_NO_BITMAP;
     for glyph in &run.glyphs {
-        let layout_slot =
-            ffi::FT_Load_Glyph(face, glyph.glyph_index, load_flags).map_err(ft_error_to_pil)?;
-
-        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width, stroke_filled)?;
+        // Pillow's first loop measures the pen from the unstroked rendered
+        // extents (`FT_LOAD_NO_BITMAP | FT_LOAD_RENDER`), then its second
+        // loop loads the outline again and strokes it.
+        let rendered_slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, stroked_load_flags | RDR)
+            .map_err(ft_error_to_pil)?;
         let px = round26(glyph.pen_before);
-        x_min = x_min.min(px + bitmap_glyph.left as i32);
-        x_max = x_max.max(px + bitmap_glyph.left as i32 + bitmap_glyph.bitmap.width as i32);
-        y_min = y_min.min(bitmap_glyph.top as i32 - bitmap_glyph.bitmap.rows as i32);
-        y_max = y_max.max(bitmap_glyph.top as i32);
+        if let Some(_bitmap) = rendered_slot.bitmap {
+            render_x_min = render_x_min.min(px + rendered_slot.bitmap_left as i32);
+            first_y_max = first_y_max.max(rendered_slot.bitmap_top as i32);
+        }
+
+        let layout_slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, stroked_load_flags)
+            .map_err(ft_error_to_pil)?;
+        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width, stroke_filled)?;
         rendered.push(RenderedBitmap {
             pen_before: glyph.pen_before,
             bitmap_left: bitmap_glyph.left as i32,
@@ -1192,26 +1210,48 @@ fn stroked_mask_from_run_with_start(
         });
     }
 
-    let bbox = bbox_from_glyph_run(ttf, &run)?;
+    // Pillow's `bounding_box_and_anchors` mixes the BASIC-layout advances
+    // (loaded with `FT_LOAD_DEFAULT` in `text_layout_fallback`) with glyph
+    // cboxes loaded under `FT_LOAD_NO_BITMAP`.  Strikes and outlines can
+    // report different advances, so the pen line must come from the
+    // default-load run while the cboxes come from the no-bitmap run.
+    let bbox_run = glyph_run(ttf, text, stroked_load_flags)?;
+    let merged_run = GlyphRun {
+        glyphs: run
+            .glyphs
+            .iter()
+            .zip(bbox_run.glyphs.iter())
+            .map(|(layout_glyph, cbox_glyph)| RunGlyph {
+                glyph_index: layout_glyph.glyph_index,
+                pen_before: layout_glyph.pen_before,
+                advance: layout_glyph.advance,
+                layout_cbox: cbox_glyph.layout_cbox,
+            })
+            .collect(),
+        final_pen: run.final_pen,
+        max_pen: run.max_pen,
+    };
+    let bbox = bbox_from_glyph_run(ttf, &merged_run)?;
     let expected_w = ((bbox.2 - bbox.0) as f32 + stroke_width * 2.0)
         .ceil()
         .max(0.0) as i32;
     let expected_h = ((bbox.3 - bbox.1) as f32 + stroke_width * 2.0)
         .ceil()
         .max(0.0) as i32;
-    // Pillow 12.2.0 `_imagingft.c::font_render_impl` allocates from
-    // `bounding_box_and_anchors`, not from the stroked glyph bitmap extents.
-    // Descender-heavy strings such as DejaVuSans "jQ" can therefore include a
-    // leading blank column when `floor(left - stroke_width)` is left of the
-    // rendered stroked bitmap.
-    x_min = ((bbox.0 as f32) - stroke_width).floor() as i32;
-    x_max = x_min + expected_w;
-    y_max = y_min + (y_max - y_min).min(expected_h);
+    // Pillow 12.2.0 `_imagingft.c::font_render_impl` allocates the mask from
+    // `bounding_box_and_anchors` plus `ceil(stroke_width * 2 + start)`, not
+    // from the stroked glyph bitmap extents.  Descender-heavy strings such as
+    // DejaVuSans "jQ" can therefore include a leading blank column when
+    // `floor(left - stroke_width)` is left of the rendered stroked bitmap, and
+    // bitmap-only glyphs keep their bbox-derived height even when the stroked
+    // bitmap is empty.
+    let x_min = ((bbox.0 as f32) - stroke_width).floor() as i32;
+    let x_max = x_min + expected_w;
 
     let start_width = start.0.ceil() as i32;
     let start_height = start.1.ceil() as i32;
     let base_w = x_max - x_min;
-    let base_h = y_max - y_min;
+    let base_h = expected_h;
     let adjusted_w = base_w.saturating_add(start_width);
     let adjusted_h = base_h.saturating_add(start_height);
     if positive_dimension_collapsed(base_w, adjusted_w)
@@ -1228,8 +1268,10 @@ fn stroked_mask_from_run_with_start(
         .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
     let mut canvas = vec![0u8; canvas_len];
 
-    let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
-    let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
+    let x_origin =
+        ((f64::from(-render_x_min) + f64::from(stroke_width) + start.0) * 64.0).round() as i32;
+    let y_origin =
+        ((f64::from(-first_y_max) - f64::from(stroke_width) - start.1) * 64.0).round() as i32;
     paste_rendered_bitmaps(&rendered, &mut canvas, w, h, x_origin, y_origin);
     Ok((w, h, canvas))
 }
@@ -1289,6 +1331,14 @@ fn stroked_bitmap_glyph(
     stroke_width: f32,
     stroke_filled: bool,
 ) -> Result<ffi::FT_BitmapGlyphOwned, PilError> {
+    if slot.bitmap.is_some() {
+        // Pillow's `FT_Glyph_Stroke` fails with `Invalid_Argument` for bitmap
+        // glyphs (the bitmap glyph class has no stroke method in FreeType's
+        // `ftglyph.c`), surfacing as `OSError: invalid argument`.  This is
+        // reachable for bitmap-only CBLC/CBDT faces whose strikes win even
+        // under `FT_LOAD_NO_BITMAP`.
+        return Err(PilError::OsError("invalid argument".into()));
+    }
     let outline = ffi::FT_Get_Outline_Glyph(Some(slot)).map_err(ft_error_to_pil)?;
     let library = ffi::FT_Init_FreeType();
     let stroker = new_stroker(&library);

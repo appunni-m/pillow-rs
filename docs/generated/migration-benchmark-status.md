@@ -15,7 +15,7 @@ lane: benchmark
 
 - Compatible evidence IDs: `migration-benchmark-17f7714815064f3094fc1a6ab3f92437`
 - Operation outcomes: not_proven=47, pass=156
-- Stale/incompatible artifacts: 1
+- Stale/incompatible artifacts: 2
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
