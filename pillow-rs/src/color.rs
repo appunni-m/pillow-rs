@@ -968,19 +968,34 @@ pub fn palette_getcolor_validate(
     color: &[u8],
     mode: &str,
 ) -> Result<usize, String> {
-    if color.len() < 3 {
-        return Err("color must have at least 3 elements".into());
+    if color.is_empty() {
+        return Err("color must have at least 1 element".into());
     }
-    let r = color[0];
-    let g = color[1];
-    let b = color[2];
     if mode == "RGB" && color.len() >= 4 && color[3] != 255 {
         return Err("cannot add non-opaque RGBA color to RGB palette".into());
     }
-    let a = if mode == "RGBA" && color.len() >= 4 {
-        color[3]
-    } else {
-        255
-    };
-    palette_getcolor_append(palette, r, g, b, a, mode)
+    // Pillow's Python `getcolor` appends the tuple bytes up to the mode band
+    // count without padding (RGBA pads a 3-tuple to opaque), and matches
+    // existing entries by the exact tuple.
+    let mode_len = if mode == "RGBA" { 4 } else { 3 };
+    let mut stored = color.to_vec();
+    if mode == "RGBA" && stored.len() == 3 {
+        stored.push(255);
+    }
+    if stored.len() > mode_len {
+        stored.truncate(mode_len);
+    }
+    let entries = palette.len() / mode_len;
+    for i in 0..entries {
+        let start = i * mode_len;
+        if palette.get(start..start + stored.len()) == Some(&stored[..]) {
+            return Ok(i);
+        }
+    }
+    let idx = entries;
+    if idx >= 256 {
+        return Err("cannot allocate more than 256 colors".into());
+    }
+    palette.extend_from_slice(&stored);
+    Ok(idx)
 }

@@ -8,8 +8,8 @@ not parity proof and does not change the manifest or lane inputs.
 generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: c0feac4998e1a9013ce2ab33acea194510bba998f6714ab3e020dcf4d5738f00
-coverage_run_id: migration-coverage-1152a9bd3bc245038031bc042c400ea6
+manifest_sha256: abb25ed0681baf2d7404711e52bfadb954c2b449d7eec4e6facfce7b76f8201d
+coverage_run_id: migration-coverage-ab461567af9745d6b630ce86be15b111
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%
@@ -25,7 +25,7 @@ component's measured coverage by design.
 
 ## Operations below 90% region coverage
 
-127 of 204 coverage-required operations are below 90%.
+119 of 204 coverage-required operations are below 90%.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -122,14 +122,6 @@ component's measured coverage by design.
 | `PIL.Image.new` | `image-core` | 5626/7052 | 79.8% |
 | `PIL.Image.open` | `image-core` | 5626/7052 | 79.8% |
 | `PIL.Image.radial_gradient` | `image-core` | 5626/7052 | 79.8% |
-| `PIL.ImageColor.getcolor` | `image-color` | 801/983 | 81.5% |
-| `PIL.ImageColor.getrgb` | `image-color` | 801/983 | 81.5% |
-| `PIL.ImagePalette.ImagePalette` | `image-palette` | 801/983 | 81.5% |
-| `PIL.ImagePalette.ImagePalette.copy` | `image-palette` | 801/983 | 81.5% |
-| `PIL.ImagePalette.ImagePalette.getcolor` | `image-palette` | 801/983 | 81.5% |
-| `PIL.ImagePalette.ImagePalette.getdata` | `image-palette` | 801/983 | 81.5% |
-| `PIL.ImagePalette.ImagePalette.save` | `image-palette` | 801/983 | 81.5% |
-| `PIL.ImagePalette.ImagePalette.tobytes` | `image-palette` | 801/983 | 81.5% |
 | `PIL.ImageFont.FreeTypeFont` | `image-font` | 2212/2514 | 88.0% |
 | `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 2212/2514 | 88.0% |
 | `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 2212/2514 | 88.0% |
@@ -161,8 +153,6 @@ component's measured coverage by design.
 
 | Component | File | Region coverage | Percent |
 | --- | --- | ---: | ---: |
-| `image-color` | `pillow-rs/src/color.rs` | 801/983 | 81.5% |
-| `image-color` | `pillow-rs-py/python/pillow_rs/imagecolor.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs/src/lib.rs` | 99/217 | 45.6% |
 | `image-core` | `pillow-rs/src/ops/crop.rs` | 18/36 | 50.0% |
 | `image-core` | `pillow-rs/src/image.rs` | 2387/3425 | 69.7% |
@@ -185,8 +175,6 @@ component's measured coverage by design.
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 509/554 | 91.9% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1435/1472 | 97.5% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
-| `image-palette` | `pillow-rs/src/color.rs` | 801/983 | 81.5% |
-| `image-palette` | `pillow-rs-py/python/pillow_rs/imagepalette.py` | 0/0 | n/a |
 | `image-sequence` | `pillow-rs/src/image.rs` | 2387/3425 | 69.7% |
 | `image-sequence` | `pillow-rs-py/python/pillow_rs/imagesequence.py` | 0/0 | n/a |
 

@@ -274,6 +274,135 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-tuple-append",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                128
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.short-tuple-append",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                2
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

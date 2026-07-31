@@ -36,9 +36,14 @@
           "PIL.ImagePalette.ImagePalette.getcolor.parameter.image",
           "PIL.ImagePalette.ImagePalette.getdata.behavior.default",
           "PIL.ImagePalette.ImagePalette.save.behavior.default",
-          "PIL.ImagePalette.ImagePalette.tobytes.behavior.default"
+          "PIL.ImagePalette.ImagePalette.tobytes.behavior.default",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-tuple-append",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.short-tuple-append"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-imagepalette-native"
+        ]
       },
       "component_ids": [
         "image-palette"
