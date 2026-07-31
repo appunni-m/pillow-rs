@@ -261,6 +261,7 @@ class WorkflowBuilder:
     scenario_font_size: float | None = None
     scenario_transposed_orientation: Any | None = None
     scenario_bitmap_mode: str | None = None
+    scenario_bitmap_color: int | None = None
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
     scenario_asset: str | None = None
@@ -408,7 +409,11 @@ class WorkflowBuilder:
             arguments={
                 "mode": literal(requested_mode),
                 "size": literal(size),
-                "color": literal(0),
+                "color": literal(
+                    self.scenario_bitmap_color
+                    if label == "bitmap" and self.scenario_bitmap_color is not None
+                    else 0
+                ),
             },
             step_id=self.next_step_id(f"setup-{label}"),
         )
@@ -1172,6 +1177,7 @@ def build_parity_case(
     scenario_font_size: float | None = None,
     scenario_transposed_orientation: Any | None = None,
     scenario_bitmap_mode: str | None = None,
+    scenario_bitmap_color: int | None = None,
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
     scenario_asset: str | None = None,
@@ -1207,6 +1213,7 @@ def build_parity_case(
         scenario_font_size=scenario_font_size,
         scenario_transposed_orientation=scenario_transposed_orientation,
         scenario_bitmap_mode=scenario_bitmap_mode,
+        scenario_bitmap_color=scenario_bitmap_color,
         scenario_im_mode=scenario_im_mode,
         scenario_mask_mode=scenario_mask_mode,
         scenario_asset=scenario_asset,
@@ -1493,9 +1500,10 @@ def build_nuanced_cases(
             "name": "canvas-la",
             "mode": "LA",
             "bitmap_mode": "L",
+            "bitmap_color": 255,
             "values": {
                 "xy": literal([2, 2]),
-                "fill": literal([255, 0, 0, 255]),
+                "fill": literal([255, 255]),
             },
         },
         {
@@ -1505,6 +1513,7 @@ def build_nuanced_cases(
             "name": "canvas-cmyk",
             "mode": "CMYK",
             "bitmap_mode": "L",
+            "bitmap_color": 255,
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
@@ -1517,9 +1526,10 @@ def build_nuanced_cases(
             "name": "canvas-p",
             "mode": "P",
             "bitmap_mode": "L",
+            "bitmap_color": 255,
             "values": {
                 "xy": literal([2, 2]),
-                "fill": literal([255, 0, 0, 255]),
+                "fill": literal(255),
             },
         },
         {
@@ -1529,6 +1539,7 @@ def build_nuanced_cases(
             "name": "canvas-rgba-rgba-mask",
             "mode": "RGBA",
             "bitmap_mode": "RGBA",
+            "bitmap_color": 255,
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
@@ -1541,9 +1552,232 @@ def build_nuanced_cases(
             "name": "canvas-l-one-mask",
             "mode": "L",
             "bitmap_mode": "1",
+            "bitmap_color": 1,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-1-one-mask",
+            "mode": "1",
+            "bitmap_mode": "1",
+            "bitmap_color": 1,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-l-mask",
+            "mode": "L",
+            "bitmap_mode": "L",
+            "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-rgb-l-mask",
+            "mode": "RGB",
+            "bitmap_mode": "L",
+            "bitmap_color": 255,
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l",
+            "mode": "L",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-1",
+            "mode": "1",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-la",
+            "mode": "LA",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-cmyk",
+            "mode": "CMYK",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-p",
+            "mode": "P",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "nested-box",
+            "values": {
+                "xy": literal([[0, 0], [8, 8]]),
+                "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "flat-points",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "paired-points",
+            "values": {
+                "xy": literal([[0, 0], [8, 0], [8, 8], [0, 8]]),
+                "fill": literal([0, 255, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "flat-points",
+            "values": {
+                "xy": literal([2, 2, 8, 8]),
+                "fill": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rounded_rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "radius-zero-fallback",
+            "values": {
+                "xy": literal([0, 0, 10, 10]),
+                "radius": literal(0),
+                "fill": literal([200, 100, 50]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l",
+            "mode": "L",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-1",
+            "mode": "1",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-la",
+            "mode": "LA",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal([255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-cmyk",
+            "mode": "CMYK",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-p",
+            "mode": "P",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "ellipse",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-la",
+            "mode": "LA",
+            "values": {
+                "xy": literal([0, 0, 12, 12]),
+                "fill": literal([255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-cmyk",
+            "mode": "CMYK",
+            "values": {
+                "xy": literal([[0, 0], [10, 0], [10, 10], [0, 10]]),
+                "fill": literal(255),
             },
         },
         {
@@ -2839,6 +3073,7 @@ def build_nuanced_cases(
                 scenario_font_size=spec.get("font_size"),
                 scenario_transposed_orientation=spec.get("orientation"),
                 scenario_bitmap_mode=spec.get("bitmap_mode"),
+                scenario_bitmap_color=spec.get("bitmap_color"),
                 scenario_im_mode=spec.get("im_mode"),
                 scenario_mask_mode=spec.get("mask_mode"),
             )

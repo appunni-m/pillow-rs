@@ -19,7 +19,7 @@ lane: parity
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `parity_outcome` | `python-cpu` | 0 | 1327 | `not_proven` |
+| `parity_outcome` | `python-cpu` | 0 | 1347 | `not_proven` |
 
 ## Interpretation
 

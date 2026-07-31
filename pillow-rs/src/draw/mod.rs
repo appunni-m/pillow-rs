@@ -444,7 +444,7 @@ impl Draw {
                 let (img_w, img_h) = (img.width(), img.height());
                 let mut la = img.to_luma_alpha8();
                 let ink_l = color.0;
-                let ink_a = 255u8;
+                let ink_a = color.3;
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
                         let m = mask_val(px, py, &raw_data);
@@ -455,16 +455,13 @@ impl Draw {
                         let dy = y + py as i32;
                         if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
                             let existing = la.get_pixel(dx as u32, dy as u32);
-                            let l = if m == 255 {
-                                ink_l
-                            } else {
-                                pil_blend(existing[0], ink_l, m)
-                            };
-                            let a = if m == 255 {
-                                ink_a
-                            } else {
-                                pil_blend(existing[1], ink_a, m)
-                            };
+                            // Pillow's `fill_mask_L` adjusts the L-channel
+                            // coverage against the destination alpha: with a
+                            // fully transparent destination the L ink is
+                            // written directly (`src/libImaging/Paste.c`).
+                            let l_mask = if existing[1] == 0 { 255 } else { m };
+                            let l = pil_blend(existing[0], ink_l, l_mask);
+                            let a = pil_blend(existing[1], ink_a, m);
                             la.put_pixel(dx as u32, dy as u32, crate::raster::LumaA([l, a]));
                         }
                     }
@@ -479,7 +476,7 @@ impl Draw {
                 let img = self.image.materialize()?;
                 let (img_w, img_h) = (img.width(), img.height());
                 let mut rgba = img.to_rgba8();
-                let ink = [color.0, 0u8, 0u8, 0u8];
+                let ink = [color.0, color.1, color.2, color.3];
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
                         let m = mask_val(px, py, &raw_data);
@@ -1239,12 +1236,14 @@ impl Draw {
                 Ok(())
             }
             "LA" => {
-                // Anti-aliased per channel: L channel gets fill.0, A channel gets 0
-                // (for integer fill) or the tuple's alpha.
-                // Uses PIL's signed truncation: bg + (fg - bg) * cov / 255
+                // Anti-aliased per channel: the A channel blends the fill
+                // alpha by glyph coverage, and the L channel coverage is
+                // adjusted against the destination alpha — with a fully
+                // transparent destination the L ink is written directly
+                // (`src/libImaging/Paste.c::fill_mask_L`).
                 let mut la = img.to_luma_alpha8();
                 let ink_l = fill.0;
-                let ink_a = if is_int_fill { 0u8 } else { fill.3 };
+                let ink_a = fill.3;
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
@@ -1258,7 +1257,8 @@ impl Draw {
                         let dx = (x as u32 + px).min(img_w - 1);
                         let dy = (y as u32 + py).min(img_h - 1);
                         let bg = la.get_pixel(dx, dy);
-                        let new_l = pil_blend(ink_l, bg[0], cov);
+                        let l_cov = if bg[1] == 0 { 255 } else { cov };
+                        let new_l = pil_blend(ink_l, bg[0], l_cov);
                         let new_a = pil_blend(ink_a, bg[1], cov);
                         la.put_pixel(dx, dy, crate::raster::LumaA([new_l, new_a]));
                     }
