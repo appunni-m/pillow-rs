@@ -152,6 +152,30 @@ def run_native_cases() -> tuple[int, int, int]:
         ("putpixel-string-multi", lambda: pillow_rs.Image.new("RGB", (4, 4)).putpixel((1, 1), "red")),
         ("putpixel-bad-type", lambda: pillow_rs.Image.new("L", (4, 4)).putpixel((1, 1), 1.5)),
         ("putalpha-int", lambda: pillow_rs.Image.new("RGBA", (4, 4)).putalpha(128)),
+        (
+            "putalpha-l-mask-promotes-rgb",
+            lambda: pillow_rs.Image.new("RGB", (4, 4), (10, 20, 30)).putalpha(
+                pillow_rs.Image.new("L", (4, 4), 100)
+            ),
+        ),
+        (
+            "putalpha-l-mask-promotes-p",
+            lambda: pillow_rs.Image.new("P", (4, 4), 5).putalpha(
+                pillow_rs.Image.new("L", (4, 4), 128)
+            ),
+        ),
+        (
+            "putalpha-one-mask",
+            lambda: pillow_rs.Image.new("RGBA", (4, 4), (10, 20, 30, 40)).putalpha(
+                pillow_rs.Image.new("1", (4, 4), 1)
+            ),
+        ),
+        (
+            "putalpha-bad-mask-mode",
+            lambda: pillow_rs.Image.new("RGBA", (4, 4)).putalpha(
+                pillow_rs.Image.new("RGB", (4, 4))
+            ),
+        ),
         # tobytes/thumbnail/reduce/getdata/palette paths.
         ("tobytes-encoder-args", lambda: pillow_rs.Image.new("RGB", (2, 2)).tobytes("raw", "RGB")),
         ("thumbnail-int-resample", lambda: _thumbnail_int(pillow_rs.Image.new("RGB", (8, 8)))),

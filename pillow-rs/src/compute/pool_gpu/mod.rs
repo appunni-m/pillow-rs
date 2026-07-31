@@ -1159,6 +1159,10 @@ impl BackendImpl for GpuPool {
                     put_alpha_mode = Some(*mode);
                     out_mode = None;
                 }
+                PipelineOp::PutAlphaData { mode, .. } => {
+                    put_alpha_mode = Some(*mode);
+                    out_mode = None;
+                }
                 _ => {}
             }
         }

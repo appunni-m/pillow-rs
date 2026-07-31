@@ -544,6 +544,13 @@ pub enum PipelineOp {
         /// Logical Pillow mode of the image before alpha promotion.
         mode: PixelMode,
     },
+    /// Replaces the alpha channel from an L-mask image.
+    PutAlphaData {
+        /// L-mask pixel data.
+        mask: Arc<crate::raster::DynamicImage>,
+        /// Logical Pillow mode of the image before alpha promotion.
+        mode: PixelMode,
+    },
 
     // ── Channel extraction ──
     /// Extract one band by index.

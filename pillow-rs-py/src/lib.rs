@@ -734,6 +734,11 @@ impl PyImage {
         self.inner.putalpha(alpha).map_err(map_error)
     }
 
+    fn putalpha_data(&mut self, mask: &Bound<'_, PyImage>) -> PyResult<()> {
+        let mask_inner = mask.borrow().inner.clone();
+        self.inner.putalpha_data(&mask_inner).map_err(map_error)
+    }
+
     fn reduce(&self, x_factor: u32, y_factor: u32) -> PyResult<PyImage> {
         let rs = self.inner.reduce(x_factor, y_factor).map_err(map_error)?;
         Ok(PyImage { inner: rs })

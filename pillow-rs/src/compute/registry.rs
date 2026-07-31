@@ -397,6 +397,7 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::PutPixel { .. } => "PutPixel",
         PipelineOp::PutData { .. } => "PutData",
         PipelineOp::PutAlpha { .. } => "PutAlpha",
+        PipelineOp::PutAlphaData { .. } => "PutAlphaData",
         PipelineOp::ExtractBand { .. } => "ExtractBand",
         PipelineOp::LinearGradient { .. } => "LinearGradient",
         PipelineOp::RadialGradient { .. } => "RadialGradient",
@@ -540,6 +541,7 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::PutPixel { .. } => Some(OpId::PutPixel),
         PipelineOp::PutData { .. } => Some(OpId::PutData),
         PipelineOp::PutAlpha { .. } => Some(OpId::PutAlpha),
+        PipelineOp::PutAlphaData { .. } => Some(OpId::PutAlpha),
         // ── New GPU ops ──
         PipelineOp::CropBorder { .. } => Some(OpId::CropBorder),
         PipelineOp::Expand { .. } => Some(OpId::Expand),
@@ -761,6 +763,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── PutAlpha: alpha as u32 ──
         PipelineOp::PutAlpha { alpha, mode } => vec![*alpha as u32, mode.code()],
+        PipelineOp::PutAlphaData { mode, .. } => vec![0, mode.code()],
 
         // ── PutPixel: x, y, color packed as RGBA u32 ──
         PipelineOp::PutPixel { x, y, color, .. } => {
@@ -970,7 +973,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     use crate::compute::pool_cpu::ops::effects::{
         op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module,
         op_effect_mandelbrot, op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste,
-        op_point, op_put_alpha, op_put_data, op_put_pixel, op_transform,
+        op_point, op_put_alpha, op_put_alpha_data, op_put_data, op_put_pixel, op_transform,
     };
     use crate::compute::pool_cpu::ops::enhance::{
         op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast,
@@ -2223,6 +2226,21 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                 }
             },
             "put_alpha.wgsl"
+        ),
+    );
+    m.insert(
+        "PutAlphaData",
+        OpEntry::cpu_only(
+            |img: &DynamicImage,
+             op: &PipelineOp,
+             _mode: Option<&str>|
+             -> Result<DynamicImage, PilError> {
+                if let PipelineOp::PutAlphaData { mask, mode } = op {
+                    Ok(op_put_alpha_data(img, mask, *mode))
+                } else {
+                    Err(PilError::ValueError("expected PutAlphaData op".into()))
+                }
+            },
         ),
     );
 
