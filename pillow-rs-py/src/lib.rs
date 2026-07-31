@@ -1159,6 +1159,14 @@ impl PyImage {
                 .putpixel_mode(xy.0, xy.1, v, &mode)
                 .map_err(map_error);
         }
+        // Pillow treats a one-element tuple exactly like the scalar value
+        // (P: palette index; L/1: gray; RGB/RGBA/CMYK: first band).
+        if let Ok((v,)) = value.extract::<(u8,)>() {
+            return self
+                .inner
+                .putpixel_mode(xy.0, xy.1, v, &mode)
+                .map_err(map_error);
+        }
         if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
             return self
                 .inner
@@ -1173,6 +1181,7 @@ impl PyImage {
         }
         if let Ok(list) = value.extract::<Vec<u8>>() {
             let (r, g, b, a) = match list.len() {
+                1 => (list[0], 0, 0, 0),
                 2 => (list[0], 0, 0, list[1]),
                 3 => (list[0], list[1], list[2], 255),
                 4 => (list[0], list[1], list[2], list[3]),

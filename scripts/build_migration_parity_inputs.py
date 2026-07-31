@@ -2940,6 +2940,28 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "one-tuple-equals-scalar",
+            "mode": "RGBA",
+            "values": {
+                "xy": literal([1, 1]),
+                "value": literal([200]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-one-tuple-index",
+            "mode": "P",
+            "values": {
+                "xy": literal([1, 1]),
+                "value": literal([5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "p-indices",

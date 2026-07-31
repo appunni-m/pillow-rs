@@ -1016,6 +1016,8 @@
           "PIL.Image.Image.putpixel.nuanced.p-palette-exact-match",
           "PIL.Image.Image.putpixel.nuanced.p-palette-append",
           "PIL.Image.Image.putpixel.nuanced.p-rgba-tuple-error",
+          "PIL.Image.Image.putpixel.nuanced.one-tuple-equals-scalar",
+          "PIL.Image.Image.putpixel.nuanced.p-one-tuple-index",
           "PIL.Image.Image.putdata.nuanced.p-indices",
           "PIL.Image.Image.putdata.nuanced.rgba-flat",
           "PIL.Image.Image.save.nuanced.p-png",
