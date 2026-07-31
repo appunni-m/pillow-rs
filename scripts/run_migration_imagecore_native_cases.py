@@ -225,6 +225,30 @@ def run_native_cases() -> tuple[int, int, int]:
         # Degenerate populations exercise the empty/single-color guards.
         ("quantize-empty", lambda: Image.frombytes("RGB", (0, 0), b"").quantize(16)),
         ("quantize-single-color", lambda: Image.new("RGB", (8, 8), (10, 20, 30)).quantize(16)),
+        # Remaining wrapper surfaces: instance frombytes, closed-image access,
+        # getdata indexing, float alpha, palette/default transparency paths.
+        ("frombytes-instance", lambda: Image.new("L", (2, 2)).frombytes(b"\x01\x02\x03\x04")),
+        ("frombytes-instance-bad-decoder", lambda: Image.new("L", (2, 2)).frombytes(b"\x00", "BOGUS")),
+        ("frombytes-class-p-mode", lambda: Image.frombytes("P", (2, 2), b"\x01\x02\x03\x04")),
+        ("frombytes-class-cmyk", lambda: Image.frombytes("CMYK", (1, 1), b"\x00\x00\x00\x00")),
+        ("tobytes-encoder-mismatch", lambda: Image.new("L", (1, 1)).tobytes("raw", "BOGUS")),
+        ("putalpha-float", lambda: Image.new("RGBA", (1, 1)).putalpha(1.5)),
+        ("getdata-index", lambda: Image.new("L", (2, 2)).getdata()[0]),
+        ("getpalette-p-empty", lambda: Image.new("P", (2, 2)).getpalette()),
+        ("closed-image-attribute", lambda: _closed_attribute(Image.new("L", (1, 1)))),
+        ("image-eq-non-image", lambda: Image.new("L", (1, 1)) == "x"),
+        ("image-eq-copy", lambda: Image.new("L", (2, 2)) == Image.new("L", (2, 2)).copy()),
+        ("image-repr", lambda: repr(Image.new("L", (1, 1)))),
+        ("pixel-access-repr", lambda: repr(Image.new("L", (1, 1)).load())),
+        ("save-path-object", lambda: Image.new("RGB", (4, 4)).save("/tmp/imagecore-save3.png", format="PNG")),
+        ("convert-p-default-mode", lambda: Image.new("P", (4, 4)).convert()),
+        ("filter-callable-p", lambda: _filter_callable(Image.new("P", (4, 4)))),
+        ("filter-parametric-p", lambda: _filter_parametric(Image.new("P", (4, 4)))),
+        ("filter-p-string", lambda: Image.new("P", (4, 4)).filter("BLUR")),
+        ("transform-mesh-flat-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, [0, 0, 8, 8, 0, 0, 0, 8, 8, 8, 8, 0])),
+        ("transform-mesh-missing-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, None)),
+        ("open-path-object", lambda: Image.open("/tmp/imagecore-save3.png")),
+        ("open-missing-path", lambda: Image.open("/tmp/does-not-exist-anywhere.png")),
     ]
     for name, call in probes:
         probe(name, call)
@@ -241,6 +265,32 @@ def _pixel_access(image: Image) -> None:
     access = image.load()
     _ = access[0, 0]
     access[0, 0] = 255
+
+
+def _closed_attribute(image: Image) -> None:
+    image.close()
+    _ = image.mode
+
+
+def _filter_callable(image: Image) -> None:
+    class CallableFilter:
+        def __call__(self):
+            return self
+
+        def _apply(self, _image):
+            return _image
+
+    image.filter(CallableFilter())
+
+
+def _filter_parametric(image: Image) -> None:
+    class Parametric:
+        name = "BLUR"
+
+        def _apply(self, _image):
+            return _image
+
+    image.filter(Parametric())
 
 
 def _thumbnail_int(image: Image) -> None:
