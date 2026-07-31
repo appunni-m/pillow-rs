@@ -1,0 +1,94 @@
+schema: migration-parity/deprecated-map@1
+archive_id: migration-parity-v0
+active_manifest: pillow-rs/tests/fixtures/manifest.yaml
+active_inputs:
+  parity: pillow-rs/tests/fixtures/inputs/parity/
+  coverage: pillow-rs/tests/fixtures/inputs/coverage/
+  benchmark: pillow-rs/tests/fixtures/inputs/benchmark/
+rules:
+  active_consumers_may_read_archive: false
+  expected_outputs_are_active_inputs: false
+  archive_is_specification: false
+entries:
+  - id: root-project-manifest
+    former_paths:
+      - manifest.yaml
+    archive_path: deprecated/migration-parity-v0/manifest.yaml
+    replacement: pillow-rs/tests/fixtures/manifest.yaml
+    reason: obsolete numeric-version project inventory
+  - id: python-oracle-suite
+    former_paths:
+      - tests/conftest.py
+      - tests/test_apply_transparency_oracle.py
+      - tests/test_drawing_oracle.py
+      - tests/test_eval_errors.py
+      - tests/test_fromarray_descriptor_oracle.py
+      - tests/test_imagefont_facade_oracle.py
+      - tests/test_pa_mutations.py
+      - tests/test_paste_oracle.py
+      - tests/test_putdata_parity.py
+      - tests/deprecated/project_fixture_harness_v0/
+    archive_path: deprecated/migration-parity-v0/python/
+    replacement: scripts/run_migration_parity.py
+    reason: fixture-backed Python oracle and regression harness
+  - id: python-fixtures-and-results
+    former_paths:
+      - tests/deprecated/fixtures/
+      - tests/deprecated/fixtures_2/
+      - tests/oracles/image_open_inputs.json
+      - tests/test_reference.png
+      - tests/coverage/report.json
+    archive_path: deprecated/migration-parity-v0/fixtures/python/
+    replacement: pillow-rs/tests/fixtures/inputs/
+    reason: legacy inputs, expected outputs, reference media, and stale report
+  - id: rust-oracle-suite
+    former_paths:
+      - pillow-rs/tests/apply_transparency_oracle.rs
+      - pillow-rs/tests/backend_parity.rs
+      - pillow-rs/tests/color3dlut_oracle.rs
+      - pillow-rs/tests/eval_oracle.rs
+      - pillow-rs/tests/fromarray_descriptor_oracle.rs
+      - pillow-rs/tests/image_backend_migration.rs
+      - pillow-rs/tests/image_feature_gates.rs
+      - pillow-rs/tests/image_open_oracle.rs
+      - pillow-rs/tests/tobytes_oracle.rs
+      - pillow-rs/tests/deprecated/
+    archive_path: deprecated/migration-parity-v0/rust/
+    replacement: scripts/run_migration_parity.py
+    reason: Rust integration oracle harnesses and old Font migration system
+  - id: rust-fixtures-and-results
+    former_paths:
+      - pillow-rs/tests/fixtures/fromarray/
+      - pillow-rs/tests/fixtures/image_backend/
+      - pillow-rs/tests/fixtures/image_eval/
+    archive_path: deprecated/migration-parity-v0/fixtures/rust/
+    replacement: pillow-rs/tests/fixtures/inputs/
+    reason: encoded stimuli and expected-output backend corpora
+  - id: wasm-oracle-suite
+    former_paths:
+      - pillow-rs-js/tests/
+    archive_path: deprecated/migration-parity-v0/wasm/tests/
+    replacement: no active WASM profile; declare one before reactivation
+    reason: fixture-backed Node/browser oracle suite
+  - id: legacy-generators
+    former_paths:
+      - scripts/coverage/
+      - scripts/bench/
+      - scripts/analyze_palette_rotate.py
+      - scripts/build_and_test.sh
+      - scripts/ci_coverage.sh
+      - scripts/compare_font_coverage.sh
+      - scripts/generate_eval_error_oracle.py
+      - scripts/generate_fromarray_descriptor_oracle.py
+      - scripts/generate_image_backend_operation_fixtures.py
+      - scripts/generate_palette_save_fixture_inputs.py
+      - scripts/generate_point_fixture_inputs.py
+      - scripts/generate_putdata_fixture_inputs.py
+      - scripts/generate_stubs.py
+      - scripts/migrate_fixtures.py
+      - pillow-rs/scripts/font_oracle.py
+      - pillow-rs/scripts/generate_font_name_fallback_fixture.py
+      - pillow-rs-js/bench_page/
+    archive_path: deprecated/migration-parity-v0/scripts/
+    replacement: scripts/build_migration_parity_manifest.py, scripts/build_migration_parity_inputs.py, scripts/run_migration_*.py
+    reason: old manifest-derived coverage, benchmark, generator, and stub tooling

@@ -31,8 +31,10 @@ and refreshed with `make repo-map-update`.
 - `Cargo.toml`: workspace membership, edition, lint policy, and shared cargo
   settings.
 - `rust-toolchain.toml`: pinned toolchain and required components.
-- `manifest.yaml`: PIL-style operation inventory for generated stubs, coverage,
-  and fixture work.
+- `pillow-rs/tests/fixtures/manifest.yaml`: the fixed
+  `migration-parity/manifest@2` public-surface specification. Parity, coverage,
+  and benchmark inputs are indexed from this manifest; generated results are
+  not stored here.
 - `docs/REPO_MAP.md`: this maintained ownership and code tree map.
 
 ## Workspace Crates
@@ -84,12 +86,19 @@ and refreshed with `make repo-map-update`.
 
 ## Harness And Fixture Map
 
-- `tests/engine.py` and `tests/test_parity.py`: root PIL parity runner.
-- `scripts/generate_fixtures.py`: root PIL fixture generator.
-- `scripts/coverage/`: manifest coverage computation and validation.
-- `scripts/bench/`: root benchmark specification, runners, aggregation, and
-  baseline comparison.
-- `../fontdone/tests/coverage_matrix_tests.rs`: FreeType matrix runner.
+- `scripts/run_migration_parity.py`: live source/target runner for indexed
+  input-only workflows.
+- `scripts/run_migration_coverage.py`: target coverage producer for indexed
+  coverage plans.
+- `scripts/run_migration_benchmark.py`: correctness-gated benchmark producer
+  for indexed workloads.
+- `pillow-rs/tests/fixtures/inputs/`: the active parity, coverage, and
+  benchmark input documents; expected values and run status are prohibited.
+- `deprecated/migration-parity-v0/`: read-only provenance archive for the
+  retired fixture/oracle suites, old manifest, and old coverage/benchmark
+  tooling. It is not an active test root.
+- `../fontdone/tests/coverage_matrix_tests.rs`: separate FreeType matrix
+  runner.
 
 ## Cleanup Rules
 

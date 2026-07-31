@@ -1,9 +1,0 @@
-{
-  "format_version": 2,
-  "suite": 1,
-  "operation": {
-    "module": "Image",
-    "target": "apply_transparency"
-  },
-  "cases": []
-}

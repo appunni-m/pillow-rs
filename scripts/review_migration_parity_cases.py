@@ -24,8 +24,22 @@ from build_migration_parity_inputs import case_signature
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures"
 LEGACY_ROOTS = (
-    WORKSPACE_ROOT / "tests" / "deprecated" / "fixtures" / "input" / "jsons",
-    WORKSPACE_ROOT / "tests" / "deprecated" / "fixtures_2" / "input" / "jsons",
+    WORKSPACE_ROOT
+    / "deprecated"
+    / "migration-parity-v0"
+    / "fixtures"
+    / "python"
+    / "suite0"
+    / "input"
+    / "jsons",
+    WORKSPACE_ROOT
+    / "deprecated"
+    / "migration-parity-v0"
+    / "fixtures"
+    / "python"
+    / "suite1"
+    / "input"
+    / "jsons",
 )
 DEFAULT_OUTPUT = WORKSPACE_ROOT / "docs" / "migration-parity-case-review.md"
 

@@ -43,3 +43,7 @@ denominator.
    evidence are available for the mapped requirement.
 
 This file is a provenance record, not a result and not a second manifest.
+
+The complete former-path to archive-path to replacement mapping is maintained
+in [`migration-map.yaml`](migration-map.yaml). It is a migration record only;
+active loaders must reject it as a manifest or input document.

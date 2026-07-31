@@ -85,15 +85,18 @@ jobs:
       - name: build + test
         run: |
           maturin develop --manifest-path pillow-rs-py/Cargo.toml --release
-          python -m pytest tests/ -q --tb=short --timeout=300 --json-report --json-report-file=/tmp/report.json
+          python -m unittest tests.test_migration_parity_inventory
+          python -m unittest tests.test_migration_parity_cases
+          python scripts/check_migration_parity_inputs.py
+          make migration-parity-test
 
       - name: coverage
-        run: python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
+        run: make migration-parity-coverage
 
       - uses: actions/upload-artifact@v4
         with:
           name: coverage-py${{ matrix.python-version }}
-          path: /tmp/report.json
+          path: target/coverage/migration-parity-python.json
 
   # ── WASM: build sanity ──
   wasm:
@@ -111,4 +114,4 @@ jobs:
         with:
           tool: wasm-pack
       - working-directory: pillow-rs-js
-        run: npm run build:core && npm run build:extra && npm run test:codecs && npm run test:package
+        run: npm run build:core && npm run build:extra && npm run test:package

@@ -4,7 +4,7 @@
 #   Canonical lint script for pillow-rs. Used by both local dev and CI.
 #   Rust correctness:  rustfmt → clippy → tests → cargo-deny → cargo-audit
 #   Python bindings:  AST-based CLAUDE.md rule check
-#   Coverage:         manifest-driven trust report
+#   Migration spec:   fixed manifest/input/result contract checks
 # ============================================================================
 set -e
 cd "$(dirname "$0")/.."
@@ -127,15 +127,14 @@ fi
 # ── Python: binding-layer rule enforcement (AST-based, no loops/arithmetic/logic) ──
 check "Python binding rules" python scripts/check_bindings.py
 
-# ── Python: parity tests ──
+# ── Python: migration specification tests ──
 echo ""
-echo "=== Python parity tests ==="
-python -m pytest tests/ -q --timeout=300 --json-report --json-report-file=/tmp/report.json
-
-# ── Coverage: manifest-driven trust report ──
-echo ""
-echo "=== trust report ==="
-python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json 2>&1 | grep -E "TRUST|Total"
+echo "=== migration parity specification ==="
+python scripts/check_migration_parity_inputs.py
+python -m unittest \
+    tests.test_migration_parity_inventory \
+    tests.test_migration_parity_cases \
+    tests.test_migration_parity_evidence
 
 # ── Summary ──
 echo ""
