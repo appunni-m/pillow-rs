@@ -103,6 +103,91 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
     Ok((rgba[0], rgba[1], rgba[2], rgba[3]))
 }
 
+/// Parse Pillow's ``ImageColor.getrgb`` legacy forms without clamping.
+///
+/// Pillow 12.2.0 `ImageColor.getrgb` returns raw integer components for
+/// ``rgb(r, g, b)`` and ``rgba(r, g, b, a)`` even when they exceed 255, and
+/// rounds percent components with ``int(value * 255 / 100.0 + 0.5)``.  The
+/// css fallback below clamps to 8-bit, so the legacy forms must be parsed
+/// here before delegating.
+pub fn parse_color_str_unclamped(s: &str) -> Result<(i32, i32, i32, i32), crate::error::PilError> {
+    let lowered = s.to_ascii_lowercase();
+    let bad =
+        || crate::error::PilError::ValueError(format!("unknown color specifier: '{lowered}'"));
+    // Pillow anchors `rgb(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*)` (integer form)
+    // and a percent form `rgb(\s*(\d+)%\s*,\s*(\d+)%\s*,\s*(\d+)%\s*)`.
+    if lowered.starts_with("rgb(") {
+        let Some(rest) = lowered
+            .strip_prefix("rgb(")
+            .and_then(|r| r.strip_suffix(')'))
+        else {
+            return Err(bad());
+        };
+        let parts: Vec<&str> = rest.split(',').map(str::trim).collect();
+        if parts.len() != 3 {
+            return Err(bad());
+        }
+        let mut values = [0i32; 3];
+        let mut percent = [false; 3];
+        for (index, part) in parts.iter().enumerate() {
+            let (digits, is_percent) = match (*part).strip_suffix('%') {
+                Some(digits) => (digits, true),
+                None => (*part, false),
+            };
+            if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+                return Err(bad());
+            }
+            percent[index] = is_percent;
+            let raw: i32 = digits.parse().map_err(|_| bad())?;
+            values[index] = if is_percent {
+                (raw as f64 * 255.0 / 100.0 + 0.5) as i32
+            } else {
+                raw
+            };
+        }
+        // Mixed integer/percent forms fall through to the css parser (which
+        // clamps); Pillow matches either the all-integer or all-percent regex.
+        if percent == [true, true, true] || percent == [false, false, false] {
+            return Ok((values[0], values[1], values[2], 255));
+        }
+        return Err(bad());
+    }
+    // Pillow's rgba regex is anchored integer-only; float-alpha and other
+    // arities are rejected before the css fallback.
+    if lowered.starts_with("rgba(") {
+        let Some(rest) = lowered
+            .strip_prefix("rgba(")
+            .and_then(|r| r.strip_suffix(')'))
+        else {
+            return Err(bad());
+        };
+        let parts: Vec<&str> = rest.split(',').map(str::trim).collect();
+        if parts.len() != 4
+            || parts
+                .iter()
+                .any(|p| p.is_empty() || !p.bytes().all(|b| b.is_ascii_digit()))
+        {
+            return Err(bad());
+        }
+        let values: Vec<i32> = parts
+            .iter()
+            .map(|p| p.parse().map_err(|_| bad()))
+            .collect::<Result<_, _>>()?;
+        return Ok((values[0], values[1], values[2], values[3]));
+    }
+    // Pillow has no hsla form.
+    if lowered.starts_with("hsla(") {
+        return Err(bad());
+    }
+    let clamped = parse_color_str(s)?;
+    Ok((
+        clamped.0 as i32,
+        clamped.1 as i32,
+        clamped.2 as i32,
+        clamped.3 as i32,
+    ))
+}
+
 /// Validates Pillow's anchored integer/percent `rgb(r, g, b)` forms.
 fn legacy_rgb_components_valid(lowered: &str) -> bool {
     let Some(rest) = lowered
@@ -334,11 +419,11 @@ pub fn resolve_new_color(
 /// it explicit instead of folding it into a fixed four-tuple.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ColorValue {
-    Gray(u8),
-    GrayAlpha(u8, u8),
-    Rgb(u8, u8, u8),
-    Rgba(u8, u8, u8, u8),
-    Hsv(u8, u8, u8),
+    Gray(i32),
+    GrayAlpha(i32, i32),
+    Rgb(i32, i32, i32),
+    Rgba(i32, i32, i32, i32),
+    Hsv(i32, i32, i32),
 }
 
 /// Convert one RGB pixel to Pillow's ``colorsys.rgb_to_hsv`` 0..255 triple.
@@ -351,20 +436,23 @@ pub enum ColorValue {
     clippy::cast_precision_loss,
     reason = "int() truncation of the 0..1 colorsys floats is the public contract"
 )]
-fn rgb_to_hsv_u8(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
-    let rf = f64::from(r) / 255.0;
-    let gf = f64::from(g) / 255.0;
-    let bf = f64::from(b) / 255.0;
+fn rgb_to_hsv_i32(r: i32, g: i32, b: i32) -> (i32, i32, i32) {
+    let rf = r as f64 / 255.0;
+    let gf = g as f64 / 255.0;
+    let bf = b as f64 / 255.0;
     let maxc = rf.max(gf).max(bf);
     let minc = rf.min(gf).min(bf);
     let v = maxc;
     if minc == maxc {
-        return (0, 0, (v * 255.0) as u8);
+        return (0, 0, (v * 255.0) as i32);
     }
     let s = (maxc - minc) / maxc;
-    let rc = (maxc - rf) / (6.0 * (maxc - minc));
-    let gc = (maxc - gf) / (6.0 * (maxc - minc));
-    let bc = (maxc - bf) / (6.0 * (maxc - minc));
+    // CPython colorsys.rgb_to_hsv divides the channel deltas by the range
+    // itself (`rangec = maxc - minc`), not by 6 * range.
+    let range = maxc - minc;
+    let rc = (maxc - rf) / range;
+    let gc = (maxc - gf) / range;
+    let bc = (maxc - bf) / range;
     let h = if rf == maxc {
         bc - gc
     } else if gf == maxc {
@@ -373,19 +461,22 @@ fn rgb_to_hsv_u8(r: u8, g: u8, b: u8) -> (u8, u8, u8) {
         4.0 + gc - rc
     };
     let h = (h / 6.0).rem_euclid(1.0);
-    ((h * 255.0) as u8, (s * 255.0) as u8, (v * 255.0) as u8)
+    ((h * 255.0) as i32, (s * 255.0) as i32, (v * 255.0) as i32)
 }
 
 pub fn getcolor(
-    r: u8,
-    g: u8,
-    b: u8,
-    a: u8,
+    r: i32,
+    g: i32,
+    b: i32,
+    a: i32,
     mode: &str,
 ) -> Result<ColorValue, crate::error::PilError> {
-    let luma = rgb_to_luma_u8(r, g, b);
+    // Pillow's getcolor computes from the raw (unclamped) parsed components:
+    // `(r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16` and colorsys HSV on
+    // r/255, so out-of-range values like rgb(300,0,0) produce 90 / (0,255,300).
+    let luma = (r * 19595 + g * 38470 + b * 7471 + 0x8000) >> 16;
     if mode == "HSV" {
-        let (h, s, v) = rgb_to_hsv_u8(r, g, b);
+        let (h, s, v) = rgb_to_hsv_i32(r, g, b);
         return Ok(ColorValue::Hsv(h, s, v));
     }
     if matches!(mode, "L" | "LA" | "1" | "I" | "F" | "I;16" | "I;16B") {
