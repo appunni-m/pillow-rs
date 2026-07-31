@@ -401,6 +401,11 @@ class WorkflowBuilder:
             and label not in {"image", "mask"}
         ):
             size = [32, 32]
+        elif (
+            self.edge == "source-smaller-than-dest"
+            and label not in {"image", "mask"}
+        ):
+            size = [8, 8]
         elif self.edge == "mask-size-mismatch" and label == "mask":
             size = [8, 8]
         step_id = self.add_step(
@@ -2989,6 +2994,132 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "values": {
                 "dest": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-larger-than-dest",
+            "mode": "RGBA",
+            "edge": "source-larger-than-dest",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-smaller-than-dest",
+            "mode": "RGBA",
+            "edge": "source-smaller-than-dest",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-four-tuple",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([2, 2, 8, 8]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-smaller-offset-dest",
+            "mode": "RGBA",
+            "edge": "source-smaller-than-dest",
+            "values": {
+                "dest": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-dest-mode-error",
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-dest-rgb-source-mode-error",
+            "mode": "RGBA",
+            "im_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-rgb-four-tuple",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-ycbcr-four-tuple",
+            "mode": "YCbCr",
+            "values": {
+                "im": literal([255, 0, 0, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-hsv-four-tuple",
+            "mode": "HSV",
+            "values": {
+                "im": literal([255, 0, 0, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-pa-int",
+            "mode": "PA",
+            "values": {
+                "im": literal(7),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-pa-two-tuple",
+            "mode": "PA",
+            "values": {
+                "im": literal([7, 3]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-from-p",
+            "mode": "PA",
+            "im_mode": "P",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "i-two-tuple-mode-error",
+            "mode": "I",
+            "values": {
+                "im": literal([1, 2]),
+                "box": literal([1, 1, 5, 5]),
             },
         },
         {
