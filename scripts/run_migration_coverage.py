@@ -175,7 +175,22 @@ def file_dimensions(path: Path, data: dict[str, Any] | None) -> list[dict[str, A
             for dimension in ("function", "line", "branch", "region")
         ]
     summary = data.get("summary", {})
-    missing = data.get("missing_lines", [])
+
+    def uncovered(values: list[Any]) -> list[int]:
+        """Normalize coverage.py/llvm-cov gap locations to line numbers.
+
+        coverage.py emits branch gaps as ``[from, to]`` pairs; llvm-cov emits
+        plain line numbers.  The strict result contract only stores
+        repository-native locations, so pairs are reduced to their start line.
+        """
+
+        result: set[int] = set()
+        for value in values:
+            if isinstance(value, (list, tuple)):
+                value = value[0] if value else 0
+            result.add(int(value))
+        return sorted(result)
+
     return [
         {
             "dimension": "function",
@@ -187,17 +202,23 @@ def file_dimensions(path: Path, data: dict[str, Any] | None) -> list[dict[str, A
             "dimension": "line",
             "covered": int(summary.get("covered_lines", 0)),
             "total": int(summary.get("num_statements", 0)),
-            "uncovered": [int(line) for line in missing],
+            "uncovered": uncovered(data.get("missing_lines", [])),
         },
         {
             "dimension": "branch",
             "covered": int(summary.get("covered_branches", 0)),
             "total": int(summary.get("num_branches", 0)),
-            "uncovered": [],
+            "uncovered": uncovered(data.get("missing_branches", [])),
         },
-        # coverage.py has no region metric.  A zero-total dimension is marked
-        # not_proven below rather than being treated as a passing 100% rate.
-        {"dimension": "region", "covered": 0, "total": 0, "uncovered": []},
+        # coverage.py has no region metric; the Rust LLVM lane supplies it.
+        # A zero-total dimension is marked not_proven below rather than being
+        # treated as a passing 100% rate.
+        {
+            "dimension": "region",
+            "covered": int(summary.get("covered_regions", 0)),
+            "total": int(summary.get("num_regions", 0)),
+            "uncovered": uncovered(data.get("missing_regions", [])),
+        },
     ]
 
 
@@ -235,19 +256,11 @@ def coverage_case_failed(observations: list[dict[str, Any]]) -> bool:
     return False
 
 
-def build_plan_result(
+def build_components(
     plan: dict[str, Any],
-    plan_input_path: str,
-    case_results: dict[str, dict[str, Any]],
     component_index: dict[str, dict[str, Any]],
     files: dict[Path, dict[str, Any]],
-) -> dict[str, Any]:
-    selected_ids = list(plan["selectors"]["parity_case_ids"])
-    tests_failed = sum(
-        1
-        for case_id in selected_ids
-        if coverage_case_failed(case_results[case_id]["observations"])
-    )
+) -> list[dict[str, Any]]:
     components: list[dict[str, Any]] = []
     for component_id in plan["component_ids"]:
         component = component_index[component_id]
@@ -286,6 +299,22 @@ def build_plan_result(
                 "thresholds": thresholds,
             }
         )
+    return components
+
+
+def build_plan_result(
+    plan: dict[str, Any],
+    plan_input_path: str,
+    case_results: dict[str, dict[str, Any]],
+    component_index: dict[str, dict[str, Any]],
+    files: dict[Path, dict[str, Any]],
+) -> dict[str, Any]:
+    selected_ids = list(plan["selectors"]["parity_case_ids"])
+    tests_failed = sum(
+        1
+        for case_id in selected_ids
+        if coverage_case_failed(case_results[case_id]["observations"])
+    )
     return {
         "plan_id": plan["plan_id"],
         "target_profile": plan["target_profile"],
@@ -299,7 +328,7 @@ def build_plan_result(
             "tests_passed": len(selected_ids) - tests_failed,
             "tests_failed": tests_failed,
         },
-        "components": components,
+        "components": build_components(plan, component_index, files),
     }
 
 
