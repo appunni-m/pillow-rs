@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1317
-- Unique active workflow signatures: 1317
+- Active parity workflows: 1321
+- Unique active workflow signatures: 1321
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 148
+- Deliberate nuanced workflows: 152
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 108 |
-| `PIL.Image.Image` | 498 |
+| `PIL.Image.Image` | 501 |
 | `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 12 |
 | `PIL.ImageDraw` | 3 |
@@ -42,7 +42,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 6 |
 | `PIL.ImageSequence` | 2 |
-| `PIL.ImageStat` | 4 |
+| `PIL.ImageStat` | 5 |
 | `PIL.ImageStat.Stat` | 32 |
 
 ## Deprecated corpus accounting
@@ -108,9 +108,12 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putdata.nuanced.f-mode`
 - `PIL.Image.Image.putdata.nuanced.i-mode`
 - `PIL.Image.Image.putdata.nuanced.la-tuples`
+- `PIL.Image.Image.putdata.nuanced.p-indices`
+- `PIL.Image.Image.putdata.nuanced.rgba-flat`
 - `PIL.Image.Image.putdata.nuanced.rgba-tuples`
 - `PIL.Image.Image.putdata.nuanced.scale-offset`
 - `PIL.Image.Image.putpixel.nuanced.p-index`
+- `PIL.Image.Image.putpixel.nuanced.p-rgba-tuple-error`
 - `PIL.Image.Image.putpixel.nuanced.p-tuple`
 - `PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
@@ -206,6 +209,7 @@ are not copied into the active lane by name.
 - `PIL.ImageStat.Stat.extrema.nuanced.i-mode`
 - `PIL.ImageStat.Stat.extrema.nuanced.one-mode`
 - `PIL.ImageStat.Stat.extrema.nuanced.p-mode`
+- `PIL.ImageStat.Stat.nuanced.from-histogram-list`
 
 These cases cover high-risk behavior families that a broad default
 matrix does not distinguish: Unicode/combining/multiline font text,

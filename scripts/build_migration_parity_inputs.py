@@ -2188,6 +2188,50 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-rgba-tuple-error",
+            "mode": "P",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([10, 20, 30, 40]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "p-indices",
+            "mode": "P",
+            "values": {
+                "data": literal([0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-flat",
+            "mode": "RGBA",
+            "values": {
+                "data": literal(
+                    [255, 0, 0, 128] * 9
+                ),
+            },
+        },
+        {
+            "surface": "PIL.ImageStat",
+            "operation": "Stat",
+            "requirement_suffix": "behavior.default",
+            "name": "from-histogram-list",
+            "values": {
+                "image_or_list": literal(
+                    [10 if index == 5 else 54 if index == 200 else 0 for index in range(256)]
+                ),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "save",
             "requirement_suffix": "behavior.default",
             "name": "p-png",
