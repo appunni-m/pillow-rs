@@ -219,6 +219,10 @@ class AssetStore:
             return str(path)
         if name == "identity-callable":
             return lambda value: value
+        if name == "clamp-shift-callable":
+            # Return values outside the [0, 255] LUT range so both adapters
+            # exercise Pillow's CLIP8 saturation in `_imaging.c::_point`.
+            return lambda value: value + 100
         if name in {"font-byte-stream", "in-memory-byte-stream"}:
             return io.BytesIO()
         raise ValueError(f"unsupported builtin asset: {name}")

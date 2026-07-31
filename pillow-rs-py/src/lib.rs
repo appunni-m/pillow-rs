@@ -1506,7 +1506,16 @@ fn make_lut(func: &Bound<'_, PyAny>, n_bands: u32) -> PyResult<Vec<u8>> {
         let v = result.extract::<i32>().map_err(|_| {
             pyo3::exceptions::PyValueError::new_err("LUT function must return an integer")
         })?;
-        table.push((v & 0xFF) as u8);
+        // Pillow 12.2.0 `_imaging.c::_point` maps each function output through
+        // CLIP8 (ImagingUtils.h), saturating to [0, 255]; wrapping with a mask
+        // would diverge for out-of-range function values.
+        table.push(if v <= 0 {
+            0
+        } else if v < 256 {
+            v as u8
+        } else {
+            255
+        });
     }
     if n_bands > 1 {
         table = table.repeat(n_bands as usize);
