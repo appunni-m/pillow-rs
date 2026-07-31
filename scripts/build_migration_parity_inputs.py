@@ -262,6 +262,7 @@ class WorkflowBuilder:
     scenario_transposed_orientation: Any | None = None
     scenario_bitmap_mode: str | None = None
     scenario_bitmap_color: int | None = None
+    scenario_size: list[int] | None = None
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
     scenario_asset: str | None = None
@@ -388,7 +389,7 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
-        size = [16, 16]
+        size = self.scenario_size or [16, 16]
         if self.edge == "zero-width":
             size = [0, 16]
         elif self.edge == "zero-height":
@@ -1178,6 +1179,7 @@ def build_parity_case(
     scenario_transposed_orientation: Any | None = None,
     scenario_bitmap_mode: str | None = None,
     scenario_bitmap_color: int | None = None,
+    scenario_size: list[int] | None = None,
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
     scenario_asset: str | None = None,
@@ -1214,6 +1216,7 @@ def build_parity_case(
         scenario_transposed_orientation=scenario_transposed_orientation,
         scenario_bitmap_mode=scenario_bitmap_mode,
         scenario_bitmap_color=scenario_bitmap_color,
+        scenario_size=scenario_size,
         scenario_im_mode=scenario_im_mode,
         scenario_mask_mode=scenario_mask_mode,
         scenario_asset=scenario_asset,
@@ -1649,6 +1652,87 @@ def build_nuanced_cases(
             "mode": "P",
             "values": {
                 "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-p-small",
+            "mode": "P",
+            "size": [8, 8],
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-small",
+            "mode": "L",
+            "size": [8, 8],
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-one-small",
+            "mode": "1",
+            "size": [8, 8],
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-rgba-tuple-fill",
+            "mode": "RGBA",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([255, 0, 0, 128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-ycbcr",
+            "mode": "YCbCr",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-hsv",
+            "mode": "HSV",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-position",
+            "mode": "P",
+            "values": {
+                "text": literal("A"),
+                "xy": literal([-3, -3]),
                 "fill": literal(255),
             },
         },
@@ -3384,6 +3468,7 @@ def build_nuanced_cases(
                 scenario_transposed_orientation=spec.get("orientation"),
                 scenario_bitmap_mode=spec.get("bitmap_mode"),
                 scenario_bitmap_color=spec.get("bitmap_color"),
+                scenario_size=spec.get("size"),
                 scenario_im_mode=spec.get("im_mode"),
                 scenario_mask_mode=spec.get("mask_mode"),
             )
