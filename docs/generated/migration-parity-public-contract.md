@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: dd171a9c7823b663abcfb46c9953694a67e888448de5027682b84b963347517f
+manifest_sha256: 739363bdef369386eadd04d7c653c5f4c3275d24af41b6315c77d7a7db3244e5
 statement_status: declared
 ```
 
@@ -19,7 +19,7 @@ statement_status: declared
 - Public surfaces: 22
 - Operations: 204
 - Requirements: 1780
-- Indexed parity cases: 1221
+- Indexed parity cases: 1231
 - Indexed coverage plans: 22
 - Indexed benchmark workloads: 203
 
