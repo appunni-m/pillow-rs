@@ -1064,8 +1064,8 @@ surfaces:
             reason: null
     targets:
     - target_id: pillow-rs-python
-      path: pillow_rs.Image.effect_noise
-      signature: 'effect_noise(size: Tuple[int, int], sigma: float) -> ''Image'''
+      path: pillow_rs.effect_noise
+      signature: 'effect_noise(size: tuple[int, int], sigma: float) -> pillow_rs.image.Image'
       support:
         status: supported
     requirements:
@@ -1182,8 +1182,8 @@ surfaces:
             reason: null
     targets:
     - target_id: pillow-rs-python
-      path: pillow_rs.Image.eval
-      signature: eval(image, *args)
+      path: pillow_rs.eval
+      signature: 'eval(image: pillow_rs.image.Image, *args)'
       support:
         status: supported
     requirements:

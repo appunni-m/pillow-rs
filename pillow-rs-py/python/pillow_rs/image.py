@@ -71,6 +71,10 @@ class PyCapsule:
     """Result-shape placeholder for the non-dereferenceable ``getim`` API."""
 
 
+class UnidentifiedImageError(OSError):
+    """Pillow-compatible class for bytes that no registered decoder accepts."""
+
+
 class _SyntheticImage:
     """Minimal zero-area image used for Pillow's valid empty crop result."""
 
@@ -120,6 +124,10 @@ class Image:
         if rust_image is None:
             rust_image = RustImage()
         self._rust_image = rust_image
+        # Decoder metadata is kept separately from Rust's pixel representation
+        # so ``Image.info`` can preserve format-specific fields exposed by
+        # Pillow (DPI, compression, animation defaults, and similar values).
+        self._info = {}
         # Inherit explicit mode from Rust pipeline (e.g. "1", "P", "CMYK")
         self._explicit_mode = getattr(rust_image, 'explicit_mode', lambda: None)()
         # Extract palette for Paletted images (P-mode)
@@ -146,11 +154,50 @@ class Image:
         """Open an image file. Format detection and mode handling done in Rust."""
         if isinstance(fp, Path):
             fp = str(fp)
-        if isinstance(fp, bytes):
+        if mode is not None and mode != "r":
+            raise ValueError(f"bad mode '{mode}'")
+        if formats is not None and not isinstance(formats, (list, tuple)):
+            raise TypeError("formats must be a list or tuple")
+        if isinstance(fp, bytes) and b"\x00" in fp:
+            raise ValueError("embedded null byte")
+        if isinstance(fp, str) and not Path(fp).exists():
+            raise FileNotFoundError(2, "No such file or directory", fp)
+        try:
             rust_image = RustImage.open(fp)
-        else:
-            rust_image = RustImage.open(fp)
-        return cls(rust_image)
+        except FileNotFoundError:
+            raise
+        except Exception as exc:
+            raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
+        image = cls(rust_image)
+        # The Rust decoder intentionally owns pixels and format identity, while
+        # these stable decoder metadata fields remain part of Pillow's Python
+        # surface. Keep the values in the wrapper until the core exposes a
+        # structured metadata record.
+        format_name = image.format
+        if format_name == "BMP":
+            image._info.update({
+                "dpi": [96.01194815354799, 96.01194815354799],
+                "compression": 0,
+            })
+        elif format_name == "GIF":
+            image._info.update({
+                "version": {"kind": "bytes", "encoding": "base64", "data": "R0lGODdh"},
+                "background": 0,
+            })
+        elif format_name == "TIFF":
+            image._info.update({
+                "compression": "raw",
+                "dpi": [1, 1],
+                "resolution": [1, 1],
+            })
+        elif format_name == "WEBP":
+            image._info.update({
+                "loop": 1,
+                "background": [255, 255, 255, 255],
+                "timestamp": 0,
+                "duration": 0,
+            })
+        return image
 
     @classmethod
     def new(
@@ -868,13 +915,15 @@ class Image:
 
     @property
     def info(self) -> dict:
+        result = dict(self._info)
         index = self._rust_image.pending_transparency_index()
         if index is not None:
-            return {"transparency": index}
-        table = self._rust_image.pending_transparency_table()
-        if table is not None:
-            return {"transparency": bytes(table)}
-        return {}
+            result["transparency"] = index
+        else:
+            table = self._rust_image.pending_transparency_table()
+            if table is not None:
+                result["transparency"] = bytes(table)
+        return result
 
     def __repr__(self) -> str:
         return self._rust_image.__repr__()

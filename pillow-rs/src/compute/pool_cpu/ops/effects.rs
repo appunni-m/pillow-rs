@@ -425,6 +425,55 @@ pub fn op_blend_module(
         }
         return Ok(DynamicImage::ImageRgba8(out));
     }
+
+    // Pillow blends every stored channel independently. Converting LA/RGBA
+    // through RGB manufactures an opaque alpha channel, which is observable
+    // even for transparent black inputs.
+    if matches!(img, DynamicImage::ImageLumaA8(_)) {
+        let first = img.to_luma_alpha8();
+        let second = other_img.to_luma_alpha8();
+        let (w, h) = (first.width(), first.height());
+        let mut out = GrayAlphaImage::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                let p1 = first.get_pixel(x, y);
+                let p2 = second.get_pixel(x, y);
+                out.put_pixel(
+                    x,
+                    y,
+                    crate::raster::LumaA([
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
+                    ]),
+                );
+            }
+        }
+        return Ok(DynamicImage::ImageLumaA8(out));
+    }
+    if matches!(img, DynamicImage::ImageRgba8(_)) {
+        let first = img.to_rgba8();
+        let second = other_img.to_rgba8();
+        let (w, h) = (first.width(), first.height());
+        let mut out = RgbaImage::new(w, h);
+        for y in 0..h {
+            for x in 0..w {
+                let p1 = first.get_pixel(x, y);
+                let p2 = second.get_pixel(x, y);
+                out.put_pixel(
+                    x,
+                    y,
+                    crate::raster::Rgba([
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
+                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
+                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a) as u8,
+                    ]),
+                );
+            }
+        }
+        return Ok(DynamicImage::ImageRgba8(out));
+    }
+
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
     let (w, h) = (

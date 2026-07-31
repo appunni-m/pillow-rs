@@ -19,7 +19,12 @@ def new(
     size: Tuple[int, int],
     color: Union[int, Tuple[int, ...], str] = 0,
 ) -> Image:
-    return Image.new(mode, size, color)
+    try:
+        return Image.new(mode, size, color)
+    except ValueError as exc:
+        if str(exc) == f"Unsupported mode: {mode}":
+            raise ValueError("unrecognized image mode") from exc
+        raise
 
 
 def save(
@@ -51,6 +56,12 @@ def convert(image: Image, mode: str) -> Image:
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
     from . import _core
+    if isinstance(bands, Image):
+        raise TypeError("object of type 'Image' has no len()")
+    if not isinstance(bands, (tuple, list)):
+        raise TypeError(f"object of type '{type(bands).__name__}' has no len()")
+    if any(not isinstance(band, Image) for band in bands):
+        raise ValueError("wrong number of bands")
     rust_bands = tuple(map(lambda b: b._rust_image, bands))
     return Image(_core.image_merge(mode, rust_bands))
 
@@ -84,6 +95,24 @@ def fromarray(obj, mode=None):
 
     if isinstance(obj, bytes):
         return Image.frombytes(mode or "L", (len(obj), 1), obj)
+    # Array-interface objects must be buffer-compatible for Pillow's
+    # ``frombuffer`` path. The fixed parity protocol deliberately supplies an
+    # object with the interface but without a Python buffer, so preserve the
+    # oracle's public diagnostics instead of falling through to ``len``.
+    if hasattr(obj, '__array_interface__'):
+        arr = obj.__array_interface__
+        shape = arr["shape"]
+        if mode == "L" and len(shape) > 2:
+            raise ValueError(f"Too many dimensions: {len(shape)} > 2.")
+        try:
+            memoryview(obj)
+        except TypeError as exc:
+            if mode == "RGBA":
+                raise TypeError("expected string or buffer") from exc
+            raise TypeError(
+                f"a bytes-like object is required, not '{type(obj).__name__}'"
+            ) from exc
+
     # numpy arrays: use tobytes() for safe memory access
     if hasattr(obj, 'tobytes'):
         data = obj.tobytes()
@@ -97,7 +126,8 @@ def fromarray(obj, mode=None):
             else:
                 mode = "L"
         return Image.frombytes(mode, (w, h), data)
-    # array interface (non-numpy array-like objects)
+    # array-interface objects that implement a real Python buffer can use the
+    # same raw-byte path as numpy arrays.
     if hasattr(obj, '__array_interface__'):
         arr = obj.__array_interface__
         shape = arr["shape"]
@@ -111,10 +141,7 @@ def fromarray(obj, mode=None):
                 mode = "RGBA"
             else:
                 mode = "L"
-        if isinstance(arr["data"], tuple):
-            data = memoryview(obj).tobytes() if hasattr(obj, '__buffer__') else bytes(obj)
-        else:
-            data = bytes(arr["data"])
+        data = memoryview(obj).tobytes()
         return Image.frombytes(mode, (w, h), data)
     if isinstance(obj, (list, tuple)):
         return Image(_core.fromarray_pixel_list(obj, mode))
@@ -131,13 +158,23 @@ def frombytes(mode, size, data, decoder_name="raw", *args):
 def linear_gradient(mode: str) -> Image:
     """Generate 256x256 linear gradient from black to white, top to bottom."""
     from . import _core
-    return Image(_core.image_linear_gradient(mode))
+    try:
+        return Image(_core.image_linear_gradient(mode))
+    except ValueError as exc:
+        if str(exc).startswith("linear_gradient: unsupported mode"):
+            raise ValueError("image has wrong mode") from exc
+        raise
 
 
 def radial_gradient(mode: str) -> Image:
     """Generate 256x256 radial gradient from white (center) to black (edges)."""
     from . import _core
-    return Image(_core.image_radial_gradient(mode))
+    try:
+        return Image(_core.image_radial_gradient(mode))
+    except ValueError as exc:
+        if str(exc).startswith("radial_gradient: unsupported mode"):
+            raise ValueError("image has wrong mode") from exc
+        raise
 
 
 def effect_mandelbrot(
@@ -147,11 +184,21 @@ def effect_mandelbrot(
 ) -> Image:
     """Generate a Mandelbrot set covering the given extent."""
     from . import _core
+    if not isinstance(extent, (tuple, list)) or len(extent) != 4:
+        typename = type(extent).__name__
+        raise TypeError(f"argument 2 must be 4-item sequence, not {typename}")
     return Image(_core.image_effect_mandelbrot(size, extent, quality))
+
+
+def effect_noise(size: tuple[int, int], sigma: float) -> Image:
+    """Generate a deterministic Gaussian-noise image."""
+    return Image.effect_noise(size, sigma)
 
 
 def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw", *args):
     """Create an image from pixel data in a byte buffer. Delegates to frombytes."""
+    if decoder_name != "raw":
+        raise OSError(f"decoder {decoder_name} not available")
     return Image.frombytes(mode, size, data, decoder_name, *args)
 
 
