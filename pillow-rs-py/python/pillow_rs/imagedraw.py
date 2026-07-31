@@ -49,6 +49,13 @@ class Draw:
             raise TypeError("coordinate list must contain at least 2 coordinates")
         return tuple((int(values[index]), int(values[index + 1])) for index in range(0, len(values), 2))
 
+    @staticmethod
+    def _text_options(anchor, direction, features, language):
+        if anchor is not None and (not isinstance(anchor, str) or len(anchor) != 2):
+            raise ValueError("anchor must be a 2 character string")
+        if direction is not None or features is not None or language is not None:
+            raise KeyError("setting text direction, language or font features is not supported without libraqm")
+
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
         if len(xy) < 2 or (
             len(xy) == 2
@@ -60,7 +67,13 @@ class Draw:
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
-        self._draw.rectangle(self._box(xy), fill, outline, width)
+        try:
+            self._draw.rectangle(self._box(xy), fill, outline, width)
+        except ValueError:
+            invalid_color = fill if isinstance(fill, str) else outline if isinstance(outline, str) else None
+            if invalid_color is None:
+                raise
+            raise ValueError(f"unknown color specifier: {invalid_color!r}") from None
         self._sync()
 
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):
@@ -91,8 +104,17 @@ class Draw:
         self._draw.circle((float(xy[0]), float(xy[1])), float(radius), fill, outline, width)
         self._sync()
 
-    def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1):
-        x0, y0, x1, y1 = int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3])
+    def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1, *, corners=None):
+        try:
+            values = tuple(xy)
+        except TypeError:
+            values = ()
+        if len(values) == 2 and all(isinstance(value, (list, tuple)) for value in values):
+            x0, y0, x1, y1 = self._box(values)
+        elif len(values) == 2:
+            raise ValueError("not enough values to unpack (expected 4, got 2)")
+        else:
+            x0, y0, x1, y1 = int(values[0]), int(values[1]), int(values[2]), int(values[3])
         self._draw.rounded_rectangle((x0, y0, x1, y1), float(radius), fill, outline, width)
         self._sync()
 
@@ -101,14 +123,16 @@ class Draw:
         self._draw.bitmap((float(xy[0]), float(xy[1])), bitmap._rust_image, fill)
         self._sync()
 
-    def _get_font(self, font):
+    def _get_font(self, font, size=None):
         """Get font, loading default if needed (PIL-compatible)."""
         if font is not None:
+            if size is not None and hasattr(font, "font_variant"):
+                return font.font_variant(size=size)
             return font
-        if self._font is not None:
+        if self._font is not None and size is None:
             return self._font
         from . import imagefont as ImageFont
-        self._font = ImageFont.load_default()
+        self._font = ImageFont.load_default(size=size)
         return self._font
 
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
@@ -121,7 +145,13 @@ class Draw:
                   stroke_fill=stroke_fill, embedded_color=embedded_color)
 
     def textbbox(self, xy, text, font=None, **kwargs):
-        font = self._get_font(font)
+        self._text_options(
+            kwargs.get("anchor"),
+            kwargs.get("direction"),
+            kwargs.get("features"),
+            kwargs.get("language"),
+        )
+        font = self._get_font(font, kwargs.get("font_size"))
         return self._draw.textbbox(
             xy,
             str(text),
@@ -134,7 +164,13 @@ class Draw:
         )
 
     def textlength(self, text, font=None, **kwargs):
-        font = self._get_font(font)
+        self._text_options(
+            kwargs.get("anchor"),
+            kwargs.get("direction"),
+            kwargs.get("features"),
+            kwargs.get("language"),
+        )
+        font = self._get_font(font, kwargs.get("font_size"))
         return self._draw.textlength(
             str(text),
             font._rust_font if hasattr(font, "_rust_font") else font,
@@ -151,7 +187,8 @@ class Draw:
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
-        font = self._get_font(font)
+        self._text_options(anchor, direction, features, language)
+        font = self._get_font(font, font_size)
         return self._draw.multiline_textbbox(
             xy,
             str(text),
@@ -167,6 +204,8 @@ class Draw:
 
     def shape(self, shape, fill=None, outline=None):
         """Draw a shape using Rust's Pillow-compatible outline semantics."""
+        if not isinstance(shape, Outline):
+            raise TypeError("expected outline object")
         self._draw.shape(shape, fill, outline)
         self._sync()
 
@@ -180,6 +219,7 @@ class Draw:
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):
+        self._text_options(anchor, direction, features, language)
         font = self._get_font(font)
         if hasattr(font, '_rust_font'):
             self._draw.text(

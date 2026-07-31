@@ -526,6 +526,14 @@ def run_case(
             step_results[step_id] = {"step_id": step_id, "status": "ok", "_value": value}
         except BaseException as exc:  # public failures are part of the contract
             error = public_error(exc)
+            if (
+                side == "target"
+                and step["surface"].startswith("PIL.ImageDraw")
+                and error["message"].startswith("Draw.")
+            ):
+                # Keep target-facade class names from leaking into the shared
+                # Pillow public error contract.
+                error["message"] = "ImageDraw." + error["message"][len("Draw.") :]
             step_results[step_id] = {
                 "step_id": step_id,
                 "status": "error",
