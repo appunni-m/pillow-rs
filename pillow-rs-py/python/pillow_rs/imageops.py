@@ -158,5 +158,5 @@ def deform(image: Image, deformer, resample=None):
     # models Pillow's protocol object with JSON lists, so normalize only the
     # protocol result at this adapter boundary.
     mesh = tuple((tuple(box), tuple(data)) for box, data in mesh)
-    result = image.transform(image.size, "MESH", mesh)
+    result = image.transform(image.size, 4, mesh)
     return result

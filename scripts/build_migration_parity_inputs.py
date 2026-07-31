@@ -749,6 +749,17 @@ class WorkflowBuilder:
             if (
                 isinstance(value, str)
                 and value in enum_values
+                and self.primary_operation == "transform"
+                and parameter_id == "resample"
+            ):
+                # Pillow's transform accepts the integer Resampling enum only;
+                # convert the symbolic generator default so the canonical
+                # resample workflow exercises a real filter instead of an
+                # error-only string.
+                value = enum_values[value]
+            if (
+                isinstance(value, str)
+                and value in enum_values
                 and "integer" in value_types
                 and "string" not in value_types
                 and "enum" not in value_types
@@ -756,6 +767,17 @@ class WorkflowBuilder:
                 value = enum_values[value]
             if value is not None:
                 return literal(value)
+
+        if (
+            self.primary_operation == "transform"
+            and self.primary_surface == "PIL.Image.Image"
+            and parameter_id in {"data", "resample"}
+        ):
+            if parameter_id == "data":
+                # Canonical transform workflows need real AFFINE data; the
+                # identity matrix exercises the full geometry pipeline.
+                return literal([1.0, 0.0, 0.0, 0.0, 1.0, 0.0])
+            return literal(0)
 
         override = self.edge_override(parameter_id, value_types)
         if override is not None:
@@ -939,6 +961,12 @@ class WorkflowBuilder:
             if "integer" in value_types and not (
                 {"string", "enum"} & value_types
             ):
+                return literal(0)
+            if name == "method" and self.primary_operation == "transform":
+                # Pillow's transform method is an integer enum (AFFINE=0,
+                # EXTENT=1, PERSPECTIVE=2, QUAD=3, MESH=4); the generic
+                # "NEAREST" default above is a resample name and would make
+                # every canonical transform case an error-only workflow.
                 return literal(0)
             return literal("NEAREST")
         if name in {"args"}:
@@ -1732,6 +1760,46 @@ def build_nuanced_cases(
             "values": {
                 "angle": literal(33.5),
                 "expand": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "behavior.default",
+            "name": "p-affine-scalar-fill",
+            "mode": "P",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(0),
+                "data": literal([1, 0, 0, 0, 1, 0]),
+                "resample": literal(3),
+                "fillcolor": literal(5),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "behavior.default",
+            "name": "p-affine-tuple-fill",
+            "mode": "P",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(0),
+                "data": literal([1, 0, 0, 0, 1, 0]),
+                "fillcolor": literal([10, 20, 30]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-affine-tuple-fill",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(0),
+                "data": literal([1, 0, 0, 0, 1, 0]),
+                "fillcolor": literal([10, 20, 30]),
             },
         },
         {
