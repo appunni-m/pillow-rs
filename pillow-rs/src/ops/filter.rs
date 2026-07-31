@@ -97,11 +97,11 @@ impl Image {
         if self.explicit_mode() == Some("I") {
             return self.filter_push(filter_type);
         }
-        // F-mode: convert to L, apply filter, convert back to F
+        // Pillow raises for built-in filters on F-mode images instead of
+        // converting; the C filter checks the mode and returns
+        // "image has wrong mode".
         if self.explicit_mode() == Some("F") {
-            let l_img = self.convert("L", None, None, None, None)?;
-            let filtered = l_img.filter(filter_type)?;
-            return filtered.convert("F", None, None, None, None);
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
         // Mode "1" (binary): stored as Luma8 (0/255), filter applies on L data.
         // No conversion needed.
@@ -177,7 +177,7 @@ impl Image {
                 let mut k = [0.0f32; 9];
                 if kernel.len() < 9 {
                     return Err(PilError::ValueError(
-                        "Kernel must have at least 9 elements for 3x3".into(),
+                        "not enough coefficients in kernel".into(),
                     ));
                 }
                 k.copy_from_slice(&kernel[..9]);
@@ -194,7 +194,7 @@ impl Image {
                 let mut k = [0.0f32; 25];
                 if kernel.len() < 25 {
                     return Err(PilError::ValueError(
-                        "Kernel must have at least 25 elements for 5x5".into(),
+                        "not enough coefficients in kernel".into(),
                     ));
                 }
                 k.copy_from_slice(&kernel[..25]);
@@ -207,7 +207,7 @@ impl Image {
                     },
                 ))
             }
-            _ => Err(PilError::ValueError("Kernel size must be 3 or 5".into())),
+            _ => Err(PilError::ValueError("bad kernel size".into())),
         }
     }
 }

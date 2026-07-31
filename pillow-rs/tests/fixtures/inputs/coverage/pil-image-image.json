@@ -1011,7 +1011,9 @@
           "PIL.Image.Image.getbbox.nuanced.alpha-only-rgba",
           "PIL.Image.Image.getbbox.nuanced.transparent-alpha-rgba",
           "PIL.Image.Image.getextrema.nuanced.nonzero-rgba",
-          "PIL.Image.Image.histogram.nuanced.nonzero-rgba"
+          "PIL.Image.Image.histogram.nuanced.nonzero-rgba",
+          "PIL.Image.Image.filter.nuanced.f-mode",
+          "PIL.Image.Image.filter.nuanced.invalid-filter"
         ],
         "command_ids": []
       },

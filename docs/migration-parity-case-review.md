@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1244
-- Unique active workflow signatures: 1244
+- Active parity workflows: 1249
+- Unique active workflow signatures: 1249
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 75
+- Deliberate nuanced workflows: 80
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 100 |
-| `PIL.Image.Image` | 461 |
+| `PIL.Image.Image` | 463 |
 | `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 12 |
 | `PIL.ImageDraw` | 3 |
@@ -33,7 +33,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageEnhance.Color` | 1 |
 | `PIL.ImageEnhance.Contrast` | 1 |
 | `PIL.ImageEnhance.Sharpness` | 1 |
-| `PIL.ImageFilter` | 101 |
+| `PIL.ImageFilter` | 104 |
 | `PIL.ImageFont` | 25 |
 | `PIL.ImageFont.FreeTypeFont` | 61 |
 | `PIL.ImageFont.ImageFont` | 10 |
@@ -75,6 +75,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.rgb-to-ycbcr`
 - `PIL.Image.Image.convert.nuanced.rgba-to-l`
 - `PIL.Image.Image.convert.nuanced.ycbcr-to-rgb`
+- `PIL.Image.Image.filter.nuanced.f-mode`
+- `PIL.Image.Image.filter.nuanced.invalid-filter`
 - `PIL.Image.Image.getbbox.nuanced.alpha-only-rgba`
 - `PIL.Image.Image.getbbox.nuanced.blue-only-rgb`
 - `PIL.Image.Image.getbbox.nuanced.green-only-rgb`
@@ -98,6 +100,9 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor`
 - `PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor`
+- `PIL.ImageFilter.Kernel.nuanced.bad-size`
+- `PIL.ImageFilter.Kernel.nuanced.five-by-five`
+- `PIL.ImageFilter.Kernel.nuanced.short-kernel`
 - `PIL.ImageFilter.Kernel.nuanced.three-by-three-edge`
 - `PIL.ImageFont.FreeTypeFont.font_variant.nuanced.variable-font-size`
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.named-instances`

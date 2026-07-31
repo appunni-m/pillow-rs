@@ -1812,6 +1812,53 @@ def build_nuanced_cases(
             },
             "mode": "RGB",
         },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "requirement_suffix": "behavior.default",
+            "name": "five-by-five",
+            "values": {
+                "size": literal([5, 5]),
+                "kernel": literal(list(range(1, 26))),
+            },
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "requirement_suffix": "behavior.default",
+            "name": "bad-size",
+            "values": {
+                "size": literal([4, 4]),
+                "kernel": literal([1] * 16),
+            },
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "requirement_suffix": "behavior.default",
+            "name": "short-kernel",
+            "values": {
+                "size": literal([3, 3]),
+                "kernel": literal([1, 2]),
+            },
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode",
+            "mode": "F",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-filter",
+            "values": {"filter": literal("BOGUS")},
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}

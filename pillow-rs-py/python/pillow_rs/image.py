@@ -397,6 +397,10 @@ class Image:
         return new
 
     def filter(self, filter_type) -> "Image":
+        # PIL instantiates callable filter classes and rejects anything that
+        # is not a Filter instance/class.
+        if callable(filter_type):
+            filter_type = filter_type()
         # PIL only allows ModeFilter on palette images; all others raise ValueError
         if self.mode == "P":
             # For built-in string filters, always raise
@@ -411,11 +415,10 @@ class Image:
                 name = str(filter_type)
             if name != "Mode":
                 raise ValueError("cannot filter palette images")
-        # Parametric filter objects have _apply(); string names go to Rust
-        if hasattr(filter_type, '_apply'):
-            return filter_type._apply(self._rust_image)
-        rust_image = self._rust_image.filter(str(filter_type))
-        return Image(rust_image)
+        if not hasattr(filter_type, "_apply"):
+            msg = "filter argument should be ImageFilter.Filter instance or class"
+            raise TypeError(msg)
+        return filter_type._apply(self._rust_image)
 
     def thumbnail(
         self,

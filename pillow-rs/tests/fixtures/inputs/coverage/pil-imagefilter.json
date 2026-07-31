@@ -235,7 +235,10 @@
           "PIL.ImageFilter.UnsharpMask.mode.l",
           "PIL.ImageFilter.UnsharpMask.mode.la",
           "PIL.ImageFilter.UnsharpMask.mode.rgba",
-          "PIL.ImageFilter.Kernel.nuanced.three-by-three-edge"
+          "PIL.ImageFilter.Kernel.nuanced.three-by-three-edge",
+          "PIL.ImageFilter.Kernel.nuanced.five-by-five",
+          "PIL.ImageFilter.Kernel.nuanced.bad-size",
+          "PIL.ImageFilter.Kernel.nuanced.short-kernel"
         ],
         "command_ids": []
       },

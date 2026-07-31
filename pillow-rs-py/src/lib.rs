@@ -3635,10 +3635,7 @@ fn kernel_prepare(
 ) -> PyResult<(Vec<f64>, f64, i32, u32)> {
     let (size_x, size_y) = size;
     if size_x != size_y || (size_x != 3 && size_x != 5) {
-        return Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
-            "Kernel size {}x{} not supported, only 3x3 and 5x5",
-            size_x, size_y
-        )));
+        return Err(PyValueError::new_err("bad kernel size"));
     }
     let numel = (size_x * size_y) as usize;
     let k: Vec<f64> = match kernel {
@@ -3646,11 +3643,7 @@ fn kernel_prepare(
         None => vec![1.0_f64; numel],
     };
     if k.len() != numel {
-        return Err(PyValueError::new_err(format!(
-            "not enough coefficients in kernel (expected {}, got {})",
-            numel,
-            k.len()
-        )));
+        return Err(PyValueError::new_err("not enough coefficients in kernel"));
     }
     let computed_scale = scale.unwrap_or_else(|| k.iter().sum());
     Ok((k, computed_scale, offset as i32, size_x))

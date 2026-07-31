@@ -117,10 +117,16 @@ class RankFilter:
 
 class Kernel:
     def __init__(self, size=(3, 3), kernel=None, scale=None, offset=0):
-        self.size = size
+        self.size = tuple(size) if not isinstance(size, tuple) else size
         self.kernel = kernel
-        self.scale = scale
         self.offset = offset
+        # PIL validates the coefficient count at construction and defaults
+        # the scale to the kernel sum; the size shape is validated at apply.
+        if scale is None:
+            scale = sum(kernel)
+        if self.size[0] * self.size[1] != len(self.kernel):
+            raise ValueError("not enough coefficients in kernel")
+        self.scale = scale
     def _apply(self, rust_image):
         k, scale, offset, size_x = _core.kernel_prepare(
             self.kernel, self.scale, self.offset, self.size
