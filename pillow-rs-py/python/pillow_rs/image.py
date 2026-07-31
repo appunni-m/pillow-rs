@@ -190,6 +190,8 @@ class Image:
         return Image(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
+        if isinstance(method, str):
+            raise TypeError("'str' object cannot be interpreted as an integer")
         if isinstance(method, int):
             method = Transpose.from_int(method)
         rust_image = self._rust_image.transpose(method)
@@ -673,7 +675,9 @@ class Image:
             else:
                 mesh_flat = _core.mesh_flatten([data])
             return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
-        raise NotImplementedError(f"transform method '{method}' not yet implemented")
+        if data is None:
+            raise ValueError("missing method data")
+        raise ValueError("unknown transformation method")
 
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""
