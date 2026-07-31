@@ -1,266 +1,223 @@
-# Project parity test process standard
+# Universal migration parity test process standard
 
 Date: 2026-07-31
 
-Status: design standard for the next migration.
+Status: design standard for any implementation migration.
 
-This document defines the single reproducible test process for `pillow-rs` project parity. It is intentionally strict. The purpose is to make parity evidence trustworthy, repeatable, coverage-aware, and hard to fake.
+This document defines a single reproducible parity process for migrating behavior from any source implementation to any target implementation.
+
+It is intentionally language-agnostic. The source may be Python, C, C++, Java, JavaScript, Go, Rust, a CLI, a service, or a binary library. The target may be any language/runtime. The standard is about truth, repeatability, coverage, and public-behavior compatibility.
+
+Project-specific examples for `pillow-rs` appear only in the final profile section.
 
 ## Core rule
 
-The project has one parity process:
+Every migration parity test follows one process:
 
 ```text
-input-only fixture -> live Pillow oracle -> live Rust execution -> normalized Result comparison -> Coverage MCP evidence
+input-only fixture
+-> live source oracle execution
+-> live target implementation execution
+-> normalized Result comparison
+-> coverage/evidence ledger
 ```
 
-No checked-in input file may contain expected output, expected errors, hashes, byte counts, status, oracle results, or reference output paths.
+Input fixtures describe only inputs. They do not describe expected outputs.
 
-Pillow is the oracle. Rust is the implementation under test. Coverage MCP is the evidence ledger.
+The source implementation is the oracle. The target implementation is the system under test. The evidence ledger records what ran, where it ran, what version ran, what passed, what failed, and what coverage was proven.
+
+## Terminology
+
+- Source implementation: the existing implementation whose observable behavior must be matched.
+- Target implementation: the new implementation being migrated.
+- Oracle: a controlled runtime execution of the source implementation.
+- Fixture: checked-in input data used to call both source and target.
+- Manifest: the authoritative public-surface and coverage-intent index.
+- Result envelope: a normalized success/error payload produced by both source and target.
+- Comparator: generic logic that compares two Result envelopes.
+- Coverage ledger: durable system of record for approved commands, retained logs, and coverage snapshots.
+- Public surface: externally observable API, CLI command, file format behavior, protocol, ABI, wire behavior, or user-visible contract.
+- Active case: a case that must run and pass.
+- Pending case: a known gap that is documented, visible, and not counted as passed.
+- Unsupported case: behavior the source exposes as unsupported/error and the target must match.
+- Deprecated case: old test/fixture material retained only as migration reference.
 
 ## Goals
 
-The standard must improve all directions at once:
+The standard must improve all important dimensions together:
 
-- parity truth: compare against live Pillow 12.2.0 behavior, not stale stored output;
+- parity truth: compare against live source behavior, not stale checked-in expected output;
 - API truth: manifest covers public surfaces explicitly;
-- input truth: fixtures describe only independent inputs;
-- error truth: success/error status comes from oracle/runtime execution;
-- coverage truth: coverage claims require fresh Coverage MCP snapshots;
-- reproducibility: all commands, oracle versions, inputs, assets, and outputs are deterministic;
-- migration safety: old tests are removed only after equivalent or better migrated coverage;
-- anti-cheat safety: tests reject self-comparison, embedded expected output, and coverage shortcuts.
+- input truth: fixtures contain only independent inputs;
+- error truth: success/error status comes from runtime execution;
+- coverage truth: coverage claims require fresh evidence;
+- reproducibility: versions, commands, inputs, assets, environment, and outputs are deterministic;
+- migration safety: old tests are removed only after equivalent or better migrated evidence;
+- anti-cheat safety: tests reject self-comparison, embedded expected output, and coverage shortcuts;
+- maintainability: adding a public operation requires manifest, input, runner, oracle, comparator, and coverage updates.
 
 ## Non-goals
 
-The new standard must not:
+The standard must not:
 
-- preserve old fixture layout for convenience;
-- keep stored expected pixels/hashes as the primary oracle;
-- compare Rust against Rust;
+- preserve old test layout merely for convenience;
+- keep stored expected pixels/hashes/text/bytes as the primary oracle;
+- compare target output against target output;
 - use deprecated fixtures as active truth;
 - hide pending implementation gaps;
-- mark a route covered because a unit test touched it;
-- claim 100% coverage without an ingested Coverage MCP artifact;
-- place behavior logic in Python/JS bindings.
+- mark a route trusted because a narrow unit test touched it;
+- claim full coverage without a current coverage artifact;
+- move behavior into a wrapper/binding just to satisfy tests;
+- special-case case IDs to force equality.
 
-## Repository scope
+## Required repository layout
 
-The active project-level corpus lives under the `pillow-rs` crate:
+Every project should have one active migration fixture root:
 
 ```text
-pillow-rs/tests/fixtures/
+tests/fixtures/
   manifest.yaml
   assets/
   inputs/
 ```
 
-The repository-root legacy fixture corpora are deprecated:
+Recommended optional roots:
 
 ```text
-tests/deprecated/fixtures
-tests/deprecated/fixtures_2
+tests/deprecated/
+tests/support/
+tests/oracles/
+docs/
 ```
 
-They may be used as migration source material only. They are not active truth.
+Rules:
 
-Sibling repositories are upstream dependencies:
-
-```text
-../image-slash-star
-../fontdone
-```
-
-For this project-level process, sibling repositories may be read to understand behavior, but the active project parity corpus and runner live in `pillow-rs`.
-
-## Directory layout
-
-Target layout:
-
-```text
-pillow-rs/tests/fixtures/
-  manifest.yaml
-
-  assets/
-    fonts/
-    images/
-    encoded/
-    raw/
-
-  inputs/
-    ImageFont/
-      getbbox.json
-      getlength.json
-      getmask.json
-      load.json
-      truetype.json
-
-    Image/
-      open.json
-      new.json
-      frombytes.json
-      convert.json
-      crop.json
-      paste.json
-      verify.json
-
-    ImageDraw/
-      text.json
-      line.json
-      rectangle.json
-
-    ImageOps/
-    ImageChops/
-    ImageFilter/
-    ImagePalette/
-```
-
-Deprecated/reference-only material may live under:
-
-```text
-pillow-rs/tests/deprecated/
-```
-
-or the already deprecated repository-root paths, but active test runners must not read from deprecated fixture roots.
+- active runners read from `tests/fixtures`;
+- deprecated/reference-only tests read from `tests/deprecated` only when explicitly named;
+- generated run outputs go under `target/`, `.coverage-*`, or another ignored build directory;
+- checked-in fixtures are inputs, not generated expected outputs.
 
 ## Single manifest
 
-There is exactly one active project manifest:
+There is exactly one active manifest for the migration suite:
 
 ```text
-pillow-rs/tests/fixtures/manifest.yaml
+tests/fixtures/manifest.yaml
 ```
 
 The manifest is the authoritative index of:
 
-- oracle identity;
-- namespace inventory;
-- public operations;
+- source/oracle identity;
+- target identity;
+- public namespaces/surfaces;
+- operations/endpoints;
 - input files;
-- required parameter coverage;
+- asset roots;
+- required parameter/value coverage;
+- required branch/region coverage;
 - out-of-scope features;
-- explicitly pending routes;
-- migration status;
-- coverage requirements.
+- pending/unsupported/deprecated routes;
+- migration status.
 
 The manifest is not an output store.
 
-### Manifest required top-level fields
+## Manifest schema
+
+Minimum shape:
 
 ```yaml
 version: 1
 
-oracle:
-  provider: pillow
-  version: "12.2.0"
-  python: ".oracle-venv/bin/python"
-  import_contract: "PIL public API"
+source:
+  name: source-system
+  version: "exact-version"
+  runtime: "command-or-runtime-used-for-oracle"
+  contract: "public observable behavior"
 
-rust:
-  crate: pillow-rs
-  public_api: "pillow_rs root API only"
-  binding_rule: "Python and JS bindings are thin wrappers only"
+target:
+  name: target-system
+  version: "current checkout/build"
+  runtime: "command-or-library-entrypoint"
+  contract: "public target surface used by tests"
 
 policy:
   input_only: true
-  runtime_oracle: true
+  live_oracle: true
   result_comparison: true
-  coverage_mcp_required: true
+  coverage_required_for_claims: true
 
-namespaces: []
+surfaces: []
 ```
 
-### Namespace entry
-
-Each namespace maps one Pillow public module/class family to Rust public API.
+Surface entry:
 
 ```yaml
-namespaces:
+surfaces:
   - id: ImageFont
-    pillow_path: PIL.ImageFont
-    rust_surface: pillow_rs::imagefont
+    source_path: PIL.ImageFont
+    target_path: pillow_rs::imagefont
     input_dir: inputs/ImageFont
-    assets_dir: assets
+    asset_dir: assets
     status: active
     out_of_scope:
-      - libraqm successful shaping
+      - successful complex text shaping
     operations:
       - id: getbbox
         kind: method
         public: true
         input_file: getbbox.json
+        status: active
         coverage:
           parameters:
-            text: required
-            mode: required
-            direction: no-libraqm-error
-            features: no-libraqm-error
-            language: no-libraqm-error
-            stroke_width: required
-            anchor: required
+            text:
+              required_values:
+                - "Hello"
+                - ""
+                - "ज"
+            mode:
+              required_values:
+                - "<default>"
+                - "1"
+                - "bad"
+          branches:
+            - empty_text
+            - invalid_mode
+          regions:
+            - file: src/font/imagingft.rs
+              target: 100
 ```
 
-### Operation fields
+## Operation status rules
 
-Every operation must declare:
+Every operation must be one of:
 
-- `id`: operation name used in input JSON;
-- `kind`: function, method, property, constructor, constant, codec, or helper;
-- `public`: whether this is a Pillow public surface;
-- `input_file`: relative file under namespace `input_dir`;
-- `coverage`: parameters, branches, and route intent;
-- `status`: active, pending, unsupported, or deprecated;
-- optional `reason` for pending/unsupported.
+- `active`: must have input cases and must pass runtime parity;
+- `pending`: known target gap; must have blocker/reason and appear in reports;
+- `unsupported`: source behavior is unsupported/error and target must match it;
+- `deprecated`: retained only as migration reference; active runner must ignore it.
 
-Operation status rules:
-
-- `active`: must have input cases and runtime parity must pass;
-- `pending`: must have a documented blocker and must be visible in reports;
-- `unsupported`: must match Pillow unsupported/error behavior when called;
-- `deprecated`: must not be included in active parity execution.
-
-### Coverage fields
-
-Coverage requirements belong in the manifest, not in input cases:
+Pending operation entry:
 
 ```yaml
-coverage:
-  parameters:
-    mode:
-      required_values:
-        - "<default>"
-        - "1"
-        - "L"
-        - "RGBA"
-        - "bad"
-    anchor:
-      required_values:
-        - "<default>"
-        - "la"
-        - "mm"
-        - "xy"
-  branches:
-    - empty_text
-    - non_ascii_text
-    - invalid_mode
-    - missing_asset
-  regions:
-    - file: src/font/imagingft.rs
-      target: 100
+operations:
+  - id: complex_feature
+    status: pending
+    reason: "Target implementation lacks source-compatible X path"
+    blocker: "docs/gap-analysis.md#complex-feature"
 ```
 
-Inputs prove coverage by exercising these values. Inputs do not say what output should happen.
+Pending is not passing. Pending is visible debt.
 
 ## Input JSON standard
 
-Input files contain only runnable input cases.
+Input files contain only runnable inputs.
 
 Required document shape:
 
 ```json
 {
   "version": 1,
-  "namespace": "ImageFont",
+  "surface": "ImageFont",
   "operation": "getbbox",
   "cases": []
 }
@@ -295,17 +252,22 @@ params
 environment
 ```
 
-`environment` is allowed only for declarative input conditions such as locale, feature flags, or Pillow plugin availability. It must not contain expected output.
+`environment` may describe declarative input conditions such as locale, platform feature flag, protocol version, runtime option, or plugin availability. It must not contain expected output.
 
-### Forbidden keys anywhere in input JSON
+## Forbidden input keys
 
-The runner must recursively reject these keys:
+The runner must recursively reject these keys in active input JSON:
 
 ```text
+actual
+baseline
+encoded_ref_bytes
+encoded_ref_path
 error
 expect_error
 expectation
 expected
+golden
 hash
 oracle
 output
@@ -313,25 +275,20 @@ outputs
 pixels
 pixels_hex
 raw_path
-ref_path
 ref_bytes
-encoded_ref_path
-encoded_ref_bytes
+ref_path
 sha256
 status
-actual
-baseline
-golden
 ```
 
-Reason: these keys encode expected behavior. Expected behavior must come from live Pillow.
+Reason: these keys encode expected behavior. Expected behavior must come from live source execution.
 
-### Case ID standard
+## Case ID standard
 
 Case IDs must be globally unique and deterministic:
 
 ```text
-<Namespace>.<operation>.<short_independent_path>
+<Surface>.<operation>.<short_independent_path>
 ```
 
 Examples:
@@ -339,35 +296,52 @@ Examples:
 ```text
 ImageFont.getbbox.basic_latin_default
 Image.open.png_bad_idat_crc_verify
-Image.paste.rgba_mask_partial_alpha
-ImageDraw.text.no_libraqm_direction_rtl
+Codec.decode.gif_lzw_no_eoi
+Cli.convert.missing_input_file
+HttpClient.request.invalid_header_name
+Parser.parse.empty_input
 ```
 
-Case IDs must not include random values, timestamps, host paths, machine names, or generated counters that can change between runs.
+Case IDs must not contain:
 
-### Independent input rule
+- random values;
+- timestamps;
+- host paths;
+- machine names;
+- generated counters that can change between runs.
 
-Every input case must cover an independent behavior path.
+## Independent input rule
 
-Do not add duplicates just to increase case count. If two cases cover the same parameters, same branch, same mode, same error category, and same asset family, keep one.
+Every case must cover an independent behavior path.
+
+Do not add duplicates just to increase case count.
 
 Acceptable reasons for multiple cases:
 
 - different public operation;
 - different parameter branch;
-- different image mode;
-- different font table/path;
-- different codec path;
+- different data mode/type;
+- different file format/protocol variant;
+- different asset family;
 - success vs error;
 - boundary value;
-- regression for a known divergence;
-- platform-independent Pillow behavior difference.
+- known historical divergence;
+- source implementation documented edge behavior;
+- platform-independent observable behavior difference.
+
+Duplicate-filter rule:
+
+```text
+same surface + same operation + same parameter class + same branch + same mode + same asset family + same expected source status = duplicate
+```
+
+Duplicates should be removed or marked deprecated.
 
 ## Asset standard
 
 Assets are inputs. They are allowed.
 
-Asset references must be relative to `pillow-rs/tests/fixtures/assets` unless a namespace explicitly sets a narrower asset directory.
+Asset references must be relative to the fixture asset root.
 
 Allowed asset descriptor:
 
@@ -381,77 +355,81 @@ Allowed asset descriptor:
 Allowed asset kinds:
 
 - `ref`: tracked fixture asset;
-- `inline_bytes`: small byte payload for malformed/minimal inputs;
-- `generated_input`: deterministic generated asset declared by a maintained generator;
-- `pillow_builtin`: Pillow built-in/default resource, if the oracle uses the same resource deterministically;
-- `missing_ref`: intentional missing-file input for error parity only.
+- `inline_bytes`: small byte payload;
+- `generated_input`: deterministic generated asset from maintained generator;
+- `builtin`: source runtime built-in/default resource;
+- `missing_ref`: intentional missing-file input for error parity;
+- `remote_mock`: deterministic local fixture representing a remote response, not a live network call.
 
 Rules:
 
-- assets must be read-only during tests;
-- asset paths must canonicalize under the fixture asset root;
+- assets are read-only during tests;
+- asset paths canonicalize under fixture asset root;
 - no absolute paths in committed input JSON;
-- no network access for assets during tests;
-- generated assets must have a maintained generator and deterministic seed;
-- generated assets must be committed only if needed for reproducibility;
-- output artifacts from a test run are never assets unless promoted intentionally as input fixtures.
+- no network access during parity tests unless the public surface is explicitly network behavior and the network is replaced by a deterministic local server fixture;
+- generated assets need maintained generator, deterministic seed, and documented command;
+- generated assets are committed only when required for reproducibility;
+- output artifacts from a run are never active input assets unless intentionally promoted by a reviewed fixture-generation change.
 
 ## Oracle runtime standard
 
-The oracle is live Pillow 12.2.0 running in the repository oracle environment.
+The oracle is a controlled runtime execution of the source implementation.
 
-Default oracle executable:
+The oracle runner must:
 
-```text
-.oracle-venv/bin/python
-```
+- verify the source runtime path/version;
+- isolate user/global environment where possible;
+- pin dependencies/plugins/feature flags;
+- pass input cases through stdin, deterministic file, local IPC, or stable API call;
+- receive normalized Result envelopes;
+- treat oracle startup failure as test failure;
+- treat oracle non-zero exit as test failure;
+- record bounded oracle stderr/stdout on failure;
+- ensure oracle result count equals input case count;
+- ensure oracle never reads target output.
 
-The runner must:
+The oracle may be:
 
-- verify the interpreter path exists;
-- verify the interpreter is under the repository oracle environment;
-- isolate user site packages;
-- verify Pillow version is exactly 12.2.0;
-- verify relevant Pillow plugin versions when format-specific behavior matters;
-- pass input cases over stdin or a deterministic batch file;
-- receive normalized JSON results over stdout;
-- treat non-zero oracle exit as test failure;
-- include oracle stderr in bounded failure output.
+- a Python script calling a source package;
+- a compiled C/C++ helper;
+- a CLI wrapper;
+- an HTTP/gRPC local fixture server;
+- a WASM/JS runtime script;
+- a JVM/.NET process;
+- a direct library binding.
 
-The oracle script must not read Rust output. It only sees input cases and assets.
+The oracle must not read checked-in expected output.
 
-The oracle script must not use checked-in expected output.
+## Target runtime standard
 
-## Rust runtime standard
-
-Rust execution must use the public root API exposed by `pillow-rs/src/lib.rs`.
+The target runner executes the target implementation through the public target surface.
 
 Rules:
 
-- no deep imports from implementation modules in project parity tests;
-- no direct calls into private/internal modules;
-- no test-only implementation shortcuts;
-- no subprocess or Python calls from Rust implementation code;
-- no fixture/oracle path reads from Rust implementation code;
-- no `cfg(test)` behavior that changes production results;
-- no coverage exclusions in implementation code to fake 100% coverage.
+- use the target public API, CLI, ABI, protocol, or wire surface;
+- do not call deep private implementation paths unless the migrated public surface is itself low-level/internal by design;
+- do not use test-only behavior to change production results;
+- do not read oracle files from target implementation code;
+- do not launch the source oracle from target implementation code;
+- do not add coverage exclusions to fake completeness;
+- do not implement behavior in a wrapper/binding if the core target must own it.
 
-Bindings must stay thin:
+If wrappers/bindings exist:
 
-- Python ABI forwards inputs to Rust;
-- JS ABI forwards inputs to Rust;
-- binding code may convert types and map errors;
-- binding code must not implement algorithms or parity logic.
+- wrappers may convert types;
+- wrappers may map errors;
+- wrappers may manage handles/lifetimes;
+- wrappers must not implement algorithms, fixture interpretation, or source-specific parity hacks.
 
 ## Result envelope
 
-Both oracle and Rust output must normalize to one envelope.
+Both source oracle and target output normalize to the same envelope.
 
 Success:
 
 ```json
 {
-  "case_id": "ImageFont.getbbox.basic_latin_default",
+  "case_id": "Surface.operation.case",
   "status": "ok",
   "value": {}
 }
@@ -461,151 +439,176 @@ Error:
 
 ```json
 {
-  "case_id": "Image.open.bad_png",
+  "case_id": "Surface.operation.case",
   "status": "error",
   "error": {
-    "class": "SyntaxError",
-    "kind": "malformed_png",
-    "message": "broken PNG file"
+    "class": "ValueError",
+    "kind": "invalid_argument",
+    "message": "stable source-visible message"
   }
 }
 ```
 
-The Rust side may internally use idiomatic `Result<T, PilError>`. The serialized test payload still uses the same envelope as Pillow.
+The target may internally use any idiomatic error mechanism:
 
-### Result comparison
+- `Result<T, E>`;
+- exceptions;
+- error codes;
+- status objects;
+- process exit codes;
+- rejected promises;
+- protocol error frames.
+
+The parity harness converts that native mechanism into the standard envelope.
+
+## Comparator standard
 
 Comparison is generic:
 
 ```text
+case_id must match
 status must match
-if status == ok: value must match exactly
-if status == error: error must match exactly according to the error policy
+if status == ok: value must match according to declared output shape
+if status == error: error must match according to declared error policy
 ```
 
-The comparator must not contain per-case expected output.
+The comparator must not contain case-id-specific pass logic.
 
-The comparator may contain type-specific normalization rules, but those rules must be reusable and documented.
+The comparator may contain reusable type-specific normalization rules, but every normalization rule must be documented.
 
-Examples of valid normalization:
+Valid normalization examples:
 
-- convert tuples/lists into the same JSON array shape;
-- serialize image bytes as hex only in runtime output, never input;
-- normalize path display to basename if Pillow exposes host-specific absolute paths;
-- normalize floating point only when Pillow itself uses a documented representation.
+- tuple/list shape normalization;
+- map/object deterministic key ordering;
+- path normalization to basename when the source exposes host-specific absolute paths;
+- stable float representation when the source documents/uses it;
+- byte output encoded as hex/base64 in runtime JSON;
+- platform-neutral newline normalization when the public contract specifies text, not raw bytes.
 
-Examples of invalid normalization:
+Invalid normalization examples:
 
-- ignore mismatching pixels;
+- ignore mismatching bytes;
 - ignore mismatching error class;
 - accept any error for an error case;
 - round numbers just to make a failing case pass;
 - compare only hash when raw bytes are available;
-- special-case a case ID to force equality.
+- special-case a case ID;
+- suppress fields that differ without declaring them out of scope.
 
-## Output type standard
+## Output shape standard
 
-Each operation declares an output shape in runner code or manifest schema. The shape controls normalization and exact comparison.
+Every operation must have a declared output shape.
 
-Common output types:
+Common shapes:
 
 - scalar: bool, integer, float, string, null;
-- tuple/list;
-- dictionary/object with deterministic key ordering;
-- image: mode, size, bands, palette, raw bytes;
+- sequence: tuple/list/array;
+- object: deterministic key-value structure;
+- bytes: raw byte array represented deterministically;
+- image: mode, size, bands, palette, frames, raw bytes;
 - mask: mode, size, offset, raw bytes;
-- encoded bytes: format, bytes, optional decoded verification;
-- font metrics: exact numeric values;
-- error: class, kind, message/category.
+- encoded file: format, bytes, decoded verification;
+- metrics: exact numeric values;
+- protocol response: status, headers, body, trailers;
+- CLI result: exit code, stdout, stderr, generated files;
+- error: class/category/kind/message/stage.
 
-### Image output comparison
+### Byte-like output
 
-Image-like results must compare:
+Byte-like output must compare raw bytes exactly unless the source contract is explicitly nondeterministic.
 
-- mode;
-- size;
-- bands where applicable;
-- palette bytes where applicable;
-- transparency info where applicable;
-- frame count for sequences;
-- per-frame duration/loop metadata where applicable;
-- raw pixel bytes.
+Diagnostic hashes may be included in runtime output, but raw bytes are authoritative when practical.
 
-Hash may be included in runtime output for diagnostics, but raw bytes remain the authoritative comparison when practical.
+### Structured output
 
-### Encoded output comparison
+Structured output must compare:
 
-Encoded bytes are exact only when Pillow produces deterministic bytes for the operation/platform.
+- field presence;
+- field values;
+- ordering when order is public behavior;
+- absence when absence is public behavior;
+- numeric type/precision when observable.
 
-For deterministic encoders:
+### Encoded/nondeterministic output
 
-- compare encoded bytes exactly;
-- then decode output and compare decoded pixels/metadata as a secondary check.
+If source output is nondeterministic:
 
-For nondeterministic encoders:
+- declare nondeterminism in manifest;
+- compare stable public observations instead;
+- include a deterministic secondary validation if possible;
+- do not store one generated output as truth.
 
-- the manifest must mark deterministic-byte parity as out of scope with reason;
-- compare Pillow-observable decoded result and stable metadata;
-- document the nondeterminism source.
+Example:
 
-Do not put encoded reference bytes in input JSON.
+```yaml
+determinism:
+  encoded_bytes: false
+  reason: "source encoder embeds timestamp"
+  compare_instead:
+    - decoded_pixels
+    - public_metadata_without_timestamp
+```
 
-### Error output comparison
+## Error comparison standard
 
 Error comparison must include:
 
-- status: `error`;
+- `status: error`;
 - public error class/category;
 - stable kind;
-- message or stable message pattern when Pillow wording is stable;
-- operation stage if Pillow distinguishes open/load/verify/save.
+- stable message or documented message pattern;
+- operation stage when source distinguishes stages;
+- exit/status code when applicable.
 
-An expected-error input is forbidden. The case becomes an error case only because live Pillow returned an error.
+The case becomes an error case only because live source oracle returned an error.
 
-If Pillow returns success and Rust returns error, fail.
+Outcomes:
 
-If Pillow returns error and Rust returns success, fail.
-
-If both error but class/kind mismatches, fail.
+- source ok + target ok + equal value = pass;
+- source ok + target ok + different value = fail;
+- source ok + target error = fail;
+- source error + target ok = fail;
+- source error + target error + equal error = pass;
+- source error + target error + different error = fail.
 
 ## Public surface standard
 
-The manifest must cover public surfaces, not implementation files.
+The manifest covers public behavior, not arbitrary implementation files.
 
-For each namespace:
+For each surface:
 
-- query live Pillow public names/signatures where possible;
-- classify every public name as active, pending, unsupported, or non-endpoint;
+- discover or document source public names/signatures;
+- classify every public name as active, pending, unsupported, deprecated, or non-endpoint;
 - verify every active operation has an input file;
 - verify every input file maps to a manifest operation;
 - verify every case operation maps to a runner arm;
-- verify every Rust public root API endpoint has manifest coverage or documented non-endpoint status.
+- verify every target public endpoint is covered or documented as non-endpoint;
+- report all unclassified source/target public names.
 
-Do not expose implementation functions just because tests need them.
+If a test needs deep implementation access, either:
 
-If a test needs deep implementation access, the public API is probably wrong or the test belongs at a lower-level crate.
+- the public API is missing the necessary behavior, or
+- the test belongs in a lower-level component suite, not the migration parity suite.
 
 ## Coverage standard
 
-Coverage claims require Coverage MCP.
+Coverage claims require a durable coverage/evidence ledger.
 
 Required flow:
 
-1. call `project_context`;
-2. run an approved immutable command;
-3. poll with `get_run_data` until terminal;
-4. inspect coverage ingestion status;
-5. record snapshot IDs;
+1. discover approved commands and latest results;
+2. run only approved immutable commands;
+3. poll until terminal;
+4. inspect artifact ingestion;
+5. capture snapshot IDs;
 6. query summary/files/file/insights as needed;
-7. report missing lines/regions explicitly.
+7. report missing lines/branches/regions explicitly.
 
-No coverage claim is valid without a current ingested snapshot.
-
-### Coverage levels
+No coverage claim is valid without a current ingested artifact.
 
 The process distinguishes:
 
-- parity pass: all active fixture rows match live Pillow;
+- parity pass: all active fixture rows match live source;
 - line coverage: source lines executed;
 - branch coverage: branch outcomes executed;
 - region coverage: compiler/source regions executed;
@@ -618,152 +621,162 @@ Coverage does not imply parity.
 
 Both are required.
 
-### 100% region coverage rule
+## 100% coverage claim rule
 
-For a target file or module, “100% region coverage” can be claimed only when:
+For any target file/module/surface, “100% coverage” can be claimed only when:
 
-- the Coverage MCP snapshot is fresh for the current commit;
-- the suite includes the active project parity test;
-- the target file appears in the coverage report;
-- region total and covered counts are present;
-- uncovered regions are zero;
+- the coverage snapshot is fresh for the current commit;
+- the suite includes the active parity test;
+- the target file/module appears in the coverage report;
+- relevant totals and covered counts are present;
+- uncovered lines/branches/regions/functions are zero for the claimed dimension;
 - all active manifest rows ran successfully.
 
-If any condition is absent, report “not proven.”
+If any condition is absent, report:
 
-## Coverage MCP command standard
+```text
+not proven
+```
 
-Every maintained parity/coverage command must be registered in Coverage MCP with:
+## Evidence ledger command standard
+
+Every maintained parity/coverage command must be registered with:
 
 - exact command;
 - exact cwd;
-- exact shell;
+- exact shell/runtime;
 - suite name;
-- declared coverage artifact path;
-- coverage format;
-- human approval note.
+- declared artifacts;
+- coverage format when applicable;
+- human approval or review record;
+- immutable command identity.
 
 Do not run ad-hoc coverage commands and later claim coverage.
 
-Use Make targets for normal workflows. If a repeated workflow has no Make target, add one.
+Use maintained build/test targets for normal workflows. If a repeated workflow has no target, add one.
 
 ## Anti-cheat guardrails
 
-The project parity test must fail if:
+The parity suite must fail if:
 
 - input JSON contains forbidden expected-output keys;
 - active runner reads deprecated fixture roots;
-- Rust implementation reads oracle or fixture paths;
-- Rust implementation launches subprocesses;
-- Rust implementation contains test-only parity branches;
+- target implementation reads oracle or fixture paths;
+- target implementation launches source oracle;
+- target implementation contains test-only parity branches;
 - comparator contains case-id-specific success logic;
-- Rust output is used as oracle output;
-- oracle output count does not equal input case count;
+- target output is used as oracle output;
+- oracle result count does not equal input count;
 - manifest input file list does not match discovered input files;
-- an active manifest operation has no runner arm;
-- a runner arm is not represented in the manifest;
-- a public Pillow operation is unclassified;
-- a public Rust root API endpoint is unclassified;
-- Coverage MCP run is stale/missing but a coverage claim is attempted.
+- active manifest operation has no runner arm;
+- runner arm is not represented in manifest;
+- source public operation is unclassified;
+- target public endpoint is unclassified;
+- stale/missing coverage is reported as coverage proof.
 
-## Migration rules
+## Migration process
 
-Migration must be one surface at a time.
+Migration must happen one public surface at a time.
 
 For each surface:
 
-1. list current old fixture files and tests;
-2. identify public Pillow operations;
-3. create manifest namespace/operation entries;
-4. create input-only JSON cases;
-5. implement oracle runtime support;
-6. implement Rust runner support through public root API;
-7. compare exact `Result` envelopes;
-8. run narrow parity test;
-9. run Coverage MCP coverage suite;
-10. add missing independent cases until intended region/branch coverage is proven;
-11. mark old tests deprecated;
-12. delete old tests only after new suite has equivalent or better evidence;
-13. commit.
+1. inventory old tests/fixtures;
+2. identify source public operations;
+3. identify target public endpoints;
+4. create manifest surface/operation entries;
+5. create input-only JSON cases;
+6. implement source oracle runner;
+7. implement target runner through public target surface;
+8. normalize both sides into Result envelopes;
+9. compare exactly;
+10. run narrow parity test;
+11. run coverage/evidence suite;
+12. add missing independent cases until intended coverage is proven;
+13. mark old tests deprecated;
+14. delete old tests only after equivalent or better evidence exists;
+15. commit.
 
 Do not delete first. Migrate, prove, then delete.
-
-## Handling pending and unsupported behavior
-
-Pending behavior belongs in the manifest, not in input expected output.
-
-Allowed pending entry:
-
-```yaml
-operations:
-  - id: complex_feature
-    status: pending
-    reason: "Rust implementation lacks Pillow-compatible X path"
-    blocker: "link or doc section"
-```
-
-Pending rows must be visible in reports.
-
-Unsupported behavior means Pillow public behavior is unsupported and Rust should match the same public error. Unsupported is still testable through live oracle.
 
 ## Reproducibility checklist
 
 A parity run is reproducible only when the report records:
 
-- git commit;
+- source repository/version/build identity;
+- target repository/version/build identity;
+- git commit or immutable source revision;
 - dirty/clean status;
 - manifest path and hash;
 - input file list and hash;
 - asset file list and hash;
-- oracle Python path;
-- Pillow version;
-- Pillow plugin versions when relevant;
-- Rust toolchain version;
-- Make target or Coverage MCP command id;
-- Coverage MCP run id;
-- coverage snapshot id if coverage is claimed;
+- oracle runtime path/version;
+- target runtime/toolchain version;
+- dependency/plugin versions relevant to behavior;
+- command id/target;
+- run id;
+- coverage snapshot id when coverage is claimed;
 - command result and counters;
 - exact failing case IDs if failed.
 
-## Report format
+## Final report standard
 
-Every final report for parity work must include:
+Every parity task report must include:
 
 - commit hash;
 - changed files;
 - tests run;
 - pass/fail counts;
-- Coverage MCP run id;
-- Coverage MCP snapshot id when available;
+- evidence run id;
+- coverage snapshot id when available;
 - coverage percentage only if proven;
 - pending manifest operations;
-- deprecated tests removed or still retained;
-- final git status.
+- deprecated tests removed or retained;
+- final worktree status.
 
-## First implementation milestone
+## First implementation milestone for any project
 
-The first migration must be intentionally small:
+Start small:
 
-1. create `pillow-rs/tests/fixtures/manifest.yaml`;
-2. migrate existing Font/ImageFont manifest content into namespace `ImageFont`;
-3. keep existing Font input JSON initially;
-4. update Font test to read the project manifest;
-5. extract input-only validation into shared test support;
-6. keep exact current Font parity behavior;
-7. run Font parity;
-8. run Coverage MCP;
-9. commit.
+1. create `tests/fixtures/manifest.yaml`;
+2. choose one public surface;
+3. migrate only that surface into the manifest;
+4. keep existing input cases initially if they are input-only;
+5. reject embedded outputs/errors;
+6. implement source oracle execution;
+7. implement target public-surface execution;
+8. compare Result envelopes exactly;
+9. run parity;
+10. run coverage/evidence command;
+11. commit.
 
-Only after this is stable should image backend and codec surfaces be migrated.
+Only after this is stable should broader surfaces be migrated.
 
-## Design decision
+## `pillow-rs` project profile
 
-The canonical standard is:
+For this repository, instantiate the universal terms as:
 
 ```text
-Font/ImageFont runtime-oracle parity semantics
-+ fontdone manifest coverage/accounting discipline
-- image-slash-star stored-output matrix as active truth
+source implementation = Pillow 12.2.0
+source oracle = .oracle-venv/bin/python executing PIL public APIs
+target implementation = pillow-rs
+target runner = Rust tests calling pillow_rs root public API
+coverage ledger = Coverage MCP
+active fixture root = pillow-rs/tests/fixtures
+single manifest = pillow-rs/tests/fixtures/manifest.yaml
 ```
 
-This is the project standard until superseded by a newer design document and migration commit.
+Current migration priority:
+
+1. migrate existing Font/ImageFont parity into the single manifest;
+2. extract shared input-only validation, oracle execution, Result comparison, and manifest coverage checks;
+3. migrate image backend parity;
+4. migrate codec rows from `image-slash-star` as input-only cases with live Pillow oracle;
+5. use `fontdone` as the model for public-surface accounting and pending-route visibility, not as the direct schema.
+
+Project-specific hard rules:
+
+- Python and JS bindings remain thin;
+- target behavior belongs in Rust core;
+- active input JSON must not contain output/error expectations;
+- Coverage MCP is required for coverage claims;
+- deprecated root fixture corpora are migration references only.
