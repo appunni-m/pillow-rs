@@ -1031,7 +1031,7 @@ impl PyImage {
                 "L" | "1" => r.to_object(py),
                 "LA" | "PA" => (r, a).to_object(py),
                 "RGB" => (r, g, b).to_object(py),
-                "RGBA" => (r, g, b, a).to_object(py),
+                "RGBA" | "CMYK" => (r, g, b, a).to_object(py),
                 "P" => r.to_object(py), // P mode stored as RGB; r is the palette index proxy
                 _ => (r, g, b).to_object(py),
             })

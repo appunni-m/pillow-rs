@@ -4036,6 +4036,22 @@ pub fn convert(
                 out.push(r_src | (g_src << 8) | (b_src << 16) | (0xFF << 24));
             }
 
+            // ── L/LA (0/1) -> CMYK (4): gray to K, C=M=Y=0 ──
+            (0, 4) | (1, 4) => {
+                let k = 255u32.saturating_sub(u32::from(r_src)) & 0xFF;
+                out.push(k << 24);
+            }
+
+            // ── RGB/RGBA (2/3) -> CMYK (4): inverse, K=0 ──
+            (2, 4) | (3, 4) => {
+                out.push(
+                    (255u32.wrapping_sub(u32::from(r_src)) & 0xFF)
+                        | ((255u32.wrapping_sub(u32::from(g_src)) & 0xFF) << 8)
+                        | ((255u32.wrapping_sub(u32::from(b_src)) & 0xFF) << 16)
+                        | 0,
+                );
+            }
+
             // ── Unreachable (all combos covered above) ──
             _ => {
                 let out_a = if target_mode == 0 || target_mode == 2 {

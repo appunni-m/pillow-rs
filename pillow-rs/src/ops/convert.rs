@@ -89,6 +89,19 @@ impl Image {
         // but converts P→RGB (palette images default to RGB when no mode given).
         let src_mode = self.mode()?;
 
+        // Pillow stores bilevel "1" pixels as 0/255; our core keeps the raw
+        // 0/1 bytes, so every conversion FROM "1" must map 1 -> 255 first
+        // (Pillow's convert treats "1" as "L" through the luma path).
+        if src_mode == "1" && mode != "1" {
+            let img = self.materialize()?;
+            let mut gray = crate::raster::GrayImage::new(img.width(), img.height());
+            for (op, ip) in gray.pixels_mut().zip(img.to_luma8().pixels()) {
+                op[0] = if ip[0] != 0 { 255 } else { 0 };
+            }
+            let expanded = crate::raster::DynamicImage::ImageLuma8(gray);
+            return Image::from_dynamic(expanded, None).convert(mode, matrix, dither, None, None);
+        }
+
         // Matrix-based conversion must be executed even when the requested
         // mode equals the source mode. Pillow applies the matrix before its
         // same-mode fast path; returning a copy first silently discarded the
@@ -115,15 +128,22 @@ impl Image {
         // materialize first and convert using PIL's exact algorithms.
         if let Some(src_mode) = self.explicit_mode() {
             let target_is_standard = !is_nonstandard_mode(mode);
-            if is_nonstandard_mode(src_mode) && target_is_standard {
+            // Non-standard sources must be materialized and converted to RGB
+            // before reaching a standard target OR a CMYK target (Pillow's
+            // CMYK inverse runs on the RGB values).  CMYK->CMYK is identity.
+            if is_nonstandard_mode(src_mode) && (target_is_standard || mode == "CMYK") {
                 // Extract palette before materializing (P-mode palette may be on Pipeline)
                 let palette = self.palette();
                 let img = self.materialize()?;
                 let converted = color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
                     .unwrap_or_else(|| img.to_rgb8().into());
-                // If the target is a standard mode, return the converted image directly.
                 // For mode "L" etc., derive from the RGB result.
-                let result = if mode == "L" || mode == "LA" {
+                let result = if mode == "CMYK" {
+                    // Apply the RGB inverse directly on the converted RGB.
+                    DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
+                        &converted.to_rgb8(),
+                    ))
+                } else if mode == "L" || mode == "LA" {
                     if mode == "L" && src_mode == "YCbCr" {
                         // Pillow's C converter maps YCbCr to L through the Y
                         // band directly, not through the RGB luma.
