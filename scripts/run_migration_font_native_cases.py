@@ -59,6 +59,12 @@ def load_font(params: dict[str, Any], assets: dict[str, Any]) -> Any:
     )
 
 
+def case_text(params: dict[str, Any]) -> str | bytes:
+    if "text_bytes_hex" in params:
+        return bytes.fromhex(params["text_bytes_hex"])
+    return params.get("text", "Hello")
+
+
 def run_case(case: dict[str, Any]) -> str:
     """Execute one font-native case; returns 'pass' or 'skip'."""
 
@@ -71,16 +77,53 @@ def run_case(case: dict[str, Any]) -> str:
     text = params.get("text", "Hello")
     orientation = params.get("orientation")
 
-    if operation in {"unsupported_magic", "draw_text", "render_text_binary"}:
-        return "skip"
-    if operation in {"getbbox_binary", "info"}:
-        return "skip"
-    if operation.startswith("ImageFont."):
-        return "skip"
-
     font = load_font(params, assets)
     if operation in {"truetype", "constructor", "load", "load_path",
                      "load_default", "load_default_imagefont"}:
+        return "pass"
+
+    if operation.startswith("ImageFont."):
+        method = operation.split(".", 1)[1]
+        font_text = case_text(params)
+        if method == "info":
+            _ = font.info
+        elif method == "getmask":
+            font.getmask(font_text, mode=params.get("mode", ""))
+        else:
+            getattr(font, method)(font_text)
+        return "pass"
+    if operation == "draw_text":
+        from pillow_rs import Image as PILImage
+        from pillow_rs import ImageDraw
+
+        canvas = PILImage.new(
+            params.get("mode", "RGBA"),
+            [params["canvas_width"], params["canvas_height"]],
+        )
+        draw = ImageDraw.Draw(canvas)
+        draw.text(
+            tuple(params["xy"]),
+            text,
+            font=font,
+            fill=tuple(params["fill"]),
+        )
+        return "pass"
+    if operation == "render_text_binary":
+        font._rust_font.render_with_options(
+            text,
+            mode=params.get("mode", "RGBA"),
+            stroke_width=params.get("stroke_width", 0.0),
+            start=tuple(params["start"]) if params.get("start") else None,
+        )
+        return "pass"
+    if operation == "getbbox_binary":
+        font.getbbox(text)
+        return "pass"
+    if operation == "unsupported_magic":
+        # Loading a non-font asset must fail; the failure still exercises the
+        # loader/error mapping.  The reference corpus treated this as a
+        # negative operation.
+        ImageFont.truetype(str(ASSETS / "font" / "pilfont" / "courb08.png"), 20)
         return "pass"
 
     if operation == "getbbox":
@@ -120,7 +163,10 @@ def run_case(case: dict[str, Any]) -> str:
     elif operation == "font_size":
         font.size
     elif operation == "font_variant":
-        font.font_variant(size=params.get("size"))
+        # The public wrapper reconstructs the font without touching the core
+        # variant path; this coverage-only command exercises the binding's
+        # native font_variant so the core function is measured.
+        font._rust_font.font_variant(size=params.get("size"))
     elif operation == "has_variations":
         font._rust_font.has_variations()
     elif operation in {"get_variation_axes", "native_getvaraxes"}:
@@ -145,6 +191,9 @@ def run_case(case: dict[str, Any]) -> str:
             text,
             mode=params.get("mode"),
             stroke_width=params.get("stroke_width", 0.0),
+            stroke_filled=bool(params.get("stroke_filled", False)),
+            anchor=params.get("anchor"),
+            ink=params.get("ink"),
             start=tuple(params["start"]) if params.get("start") else None,
         )
     elif operation == "native_face_attrs":
