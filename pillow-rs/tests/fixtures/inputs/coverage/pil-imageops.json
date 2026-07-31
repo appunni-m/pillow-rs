@@ -240,7 +240,16 @@
           "PIL.ImageOps.colorize.nuanced.mode-one",
           "PIL.ImageOps.colorize.nuanced.invalid-points",
           "PIL.ImageOps.colorize.nuanced.invalid-mid-points",
-          "PIL.ImageOps.invert.nuanced.p-mode"
+          "PIL.ImageOps.invert.nuanced.p-mode",
+          "PIL.ImageOps.equalize.nuanced.unsupported-mode-cmyk",
+          "PIL.ImageOps.equalize.nuanced.unsupported-mode-i",
+          "PIL.ImageOps.equalize.nuanced.unsupported-mode-f",
+          "PIL.ImageOps.equalize.nuanced.unsupported-mode-one",
+          "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-cmyk",
+          "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-i",
+          "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-f",
+          "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-one",
+          "PIL.ImageOps.autocontrast.nuanced.p-mode"
         ],
         "command_ids": [
           "coverage-imageops-native"
