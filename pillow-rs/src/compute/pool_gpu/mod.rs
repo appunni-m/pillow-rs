@@ -1047,8 +1047,8 @@ fn op_output_dims(op: &PipelineOp, cur_w: u32, cur_h: u32) -> Option<(u32, u32)>
                 Some((cur_w, cur_h))
             }
         }
-        PipelineOp::Reduce { factor } if *factor > 0 => {
-            Some(((cur_w / factor).max(1), (cur_h / factor).max(1)))
+        PipelineOp::Reduce { x_factor, y_factor } if *x_factor > 0 && *y_factor > 0 => {
+            Some(((cur_w / x_factor).max(1), (cur_h / y_factor).max(1)))
         }
         PipelineOp::Scale { factor, .. } => {
             let new_w = (cur_w as f64 * factor).round().max(1.0) as u32;

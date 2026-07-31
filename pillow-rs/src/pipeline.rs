@@ -86,8 +86,10 @@ pub enum PipelineOp {
     },
     /// Reduce image dimensions by an integer factor.
     Reduce {
-        /// Reduction factor.
-        factor: u32,
+        /// Horizontal reduction factor.
+        x_factor: u32,
+        /// Vertical reduction factor.
+        y_factor: u32,
     },
 
     // ── Color/Convert ──

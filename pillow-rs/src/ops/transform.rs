@@ -83,14 +83,17 @@ impl Image {
         ))
     }
 
-    /// Reduces image size by an integer factor using box downsampling.
+    /// Reduces image size by integer factors using box downsampling.
     ///
     /// # Errors
     ///
     /// Currently returns `Ok(Image)`; invalid factor handling is reported by
     /// pipeline execution.
-    pub fn reduce(&self, factor: u32) -> Result<Image, PilError> {
-        Ok(Image::push_op(self, PipelineOp::Reduce { factor }))
+    pub fn reduce(&self, x_factor: u32, y_factor: u32) -> Result<Image, PilError> {
+        Ok(Image::push_op(
+            self,
+            PipelineOp::Reduce { x_factor, y_factor },
+        ))
     }
 
     /// Applies a mesh transform using piecewise quadrilateral mappings.
