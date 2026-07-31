@@ -134,6 +134,7 @@ python scripts/check_migration_parity_inputs.py
 python -m unittest \
     tests.test_migration_parity_inventory \
     tests.test_migration_parity_cases \
+    tests.test_migration_parity_contract \
     tests.test_migration_parity_evidence
 
 # ── Summary ──

@@ -35,6 +35,13 @@ from typing import Any, Iterable
 
 import yaml
 
+try:
+    from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
+    from validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
+except ModuleNotFoundError:  # imported as ``scripts.run_migration_parity`` in tests
+    from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
+    from scripts.validate_migration_parity_contract import validate_inputs as validate_fixed_inputs
+
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
@@ -561,12 +568,11 @@ def run_case(
 
 def load_manifest(path: Path) -> dict[str, Any]:
     manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != "migration-parity/manifest@2":
-        raise ValueError("manifest must declare migration-parity/manifest@2")
-    return manifest
+    return validate_fixed_manifest(manifest, manifest_path=path)
 
 
 def load_cases(manifest: dict[str, Any], *, case_ids: set[str] | None, surface: str | None) -> tuple[list[dict[str, Any]], dict[str, str]]:
+    validate_fixed_inputs(manifest, FIXTURE_ROOT, lane="parity")
     cases: list[dict[str, Any]] = []
     case_inputs: dict[str, str] = {}
     for relative in manifest["input_index"]["parity"]:

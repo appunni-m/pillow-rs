@@ -468,7 +468,7 @@ migration-parity-fixtures-check: migration-parity-inventory-check ## Verify auth
 .PHONY: migration-parity-inputs-check
 migration-parity-inputs-check: ## Verify deterministic input regeneration
 	$(PYTHON) scripts/check_migration_parity_inputs.py
-	$(PYTHON) -m unittest tests.test_migration_parity_cases
+	$(PYTHON) -m unittest tests.test_migration_parity_cases tests.test_migration_parity_contract
 
 migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
 	$(PYTHON) -m unittest tests.test_migration_parity_evidence

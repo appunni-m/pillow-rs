@@ -25,6 +25,11 @@ from typing import Any
 
 import yaml
 
+try:
+    from validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
+except ModuleNotFoundError:  # imported as ``scripts.build_migration_parity_inputs`` in tests
+    from scripts.validate_migration_parity_contract import validate_manifest as validate_fixed_manifest
+
 
 WORKSPACE_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures"
@@ -146,9 +151,7 @@ def merge_duplicate_cases(
 
 def load_manifest(path: Path) -> dict[str, Any]:
     manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
-    if manifest.get("schema") != "migration-parity/manifest@2":
-        raise ValueError(f"{path}: expected migration-parity/manifest@2")
-    return manifest
+    return validate_fixed_manifest(manifest, manifest_path=path)
 
 
 def operation_index(
