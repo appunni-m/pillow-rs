@@ -93,6 +93,12 @@ commands:
   - migration-parity-imageops-native-coverage
   cwd: .
   timeout_seconds: 600
+- id: coverage-imagesequence-native
+  argv:
+  - make
+  - migration-parity-imagesequence-native-coverage
+  cwd: .
+  timeout_seconds: 600
 - id: benchmark
   argv:
   - make

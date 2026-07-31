@@ -3198,6 +3198,11 @@ def build_inputs(
             # through the public Pillow surface; exercise them through the
             # maintained native coverage command.
             command_ids = ["coverage-imageops-native"]
+        elif "image-sequence" in component_ids:
+            # The iterator protocol (``__iter__``/``__next__``) has no public
+            # manifest endpoint; exercise it through the maintained native
+            # coverage command.
+            command_ids = ["coverage-imagesequence-native"]
         else:
             command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
