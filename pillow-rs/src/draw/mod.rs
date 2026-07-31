@@ -1117,6 +1117,9 @@ impl Draw {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
         let (img_w, img_h) = (canvas.width(), canvas.height());
+        if img_w == 0 || img_h == 0 {
+            return Ok(());
+        }
         let mode = self.effective_mode();
         for py in 0..h {
             for px in 0..w {
@@ -1126,8 +1129,21 @@ impl Draw {
                     if sa == 0 {
                         continue;
                     }
-                    let dx = (x as u32 + px).min(img_w - 1);
-                    let dy = (y as u32 + py).min(img_h - 1);
+                    // Pillow's ImageDraw text compositor clips glyph pixels
+                    // outside the destination.  Keep the coordinate signed
+                    // until bounds are checked; casting a negative anchor or
+                    // stroke offset to u32 previously wrapped and panicked.
+                    let dx_signed = i64::from(x) + i64::from(px);
+                    let dy_signed = i64::from(y) + i64::from(py);
+                    if dx_signed < 0
+                        || dy_signed < 0
+                        || dx_signed >= i64::from(img_w)
+                        || dy_signed >= i64::from(img_h)
+                    {
+                        continue;
+                    }
+                    let dx = dx_signed as u32;
+                    let dy = dy_signed as u32;
                     let dp = canvas.get_pixel(dx, dy);
                     let inv = 255u16 - sa as u16;
                     let alpha = if mode == "RGBA" {
