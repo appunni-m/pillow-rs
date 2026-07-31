@@ -1,0 +1,70 @@
+{
+ "cases": [
+  {
+   "case_id": "font.native_getvaraxes.type1_mm_invalid_argument",
+   "inputs": {
+    "assets": {
+     "font": {
+      "id": "input/fonts/type1-mm-two-axis.pfb",
+      "kind": "ref"
+     }
+    },
+    "params": {
+     "size": 20
+    }
+   },
+   "operation": "native_getvaraxes"
+  },
+  {
+   "case_id": "font.native_getvarnames.type1_mm_invalid_argument",
+   "inputs": {
+    "assets": {
+     "font": {
+      "id": "input/fonts/type1-mm-two-axis.pfb",
+      "kind": "ref"
+     }
+    },
+    "params": {
+     "size": 20
+    }
+   },
+   "operation": "native_getvarnames"
+  },
+  {
+   "case_id": "font.native_setvaraxes.type1_mm_invalid_argument",
+   "inputs": {
+    "assets": {
+     "font": {
+      "id": "input/fonts/type1-mm-two-axis.pfb",
+      "kind": "ref"
+     }
+    },
+    "params": {
+     "axes": [
+      100.0,
+      400.0
+     ],
+     "size": 20
+    }
+   },
+   "operation": "native_setvaraxes"
+  },
+  {
+   "case_id": "font.native_setvarname.type1_mm_invalid_argument",
+   "inputs": {
+    "assets": {
+     "font": {
+      "id": "input/fonts/type1-mm-two-axis.pfb",
+      "kind": "ref"
+     }
+    },
+    "params": {
+     "instance_index": 1,
+     "size": 20
+    }
+   },
+   "operation": "native_setvarname"
+  }
+ ],
+ "schema": "migration-parity/coverage-input@1"
+}
