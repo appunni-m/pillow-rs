@@ -1,517 +1,717 @@
-# Project manifest test design review
+# Canonical manifest, input, evidence, and documentation design
 
-Date: 2026-07-30
+Date: 2026-07-31
 
-Scope:
+This review compares five different artifacts that were previously discussed as
+though they were the same kind of “manifest.” They are not. It also records the
+required project-wide design.
 
-- `pillow-rs` Font/ImageFont parity in this repository
-- `image-slash-star`
-- `fontdone`
+## Decision
 
-Constraint for this review: sibling repositories were read only. This document is written only in `pillow-rs`.
+The canonical manifest and its indexed input JSON are specification.
 
-## Executive summary
+Generated parity comparisons, coverage snapshots, benchmark measurements,
+aggregate status, and generated status documentation are evidence.
 
-The strongest model is the current `pillow-rs` Font/ImageFont parity test:
+The manifest must be the only public operation inventory. Parity, coverage,
+benchmark, stub, and documentation consumers select work from it. They must not
+keep independent operation lists.
 
-1. fixture JSON contains inputs only;
-2. the oracle is executed at test runtime;
-3. Rust output is executed at test runtime;
-4. the comparison is exact `Result` payload parity.
+The current `pillow-rs/tests/fixtures/manifest.yaml` is not a final project-wide
+manifest. It is a bootstrap hybrid containing complete Font cases and
+name-level placeholders for the other old project surfaces. Its “100%” value
+means only that names from the old root manifest were classified. It does not
+mean 100% scenario specification, parity, code coverage, benchmark readiness,
+or documentation.
 
-`fontdone` is also manifest-driven and very rigorous, but it is lower-level and FreeType-specific. It uses a large public C API manifest, input case files, route-audit categories, and a pinned C oracle cache. It allows `expect_error` and `expectation` fields because its public surface must classify C ABI failure contracts and pending/safety routes explicitly.
+`font` is also not the correct canonical surface ID. The source namespace is
+`PIL.ImageFont`, so the canonical ID is `ImageFont`. Lowercase storage slugs may
+be mapped explicitly, but they are not public identities.
 
-`image-slash-star` is the least aligned with the target project-wide design. It has a useful high-level `manifest.yaml`, but the active runner is driven by generated `coverage_matrix.json` and generated reference artifacts. Those rows embed oracle status/error/ref paths/byte counts. This is practical for codecs today, but it is not the desired “input-only + live Pillow oracle” model.
+## The five artifacts are different
 
-The project-wide redesign should therefore use Font/ImageFont as the base runner contract, borrow `fontdone`'s manifest coverage discipline and route accounting, and migrate image-slash-star away from stored output references for project-level parity.
+| Artifact | What it actually models | Main strength | Main limitation |
+| --- | --- | --- | --- |
+| `manifest.yaml` at repository root | Broad Pillow product/API capability catalog | Twelve modules, signatures, modes, formats, variants, targets, edge cases; already feeds coverage and benchmark tooling | Does not directly enumerate executable live-oracle cases; support status is declaration-heavy and sometimes absent/ambiguous |
+| Deprecated Font manifest | One high-level `PIL.ImageFont` parity suite | 41 required operations and 445 input-only cases executed against live Pillow and public Rust behavior | Font-only; mixes some public Pillow APIs with native/helper consumer paths; no project-wide coverage or benchmark contract |
+| Current canonical manifest | Hybrid migration index plus the migrated Font parity suite | Preserves the 445 live Font cases and accounts for all old root-manifest names | Only Font is concretely scoped; other surfaces are name placeholders; one status model is overloaded; it does not yet drive project coverage, benchmarks, or docs |
+| `fontdone/tests/manifest.yaml` | Low-level FreeType C API/ABI subject and case ledger | Exhaustive subjects/cases, strong manifest-case mapping, route accounting, multi-backend parity, stale-cache protection | FreeType-specific; input files include expectation/error metadata; not the high-level Pillow product manifest and not a benchmark/documentation source |
+| `image-slash-star/manifest.yaml` plus generated matrix | Codec/format plan and generated reference matrix | Deep format taxonomy, assets, edge cases, decode/encode lifecycle coverage | Runner reads a generated second inventory with stored oracle outputs/errors; no live Pillow source on every run; benchmark/docs are not integrated |
 
-## Active fixture locations observed
+### Repository-root project manifest
 
-Root-level legacy corpora were moved to:
-
-- `tests/deprecated/fixtures`
-- `tests/deprecated/fixtures_2`
-
-Active crate-local corpora still exist under:
-
-- `pillow-rs/tests/fixtures/font`
-- `pillow-rs/tests/fixtures/image_backend`
-
-Sibling corpora:
-
-- `../image-slash-star/tests/fixtures`
-- `../fontdone/tests/fixtures`
-- `../fontdone/tests/manifest.yaml`
-
-This means the next migration should not assume “all old fixtures are gone.” The root-level legacy corpora are deprecated; crate-local active test fixtures still need migration.
-
-## `pillow-rs` Font/ImageFont model
-
-Primary files:
-
-- `pillow-rs/tests/fixtures/font/font_manifest.yaml`
-- `pillow-rs/tests/font_public_api.rs`
-- `pillow-rs/tests/support/font_runner.rs`
-- `pillow-rs/scripts/font_oracle.py`
-
-### Manifest shape
-
-The Font manifest declares:
-
-- version/suite/input directory;
-- oracle scope (`PIL.ImageFont`, Pillow runtime, Rust contract);
-- out-of-scope features such as successful libraqm shaping;
-- required public operations;
-- negative operations;
-- public method parameter coverage;
-- exact input files.
-
-It is still Font-specific:
-
-- file name is `font_manifest.yaml`;
-- input root is `inputs/public-api`;
-- required operations are all Font/ImageFont-specific;
-- test constants still hard-code Font public operation lists.
-
-### Input JSON contract
-
-The test enforces input-only fixtures.
-
-Allowed document envelope:
+The old root `manifest.yaml` is 2,477 lines and contains twelve modules:
 
 ```text
-version
-operation
-cases
+Image ImageModule ImageDraw ImageFilter ImageEnhance ImageOps
+ImageChops ImageColor ImagePalette ImageFont ImageStat ImageSequence
 ```
 
-Allowed case envelope:
+It has 173 top-level operation rows: 162 declared `implemented`, five
+`ignored`, and six without a status. Rows can contain:
 
 ```text
-case_id
-operation
-inputs
+name signature supported_modes supported_formats param_variants edge_cases
+pillow_since supported_targets methods properties type reason
 ```
 
-Forbidden keys include output/oracle/error material:
+This is the closest existing artifact to a product specification. It already
+feeds:
+
+- operation/mode registries;
+- fixture and coverage validation;
+- multi-backend coverage;
+- benchmark specification generation.
+
+Its weakness is traceability. Concrete parity cases are inferred through other
+files and conventions rather than linked through stable requirement IDs. It
+also conflates a declaration such as `implemented` with evidence that the
+behavior has been compared and covered.
+
+### Deprecated Font manifest
+
+The archived Font v0 manifest is:
 
 ```text
-error
-expect_error
-expected
-hash
-oracle
-output
-outputs
-pixels_hex
-status
+pillow-rs/tests/deprecated/font_public_api_v0/font_manifest.yaml
 ```
 
-This is the correct project-wide rule.
+It contains:
 
-### Oracle model
+- 41 required operations;
+- one negative operation;
+- 23 operation-level parameter coverage declarations;
+- 35 grouped input files;
+- 445 input-only cases.
 
-`font_public_api.rs` starts the pinned Python interpreter from `.oracle-venv/bin/python`, runs `scripts/font_oracle.py`, sends the input-only cases over stdin, and receives a case-id result map.
-
-Important properties:
-
-- the oracle is generated at runtime;
-- fixture JSON does not contain expected output;
-- Pillow public surface is queried live;
-- Pillow layout enum members are queried live;
-- public method signatures are queried live;
-- Rust root API coverage is checked against `src/lib.rs`;
-- input files must exactly match manifest `input_files`.
-
-### Rust execution model
-
-`font_runner::run(case, fixture_root)` returns a structured JSON payload. The test compares:
+It is an executable parity suite:
 
 ```text
-live Pillow oracle payload == Rust payload
+input case -> live Pillow 12.2.0 oracle
+           -> public Rust target execution
+           -> exact normalized Result comparison
 ```
 
-The comparison checks status first and then exact payload equality.
+It is excellent evidence for `ImageFont`, but it is not a full product
+specification. It has no general code-coverage target/dimension schema, no
+benchmark workloads or budgets, and no generated-document interface.
 
-This gives the desired `Result<Output, Error>` behavior even though the envelope is represented as JSON.
+### Current canonical manifest
 
-### Strengths
-
-- Best match for target trust model.
-- Input-only fixtures are actively enforced.
-- Public Pillow surface is queried at runtime, reducing stale manifest risk.
-- Rust implementation is checked through the public/root API path.
-- It contains guardrails against fake coverage/oracle shortcuts in `imagingft.rs`.
-- It handles no-libraqm errors as a real core error contract rather than a test hack.
-
-### Weaknesses to fix during migration
-
-- Manifest and runner are Font-specific.
-- A large amount of public surface knowledge is hard-coded in `font_public_api.rs`.
-- Some repo-helper operations are mixed with true Pillow public operations.
-- Some guardrails read unrelated binding files directly from a Font test.
-- Current implementation is one large test file rather than a reusable shared parity harness.
-
-### Migration implication
-
-Keep the semantics, not the Font-specific structure.
-
-The shared project runner should extract:
-
-- manifest parser;
-- input-only validation;
-- case-id uniqueness validation;
-- asset resolution validation;
-- runtime oracle execution contract;
-- `Result` envelope comparison;
-- public surface coverage checks.
-
-Then Font/ImageFont becomes just one namespace in the project manifest.
-
-## `image-slash-star` model
-
-Primary files:
-
-- `../image-slash-star/manifest.yaml`
-- `../image-slash-star/tests/coverage_matrix_tests.rs`
-- `../image-slash-star/tests/support/json.rs`
-- `../image-slash-star/tests/fixtures/coverage_matrix.json`
-- `../image-slash-star/tests/fixtures/input/jsons/*.json`
-- `../image-slash-star/tests/fixtures/outputs/**`
-
-### Manifest shape
-
-The top-level `manifest.yaml` is broad and format-oriented. It records:
-
-- Pillow 12.2.0 oracle identity;
-- codec-specific oracle versions;
-- quality goals;
-- format coverage plans;
-- format-specific edge cases and assets;
-- decode/encode status.
-
-This is useful as a planning and coverage map, but it is not the active runner input by itself.
-
-### Active runner shape
-
-The active Rust runner is `coverage_matrix_tests.rs`, driven by `tests/fixtures/coverage_matrix.json`.
-
-The matrix rows contain fields such as:
-
-- `expect_error`;
-- `oracle_status`;
-- `oracle_error_type`;
-- `oracle_error_message`;
-- `oracle_error_kind`;
-- `inspect_status`;
-- `verify_status`;
-- `ref_mode`;
-- `ref_size`;
-- `ref_path`;
-- `ref_bytes`;
-- `encoded_ref_path`;
-- `encoded_ref_bytes`.
-
-Decode cases read encoded assets, run `detect_format`, `inspect`, `verify`, `decode`, then compare decoded pixels to stored reference bytes.
-
-Encode cases decode a source asset, encode with params, compare encoded bytes to stored reference bytes, and optionally decode the encoded result back to compare pixels.
-
-### Strengths
-
-- Very broad codec coverage.
-- Good lifecycle checks: detect/inspect/verify/decode/cache behavior.
-- Structured error kind matching exists.
-- Encoded byte parity is exact where reference bytes exist.
-- Format-specific contract checks catch structural regressions that pure pixel comparison may miss.
-- Custom JSON parser keeps tests independent of serde for this crate.
-
-### Weaknesses relative to target model
-
-- The active test is not input-only.
-- Oracle status/errors/reference paths/byte counts are embedded in generated matrix rows.
-- Expected encoded output is stored in fixture outputs.
-- Generated reference artifacts can drift from the current Pillow runtime unless regenerated and verified.
-- The runner is coupled to codec formats, not a generic Pillow public API namespace/operation model.
-- Some row mutation in the test creates malformed encode inputs internally instead of expressing all inputs in JSON.
-
-### Migration implication
-
-For the project-wide manifest, do not copy `coverage_matrix.json` as-is.
-
-Instead:
-
-- migrate each decode/encode row into input-only case JSON;
-- run Pillow 12.2.0 oracle live for decode, inspect, verify, encode, and error behavior;
-- use project runner `Result` comparison;
-- keep `image-slash-star` structural contract checks as optional secondary assertions only after live oracle equality;
-- keep generated reference files only as deprecated/debug evidence, not as the source of truth.
-
-## `fontdone` model
-
-Primary files:
-
-- `../fontdone/tests/manifest.yaml`
-- `../fontdone/tests/fixtures/inputs/public-api/*.json`
-- `../fontdone/tests/unified_fixture_parity.rs`
-- `../fontdone/scripts/run_runtime_parity.py`
-- generated route audit under `../fontdone/target/api-abi-audit/route_audit.json`
-- generated pinned oracle under `../fontdone/target/unified-fixtures/gen_unified_oracle`
-
-### Manifest shape
-
-`tests/manifest.yaml` is a public API subject manifest. It records:
-
-- subject id;
-- kind;
-- C symbol;
-- public header;
-- description;
-- case ids.
-
-This is a true public-surface manifest, not just a fixture index.
-
-Examples of subject kinds include enums, enum variants, structs, functions, macros, and public constants.
-
-### Input JSON shape
-
-Input files live under `tests/fixtures/inputs/public-api`.
-
-Cases contain:
-
-- `case_id`;
-- `subject`;
-- `case`;
-- optional `covers_manifest_cases`;
-- `operation`;
-- `schema`;
-- `expect_error`;
-- `expectation`;
-- `inputs`;
-- optional variants.
-
-`inputs` may contain assets, params, and variants. Variants are expanded into concrete cases with `case_id@variant`.
-
-Unlike the desired project-wide Pillow model, `fontdone` intentionally allows expected-error metadata because C API parity needs exact error contract routing and strict error ledgers.
-
-### Oracle model
-
-`unified_fixture_parity.rs` builds/runs a pinned C FreeType oracle, caches oracle output by:
-
-- oracle identity;
-- argv batch;
-- asset identity;
-- input cases.
-
-It compares three backends to the same oracle where applicable:
-
-- Rust FFI path;
-- C ABI path;
-- WASM ABI path.
-
-The runtime summary reports:
-
-- runnable cases;
-- pending cases;
-- passed/failed totals;
-- covered manifest cases;
-- route evidence categories.
-
-### Route accounting
-
-The route audit categorizes concrete cases:
-
-- `real-parity`;
-- `real-null-validation`;
-- `pending-route`;
-- `safety-extension`;
-- other categories.
-
-Pending/safety routes are not hidden. They are counted and sampled.
-
-### Strengths
-
-- Strong public surface coverage discipline.
-- Explicit mapping from manifest subjects/cases to concrete runtime inputs.
-- Excellent pending-route visibility.
-- Oracle cache key tracks asset identity, preventing stale cache from silently passing.
-- Multi-backend comparison is systematic.
-- Large-scale batching and deduplication are built in.
-
-### Weaknesses relative to target Pillow project model
-
-- It is FreeType C API-specific and much heavier than needed for high-level Pillow APIs.
-- It allows `expect_error` and `expectation` in inputs.
-- Route selection has many operation-specific branches.
-- The comparison backend model includes C ABI and WASM ABI, which is outside the current target if we only want Rust public API vs Pillow.
-
-### Migration implication
-
-Borrow these ideas:
-
-- one public-surface manifest;
-- exact subject/case coverage accounting;
-- explicit pending route classification;
-- route audit generated by maintained tooling;
-- oracle cache keyed by executable/input/assets.
-
-Do not copy these parts directly into the new project-wide Pillow runner:
-
-- C ABI/WASM comparison requirement;
-- C-symbol/header subject model;
-- expected output/error fields in input JSON;
-- route-specific special casing inside the runner.
-
-## Desired project-wide test architecture
-
-Target files:
+The newly created file is:
 
 ```text
 pillow-rs/tests/fixtures/manifest.yaml
-pillow-rs/tests/fixtures/inputs/<namespace>/<operation>.json
-pillow-rs/tests/support/project_parity/
-pillow-rs/tests/project_public_api.rs
 ```
 
-The root-level `tests/fixtures` name was just deprecated. The new active corpus should be crate-local under `pillow-rs/tests/fixtures`, because the active crate tests already use that root. If a true repository-root manifest is still desired, update Make targets and Coverage MCP commands together; do not split active fixture roots.
+It currently contains:
 
-### Manifest should define
+- twelve surfaces;
+- 206 operation rows;
+- 41 active Font operations;
+- one Font negative/unsupported row;
+- 164 pending placeholder rows;
+- 42 indexed Font input files;
+- 445 concrete cases, all belonging to the migrated Font suite.
+
+The old root catalog has 173 rows while the current manifest has 206 because the
+Font migration expands detailed public/helper operation accounting beyond the
+root catalog’s top-level rows.
+
+What the current file proves:
+
+- the twelve old surface names were not silently lost;
+- all migrated Font input files and 445 cases are indexed;
+- Font cases are input-only and runnable through the live oracle.
+
+What it does not prove:
+
+- complete signatures, modes, formats, variants, edges, and exclusions for the
+  eleven non-Font surfaces;
+- concrete parity cases outside Font;
+- project-wide line/branch/function/region coverage;
+- project-wide benchmark workload readiness or performance;
+- current documentation generated from compatible evidence.
+
+Therefore the current `accounting: 100%` is too broad. At most it is:
+
+```text
+inventory classification = represented old names / old manifest names
+```
+
+It must not be presented as “manifest completeness.”
+
+### `fontdone`
+
+`fontdone` is the sibling pure-Rust FreeType-compatible implementation. It is
+not another spelling of `ImageFont`.
+
+Its manifest is a low-level C API/ABI denominator:
+
+- 1,543 public subjects;
+- 4,184 declared manifest cases;
+- functions, records, enums, enum variants, flags, macros, tags, types,
+  constants, and errors;
+- concrete input files mapping runtime cases to manifest cases;
+- route categories such as real parity, null validation, pending route, and
+  safety extension;
+- Rust, C ABI, and WASM paths where applicable.
+
+The project should borrow:
+
+- exhaustive denominator discovery;
+- explicit manifest requirement-to-input mapping;
+- bidirectional route audits;
+- visible pending/incomplete lanes;
+- cache/evidence keys containing executable, input, and asset identity.
+
+The project must not copy:
+
+- expected output/error fields into active Pillow input JSON;
+- C symbol/header/ABI structure as the high-level Pillow schema;
+- operation-specific comparison shortcuts;
+- C/WASM requirements for high-level APIs that do not expose those interfaces.
+
+### `image-slash-star`
+
+`image-slash-star` is a codec-focused sibling project. Its top-level manifest
+describes eight codecs and roughly 380 edge cases:
+
+```text
+jpeg png gif bmp webp tiff ico avif
+```
+
+It has rich format details:
+
+- oracle and codec versions;
+- extensions and magic bytes;
+- decoder/encoder ownership;
+- assets and format-specific edge cases;
+- planned gaps and quality goals.
+
+The active test, however, reads generated `coverage_matrix.json` and stored
+reference artifacts. Matrix rows include oracle status/error and expected
+reference paths/bytes. This creates two practical sources of truth:
+
+```text
+high-level manifest -> generated matrix + stored output -> active runner
+```
+
+The project should borrow the format taxonomy, deterministic asset generation,
+edge cases, and lifecycle stages. It must convert them to input-only live-oracle
+parity cases. Generated oracle output remains evidence, not input truth.
+
+## Source-of-truth architecture
+
+There are three specification layers and three generated evidence lanes:
+
+```text
+                         CANONICAL SPECIFICATION
+
+ authoritative inventory
+          |
+          v
+ manifest.yaml ---- requirements/status/policy/interfaces/docs
+      |                         |                         |
+      v                         v                         v
+ parity input JSON       coverage plan JSON       benchmark input JSON
+ public invocations      test/case selection       workloads/execution knobs
+      |                         |                         |
+      v                         v                         v
+ live source+target      managed instrumentation   benchmark runner
+      |                         |                         |
+      v                         v                         v
+ parity-result.json      coverage-result.json      benchmark-result.json
+      \_________________________|_________________________/
+                                |
+                  compatible identity/hash join
+                                |
+                                v
+                       status-report.json
+                                |
+                                v
+                 generated specification/status docs
+```
+
+Nothing below the “canonical specification” line writes results back into the
+manifest or input JSON.
+
+## Canonical manifest contract
+
+The manifest is versioned specification. Its required top-level shape is:
 
 ```yaml
-version: 1
-oracle:
-  provider: pillow
+schema: migration-parity/manifest@2
+version: 2
+scope:
+  id: pillow-public-api
+  phase: final
+  inventory:
+    authority: manifest.yaml plus verified Pillow public discovery
+    revision: Pillow-12.2.0
+source:
+  name: Pillow
   version: "12.2.0"
-  runtime: ".oracle-venv/bin/python"
-
-namespaces:
-  - id: ImageFont
-    pillow_path: PIL.ImageFont
-    rust_surface: pillow_rs::imagefont_*
-    input_dir: inputs/ImageFont
-    operations:
-      - id: getbbox
-        public: true
-        input_file: getbbox.json
-      - id: getlength
-        public: true
-        input_file: getlength.json
+  runtime: .oracle-venv/bin/python
+  contract: selected PIL public observable behavior
+target:
+  name: pillow-rs
+  version: current-checkout
+  runtime: public Rust API
+  contract: selected public Rust observable behavior
+policy:
+  input_only: true
+  live_oracle: true
+  result_comparison: true
+  coverage_required_for_claims: true
+interfaces:
+  parity:
+    input_schema: migration-parity/parity-input@1
+    result_schema: migration-parity/parity-result@1
+    command: maintained repository command
+  coverage:
+    input_schema: migration-parity/coverage-input@1
+    result_schema: migration-parity/coverage-result@1
+    command: maintained managed-coverage command
+  benchmark:
+    input_schema: migration-parity/benchmark-input@1
+    result_schema: migration-parity/benchmark-result@1
+    command: maintained benchmark command
+  aggregation:
+    input_schemas:
+      - migration-parity/parity-result@1
+      - migration-parity/coverage-result@1
+      - migration-parity/benchmark-result@1
+    result_schema: migration-parity/status-report@1
+    command: maintained aggregation command
+surfaces: []
+documentation:
+  command: maintained documentation command
+  outputs: []
 ```
 
-The final schema should support all PIL namespaces, but the first migration should keep the schema small and strict.
+The manifest owns:
 
-### Input JSON should define only
+- canonical surface and operation identity;
+- source and target signatures;
+- endpoint classification;
+- declared target support;
+- exhaustive behavior/performance requirements;
+- parity, coverage, and benchmark lane readiness;
+- indexed input file paths;
+- output/comparison policy;
+- coverage targets, dimensions, and thresholds;
+- benchmark metrics and product budgets;
+- maintained runner and documentation interfaces;
+- explicit exclusions, blockers, and deprecation mappings.
+
+It does not own:
+
+- pass/fail;
+- covered/total counts or percentages;
+- snapshot/run IDs;
+- timings or sample distributions;
+- regression outcomes;
+- last successful results;
+- generated documentation text.
+
+## Strict, well-defined, extensible interfaces
+
+“Extensible” means the fixed schema has enough defined structure for diverse
+interfaces and can improve deliberately. It does not mean runtime extension
+registries or dynamic payload schemas.
+
+- Every manifest, input, result, and aggregate object has exact allowed fields.
+- Unknown fields and unsupported schema identifiers fail before execution.
+- Diversity is expressed as data inside defined fields: interface `kind`,
+  requirements, public params, typed assets, environment, output shape,
+  coverage dimensions, benchmark metrics, thresholds, and budgets.
+- If a real case cannot be represented, propose the missing fixed field or enum
+  value with exact semantics.
+- An accepted shape/meaning change gets a new schema major, coordinated
+  producer/consumer changes, and a deterministic maintained migrator.
+- Old and migrated examples plus intentionally invalid examples must be tested.
+- Evidence from different schema versions cannot be joined.
+- Documentation is regenerated from the migrated specification.
+
+This keeps the interface closed and predictable today while leaving a clear,
+reviewable path to improve it tomorrow.
+
+## Operation contract
+
+Each public name appears once. An endpoint operation has:
+
+```yaml
+- id: getbbox
+  kind: method
+  source_signature: "getbbox(text, mode='', direction=None, ...)"
+  target_signature: "getbbox(text, ...)"
+  classification: endpoint
+  support:
+    status: supported
+  requirements:
+    - id: text.basic_latin
+      dimension: input_family
+      description: Basic Latin text
+      lanes: [parity, coverage]
+    - id: performance.standard_latency
+      dimension: performance
+      description: Standard bbox latency
+      lanes: [benchmark]
+      budget:
+        metric: latency
+        statistic: median
+        operator: less_than_or_equal
+        value: 10
+        unit: millisecond
+  parity:
+    status: active
+    input_files: [inputs/parity/ImageFont/getbbox.json]
+    output_shape: sequence
+    comparison:
+      normalization: exact
+  coverage:
+    status: active
+    input_files: [inputs/coverage/ImageFont/getbbox.json]
+    targets: [pillow-rs/src/font.rs]
+    dimensions: [function, line, branch, region]
+    thresholds:
+      line: 100
+      branch: 100
+  benchmark:
+    status: active
+    input_files: [inputs/benchmark/ImageFont/getbbox.json]
+    metrics: [latency]
+```
+
+Requirements are the semantic join. Every input item names requirement IDs in
+`covers`. No mapping is inferred from filenames or prose.
+
+## Status definitions
+
+Three different facts must never share one status field.
+
+### Classification
+
+- `endpoint`: independently observable public behavior.
+- `non_endpoint`: inventoried public metadata, namespace, type marker,
+  re-export, or other non-invocable name.
+
+### Target support declaration
+
+- `supported`: target claims the complete declared behavior contract.
+- `partial`: exact missing requirement IDs and reason are present.
+- `unimplemented`: required behavior is absent; reason and blocker are present.
+- `intentionally_unsupported`: policy exclusion with reason and authority.
+- `out_of_scope`: outside the declared denominator with reason and authority.
+- `deprecated`: retained for migration traceability with replacement/authority.
+- `not_applicable`: only for a `non_endpoint`.
+
+This is a product declaration, not measured proof.
+
+### Lane readiness
+
+Parity, coverage, and benchmark each use:
+
+- `active`: indexed inputs exist and the runner is executable; the result may
+  pass or fail.
+- `pending`: runner is not ready; reason and blocker are required.
+- `blocked`: inputs/routing exist but an external prerequisite blocks execution;
+  reason, blocker, and unblock condition are required.
+- `not_applicable`: the lane intentionally does not apply; an endpoint needs a
+  reason.
+
+Passing, failing, coverage percentage, and benchmark regression are generated
+evidence, never lane state.
+
+## Three input interfaces
+
+All active input files are specification and recursively reject expected or
+observed results.
+
+### Parity input
 
 ```json
 {
-  "version": 1,
-  "namespace": "ImageFont",
+  "schema": "migration-parity/parity-input@1",
+  "surface": "ImageFont",
   "operation": "getbbox",
   "cases": [
     {
-      "case_id": "ImageFont.getbbox.basic_latin_default",
+      "case_id": "ImageFont.getbbox.basic_latin",
       "operation": "getbbox",
+      "covers": ["text.basic_latin"],
       "inputs": {
         "assets": {},
-        "params": {}
+        "params": {"text": "hello"},
+        "environment": {}
       }
     }
   ]
 }
 ```
 
-Forbidden in input JSON:
+The same case independently enters the live Pillow oracle and public Rust
+target. Neither side receives the other side’s result.
 
-```text
-expect_error
-expectation
-expected
-oracle
-output
-outputs
-hash
-sha256
-raw_path
-ref_path
-ref_bytes
-encoded_ref_path
-encoded_ref_bytes
-status
-error
-```
-
-Error expectations must come from the live oracle result, not the input fixture.
-
-### Runtime comparison envelope
-
-Both Pillow and Rust should normalize into:
-
-```text
-Result<ParityOutput, ParityError>
-```
-
-Serializable JSON shape:
+### Coverage plan input
 
 ```json
 {
-  "status": "ok",
-  "value": {}
+  "schema": "migration-parity/coverage-input@1",
+  "surface": "ImageFont",
+  "operation": "getbbox",
+  "plans": [
+    {
+      "plan_id": "ImageFont.getbbox.public_paths",
+      "operation": "getbbox",
+      "covers": ["text.basic_latin"],
+      "selectors": {
+        "parity_case_ids": ["ImageFont.getbbox.basic_latin"],
+        "repository_test_ids": []
+      },
+      "execution": {
+        "contexts": ["parity"],
+        "features": [],
+        "backends": ["cpu"]
+      }
+    }
+  ]
 }
+```
+
+This selects execution. It does not contain line counts, percentages, snapshots,
+or exclusions. Repository test IDs may cover target internals but cannot prove
+public parity.
+
+### Benchmark workload input
+
+```json
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "surface": "ImageFont",
+  "operation": "getbbox",
+  "workloads": [
+    {
+      "workload_id": "ImageFont.getbbox.standard_latin",
+      "operation": "getbbox",
+      "covers": ["performance.standard_latency"],
+      "input": {
+        "parity_case_id": "ImageFont.getbbox.basic_latin"
+      },
+      "execution": {
+        "profile": "standard",
+        "warmup_iterations": 20,
+        "measurement_iterations": 100,
+        "samples": 30,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "backends": ["cpu"]
+      }
+    }
+  ]
+}
+```
+
+Execution controls are specification. Timings, machine data, statistics, and
+budget outcomes are results.
+
+### Forbidden input content
+
+Every input kind rejects:
+
+```text
+actual baseline error expect_error expectation expected golden hash oracle
+output outputs pass passed pixels raw_path ref_bytes ref_path regression
+result results sha256 snapshot status threshold_met timing timings
+```
+
+An invalid call or missing asset may be an input. The input must not say which
+error or result should occur.
+
+## Three result interfaces
+
+Every result includes:
+
+- schema and artifact kind;
+- durable run identity and timestamps;
+- manifest path/version/hash;
+- exact indexed input path/hash list;
+- immutable target revision/build/runtime identity;
+- command/cwd identity;
+- lane-specific environment identity;
+- selected/executed/not-run counts;
+- infrastructure failures separated from behavior/results.
+
+### Parity result
+
+`migration-parity/parity-result@1` contains:
+
+- source identity;
+- normalized source `PublicResult`;
+- normalized target `PublicResult`;
+- generic comparison outcome and structured diffs per case;
+- selected, executed, passed, failed, and not-run counts;
+- infrastructure failures separately.
+
+Public result is exactly:
+
+```json
+{"case_id": "id", "status": "ok", "value": {}}
 ```
 
 or:
 
 ```json
 {
+  "case_id": "id",
   "status": "error",
   "error": {
     "class": "ValueError",
-    "kind": "bad_mode",
-    "message": "..."
+    "kind": "invalid_argument",
+    "message": "stable public message",
+    "stage": "layout",
+    "code": null
   }
 }
 ```
 
-Comparison rule:
+A public error is behavior. Oracle startup, timeout, crash, malformed output, or
+missing IDs is infrastructure failure.
 
-- `ok` vs `ok`: exact value equality after deterministic normalization;
-- `error` vs `error`: exact class/kind and stable message/category comparison;
-- `ok` vs `error`: fail;
-- `error` vs `ok`: fail.
+### Coverage result
 
-The test file must not decide which case “should error.” Pillow decides at runtime.
+`migration-parity/coverage-result@1` contains:
 
-## Migration sequence
+- managed run and snapshot identity;
+- collector name/version;
+- plans and exact selected tests/cases;
+- test execution status;
+- instrumented target paths/modules;
+- integer covered/total counts per function/line/branch/region dimension;
+- uncovered item locations;
+- threshold calculations and outcomes;
+- artifact ingestion state and infrastructure failures.
 
-1. Create a shared project manifest parser while keeping current Font test behavior unchanged.
-2. Move `pillow-rs/tests/fixtures/font/font_manifest.yaml` content into `pillow-rs/tests/fixtures/manifest.yaml` under namespace `ImageFont`.
-3. Update `font_public_api.rs` to read the project manifest but filter `namespace == ImageFont`.
-4. Extract generic input-only validation into shared support code.
-5. Extract generic runtime-oracle invocation into shared support code.
-6. Extract generic `Result` payload comparison into shared support code.
-7. Keep Font-specific operation execution in `font_runner.rs` temporarily.
-8. Migrate crate-local `pillow-rs/tests/fixtures/image_backend` rows into the same manifest namespace model.
-9. Replace stored image backend outputs with live Pillow oracle generation.
-10. Migrate selected image-slash-star codec rows into project input-only cases.
-11. Add route/pending accounting borrowed from fontdone, but only as manifest metadata; do not put expected runtime result in input JSON.
-12. Once an old runner's cases are fully represented and Coverage MCP proves equivalent/better coverage, remove that old runner and its deprecated fixture outputs.
+Percentages are derived from integer counts. Coverage does not upgrade or
+replace parity evidence.
 
-## Immediate action items
+### Benchmark result
 
-1. Decide active manifest location:
-   - recommended: `pillow-rs/tests/fixtures/manifest.yaml`;
-   - avoid repository-root `tests/fixtures` because that root was just deprecated and is not crate-local.
-2. Add project manifest schema with only `ImageFont` migrated first.
-3. Update Font runner to consume project manifest without changing case execution.
-4. Run Font parity and Coverage MCP to prove no regression.
-5. Migrate `pillow-rs/tests/fixtures/image_backend/manifest.json` into the same manifest schema.
-6. Write a live Pillow oracle for image backend decode/verify/load parity.
-7. Do not migrate image-slash-star generated output references directly; convert them to input-only cases and runtime oracle rows.
-8. Keep fontdone read-only unless the user explicitly authorizes upstream changes.
+`migration-parity/benchmark-result@1` contains:
 
-## Design decision
+- workload IDs and exact execution controls;
+- OS, architecture, CPU, memory, power mode, toolchain, and stable non-secret
+  machine identity;
+- sample count and units;
+- min/median/mean/p95/max/standard deviation where relevant;
+- raw sample artifact reference;
+- declared budget calculation and outcome;
+- optional compatible baseline result ID/comparison;
+- infrastructure failures.
 
-Use Font/ImageFont as the canonical project-wide parity test design.
+Baseline comparisons require compatible manifest/input, workload, target
+configuration, and machine/environment identity.
 
-Use fontdone as the canonical manifest coverage/accounting design.
+## Aggregate status and documentation
 
-Treat image-slash-star's current coverage matrix as migration source material, not as the final project-level truth model.
+The aggregate report is a derived join, not another source of truth. It accepts
+an artifact only when manifest hash, indexed input hashes, target revision, lane
+schema, and relevant runtime/backend identity are compatible.
+
+Missing, stale, incompatible, partial, cancelled, or failed evidence is
+`not_proven`. It is never silently treated as current.
+
+Generated documentation has two layers:
+
+1. Specification reference from the manifest and indexed inputs:
+   surfaces, signatures, support declarations, exclusions, requirements,
+   cases/plans/workloads, coverage policy, benchmark budgets, and commands.
+2. Current status from compatible aggregate evidence:
+   parity failures, uncovered code, benchmark measurements/budgets, blockers,
+   stale evidence, and run/snapshot IDs.
+
+Every generated page states:
+
+- generator/schema version;
+- manifest path/version/hash;
+- target revision where evidence appears;
+- parity run, coverage run/snapshot, and benchmark run IDs;
+- whether each statement is `declared`, `measured`, `not_proven`, or
+  `stale/incompatible`.
+
+Recommended outputs:
+
+```text
+docs/generated/api-support.md
+docs/generated/parity-status.md
+docs/generated/coverage-status.md
+docs/generated/benchmark-status.md
+docs/generated/status-report.json
+```
+
+CI either regenerates and diffs checked-in documentation or publishes it from
+immutable artifacts. Documentation never writes results into specification.
+
+## Completeness language
+
+Bare “100%” is forbidden. Report the following independently:
+
+1. inventory classification = represented/classified discovered public names /
+   authoritative discovered names;
+2. requirement specification = requirements with complete lane policy /
+   declared requirements;
+3. parity input mapping = parity requirements mapped to cases / parity
+   requirements;
+4. coverage input mapping = coverage requirements mapped to plans / coverage
+   requirements;
+5. benchmark input mapping = benchmark requirements mapped to workloads /
+   benchmark requirements;
+6. parity/coverage/benchmark lane readiness = active runnable operations /
+   applicable in-scope endpoint operations for that lane;
+7. parity outcome = passing comparisons / executed comparisons plus run ID;
+8. code coverage = covered / total for each named dimension plus snapshot ID;
+9. benchmark outcome = workloads meeting budgets / measured workloads plus run
+   and machine identity;
+10. documentation freshness = outputs generated from the current manifest and
+    compatible evidence / declared outputs.
+
+Name placeholders satisfy only the first dimension.
+
+## Required rebuild
+
+The current canonical manifest must be rebuilt rather than relabeled:
+
+1. preserve the old root manifest as migration input until every field is
+   mapped;
+2. use the exact twelve public surface names, including `ImageFont`;
+3. flatten every function, method, property, type, and intentional non-endpoint
+   into a uniquely classified operation;
+4. preserve signatures, modes, formats, parameter variants, edge cases,
+   supported targets, Pillow version, exclusions, and reasons;
+5. split classification, support, parity, coverage, and benchmark states;
+6. define stable requirements for every applicable lane;
+7. migrate the 445 Font cases under canonical `ImageFont` IDs and map them with
+   `covers`;
+8. create coverage plans and benchmark workloads instead of claiming those
+   lanes from parity cases alone;
+9. convert image backend and `image-slash-star` cases to input-only live Pillow
+   calls;
+10. generate three result artifacts, aggregate only compatible evidence, and
+    generate documentation;
+11. add CI gates for authoritative inventory drift, per-lane input bijection,
+    runner registry drift, evidence compatibility, and docs drift;
+12. remove old/deprecated material only after equivalent or better mapped
+    specification and compatible evidence exist.
+
+Until that rebuild is complete, the honest current statement is:
+
+```text
+Old-name inventory: accounted for.
+Font parity input migration: concrete.
+Project-wide scenario specification: incomplete.
+Project-wide parity: not proven.
+Project-wide code coverage: not proven.
+Project-wide benchmark readiness/performance: not proven.
+Generated documentation freshness: not implemented.
+```

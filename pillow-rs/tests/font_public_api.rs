@@ -1,44 +1,218 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     env, fs,
+    fs::File,
     io::Write,
     path::{Path, PathBuf},
     process::{Command, Stdio},
+    thread,
+    time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+use serde::Deserialize;
 use serde_json::Value;
 
 #[path = "support/font_runner.rs"]
 mod font_runner;
+#[path = "support/migration_parity.rs"]
+mod migration_parity;
+
+use migration_parity::{Case, OutputShape, ResultEnvelope, compare_results};
 
 const NO_LIBRAQM_MESSAGE: &str =
     "'setting text direction, language or font features is not supported without libraqm'";
 
-const FORBIDDEN_INPUT_KEYS: [&str; 9] = [
+const FORBIDDEN_INPUT_KEYS: [&str; 20] = [
+    "actual",
+    "baseline",
+    "encoded_ref_bytes",
+    "encoded_ref_path",
     "error",
     "expect_error",
+    "expectation",
     "expected",
+    "golden",
     "hash",
     "oracle",
     "output",
     "outputs",
+    "pixels",
     "pixels_hex",
+    "raw_path",
+    "ref_bytes",
+    "ref_path",
+    "sha256",
     "status",
 ];
 
 #[derive(Debug)]
 struct FontManifest {
+    asset_dir: String,
     input_dir: String,
     input_files: BTreeSet<String>,
     negative_operations: BTreeSet<String>,
+    operation_shapes: BTreeMap<String, OutputShape>,
     public_method_parameters: BTreeMap<String, ParameterCoverage>,
     required_operations: BTreeSet<String>,
+    source_name: String,
+    target_name: String,
+    case_count: usize,
 }
 
 #[derive(Debug)]
 struct ParameterCoverage {
     blocked: BTreeSet<String>,
     covered: BTreeSet<String>,
+    required_values: BTreeMap<String, BTreeSet<String>>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct MigrationManifest {
+    version: u64,
+    source: SourceIdentity,
+    target: TargetIdentity,
+    policy: Policy,
+    migration: Migration,
+    accounting: Accounting,
+    surfaces: Vec<Surface>,
+    evidence: Evidence,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceIdentity {
+    name: String,
+    version: String,
+    runtime: String,
+    contract: String,
+    identity: SourceRuntimeIdentity,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SourceRuntimeIdentity {
+    module: String,
+    native_core: String,
+    freetype_version: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TargetIdentity {
+    name: String,
+    version: String,
+    runtime: String,
+    contract: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Policy {
+    input_only: bool,
+    live_oracle: bool,
+    result_comparison: bool,
+    coverage_required_for_claims: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Migration {
+    source: String,
+    source_status: String,
+    case_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Accounting {
+    inventory_source: String,
+    inventory_version: String,
+    surface_total: usize,
+    surface_accounted: usize,
+    surface_accounting_percent: u64,
+    public_name_total: usize,
+    public_name_accounted: usize,
+    public_name_accounting_percent: u64,
+    active_surface_count: usize,
+    pending_surface_count: usize,
+    active_operation_count: usize,
+    unsupported_operation_count: usize,
+    pending_operation_count: usize,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Surface {
+    id: String,
+    source_path: String,
+    target_path: String,
+    input_root: Option<String>,
+    asset_root: String,
+    status: String,
+    reason: Option<String>,
+    blocker: Option<String>,
+    exclusions: Vec<String>,
+    inventory: SurfaceInventory,
+    public_names: PublicNames,
+    operations: Vec<ManifestOperation>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SurfaceInventory {
+    source: String,
+    public_names: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PublicNames {
+    active: Vec<String>,
+    pending: Vec<String>,
+    non_endpoint: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ManifestOperation {
+    id: String,
+    kind: String,
+    status: String,
+    legacy_status: Option<String>,
+    input: Option<String>,
+    output_shape: Option<OutputShape>,
+    required_parameter_values: BTreeMap<String, Vec<String>>,
+    branches: Vec<String>,
+    coverage_regions: Vec<String>,
+    case_count: usize,
+    reason: Option<String>,
+    blocker: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Evidence {
+    parity_command: String,
+    coverage_command: String,
+    coverage_artifact: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OraclePayload {
+    identity: OracleIdentity,
+    results: Vec<ResultEnvelope>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct OracleIdentity {
+    pillow_version: String,
+    python_executable: String,
+    pillow_module: String,
+    native_core: String,
+    freetype_version: String,
 }
 
 const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 41] = [
@@ -85,6 +259,24 @@ const EXPECTED_FONT_PUBLIC_OPERATIONS: [&str; 41] = [
     "validate_transposed_length",
 ];
 
+const EXPECTED_PROJECT_SURFACES: [&str; 12] = [
+    "Image",
+    "ImageModule",
+    "ImageDraw",
+    "ImageFilter",
+    "ImageEnhance",
+    "ImageOps",
+    "ImageChops",
+    "ImageColor",
+    "ImagePalette",
+    "font",
+    "ImageStat",
+    "ImageSequence",
+];
+
+const EXPECTED_PROJECT_PUBLIC_NAME_COUNT: usize = 173;
+const EXPECTED_PROJECT_PENDING_OPERATION_COUNT: usize = 164;
+
 const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 18] = [
     "draw_text",
     "font_size",
@@ -108,17 +300,6 @@ const EXPECTED_REPO_FONT_HELPER_OPERATIONS: [&str; 18] = [
 
 const EXPECTED_OUT_OF_SCOPE: [&str; 1] = [
     "libraqm successful shaping; direction/features/language rows must match Pillow's no-libraqm errors",
-];
-
-const EXPECTED_ORACLE_SCOPE: [(&str, &str); 5] = [
-    ("expected_runtime", "python_pillow_font"),
-    ("expected_path", "PIL.ImageFont"),
-    (
-        "native_core",
-        "PIL.ImageFont public module; PIL._imagingft is asserted only for FreeTypeFont-backed rows",
-    ),
-    ("rust_runtime", "pillow_rs::FreeTypeFont"),
-    ("rust_contract", "Result-style status payload"),
 ];
 
 const EXPECTED_IMAGEFONT_LAYOUT_MEMBERS: [&str; 2] = ["BASIC", "RAQM"];
@@ -157,16 +338,6 @@ const EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES: [&str; 21] = [
     "os",
     "sys",
     "warnings",
-];
-
-const ALLOWED_FONT_INPUT_GROUPS: [&str; 3] = ["constructor", "load_failure", "variations"];
-
-const ALLOWED_CASE_ID_GROUP_PREFIXES: [&str; 5] = [
-    "font.constructor.",
-    "font.layout_failure.",
-    "font.load_failure.",
-    "font.unsupported_operation.",
-    "font.variations.",
 ];
 
 const EXPECTED_BLOCKED_PUBLIC_PARAMETERS: [(&str, &str); 0] = [];
@@ -335,7 +506,7 @@ const ROOT_FONT_API_TO_OPERATION: [(&str, &str); 46] = [
 ];
 
 fn fixture_root() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/font")
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures")
 }
 
 fn oracle_site_packages() -> Vec<PathBuf> {
@@ -403,18 +574,491 @@ fn oracle_python() -> PathBuf {
     candidate
 }
 
+fn assert_present(value: &Option<String>, context: &str) {
+    assert!(
+        value.as_ref().is_some_and(|text| !text.is_empty()),
+        "{context} must be present and non-empty"
+    );
+}
+
+fn assert_project_surface_accounting(path: &Path, manifest: &MigrationManifest) {
+    let accounting = &manifest.accounting;
+    assert_eq!(
+        accounting.inventory_source,
+        "tests/deprecated/project_manifest_v0/manifest.yaml"
+    );
+    assert_eq!(accounting.inventory_version, "0.2.0");
+    assert_eq!(accounting.surface_total, EXPECTED_PROJECT_SURFACES.len());
+    assert_eq!(
+        accounting.surface_accounted,
+        EXPECTED_PROJECT_SURFACES.len()
+    );
+    assert_eq!(accounting.surface_accounting_percent, 100);
+    assert_eq!(
+        accounting.public_name_total,
+        EXPECTED_PROJECT_PUBLIC_NAME_COUNT
+    );
+    assert_eq!(
+        accounting.public_name_accounted,
+        EXPECTED_PROJECT_PUBLIC_NAME_COUNT
+    );
+    assert_eq!(accounting.public_name_accounting_percent, 100);
+    assert_eq!(accounting.active_surface_count, 1);
+    assert_eq!(
+        accounting.pending_surface_count,
+        EXPECTED_PROJECT_SURFACES.len() - 1
+    );
+    assert_eq!(
+        accounting.active_operation_count,
+        EXPECTED_FONT_PUBLIC_OPERATIONS.len()
+    );
+    assert_eq!(accounting.unsupported_operation_count, 1);
+    assert_eq!(
+        accounting.pending_operation_count,
+        EXPECTED_PROJECT_PENDING_OPERATION_COUNT
+    );
+
+    let expected_surface_ids = EXPECTED_PROJECT_SURFACES
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let observed_surface_ids = manifest
+        .surfaces
+        .iter()
+        .map(|surface| surface.id.clone())
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        observed_surface_ids,
+        expected_surface_ids,
+        "{} must classify every deprecated project-manifest surface exactly",
+        path.display()
+    );
+    assert_eq!(
+        observed_surface_ids.len(),
+        manifest.surfaces.len(),
+        "{} contains duplicate surface IDs",
+        path.display()
+    );
+
+    let mut inventory_name_count = 0usize;
+    let mut active_surface_count = 0usize;
+    let mut pending_surface_count = 0usize;
+    let mut active_operation_count = 0usize;
+    let mut unsupported_operation_count = 0usize;
+    let mut pending_operation_count = 0usize;
+
+    for surface in &manifest.surfaces {
+        assert!(
+            !surface.source_path.is_empty() && !surface.target_path.is_empty(),
+            "{} surface {} must declare source and target paths",
+            path.display(),
+            surface.id
+        );
+        assert_eq!(
+            surface.inventory.source,
+            "deprecated-project-manifest-v0",
+            "{} surface {} has an unknown inventory source",
+            path.display(),
+            surface.id
+        );
+        let inventory_names = surface
+            .inventory
+            .public_names
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(
+            inventory_names.len(),
+            surface.inventory.public_names.len(),
+            "{} surface {} contains duplicate inventory names",
+            path.display(),
+            surface.id
+        );
+        assert!(
+            !inventory_names.is_empty(),
+            "{} surface {} has an empty legacy inventory",
+            path.display(),
+            surface.id
+        );
+        inventory_name_count += inventory_names.len();
+
+        let active_names = surface
+            .public_names
+            .active
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let pending_names = surface
+            .public_names
+            .pending
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let non_endpoint_names = surface
+            .public_names
+            .non_endpoint
+            .iter()
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        assert_eq!(active_names.len(), surface.public_names.active.len());
+        assert_eq!(pending_names.len(), surface.public_names.pending.len());
+        assert_eq!(
+            non_endpoint_names.len(),
+            surface.public_names.non_endpoint.len()
+        );
+        assert!(
+            active_names.is_disjoint(&pending_names)
+                && active_names.is_disjoint(&non_endpoint_names)
+                && pending_names.is_disjoint(&non_endpoint_names),
+            "{} surface {} classifies a public name more than once",
+            path.display(),
+            surface.id
+        );
+        let classified_names = active_names
+            .union(&pending_names)
+            .cloned()
+            .collect::<BTreeSet<_>>()
+            .union(&non_endpoint_names)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let unclassified = inventory_names
+            .difference(&classified_names)
+            .cloned()
+            .collect::<Vec<_>>();
+        assert!(
+            unclassified.is_empty(),
+            "{} surface {} leaves legacy public names unclassified: {unclassified:?}",
+            path.display(),
+            surface.id
+        );
+
+        match surface.status.as_str() {
+            "active" => {
+                active_surface_count += 1;
+                assert_eq!(
+                    surface.id,
+                    "font",
+                    "{} only the proven Font surface may be active",
+                    path.display()
+                );
+                assert!(surface.reason.is_none() && surface.blocker.is_none());
+                assert!(surface.public_names.pending.is_empty());
+                assert_present(
+                    &surface.input_root,
+                    &format!("active surface {} input_root", surface.id),
+                );
+            }
+            "pending" => {
+                pending_surface_count += 1;
+                assert_present(
+                    &surface.reason,
+                    &format!("pending surface {} reason", surface.id),
+                );
+                assert_present(
+                    &surface.blocker,
+                    &format!("pending surface {} blocker", surface.id),
+                );
+                assert!(
+                    surface.input_root.is_none(),
+                    "{} pending surface {} must not claim an active input root",
+                    path.display(),
+                    surface.id
+                );
+                assert!(surface.public_names.active.is_empty());
+                assert_eq!(
+                    pending_names,
+                    inventory_names,
+                    "{} pending surface {} must expose its full legacy inventory as pending",
+                    path.display(),
+                    surface.id
+                );
+            }
+            other => panic!(
+                "{} surface {} has unclassified status {other}",
+                path.display(),
+                surface.id
+            ),
+        }
+
+        let mut operation_ids = BTreeSet::new();
+        for operation in &surface.operations {
+            assert!(
+                operation_ids.insert(operation.id.clone()),
+                "{} surface {} duplicates operation {}",
+                path.display(),
+                surface.id,
+                operation.id
+            );
+            assert!(
+                !operation.kind.is_empty(),
+                "{} surface {} operation {} must declare a kind",
+                path.display(),
+                surface.id,
+                operation.id
+            );
+            match operation.status.as_str() {
+                "active" | "unsupported" => {
+                    assert_eq!(
+                        surface.status,
+                        "active",
+                        "{} executable operation {} cannot belong to pending surface {}",
+                        path.display(),
+                        operation.id,
+                        surface.id
+                    );
+                    assert_present(
+                        &operation.input,
+                        &format!("operation {} input", operation.id),
+                    );
+                    assert!(
+                        operation.output_shape.is_some(),
+                        "{} operation {} must declare an output shape",
+                        path.display(),
+                        operation.id
+                    );
+                    assert!(
+                        !operation.branches.is_empty() && !operation.coverage_regions.is_empty(),
+                        "{} operation {} must declare branches and coverage regions",
+                        path.display(),
+                        operation.id
+                    );
+                    assert!(
+                        operation.reason.is_none()
+                            && operation.blocker.is_none()
+                            && operation.legacy_status.is_none(),
+                        "{} executable operation {} must not carry pending metadata",
+                        path.display(),
+                        operation.id
+                    );
+                    if operation.status == "active" {
+                        active_operation_count += 1;
+                    } else {
+                        unsupported_operation_count += 1;
+                    }
+                }
+                "pending" => {
+                    pending_operation_count += 1;
+                    assert_eq!(
+                        surface.status,
+                        "pending",
+                        "{} pending operation {} must belong to a pending surface",
+                        path.display(),
+                        operation.id
+                    );
+                    assert!(
+                        operation.input.is_none()
+                            && operation.output_shape.is_none()
+                            && operation.branches.is_empty()
+                            && operation.coverage_regions.is_empty()
+                            && operation.case_count == 0,
+                        "{} pending operation {} must not claim runnable evidence",
+                        path.display(),
+                        operation.id
+                    );
+                    assert_present(
+                        &operation.reason,
+                        &format!("pending operation {} reason", operation.id),
+                    );
+                    assert_present(
+                        &operation.blocker,
+                        &format!("pending operation {} blocker", operation.id),
+                    );
+                    assert!(
+                        operation
+                            .legacy_status
+                            .as_deref()
+                            .is_some_and(|status| matches!(
+                                status,
+                                "implemented" | "ignored" | "unclassified"
+                            )),
+                        "{} pending operation {} has an invalid legacy status",
+                        path.display(),
+                        operation.id
+                    );
+                }
+                other => panic!(
+                    "{} surface {} operation {} has unclassified status {other}",
+                    path.display(),
+                    surface.id,
+                    operation.id
+                ),
+            }
+        }
+        if surface.status == "pending" {
+            assert_eq!(
+                operation_ids,
+                inventory_names,
+                "{} pending surface {} operation rows must exactly match its legacy inventory",
+                path.display(),
+                surface.id
+            );
+        }
+    }
+
+    assert_eq!(inventory_name_count, accounting.public_name_accounted);
+    assert_eq!(active_surface_count, accounting.active_surface_count);
+    assert_eq!(pending_surface_count, accounting.pending_surface_count);
+    assert_eq!(active_operation_count, accounting.active_operation_count);
+    assert_eq!(
+        unsupported_operation_count,
+        accounting.unsupported_operation_count
+    );
+    assert_eq!(pending_operation_count, accounting.pending_operation_count);
+}
+
 fn load_manifest(root: &Path) -> FontManifest {
-    let path = root.join("font_manifest.yaml");
-    let text = fs::read_to_string(&path).expect("font public-api manifest must be readable");
-    assert_manifest_has_no_embedded_expectations(&path, &text);
-    assert_manifest_oracle_scope(&path, &text);
-    let input_dir = manifest_scalar(&text, "input_dir")
-        .unwrap_or_else(|| panic!("{} must define input_dir", path.display()));
-    let input_files = manifest_list(&text, "input_files");
-    let negative_operations = manifest_list(&text, "negative_operations");
-    let out_of_scope = manifest_list(&text, "out_of_scope");
-    let public_method_parameters = manifest_nested_list_map(&text, "public_method_parameters");
-    let required_operations = manifest_list(&text, "required_operations");
+    let path = root.join("manifest.yaml");
+    let text = fs::read_to_string(&path).expect("migration parity manifest must be readable");
+    let manifest: MigrationManifest = serde_json::from_str(&text).unwrap_or_else(|error| {
+        panic!(
+            "{} must be strict JSON-compatible YAML: {error}",
+            path.display()
+        )
+    });
+    assert_eq!(manifest.version, 1, "{} must use version 1", path.display());
+    assert_eq!(manifest.source.name, "Pillow");
+    assert_eq!(manifest.source.version, "12.2.0");
+    assert_eq!(manifest.source.runtime, ".oracle-venv/bin/python");
+    assert_eq!(manifest.source.contract, "PIL.ImageFont public behavior");
+    assert_eq!(manifest.source.identity.module, "PIL.ImageFont");
+    assert_eq!(manifest.source.identity.native_core, "PIL._imagingft");
+    assert_eq!(manifest.source.identity.freetype_version, "2.14.3");
+    assert_eq!(manifest.target.name, "pillow-rs");
+    assert_eq!(manifest.target.version, "current-checkout");
+    assert_eq!(
+        manifest.target.runtime,
+        "Rust integration test calling pillow_rs root public API"
+    );
+    assert_eq!(
+        manifest.target.contract,
+        "Result-style public Font behavior"
+    );
+    assert!(
+        manifest.policy.input_only
+            && manifest.policy.live_oracle
+            && manifest.policy.result_comparison
+            && manifest.policy.coverage_required_for_claims,
+        "{} must require the full parity evidence policy",
+        path.display()
+    );
+    assert_eq!(
+        manifest.migration.source,
+        "tests/deprecated/font_public_api_v0"
+    );
+    assert_eq!(manifest.migration.source_status, "deprecated");
+    assert_eq!(
+        manifest.evidence.parity_command,
+        "make migration-parity-test"
+    );
+    assert_eq!(
+        manifest.evidence.coverage_command,
+        "make coverage-font-rust-with-freetype"
+    );
+    assert_eq!(
+        manifest.evidence.coverage_artifact,
+        "coverage/font-rust-with-freetype"
+    );
+    assert_project_surface_accounting(&path, &manifest);
+    let surface = manifest
+        .surfaces
+        .into_iter()
+        .find(|surface| surface.id == "font")
+        .expect("project accounting must contain the active Font surface");
+    assert_eq!(surface.id, "font");
+    assert_eq!(surface.source_path, "PIL.ImageFont");
+    assert_eq!(surface.target_path, "pillow_rs::imagefont_*");
+    assert_eq!(surface.status, "active");
+    assert!(surface.public_names.pending.is_empty());
+    assert_eq!(
+        surface
+            .public_names
+            .active
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        EXPECTED_IMAGEFONT_BEHAVIORAL_PUBLIC_NAMES
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>()
+    );
+    assert_eq!(
+        surface
+            .public_names
+            .non_endpoint
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
+        EXPECTED_IMAGEFONT_NON_ENDPOINT_PUBLIC_NAMES
+            .into_iter()
+            .map(str::to_owned)
+            .collect::<BTreeSet<_>>()
+    );
+
+    let out_of_scope = surface.exclusions.into_iter().collect::<BTreeSet<_>>();
+    let mut input_files = BTreeSet::new();
+    let mut negative_operations = BTreeSet::new();
+    let mut operation_shapes = BTreeMap::new();
+    let mut public_method_parameters = BTreeMap::new();
+    let mut required_operations = BTreeSet::new();
+    let mut declared_case_count = 0usize;
+    for operation in surface.operations {
+        assert!(!operation.kind.is_empty());
+        assert!(
+            !operation.branches.is_empty() && !operation.coverage_regions.is_empty(),
+            "{} operation {} must declare intended branches and coverage regions",
+            path.display(),
+            operation.id
+        );
+        let input = operation
+            .input
+            .expect("validated active Font operation must have an input");
+        assert!(
+            input_files.insert(input.clone()),
+            "{} input file {} is assigned twice",
+            path.display(),
+            input
+        );
+        let output_shape = operation
+            .output_shape
+            .expect("validated active Font operation must have an output shape");
+        assert!(
+            operation_shapes
+                .insert(operation.id.clone(), output_shape)
+                .is_none(),
+            "{} operation {} is duplicated",
+            path.display(),
+            operation.id
+        );
+        match operation.status.as_str() {
+            "active" => {
+                required_operations.insert(operation.id.clone());
+            }
+            "unsupported" => {
+                negative_operations.insert(operation.id.clone());
+            }
+            other => panic!(
+                "{} Font operation {} has unclassified status {other}",
+                path.display(),
+                operation.id
+            ),
+        }
+        let required_values = operation
+            .required_parameter_values
+            .into_iter()
+            .map(|(parameter, values)| (parameter, values.into_iter().collect()))
+            .collect::<BTreeMap<_, _>>();
+        if !EXPECTED_REPO_FONT_HELPER_OPERATIONS.contains(&operation.id.as_str())
+            && operation.status == "active"
+        {
+            public_method_parameters.insert(
+                operation.id,
+                ParameterCoverage {
+                    blocked: BTreeSet::new(),
+                    covered: required_values.keys().cloned().collect(),
+                    required_values,
+                },
+            );
+        }
+        declared_case_count += operation.case_count;
+    }
     let expected_operations = EXPECTED_FONT_PUBLIC_OPERATIONS
         .into_iter()
         .map(str::to_owned)
@@ -445,193 +1089,21 @@ fn load_manifest(root: &Path) -> FontManifest {
         "{} out_of_scope must be exact; libraqm successful shaping is the only excluded PIL.ImageFont behavior",
         path.display()
     );
+    assert_eq!(declared_case_count, manifest.migration.case_count);
     FontManifest {
-        input_dir,
+        asset_dir: surface.asset_root,
+        input_dir: surface
+            .input_root
+            .expect("validated active Font surface must have an input root"),
         input_files,
         negative_operations,
+        operation_shapes,
         public_method_parameters,
         required_operations,
+        source_name: manifest.source.name,
+        target_name: manifest.target.name,
+        case_count: declared_case_count,
     }
-}
-
-fn assert_manifest_oracle_scope(path: &Path, text: &str) {
-    let oracle = manifest_section_scalars(text, "oracle");
-    for (key, expected) in EXPECTED_ORACLE_SCOPE {
-        let actual = oracle
-            .get(key)
-            .unwrap_or_else(|| panic!("{} oracle.{key} must be defined", path.display()));
-        assert_eq!(
-            actual,
-            expected,
-            "{} oracle.{key} must keep the parity target as PIL.ImageFont; FreeType/_imagingft is only an implementation path for FreeTypeFont-backed rows",
-            path.display()
-        );
-    }
-}
-
-fn manifest_scalar(text: &str, key: &str) -> Option<String> {
-    text.lines().find_map(|line| {
-        let trimmed = line.trim();
-        trimmed
-            .strip_prefix(&format!("{key}:"))
-            .map(|value| value.trim().trim_matches('"').to_owned())
-            .filter(|value| !value.is_empty())
-    })
-}
-
-fn manifest_section_scalars(text: &str, section: &str) -> BTreeMap<String, String> {
-    let mut values = BTreeMap::new();
-    let mut in_section = false;
-    for line in text.lines() {
-        let without_comment = line.split_once('#').map_or(line, |(line, _)| line);
-        if without_comment.trim().is_empty() {
-            continue;
-        }
-        let indent = without_comment
-            .chars()
-            .take_while(|character| *character == ' ')
-            .count();
-        let trimmed = without_comment.trim();
-        if trimmed == format!("{section}:") {
-            in_section = true;
-            continue;
-        }
-        if in_section && indent == 0 {
-            break;
-        }
-        if in_section && indent == 2 {
-            let (key, value) = trimmed
-                .split_once(':')
-                .unwrap_or_else(|| panic!("{section} scalar must be key/value: {trimmed}"));
-            let value = value.trim().trim_matches('"').to_owned();
-            assert!(!value.is_empty(), "{section}.{key} must not be empty");
-            values.insert(key.to_owned(), value);
-        }
-    }
-    values
-}
-
-fn manifest_list(text: &str, key: &str) -> BTreeSet<String> {
-    let mut values = BTreeSet::new();
-    let mut in_list = false;
-    for line in text.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        if trimmed == format!("{key}:") {
-            in_list = true;
-            continue;
-        }
-        if in_list && !trimmed.starts_with('-') {
-            break;
-        }
-        if in_list {
-            let value = trimmed
-                .strip_prefix('-')
-                .expect("manifest list item starts with dash")
-                .trim()
-                .trim_matches('"')
-                .to_owned();
-            assert!(
-                !value.is_empty(),
-                "font public-api manifest list item must not be empty"
-            );
-            values.insert(value);
-        }
-    }
-    values
-}
-
-fn manifest_nested_list_map(text: &str, section: &str) -> BTreeMap<String, ParameterCoverage> {
-    let mut values: BTreeMap<String, ParameterCoverage> = BTreeMap::new();
-    let mut in_section = false;
-    let mut current_method: Option<String> = None;
-    let mut current_key: Option<String> = None;
-
-    for line in text.lines() {
-        let without_comment = line.split_once('#').map_or(line, |(line, _)| line);
-        if without_comment.trim().is_empty() {
-            continue;
-        }
-        let indent = without_comment
-            .chars()
-            .take_while(|character| *character == ' ')
-            .count();
-        let trimmed = without_comment.trim();
-        if trimmed == format!("{section}:") {
-            in_section = true;
-            current_method = None;
-            current_key = None;
-            continue;
-        }
-        if in_section && indent == 0 && !trimmed.starts_with('-') {
-            break;
-        }
-        if !in_section {
-            continue;
-        }
-        if indent == 2 && trimmed.ends_with(':') {
-            let method = trimmed.trim_end_matches(':').to_owned();
-            values
-                .entry(method.clone())
-                .or_insert_with(|| ParameterCoverage {
-                    blocked: BTreeSet::new(),
-                    covered: BTreeSet::new(),
-                });
-            current_method = Some(method);
-            current_key = None;
-            continue;
-        }
-        if indent == 4 && trimmed.ends_with(':') {
-            current_key = Some(trimmed.trim_end_matches(':').to_owned());
-            continue;
-        }
-        if indent == 4 && trimmed.ends_with("[]") {
-            let Some(method) = current_method.as_ref() else {
-                panic!("{section} list key without method: {trimmed}");
-            };
-            let key = trimmed
-                .split_once(':')
-                .map(|(key, _)| key.trim())
-                .unwrap_or_else(|| panic!("{section} malformed inline empty list: {trimmed}"));
-            match key {
-                "blocked" | "covered" => {}
-                other => panic!("{section}.{method} has unsupported key {other}"),
-            }
-            current_key = None;
-            continue;
-        }
-        if indent == 6 && trimmed.starts_with('-') {
-            let Some(method) = current_method.as_ref() else {
-                panic!("{section} list item without method: {trimmed}");
-            };
-            let Some(key) = current_key.as_deref() else {
-                panic!("{section}.{method} list item without key: {trimmed}");
-            };
-            let value = trimmed
-                .strip_prefix('-')
-                .expect("nested manifest list item starts with dash")
-                .trim()
-                .trim_matches('"')
-                .to_owned();
-            assert!(!value.is_empty(), "{section}.{method}.{key} item is empty");
-            let coverage = values
-                .get_mut(method)
-                .expect("current method must have parameter coverage");
-            match key {
-                "blocked" => {
-                    coverage.blocked.insert(value);
-                }
-                "covered" => {
-                    coverage.covered.insert(value);
-                }
-                other => panic!("{section}.{method} has unsupported key {other}"),
-            }
-        }
-    }
-
-    values
 }
 
 fn load_input_cases(directory: &Path, manifest: &FontManifest) -> Vec<Value> {
@@ -655,7 +1127,6 @@ fn load_input_cases(directory: &Path, manifest: &FontManifest) -> Vec<Value> {
         .required_operations
         .union(&manifest.negative_operations)
         .cloned()
-        .chain(ALLOWED_FONT_INPUT_GROUPS.into_iter().map(str::to_owned))
         .collect::<BTreeSet<_>>();
     let mut cases = Vec::new();
     for file in &manifest.input_files {
@@ -676,28 +1147,29 @@ fn load_input_cases(directory: &Path, manifest: &FontManifest) -> Vec<Value> {
             .and_then(Value::as_array)
             .expect("font public-api input must contain a cases array");
         for case in rows {
-            let object = case
-                .as_object()
-                .expect("each font public-api case must be an object");
-            let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
-            let required_keys = BTreeSet::from(["case_id", "inputs", "operation"]);
-            assert!(
-                keys == required_keys,
-                "{} must contain only case_id, inputs, and operation",
-                path.display()
-            );
             assert_input_only_case(&path, case);
-            let case_operation = font_runner::operation(case)
+            let typed: Case = serde_json::from_value(case.clone()).unwrap_or_else(|error| {
+                panic!(
+                    "{} contains an invalid strict Case: {error}",
+                    path.display()
+                )
+            });
+            let case = serde_json::to_value(typed).expect("strict Case must serialize");
+            let case_operation = font_runner::operation(&case)
                 .expect("font public-api case operation must be a string");
             assert!(
-                document_operation == case_operation
-                    || ALLOWED_FONT_INPUT_GROUPS.contains(&document_operation),
-                "{} declares operation `{document_operation}` but contains case operation `{case_operation}`; only explicit grouped files may mix operations",
+                document_operation == case_operation,
+                "{} declares operation `{document_operation}` but contains case operation `{case_operation}`",
                 path.display()
             );
-            cases.push(case.clone());
+            cases.push(case);
         }
     }
+    assert_eq!(
+        cases.len(),
+        manifest.case_count,
+        "manifest operation case counts must equal the loaded corpus"
+    );
     cases
 }
 
@@ -714,11 +1186,11 @@ fn assert_input_document_envelope(
         .as_object()
         .unwrap_or_else(|| panic!("{} must be a JSON object", path.display()));
     let keys = object.keys().map(String::as_str).collect::<BTreeSet<_>>();
-    let required_keys = BTreeSet::from(["cases", "operation", "version"]);
+    let required_keys = BTreeSet::from(["cases", "operation", "surface", "version"]);
     assert_eq!(
         keys,
         required_keys,
-        "{} must contain only version, operation, and cases",
+        "{} must contain only version, surface, operation, and cases",
         path.display()
     );
     assert_eq!(
@@ -731,10 +1203,16 @@ fn assert_input_document_envelope(
         .get("operation")
         .and_then(Value::as_str)
         .unwrap_or_else(|| panic!("{} operation must be a string", path.display()));
+    assert_eq!(
+        document.get("surface").and_then(Value::as_str),
+        Some("font"),
+        "{} surface must be `font`",
+        path.display()
+    );
     let operation = normalize_font_operation(operation);
     assert!(
         allowed_document_operations.contains(operation),
-        "{} top-level operation/group `{operation}` must be listed in required_operations, negative_operations, or the explicit grouped-file allow-list",
+        "{} top-level operation `{operation}` must be listed in the manifest",
         path.display()
     );
     let cases = document
@@ -766,6 +1244,13 @@ fn assert_case_ids_are_unique(cases: &[Value]) {
     );
 }
 
+fn assert_result_ids_match(expected_ids: &BTreeSet<String>, actual_ids: &BTreeSet<String>) {
+    assert_eq!(
+        actual_ids, expected_ids,
+        "Result IDs must exactly match input Case IDs"
+    );
+}
+
 fn assert_case_ids_match_operations(cases: &[Value]) {
     for case in cases {
         let case_id = case
@@ -775,12 +1260,9 @@ fn assert_case_ids_match_operations(cases: &[Value]) {
         let operation =
             font_runner::operation(case).expect("font public-api operation must be a string");
         let operation_prefix = format!("font.{operation}.");
-        let grouped = ALLOWED_CASE_ID_GROUP_PREFIXES
-            .iter()
-            .any(|prefix| case_id.starts_with(prefix));
         assert!(
-            case_id.starts_with(&operation_prefix) || grouped,
-            "{case_id}: case_id prefix must match normalized operation `{operation}` or an explicit grouped fixture prefix"
+            case_id.starts_with(&operation_prefix),
+            "{case_id}: case_id prefix must match normalized operation `{operation}`"
         );
     }
 }
@@ -806,22 +1288,25 @@ fn assert_referenced_assets_exist(fixture_root: &Path, cases: &[Value]) {
                 panic!("{case_id}.{asset_name}: font asset kind must be a string");
             };
             match kind {
-                "load_default" | "pilfont_default" => {
+                "builtin" => {
                     assert!(
-                        asset.get("id").is_none(),
-                        "{case_id}.{asset_name}: embedded default font assets must not have an id"
+                        matches!(
+                            asset.get("name").and_then(Value::as_str),
+                            Some("load_default" | "pilfont_default")
+                        ),
+                        "{case_id}.{asset_name}: builtin font name must be classified"
                     );
                 }
-                "ref" | "pilfont_ref" => {
-                    let id = asset
-                        .get("id")
+                "ref" | "missing_ref" => {
+                    let relative = asset
+                        .get("path")
                         .and_then(Value::as_str)
-                        .unwrap_or_else(|| panic!("{case_id}.{asset_name}: ref asset id missing"));
-                    let path = fixture_root.join(id);
-                    if case_id == "font.load_failure.missing_font_asset" {
+                        .unwrap_or_else(|| panic!("{case_id}.{asset_name}: asset path missing"));
+                    let path = fixture_root.join(relative);
+                    if kind == "missing_ref" {
                         assert!(
                             !path.exists(),
-                            "{case_id}.{asset_name}: missing-asset negative row must reference an absent file"
+                            "{case_id}.{asset_name}: missing_ref must reference an absent file"
                         );
                         continue;
                     }
@@ -845,34 +1330,6 @@ fn assert_referenced_assets_exist(fixture_root: &Path, cases: &[Value]) {
                 other => panic!("{case_id}.{asset_name}: unsupported font asset kind {other}"),
             }
         }
-    }
-}
-
-fn assert_manifest_has_no_embedded_expectations(path: &Path, text: &str) {
-    for (index, line) in text.lines().enumerate() {
-        let Some((key, _)) = line.trim().split_once(':') else {
-            continue;
-        };
-        assert!(
-            !matches!(
-                key,
-                "error"
-                    | "expect_error"
-                    | "expectation"
-                    | "expected"
-                    | "hash"
-                    | "output"
-                    | "outputs"
-                    | "pixels_hex"
-                    | "raw_path"
-                    | "sha256"
-                    | "status"
-            ),
-            "{}:{} must not embed oracle output/error expectation key `{}`",
-            path.display(),
-            index + 1,
-            key
-        );
     }
 }
 
@@ -1001,7 +1458,20 @@ fn assert_manifest_operations_have_runner_arms(manifest: &FontManifest) {
     let runner_operations = runner_public_operations();
     assert_eq!(
         runner_operations, manifest.required_operations,
-        "font_manifest.yaml required_operations must exactly match explicit font_runner public operation arms"
+        "active manifest operations must exactly match explicit font_runner public operation arms"
+    );
+    let registered_operations = font_runner::SUPPORTED_OPERATIONS
+        .into_iter()
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>();
+    let manifest_operations = manifest
+        .required_operations
+        .union(&manifest.negative_operations)
+        .cloned()
+        .collect::<BTreeSet<_>>();
+    assert_eq!(
+        registered_operations, manifest_operations,
+        "manifest operations and the target operation registry must map both ways"
     );
 }
 
@@ -1054,7 +1524,7 @@ fn assert_input_only_case(path: &Path, value: &Value) {
     }
 }
 
-fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
+fn run_oracle(cases: &[Value]) -> BTreeMap<String, ResultEnvelope> {
     let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("scripts/font_oracle.py");
     let oracle = oracle_python();
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1062,14 +1532,29 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
         .canonicalize()
         .expect("repo root for font tests must be discoverable");
     let venv_root = repo_root.join(".oracle-venv");
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must be after the Unix epoch")
+        .as_nanos();
+    let capture_root = env::temp_dir().join(format!(
+        "pillow-rs-font-oracle-{}-{nonce}",
+        std::process::id()
+    ));
+    fs::create_dir(&capture_root).expect("oracle capture directory must be creatable");
+    let stdout_path = capture_root.join("stdout.json");
+    let stderr_path = capture_root.join("stderr.txt");
     let mut command = Command::new(oracle.as_os_str());
     command
         .arg(script)
         .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
+        .stdout(Stdio::from(
+            File::create(&stdout_path).expect("oracle stdout capture must be creatable"),
+        ))
+        .stderr(Stdio::from(
+            File::create(&stderr_path).expect("oracle stderr capture must be creatable"),
+        ))
         .env_clear()
-        .env("VIRTUAL_ENV", venv_root);
+        .env("VIRTUAL_ENV", &venv_root);
     command.env("PYTHONNOUSERSITE", "1");
     command.env(
         "PYTHONPATH",
@@ -1086,15 +1571,88 @@ fn run_oracle(cases: &[Value]) -> BTreeMap<String, Value> {
         .write_all(&serde_json::to_vec(cases).expect("input-only font cases must serialize"))
         .expect("input-only font cases must be sent to the oracle");
 
-    let output = child
-        .wait_with_output()
-        .expect("the Pillow font oracle must finish");
+    let started = Instant::now();
+    let status = loop {
+        if let Some(status) = child
+            .try_wait()
+            .expect("the Pillow font oracle status must be observable")
+        {
+            break status;
+        }
+        if started.elapsed() >= Duration::from_secs(60) {
+            child
+                .kill()
+                .expect("timed-out Pillow font oracle must be killable");
+            child
+                .wait()
+                .expect("timed-out Pillow font oracle must be reaped");
+            let stderr = fs::read_to_string(&stderr_path).unwrap_or_default();
+            let _ = fs::remove_dir_all(&capture_root);
+            panic!("Pillow font oracle timed out after 60 seconds:\n{stderr}");
+        }
+        thread::sleep(Duration::from_millis(10));
+    };
+    let stdout = fs::read(&stdout_path).expect("oracle stdout must be readable");
+    let stderr = fs::read(&stderr_path).expect("oracle stderr must be readable");
+    fs::remove_dir_all(&capture_root).expect("oracle capture directory must be removable");
     assert!(
-        output.status.success(),
+        status.success(),
         "Pillow font oracle failed:\n{}",
-        String::from_utf8_lossy(&output.stderr)
+        String::from_utf8_lossy(&stderr)
     );
-    serde_json::from_slice(&output.stdout).expect("oracle output must be a case-id result map")
+    let payload: OraclePayload = serde_json::from_slice(&stdout)
+        .expect("oracle output must be a strict identity/results payload");
+    assert_eq!(payload.identity.pillow_version, "12.2.0");
+    assert_eq!(payload.identity.freetype_version, "2.14.3");
+    assert_eq!(
+        Path::new(&payload.identity.python_executable)
+            .canonicalize()
+            .expect("oracle identity Python path must canonicalize"),
+        oracle
+            .canonicalize()
+            .expect("configured oracle Python path must canonicalize")
+    );
+    let canonical_venv = venv_root
+        .canonicalize()
+        .expect("oracle venv must canonicalize");
+    for identity_path in [
+        &payload.identity.pillow_module,
+        &payload.identity.native_core,
+    ] {
+        assert!(
+            Path::new(identity_path)
+                .canonicalize()
+                .expect("oracle module identity path must canonicalize")
+                .starts_with(&canonical_venv),
+            "oracle module identity must remain beneath .oracle-venv: {identity_path}"
+        );
+    }
+
+    let expected_ids = cases
+        .iter()
+        .map(|case| {
+            case.get("case_id")
+                .and_then(Value::as_str)
+                .expect("input case_id must be a string")
+                .to_owned()
+        })
+        .collect::<BTreeSet<_>>();
+    let mut results = BTreeMap::new();
+    for result in payload.results {
+        result
+            .validate()
+            .unwrap_or_else(|error| panic!("oracle emitted malformed Result: {error}"));
+        let case_id = result.case_id.clone();
+        assert!(
+            results.insert(case_id.clone(), result).is_none(),
+            "oracle emitted duplicate Result for {case_id}"
+        );
+    }
+    assert_result_ids_match(
+        &expected_ids,
+        &results.keys().cloned().collect::<BTreeSet<_>>(),
+    );
+    results
 }
 
 fn pillow_imagefont_public_methods() -> BTreeSet<String> {
@@ -1290,7 +1848,7 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
                 .get("inputs")
                 .and_then(|inputs| inputs.get("assets"))
                 .and_then(|assets| assets.get("font"))
-                .and_then(|font| font.get("id"))
+                .and_then(|font| font.get("path"))
                 .is_some()
             {
                 entry.insert("filename".to_owned());
@@ -1301,7 +1859,7 @@ fn observed_public_method_parameters(cases: &[Value]) -> BTreeMap<String, BTreeS
                 .get("inputs")
                 .and_then(|inputs| inputs.get("assets"))
                 .and_then(|assets| assets.get("font"))
-                .and_then(|font| font.get("id"))
+                .and_then(|font| font.get("path"))
                 .is_some()
         {
             entry.insert("font".to_owned());
@@ -1445,6 +2003,15 @@ fn assert_manifest_covers_required_public_parameter_values(
     cases: &[Value],
 ) {
     let observed_values = observed_public_parameter_values(cases);
+
+    for (operation, coverage) in &manifest.public_method_parameters {
+        for (parameter, required_values) in &coverage.required_values {
+            assert!(
+                coverage.covered.contains(parameter) && !required_values.is_empty(),
+                "{operation}.{parameter}: manifest required values must be non-empty and classified as covered"
+            );
+        }
+    }
 
     for &(operation, parameter, required_value) in REQUIRED_PUBLIC_PARAMETER_VALUES {
         let coverage = manifest
@@ -1934,24 +2501,19 @@ fn actual_live_corpus_counts(input_dir: &Path, manifest: &FontManifest) -> BTree
         .collect()
 }
 
-fn assert_exact_oracle_match(case_id: &str, expected: &Value, actual: &Value) {
-    let expected_status = expected
-        .get("status")
-        .and_then(Value::as_str)
-        .unwrap_or_else(|| panic!("{case_id}: missing status in oracle payload"));
-    let actual_status = actual
-        .get("status")
-        .and_then(Value::as_str)
-        .unwrap_or_else(|| panic!("{case_id}: missing status in rust payload"));
-
-    assert_eq!(
-        expected_status, actual_status,
-        "{case_id}: status mismatch between rust and live oracle\nexpected={expected:#}\nactual={actual:#}"
-    );
-
-    assert_eq!(
-        expected, actual,
-        "{case_id}: Rust result differs from live Pillow ImageFont oracle"
+fn assert_exact_oracle_match(
+    case_id: &str,
+    source_system: &str,
+    target_system: &str,
+    expected: &ResultEnvelope,
+    actual: &ResultEnvelope,
+    output_shape: OutputShape,
+) {
+    let diffs = compare_results(source_system, target_system, expected, actual, output_shape)
+        .unwrap_or_else(|error| panic!("{case_id}: invalid comparison: {error}"));
+    assert!(
+        diffs.is_empty(),
+        "{case_id}: Rust result differs from live Pillow ImageFont oracle: {diffs:#?}"
     );
 }
 
@@ -2158,10 +2720,129 @@ fn assert_python_imagefont_facade_delegates_variation_apis() {
 }
 
 #[test]
+fn migration_parity_schema_and_anti_cheat_guards_reject_invalid_inputs() {
+    let forbidden = serde_json::json!({
+        "case_id": "font.getname.forbidden",
+        "operation": "getname",
+        "inputs": {
+            "assets": {},
+            "params": {"expected": "answer"}
+        }
+    });
+    assert!(
+        std::panic::catch_unwind(|| {
+            assert_input_only_case(Path::new("forbidden.json"), &forbidden);
+        })
+        .is_err(),
+        "input-only validation must reject recursively embedded expectations"
+    );
+
+    let unknown_case_field = serde_json::json!({
+        "case_id": "font.getname.unknown_field",
+        "operation": "getname",
+        "inputs": {"assets": {}, "params": {}},
+        "extra": true
+    });
+    assert!(
+        serde_json::from_value::<Case>(unknown_case_field).is_err(),
+        "strict Case loading must reject unknown fields"
+    );
+
+    let duplicate = serde_json::json!({
+        "case_id": "font.getname.duplicate",
+        "operation": "getname",
+        "inputs": {"assets": {}, "params": {}}
+    });
+    assert!(
+        std::panic::catch_unwind(|| {
+            assert_case_ids_are_unique(&[duplicate.clone(), duplicate.clone()]);
+        })
+        .is_err(),
+        "duplicate Case IDs must fail"
+    );
+
+    let expected_ids = BTreeSet::from(["font.getname.missing_result".to_owned()]);
+    assert!(
+        std::panic::catch_unwind(|| {
+            assert_result_ids_match(&expected_ids, &BTreeSet::new());
+        })
+        .is_err(),
+        "missing Results must fail"
+    );
+}
+
+#[test]
+fn migration_parity_comparator_rejects_self_comparison_and_has_no_case_branches() {
+    let result: ResultEnvelope = serde_json::from_value(serde_json::json!({
+        "case_id": "font.getname.self_compare",
+        "status": "ok",
+        "value": {"type": "name", "value": ["Family", "Style"]}
+    }))
+    .expect("test Result must parse");
+    assert!(
+        compare_results("same", "same", &result, &result, OutputShape::Object).is_err(),
+        "source/target self-comparison must be rejected"
+    );
+
+    let comparator_source = include_str!("support/migration_parity.rs");
+    assert!(
+        !comparator_source.contains("\"font."),
+        "generic comparator must not contain Font case-ID branches"
+    );
+}
+
+#[test]
+fn migration_parity_manifest_and_runner_drift_is_rejected() {
+    let root = fixture_root();
+    let manifest_text =
+        fs::read_to_string(root.join("manifest.yaml")).expect("manifest must be readable");
+    let mut manifest_value: Value =
+        serde_json::from_str(&manifest_text).expect("manifest must parse as JSON");
+    manifest_value
+        .as_object_mut()
+        .expect("manifest must be an object")
+        .insert("unexpected".into(), Value::Bool(true));
+    assert!(
+        serde_json::from_value::<MigrationManifest>(manifest_value).is_err(),
+        "strict manifest loading must reject unknown fields"
+    );
+
+    let mut manifest = load_manifest(&root);
+    assert!(manifest.required_operations.remove("getname"));
+    assert!(
+        std::panic::catch_unwind(|| {
+            assert_manifest_operations_have_runner_arms(&manifest);
+        })
+        .is_err(),
+        "manifest/registry drift must fail"
+    );
+}
+
+#[test]
+fn migration_manifest_accounts_for_every_deprecated_project_surface() {
+    let root = fixture_root();
+    let path = root.join("manifest.yaml");
+    let text = fs::read_to_string(&path).expect("manifest must be readable");
+    let manifest: MigrationManifest =
+        serde_json::from_str(&text).expect("manifest must be strict JSON-compatible YAML");
+
+    assert_project_surface_accounting(&path, &manifest);
+}
+
+#[test]
+fn active_target_and_oracle_adapters_do_not_read_deprecated_evidence() {
+    let target_runner = include_str!("support/font_runner.rs");
+    let source_oracle = include_str!("../scripts/font_oracle.py");
+    assert!(!target_runner.contains("tests/deprecated"));
+    assert!(!source_oracle.contains("tests/deprecated"));
+}
+
+#[test]
 fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     let root = fixture_root();
     let manifest = load_manifest(&root);
     let input_dir = root.join(&manifest.input_dir);
+    let asset_dir = root.join(&manifest.asset_dir);
     let cases = load_input_cases(&input_dir, &manifest);
     assert!(
         !cases.is_empty(),
@@ -2169,7 +2850,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     );
     assert_case_ids_are_unique(&cases);
     assert_case_ids_match_operations(&cases);
-    assert_referenced_assets_exist(&root, &cases);
+    assert_referenced_assets_exist(&asset_dir, &cases);
     assert_manifest_covers_root_font_api(&manifest);
     assert_runner_exercises_root_font_api();
     assert_manifest_operations_have_runner_arms(&manifest);
@@ -2204,7 +2885,7 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
     assert_blocked_public_parameters_have_active_dependency_blockers();
     assert_imagingft_has_no_coverage_or_oracle_shortcuts();
     assert_libraqm_error_contract_is_hard_coded();
-    assert_raqm_rows_use_dedicated_core_error(&cases, &root);
+    assert_raqm_rows_use_dedicated_core_error(&cases, &asset_dir);
     assert_stroke_filled_rows_do_not_fake_branch_coverage(&cases);
 
     let observed = cases
@@ -2246,7 +2927,20 @@ fn every_input_matches_the_live_pillow_font_oracle_exactly() {
         let expected = oracle
             .get(case_id)
             .unwrap_or_else(|| panic!("{case_id}: live Pillow oracle result missing"));
-        let actual = font_runner::run(case, &root);
-        assert_exact_oracle_match(case_id, expected, &actual);
+        let actual: ResultEnvelope = serde_json::from_value(font_runner::run(case, &asset_dir))
+            .unwrap_or_else(|error| panic!("{case_id}: target emitted malformed Result: {error}"));
+        let operation = font_runner::operation(case).expect("case operation must be valid");
+        let output_shape = *manifest
+            .operation_shapes
+            .get(operation)
+            .unwrap_or_else(|| panic!("{case_id}: manifest output shape missing"));
+        assert_exact_oracle_match(
+            case_id,
+            &manifest.source_name,
+            &manifest.target_name,
+            expected,
+            &actual,
+            output_shape,
+        );
     }
 }

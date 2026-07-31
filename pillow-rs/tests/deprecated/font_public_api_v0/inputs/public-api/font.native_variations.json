@@ -1,0 +1,285 @@
+{
+  "version": 1,
+  "operation": "variations",
+  "cases": [
+    {
+      "case_id": "font.native_getvarnames.variable_named_instances",
+      "operation": "native_getvarnames",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvaraxes.variable_named_instances",
+      "operation": "native_getvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvarnames.windows_non_en_us_fallback",
+      "operation": "native_getvarnames",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvaraxes.windows_non_en_us_fallback",
+      "operation": "native_getvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-windows-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvarnames.platform1_fallback",
+      "operation": "native_getvarnames",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvaraxes.platform1_fallback",
+      "operation": "native_getvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-platform1-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvarname.variable_named_instances_default",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": 0
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvarname.variable_named_instances_thin",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": 1
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvarname.variable_named_instances_regular",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": 3
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvarname.missing_subfamily_name_keeps_none",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-name-missing-subfamily.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": 5
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvarname.variable_named_instances_invalid_positive",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": 13
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvarname.variable_named_instances_invalid_negative",
+      "operation": "native_setvarname",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "instance_index": -1
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvaraxes.variable_named_instances_default_axes",
+      "operation": "native_setvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "axes": [
+            100,
+            400
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvaraxes.variable_named_instances_empty_reset",
+      "operation": "native_setvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "axes": []
+        }
+      }
+    },
+    {
+      "case_id": "font.native_setvaraxes.dejavusans_invalid_argument",
+      "operation": "native_setvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "axes": [
+            100,
+            400
+          ]
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvarnames.dejavusans_invalid_argument",
+      "operation": "native_getvarnames",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.native_getvaraxes.dejavusans_invalid_argument",
+      "operation": "native_getvaraxes",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    }
+  ]
+}

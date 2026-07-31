@@ -11,7 +11,8 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = REPO_ROOT.parent
-FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "font"
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
+ASSET_ROOT = FIXTURE_ROOT / "assets"
 REPO_ORACLE_VENV = WORKSPACE_ROOT / ".oracle-venv"
 EXPECTED_PILLOW_VERSION = "12.2.0"
 
@@ -116,10 +117,10 @@ def load_bitmap_imagefont(case: dict[str, Any], ImageFont: Any) -> Any:
     params = inputs["params"]
     font = inputs["assets"]["font"]
 
-    if font["kind"] == "pilfont_default":
+    if font["kind"] == "builtin" and font.get("name") == "pilfont_default":
         return ImageFont.load_default_imagefont()
-    if font["kind"] == "pilfont_ref":
-        filename = FIXTURE_ROOT / font["id"]
+    if font["kind"] in {"ref", "missing_ref"} and font.get("format") == "pilfont":
+        filename = ASSET_ROOT / font["path"]
         if params.get("loader") == "load_path":
             return ImageFont.load_path(str(filename))
         return ImageFont.load(str(filename))
@@ -133,12 +134,12 @@ def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
     font = inputs["assets"]["font"]
     size = params.get("size", 10.0)
 
-    if font["kind"] == "load_default":
+    if font["kind"] == "builtin" and font.get("name") == "load_default":
         value = ImageFont.load_default(size)
         ensure_c_font_path(value)
         return value
 
-    if font["kind"] == "ref":
+    if font["kind"] in {"ref", "missing_ref"}:
         kwargs: dict[str, Any] = {"layout_engine": ImageFont.Layout.BASIC}
         if "index" in params:
             kwargs["index"] = params["index"]
@@ -147,7 +148,7 @@ def load_font(case: dict[str, Any], ImageFont: Any) -> Any:
         if "layout_engine" in params:
             kwargs["layout_engine"] = layout_engine(params["layout_engine"], ImageFont)
         loaded = ImageFont.truetype(
-            FIXTURE_ROOT / font["id"],
+            ASSET_ROOT / font["path"],
             size,
             **kwargs,
         )
@@ -462,7 +463,7 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
         kwargs: dict[str, Any] = {"size": params.get("variant_size")}
         variant_font = case["inputs"].get("assets", {}).get("variant_font")
         if variant_font is not None:
-            kwargs["font"] = FIXTURE_ROOT / variant_font["id"]
+            kwargs["font"] = ASSET_ROOT / variant_font["path"]
         if "variant_index" in params:
             kwargs["index"] = params["variant_index"]
         if "variant_encoding" in params:
@@ -524,11 +525,21 @@ def execute(case: dict[str, Any], Image: Any, ImageDraw: Any, ImageFont: Any) ->
 def outcome(case: dict[str, Any], modules: tuple[Any, Any, Any, Any]) -> dict[str, Any]:
     _, _, Image, ImageDraw, ImageFont = modules
     try:
-        return {"status": "ok", "value": execute(case, Image, ImageDraw, ImageFont)}
+        return {
+            "case_id": case["case_id"],
+            "status": "ok",
+            "value": execute(case, Image, ImageDraw, ImageFont),
+        }
     except Exception as error:  # noqa: BLE001
         return {
+            "case_id": case["case_id"],
             "status": "error",
-            "error": {"kind": type(error).__name__, "message": str(error)},
+            "error": {
+                "class": type(error).__name__,
+                "kind": type(error).__name__,
+                "message": str(error),
+                "stage": "execute",
+            },
         }
 
 
@@ -613,11 +624,20 @@ def main() -> None:
         return
 
     cases = json.load(sys.stdin)
-    results = {
-        case["case_id"]: outcome(case, (PIL, _imagingft, Image, ImageDraw, ImageFont))
-        for case in cases
+    payload = {
+        "identity": {
+            "pillow_version": PIL.__version__,
+            "python_executable": str(Path(sys.executable).resolve()),
+            "pillow_module": str(Path(PIL.__file__).resolve()),
+            "native_core": str(Path(_imagingft.__file__).resolve()),
+            "freetype_version": ImageFont.core.freetype2_version,
+        },
+        "results": [
+            outcome(case, (PIL, _imagingft, Image, ImageDraw, ImageFont))
+            for case in cases
+        ],
     }
-    json.dump(results, sys.stdout, separators=(",", ":"), sort_keys=True)
+    json.dump(payload, sys.stdout, separators=(",", ":"), sort_keys=True)
 
 
 if __name__ == "__main__":

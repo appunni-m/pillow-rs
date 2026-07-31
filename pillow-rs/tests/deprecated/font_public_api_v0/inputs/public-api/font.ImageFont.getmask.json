@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "operation": "ImageFont.getmask",
+  "cases": [
+    {
+      "case_id": "font.ImageFont.getmask.hello_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.empty_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.bytes_with_nul_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text_bytes_hex": "410042"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.explicit_empty_mode_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "AV",
+          "mode": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.pbm_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_pbm.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.p1_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_p1.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.l_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_l.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.p1_comments_backed_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_p1_comments.pil"
+          }
+        },
+        "params": {
+          "text": "Hi"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.clipped_success_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/clipped_success.pil"
+          }
+        },
+        "params": {
+          "text": "ABC"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.negative_x_clip_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/negative_x_clip.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.positive_x_clip_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/positive_x_clip.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.missing_p4_raster_crlf_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/missing_p4_raster_crlf.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.truncated_p4_crlf_raster_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/truncated_p4_crlf_raster.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.invalid_source_rect_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_source_rect.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.invalid_source_height_rect_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/invalid_source_height_rect.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.mismatch_rect_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/mismatch_rect.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.mismatch_height_rect_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/mismatch_height_rect.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.zero_height_error",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/zero_height.pil"
+          }
+        },
+        "params": {
+          "text": "A"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getmask.ignored_args_kwargs_default_bitmap",
+      "operation": "ImageFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "mode": "",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
+    }
+  ]
+}

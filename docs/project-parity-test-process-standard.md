@@ -767,11 +767,28 @@ single manifest = pillow-rs/tests/fixtures/manifest.yaml
 
 Current migration priority:
 
-1. migrate existing Font/ImageFont parity into the single manifest;
-2. extract shared input-only validation, oracle execution, Result comparison, and manifest coverage checks;
-3. migrate image backend parity;
-4. migrate codec rows from `image-slash-star` as input-only cases with live Pillow oracle;
-5. use `fontdone` as the model for public-surface accounting and pending-route visibility, not as the direct schema.
+1. **Project inventory accounted:** the single active manifest derives its
+   denominator from
+   `pillow-rs/tests/deprecated/project_manifest_v0/manifest.yaml` and
+   classifies all 12 legacy Pillow surfaces and all 173 catalogued public
+   names. This is 100% public-surface accounting, not 100% runnable parity.
+2. **Active:** Font/ImageFont is represented by 42 input documents, 445
+   input-only cases, a live Pillow identity handshake, the Rust public target
+   runner, a shared strict Result comparator, anti-cheat/schema tests, and
+   managed coverage evidence. It contributes 41 active operations and one
+   tested unsupported operation. Its bespoke v0 corpus is retained under
+   `pillow-rs/tests/deprecated/font_public_api_v0`.
+3. **Pending:** the remaining 11 project surfaces and 164 legacy public names
+   are explicit pending rows with migration reasons and blockers. They do not
+   claim input files, output shapes, runner arms, branch coverage, or parity.
+4. **Pending:** migrate image backend parity; its current stored-output suite
+   remains active until equivalent live-oracle evidence exists.
+5. **Pending:** migrate codec rows from `image-slash-star` as input-only cases
+   with a live Pillow oracle.
+6. **Pending:** migrate the deprecated root Python fixture corpora operation by
+   operation; deprecated material is never active truth.
+7. Use `fontdone` as the model for public-surface accounting and pending-route
+   visibility, not as the direct schema.
 
 Project-specific hard rules:
 

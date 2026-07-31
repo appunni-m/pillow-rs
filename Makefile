@@ -79,6 +79,9 @@ help: ## Show this help
 	@printf "  $(CYAN)make image-backend-migration-test$(NC) Run codec/backend migration fixtures\n"
 	@printf "  $(CYAN)make image-backend-parity-test$(NC) Run forced-backend Pillow parity\n"
 	@printf "  $(CYAN)make image-backend-feature-test$(NC) Verify disabled codec forwarding\n"
+	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
+	@printf "  $(CYAN)make migration-parity-inventory$(NC) Print the canonical selected-scope endpoint inventory\n"
+	@printf "  $(CYAN)make migration-parity-inventory-check$(NC) Verify endpoint authority expansion and alias accounting\n"
 	@printf "  $(CYAN)make parity$(NC)        Run pillow-rs Font + fontdone unified parity\n"
 	@printf "\n$(BOLD)pillow-rs / core crate$(NC)\n"
 	@printf "  $(CYAN)make pillow-rs-help$(NC) Show crate-local pillow-rs targets\n"
@@ -109,6 +112,9 @@ help: ## Show this help
 	@printf "  $(CYAN)make image-slash-star-full-test$(NC) Run image-slash-star all-feature coverage matrix\n"
 	@printf "\n$(BOLD)Fixtures$(NC)\n"
 	@printf "  $(CYAN)make fixtures$(NC)       Generate all test fixtures (requires Pillow)\n"
+	@printf "  $(CYAN)make migration-parity-manifest$(NC) Build the fixed project-wide manifest from frozen authority\n"
+	@printf "  $(CYAN)make migration-parity-fixtures$(NC) Compatibility alias for the manifest build during migration\n"
+	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify authority and manifest regeneration\n"
 	@printf "  $(CYAN)make image-backend-fixtures$(NC) Generate image backend migration fixtures\n"
 	@printf "  $(CYAN)make putdata-fixtures$(NC) Generate semantic Image.putdata fixtures\n"
 	@printf "  $(CYAN)make imagefont-getmask2-fixtures$(NC) Generate independent ImageFont.getmask2 fixtures\n"
@@ -345,7 +351,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
+.PHONY: migration-parity-test font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
 .PHONY: pillow-rs-build pillow-rs-build-release pillow-rs-bench
@@ -374,8 +380,11 @@ image-backend-feature-test: ## Verify disabled image codec feature forwarding
 pillow-rs-test-core: ## Run pillow-rs unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
 
+migration-parity-test: ## Run canonical input-only parity against live Pillow
+	$(MAKE) -C $(CORE_SRC) migration-parity-test
+
 font-tests: ## Run Font public API parity tests
-	$(MAKE) -C $(CORE_SRC) font-tests
+	$(MAKE) migration-parity-test
 
 font-tests-release: ## Run Font public API parity tests (release)
 	$(MAKE) -C $(CORE_SRC) font-tests-release
@@ -525,7 +534,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures image-backend-fixtures putdata-fixtures
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-fixtures migration-parity-fixtures-check image-backend-fixtures putdata-fixtures
 .PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
@@ -533,6 +542,23 @@ image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-
 .PHONY: fixtures-suite0 fixtures-suite1 fixtures-clean
 
 fixtures: fixtures-suite0 fixtures-suite1 ## Generate all test fixtures
+
+migration-parity-inventory: ## Print canonical selected-scope endpoint inventory
+	$(PYTHON) scripts/migration_parity_inventory.py
+
+migration-parity-inventory-check: ## Verify endpoint authority expansion and alias accounting
+	$(PYTHON) -m unittest tests.test_migration_parity_inventory
+
+migration-parity-manifest: ## Build fixed project-wide manifest from frozen authority
+	$(PYTHON) scripts/build_migration_parity_manifest.py
+
+migration-parity-fixtures: migration-parity-manifest ## Compatibility alias during migration
+
+migration-parity-fixtures-check: migration-parity-inventory-check ## Verify authority and manifest regeneration
+	@tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	$(PYTHON) scripts/build_migration_parity_manifest.py --output "$$tmp/manifest.yaml"; \
+	diff -u pillow-rs/tests/fixtures/manifest.yaml "$$tmp/manifest.yaml"
 
 image-backend-fixtures: ## Generate exact Pillow image backend migration fixtures
 	$(IMAGE_ORACLE_PYTHON) scripts/generate_image_backend_operation_fixtures.py

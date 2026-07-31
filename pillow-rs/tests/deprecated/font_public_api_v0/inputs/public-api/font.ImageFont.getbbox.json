@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "operation": "ImageFont.getbbox",
+  "cases": [
+    {
+      "case_id": "font.ImageFont.getbbox.hello_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getbbox.empty_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": ""
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getbbox.bytes_with_nul_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text_bytes_hex": "410042"
+        }
+      }
+    },
+    {
+      "case_id": "font.ImageFont.getbbox.ignored_args_kwargs_default_bitmap",
+      "operation": "ImageFont.getbbox",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
+    }
+  ]
+}

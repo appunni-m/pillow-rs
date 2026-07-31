@@ -12,12 +12,12 @@ import struct
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEJAVU_SOURCE = ROOT / "tests/fixtures/font/input/fonts/DejaVuSans.ttf"
-SOURCE = ROOT / "tests/fixtures/font/input/fonts/variable-named-instances.ttf"
-WINDOWS_TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-windows-fallback.ttf"
-PLATFORM1_TARGET = ROOT / "tests/fixtures/font/input/fonts/variable-name-platform1-fallback.ttf"
+DEJAVU_SOURCE = ROOT / "tests/fixtures/assets/font/fonts/DejaVuSans.ttf"
+SOURCE = ROOT / "tests/fixtures/assets/font/fonts/variable-named-instances.ttf"
+WINDOWS_TARGET = ROOT / "tests/fixtures/assets/font/fonts/variable-name-windows-fallback.ttf"
+PLATFORM1_TARGET = ROOT / "tests/fixtures/assets/font/fonts/variable-name-platform1-fallback.ttf"
 MISSING_FAMILY_STYLE_TARGET = (
-    ROOT / "tests/fixtures/font/input/fonts/dejavu-missing-family-style.ttf"
+    ROOT / "tests/fixtures/assets/font/fonts/dejavu-missing-family-style.ttf"
 )
 
 

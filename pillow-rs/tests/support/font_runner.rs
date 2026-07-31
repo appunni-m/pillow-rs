@@ -6,6 +6,51 @@ use pillow_rs::{
 };
 use serde_json::{Value, json};
 
+pub const SUPPORTED_OPERATIONS: [&str; 42] = [
+    "ImageFont.getbbox",
+    "ImageFont.getlength",
+    "ImageFont.getmask",
+    "ImageFont.info",
+    "TransposedFont.getbbox",
+    "TransposedFont.getlength",
+    "TransposedFont.getmask",
+    "draw_text",
+    "font_size",
+    "font_variant",
+    "get_transposed_mask",
+    "get_variation_axes",
+    "get_variation_names",
+    "getbbox",
+    "getbbox_binary",
+    "getlength",
+    "getmask",
+    "getmask2",
+    "getmask2_with_start",
+    "getmetrics",
+    "getname",
+    "has_variations",
+    "load",
+    "load_default",
+    "load_default_imagefont",
+    "load_path",
+    "native_face_attrs",
+    "native_getlength_26dot6",
+    "native_getsize",
+    "native_getvaraxes",
+    "native_getvarnames",
+    "native_render",
+    "native_setvaraxes",
+    "native_setvarname",
+    "render_text_binary",
+    "set_variation_by_axes",
+    "set_variation_by_name",
+    "text_bbox",
+    "transposed_bbox",
+    "truetype",
+    "unsupported_magic",
+    "validate_transposed_length",
+];
+
 pub fn operation(case: &Value) -> Result<&str, PilError> {
     case.get("operation")
         .and_then(Value::as_str)
@@ -14,13 +59,20 @@ pub fn operation(case: &Value) -> Result<&str, PilError> {
 }
 
 pub fn run(case: &Value, fixture_root: &Path) -> Value {
+    let case_id = case
+        .get("case_id")
+        .and_then(Value::as_str)
+        .unwrap_or("<missing-case-id>");
     match try_run(case, fixture_root) {
-        Ok(value) => json!({"status": "ok", "value": value}),
+        Ok(value) => json!({"case_id": case_id, "status": "ok", "value": value}),
         Err(error) => json!({
+            "case_id": case_id,
             "status": "error",
             "error": {
+                "class": error_kind(&error),
                 "kind": error_kind(&error),
                 "message": error.to_string(),
+                "stage": "execute",
             }
         }),
     }
@@ -645,10 +697,10 @@ fn font_variant_options(
         .and_then(|inputs| inputs.get("assets"))
         .and_then(|assets| assets.get("variant_font"))
         .map(|font| {
-            let id = required(font, "id")?
+            let path = required(font, "path")?
                 .as_str()
-                .ok_or_else(|| PilError::TypeError("variant font id must be a string".into()))?;
-            fs::read(fixture_root.join(id))
+                .ok_or_else(|| PilError::TypeError("variant font path must be a string".into()))?;
+            fs::read(fixture_root.join(path))
                 .map_err(|_| PilError::OsError("cannot open resource".into()))
         })
         .transpose()?;
@@ -753,16 +805,18 @@ fn load_font(case: &Value, fixture_root: &Path) -> Result<FreeTypeFont, PilError
             .ok_or_else(|| PilError::TypeError("size must be a number".into()))
     })?;
     let font = required(required(inputs, "assets")?, "font")?;
-    match required(font, "kind")?
+    let kind = required(font, "kind")?
         .as_str()
-        .ok_or_else(|| PilError::TypeError("font kind must be a string".into()))?
-    {
-        "load_default" => pillow_rs::imagefont_load_default(size),
-        "ref" => {
-            let id = required(font, "id")?
+        .ok_or_else(|| PilError::TypeError("font kind must be a string".into()))?;
+    match kind {
+        "builtin" if font.get("name").and_then(Value::as_str) == Some("load_default") => {
+            pillow_rs::imagefont_load_default(size)
+        }
+        "ref" | "missing_ref" => {
+            let path = required(font, "path")?
                 .as_str()
-                .ok_or_else(|| PilError::TypeError("font id must be a string".into()))?;
-            let data = fs::read(fixture_root.join(id))
+                .ok_or_else(|| PilError::TypeError("font path must be a string".into()))?;
+            let data = fs::read(fixture_root.join(path))
                 .map_err(|_| PilError::OsError("cannot open resource".into()))?;
             if uses_font_load_options(params) {
                 pillow_rs::imagefont_from_bytes_with_options(
@@ -812,12 +866,14 @@ fn load_pilfont(case: &Value, fixture_root: &Path) -> Result<PilFont, PilError> 
         .as_str()
         .ok_or_else(|| PilError::TypeError("font asset kind must be a string".into()))?;
     match kind {
-        "pilfont_default" => PilFont::load_default(),
-        "pilfont_ref" => {
-            let id = required(font, "id")?
+        "builtin" if font.get("name").and_then(Value::as_str) == Some("pilfont_default") => {
+            PilFont::load_default()
+        }
+        "ref" | "missing_ref" if font.get("format").and_then(Value::as_str) == Some("pilfont") => {
+            let path = required(font, "path")?
                 .as_str()
-                .ok_or_else(|| PilError::TypeError("font asset id must be a string".into()))?;
-            let metrics_path = fixture_root.join(id);
+                .ok_or_else(|| PilError::TypeError("font asset path must be a string".into()))?;
+            let metrics_path = fixture_root.join(path);
             let metrics = fs::read(&metrics_path).map_err(|error| {
                 PilError::IOError(format!("failed to read PILfont metrics fixture: {error}"))
             })?;
