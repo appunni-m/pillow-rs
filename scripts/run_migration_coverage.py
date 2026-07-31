@@ -399,6 +399,10 @@ def run(args: argparse.Namespace) -> int:
                         from run_migration_imagecolor_native_cases import run_native_cases
 
                         passed, _skipped, failed = run_native_cases()
+                    elif command_id == "coverage-imagepalette-native":
+                        from run_migration_imagepalette_native_cases import run_native_cases
+
+                        passed, _skipped, failed = run_native_cases()
                     else:
                         raise ValueError(f"unknown coverage command: {command_id}")
                     command_totals[command_id] = (passed, failed)

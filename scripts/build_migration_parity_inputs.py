@@ -2182,6 +2182,33 @@ def build_nuanced_cases(
             "values": {"color": literal("rgb(100%, 50%, 0%)")},
         },
         {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-tuple-append",
+            "values": {"color": literal([255, 0, 0])},
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-tuple-append",
+            "values": {"color": literal([1, 2, 3, 128])},
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "short-tuple-append",
+            "values": {"color": literal([1, 2])},
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "copy",
+            "requirement_suffix": "behavior.default",
+            "name": "with-palette",
+        },
+        {
             "surface": "PIL.ImageColor",
             "operation": "getcolor",
             "requirement_suffix": "parameter.mode",
@@ -3499,6 +3526,10 @@ def build_inputs(
             # The getcolor mode matrix and rejected function-form variants
             # are not selected by the parity plan.
             command_ids = ["coverage-imagecolor-native"]
+        elif "image-palette" in component_ids:
+            # The palette append/lookup shapes and save surfaces are not
+            # selected by the parity plan.
+            command_ids = ["coverage-imagepalette-native"]
         else:
             command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"

@@ -117,6 +117,12 @@ commands:
   - migration-parity-imagecolor-native-coverage
   cwd: .
   timeout_seconds: 600
+- id: coverage-imagepalette-native
+  argv:
+  - make
+  - migration-parity-imagepalette-native-coverage
+  cwd: .
+  timeout_seconds: 600
 - id: benchmark
   argv:
   - make
