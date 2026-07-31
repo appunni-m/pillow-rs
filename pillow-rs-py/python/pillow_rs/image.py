@@ -525,7 +525,11 @@ class Image:
 
     def histogram(self, mask=None, extrema=None):
         """Image histogram per band."""
-        if isinstance(mask, Image) and mask.mode not in ("1", "L"):
+        if isinstance(mask, Image):
+            if mask.mode not in ("1", "L"):
+                raise ValueError("bad transparency mask")
+            return self._rust_image.histogram_with_mask(mask._rust_image)
+        if mask is not None:
             raise ValueError("bad transparency mask")
         return self._rust_image.histogram()
 
@@ -643,7 +647,11 @@ class Image:
 
     def entropy(self, mask=None, extrema=None):
         """Calculate image entropy."""
-        if isinstance(mask, Image) and mask.mode not in ("1", "L"):
+        if isinstance(mask, Image):
+            if mask.mode not in ("1", "L"):
+                raise ValueError("bad transparency mask")
+            return self._rust_image.entropy_with_mask(mask._rust_image)
+        if mask is not None:
             raise ValueError("bad transparency mask")
         return self._rust_image.entropy()
 
