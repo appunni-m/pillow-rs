@@ -22791,6 +22791,7 @@ surfaces:
         - 'null'
         - image
         - enum
+        - integer
         omission:
           kind: literal
           value: null
