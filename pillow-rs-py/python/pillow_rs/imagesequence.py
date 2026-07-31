@@ -4,8 +4,8 @@
 class Iterator:
     """Iterate over frames in a multi-frame image."""
 
-    def __init__(self, image):
-        self._image = image
+    def __init__(self, im=None, image=None):
+        self._image = im if im is not None else image
         self._frame = 0
 
     def __iter__(self):

@@ -28253,7 +28253,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImagePalette.ImagePalette
-      signature: ImagePalette(mode='RGB')
+      signature: ImagePalette(mode='RGB', palette=None, size=0)
       support:
         status: supported
     requirements:
@@ -28900,7 +28900,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageSequence.Iterator
-      signature: Iterator(image)
+      signature: Iterator(im=None, image=None)
       support:
         status: supported
     requirements:

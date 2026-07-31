@@ -89,18 +89,24 @@ def offset(image: Image, xoffset: int, yoffset: int = None) -> Image:
 def logical_and(image1: Image, image2: Image) -> Image:
     """Bitwise AND."""
     from . import _core
+    if image1.mode != "1" or image2.mode != "1":
+        raise ValueError("image has wrong mode")
     return Image(_core.chops_logical_and(image1._rust_image, image2._rust_image))
 
 
 def logical_or(image1: Image, image2: Image) -> Image:
     """Bitwise OR."""
     from . import _core
+    if image1.mode != "1" or image2.mode != "1":
+        raise ValueError("image has wrong mode")
     return Image(_core.chops_logical_or(image1._rust_image, image2._rust_image))
 
 
 def logical_xor(image1: Image, image2: Image) -> Image:
     """Bitwise XOR."""
     from . import _core
+    if image1.mode != "1" or image2.mode != "1":
+        raise ValueError("image has wrong mode")
     return Image(_core.chops_logical_xor(image1._rust_image, image2._rust_image))
 
 

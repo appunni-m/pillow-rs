@@ -6,15 +6,16 @@ use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, OnceLock};
 
 // ── Darwin-compatible PRNG ───────────────────────────────────────────────
 //
-// Pillow delegates effect_noise randomness to libc rand(). The pinned
-// macOS/Darwin Pillow 12.2.0 oracle uses the Park-Miller sequence, whose
-// process-default state is the same as srand(1). Keep the generator itself
-// independent of libc so native and WASM builds reproduce the oracle without
-// runtime FFI.
+// Pillow delegates effect_spread/effect_noise randomness to process-global
+// libc rand(). The pinned macOS/Darwin Pillow 12.2.0 oracle uses the
+// Park-Miller sequence, whose process-default state is the same as srand(1).
+// Keep the generator independent of libc so native and WASM builds reproduce
+// the oracle without runtime FFI, while retaining the shared state and call
+// consumption that the public APIs expose.
 
 struct DarwinRand {
     state: u32,
@@ -27,10 +28,6 @@ impl Default for DarwinRand {
 }
 
 impl DarwinRand {
-    fn new(seed: u32) -> Self {
-        Self { state: seed }
-    }
-
     fn next(&mut self) -> u32 {
         const MULTIPLIER: u64 = 16_807;
         const MODULUS: u64 = 2_147_483_647;
@@ -38,6 +35,12 @@ impl DarwinRand {
         self.state = ((u64::from(self.state) * MULTIPLIER) % MODULUS) as u32;
         self.state
     }
+}
+
+static PROCESS_RNG: OnceLock<Mutex<DarwinRand>> = OnceLock::new();
+
+fn process_rng() -> &'static Mutex<DarwinRand> {
+    PROCESS_RNG.get_or_init(|| Mutex::new(DarwinRand::default()))
 }
 
 // ── EffectSpread ──
@@ -92,10 +95,10 @@ pub fn op_effect_spread(img: &DynamicImage, distance: u32) -> Result<DynamicImag
     let input_pixels = pixels;
     let mut out_pixels = input_pixels.clone();
 
-    // The fixture generator isolates this process-global Pillow API with
-    // srand(42). On the pinned macOS Pillow oracle this uses Darwin libc's
-    // Park-Miller sequence, not glibc's TYPE_3 rand().
-    let mut rng = DarwinRand::new(42);
+    // Consume the same process-global stream as Pillow's libc rand().
+    let mut rng = process_rng()
+        .lock()
+        .map_err(|_| PilError::InternalError("effect_spread RNG lock poisoned".into()))?;
     for y in 0..h {
         for x in 0..w {
             let src_idx = (y * w + x) as usize;
@@ -682,7 +685,9 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
     // second deviate.
     let (w, h) = (img.width(), img.height());
     let mut out = GrayImage::new(w, h);
-    let mut rng = DarwinRand::default();
+    let mut rng = process_rng()
+        .lock()
+        .map_err(|_| PilError::InternalError("effect_noise RNG lock poisoned".into()))?;
     // `_effect_noise` parses sigma with PyArg's `f` conversion before passing
     // it to ImagingEffectNoise, so round it to FLOAT32 once at the boundary.
     let sigma = f64::from(sigma as f32);
@@ -1343,6 +1348,9 @@ mod tests {
 
     #[test]
     fn effect_noise_matches_pillow_pair_consumption_and_l_mode() {
+        if let Ok(mut rng) = super::process_rng().lock() {
+            *rng = DarwinRand::default();
+        }
         let input = DynamicImage::ImageLuma8(GrayImage::new(16, 1));
 
         let output = op_effect_noise(&input, 10.0).expect("noise generation must succeed");
