@@ -287,6 +287,33 @@ def run_native_cases() -> tuple[int, int, int]:
         ("backend-disable-cpu", lambda: pillow_rs.disable_backend("cpu")),
         ("backend-unknown", lambda: pillow_rs.enable_backend("NOPE")),
         ("backend-eval-image", lambda: _backend_image()),
+        # getbands explicit-mode band names.
+        ("getbands-cmyk", lambda: Image.new("CMYK", (2, 2)).getbands()),
+        ("getbands-ycbcr", lambda: Image.new("YCbCr", (2, 2)).getbands()),
+        ("getbands-hsv", lambda: Image.new("HSV", (2, 2)).getbands()),
+        ("getbands-pa", lambda: Image.new("PA", (2, 2)).getbands()),
+        ("getbands-i", lambda: Image.new("I", (2, 2)).getbands()),
+        ("getbands-f", lambda: Image.new("F", (2, 2)).getbands()),
+        ("getbands-p", lambda: Image.new("P", (2, 2)).getbands()),
+        ("getbands-1", lambda: Image.new("1", (2, 2)).getbands()),
+        # getcolors histogram paths.
+        ("getcolors-la", lambda: Image.new("LA", (2, 2)).getcolors()),
+        ("getcolors-l-maxcolors", lambda: Image.new("L", (4, 4)).getcolors(1)),
+        ("getcolors-p", lambda: Image.new("P", (4, 4)).getcolors()),
+        ("getcolors-1", lambda: Image.new("1", (4, 4)).getcolors()),
+        # tobitmap wide images need the per-byte bit indexing.
+        ("tobitmap-1-wide", lambda: _tobitmap_wide("1")),
+        ("tobitmap-l-wide", lambda: _tobitmap_wide("L")),
+        # remap_palette paths.
+        ("remap-p", lambda: Image.new("P", (4, 4)).remap_palette([0, 1, 2])),
+        ("remap-l", lambda: Image.new("L", (4, 4)).remap_palette([0, 1, 2])),
+        ("remap-bad-mode", lambda: Image.new("RGB", (4, 4)).remap_palette([0])),
+        ("remap-too-long", lambda: Image.new("P", (4, 4)).remap_palette(list(range(257)))),
+        ("remap-rgba-source", lambda: Image.new("P", (4, 4)).remap_palette([0, 1], bytes(range(768 + 3)))),
+        # getprojection on a non-zero image.
+        ("getprojection-content", lambda: Image.new("L", (8, 8), 0).point(lambda v: 255).getprojection()),
+        # stat on an empty image exercises the zero-count band branch.
+        ("stat-empty", lambda: _stat_of(Image.new("L", (0, 0)))),
     ]
     for name, call in probes:
         probe(name, call)
@@ -392,6 +419,14 @@ def _backend_image() -> None:
             pillow_rs.Image.new("L", (4, 4)).point(lambda v: v).tobytes()
         finally:
             pillow_rs.disable_backend("cpu")
+
+
+def _tobitmap_wide(mode: str) -> None:
+    image = Image.new(mode, (16, 1), 0)
+    for x in range(16):
+        if x % 3 == 0:
+            image.putpixel((x, 0), 255)
+    image.tobitmap()
 
 
 def _noise_rgba(w: int, h: int, seed: int) -> Image:
