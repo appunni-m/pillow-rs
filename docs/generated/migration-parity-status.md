@@ -13,13 +13,13 @@ lane: parity
 
 ## Evidence state
 
-- Compatible evidence IDs: `migration-parity-fde9553720b048ee8cdbbdffdc7b1ddd`
+- Compatible evidence IDs: `migration-parity-35057f15284f4f57b2b1763e54971a92`
 - Operation outcomes: fail=102, pass=102
 - Stale/incompatible artifacts: 0
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
-| `parity_outcome` | `python-cpu` | 725 | 1181 | `migration-parity-fde9553720b048ee8cdbbdffdc7b1ddd` |
+| `parity_outcome` | `python-cpu` | 725 | 1181 | `migration-parity-35057f15284f4f57b2b1763e54971a92` |
 
 ## Interpretation
 
