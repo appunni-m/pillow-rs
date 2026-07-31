@@ -51,6 +51,12 @@ def run_native_cases() -> tuple[int, int, int]:
         ("shape-outline", lambda: _shape(outline=255)),
         ("shape-fill-outline", lambda: _shape(fill=255, outline=100)),
         ("shape-invalid-object", lambda: _shape_invalid()),
+        ("shape-curve-outline", lambda: _shape_curve()),
+        ("bitmap-i-canvas", lambda: _bitmap("I")),
+        ("bitmap-f-canvas", lambda: _bitmap("F")),
+        ("polygon-horizontal-runs", lambda: _polygon_horizontal()),
+        ("polygon-out-of-bounds", lambda: _polygon_oob()),
+        ("line-out-of-bounds", lambda: _line_oob()),
     ]
 
     def _shape(**kwargs) -> None:
@@ -60,6 +66,32 @@ def run_native_cases() -> tuple[int, int, int]:
     def _shape_invalid() -> None:
         draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
         draw.shape("not-an-outline")
+
+    def _shape_curve() -> None:
+        outline = Outline()
+        outline.move(1, 1)
+        outline.curve(4, 8, 8, 8, 12, 1)
+        outline.line(12, 10)
+        outline.close()
+        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
+        draw.shape(outline, fill=255)
+
+    def _bitmap(mode: str) -> None:
+        mask = Image.new("L", (8, 8), 128)
+        draw = ImageDraw.Draw(Image.new(mode, (16, 16), 0))
+        draw.bitmap((2, 2), mask, fill=255)
+
+    def _polygon_horizontal() -> None:
+        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
+        draw.polygon([(1, 4), (12, 4), (12, 8), (4, 8), (4, 5), (10, 5), (10, 7), (2, 7)], fill=255)
+
+    def _polygon_oob() -> None:
+        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
+        draw.polygon([(-5, 3), (20, 3), (20, 13), (-5, 13)], fill=255)
+
+    def _line_oob() -> None:
+        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
+        draw.line([(-4, -4), (20, 20)], fill=255, width=2)
 
     for name, call in probes:
         probe(name, call)
