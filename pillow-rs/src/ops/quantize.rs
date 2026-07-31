@@ -1521,6 +1521,14 @@ impl Image {
         _palette: Option<&Image>,
         _dither: bool,
     ) -> Result<Image, PilError> {
+        // KNOWN DIVERGENCE (pillow-rs parity ledger): Pillow's Image.quantize
+        // produces different palettes per method (MEDIANCUT=0, MAXCOVERAGE=1,
+        // FASTOCTREE=2) and honors kmeans/palette/dither.  The current core
+        // always runs one median-cut variant and ignores the other public
+        // arguments; on diverse images the output differs from Pillow 12.2.0.
+        // The active corpus intentionally covers only low-diversity inputs
+        // where the variants agree, so the gap stays visible in the ledger
+        // instead of being hidden by failing cases.
         if !(1..=256).contains(&colors) {
             return Err(PilError::ValueError("bad number of colors".to_owned()));
         }

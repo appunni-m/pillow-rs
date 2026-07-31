@@ -1987,6 +1987,48 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode",
+            "mode": "I",
+            "values": {
+                "data": literal([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode",
+            "mode": "F",
+            "values": {
+                "data": literal([0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "clipped-values",
+            "mode": "L",
+            "values": {
+                "data": literal([300, -5, 128, 0, 255, 1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "scale-offset",
+            "mode": "L",
+            "values": {
+                "data": literal([1, 2, 3, 4, 5, 6, 7, 8, 9]),
+                "scale": literal(2),
+                "offset": literal(10),
+            },
+        },
+        {
             "surface": "PIL.Image",
             "operation": "linear_gradient",
             "requirement_suffix": "behavior.default",
