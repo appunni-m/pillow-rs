@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 204
 - Manifest requirements: 1780
-- Active parity workflows: 1291
-- Unique active workflow signatures: 1291
+- Active parity workflows: 1299
+- Unique active workflow signatures: 1299
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 122
+- Deliberate nuanced workflows: 130
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,7 +22,7 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 100 |
+| `PIL.Image` | 108 |
 | `PIL.Image.Image` | 485 |
 | `PIL.ImageChops` | 76 |
 | `PIL.ImageColor` | 12 |
@@ -108,6 +108,14 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.p-affine-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-tuple-fill`
+- `PIL.Image.effect_mandelbrot.nuanced.quality-200`
+- `PIL.Image.effect_mandelbrot.nuanced.quality-one-error`
+- `PIL.Image.effect_mandelbrot.nuanced.zero-size`
+- `PIL.Image.eval.nuanced.rgb-replicated-lut`
+- `PIL.Image.linear_gradient.nuanced.f-mode`
+- `PIL.Image.linear_gradient.nuanced.i-mode`
+- `PIL.Image.radial_gradient.nuanced.f-mode`
+- `PIL.Image.radial_gradient.nuanced.i-mode`
 - `PIL.ImageChops.invert.nuanced.la`
 - `PIL.ImageChops.invert.nuanced.rgba`
 - `PIL.ImageColor.getcolor.nuanced.hex-la-alpha`

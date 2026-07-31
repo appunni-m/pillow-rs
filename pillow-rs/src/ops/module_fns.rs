@@ -35,12 +35,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     };
 
     if bands.len() != n_expected {
-        return Err(PilError::ValueError(format!(
-            "Wrong number of bands for mode {}: expected {}, got {}",
-            mode,
-            n_expected,
-            bands.len()
-        )));
+        return Err(PilError::ValueError("wrong number of bands".into()));
     }
 
     let mode_enum = parse_mode(mode)?;
@@ -250,10 +245,7 @@ pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
 /// [`PilError`] when raw image construction fails.
 pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
     if mode.len() != 1 {
-        return Err(PilError::ValueError(format!(
-            "linear_gradient: unsupported mode '{}', only single-channel modes supported",
-            mode
-        )));
+        return Err(PilError::ValueError("image has wrong mode".into()));
     }
     let bytes_per_pixel = match mode {
         "L" | "P" => 1,
@@ -261,10 +253,7 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
         "I" => 4,
         "F" => 4,
         _ => {
-            return Err(PilError::ValueError(format!(
-                "linear_gradient: unsupported mode '{}'",
-                mode
-            )));
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
     };
     let size: usize = 256 * 256 * bytes_per_pixel;
@@ -312,10 +301,7 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
 /// [`PilError`] when raw image construction fails.
 pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
     if mode.len() != 1 {
-        return Err(PilError::ValueError(format!(
-            "radial_gradient: unsupported mode '{}', only single-channel modes supported",
-            mode
-        )));
+        return Err(PilError::ValueError("image has wrong mode".into()));
     }
     let bytes_per_pixel = match mode {
         "L" | "P" => 1,
@@ -323,10 +309,7 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
         "I" => 4,
         "F" => 4,
         _ => {
-            return Err(PilError::ValueError(format!(
-                "radial_gradient: unsupported mode '{}'",
-                mode
-            )));
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
     };
     let size: usize = 256 * 256 * bytes_per_pixel;
@@ -378,9 +361,8 @@ pub fn effect_mandelbrot(
 ) -> Result<Image, PilError> {
     let (w, h) = size;
     if w == 0 || h == 0 {
-        return Err(PilError::ValueError(
-            "effect_mandelbrot: size must be > 0".into(),
-        ));
+        // Pillow accepts a zero-size mandelbrot and returns an empty image.
+        return Image::new(w, h, "L", (0, 0, 0, 255));
     }
 
     let (x0, y0, x1, y1) = extent;
@@ -388,9 +370,7 @@ pub fn effect_mandelbrot(
     let height = y1 - y0;
 
     if width < 0.0 || height < 0.0 || quality < 2 {
-        return Err(PilError::ValueError(
-            "effect_mandelbrot: invalid extent or quality".into(),
-        ));
+        return Err(PilError::ValueError("unrecognized argument value".into()));
     }
 
     // PIL's exact stride computation

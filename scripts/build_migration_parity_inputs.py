@@ -262,6 +262,7 @@ class WorkflowBuilder:
     scenario_transposed_orientation: Any | None = None
     scenario_bitmap_mode: str | None = None
     scenario_im_mode: str | None = None
+    scenario_mask_mode: str | None = None
 
     @property
     def mode(self) -> str:
@@ -835,6 +836,13 @@ class WorkflowBuilder:
                 )
             return binding(self.ensure_image(label=slug(parameter_id)))
         if name == "mask":
+            if self.scenario_mask_mode is not None:
+                return binding(
+                    self.ensure_image(
+                        mode=self.scenario_mask_mode,
+                        label="mask",
+                    )
+                )
             return binding(self.ensure_image(mode="L", label="mask"))
         if name == "font":
             if "font" in value_types and "path" not in value_types:
@@ -1130,6 +1138,7 @@ def build_parity_case(
     scenario_transposed_orientation: Any | None = None,
     scenario_bitmap_mode: str | None = None,
     scenario_im_mode: str | None = None,
+    scenario_mask_mode: str | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1149,6 +1158,7 @@ def build_parity_case(
         scenario_transposed_orientation=scenario_transposed_orientation,
         scenario_bitmap_mode=scenario_bitmap_mode,
         scenario_im_mode=scenario_im_mode,
+        scenario_mask_mode=scenario_mask_mode,
     )
     assets, steps, observations = builder.build()
     return {
@@ -1977,6 +1987,107 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode",
+            "values": {"mode": literal("I")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode",
+            "values": {"mode": literal("F")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-error",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode",
+            "values": {"mode": literal("I")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode",
+            "values": {"mode": literal("F")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-error",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size",
+            "values": {
+                "size": literal([0, 0]),
+                "extent": literal([-2.5, -1.5, 2.5, 1.5]),
+                "quality": literal(100),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "quality-one-error",
+            "values": {
+                "size": literal([64, 64]),
+                "extent": literal([-2.5, -1.5, 2.5, 1.5]),
+                "quality": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "quality-200",
+            "values": {
+                "size": literal([16, 16]),
+                "extent": literal([-1.0, -1.0, 1.0, 1.0]),
+                "quality": literal(200),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-replicated-lut",
+            "mode": "RGB",
+            "values": {
+                "args": literal(list(range(256))),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "one-mask",
+            "mode": "RGB",
+            "mask_mode": "1",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-mask",
+            "mode": "RGB",
+            "mask_mode": "RGBA",
+        },
+        {
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
@@ -2427,6 +2538,7 @@ def build_nuanced_cases(
                 scenario_transposed_orientation=spec.get("orientation"),
                 scenario_bitmap_mode=spec.get("bitmap_mode"),
                 scenario_im_mode=spec.get("im_mode"),
+                scenario_mask_mode=spec.get("mask_mode"),
             )
         )
     return cases
