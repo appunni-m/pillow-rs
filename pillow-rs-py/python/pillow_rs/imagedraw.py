@@ -125,6 +125,8 @@ class Draw:
         if isinstance(fill, (tuple, list)):
             n = len(fill)
             if len(self._orig_mode) == 1 and self._orig_mode != "P" and n != 1:
+                if self._orig_mode == "F":
+                    raise TypeError("must be real number, not tuple")
                 raise TypeError("color must be int or single-element tuple")
             if len(self._orig_mode) == 2 and n not in (1, 2):
                 raise TypeError(
