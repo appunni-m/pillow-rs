@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: cb07746491b0906acb4eee0d6becbee202dfd70b5389883e7cd98a1a352f7ffc
+manifest_sha256: 58cdf3e032fae34a6a44abac37df42133aade3f1a3714aa9227cb6c881e7f290
 statement_status: declared
 ```
 
@@ -31,11 +31,11 @@ statement_status: declared
 | `PIL.Image` | `blend` | `function` | `PIL.Image.blend` | `pillow_rs.blend` | 11 |
 | `PIL.Image` | `composite` | `function` | `PIL.Image.composite` | `pillow_rs.composite` | 13 |
 | `PIL.Image` | `effect_mandelbrot` | `function` | `PIL.Image.effect_mandelbrot` | `pillow_rs.effect_mandelbrot` | 6 |
-| `PIL.Image` | `effect_noise` | `function` | `PIL.Image.effect_noise` | `pillow_rs.Image.effect_noise` | 6 |
-| `PIL.Image` | `eval` | `function` | `PIL.Image.eval` | `pillow_rs.Image.eval` | 12 |
+| `PIL.Image` | `effect_noise` | `function` | `PIL.Image.effect_noise` | `pillow_rs.effect_noise` | 6 |
+| `PIL.Image` | `eval` | `function` | `PIL.Image.eval` | `pillow_rs.eval` | 12 |
 | `PIL.Image` | `fromarray` | `function` | `PIL.Image.fromarray` | `pillow_rs.fromarray` | 8 |
 | `PIL.Image` | `frombuffer` | `function` | `PIL.Image.frombuffer` | `pillow_rs.frombuffer` | 8 |
-| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.Image.frombytes` | 15 |
+| `PIL.Image` | `frombytes` | `function` | `PIL.Image.frombytes` | `pillow_rs.frombytes` | 15 |
 | `PIL.Image` | `linear_gradient` | `function` | `PIL.Image.linear_gradient` | `pillow_rs.linear_gradient` | 5 |
 | `PIL.Image` | `merge` | `function` | `PIL.Image.merge` | `pillow_rs.merge` | 10 |
 | `PIL.Image` | `new` | `function` | `PIL.Image.new` | `pillow_rs.new` | 28 |
