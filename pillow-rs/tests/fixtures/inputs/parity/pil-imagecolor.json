@@ -252,6 +252,188 @@
       ]
     },
     {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-hsv",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "red"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-i",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "blue"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgba-float-alpha",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgba(255, 0, 0, 0.5)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgba-short",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgba(1,2,3)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-transparent",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "transparent"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rgb-percent",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(100%, 50%, 0%)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageColor.getcolor.nuanced.hex-rgba",
       "surface": "PIL.ImageColor",
       "operation": "getcolor",

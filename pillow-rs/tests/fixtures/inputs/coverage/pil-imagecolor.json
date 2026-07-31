@@ -23,12 +23,20 @@
           "PIL.ImageColor.getrgb.nuanced.hsl-syntax",
           "PIL.ImageColor.getrgb.nuanced.hex-with-alpha",
           "PIL.ImageColor.getcolor.nuanced.named-l",
+          "PIL.ImageColor.getcolor.nuanced.named-hsv",
+          "PIL.ImageColor.getcolor.nuanced.named-i",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-float-alpha",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-short",
+          "PIL.ImageColor.getrgb.nuanced.rejected-transparent",
+          "PIL.ImageColor.getrgb.nuanced.rgb-percent",
           "PIL.ImageColor.getcolor.nuanced.hex-rgba",
           "PIL.ImageColor.getcolor.nuanced.rgb-syntax-l",
           "PIL.ImageColor.getcolor.nuanced.named-one",
           "PIL.ImageColor.getcolor.nuanced.hex-la-alpha"
         ],
-        "command_ids": []
+        "command_ids": [
+          "coverage-imagecolor-native"
+        ]
       },
       "component_ids": [
         "image-color"
