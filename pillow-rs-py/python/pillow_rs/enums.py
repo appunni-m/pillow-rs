@@ -40,7 +40,14 @@ class Resampling:
 
     @classmethod
     def from_int(cls, value: int) -> str:
-        mapping = {0: "NEAREST", 1: "BILINEAR", 2: "BICUBIC", 3: "LANCZOS"}
+        mapping = {
+            0: "NEAREST",
+            1: "LANCZOS",
+            2: "BILINEAR",
+            3: "BICUBIC",
+            4: "BOX",
+            5: "HAMMING",
+        }
         return mapping.get(value, "BILINEAR")
 
 

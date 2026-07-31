@@ -268,8 +268,43 @@ class Image:
         reducing_gap=None,
     ) -> "Image":
         del reducing_gap
-        if isinstance(resample, int):
-            resample = Resampling.from_int(resample)
+        # Pillow accepts only integer resample values 0..5. Our public API
+        # exposes the name strings as the default, so accept the six known
+        # names and reject every other string/int with Pillow's error.
+        if resample is None:
+            resample = Resampling.BICUBIC_INT
+        if isinstance(resample, str):
+            names = {
+                "NEAREST": 0,
+                "LANCZOS": 1,
+                "BILINEAR": 2,
+                "BICUBIC": 3,
+                "BOX": 4,
+                "HAMMING": 5,
+            }
+            if resample not in names:
+                raise ValueError(
+                    f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
+                    "Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), "
+                    "Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or "
+                    "Image.Resampling.HAMMING (5)"
+                )
+            resample = names[resample]
+        if not isinstance(resample, int):
+            raise ValueError(
+                f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
+                "Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), "
+                "Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or "
+                "Image.Resampling.HAMMING (5)"
+            )
+        if resample not in (0, 1, 2, 3, 4, 5):
+            raise ValueError(
+                f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
+                "Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), "
+                "Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or "
+                "Image.Resampling.HAMMING (5)"
+            )
+        resample = Resampling.from_int(resample)
         # Ensure size is a tuple (JSON deserialization may produce a list)
         size = tuple(size)
         if size[0] <= 0 or size[1] <= 0:
