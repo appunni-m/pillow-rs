@@ -439,6 +439,16 @@ class FreeTypeFont:
 class TransposedFont:
     """Wrapper for writing rotated or mirrored text."""
 
+    _TRANSPOSE_NAMES = {
+        0: "FLIP_LEFT_RIGHT",
+        1: "FLIP_TOP_BOTTOM",
+        2: "ROTATE_90",
+        3: "ROTATE_180",
+        4: "ROTATE_270",
+        5: "TRANSPOSE",
+        6: "TRANSVERSE",
+    }
+
     def __init__(self, font, orientation=None):
         """Wrap a font for transposed rendering.
 
@@ -452,13 +462,17 @@ class TransposedFont:
         """
         self.font = font
         self.orientation = orientation
+        if isinstance(orientation, int):
+            self._orientation_name = self._TRANSPOSE_NAMES.get(orientation)
+        else:
+            self._orientation_name = orientation
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""
         if isinstance(self.font, FreeTypeFont):
             from .image import Image as PILImage
             image = self.font._rust_font.get_transposed_mask_image(
-                str(text), self.orientation
+                str(text), self._orientation_name
             )
             return ImagingCore(PILImage(image))
         im = self.font.getmask(text, mode, *args, **kwargs)
@@ -472,7 +486,7 @@ class TransposedFont:
         For rotated text (90/270 degrees), width and height are swapped.
         """
         return _core.transposed_font_bbox(
-            self.font.getbbox(text, *args, **kwargs), self.orientation
+            self.font.getbbox(text, *args, **kwargs), self._orientation_name
         )
 
     def getlength(self, text, *args, **kwargs):
@@ -481,7 +495,7 @@ class TransposedFont:
         :raises ValueError: If text is rotated by 90 or 270 degrees,
             where length is undefined.
         """
-        _core.validate_transposed_font_length(self.orientation)
+        _core.validate_transposed_font_length(self._orientation_name)
         return self.font.getlength(text, *args, **kwargs)
 
 

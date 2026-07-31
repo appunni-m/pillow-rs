@@ -230,6 +230,11 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
         r"resampling|transpose|dither|palette|transform|layout|enum", lower
     ):
         include("enum")
+    if parameter_name.lower() == "orientation":
+        # Pillow's TransposedFont orientation is an Image.Transpose integer
+        # enum (or None); callers pass ints such as 2 (ROTATE_90).
+        include("integer")
+        include("enum")
     if re.search(r"\bany\b|\bobject\b", lower):
         include("any_json")
 

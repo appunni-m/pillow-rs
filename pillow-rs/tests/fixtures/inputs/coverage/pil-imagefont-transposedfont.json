@@ -30,7 +30,10 @@
           "PIL.ImageFont.TransposedFont.getmask.behavior.default",
           "PIL.ImageFont.TransposedFont.getmask.parameter.mode",
           "PIL.ImageFont.TransposedFont.getmask.parameter.args",
-          "PIL.ImageFont.TransposedFont.getmask.parameter.kwargs"
+          "PIL.ImageFont.TransposedFont.getmask.parameter.kwargs",
+          "PIL.ImageFont.TransposedFont.getmask.nuanced.rotate-90",
+          "PIL.ImageFont.TransposedFont.getbbox.nuanced.rotate-270",
+          "PIL.ImageFont.TransposedFont.getlength.nuanced.rotate-90-length-error"
         ],
         "command_ids": []
       },

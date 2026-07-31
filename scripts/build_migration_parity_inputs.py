@@ -257,6 +257,9 @@ class WorkflowBuilder:
     scenario_mode: str | None = None
     scenario_edge: str | None = None
     scenario_pixel: Any | None = None
+    scenario_font: str | None = None
+    scenario_font_size: float | None = None
+    scenario_transposed_orientation: Any | None = None
 
     @property
     def mode(self) -> str:
@@ -428,14 +431,19 @@ class WorkflowBuilder:
             return self._font_step
         font = self.ref(
             "font",
-            "font/fonts/DejaVuSans.ttf",
+            self.scenario_font or "font/fonts/DejaVuSans.ttf",
             "font/ttf",
+        )
+        size = (
+            self.scenario_font_size
+            if self.scenario_font_size is not None
+            else 20
         )
         self._font_step = self.add_step(
             "PIL.ImageFont",
             "truetype",
             receiver=None,
-            arguments={"font": font, "size": literal(20)},
+            arguments={"font": font, "size": literal(size)},
             step_id=self.next_step_id("setup-font"),
         )
         return self._font_step
@@ -488,11 +496,18 @@ class WorkflowBuilder:
             return binding(font_step)
         if surface == "PIL.ImageFont.TransposedFont":
             font_step = self.ensure_font()
+            arguments: dict[str, dict[str, Any]] = {
+                "font": binding(font_step)
+            }
+            if self.scenario_transposed_orientation is not None:
+                arguments["orientation"] = literal(
+                    self.scenario_transposed_orientation
+                )
             transposed = self.add_step(
                 "PIL.ImageFont",
                 "TransposedFont",
                 receiver=None,
-                arguments={"font": binding(font_step)},
+                arguments=arguments,
                 step_id=self.next_step_id("setup-transposed-font"),
             )
             return binding(transposed)
@@ -1063,6 +1078,9 @@ def build_parity_case(
     scenario_mode: str | None = None,
     scenario_edge: str | None = None,
     scenario_pixel: Any | None = None,
+    scenario_font: str | None = None,
+    scenario_font_size: float | None = None,
+    scenario_transposed_orientation: Any | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1077,6 +1095,9 @@ def build_parity_case(
         scenario_mode=scenario_mode,
         scenario_edge=scenario_edge,
         scenario_pixel=scenario_pixel,
+        scenario_font=scenario_font,
+        scenario_font_size=scenario_font_size,
+        scenario_transposed_orientation=scenario_transposed_orientation,
     )
     assets, steps, observations = builder.build()
     return {
@@ -1131,6 +1152,82 @@ def build_nuanced_cases(
                 "text": literal("A\nV"),
                 "stroke_width": literal(1),
             },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "variable-font",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_names",
+            "requirement_suffix": "behavior.default",
+            "name": "variable-font",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "set_variation_by_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "variable-font",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+            "values": {"axes": literal([100.0, 600.0])},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "set_variation_by_name",
+            "requirement_suffix": "behavior.default",
+            "name": "variable-font",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+            "values": {"name": literal("Bold")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "font_variant",
+            "requirement_suffix": "parameter.size",
+            "name": "variable-font-size",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+            "values": {"size": literal(30)},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.anchor",
+            "name": "invalid-anchor",
+            "values": {
+                "text": literal("A"),
+                "anchor": literal("bad-anchor"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-size",
+            "values": {"size": literal(0)},
+        },
+        {
+            "surface": "PIL.ImageFont.TransposedFont",
+            "operation": "getmask",
+            "requirement_suffix": "behavior.default",
+            "name": "rotate-90",
+            "orientation": 2,
+        },
+        {
+            "surface": "PIL.ImageFont.TransposedFont",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "rotate-270",
+            "orientation": 4,
+        },
+        {
+            "surface": "PIL.ImageFont.TransposedFont",
+            "operation": "getlength",
+            "requirement_suffix": "behavior.default",
+            "name": "rotate-90-length-error",
+            "orientation": 2,
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -1635,6 +1732,9 @@ def build_nuanced_cases(
                 scenario_mode=spec.get("mode"),
                 scenario_edge=spec.get("edge"),
                 scenario_pixel=spec.get("pixel"),
+                scenario_font=spec.get("font"),
+                scenario_font_size=spec.get("font_size"),
+                scenario_transposed_orientation=spec.get("orientation"),
             )
         )
     return cases
