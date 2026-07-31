@@ -987,6 +987,8 @@
           "PIL.Image.Image.verify.mode.rgba",
           "PIL.Image.Image.width.behavior.default",
           "PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos",
+          "PIL.Image.Image.resize.nuanced.box-filter",
+          "PIL.Image.Image.resize.nuanced.hamming-filter",
           "PIL.Image.Image.rotate.nuanced.fractional-expanded",
           "PIL.Image.Image.transform.nuanced.p-affine-scalar-fill",
           "PIL.Image.Image.transform.nuanced.p-affine-tuple-fill",
