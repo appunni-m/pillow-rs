@@ -3347,9 +3347,7 @@ fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
     let result = pillow_rs::getcolor(r, g, b, a, mode).map_err(map_error)?;
     Python::with_gil(|py| match result {
         pillow_rs::ColorValue::Gray(value) => Ok(value.to_object(py)),
-        pillow_rs::ColorValue::GrayAlpha(gray, alpha) => {
-            Ok((gray, alpha).to_object(py))
-        }
+        pillow_rs::ColorValue::GrayAlpha(gray, alpha) => Ok((gray, alpha).to_object(py)),
         pillow_rs::ColorValue::Rgb(r, g, b) => Ok((r, g, b).to_object(py)),
         pillow_rs::ColorValue::Rgba(r, g, b, a) => Ok((r, g, b, a).to_object(py)),
         pillow_rs::ColorValue::Hsv(h, s, v) => Ok((h, s, v).to_object(py)),
