@@ -2823,7 +2823,9 @@ fn parse_draw_color(
         //   L/1/P: (i, i, i, 255) — single channel, G/B irrelevant
         //   F/I: already handled above
         match mode {
-            Some("RGB") => Ok((i, 0, 0, 255)),
+            // Pillow's `Draw._getink` writes integer inks into the first
+            // channel only for every multi-band mode (RGB, YCbCr, HSV, ...).
+            Some("RGB") | Some("YCbCr") | Some("HSV") => Ok((i, 0, 0, 255)),
             Some("RGBA") => Ok((i, 0, 0, 0)),
             // PIL's _getink for LA: (L=value, A=0) where A=0 means full opacity
             Some("LA") => Ok((i, i, i, 0)),

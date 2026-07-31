@@ -225,7 +225,7 @@ impl Draw {
         _width: u32,
     ) -> Result<(), PilError> {
         let (fill, outline) = self.shape_inks(fill, outline);
-        if points.len() < 3 {
+        if points.len() < 2 {
             return Ok(());
         }
         self.image = Image::push_op(
@@ -687,7 +687,15 @@ impl Draw {
                         }
                     }
                 }
-                self.set_image(canvas);
+                // YCbCr/HSV and other 3-band fallback modes store no alpha;
+                // rebuild the canvas as RGB tagged with the source mode so
+                // the resulting image keeps Pillow's 3-byte pixel layout.
+                self.image = Image::from_dynamic(
+                    crate::raster::DynamicImage::ImageRgb8(
+                        crate::raster::DynamicImage::ImageRgba8(canvas).to_rgb8(),
+                    ),
+                    Some(mode.to_string()),
+                );
                 Ok(())
             }
         }
@@ -1632,7 +1640,7 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
     _raw: bool,
 ) {
     let n = points.len();
-    if n < 3 {
+    if n < 2 {
         return;
     }
 
