@@ -3305,10 +3305,15 @@ fn image_effect_mandelbrot(
 // --- ImageColor ---
 
 #[pyfunction]
-fn getrgb(color: &str) -> PyResult<(u8, u8, u8)> {
-    pillow_rs::parse_color_str(color)
-        .map(|(r, g, b, _a)| (r, g, b))
-        .map_err(map_error)
+fn getrgb(color: &str) -> PyResult<PyObject> {
+    let (r, g, b, a) = pillow_rs::parse_color_str(color).map_err(map_error)?;
+    Python::with_gil(|py| {
+        if pillow_rs::color_has_explicit_alpha(color) {
+            Ok((r, g, b, a).to_object(py))
+        } else {
+            Ok((r, g, b).to_object(py))
+        }
+    })
 }
 
 #[pyfunction]
@@ -3338,16 +3343,16 @@ fn palette_to_text(palette: Vec<u8>, mode: &str) -> String {
 
 #[pyfunction]
 fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
-    let (r, g, b) = pillow_rs::parse_color_str(color)
-        .map(|(r, g, b, _a)| (r, g, b))
-        .map_err(map_error)?;
-    let result = pillow_rs::getcolor(r, g, b, mode).map_err(map_error)?;
-    Python::with_gil(|py| match mode {
-        "L" | "1" => Ok(result.0.to_object(py)),
-        "LA" => Ok((result.0, result.3).to_object(py)),
-        "RGB" => Ok((result.0, result.1, result.2).to_object(py)),
-        "RGBA" => Ok((result.0, result.1, result.2, result.3).to_object(py)),
-        _ => Ok((result.0, result.1, result.2).to_object(py)),
+    let (r, g, b, a) = pillow_rs::parse_color_str(color).map_err(map_error)?;
+    let result = pillow_rs::getcolor(r, g, b, a, mode).map_err(map_error)?;
+    Python::with_gil(|py| match result {
+        pillow_rs::ColorValue::Gray(value) => Ok(value.to_object(py)),
+        pillow_rs::ColorValue::GrayAlpha(gray, alpha) => {
+            Ok((gray, alpha).to_object(py))
+        }
+        pillow_rs::ColorValue::Rgb(r, g, b) => Ok((r, g, b).to_object(py)),
+        pillow_rs::ColorValue::Rgba(r, g, b, a) => Ok((r, g, b, a).to_object(py)),
+        pillow_rs::ColorValue::Hsv(h, s, v) => Ok((h, s, v).to_object(py)),
     })
 }
 

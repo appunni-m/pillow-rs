@@ -131,6 +131,8 @@ mod pipeline;
 /// Pillow-owned materialized pixel storage and raster primitives.
 mod raster;
 pub use crate::color::getcolor;
+pub use crate::color::color_has_explicit_alpha;
+pub use crate::color::ColorValue;
 pub use crate::color::palette_getcolor;
 pub use crate::color::palette_getcolor_append;
 pub use crate::color::palette_getcolor_validate;
