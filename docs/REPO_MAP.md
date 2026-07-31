@@ -380,6 +380,7 @@ generated reports, build outputs, and package installs.
 |-- rust-toolchain.toml
 |-- rustfmt.toml
 |-- scripts/
+|   |-- aggregate_migration_parity.py
 |   |-- analyze_palette_rotate.py
 |   |-- audit_rust_result_methods.py
 |   |-- bench/
@@ -404,6 +405,7 @@ generated reports, build outputs, and package installs.
 |   |-- build_migration_parity_inputs.py
 |   |-- build_migration_parity_manifest.py
 |   |-- check_bindings.py
+|   |-- check_migration_parity_inputs.py
 |   |-- check_public_api_boundary.py
 |   |-- check_repo_map.py
 |   |-- ci_coverage.sh
@@ -430,13 +432,19 @@ generated reports, build outputs, and package installs.
 |   |-- generate_eval_error_oracle.py
 |   |-- generate_fromarray_descriptor_oracle.py
 |   |-- generate_image_backend_operation_fixtures.py
+|   |-- generate_migration_parity_docs.py
 |   |-- generate_palette_save_fixture_inputs.py
 |   |-- generate_point_fixture_inputs.py
 |   |-- generate_putdata_fixture_inputs.py
 |   |-- generate_stubs.py
 |   |-- lint.sh
 |   |-- migrate_fixtures.py
-|   `-- migration_parity_inventory.py
+|   |-- migration_parity_inventory.py
+|   |-- review_migration_parity_cases.py
+|   |-- run_migration_benchmark.py
+|   |-- run_migration_coverage.py
+|   |-- run_migration_parity.py
+|   `-- validate_migration_parity_result.py
 `-- tests/
     |-- conftest.py
     |-- deprecated/
@@ -1135,6 +1143,8 @@ generated reports, build outputs, and package installs.
     |-- test_eval_errors.py
     |-- test_fromarray_descriptor_oracle.py
     |-- test_imagefont_facade_oracle.py
+    |-- test_migration_parity_cases.py
+    |-- test_migration_parity_evidence.py
     |-- test_migration_parity_inventory.py
     |-- test_pa_mutations.py
     |-- test_paste_oracle.py
