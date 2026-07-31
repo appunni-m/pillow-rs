@@ -676,22 +676,12 @@ class Image:
         """
         if rawmode is None:
             rawmode = self._rust_image.palette_mode()
-        if rawmode == "RGBA":
-            p = self._rust_image.getpalette_rgba()
-            return list(p) if p is not None else None
-        if hasattr(self, '_palette'):
-            return self._palette
-        try:
-            p = self._rust_image.getpalette_trimmed()
-            if p is not None:
-                self._palette = list(p)
-                return self._palette
-        except Exception:
-            pass
-        # PIL: P-mode image with no palette returns empty list, not None
-        if self.mode in ("P", "PA"):
+        # Pillow's C getpalette accepts RGB/RGBA/RGBX and R/G/B selectors and
+        # raises "unrecognized raw mode" for everything else.
+        p = self._rust_image.getpalette_rawmode(rawmode)
+        if p is None and self.mode in ("P", "PA"):
             return []
-        return None
+        return list(p) if p is not None else None
 
     def getxmp(self):
         """Return XMP metadata. Returns empty dict."""
