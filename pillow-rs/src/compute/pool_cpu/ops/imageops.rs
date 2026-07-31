@@ -88,8 +88,9 @@ pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     // step = (sum(non_zero_bins) - last_bin_count) / 255
     // lut[i] = floor(accumulator / step) where accumulator tracks step/2 + cumulative hist
     let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    let mut out = crate::raster::RgbImage::new(w, h);
+    // Start from a copy of the input: uniform or single-value histograms
+    // keep the source pixels unchanged (PIL's equalize identity path).
+    let mut out = rgb.clone();
     for ch in 0..3 {
         let mut hist = [0u32; 256];
         for px in rgb.pixels() {

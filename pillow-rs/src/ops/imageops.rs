@@ -16,7 +16,14 @@ use crate::pipeline::PipelineOp;
 /// or another [`PilError`] when mode detection fails.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
     let mode = image.mode()?;
-    if mode == "LA" || mode == "RGBA" {
+    // Pillow 12.2.0 `ImageOps._lut` accepts only "L" and "RGB"; "P" raises
+    // NotImplementedError and every other mode raises the OSError below.
+    if mode == "P" {
+        return Err(PilError::NotImplementedError(
+            "mode P support coming soon".into(),
+        ));
+    }
+    if mode != "L" && mode != "RGB" {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
     Ok(Image::push_op(image, PipelineOp::Autocontrast { cutoff }))
@@ -30,7 +37,9 @@ pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
 /// or another [`PilError`] when mode detection fails.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
-    if mode == "LA" || mode == "RGBA" {
+    // Pillow 12.2.0 converts "P" to "RGB" before building the LUT and then
+    // `_lut` accepts only "L" and "RGB"; all other modes raise the OSError.
+    if mode != "L" && mode != "RGB" && mode != "P" {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
     Ok(Image::push_op(image, PipelineOp::Equalize))
