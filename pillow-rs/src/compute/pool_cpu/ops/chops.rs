@@ -174,7 +174,9 @@ pub fn op_chops_add(
     offset: f64,
 ) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| {
-        ((a as f64 + b as f64) * scale + offset).clamp(0.0, 255.0) as u8
+        // Pillow 12.2.0 `Chops.c::ImagingChopAdd`: ((a + b) / scale + offset),
+        // then CHOP clamps to [0, 255].
+        ((a as f64 + b as f64) / scale + offset).clamp(0.0, 255.0) as u8
     })
 }
 
@@ -185,7 +187,9 @@ pub fn op_chops_subtract(
     offset: f64,
 ) -> Result<DynamicImage, PilError> {
     channel_op_binary(img, other, |a, b| {
-        ((a as f64 - b as f64) * scale + offset).clamp(0.0, 255.0) as u8
+        // Pillow 12.2.0 `Chops.c::ImagingChopSubtract`: ((a - b) / scale +
+        // offset), then CHOP clamps to [0, 255].
+        ((a as f64 - b as f64) / scale + offset).clamp(0.0, 255.0) as u8
     })
 }
 
@@ -298,7 +302,6 @@ pub fn op_chops_blend(
     alpha: f64,
 ) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize_for_ops()?;
-    let a = alpha.clamp(0.0, 1.0);
     let rgb1 = img.to_rgb8();
     let rgb2 = other_img.to_rgb8();
     let (w, h) = (
@@ -314,9 +317,11 @@ pub fn op_chops_blend(
                 x,
                 y,
                 crate::raster::Rgb([
-                    (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
-                    (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
-                    (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
+                    // Pillow 12.2.0 `Blend.c::ImagingBlend` interpolates for alpha in
+                    // [0, 1] and clips extrapolation results to [0, 255] otherwise.
+                    (p1[0] as f64 * (1.0 - alpha) + p2[0] as f64 * alpha).clamp(0.0, 255.0) as u8,
+                    (p1[1] as f64 * (1.0 - alpha) + p2[1] as f64 * alpha).clamp(0.0, 255.0) as u8,
+                    (p1[2] as f64 * (1.0 - alpha) + p2[2] as f64 * alpha).clamp(0.0, 255.0) as u8,
                 ]),
             );
         }

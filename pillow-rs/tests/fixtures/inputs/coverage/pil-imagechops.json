@@ -217,7 +217,10 @@
           "PIL.ImageChops.subtract_modulo.mode.la",
           "PIL.ImageChops.subtract_modulo.mode.rgba",
           "PIL.ImageChops.invert.nuanced.la",
-          "PIL.ImageChops.invert.nuanced.rgba"
+          "PIL.ImageChops.invert.nuanced.rgba",
+          "PIL.ImageChops.add.nuanced.scale-offset",
+          "PIL.ImageChops.subtract.nuanced.scale-offset",
+          "PIL.ImageChops.blend.nuanced.extrapolate-alpha"
         ],
         "command_ids": []
       },

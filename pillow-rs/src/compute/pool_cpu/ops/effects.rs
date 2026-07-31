@@ -400,7 +400,9 @@ pub fn op_blend_module(
     if (other_img.width(), other_img.height()) != (img.width(), img.height()) {
         return Err(PilError::ValueError("images do not match".into()));
     }
-    let a = alpha.clamp(0.0, 1.0);
+    // Pillow 12.2.0 `Blend.c::ImagingBlend` interpolates for alpha in [0, 1]
+    // and clips extrapolation results to [0, 255] for any other alpha.
+    let a = alpha;
     // CMYK mode: blend all 4 channels (C,M,Y,K stored as R,G,B,A in Rgba8)
     if explicit_mode == Some("CMYK") {
         let rgba1 = img.to_rgba8();
@@ -418,10 +420,10 @@ pub fn op_blend_module(
                     x,
                     y,
                     crate::raster::Rgba([
-                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
-                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
-                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
-                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a) as u8,
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a).clamp(0.0, 255.0) as u8,
                     ]),
                 );
             }
@@ -445,8 +447,8 @@ pub fn op_blend_module(
                     x,
                     y,
                     crate::raster::LumaA([
-                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
-                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
                     ]),
                 );
             }
@@ -466,10 +468,10 @@ pub fn op_blend_module(
                     x,
                     y,
                     crate::raster::Rgba([
-                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
-                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
-                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
-                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a) as u8,
+                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).clamp(0.0, 255.0) as u8,
+                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a).clamp(0.0, 255.0) as u8,
                     ]),
                 );
             }
@@ -492,9 +494,9 @@ pub fn op_blend_module(
                 x,
                 y,
                 crate::raster::Rgb([
-                    (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a) as u8,
-                    (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a) as u8,
-                    (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a) as u8,
+                    (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
+                    (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
+                    (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).clamp(0.0, 255.0) as u8,
                 ]),
             );
         }
