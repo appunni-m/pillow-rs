@@ -13,14 +13,14 @@ lane: benchmark
 
 ## Evidence state
 
-- Compatible evidence IDs: `migration-benchmark-5eebf686fac749e1b5cae60e53dc4629`
-- Operation outcomes: not_proven=47, pass=156
-- Stale/incompatible artifacts: 1
+- Compatible evidence IDs: none
+- Operation outcomes: not_proven=203
+- Stale/incompatible artifacts: 2
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
 | `benchmark_input_mapping` | `python-cpu` | 203 | 203 | `not_proven` |
-| `benchmark_budget_outcome` | `python-cpu` | 0 | 203 | `migration-benchmark-5eebf686fac749e1b5cae60e53dc4629` |
+| `benchmark_budget_outcome` | `python-cpu` | 0 | 203 | `not_proven` |
 
 ## Interpretation
 

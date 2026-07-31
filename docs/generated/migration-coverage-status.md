@@ -15,7 +15,7 @@ lane: coverage
 
 - Compatible evidence IDs: none
 - Operation outcomes: not_proven=204
-- Stale/incompatible artifacts: 1
+- Stale/incompatible artifacts: 2
 
 | Dimension | Target profile | Covered | Total | Evidence ID |
 | --- | --- | ---: | ---: | --- |
