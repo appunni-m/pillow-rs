@@ -384,6 +384,7 @@ generated reports, build outputs, and package installs.
 |   |-- review_migration_parity_cases.py
 |   |-- run_migration_benchmark.py
 |   |-- run_migration_coverage.py
+|   |-- run_migration_font_native_cases.py
 |   |-- run_migration_parity.py
 |   |-- run_migration_rust_coverage.py
 |   |-- validate_migration_parity_contract.py
