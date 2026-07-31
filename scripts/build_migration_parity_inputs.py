@@ -260,6 +260,7 @@ class WorkflowBuilder:
     scenario_font: str | None = None
     scenario_font_size: float | None = None
     scenario_transposed_orientation: Any | None = None
+    scenario_bitmap_mode: str | None = None
 
     @property
     def mode(self) -> str:
@@ -795,6 +796,13 @@ class WorkflowBuilder:
             "bitmap",
             "palette",
         } or "image" in value_types:
+            if name == "bitmap" and self.scenario_bitmap_mode is not None:
+                return binding(
+                    self.ensure_image(
+                        mode=self.scenario_bitmap_mode,
+                        label="bitmap",
+                    )
+                )
             return binding(self.ensure_image(label=slug(parameter_id)))
         if name == "mask":
             return binding(self.ensure_image(mode="L", label="mask"))
@@ -1084,6 +1092,7 @@ def build_parity_case(
     scenario_font: str | None = None,
     scenario_font_size: float | None = None,
     scenario_transposed_orientation: Any | None = None,
+    scenario_bitmap_mode: str | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1101,6 +1110,7 @@ def build_parity_case(
         scenario_font=scenario_font,
         scenario_font_size=scenario_font_size,
         scenario_transposed_orientation=scenario_transposed_orientation,
+        scenario_bitmap_mode=scenario_bitmap_mode,
     )
     assets, steps, observations = builder.build()
     return {
@@ -1375,6 +1385,121 @@ def build_nuanced_cases(
             "values": {
                 "text": literal("A\u0301🙂"),
                 "anchor": literal("mm"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-la",
+            "mode": "LA",
+            "bitmap_mode": "L",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-cmyk",
+            "mode": "CMYK",
+            "bitmap_mode": "L",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-p",
+            "mode": "P",
+            "bitmap_mode": "L",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-rgba-rgba-mask",
+            "mode": "RGBA",
+            "bitmap_mode": "RGBA",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-one-mask",
+            "mode": "L",
+            "bitmap_mode": "1",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rounded_rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "radius",
+            "values": {
+                "xy": literal([0, 0, 10, 10]),
+                "radius": literal(4),
+                "fill": literal([200, 100, 50]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "circle",
+            "requirement_suffix": "behavior.default",
+            "name": "bbox",
+            "values": {
+                "xy": literal([0, 0, 12, 12]),
+                "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "fill-outline",
+            "values": {
+                "xy": literal([[1, 1], [10, 1], [5, 10]]),
+                "fill": literal([255, 0, 0]),
+                "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "wide",
+            "values": {
+                "xy": literal([[0, 0], [12, 12]]),
+                "width": literal(3),
+                "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "wide-joint-curve",
+            "values": {
+                "xy": literal([[0, 0], [12, 0], [6, 12]]),
+                "width": literal(3),
+                "joint": literal("curve"),
+                "fill": literal([255, 0, 0]),
             },
         },
         {
@@ -1900,6 +2025,7 @@ def build_nuanced_cases(
                 scenario_font=spec.get("font"),
                 scenario_font_size=spec.get("font_size"),
                 scenario_transposed_orientation=spec.get("orientation"),
+                scenario_bitmap_mode=spec.get("bitmap_mode"),
             )
         )
     return cases

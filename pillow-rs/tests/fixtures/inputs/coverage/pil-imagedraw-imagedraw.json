@@ -504,7 +504,17 @@
           "PIL.ImageDraw.ImageDraw.textlength.mode.l",
           "PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor",
           "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing",
-          "PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor"
+          "PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-la",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgba-rgba-mask",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-one-mask",
+          "PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius",
+          "PIL.ImageDraw.ImageDraw.circle.nuanced.bbox",
+          "PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline",
+          "PIL.ImageDraw.ImageDraw.line.nuanced.wide",
+          "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve"
         ],
         "command_ids": []
       },

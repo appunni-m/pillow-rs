@@ -2774,7 +2774,7 @@ fn parse_draw_color(
             return Ok((luma, luma, luma, 0));
         }
         return Err(pyo3::exceptions::PyTypeError::new_err(
-            "color must be int or tuple of one or two elements",
+            "color must be int, or tuple of one or two elements",
         ));
     }
     // Standard modes: extract as u8
