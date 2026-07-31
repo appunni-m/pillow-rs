@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "operation": "font.get_transposed_mask",
+  "cases": [
+    {
+      "case_id": "font.get_transposed_mask.invalid_orientation_error",
+      "operation": "font.get_transposed_mask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "orientation": "UNSUPPORTED"
+        }
+      }
+    }
+  ]
+}

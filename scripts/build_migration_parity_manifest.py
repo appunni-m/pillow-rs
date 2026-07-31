@@ -1046,6 +1046,11 @@ def build_manifest() -> dict[str, Any]:
             command("parity", "migration-parity-test", 3600),
             command("coverage", "migration-parity-coverage", 3600),
             command("coverage-rust", "migration-parity-coverage-rust", 7200),
+            command(
+                "coverage-font-native",
+                "migration-parity-font-native-coverage",
+                600,
+            ),
             command("benchmark", "migration-parity-benchmark", 7200),
             command("aggregate", "migration-parity-aggregate", 300),
             command("docs", "migration-parity-docs", 300),

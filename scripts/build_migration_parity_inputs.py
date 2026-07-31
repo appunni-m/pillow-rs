@@ -690,6 +690,9 @@ class WorkflowBuilder:
             if scenario_key == parameter_id:
                 return descriptor
 
+        if parameter_id == "font" and self.scenario_font is not None:
+            return self.ref("font", self.scenario_font, "font/ttf")
+
         if variant_value is not inspect_missing:
             if (
                 parameter_id == "filter"
@@ -1169,6 +1172,86 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "named-instances",
+            "font": "font/fonts/variable-named-instances.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_names",
+            "requirement_suffix": "behavior.default",
+            "name": "named-instances",
+            "font": "font/fonts/variable-named-instances.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "non-variable-error",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.direction",
+            "name": "unsupported-direction",
+            "values": {
+                "text": literal("A"),
+                "direction": literal("rtl"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.features",
+            "name": "unsupported-features",
+            "values": {
+                "text": literal("A"),
+                "features": literal(["liga"]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getlength",
+            "requirement_suffix": "parameter.language",
+            "name": "unsupported-language",
+            "values": {
+                "text": literal("A"),
+                "language": literal("en"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.stroke-width",
+            "name": "fractional-stroke",
+            "values": {
+                "text": literal("AV"),
+                "stroke_width": literal(1.5),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "fractional-start",
+            "values": {
+                "text": literal("AV"),
+                "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.mode",
+            "name": "mode-one",
+            "values": {
+                "text": literal("AV"),
+                "mode": literal("1"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "set_variation_by_axes",
             "requirement_suffix": "behavior.default",
             "name": "variable-font",
@@ -1207,6 +1290,41 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.size",
             "name": "zero-size",
             "values": {"size": literal(0)},
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.font",
+            "name": "malformed-cff-table",
+            "font": "font/fonts/cff-malformed-short-header.otf",
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.font",
+            "name": "malformed-cff-name-index",
+            "font": "font/fonts/cff-malformed-name-index-offsets-out-of-order.otf",
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.size",
+            "name": "fractional-size",
+            "values": {"size": literal(20.5)},
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.size",
+            "name": "negative-fractional-size",
+            "values": {"size": literal(-5.5)},
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.size",
+            "name": "oversized-size",
+            "values": {"size": literal(50000)},
         },
         {
             "surface": "PIL.ImageFont.TransposedFont",
@@ -1850,6 +1968,12 @@ def build_inputs(
             )
         )
         selected_cases = list(dict.fromkeys(selected_cases))
+        command_ids = (
+            ["coverage-font-native"]
+            if "image-font" in component_ids
+            and surface_id == "PIL.ImageFont.FreeTypeFont"
+            else []
+        )
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
         coverage_path = output_root / coverage_relative
         write_json(
@@ -1863,7 +1987,7 @@ def build_inputs(
                         "target_profile": TARGET_PROFILE,
                         "selectors": {
                             "parity_case_ids": selected_cases,
-                            "command_ids": [],
+                            "command_ids": command_ids,
                         },
                         "component_ids": component_ids,
                         "command_id": "coverage",

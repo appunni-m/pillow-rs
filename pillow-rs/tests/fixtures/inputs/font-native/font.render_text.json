@@ -1,0 +1,209 @@
+{
+  "version": 1,
+  "operation": "draw_text",
+  "cases": [
+    {
+      "case_id": "font.draw_text.dejavusans20_hello_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [
+            10,
+            18
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.draw_text.dejavusans20_av_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "AV",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [
+            10,
+            18
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.draw_text.dejavusans20_jq_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "jQ",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [
+            10,
+            18
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.draw_text.dejavusans20_empty_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "",
+          "canvas_width": 18,
+          "canvas_height": 12,
+          "xy": [
+            0,
+            0
+          ],
+          "fill": [
+            255,
+            255,
+            255,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.draw_text.dejavusans20_negative_y_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "Hello",
+          "canvas_width": 96,
+          "canvas_height": 64,
+          "xy": [
+            10,
+            -4
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.draw_text.embedded_strike_a_draw_text_rgba",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20,
+          "text": "A",
+          "canvas_width": 64,
+          "canvas_height": 48,
+          "xy": [
+            8,
+            18
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    },
+    {
+      "case_id": "font.draw_text.invalid_maxp_too_many_instruction_defs",
+      "operation": "draw_text",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/invalid-maxp.ttf"
+          }
+        },
+        "params": {
+          "size": 7,
+          "text": "A",
+          "canvas_width": 32,
+          "canvas_height": 24,
+          "xy": [
+            4,
+            8
+          ],
+          "fill": [
+            20,
+            40,
+            200,
+            255
+          ],
+          "mode": "RGBA"
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "version": 1,
+  "operation": "getmetrics",
+  "cases": [
+    {
+      "case_id": "font.getmetrics.dejavusans20_getmetrics",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/DejaVuSans.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.pure_cff",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/pure-cff-cubic.otf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.embedded_strike",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/embedded-strike-color-or-sbit.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.variable_named_instances",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/variable-named-instances.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.fixed_width",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/fixed-width.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.hhea_zero_no_os2_fallback",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/hhea-zero-no-os2-fallback.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.mvar_vertical_metrics",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/mvar-vertical-metrics.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    },
+    {
+      "case_id": "font.getmetrics.vertical_vhea_only",
+      "operation": "getmetrics",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "ref",
+            "id": "input/fonts/vertical-vhea-only.ttf"
+          }
+        },
+        "params": {
+          "size": 20
+        }
+      }
+    }
+  ]
+}

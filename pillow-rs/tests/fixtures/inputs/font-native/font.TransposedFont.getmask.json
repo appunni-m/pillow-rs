@@ -1,0 +1,104 @@
+{
+  "version": 1,
+  "operation": "TransposedFont.getmask",
+  "cases": [
+    {
+      "case_id": "font.TransposedFont.getmask.rotate_90_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello",
+          "orientation": "ROTATE_90"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.none_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hello"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.explicit_empty_mode_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "AV",
+          "mode": "",
+          "orientation": "FLIP_LEFT_RIGHT"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.empty_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "",
+          "orientation": "ROTATE_90"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.l_mode_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_ref",
+            "id": "input/pilfont/courb08_l.pil"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "orientation": "FLIP_TOP_BOTTOM"
+        }
+      }
+    },
+    {
+      "case_id": "font.TransposedFont.getmask.ignored_args_kwargs_default_bitmap",
+      "operation": "TransposedFont.getmask",
+      "inputs": {
+        "assets": {
+          "font": {
+            "kind": "pilfont_default"
+          }
+        },
+        "params": {
+          "text": "Hi",
+          "mode": "",
+          "orientation": "FLIP_LEFT_RIGHT",
+          "args": [
+            "ignored"
+          ],
+          "kwargs": {
+            "unknown": 1
+          }
+        }
+      }
+    }
+  ]
+}
