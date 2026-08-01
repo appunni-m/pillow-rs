@@ -4236,6 +4236,48 @@ def build_nuanced_cases(
             "pixel": [200, 100, 50],
             "values": {"format": literal("PNG")},
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk",
+            "mode": "CMYK",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "ycbcr",
+            "mode": "YCbCr",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv",
+            "mode": "HSV",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode",
+            "mode": "I",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode",
+            "mode": "F",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-mode",
+            "mode": "PA",
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}

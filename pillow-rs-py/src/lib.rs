@@ -599,6 +599,14 @@ impl PyImage {
             }
         })
     }
+    /// Band names for the active image, delegated to the Rust core.
+    fn getbands(&self) -> PyResult<PyObject> {
+        let bands = self.inner.getbands().map_err(map_error)?;
+        Python::with_gil(|py| {
+            let objs: Vec<PyObject> = bands.iter().map(|band| band.to_object(py)).collect();
+            Ok(PyTuple::new(py, objs)?.to_object(py))
+        })
+    }
 
     fn stat(&self) -> PyResult<Vec<Vec<f64>>> {
         self.inner.stat().map_err(map_error)

@@ -1114,7 +1114,13 @@
           "PIL.Image.Image.putalpha.nuanced.l-mask",
           "PIL.Image.Image.putdata.nuanced.rgb-tuples-scale-offset",
           "PIL.Image.Image.putdata.nuanced.rgba-clipped-tuples",
-          "PIL.Image.Image.save.nuanced.rgb-nonzero"
+          "PIL.Image.Image.save.nuanced.rgb-nonzero",
+          "PIL.Image.Image.getbands.nuanced.cmyk",
+          "PIL.Image.Image.getbands.nuanced.ycbcr",
+          "PIL.Image.Image.getbands.nuanced.hsv",
+          "PIL.Image.Image.getbands.nuanced.i-mode",
+          "PIL.Image.Image.getbands.nuanced.f-mode",
+          "PIL.Image.Image.getbands.nuanced.pa-mode"
         ],
         "command_ids": [
           "coverage-imagecore-native"
