@@ -547,7 +547,10 @@ impl Draw {
                 Ok(())
             }
             "P" => {
-                if let Some(palette) = self.image.palette() {
+                // Raw P images use an empty retained palette to mean that no
+                // palette has been attached yet; only a non-empty palette
+                // needs the indexed reconstruction path below.
+                if let Some(palette) = self.image.palette().filter(|palette| !palette.is_empty()) {
                     // Pillow ImageDraw mutates the existing ImagingCore, so the
                     // encoded format and pending `info` metadata stay attached.
                     // Carry them across our immediate indexed-buffer rebuild.
