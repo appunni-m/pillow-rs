@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1864
-- Unique active workflow signatures: 1864
+- Active parity workflows: 1871
+- Unique active workflow signatures: 1871
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 695
+- Deliberate nuanced workflows: 702
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 154 |
-| `PIL.Image.Image` | 789 |
+| `PIL.Image.Image` | 796 |
 | `PIL.ImageChops` | 79 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
@@ -145,6 +145,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.crop.nuanced.opened-rgb`
 - `PIL.Image.Image.entropy.nuanced.bad-mask-mode`
 - `PIL.Image.Image.entropy.nuanced.mask-size-mismatch`
+- `PIL.Image.Image.entropy.nuanced.masked-nonzero`
+- `PIL.Image.Image.entropy.nuanced.masked-nonzero-l`
+- `PIL.Image.Image.entropy.nuanced.masked-nonzero-la`
 - `PIL.Image.Image.entropy.nuanced.masked-region`
 - `PIL.Image.Image.entropy.nuanced.opened-l`
 - `PIL.Image.Image.filter.nuanced.f-mode`
@@ -191,7 +194,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getchannel.nuanced.pa-alpha-channel`
 - `PIL.Image.Image.getchannel.nuanced.pa-index-channel`
 - `PIL.Image.Image.getcolors.nuanced.i-nonzero`
+- `PIL.Image.Image.getcolors.nuanced.l-two-colors-limit`
 - `PIL.Image.Image.getcolors.nuanced.la-nonzero`
+- `PIL.Image.Image.getcolors.nuanced.la-odd-nonzero`
 - `PIL.Image.Image.getcolors.nuanced.opened-p`
 - `PIL.Image.Image.getcolors.nuanced.opened-rgba`
 - `PIL.Image.Image.getdata.nuanced.opened-rgb`
@@ -397,6 +402,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.split.nuanced.p-mode`
 - `PIL.Image.Image.thumbnail.nuanced.zero-height`
 - `PIL.Image.Image.thumbnail.nuanced.zero-width`
+- `PIL.Image.Image.tobitmap.nuanced.nonzero-1`
+- `PIL.Image.Image.tobitmap.nuanced.nonzero-l`
 - `PIL.Image.Image.tobytes.nuanced.f-mode`
 - `PIL.Image.Image.tobytes.nuanced.i-mode`
 - `PIL.Image.Image.tobytes.nuanced.one-packed-nonzero`
