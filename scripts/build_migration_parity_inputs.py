@@ -1948,6 +1948,28 @@ class WorkflowBuilder:
                     observation_step = image_step
                 else:
                     receiver_step = image_step
+            elif chain == "p-bitmap-putpixel":
+                image_step = self.ensure_image(mode="P")
+                draw_step = self.add_step(
+                    "PIL.ImageDraw",
+                    "Draw",
+                    receiver=None,
+                    arguments={"im": binding(image_step)},
+                    step_id="setup-draw",
+                )
+                bitmap_step = self.ensure_image(mode="L", label="bitmap")
+                self.add_step(
+                    "PIL.ImageDraw.ImageDraw",
+                    "bitmap",
+                    receiver=binding(draw_step),
+                    arguments={
+                        "xy": literal([0, 0]),
+                        "bitmap": binding(bitmap_step),
+                        "fill": literal(7),
+                    },
+                    step_id="setup-bitmap",
+                )
+                receiver_step = image_step
             elif chain == "p-full-palette-exhausted-putpixel":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -9592,6 +9614,20 @@ def build_nuanced_cases(
             "name": "raw-p-no-palette-tuple",
             "mode": "P",
             "edge": "raw-p-no-palette",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([9, 8, 7]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-after-bitmap-no-palette-tuple",
+            "observe_receiver": True,
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "chain": "p-bitmap-putpixel",
             "values": {
                 "xy": literal([0, 0]),
                 "value": literal([9, 8, 7]),

@@ -1288,9 +1288,12 @@ impl Image {
     /// 256 colors. The returned palette is present only when allocation changed
     /// it.
     fn resolve_palette_color(&self, color: [u8; 3]) -> Result<(u8, Option<Vec<u8>>), PilError> {
-        let mut palette = self.extract_palette().ok_or_else(|| {
-            PilError::PaletteError("P-mode image has no retained palette".to_owned())
-        })?;
+        // Pillow's Image.putpixel creates an empty ImagePalette when a public
+        // P-mode operation leaves no palette attached (for example, after
+        // ImageDraw.bitmap). Treat the missing palette as an empty table so
+        // tuple-color writes allocate the same first entry instead of raising
+        // a binding-visible PaletteError.
+        let mut palette = self.extract_palette().unwrap_or_default();
         if let Some(index) = palette
             .chunks_exact(3)
             .position(|entry| entry == color.as_slice())
