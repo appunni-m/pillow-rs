@@ -77,8 +77,8 @@ impl Image {
     /// - `mode`: destination Pillow mode, such as `"L"`, `"RGB"`, `"RGBA"`,
     ///   `"CMYK"`, `"HSV"`, `"YCbCr"`, `"I"`, `"F"`, `"P"`, or `"1"`.
     /// - `matrix`: optional Pillow conversion matrix for immediate conversion.
-    ///   Four values convert single-channel input to RGB-family output; twelve
-    ///   values convert RGB input through a 3x4 color matrix.
+    ///   Four values convert RGB input to luma; twelve values convert RGB input
+    ///   through a 3x4 color matrix.
     /// - `dither`: optional dither name for binary and palette-like conversion.
     ///
     /// # Returns
@@ -160,10 +160,25 @@ impl Image {
                     .unwrap_or_else(|| img.to_rgb8().into());
                 // For mode "L" etc., derive from the RGB result.
                 let result = if mode == "CMYK" {
-                    // Apply the RGB inverse directly on the converted RGB.
-                    DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
-                        &converted.to_rgb8(),
-                    ))
+                    if matches!(src_mode, "I" | "F") {
+                        // Pillow's Convert.c sends I/F sources through the
+                        // grayscale-to-CMYK path, not the RGB inverse: C=M=Y=0
+                        // and K=255-gray.  The old Rust path inverted the
+                        // broadcast RGB representation and diverged for these
+                        // source modes.
+                        let gray = color::pil_grayscale(&converted)?;
+                        let (w, h) = gray.dimensions();
+                        let mut cmyk = crate::raster::RgbaImage::new(w, h);
+                        for (out, input) in cmyk.pixels_mut().zip(gray.pixels()) {
+                            *out = crate::raster::Rgba([0, 0, 0, 255 - input[0]]);
+                        }
+                        DynamicImage::ImageRgba8(cmyk)
+                    } else {
+                        // Apply the RGB inverse directly on the converted RGB.
+                        DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
+                            &converted.to_rgb8(),
+                        ))
+                    }
                 } else if mode == "L" || mode == "LA" {
                     if mode == "L" && src_mode == "YCbCr" {
                         // Pillow's C converter maps YCbCr to L through the Y
@@ -431,10 +446,9 @@ fn convert_with_matrix(
 ) -> Result<crate::raster::DynamicImage, PilError> {
     match (matrix.len(), target_mode) {
         (4, "RGB") => {
-            // Pillow's four-coefficient RGB matrix path applies one affine
-            // channel expression and leaves the remaining channels at zero.
-            // Treat the source as RGB here; reducing it to luma loses the
-            // matrix offset and diverges for the accepted RGB->RGB form.
+            // Pillow 12.2 retains a legacy four-coefficient RGB-output path:
+            // the affine expression is written to the first channel and the
+            // other channels are zero for the deterministic public fixture.
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             let pixels: Vec<u8> = rgb
@@ -453,6 +467,26 @@ fn convert_with_matrix(
                 .collect();
             Ok(crate::raster::DynamicImage::ImageRgb8(
                 crate::raster::RgbImage::from_raw(w, h, pixels)
+                    .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
+            ))
+        }
+        (4, "L") => {
+            // Pillow's four-coefficient matrix path applies one affine
+            // expression to the RGB source and produces a luma image.
+            let rgb = img.to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let pixels: Vec<u8> = rgb
+                .pixels()
+                .map(|p| {
+                    (matrix[0] * p[0] as f64
+                        + matrix[1] * p[1] as f64
+                        + matrix[2] * p[2] as f64
+                        + matrix[3])
+                        .clamp(0.0, 255.0) as u8
+                })
+                .collect();
+            Ok(crate::raster::DynamicImage::ImageLuma8(
+                crate::raster::GrayImage::from_raw(w, h, pixels)
                     .ok_or_else(|| PilError::ValueError("matrix conversion failed".into()))?,
             ))
         }

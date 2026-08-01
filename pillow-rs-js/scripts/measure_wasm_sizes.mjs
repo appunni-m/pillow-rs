@@ -13,9 +13,7 @@ const rows = ['core', 'extra'].map((variant) => {
         .reduce((total, size) => total + size, 0);
     return {
         variant,
-        features: variant === 'core'
-            ? ['png']
-            : ['png', 'jpeg', 'gif', 'bmp', 'tiff', 'webp', 'ico'],
+        features: ['image-codecs-all'],
         wasm_bytes: bytes.length,
         js_bytes: statSync(join(packageDir, 'pillow_rs_js.js')).size,
         types_bytes:

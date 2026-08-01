@@ -536,13 +536,32 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] when dimensions are zero, allocation checks fail,
-    /// the mode is unsupported, or `data` is shorter than the required mode
-    /// layout.
+    /// Returns [`PilError`] when allocation checks fail, the mode is
+    /// unsupported, or `data` is shorter than the required mode layout.
     pub fn frombytes(mode: &str, size: (u32, u32), data: &[u8]) -> Result<Self, PilError> {
         let (w, h) = size;
+        if !matches!(
+            mode,
+            "L" | "LA" | "RGB" | "RGBA" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P" | "1"
+        ) {
+            return Err(PilError::ValueError("unrecognized image mode".into()));
+        }
         if w == 0 || h == 0 {
-            return Err(PilError::ValueError("frombytes: size must be > 0".into()));
+            // Pillow accepts empty frombytes images and ignores the payload
+            // because there are no samples to decode. Reuse the established
+            // empty-image constructors while keeping CheckedDims strict for
+            // all non-empty allocations.
+            if mode == "P" {
+                return Ok(Image::Paletted(PalettedData {
+                    indices: crate::raster::GrayImage::from_pixel(w, h, crate::raster::Luma([0u8])),
+                    palette: Vec::new(),
+                    palette_alpha: Vec::new(),
+                    source_format: None,
+                    info: None,
+                    materialized: materialization_cache(),
+                }));
+            }
+            return Self::new(w, h, mode, (0, 0, 0, 0));
         }
         let expected = match mode {
             "L" => CheckedDims::new(w, h, 1)?.total_bytes(),
@@ -648,14 +667,42 @@ impl Image {
     /// header is unknown or malformed, or the hint does not match the detected
     /// format.
     pub fn open_bytes_with_format(data: Vec<u8>, format: Option<&str>) -> Result<Self, PilError> {
-        let requested = format.map(parse_format_str).transpose()?;
+        let formats = format.map(|format| vec![format]);
+        Self::open_bytes_with_formats(data, formats.as_deref())
+    }
+
+    /// Creates a lazy image from encoded bytes while restricting accepted formats.
+    ///
+    /// Pillow's ``Image.open(formats=...)`` argument is an allow-list, rather
+    /// than a decoder selection hint. The header is still detected first; the
+    /// image is rejected when its detected format is not present in the list.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PilError`] when a format name is unknown, the encoded header
+    /// is unknown or malformed, or no requested format matches the header.
+    pub fn open_bytes_with_formats(
+        data: Vec<u8>,
+        formats: Option<&[&str]>,
+    ) -> Result<Self, PilError> {
+        let requested = formats
+            .map(|formats| {
+                formats
+                    .iter()
+                    .map(|format| parse_format_str(format))
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .transpose()?;
         let data: Arc<[u8]> = data.into();
         let source = EncodedImage::new(Arc::clone(&data))
             .map_err(|error| map_codec_error(error, "memory"))?;
         let info = source.info().clone();
-        if requested.is_some_and(|requested| requested != info.format) {
+        if requested
+            .as_ref()
+            .is_some_and(|requested| !requested.contains(&info.format))
+        {
             return Err(PilError::ValueError(format!(
-                "requested {requested:?} input but detected {:?}",
+                "requested formats {requested:?} but detected {:?}",
                 info.format
             )));
         }
@@ -733,6 +780,10 @@ impl Image {
                 mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
                 ..
             } => true,
+            // Pillow's PA bands are the raw index and alpha bytes. Extracting
+            // either band must happen before palette expansion, just like the
+            // corresponding ImagingCore band operation.
+            PipelineOp::ExtractBand { .. } => true,
             PipelineOp::CompositeModule { other, .. } => other.has_palette_mode(),
             PipelineOp::PutPixel {
                 palette_index: true,
@@ -1030,7 +1081,9 @@ impl Image {
                     ..
                 }
             );
-        let explicit_mode = if source_is_paletted {
+        let explicit_mode = if matches!(&op, PipelineOp::ExtractBand { .. }) {
+            None
+        } else if source_is_paletted {
             palette_safe.then(|| {
                 if source.explicit_mode() == Some("PA") {
                     "PA".to_owned()
@@ -1047,12 +1100,13 @@ impl Image {
                 _ => source.explicit_mode().map(str::to_owned),
             }
         };
-        let source_palette = if palette_safe {
+        let preserve_palette = palette_safe && !matches!(&op, PipelineOp::ExtractBand { .. });
+        let source_palette = if preserve_palette {
             source.extract_palette()
         } else {
             None
         };
-        let source_palette_alpha = if palette_safe {
+        let source_palette_alpha = if preserve_palette {
             source.palette_alpha()
         } else {
             None
@@ -1280,10 +1334,40 @@ impl Image {
             "L" | "1" => (v, v, v, 255),
             "LA" => (v, 0, 0, 0),
             "RGB" => (v, 0, 0, 255),
+            // Pillow treats a scalar as the first sample for every
+            // three-band mode, including YCbCr and HSV; the remaining
+            // samples are zero rather than copies of the scalar.
+            "YCbCr" | "HSV" => (v, 0, 0, 255),
             "RGBA" | "CMYK" => (v, 0, 0, 0),
             _ => (v, v, v, 255),
         };
         self.putpixel(x, y, r, g, b, a)
+    }
+
+    /// Writes a scalar pixel for Pillow's numeric `I` and `F` modes.
+    ///
+    /// Those modes preserve the host numeric value as a four-byte signed or
+    /// floating-point sample. The ordinary byte-oriented mode helper remains
+    /// intentionally narrow for `L`, `1`, and `P` inputs.
+    pub fn putpixel_mode_scalar(
+        &mut self,
+        x: u32,
+        y: u32,
+        value: f64,
+        mode: &str,
+    ) -> Result<(), PilError> {
+        if !matches!(mode, "I" | "F") {
+            return self.putpixel_mode(x, y, value as u8, mode);
+        }
+        let (width, height) = self.size()?;
+        if x >= width || y >= height {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
+        let pixel_index = (y as usize)
+            .checked_mul(width as usize)
+            .and_then(|row| row.checked_add(x as usize))
+            .ok_or_else(|| PilError::DimensionError("pixel index overflow".into()))?;
+        self.putdata_value_at(pixel_index, &PutDataValue::Number(value), 1.0, 0.0)
     }
 
     /// Returns Pillow-compatible image statistics in structured form.
@@ -1324,7 +1408,9 @@ impl Image {
             let rgba = img.as_bytes();
             let n_pixels = rgba.len() / 4;
             if n_pixels == 0 {
-                return Ok(vec![vec![0.0; 10]]);
+                // Pillow's I/F histogram path requires a finite min/max and
+                // rejects an empty image before constructing ImageStat.Stat.
+                return Err(PilError::ValueError("min/max not given".into()));
             }
             let mut values: Vec<f64> = Vec::with_capacity(n_pixels);
             for i in 0..n_pixels {
@@ -1360,7 +1446,14 @@ impl Image {
             let scale = 255.0 / (max_val - min_val);
             let mut hist = [0i64; 256];
             for &v in &values {
-                let bin = ((v - min_val) * scale) as usize;
+                // Pillow assigns the maximum sample to histogram bin 255.
+                // Avoid letting a representationally-tiny floating error turn
+                // the endpoint into bin 254.
+                let bin = if (v - max_val).abs() < f64::EPSILON {
+                    255
+                } else {
+                    ((v - min_val) * scale).clamp(0.0, 255.0) as usize
+                };
                 if bin < 256 {
                     hist[bin] += 1;
                 }
@@ -1462,7 +1555,9 @@ impl Image {
         for band in &bands {
             let count = band.len() as f64;
             if count == 0.0 {
-                results.push(vec![0.0; 10]);
+                // Pillow's byte-oriented histogram starts an empty band at
+                // extrema (255, 0), while all aggregate statistics remain 0.
+                results.push(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
                 continue;
             }
             let sum: f64 = band.iter().map(|&x| x as f64).sum();
@@ -2680,6 +2775,13 @@ impl Image {
                 channel,
                 bands - 1
             )));
+        }
+        // Pillow treats a single-band P image's only band as the palette-index
+        // image itself, preserving its mode and retained palette. Extracting
+        // it through the generic raster path would expand the indices to L and
+        // silently lose that observable palette contract.
+        if self.has_palette_mode() && self.explicit_mode() != Some("PA") && ch == 0 {
+            return Ok(self.copy());
         }
         // Defer extraction via pipeline
         Ok(Image::push_op(

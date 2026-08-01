@@ -382,9 +382,13 @@ pub fn effect_mandelbrot(
         return Err(PilError::ValueError("unrecognized argument value".into()));
     }
 
-    // PIL's exact stride computation
-    let dr = if w > 1 { width / (w - 1) as f64 } else { 0.0 };
-    let di = if h > 1 { height / (h - 1) as f64 } else { 0.0 };
+    // Pillow's C implementation divides by ``width - 1`` and ``height - 1``
+    // without a degenerate-dimension guard.  For a one-pixel axis this yields
+    // NaN, and every comparison in the iteration loop remains false, producing
+    // the all-zero row/column observed from the public API.  Preserve that
+    // version-matched behavior instead of replacing it with a finite stride.
+    let dr = width / (w - 1) as f64;
+    let di = height / (h - 1) as f64;
 
     // PIL uses escape radius 100.0 (NOT the common 4.0)
     let radius = 100.0f64;

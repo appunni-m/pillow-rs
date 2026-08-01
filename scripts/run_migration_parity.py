@@ -154,6 +154,18 @@ class DeformerValue:
         return self._mesh
 
 
+def decode_outline(value: dict[str, Any], *, side: str) -> Any:
+    """Construct an Outline through each side's public ImageDraw surface."""
+
+    module_name = "PIL.ImageDraw" if side == "source" else "pillow_rs.imagedraw"
+    outline = getattr(importlib.import_module(module_name), "Outline")()
+    for command in value["commands"]:
+        method = getattr(outline, command["name"])
+        arguments = [decode_literal(item, side=side) for item in command["args"]]
+        method(*arguments)
+    return outline
+
+
 def decode_literal(value: Any, *, side: str = "source") -> Any:
     if isinstance(value, list):
         converted = [decode_literal(item, side=side) for item in value]
@@ -165,6 +177,8 @@ def decode_literal(value: Any, *, side: str = "source") -> Any:
         return tuple(converted)
     if isinstance(value, dict):
         protocol = value.get("protocol")
+        if protocol == "outline":
+            return decode_outline(value, side=side)
         if protocol == "array-interface":
             return ArrayInterfaceValue(value)
         if protocol == "getmesh":
@@ -193,6 +207,13 @@ class AssetStore:
             if asset.get("encoding") != "base64":
                 raise ValueError(f"unsupported inline encoding: {asset_id}")
             value = base64.b64decode(asset["data"])
+            if asset.get("media_type", "").startswith("image/"):
+                # Image.open's public fp contract is a path or stream, not
+                # raw encoded bytes. Materialize inline encoded-image assets
+                # exactly as ref assets while retaining their content digest
+                # in the manifest input identity.
+                suffix = "." + asset["media_type"].split("/", 1)[1]
+                value = self._write_asset(asset_id, value, suffix)
         elif kind == "missing":
             value = str(self._tempdir / asset["path"])
         elif kind == "builtin":
@@ -316,6 +337,8 @@ def resolve_descriptor(
         return decode_literal(descriptor.get("value"), side=side)
     if kind == "binding":
         return bindings[descriptor["step_id"]]
+    if kind == "bindings":
+        return [bindings[step_id] for step_id in descriptor["step_ids"]]
     if kind == "asset":
         return assets.resolve(descriptor["asset_id"])
     raise ValueError(f"unsupported workflow descriptor: {kind}")
@@ -330,13 +353,44 @@ def _call_arguments(
     side: str,
 ) -> tuple[list[Any], dict[str, Any]]:
     params = {param["id"]: param for param in opdef["source"]["parameters"]}
+    # ``PIL.Image.eval(image, *args)`` is declared with a positional-or-keyword
+    # image parameter followed by variadic LUT arguments. Passing the image as
+    # a keyword and then expanding ``args`` makes Python report "multiple
+    # values for argument 'image'". Keep the public signature metadata intact,
+    # but emit this one mixed call positionally, as Pillow callers do.
+    force_eval_positional = opdef["source"].get("path") == "PIL.Image.eval"
+    # ``Image.Image.tobytes(encoder_name, *args)`` has the same mixed
+    # positional shape. If ``encoder_name`` is emitted as a keyword while
+    # ``args`` is expanded positionally, Python binds the first variadic value
+    # to ``encoder_name`` and raises before the target implementation runs.
+    force_tobytes_positional = (
+        opdef["source"].get("path") == "PIL.Image.Image.tobytes"
+        and "encoder_name" in descriptors
+        and "args" in descriptors
+    )
     positional: list[Any] = []
     keywords: dict[str, Any] = {}
+    handled: set[str] = set()
+    if force_tobytes_positional:
+        encoder_descriptor = descriptors.get(
+            "encoder_name", {"kind": "literal", "value": "raw"}
+        )
+        positional.append(
+            resolve_descriptor(encoder_descriptor, bindings, assets, side=side)
+        )
+        positional.extend(
+            resolve_descriptor(descriptors["args"], bindings, assets, side=side)
+        )
+        handled.update({"encoder_name", "args"})
     for name, descriptor in descriptors.items():
+        if name in handled:
+            continue
         value = resolve_descriptor(descriptor, bindings, assets, side=side)
         param = params.get(name, {})
         style = param.get("style", "positional_or_keyword")
-        if style == "positional":
+        if style == "positional" or (
+            force_eval_positional and style == "positional_or_keyword"
+        ):
             positional.append(value)
         elif style == "variadic_positional":
             positional.extend(value)

@@ -1124,6 +1124,22 @@ pub fn op_put_alpha_data(
             }
             DynamicImage::ImageLumaA8(la)
         }
+        crate::raster::ColorType::La8 => {
+            // Pillow's putalpha replaces the existing A band in-place for
+            // LA images; it does not promote the two-band sample layout to
+            // RGBA merely because the mask came from another image.
+            let la = img.to_luma_alpha8();
+            let mut out = GrayAlphaImage::new(la.width(), la.height());
+            for ((output, input), mask_px) in out
+                .pixels_mut()
+                .zip(la.pixels())
+                .zip(mask.to_luma8().pixels())
+            {
+                output[0] = input[0];
+                output[1] = mask_px.0[0];
+            }
+            DynamicImage::ImageLumaA8(out)
+        }
         _ => {
             let rgba = img.to_rgba8();
             let mut out = RgbaImage::new(rgba.width(), rgba.height());

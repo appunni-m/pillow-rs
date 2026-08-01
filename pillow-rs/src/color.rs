@@ -1068,16 +1068,14 @@ pub fn convert_from_nonstandard(
 ///
 /// # Errors
 ///
-/// Returns an error string when the color is too short, invalid for the palette
-/// mode, or cannot be appended because the palette is full.
+/// Returns an error string when the color is invalid for the palette mode or
+/// cannot be appended because the palette is full. An empty color returns the
+/// next slot index without changing the palette, matching Pillow.
 pub fn palette_getcolor_validate(
     palette: &mut Vec<u8>,
     color: &[u8],
     mode: &str,
 ) -> Result<usize, String> {
-    if color.is_empty() {
-        return Err("color must have at least 1 element".into());
-    }
     if mode == "RGB" && color.len() >= 4 && color[3] != 255 {
         return Err("cannot add non-opaque RGBA color to RGB palette".into());
     }
@@ -1085,6 +1083,12 @@ pub fn palette_getcolor_validate(
     // count without padding (RGBA pads a 3-tuple to opaque), and matches
     // existing entries by the exact tuple.
     let mode_len = if mode == "RGBA" { 4 } else { 3 };
+    // Pillow's ImagePalette.getcolor(()) still allocates the next slot index;
+    // bytes(()) is empty, so the palette remains unchanged. Preserve that
+    // public behavior instead of rejecting the empty tuple in core validation.
+    if color.is_empty() {
+        return Ok(palette.len() / mode_len);
+    }
     let mut stored = color.to_vec();
     if mode == "RGBA" && stored.len() == 3 {
         stored.push(255);

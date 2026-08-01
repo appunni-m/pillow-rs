@@ -565,6 +565,16 @@ def _validate_descriptor(value: Any, path: str, assets: set[str], prior_steps: s
         _exact(descriptor, {"kind", "step_id"}, path)
         if descriptor["step_id"] not in prior_steps:
             raise _error(f"{path}.step_id", "binding must refer to an earlier step")
+    elif kind == "bindings":
+        _exact(descriptor, {"kind", "step_ids"}, path)
+        step_ids = _list(descriptor["step_ids"], f"{path}.step_ids")
+        for index, step_id in enumerate(step_ids):
+            step_id = _string(step_id, f"{path}.step_ids[{index}]")
+            if step_id not in prior_steps:
+                raise _error(
+                    f"{path}.step_ids[{index}]",
+                    "binding must refer to an earlier step",
+                )
     else:
         raise _error(f"{path}.kind", "unsupported value descriptor")
 
@@ -634,6 +644,8 @@ def _literal_type(value: Any) -> str:
     if isinstance(value, list):
         return "sequence"
     if isinstance(value, dict):
+        if value.get("protocol") == "outline":
+            return "handle"
         return "mapping"
     return "any_json"
 

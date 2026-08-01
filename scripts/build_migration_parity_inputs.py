@@ -19,6 +19,8 @@ import hashlib
 import json
 import random
 import re
+import struct
+import zlib
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -47,8 +49,156 @@ def literal(value: Any) -> dict[str, Any]:
     return {"kind": "literal", "value": value}
 
 
+def bytes_literal(value: list[int]) -> dict[str, Any]:
+    return {"kind": "bytes", "value": value}
+
+
+def outline_literal(*, curve: bool = False) -> dict[str, Any]:
+    """Build a real public ``ImageDraw.Outline`` input for shape parity."""
+
+    if curve:
+        commands = [
+            {"name": "move", "args": [1, 1]},
+            {"name": "curve", "args": [4, 8, 8, 8, 12, 1]},
+            {"name": "line", "args": [12, 10]},
+            {"name": "close", "args": []},
+        ]
+    else:
+        commands = [
+            {"name": "move", "args": [2, 2]},
+            {"name": "line", "args": [12, 2]},
+            {"name": "line", "args": [12, 10]},
+            {"name": "line", "args": [2, 10]},
+            {"name": "close", "args": []},
+        ]
+    return literal({"protocol": "outline", "commands": commands})
+
+
+def indexed_png_with_palette_alpha() -> bytes:
+    """Return a tiny indexed PNG with a multi-entry tRNS table."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    header = struct.pack(">IIBBBBB", 2, 1, 8, 3, 0, 0, 0)
+    palette = bytes([10, 20, 30, 40, 50, 60])
+    transparency = bytes([0, 128])
+    scanline = bytes([0, 0, 1])
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"PLTE", palette)
+        + chunk(b"tRNS", transparency)
+        + chunk(b"IDAT", zlib.compress(scanline))
+        + chunk(b"IEND", b"")
+    )
+
+
+def indexed_png_with_duplicate_transparent_indices() -> bytes:
+    """Return an indexed PNG whose alpha table has two zero entries."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    header = struct.pack(">IIBBBBB", 2, 1, 8, 3, 0, 0, 0)
+    palette = bytes([10, 20, 30, 40, 50, 60])
+    transparency = bytes([0, 0])
+    scanline = bytes([0, 0, 1])
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"PLTE", palette)
+        + chunk(b"tRNS", transparency)
+        + chunk(b"IDAT", zlib.compress(scanline))
+        + chunk(b"IEND", b"")
+    )
+
+
+def indexed_png_with_full_palette_index_alpha() -> bytes:
+    """Return a full indexed palette with one transparent table entry."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    header = struct.pack(">IIBBBBB", 1, 1, 8, 3, 0, 0, 0)
+    palette = bytes(component for index in range(256) for component in (index,) * 3)
+    scanline = bytes([0, 0])
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"PLTE", palette)
+        + chunk(b"tRNS", b"\x00")
+        + chunk(b"IDAT", zlib.compress(scanline))
+        + chunk(b"IEND", b"")
+    )
+
+
+def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
+    """Add one deterministic EXIF APP1 variant to a valid JPEG stimulus.
+
+    These remain encoded-image workflows: the source and target both open the
+    same JPEG bytes through the public ``Image.open`` endpoint.  The variants
+    exercise the public EXIF paths without calling the Rust parser directly.
+    """
+
+    if len(base) < 2 or base[:2] != b"\xff\xd8":
+        raise ValueError("EXIF variant base must be a JPEG")
+
+    if variant in {"le-orientation2", "standalone-soi", "standalone-rst0"}:
+        tiff = (
+            b"II\x2a\x00"
+            + struct.pack("<I", 8)
+            + struct.pack("<H", 1)
+            + struct.pack("<HHI", 0x0112, 3, 1)
+            + struct.pack("<H", 2)
+            + b"\x00\x00"
+        )
+    elif variant == "be-orientation3":
+        tiff = (
+            b"MM\x00\x2a"
+            + struct.pack(">I", 8)
+            + struct.pack(">H", 1)
+            + struct.pack(">HHI", 0x0112, 3, 1)
+            + struct.pack(">H", 3)
+            + b"\x00\x00"
+        )
+    elif variant == "no-orientation":
+        tiff = b"II\x2a\x00" + struct.pack("<I", 8) + struct.pack("<H", 0)
+    elif variant == "invalid-magic":
+        tiff = b"II\x2b\x00" + struct.pack("<I", 8) + struct.pack("<H", 0)
+    elif variant == "invalid-byte-order":
+        tiff = b"ZZ\x2a\x00" + struct.pack("<I", 8) + struct.pack("<H", 0)
+    elif variant == "short-exif-payload":
+        # Keep the JPEG and APP1 framing valid while exposing the public
+        # extractor's shortest retained Exif payload to the Rust parser.
+        tiff = b"X"
+    elif variant == "short-tiff":
+        tiff = b"II\x2a\x00"
+    elif variant == "no-exif-prefix":
+        tiff = b"XXXX\x00\x00\x00\x00"
+    else:
+        raise ValueError(f"unknown EXIF variant: {variant}")
+
+    payload = tiff if variant == "no-exif-prefix" else b"Exif\x00\x00" + tiff
+    segment = b"\xff\xe1" + struct.pack(">H", len(payload) + 2) + payload
+    if variant == "standalone-soi":
+        return base[:2] + b"\xff\xd8" + segment + base[2:]
+    if variant == "standalone-rst0":
+        return base[:2] + b"\xff\xd0" + segment + base[2:]
+    return base[:2] + segment + base[2:]
+
+
 def binding(step_id: str) -> dict[str, str]:
     return {"kind": "binding", "step_id": step_id}
+
+
+def bindings(step_ids: list[str]) -> dict[str, Any]:
+    """Bind a public sequence argument to earlier workflow results."""
+
+    return {"kind": "bindings", "step_ids": step_ids}
 
 
 def asset_value(asset_id: str) -> dict[str, str]:
@@ -253,7 +403,6 @@ class WorkflowBuilder:
     _step_counter: int = 0
     _image_steps: dict[str, str] = field(default_factory=dict)
     _font_step: str | None = None
-    _outline_step: str | None = None
     scenario_values: dict[str, dict[str, Any]] = field(default_factory=dict)
     scenario_mode: str | None = None
     scenario_edge: str | None = None
@@ -267,7 +416,12 @@ class WorkflowBuilder:
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
     scenario_asset: str | None = None
+    scenario_exif_variant: str | None = None
     scenario_noise_seed: int | None = None
+    scenario_chain: str | None = None
+    scenario_observe_result: str | None = None
+    scenario_observe_receiver: bool = False
+    scenario_outline_curve: bool = False
 
     @property
     def mode(self) -> str:
@@ -373,6 +527,27 @@ class WorkflowBuilder:
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
+        if self.scenario_exif_variant is not None:
+            base_path = self.assets_root / "image/rgb-small.jpg"
+            if not base_path.is_file():
+                raise ValueError("missing EXIF variant base asset: image/rgb-small.jpg")
+            data = jpeg_with_exif_variant(
+                base_path.read_bytes(), self.scenario_exif_variant
+            )
+            data_descriptor = self.inline_bytes(
+                f"{label}-exif-{slug(self.scenario_exif_variant)}",
+                data,
+                "image/jpeg",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "open",
+                receiver=None,
+                arguments={"fp": data_descriptor},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.scenario_asset is not None:
             # Stimulus workflows that open an encoded container (for example
             # the JPEG-with-EXIF `ImageOps.exif_transpose` cases) build the
@@ -393,6 +568,48 @@ class WorkflowBuilder:
                 "open",
                 receiver=None,
                 arguments={"fp": fp_descriptor},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "zero-size-frombytes" and label == "image":
+            data_desc = self.inline_bytes(
+                f"{label}-zero-size-data",
+                b"",
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal([0, 0]),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "raw-p-no-palette" and label == "image":
+            if requested_mode != "P":
+                raise ValueError("raw-p-no-palette edge requires P mode")
+            size = self.scenario_size or [16, 16]
+            data = bytes(index % 4 for index in range(size[0] * size[1]))
+            data_desc = self.inline_bytes(
+                "raw-p-no-palette-data",
+                data,
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("P"),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
                 step_id=self.next_step_id(f"setup-{label}"),
             )
             self._image_steps[cache_key] = step_id
@@ -450,8 +667,10 @@ class WorkflowBuilder:
             size = [8, 8]
         elif self.edge == "second-smaller-than-first" and label == "im2":
             size = [8, 8]
-        elif self.edge == "mask-size-mismatch" and label == "mask":
+        elif self.edge == "mask-size-mismatch" and label in {"mask", "alpha"}:
             size = [8, 8]
+        elif self.edge == "valid-frombytes":
+            size = [8, 1] if requested_mode == "1" else [1, 1]
         step_id = self.add_step(
             "PIL.Image",
             "new",
@@ -501,6 +720,21 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
+        elif self.edge == "mask-nonzero-pixel" and label == "mask":
+            # Keep the primary image at its default value while selecting one
+            # pixel through the public L/1 mask. This complements the
+            # all-zero mask case and reaches both branches of every masked
+            # histogram loop without a direct native probe.
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 3]),
+                    "value": literal(255),
+                },
+                step_id=self.next_step_id("setup-mask-pixel"),
+            )
         return step_id
 
     def ensure_font(self) -> str:
@@ -525,16 +759,8 @@ class WorkflowBuilder:
         )
         return self._font_step
 
-    def ensure_outline(self) -> str:
-        if self._outline_step is None:
-            self._outline_step = self.add_step(
-                "PIL.ImageDraw",
-                "Outline",
-                receiver=None,
-                arguments={},
-                step_id=self.next_step_id("setup-outline"),
-            )
-        return self._outline_step
+    def outline_value(self) -> dict[str, Any]:
+        return outline_literal(curve=self.scenario_outline_curve)
 
     def receiver_for(self, surface: str) -> dict[str, str] | None:
         if surface == "PIL.Image.Image":
@@ -597,6 +823,15 @@ class WorkflowBuilder:
                 step_id=self.next_step_id("setup-palette"),
             )
             return binding(palette)
+        if surface == "PIL.ImageSequence.Iterator":
+            iterator = self.add_step(
+                "PIL.ImageSequence",
+                "Iterator",
+                receiver=None,
+                arguments={"im": binding(self.ensure_image())},
+                step_id=self.next_step_id("setup-iterator"),
+            )
+            return binding(iterator)
         if surface == "PIL.ImageStat.Stat":
             image_step = self.ensure_image()
             stat = self.add_step(
@@ -698,8 +933,12 @@ class WorkflowBuilder:
             return "NOT_A_FORMAT"
         if edge == "too-many-colors" and name == "maxcolors":
             return 1
-        if edge in {"out-of-bounds", "negative-coords"} and name == "xy":
-            return [16, 16] if edge == "out-of-bounds" else [-1, -1]
+        if edge in {"out-of-bounds", "negative-coords", "y-out-of-bounds"} and name == "xy":
+            if edge == "out-of-bounds":
+                return [16, 16]
+            if edge == "y-out-of-bounds":
+                return [0, 16]
+            return [-1, -1]
         if edge == "out-of-bounds" and name == "box":
             return [0, 0, 32, 32]
         if edge == "negative-coords" and name == "box":
@@ -766,6 +1005,25 @@ class WorkflowBuilder:
         for scenario_key, descriptor in self.scenario_values.items():
             if scenario_key == parameter_id:
                 if (
+                    descriptor.get("kind") == "bytes"
+                    and isinstance(descriptor.get("value"), list)
+                ):
+                    return self.inline_bytes(
+                        f"{slug(parameter_id)}-inline",
+                        bytes(descriptor["value"]),
+                        "application/octet-stream",
+                    )
+                if (
+                    parameter_id == "source_palette"
+                    and descriptor.get("kind") == "literal"
+                    and isinstance(descriptor.get("value"), list)
+                ):
+                    return self.inline_bytes(
+                        f"{slug(parameter_id)}-inline",
+                        bytes(descriptor["value"]),
+                        "application/octet-stream",
+                    )
+                if (
                     self.primary_surface == "PIL.Image"
                     and self.primary_operation == "eval"
                     and parameter_id == "args"
@@ -778,7 +1036,43 @@ class WorkflowBuilder:
                     return self.builtin("args-callable", "clamp-shift-callable")
                 return descriptor
 
+        if (
+            name == "shape"
+            and self.primary_surface.startswith("PIL.ImageDraw")
+        ):
+            return self.outline_value()
+
+        if self.edge == "valid-frombytes":
+            if parameter_id == "size":
+                return literal([8, 1] if self.mode == "1" else [1, 1])
+            if parameter_id == "data":
+                data_by_mode = {
+                    "1": b"\x80",
+                    "L": b"\x7f",
+                    "P": b"\x07",
+                    "LA": b"\x7f\xc8",
+                    "RGB": b"\x10\x20\x30",
+                    "HSV": b"\x10\x20\x30",
+                    "YCbCr": b"\x10\x20\x30",
+                    "RGBA": b"\x10\x20\x30\xc8",
+                    "CMYK": b"\x10\x20\x30\xc8",
+                    "I": b"\x10\x20\x30\xc8",
+                    "F": b"\x10\x20\x30\xc8",
+                }
+                data = data_by_mode.get(self.mode)
+                if data is None:
+                    raise ValueError(
+                        f"valid-frombytes edge unsupported for mode {self.mode}"
+                    )
+                return self.inline_bytes(
+                    f"valid-{slug(self.mode)}-data",
+                    data,
+                    "application/octet-stream",
+                )
+
         if parameter_id == "font" and self.scenario_font is not None:
+            if "font" in value_types and "path" not in value_types:
+                return binding(self.ensure_font())
             return self.ref("font", self.scenario_font, "font/ttf")
 
         if variant_value is not inspect_missing:
@@ -976,7 +1270,7 @@ class WorkflowBuilder:
         if name in {"shape"} and self.primary_surface.startswith(
             "PIL.ImageDraw"
         ):
-            return binding(self.ensure_outline())
+            return self.outline_value()
         if name == "filter":
             return binding(self.ensure_filter_instance("BLUR"))
         if name in {"obj"}:
@@ -1125,7 +1419,7 @@ class WorkflowBuilder:
         if "font" in value_types:
             return binding(self.ensure_font())
         if "handle" in value_types:
-            return binding(self.ensure_outline())
+            return self.outline_value()
         if "null" in value_types:
             return literal(None)
         return literal(1)
@@ -1152,6 +1446,8 @@ class WorkflowBuilder:
                 continue
             selected = required or parameter_id == focus or parameter_id in variant
             if parameter_id in self.scenario_values:
+                selected = True
+            if self.scenario_font is not None and parameter_id == "font":
                 selected = True
             if self.requirement["dimension"] == "format" and parameter_id == "format":
                 selected = True
@@ -1197,8 +1493,351 @@ class WorkflowBuilder:
         operation = self.operations[
             operation_key(self.primary_surface, self.primary_operation)
         ]
+
+        if self.scenario_chain is not None:
+            if self.primary_surface != "PIL.Image.Image":
+                raise ValueError(
+                    "scenario chains currently require PIL.Image.Image methods"
+                )
+
+            chain = self.scenario_chain
+            if chain == "resize-verify":
+                image_step = self.ensure_image(mode="RGB")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+            elif chain in {
+                "quantize-load",
+                "quantize-save",
+                "quantize-verify",
+            }:
+                image_step = self.ensure_image(mode="RGB")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "quantize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "colors": literal(4),
+                        "method": literal(0),
+                        "kmeans": literal(0),
+                    },
+                    step_id="setup-quantize",
+                )
+            elif chain == "p-resize-putalpha-load":
+                image_step = self.ensure_image(mode="P")
+                resized_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putalpha",
+                    receiver=binding(resized_step),
+                    arguments={"alpha": literal(192)},
+                    step_id="setup-putalpha",
+                )
+                receiver_step = resized_step
+            elif chain == "p-resize-getchannel":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+            elif chain == "p-resize-resize":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+            elif chain == "p-putalpha-convert":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putalpha",
+                    receiver=binding(image_step),
+                    arguments={"alpha": literal(192)},
+                    step_id="setup-putalpha",
+                )
+                receiver_step = image_step
+            elif chain == "p-putpalette-putalpha-convert":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putalpha",
+                    receiver=binding(image_step),
+                    arguments={"alpha": literal(192)},
+                    step_id="setup-putalpha",
+                )
+                receiver_step = image_step
+            elif chain == "p-putpalette-remap":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [10, 20, 30, 128, 40, 50, 60, 255]
+                        ),
+                        "rawmode": literal("RGBA"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = image_step
+            elif chain == "p-table-transparency":
+                image_asset = self.inline_bytes(
+                    "p-table-transparency",
+                    indexed_png_with_palette_alpha(),
+                    "image/png",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": image_asset},
+                    step_id="setup-table-transparency",
+                )
+            elif chain == "p-duplicate-transparency":
+                image_asset = self.inline_bytes(
+                    "p-duplicate-transparency",
+                    indexed_png_with_duplicate_transparent_indices(),
+                    "image/png",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": image_asset},
+                    step_id="setup-duplicate-transparency",
+                )
+            elif chain == "p-full-palette-index-transparency-putpixel":
+                image_asset = self.inline_bytes(
+                    "p-full-palette-index-transparency",
+                    indexed_png_with_full_palette_index_alpha(),
+                    "image/png",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": image_asset},
+                    step_id="setup-full-palette-index-transparency",
+                )
+            elif chain == "p-transparency-resize-apply":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([2, 2]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-transparency-resize",
+                )
+            elif chain == "p-transparency-load-apply":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-transparency-load",
+                )
+                receiver_step = image_step
+            elif chain == "p-short-palette-save":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([1, 2, 3, 4, 5, 6]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = image_step
+            elif chain == "p-full-palette-putpixel":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [component for index in range(256) for component in (index, index, index)]
+                        ),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = image_step
+            elif chain == "p-attached-palette-putpixel":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = image_step
+            elif chain == "p-full-palette-exhausted-putpixel":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [
+                                component
+                                for index in range(256)
+                                for component in (index, index, index)
+                            ]
+                        ),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={"data": literal(list(range(256)))},
+                    step_id="setup-putdata",
+                )
+                receiver_step = image_step
+            elif chain == "p-mode-filter":
+                image_step = self.ensure_image(mode="P")
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "ModeFilter",
+                    receiver=None,
+                    arguments={"size": literal(3)},
+                    step_id="setup-filter-mode",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain in {
+                "palette-getpalette-rgbx",
+                "palette-getpalette-channel",
+                "palette-getpalette-channel-g",
+                "palette-getpalette-channel-b",
+                "palette-getpalette-channel-invalid",
+                "palette-getpalette-alpha-rgbx",
+                "palette-transparency-convert",
+            }:
+                image_step = self.ensure_image(mode="P")
+                if chain in {
+                    "palette-getpalette-alpha-rgbx",
+                    "palette-transparency-convert",
+                }:
+                    palette_data = [10, 20, 30, 128, 40, 50, 60, 255]
+                    palette_rawmode = "RGBA"
+                else:
+                    palette_data = [10, 20, 30, 40, 50, 60]
+                    palette_rawmode = "RGB"
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(palette_data),
+                        "rawmode": literal(palette_rawmode),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = image_step
+            else:
+                raise ValueError(f"unknown scenario chain: {chain}")
+
+            call_id = self.add_step(
+                self.primary_surface,
+                self.primary_operation,
+                receiver=binding(receiver_step),
+                arguments=self.primary_arguments(operation),
+                step_id="call",
+            )
+            return self.assets, self.steps, [call_id]
+
         receiver = self.receiver_for(self.primary_surface)
         arguments = self.primary_arguments(operation)
+
+        if (
+            self.primary_surface == "PIL.Image"
+            and self.primary_operation == "merge"
+            and self.edge != "mode-band-mismatch"
+        ):
+            # ``Image.merge`` takes a sequence of single-band Image objects.
+            # A single binding is useful for error coverage but cannot reach
+            # the core merge pipeline, so construct the sequence through the
+            # public Image.new endpoint and bind each result explicitly.
+            band_count = {
+                "L": 1,
+                "LA": 2,
+                "RGB": 3,
+                "RGBA": 4,
+                "CMYK": 4,
+            }.get(self.mode)
+            if band_count is None:
+                raise ValueError(f"merge workflow does not support mode {self.mode}")
+            band_steps = []
+            for index in range(band_count):
+                band_steps.append(
+                    self.add_step(
+                        "PIL.Image",
+                        "new",
+                        receiver=None,
+                        arguments={
+                            "mode": literal("L"),
+                            "size": literal(self.scenario_size or [16, 16]),
+                            "color": literal(0),
+                        },
+                        step_id=f"setup-band-{index + 1}",
+                    )
+                )
+            arguments["mode"] = literal(self.mode)
+            arguments["bands"] = bindings(band_steps)
         call_id = self.add_step(
             self.primary_surface,
             self.primary_operation,
@@ -1207,6 +1846,93 @@ class WorkflowBuilder:
             step_id="call",
         )
         observations = [call_id]
+
+        if (
+            self.primary_surface == "PIL.ImageSequence"
+            and self.primary_operation == "Iterator"
+        ):
+            # The constructor itself is only a handle allocation. Seek the
+            # public image receiver once so this workflow exercises the
+            # frame-0 path without depending on a private iterator protocol.
+            observations.append(
+                self.add_step(
+                    "PIL.Image.Image",
+                    "seek",
+                    receiver=binding(self.ensure_image()),
+                    arguments={"frame": literal(0)},
+                    step_id="observe-frame-zero",
+                )
+            )
+
+        if (
+            self.primary_surface == "PIL.ImageSequence.Iterator"
+            and self.primary_operation == "__next__"
+        ):
+            # A real iterator workflow must compare both the first-frame
+            # result and the public StopIteration boundary. The second call
+            # is input-only parity evidence, not a unit-test assertion.
+            observations.append(
+                self.add_step(
+                    self.primary_surface,
+                    "__next__",
+                    receiver=receiver,
+                    arguments={},
+                    step_id="observe-stop-iteration",
+                )
+            )
+
+        if self.scenario_observe_receiver:
+            # Mutating Image.Image methods return None.  Observe the original
+            # receiver through a public image endpoint so their deferred
+            # writes are exercised by behavioral parity cases.
+            observations.append(
+                self.add_step(
+                    "PIL.Image.Image",
+                    "tobytes",
+                    receiver=binding(self.ensure_image()),
+                    arguments={},
+                    step_id="observe-receiver",
+                )
+            )
+
+        if self.scenario_observe_result is not None:
+            # Materialize a returned image through a public Image method.  This
+            # keeps nuanced ImageOps cases behavioral: the lazy operation and
+            # its resulting pixels must both agree with the oracle.
+            observations.append(
+                self.add_step(
+                    "PIL.Image.Image",
+                    self.scenario_observe_result,
+                    receiver=binding(call_id),
+                    arguments={},
+                    step_id="observe-result",
+                )
+            )
+
+        if (
+            self.primary_surface == "PIL.ImageDraw.ImageDraw"
+            and (
+                self.primary_operation == "shape"
+                or (
+                    self.primary_operation == "text"
+                    and self.scenario_font is not None
+                )
+            )
+        ):
+            # ``shape`` mutates the receiver's image and returns None. Observe
+            # the image bytes through the public tobytes endpoint so these
+            # cases are behavioral parity evidence rather than signature-only
+            # cases.
+            image_step = self.ensure_image()
+            observations.append(
+                self.add_step(
+                    "PIL.Image.Image",
+                    "tobytes",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="observe-image",
+                )
+            )
 
         if self.primary_surface == "PIL.ImageFilter" and operation["kind"] == "type":
             image_step = self.ensure_image()
@@ -1259,7 +1985,12 @@ def build_parity_case(
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
     scenario_asset: str | None = None,
+    scenario_exif_variant: str | None = None,
     scenario_noise_seed: int | None = None,
+    scenario_chain: str | None = None,
+    scenario_observe_result: str | None = None,
+    scenario_observe_receiver: bool = False,
+    scenario_outline_curve: bool = False,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1297,7 +2028,12 @@ def build_parity_case(
         scenario_im_mode=scenario_im_mode,
         scenario_mask_mode=scenario_mask_mode,
         scenario_asset=scenario_asset,
+        scenario_exif_variant=scenario_exif_variant,
         scenario_noise_seed=scenario_noise_seed,
+        scenario_chain=scenario_chain,
+        scenario_observe_result=scenario_observe_result,
+        scenario_observe_receiver=scenario_observe_receiver,
+        scenario_outline_curve=scenario_outline_curve,
     )
     assets, steps, observations = builder.build()
     return {
@@ -1330,11 +2066,39 @@ def build_nuanced_cases(
 
     specs: tuple[dict[str, Any], ...] = (
         {
+            "surface": "PIL.ImageSequence",
+            "operation": "Iterator",
+            "requirement_suffix": "behavior.default",
+            "name": "seek-frame-zero",
+            "mode": "L",
+        },
+        {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getbbox",
             "requirement_suffix": "parameter.text",
             "name": "unicode-multiline",
             "values": {"text": literal("A\u0301\nAV🙂")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "empty-default-route",
+            "values": {"text": literal("")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.formats",
+            "name": "formats-accepted",
+            "values": {"formats": literal(["PNG"])},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.formats",
+            "name": "formats-rejected",
+            "values": {"formats": literal(["JPEG"])},
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
@@ -1345,12 +2109,141 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getlength",
+            "requirement_suffix": "parameter.text",
+            "name": "empty-default-route",
+            "values": {"text": literal("")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "empty-default-route",
+            "values": {"text": literal("")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-gray-private-base",
+            "font": "font/fonts/sbit-gray-format1.ttf",
+            "values": {"text": literal("\ue000")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-gray2-private-base",
+            "font": "font/fonts/sbit-gray2-format1.ttf",
+            "values": {"text": literal("\ue000")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-gray4-private-base",
+            "font": "font/fonts/sbit-gray4-format1.ttf",
+            "values": {"text": literal("\ue000")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-bgra-private-base",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {"text": literal("\ue000")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-mono-private-base",
+            "font": "font/fonts/sbit-mono-format1.ttf",
+            "values": {"text": literal("\ue000")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-composite-mono-private-component",
+            "font": "font/fonts/sbit-composite-mono-carry-success-format8.ttf",
+            "values": {"text": literal("\ue001")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "embedded-strike-private-base",
+            "font": "font/fonts/embedded-strike-color-or-sbit.ttf",
+            "values": {"text": literal("A")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-missing-small-metrics-private-base",
+            "font": "font/fonts/sbit-missing-small-metrics-width.ttf",
+            "values": {"text": literal("\ue000")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-composite-gray2-private-component",
+            "font": "font/fonts/sbit-composite-gray2-success-format8.ttf",
+            "values": {"text": literal("\ue001")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-composite-gray4-private-component",
+            "font": "font/fonts/sbit-composite-gray4-success-format8.ttf",
+            "values": {"text": literal("\ue001")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.text",
+            "name": "sbit-composite-bgra-private-component",
+            "font": "font/fonts/sbit-composite-bgra-success-format8.ttf",
+            "values": {"text": literal("\ue001")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask2",
             "requirement_suffix": "parameter.text",
             "name": "multiline-stroked",
             "values": {
                 "text": literal("A\nV"),
                 "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
+            "name": "empty-stroked",
+            "values": {
+                "text": literal(""),
+                "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
+            "name": "empty-default-route",
+            "values": {"text": literal("")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.mode",
+            "name": "mode-rgba-error",
+            "values": {
+                "text": literal("A"),
+                "mode": literal("RGBA"),
             },
         },
         {
@@ -1556,6 +2449,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-truetype-font",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal("Hello"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "multiline_text",
             "requirement_suffix": "parameter.text",
             "name": "three-line-spacing",
@@ -1617,6 +2521,20 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
+            "name": "raw-p-no-palette-fallback",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(7),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
             "name": "canvas-rgba-rgba-mask",
             "mode": "RGBA",
             "bitmap_mode": "RGBA",
@@ -1669,6 +2587,136 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
+            "name": "canvas-l-zero-mask",
+            "mode": "L",
+            "bitmap_mode": "L",
+            "bitmap_color": 0,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-half-mask",
+            "mode": "L",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-one-half-mask",
+            "mode": "1",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-la-half-mask",
+            "mode": "LA",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-p-half-mask",
+            "mode": "P",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-cmyk-half-mask",
+            "mode": "CMYK",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-i-half-mask",
+            "mode": "I",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-i-one-mask",
+            "mode": "I",
+            "bitmap_mode": "L",
+            "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-f-half-mask",
+            "mode": "F",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-f-one-mask",
+            "mode": "F",
+            "bitmap_mode": "L",
+            "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
             "name": "canvas-rgb-l-mask",
             "mode": "RGB",
             "bitmap_mode": "L",
@@ -1715,6 +2763,114 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-1",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "1",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-l",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "L",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-la",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "LA",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-p",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "P",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-i",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "I",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-f",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "F",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-cmyk",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "CMYK",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-ycbcr",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "YCbCr",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-font-canvas-hsv",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "mode": "HSV",
+            "values": {
+                "text": literal("A"),
+                "fill": literal(255),
             },
         },
         {
@@ -1905,6 +3061,56 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "filled-and-outlined",
+            "values": {
+                "fill": literal([255, 0, 0]),
+                "outline": literal([0, 255, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "curve-outline",
+            "outline_curve": True,
+            "values": {"fill": literal([255, 0, 0])},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-default-ink",
+            "mode": "L",
+            "values": {},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-i-default-ink",
+            "mode": "I",
+            "values": {},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-f-default-ink",
+            "mode": "F",
+            "values": {},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-p-default-ink",
+            "mode": "P",
+            "values": {},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
             "name": "canvas-ycbcr",
@@ -1927,6 +3133,110 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-rgb-mask-out-of-bounds",
+            "mode": "RGB",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-l-mask-out-of-bounds",
+            "mode": "L",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-one-mask-out-of-bounds",
+            "mode": "1",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-la-mask-out-of-bounds",
+            "mode": "LA",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-cmyk-mask-out-of-bounds",
+            "mode": "CMYK",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-p-mask-out-of-bounds",
+            "mode": "P",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-i-mask",
+            "mode": "I",
+            "bitmap_mode": "L",
+            "bitmap_color": 0,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "partial-ycbcr-mask-out-of-bounds",
+            "mode": "YCbCr",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([-2, -2]),
+                "fill": literal(255),
             },
         },
         {
@@ -1974,6 +3284,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rounded_rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "degenerate-box-fallback",
+            "values": {
+                "xy": literal([0, 0, 1, 8]),
+                "radius": literal(1),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "text",
             "requirement_suffix": "behavior.default",
             "name": "canvas-i",
@@ -1996,6 +3317,57 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-text",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal(""),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size-rgba",
+            "mode": "RGBA",
+            "edge": "zero-size",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "la-opaque-destination",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 255],
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal("A"),
+                "fill": literal([255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "i-negative-position",
+            "mode": "I",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "xy": literal([-3, -3]),
+                "text": literal("A"),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "line",
             "requirement_suffix": "behavior.default",
             "name": "width-three",
@@ -2003,6 +3375,158 @@ def build_nuanced_cases(
                 "xy": literal([0, 0, 12, 8]),
                 "fill": literal([255, 255, 255]),
                 "width": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "out-of-bounds",
+            "values": {
+                "xy": literal([[-4, -4], [20, 20]]),
+                "fill": literal(255),
+                "width": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "reverse-axes",
+            "values": {
+                "xy": literal([[12, 8], [0, 0]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "vertical",
+            "values": {
+                "xy": literal([[4, 0], [4, 12]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "horizontal",
+            "values": {
+                "xy": literal([[0, 4], [12, 4]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "steep-negative-direction",
+            "values": {
+                "xy": literal([[12, 12], [4, 0]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "shallow-negative-y",
+            "values": {
+                "xy": literal([[0, 12], [12, 4]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "shallow-low-slope",
+            "values": {
+                "xy": literal([[0, 0], [12, 1]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "steep-high-slope",
+            "values": {
+                "xy": literal([[0, 0], [1, 12]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "horizontal-runs",
+            "values": {
+                "xy": literal(
+                    [
+                        [1, 4],
+                        [12, 4],
+                        [12, 8],
+                        [4, 8],
+                        [4, 5],
+                        [10, 5],
+                        [10, 7],
+                        [2, 7],
+                    ]
+                ),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "out-of-bounds",
+            "values": {
+                "xy": literal([[-5, 3], [20, 3], [20, 13], [-5, 13]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "coalesced-horizontal-increasing",
+            "values": {
+                "xy": literal([[1, 4], [4, 4], [8, 4], [8, 10], [1, 10]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "coalesced-horizontal-decreasing",
+            "values": {
+                "xy": literal([[8, 4], [4, 4], [1, 4], [1, 10], [8, 10]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "horizontal-only",
+            "values": {
+                "xy": literal([[1, 4], [10, 4], [5, 4]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "above-canvas",
+            "values": {
+                "xy": literal([[-5, -20], [20, -20], [20, -10], [-5, -10]]),
+                "fill": literal(255),
             },
         },
         {
@@ -2348,10 +3872,100 @@ def build_nuanced_cases(
             "surface": "PIL.ImageColor",
             "operation": "getcolor",
             "requirement_suffix": "parameter.mode",
+            "name": "green-hsv",
+            "values": {
+                "color": literal("rgb(0, 255, 0)"),
+                "mode": literal("HSV"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "blue-hsv",
+            "values": {
+                "color": literal("rgb(0, 0, 255)"),
+                "mode": literal("HSV"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "gray-hsv",
+            "values": {
+                "color": literal("rgb(128, 128, 128)"),
+                "mode": literal("HSV"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
             "name": "named-i",
             "values": {
                 "color": literal("blue"),
                 "mode": literal("I"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-la",
+            "values": {
+                "color": literal("red"),
+                "mode": literal("LA"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-f",
+            "values": {
+                "color": literal("blue"),
+                "mode": literal("F"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-i16",
+            "values": {
+                "color": literal("green"),
+                "mode": literal("I;16"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-i16b",
+            "values": {
+                "color": literal("white"),
+                "mode": literal("I;16B"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-rgba",
+            "values": {
+                "color": literal("rgba(1, 2, 3, 128)"),
+                "mode": literal("RGBA"),
+            },
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getcolor",
+            "requirement_suffix": "parameter.mode",
+            "name": "named-cmyk",
+            "values": {
+                "color": literal("#204080"),
+                "mode": literal("CMYK"),
             },
         },
         {
@@ -2374,6 +3988,55 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.color",
             "name": "rejected-transparent",
             "values": {"color": literal("transparent")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-currentcolor",
+            "values": {"color": literal("currentcolor")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-unclosed",
+            "values": {"color": literal("rgb(1, 2, 3")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-nondigit",
+            "values": {"color": literal("rgb(1, x, 3)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-empty-component",
+            "values": {"color": literal("rgb(, 1, 2)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-unclosed",
+            "values": {"color": literal("rgba(1, 2, 3, 4")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-nondigit",
+            "values": {"color": literal("rgba(1, x, 3, 4)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-empty-component",
+            "values": {"color": literal("rgba(1,, 3, 4)")},
         },
         {
             "surface": "PIL.ImageColor",
@@ -2409,6 +4072,41 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.color",
             "name": "rejected-hsla",
             "values": {"color": literal("hsla(120, 100%, 50%, 0.5)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-leading-whitespace",
+            "values": {"color": literal(" red")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-trailing-whitespace",
+            "values": {"color": literal("red ")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-mixed-percent",
+            "values": {"color": literal("rgb(100%, 50, 0%)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-short",
+            "values": {"color": literal("rgb(1, 2)")},
+        },
+        {
+            "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-overlong",
+            "values": {"color": literal("#" + "f" * 101)},
         },
         {
             "surface": "PIL.ImageColor",
@@ -2450,6 +4148,20 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "short-tuple-append",
             "values": {"color": literal([1, 2])},
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "opaque-rgba-tuple-rgb-mode",
+            "values": {"color": literal([1, 2, 3, 255])},
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-tuple-rejected",
+            "values": {"color": literal([])},
         },
         {
             "surface": "PIL.ImagePalette.ImagePalette",
@@ -2512,6 +4224,7 @@ def build_nuanced_cases(
             "operation": "resize",
             "requirement_suffix": "parameter.size",
             "name": "noninteger-ratio-lanczos",
+            "observe_result": "tobytes",
             "values": {
                 "size": literal([17, 9]),
                 "resample": literal(1),
@@ -2522,6 +4235,7 @@ def build_nuanced_cases(
             "operation": "resize",
             "requirement_suffix": "parameter.resample",
             "name": "box-filter",
+            "observe_result": "tobytes",
             "values": {
                 "size": literal([7, 5]),
                 "resample": literal(4),
@@ -2532,6 +4246,7 @@ def build_nuanced_cases(
             "operation": "resize",
             "requirement_suffix": "parameter.resample",
             "name": "hamming-filter",
+            "observe_result": "tobytes",
             "values": {
                 "size": literal([7, 5]),
                 "resample": literal(5),
@@ -2542,6 +4257,7 @@ def build_nuanced_cases(
             "operation": "reduce",
             "requirement_suffix": "behavior.default",
             "name": "odd-size-factor-three",
+            "observe_result": "tobytes",
             "mode": "RGB",
             "values": {
                 "size": literal([17, 11]),
@@ -2553,6 +4269,7 @@ def build_nuanced_cases(
             "operation": "reduce",
             "requirement_suffix": "behavior.default",
             "name": "non-square-factors",
+            "observe_result": "tobytes",
             "mode": "RGB",
             "values": {
                 "size": literal([17, 11]),
@@ -2564,6 +4281,7 @@ def build_nuanced_cases(
             "operation": "quantize",
             "requirement_suffix": "parameter.method",
             "name": "fast-octree-rgb",
+            "observe_result": "tobytes",
             "mode": "RGB",
             "values": {
                 "colors": literal(8),
@@ -2597,6 +4315,7 @@ def build_nuanced_cases(
             "operation": "rotate",
             "requirement_suffix": "parameter.angle",
             "name": "fractional-expanded",
+            "observe_result": "tobytes",
             "values": {
                 "angle": literal(33.5),
                 "expand": literal(True),
@@ -2607,6 +4326,7 @@ def build_nuanced_cases(
             "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "p-affine-scalar-fill",
+            "observe_result": "tobytes",
             "mode": "P",
             "values": {
                 "size": literal([6, 6]),
@@ -2621,6 +4341,7 @@ def build_nuanced_cases(
             "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "p-affine-tuple-fill",
+            "observe_result": "tobytes",
             "mode": "P",
             "values": {
                 "size": literal([6, 6]),
@@ -2634,6 +4355,7 @@ def build_nuanced_cases(
             "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "rgb-affine-tuple-fill",
+            "observe_result": "tobytes",
             "mode": "RGB",
             "values": {
                 "size": literal([6, 6]),
@@ -2647,6 +4369,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-l",
+            "observe_receiver": True,
             "mode": "L",
             "values": {
                 "im": literal(255),
@@ -2658,6 +4381,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-rgb",
+            "observe_receiver": True,
             "mode": "RGB",
             "values": {
                 "im": literal([255, 0, 0]),
@@ -2669,6 +4393,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-rgba",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "im": literal([255, 0, 0, 128]),
@@ -2680,6 +4405,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-la",
+            "observe_receiver": True,
             "mode": "LA",
             "values": {
                 "im": literal([255, 128]),
@@ -2691,6 +4417,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-p",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "im": literal(5),
@@ -2702,6 +4429,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-cmyk",
+            "observe_receiver": True,
             "mode": "CMYK",
             "values": {
                 "im": literal([0, 255, 0, 0]),
@@ -2713,6 +4441,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-i",
+            "observe_receiver": True,
             "mode": "I",
             "values": {
                 "im": literal(100),
@@ -2724,6 +4453,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "color-one",
+            "observe_receiver": True,
             "mode": "1",
             "values": {
                 "im": literal(1),
@@ -2735,6 +4465,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "rgb-int-fill",
+            "observe_receiver": True,
             "mode": "RGB",
             "values": {
                 "im": literal(255),
@@ -2746,6 +4477,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "f-int-fill",
+            "observe_receiver": True,
             "mode": "F",
             "values": {
                 "im": literal(100),
@@ -2801,6 +4533,7 @@ def build_nuanced_cases(
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "offset-source",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "source": literal([1, 1]),
@@ -2810,7 +4543,21 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "l-bytes",
+            "observe_receiver": True,
+            "mode": "L",
+            "values": {
+                "data": bytes_literal(
+                    [0, 32, 64, 96, 128, 160, 192, 224, 255]
+                ),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "i-mode",
+            "observe_receiver": True,
             "mode": "I",
             "values": {
                 "data": literal([1, 2, 3, 4, 5, 6, 7, 8, 9]),
@@ -2821,6 +4568,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "f-mode",
+            "observe_receiver": True,
             "mode": "F",
             "values": {
                 "data": literal([0.5, 1.5, 2.5, 3.5, 4.5, 5.5, 6.5, 7.5, 8.5]),
@@ -2831,6 +4579,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "clipped-values",
+            "observe_receiver": True,
             "mode": "L",
             "values": {
                 "data": literal([300, -5, 128, 0, 255, 1, 2, 3, 4]),
@@ -2841,6 +4590,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "scale-offset",
+            "observe_receiver": True,
             "mode": "L",
             "values": {
                 "data": literal([1, 2, 3, 4, 5, 6, 7, 8, 9]),
@@ -2925,13 +4675,124 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-mode",
+            "mode": "CMYK",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "mismatched-sizes",
+            "edge": "second-smaller-than-first",
+            "values": {"alpha": literal(0.25)},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "mask-size-mismatch",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "bad-mask-mode",
+            "mode": "RGB",
+            "mask_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode",
+            "values": {"mode": literal("L")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "p-mode",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode",
+            "values": {"mode": literal("L")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "p-mode",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "width-one",
+            "values": {
+                "size": literal([1, 4]),
+                "extent": literal([-1.0, -1.0, 1.0, 1.0]),
+                "quality": literal(10),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "height-one",
+            "values": {
+                "size": literal([4, 1]),
+                "extent": literal([-1.0, -1.0, 1.0, 1.0]),
+                "quality": literal(10),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-extent",
+            "values": {
+                "size": literal([4, 4]),
+                "extent": literal([1.0, -1.0, -1.0, 1.0]),
+                "quality": literal(10),
+            },
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "eval",
             "requirement_suffix": "behavior.default",
             "name": "rgb-replicated-lut",
             "mode": "RGB",
             "values": {
-                "args": literal(list(range(256))),
+                "args": literal([list(range(256))]),
             },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-expanded-lut",
+            "mode": "RGB",
+            "values": {
+                "args": literal([[index % 256 for index in range(768)]]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-lut-length",
+            "mode": "RGB",
+            "values": {"args": literal([[0]])},
         },
         {
             "surface": "PIL.Image",
@@ -2950,6 +4811,14 @@ def build_nuanced_cases(
             "name": "one-mask",
             "mode": "RGB",
             "mask_mode": "1",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "p-output-l-mask",
+            "mode": "P",
+            "mask_mode": "L",
         },
         {
             "surface": "PIL.Image",
@@ -2984,6 +4853,64 @@ def build_nuanced_cases(
             "surface": "PIL.ImageStat.Stat",
             "operation": "extrema",
             "requirement_suffix": "behavior.default",
+            "name": "i-empty",
+            "mode": "I",
+            "edge": "zero-size",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "f-empty",
+            "mode": "F",
+            "edge": "zero-size",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "l-empty-frombytes",
+            "mode": "L",
+            "edge": "zero-size-frombytes",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-empty-frombytes",
+            "mode": "RGB",
+            "edge": "zero-size-frombytes",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-empty-frombytes",
+            "mode": "RGBA",
+            "edge": "zero-size-frombytes",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "i-varied",
+            "mode": "I",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "f-varied",
+            "mode": "F",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
             "name": "cmyk-mode",
             "mode": "CMYK",
         },
@@ -3013,6 +4940,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "one-mode",
+            "observe_receiver": True,
             "mode": "1",
             "values": {
                 "data": literal([0, 1, 0, 1, 0, 1, 0, 1, 0]),
@@ -3023,6 +4951,7 @@ def build_nuanced_cases(
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "p-index",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "xy": literal([0, 0]),
@@ -3034,6 +4963,7 @@ def build_nuanced_cases(
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "p-tuple",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "xy": literal([0, 0]),
@@ -3045,6 +4975,7 @@ def build_nuanced_cases(
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "p-palette-exact-match",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "xy": literal([0, 0]),
@@ -3056,6 +4987,7 @@ def build_nuanced_cases(
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "p-palette-append",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "xy": literal([0, 0]),
@@ -3078,6 +5010,7 @@ def build_nuanced_cases(
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "one-tuple-equals-scalar",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "xy": literal([1, 1]),
@@ -3089,6 +5022,7 @@ def build_nuanced_cases(
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "p-one-tuple-index",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "xy": literal([1, 1]),
@@ -3100,6 +5034,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "p-indices",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "data": literal([0, 1, 2, 3, 4, 5, 6, 7, 8]),
@@ -3110,11 +5045,34 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "rgba-flat",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "data": literal(
                     [255, 0, 0, 128] * 9
                 ),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "la-packed",
+            "observe_receiver": True,
+            "mode": "LA",
+            "values": {
+                "data": literal([0x8000007F] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-packed",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "data": literal([0x00302010] * 9),
             },
         },
         {
@@ -3162,9 +5120,34 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-png-error",
+            "mode": "CMYK",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "behavior.default",
+            "name": "f-bmp-error",
+            "mode": "F",
+            "values": {"format": literal("BMP")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-bmp-error",
+            "mode": "CMYK",
+            "values": {"format": literal("BMP")},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "rgba-tuples",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "data": literal([[255, 0, 0, 128]] * 9),
@@ -3175,6 +5158,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-tuples",
+            "observe_receiver": True,
             "mode": "CMYK",
             "values": {
                 "data": literal([[0, 255, 0, 0]] * 9),
@@ -3185,6 +5169,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "la-tuples",
+            "observe_receiver": True,
             "mode": "LA",
             "values": {
                 "data": literal([[255, 128]] * 9),
@@ -3192,9 +5177,40 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "la-invalid-component-count",
+            "mode": "LA",
+            "values": {
+                "data": literal([[1, 2, 3]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-invalid-component-count",
+            "mode": "RGB",
+            "values": {
+                "data": literal([[1, 2]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "l-nested-sequence",
+            "mode": "L",
+            "values": {
+                "data": literal([[1, 2]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "l-from-rgb",
+            "observe_receiver": True,
             "mode": "L",
             "im_mode": "RGB",
         },
@@ -3203,6 +5219,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "rgb-from-rgba",
+            "observe_receiver": True,
             "mode": "RGB",
             "im_mode": "RGBA",
         },
@@ -3211,6 +5228,7 @@ def build_nuanced_cases(
             "operation": "paste",
             "requirement_suffix": "behavior.default",
             "name": "p-from-l",
+            "observe_receiver": True,
             "mode": "P",
             "im_mode": "L",
         },
@@ -3219,6 +5237,7 @@ def build_nuanced_cases(
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "offset-dest",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "dest": literal([1, 1]),
@@ -3229,6 +5248,7 @@ def build_nuanced_cases(
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "source-larger-than-dest",
+            "observe_receiver": True,
             "mode": "RGBA",
             "edge": "source-larger-than-dest",
         },
@@ -3237,6 +5257,7 @@ def build_nuanced_cases(
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "source-smaller-than-dest",
+            "observe_receiver": True,
             "mode": "RGBA",
             "edge": "source-smaller-than-dest",
         },
@@ -3245,6 +5266,7 @@ def build_nuanced_cases(
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "source-four-tuple",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "source": literal([2, 2, 8, 8]),
@@ -3255,6 +5277,7 @@ def build_nuanced_cases(
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "source-smaller-offset-dest",
+            "observe_receiver": True,
             "mode": "RGBA",
             "edge": "source-smaller-than-dest",
             "values": {
@@ -3285,6 +5308,28 @@ def build_nuanced_cases(
             "values": {
                 "im": literal([255, 0, 0, 128]),
                 "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "degenerate-color-box-height",
+            "mode": "RGB",
+            "values": {
+                "im": literal(255),
+                "box": literal([2, 2, 4, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "degenerate-image-box",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([2, 2, 2, 4]),
             },
         },
         {
@@ -3386,6 +5431,54 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "mode.cmyk",
+            "name": "cmyk-to-cmyk",
+            "mode": "CMYK",
+            "values": {"mode": literal("CMYK")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.cmyk",
+            "name": "hsv-to-cmyk",
+            "mode": "HSV",
+            "values": {"mode": literal("CMYK")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.cmyk",
+            "name": "ycbcr-to-cmyk",
+            "mode": "YCbCr",
+            "values": {"mode": literal("CMYK")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.cmyk",
+            "name": "i-to-cmyk",
+            "mode": "I",
+            "values": {"mode": literal("CMYK")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.cmyk",
+            "name": "f-to-cmyk",
+            "mode": "F",
+            "values": {"mode": literal("CMYK")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.cmyk",
+            "name": "p-to-cmyk",
+            "mode": "P",
+            "values": {"mode": literal("CMYK")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-to-rgb",
             "mode": "CMYK",
@@ -3410,6 +5503,16 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "mode.hsv",
+            "name": "rgb-to-hsv-nonzero",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"mode": literal("HSV")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "behavior.default",
             "name": "hsv-to-rgb",
             "mode": "HSV",
@@ -3418,9 +5521,69 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-sector-zero",
+            "mode": "HSV",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 255, 200],
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-sector-one",
+            "mode": "HSV",
+            "edge": "nonzero-pixel",
+            "pixel": [50, 255, 200],
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-sector-three",
+            "mode": "HSV",
+            "edge": "nonzero-pixel",
+            "pixel": [150, 255, 200],
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-sector-four",
+            "mode": "HSV",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 255, 200],
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-sector-five",
+            "mode": "HSV",
+            "edge": "nonzero-pixel",
+            "pixel": [250, 255, 200],
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "mode.ycbcr",
             "name": "rgb-to-ycbcr",
             "mode": "RGB",
+            "values": {"mode": literal("YCbCr")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.ycbcr",
+            "name": "rgb-to-ycbcr-nonzero",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
             "values": {"mode": literal("YCbCr")},
         },
         {
@@ -3535,7 +5698,7 @@ def build_nuanced_cases(
             "mode": "RGB",
             "values": {
                 "mode": literal("1"),
-                "dither": literal(0),
+                "dither": literal("NONE"),
             },
         },
         {
@@ -3577,6 +5740,52 @@ def build_nuanced_cases(
             "name": "p-same-mode",
             "mode": "P",
             "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.p",
+            "name": "rgb-to-p",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.p",
+            "name": "l-to-p",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.matrix",
+            "name": "rgb-matrix-four",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "values": {
+                "mode": literal("L"),
+                "matrix": literal([1, 0, 0, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.matrix",
+            "name": "rgb-matrix-twelve",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "values": {
+                "mode": literal("RGB"),
+                "matrix": literal([1, 0, 0, 4, 0, 1, 0, 5, 0, 0, 1, 6]),
+            },
         },
         {
             "surface": "PIL.Image.Image",
@@ -3703,6 +5912,42 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "masked-nonzero-rgb",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "mask-nonzero-pixel",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "masked-nonzero-l",
+            "mode": "L",
+            "mask_mode": "L",
+            "edge": "mask-nonzero-pixel",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "masked-nonzero-la",
+            "mode": "LA",
+            "mask_mode": "L",
+            "edge": "mask-nonzero-pixel",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "masked-nonzero-rgba",
+            "mode": "RGBA",
+            "mask_mode": "L",
+            "edge": "mask-nonzero-pixel",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "entropy",
             "requirement_suffix": "parameter.extrema",
             "name": "masked-region",
@@ -3768,11 +6013,168 @@ def build_nuanced_cases(
             "operation": "fit",
             "requirement_suffix": "parameter.size",
             "name": "fractional-centering",
+            "observe_result": "tobytes",
             "values": {
                 "size": literal([13, 7]),
                 "centering": literal([0.25, 0.75]),
                 "resample": literal("BICUBIC"),
             },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.l",
+            "name": "materialized-l",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 120,
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "mode.l",
+            "name": "materialized-l",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 120,
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-p",
+            "mode": "P",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "invert",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "posterize",
+            "requirement_suffix": "parameter.bits",
+            "name": "materialized-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"bits": literal(4)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "solarize",
+            "requirement_suffix": "parameter.threshold",
+            "name": "materialized-l",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 180,
+            "values": {"threshold": literal(100)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "requirement_suffix": "mode.rgb",
+            "name": "materialized-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "expand",
+            "requirement_suffix": "parameter.border",
+            "name": "materialized-border",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"border": literal(2)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "crop",
+            "requirement_suffix": "parameter.border",
+            "name": "materialized-border",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"border": literal(2)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.factor",
+            "name": "materialized-upscale",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"factor": literal(1.5)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "parameter.size",
+            "name": "materialized-aspect",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"size": literal([11, 7])},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "cover",
+            "requirement_suffix": "parameter.size",
+            "name": "materialized-aspect",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"size": literal([11, 7])},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "materialized-padding",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "values": {"size": literal([20, 12])},
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.ImageOps",
@@ -3782,6 +6184,7 @@ def build_nuanced_cases(
             "mode": "L",
             "edge": "nonzero-pixel",
             "pixel": 128,
+            "observe_result": "tobytes",
             "values": {
                 "black": literal("black"),
                 "white": literal("white"),
@@ -3795,6 +6198,7 @@ def build_nuanced_cases(
             "mode": "L",
             "edge": "nonzero-pixel",
             "pixel": 128,
+            "observe_result": "tobytes",
             "values": {
                 "black": literal("black"),
                 "white": literal("white"),
@@ -3810,6 +6214,7 @@ def build_nuanced_cases(
             "mode": "L",
             "edge": "nonzero-pixel",
             "pixel": 128,
+            "observe_result": "tobytes",
             "values": {
                 "black": literal([0, 0, 255]),
                 "white": literal([255, 255, 0]),
@@ -3857,10 +6262,97 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "colorize",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-midpoint-above-whitepoint",
+            "mode": "L",
+            "values": {
+                "black": literal([0, 0, 0]),
+                "white": literal([255, 255, 255]),
+                "mid": literal("red"),
+                "midpoint": literal(200),
+                "whitepoint": literal(100),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "invert",
             "requirement_suffix": "behavior.default",
             "name": "p-mode",
             "mode": "P",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-orientation6-materialized",
+            "scenario_asset": "image/exif-orientation6.jpg",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-le-orientation2-materialized",
+            "exif_variant": "le-orientation2",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-be-orientation3-materialized",
+            "exif_variant": "be-orientation3",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-no-orientation",
+            "exif_variant": "no-orientation",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-invalid-magic",
+            "exif_variant": "invalid-magic",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-invalid-byte-order",
+            "exif_variant": "invalid-byte-order",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-short-tiff",
+            "exif_variant": "short-tiff",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-short-exif-payload",
+            "exif_variant": "short-exif-payload",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "parameter.in-place",
+            "name": "jpeg-le-orientation2-in-place",
+            "exif_variant": "le-orientation2",
+            "values": {"in_place": literal(True)},
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.ImageOps",
@@ -3889,6 +6381,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "unsupported-mode-one",
             "mode": "1",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "behavior.default",
+            "name": "palette-mode",
+            "mode": "P",
         },
         {
             "surface": "PIL.ImageOps",
@@ -4084,6 +6583,26 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "rgba-green-only-zero-alpha",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 200, 0, 0],
+            "values": {"alpha_only": literal(False)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "rgba-blue-only-zero-alpha",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 0, 50, 0],
+            "values": {"alpha_only": literal(False)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
             "requirement_suffix": "parameter-combination.legacy-003",
             "name": "alpha-only-false-rgb",
             "mode": "RGB",
@@ -4180,6 +6699,7 @@ def build_nuanced_cases(
             "operation": "putpalette",
             "requirement_suffix": "parameter.rawmode",
             "name": "la-palette",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "data": literal([0, 255, 1, 254]),
@@ -4191,6 +6711,7 @@ def build_nuanced_cases(
             "operation": "putpalette",
             "requirement_suffix": "parameter.rawmode",
             "name": "rgba-palette",
+            "observe_receiver": True,
             "mode": "P",
             "values": {
                 "data": literal([10, 20, 30, 254, 40, 50, 60, 255]),
@@ -4210,17 +6731,204 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "la-receiver",
+            "mode": "LA",
+            "values": {
+                "data": literal([0, 255, 1, 254]),
+                "rawmode": literal("LA"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "oversized-rgb-palette",
+            "mode": "P",
+            "values": {
+                "data": literal([1, 2, 3] * 257),
+                "rawmode": literal("RGB"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "oversized-rgba-palette",
+            "mode": "P",
+            "values": {
+                "data": literal([1, 2, 3, 4] * 257),
+                "rawmode": literal("RGBA"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "oversized-la-palette",
+            "mode": "P",
+            "values": {
+                "data": literal([1, 2] * 257),
+                "rawmode": literal("LA"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "invalid-rawmode",
+            "mode": "P",
+            "values": {
+                "data": literal([1, 2, 3]),
+                "rawmode": literal("XYZ"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putalpha",
             "requirement_suffix": "behavior.default",
             "name": "l-mask",
+            "observe_receiver": True,
             "mode": "RGBA",
             "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-mask",
+            "observe_receiver": True,
+            "mode": "CMYK",
+            "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "p-mask",
+            "observe_receiver": True,
+            "mode": "P",
+            "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "la-mask",
+            "observe_receiver": True,
+            "mode": "LA",
+            "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "mode.l",
+            "name": "l-scalar",
+            "observe_receiver": True,
+            "mode": "L",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "mode.la",
+            "name": "la-scalar",
+            "observe_receiver": True,
+            "mode": "LA",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "mode.p",
+            "name": "p-scalar",
+            "observe_receiver": True,
+            "mode": "P",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "mode.rgb",
+            "name": "rgb-scalar",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgba-scalar",
+            "observe_receiver": True,
+            "mode": "RGBA",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "mode.cmyk",
+            "name": "cmyk-scalar",
+            "observe_receiver": True,
+            "mode": "CMYK",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "i-unsupported",
+            "mode": "I",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "f-unsupported",
+            "mode": "F",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "ycbcr-unsupported",
+            "mode": "YCbCr",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-unsupported",
+            "mode": "HSV",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "one-mask",
+            "mode": "RGB",
+            "mask_mode": "1",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "mask-size-mismatch",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
         },
         {
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "parameter.scale",
             "name": "rgb-tuples-scale-offset",
+            "observe_receiver": True,
             "mode": "RGB",
             "values": {
                 "data": literal([[1, 2, 3], [4, 5, 6], [7, 8, 9]] * 3),
@@ -4233,6 +6941,7 @@ def build_nuanced_cases(
             "operation": "putdata",
             "requirement_suffix": "parameter.offset",
             "name": "rgba-clipped-tuples",
+            "observe_receiver": True,
             "mode": "RGBA",
             "values": {
                 "data": literal([[300, -5, 128, 0], [255, 200, 100, 400], [1, 2, 3, 4]] * 3),
@@ -4248,6 +6957,23 @@ def build_nuanced_cases(
             "edge": "nonzero-pixel",
             "pixel": [200, 100, 50],
             "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "p-short-palette",
+            "mode": "P",
+            "chain": "p-short-palette-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "mode.p",
+            "name": "p-mode-filter",
+            "mode": "P",
+            "chain": "p-mode-filter",
         },
         {
             "surface": "PIL.Image.Image",
@@ -4625,11 +7351,87 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-table",
+            "mode": "P",
+            "chain": "p-table-transparency",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-resized",
+            "scenario_asset": "image/p-transparency.png",
+            "chain": "p-transparency-resize-apply",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-loaded",
+            "scenario_asset": "image/p-transparency.png",
+            "chain": "p-transparency-load-apply",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "convert",
             "requirement_suffix": "mode.rgba",
             "name": "opened-p-transparency",
             "scenario_asset": "image/p-transparency.png",
             "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "opened-p-transparency-auto",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"mode": literal(None)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "opened-p-auto",
+            "scenario_asset": "image/p-small.png",
+            "values": {"mode": literal(None)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgba",
+            "name": "opened-p-transparency-table",
+            "mode": "P",
+            "chain": "p-table-transparency",
+            "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "opened-p-transparency-table-to-rgb",
+            "mode": "P",
+            "chain": "p-table-transparency",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.la",
+            "name": "opened-p-transparency-table-to-la",
+            "mode": "P",
+            "chain": "p-table-transparency",
+            "values": {"mode": literal("LA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-p-transparency-table-to-pa",
+            "mode": "P",
+            "chain": "p-table-transparency",
+            "values": {"mode": literal("PA")},
         },
         {
             "surface": "PIL.Image.Image",
@@ -4646,6 +7448,14 @@ def build_nuanced_cases(
             "name": "opened-p-transparency-to-la",
             "scenario_asset": "image/p-transparency.png",
             "values": {"mode": literal("LA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.l",
+            "name": "opened-p-transparency-to-l",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"mode": literal("L")},
         },
         {
             "surface": "PIL.Image.Image",
@@ -4725,10 +7535,44 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "behavior.default",
+            "name": "p-pipeline-resize-resize",
+            "mode": "P",
+            "chain": "p-resize-resize",
+            "values": {"size": literal([4, 4]), "resample": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba",
             "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-p",
+            "scenario_asset": "image/p-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "mode.la",
+            "name": "la-nonzero",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 200],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "behavior.default",
+            "name": "i-nonzero",
+            "mode": "I",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
         },
         {
             "surface": "PIL.Image.Image",
@@ -4926,6 +7770,26 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "rgba-mask",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "mask_mode": "RGBA",
+            "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "la-mask",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "mask_mode": "LA",
+            "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
             "requirement_suffix": "parameter.im",
             "name": "l-source-into-rgb",
             "mode": "RGB",
@@ -4967,6 +7831,882 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "opened-p",
             "scenario_asset": "image/p-small.png",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.1",
+            "name": "valid-packed",
+            "mode": "1",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.l",
+            "name": "valid-l",
+            "mode": "L",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.la",
+            "name": "valid-la",
+            "mode": "LA",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.p",
+            "name": "valid-p",
+            "mode": "P",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.cmyk",
+            "name": "valid-cmyk",
+            "mode": "CMYK",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.rgba",
+            "name": "valid-rgba",
+            "mode": "RGBA",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-hsv",
+            "mode": "HSV",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
+            "name": "valid-i",
+            "mode": "I",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
+            "name": "valid-f",
+            "mode": "F",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
+            "name": "valid-ycbcr",
+            "mode": "YCbCr",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-mode",
+            "edge": "invalid-mode",
+            "values": {
+                "size": literal([1, 1]),
+                "data": bytes_literal([0]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size",
+            "mode": "L",
+            "edge": "zero-size",
+            "values": {
+                "data": bytes_literal([]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size-p",
+            "mode": "P",
+            "edge": "zero-size",
+            "values": {
+                "data": bytes_literal([]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.l",
+            "name": "valid-l",
+            "mode": "L",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.la",
+            "name": "valid-la",
+            "mode": "LA",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "mode.rgba",
+            "name": "valid-rgba",
+            "mode": "RGBA",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-packed",
+            "mode": "1",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-p",
+            "mode": "P",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-cmyk",
+            "mode": "CMYK",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-i",
+            "mode": "I",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-f",
+            "mode": "F",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-ycbcr",
+            "mode": "YCbCr",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-p",
+            "values": {
+                "mode": literal("P"),
+                "size": literal([2, 2]),
+                "color": literal([10, 20, 30]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rgb-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgb(1, 2, 3)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rgb-percent-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgb(100%, 50%, 0%)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rgba-string",
+            "values": {
+                "mode": literal("RGBA"),
+                "size": literal([2, 2]),
+                "color": literal("rgba(1, 2, 3, 128)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-short-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgba(1, 2, 3)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-nondigit-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgba(1, x, 3, 4)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgba-empty-component-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgba(1,, 3, 4)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-short-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgb(1, 2)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-unclosed-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgb(1, 2, 3"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-nondigit-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgb(1, x, 3)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-rgb-empty-percent-component",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal("rgb(%, 1%, 2%)"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "rejected-leading-space-string",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 2]),
+                "color": literal(" red"),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "integer-scalar-i",
+            "values": {
+                "mode": literal("I"),
+                "size": literal([2, 2]),
+                "color": literal(-123456),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "float-scalar-f",
+            "values": {
+                "mode": literal("F"),
+                "size": literal([2, 2]),
+                "color": literal(1.25),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-rgb-tuple",
+            "mode": "RGBA",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal([1, 1, 3, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-exif",
+            "scenario_asset": "image/exif-orientation6.jpg",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "tiff-container",
+            "scenario_asset": "image/rgb-small.tiff",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-without-exif",
+            "scenario_asset": "image/rgb-small.jpg",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-le-orientation2",
+            "exif_variant": "le-orientation2",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-no-orientation",
+            "exif_variant": "no-orientation",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-invalid-magic",
+            "exif_variant": "invalid-magic",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-no-exif-prefix",
+            "exif_variant": "no-exif-prefix",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-standalone-soi",
+            "exif_variant": "standalone-soi",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-standalone-rst0",
+            "exif_variant": "standalone-rst0",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "png-without-exif",
+            "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "attached-rgbx",
+            "chain": "palette-getpalette-rgbx",
+            "values": {"rawmode": literal("RGBX")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "attached-channel-r",
+            "chain": "palette-getpalette-channel",
+            "values": {"rawmode": literal("R")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "attached-channel-g",
+            "chain": "palette-getpalette-channel-g",
+            "values": {"rawmode": literal("G")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "attached-channel-b",
+            "chain": "palette-getpalette-channel-b",
+            "values": {"rawmode": literal("B")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "attached-channel-invalid",
+            "chain": "palette-getpalette-channel-invalid",
+            "values": {"rawmode": literal("XYZ")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "attached-alpha-rgbx",
+            "chain": "palette-getpalette-alpha-rgbx",
+            "values": {"rawmode": literal("RGBX")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "attached-alpha-auto-rawmode",
+            "chain": "palette-getpalette-alpha-rgbx",
+            "values": {"rawmode": literal(None)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-transparency-auto-rawmode",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"rawmode": literal(None)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-duplicate-transparency-auto-rawmode",
+            "mode": "P",
+            "chain": "p-duplicate-transparency",
+            "values": {"rawmode": literal(None)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "attached-palette-transparency-table",
+            "mode": "P",
+            "chain": "palette-transparency-convert",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "resize-pipeline",
+            "chain": "resize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "quantized-pipeline",
+            "chain": "quantize-load",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "quantized-pipeline",
+            "chain": "quantize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "quantized-pipeline",
+            "chain": "quantize-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-putalpha",
+            "chain": "p-resize-putalpha-load",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgba",
+            "name": "p-putalpha-to-rgba",
+            "mode": "P",
+            "chain": "p-putalpha-convert",
+            "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-preserves-p-channel",
+            "mode": "P",
+            "chain": "p-resize-getchannel",
+            "values": {"channel": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgba",
+            "name": "p-putpalette-putalpha-to-rgba",
+            "mode": "P",
+            "chain": "p-putpalette-putalpha-convert",
+            "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-index-channel",
+            "mode": "P",
+            "chain": "p-putpalette-putalpha-convert",
+            "values": {"channel": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-alpha-channel",
+            "mode": "P",
+            "chain": "p-putpalette-putalpha-convert",
+            "values": {"channel": literal(1)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "remap_palette",
+            "requirement_suffix": "parameter-combination.legacy-001",
+            "name": "attached-alpha-remap",
+            "mode": "P",
+            "chain": "p-putpalette-remap",
+            "values": {"dest_map": literal([0, 1])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "remap_palette",
+            "requirement_suffix": "parameter.source-palette",
+            "name": "explicit-rgba-source-palette",
+            "mode": "P",
+            "values": {
+                "dest_map": literal([0, 1]),
+                "source_palette": literal([1, 2, 3, 128] * 193),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "remap_palette",
+            "requirement_suffix": "parameter.dest-map",
+            "name": "oversized-dest-map",
+            "mode": "P",
+            "values": {"dest_map": literal([0] * 257)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "parameter.args",
+            "name": "rgb-bgr-raw",
+            "mode": "RGB",
+            "values": {
+                "encoder_name": literal("raw"),
+                "args": literal(["BGR"]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "parameter.args",
+            "name": "rgba-bgra-raw",
+            "mode": "RGBA",
+            "values": {
+                "encoder_name": literal("raw"),
+                "args": literal(["BGRA"]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "parameter.encoder-name",
+            "name": "unknown-encoder-error",
+            "mode": "RGB",
+            "values": {"encoder_name": literal("foo")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode",
+            "mode": "I",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode",
+            "mode": "F",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "behavior.default",
+            "name": "one-packed-nonzero",
+            "mode": "1",
+            "edge": "nonzero-pixel",
+            "pixel": 255,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i-scalar",
+            "observe_receiver": True,
+            "mode": "I",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(200),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "f-scalar",
+            "observe_receiver": True,
+            "mode": "F",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(200),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "ycbcr-scalar",
+            "observe_receiver": True,
+            "mode": "YCbCr",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(200),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-scalar",
+            "observe_receiver": True,
+            "mode": "HSV",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(200),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-full-palette-replace",
+            "observe_receiver": True,
+            "mode": "P",
+            "chain": "p-full-palette-putpixel",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([9, 8, 7]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "y-out-of-bounds",
+            "mode": "L",
+            "edge": "y-out-of-bounds",
+            "values": {"xy": literal([0, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-y-out-of-bounds",
+            "mode": "P",
+            "edge": "y-out-of-bounds",
+            "values": {"xy": literal([0, 16]), "value": literal(7)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-x-out-of-bounds",
+            "mode": "P",
+            "values": {"xy": literal([16, 0]), "value": literal(7)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i-y-out-of-bounds",
+            "mode": "I",
+            "edge": "y-out-of-bounds",
+            "values": {"xy": literal([0, 16]), "value": literal(200)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i-x-out-of-bounds",
+            "mode": "I",
+            "values": {"xy": literal([16, 0]), "value": literal(200)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "f-y-out-of-bounds",
+            "mode": "F",
+            "edge": "y-out-of-bounds",
+            "values": {"xy": literal([0, 16]), "value": literal(200)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "f-x-out-of-bounds",
+            "mode": "F",
+            "values": {"xy": literal([16, 0]), "value": literal(200)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-attached-palette-exact-match",
+            "observe_receiver": True,
+            "mode": "P",
+            "chain": "p-attached-palette-putpixel",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([10, 20, 30]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-full-palette-exhausted",
+            "mode": "P",
+            "chain": "p-full-palette-exhausted-putpixel",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([9, 8, 7]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-full-palette-transparent-slot",
+            "observe_receiver": True,
+            "mode": "P",
+            "chain": "p-full-palette-index-transparency-putpixel",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([9, 8, 7]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "raw-p-without-palette-to-rgb",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-tuples",
+            "observe_receiver": True,
+            "mode": "PA",
+            "values": {
+                "data": literal([[1, 255], [2, 128], [3, 0], [4, 64]]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-four-tuples",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "data": literal([[1, 2, 3, 4], [5, 6, 7, 8]]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-three-tuples",
+            "observe_receiver": True,
+            "mode": "RGBA",
+            "values": {
+                "data": literal([[1, 2, 3], [4, 5, 6]]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "l-nan-clips-high",
+            "observe_receiver": True,
+            "mode": "L",
+            "values": {
+                "data": literal([float("nan")]),
+            },
         },
     )
 
@@ -5016,6 +8756,11 @@ def build_nuanced_cases(
                 scenario_mask_mode=spec.get("mask_mode"),
                 scenario_noise_seed=spec.get("seed"),
                 scenario_asset=spec.get("scenario_asset"),
+                scenario_exif_variant=spec.get("exif_variant"),
+                scenario_chain=spec.get("chain"),
+                scenario_observe_result=spec.get("observe_result"),
+                scenario_observe_receiver=spec.get("observe_receiver", False),
+                scenario_outline_curve=spec.get("outline_curve", False),
             )
         )
     return cases
@@ -5131,37 +8876,11 @@ def build_inputs(
             )
         )
         selected_cases = list(dict.fromkeys(selected_cases))
-        if "image-font" in component_ids and surface_id == "PIL.ImageFont.FreeTypeFont":
-            command_ids = ["coverage-font-native"]
-        elif "image-ops" in component_ids:
-            # The EXIF parsers and the core colorize guards are unreachable
-            # through the public Pillow surface; exercise them through the
-            # maintained native coverage command.
-            command_ids = ["coverage-imageops-native"]
-        elif "image-sequence" in component_ids:
-            # The iterator protocol (``__iter__``/``__next__``) has no public
-            # manifest endpoint; exercise it through the maintained native
-            # coverage command.
-            command_ids = ["coverage-imagesequence-native"]
-        elif "image-core" in component_ids:
-            # Module-level helpers (fromarray variants, merge, gradients,
-            # resize/crop/rotate/convert wrappers) have no Pillow oracle
-            # endpoint; exercise them through the maintained native command.
-            command_ids = ["coverage-imagecore-native"]
-        elif "image-draw" in component_ids:
-            # `Draw.shape` requires a real Outline built through the
-            # move/line/close protocol the parity generator does not emit.
-            command_ids = ["coverage-imagedraw-native"]
-        elif "image-color" in component_ids:
-            # The getcolor mode matrix and rejected function-form variants
-            # are not selected by the parity plan.
-            command_ids = ["coverage-imagecolor-native"]
-        elif "image-palette" in component_ids:
-            # The palette append/lookup shapes and save surfaces are not
-            # selected by the parity plan.
-            command_ids = ["coverage-imagepalette-native"]
-        else:
-            command_ids = []
+        # Coverage is intentionally input-only: do not add direct native
+        # probes to compensate for paths that lack a public parity workflow.
+        # Those paths remain visible as uncovered until a real public input
+        # can reach them or they are documented as unreachable.
+        command_ids = []
         coverage_relative = f"inputs/coverage/{storage_slug}.json"
         coverage_path = output_root / coverage_relative
         write_json(

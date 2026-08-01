@@ -117,6 +117,10 @@ def run_native_cases() -> tuple[int, int, int]:
             ),
         ),
         (
+            "composite-palette",
+            lambda: _composite_palette(),
+        ),
+        (
             "merge-classmethod",
             lambda: pillow_rs.Image.merge(
                 "RGB",
@@ -178,6 +182,8 @@ def run_native_cases() -> tuple[int, int, int]:
         ),
         # tobytes/thumbnail/reduce/getdata/palette paths.
         ("tobytes-encoder-args", lambda: pillow_rs.Image.new("RGB", (2, 2)).tobytes("raw", "RGB")),
+        ("tobytes-bgr", lambda: Image.new("RGB", (1, 1), (1, 2, 3)).tobytes("raw", "BGR")),
+        ("tobytes-bgra", lambda: Image.new("RGBA", (1, 1), (1, 2, 3, 4)).tobytes("raw", "BGRA")),
         ("thumbnail-int-resample", lambda: _thumbnail_int(pillow_rs.Image.new("RGB", (8, 8)))),
         ("reduce-bad-factor", lambda: pillow_rs.Image.new("RGB", (8, 8)).reduce((2, 3))),
         ("getdata-single-band", lambda: list(pillow_rs.Image.new("L", (2, 2)).getdata())),
@@ -199,6 +205,17 @@ def run_native_cases() -> tuple[int, int, int]:
         ("crop-module", lambda: pillow_rs.crop(Image.new("RGB", (8, 8)), (0, 0, 4, 4))),
         ("rotate-module", lambda: pillow_rs.rotate(Image.new("RGB", (8, 8)), 90)),
         ("convert-module", lambda: pillow_rs.convert(Image.new("RGB", (8, 8)), "L")),
+        ("convert-matrix-four", lambda: Image.new("RGB", (2, 1), (10, 20, 30)).convert("RGB", matrix=(1, 0, 0, 4))),
+        ("convert-matrix-twelve", lambda: Image.new("RGB", (2, 1), (10, 20, 30)).convert("RGB", matrix=(1, 0, 0, 4, 0, 1, 0, 5, 0, 0, 1, 6))),
+        ("convert-rgb-to-one-none", lambda: _rgb_pattern().convert("1", dither=0)),
+        ("convert-rgb-to-one-floyd", lambda: _rgb_pattern().convert("1", dither=1)),
+        ("convert-i-to-cmyk", lambda: Image.frombytes("I", (2, 2), _i32_bytes([0, 64, 128, 255])).convert("CMYK")),
+        ("convert-f-to-cmyk", lambda: Image.frombytes("F", (2, 2), _f32_bytes([0.0, 0.25, 0.5, 1.0])).convert("CMYK")),
+        ("convert-hsv-to-cmyk", lambda: Image.frombytes("HSV", (2, 1), bytes([0, 255, 255, 64, 128, 192])).convert("CMYK")),
+        ("convert-ycbcr-to-cmyk", lambda: Image.frombytes("YCbCr", (2, 1), bytes([16, 128, 128, 200, 100, 50])).convert("CMYK")),
+        ("convert-cmyk-to-rgb", lambda: Image.frombytes("CMYK", (2, 1), bytes([0, 255, 0, 0, 128, 64, 32, 16])).convert("RGB")),
+        ("convert-cmyk-to-l", lambda: Image.frombytes("CMYK", (2, 1), bytes([0, 255, 0, 0, 128, 64, 32, 16])).convert("L")),
+        ("convert-p-to-cmyk", lambda: _palette_image().convert("CMYK")),
         ("save-module", lambda: pillow_rs.save(Image.new("RGB", (4, 4)), "/tmp/imagecore-save-test.png", format="PNG")),
         ("thumbnail-module", lambda: pillow_rs.thumbnail(Image.new("RGB", (8, 8)), (4, 4))),
         ("eval-module", lambda: pillow_rs.eval(Image.new("L", (4, 4)), lambda v: v)),
@@ -322,6 +339,7 @@ def run_native_cases() -> tuple[int, int, int]:
         # getdata indexing, float alpha, palette/default transparency paths.
         ("frombytes-instance", lambda: Image.new("L", (2, 2)).frombytes(b"\x01\x02\x03\x04")),
         ("frombytes-instance-bad-decoder", lambda: Image.new("L", (2, 2)).frombytes(b"\x00", "BOGUS")),
+        ("frombytes-invalid-mode", lambda: Image.frombytes("BOGUS", (1, 1), b"\x00")),
         ("frombytes-class-p-mode", lambda: Image.frombytes("P", (2, 2), b"\x01\x02\x03\x04")),
         ("frombytes-class-cmyk", lambda: Image.frombytes("CMYK", (1, 1), b"\x00\x00\x00\x00")),
         ("tobytes-encoder-mismatch", lambda: Image.new("L", (1, 1)).tobytes("raw", "BOGUS")),
@@ -335,6 +353,22 @@ def run_native_cases() -> tuple[int, int, int]:
         ("pixel-access-repr", lambda: repr(Image.new("L", (1, 1)).load())),
         ("save-path-object", lambda: Image.new("RGB", (4, 4)).save("/tmp/imagecore-save3.png", format="PNG")),
         ("convert-p-default-mode", lambda: Image.new("P", (4, 4)).convert()),
+        ("convert-one-to-l", lambda: Image.frombytes("1", (8, 1), b"\xaa").convert("L")),
+        ("convert-one-to-rgb", lambda: Image.frombytes("1", (8, 1), b"\xaa").convert("RGB")),
+        ("convert-one-to-cmyk", lambda: Image.frombytes("1", (8, 1), b"\xaa").convert("CMYK")),
+        ("convert-ycbcr-to-one", lambda: Image.frombytes("YCbCr", (2, 1), bytes([16, 128, 128, 200, 100, 50])).convert("1", dither=0)),
+        ("convert-hsv-to-one", lambda: Image.frombytes("HSV", (2, 1), bytes([0, 255, 255, 64, 128, 192])).convert("1", dither=0)),
+        ("convert-cmyk-to-one", lambda: Image.frombytes("CMYK", (2, 1), bytes([0, 255, 0, 0, 128, 64, 32, 16])).convert("1", dither=0)),
+        ("convert-i-to-one", lambda: Image.frombytes("I", (2, 2), _i32_bytes([0, 64, 128, 255])).convert("1", dither=0)),
+        ("convert-f-to-one", lambda: Image.frombytes("F", (2, 2), _f32_bytes([0.0, 0.25, 0.5, 1.0])).convert("1", dither=0)),
+        ("tobytes-unpacked-one", lambda: _imaging_core_one().tobytes()),
+        ("putpixel-p-out-of-bounds", lambda: Image.new("P", (2, 2), 0).putpixel((2, 0), 1)),
+        ("putpixel-p-palette-append", lambda: _palette_image().putpixel((0, 0), (9, 8, 7))),
+        ("putpixel-p-full-palette-replace", lambda: _full_palette_image().putpixel((0, 0), (9, 8, 7))),
+        ("putpixel-p-full-palette-exhausted", lambda: _exhausted_palette_image().putpixel((0, 0), (9, 8, 7))),
+        ("resize-rgb-materialized", lambda: _materialize_resize(Image.new("RGB", (4, 4)), 0)),
+        ("resize-palette-nearest-materialized", lambda: _materialize_resize(_palette_image(), 0)),
+        ("resize-palette-bicubic-materialized", lambda: _materialize_resize(_palette_image(), 3)),
         ("filter-callable-p", lambda: _filter_callable(Image.new("P", (4, 4)))),
         ("filter-parametric-p", lambda: _filter_parametric(Image.new("P", (4, 4)))),
         ("filter-p-string", lambda: Image.new("P", (4, 4)).filter("BLUR")),
@@ -500,6 +534,51 @@ def _f32_bytes(values) -> bytes:
     import struct
 
     return struct.pack("<4f", *values)
+
+
+def _rgb_pattern() -> Image:
+    return Image.frombytes(
+        "RGB",
+        (4, 1),
+        bytes((0, 0, 0, 64, 96, 128, 127, 160, 192, 255, 255, 255)),
+    )
+
+
+def _palette_image() -> Image:
+    image = Image.frombytes("P", (2, 2), b"\x00\x01\x02\x03")
+    image.putpalette([0, 0, 0, 255, 0, 0, 0, 255, 0, 255, 255, 255])
+    return image
+
+
+def _full_palette_image() -> Image:
+    image = Image.frombytes("P", (2, 2), b"\x00\x01\x02\x03")
+    image.putpalette([value for index in range(256) for value in (index, index, index)])
+    return image
+
+
+def _exhausted_palette_image() -> Image:
+    image = Image.frombytes("P", (16, 16), bytes(range(256)))
+    image.putpalette([value for index in range(256) for value in (index, index, index)])
+    return image
+
+
+def _composite_palette() -> None:
+    result = Image.composite(
+        _palette_image(),
+        _palette_image(),
+        Image.new("L", (2, 2), 128),
+    )
+    result.tobytes()
+
+
+def _materialize_resize(image: Image, resample: int) -> None:
+    image.resize((3, 3), resample=resample).tobytes()
+
+
+def _imaging_core_one():
+    from pillow_rs.imagefont import ImagingCore
+
+    return ImagingCore(Image.frombytes("1", (8, 1), b"\xaa"))
 
 
 def _stat_of(image: Image) -> None:

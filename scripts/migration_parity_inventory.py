@@ -55,6 +55,16 @@ EXPECTED_MODULES = (
 EXPECTED_LEGACY_ROWS = 199
 EXPECTED_LEGACY_UNIQUE_ENDPOINTS = 197
 
+# ``Image.show`` is retained in the deprecated authority for accounting, but
+# it is not part of the active selected-scope contract.  Calling it can open
+# an external viewer or block indefinitely in headless parity/coverage runs.
+EXCLUDED_ENDPOINTS = {
+    "PIL.Image.Image::show": (
+        "Headless parity, coverage, and benchmark workflows must not invoke "
+        "the external Image.show viewer."
+    ),
+}
+
 
 @dataclass(frozen=True, order=True)
 class LegacyRef:
@@ -138,6 +148,34 @@ CORRECTIONS: tuple[Endpoint, ...] = (
         correction_reason=(
             "Public constructor required to construct the receiver for every "
             "inventoried PIL.ImagePalette.ImagePalette method."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.ImageSequence.Iterator",
+        operation="__iter__",
+        kind="method",
+        source_path="PIL.ImageSequence.Iterator.__iter__",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "The public iterator protocol is required to express real "
+            "ImageSequence iteration workflows; the deprecated authority "
+            "listed only the constructor."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.ImageSequence.Iterator",
+        operation="__next__",
+        kind="method",
+        source_path="PIL.ImageSequence.Iterator.__next__",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "The public iterator protocol is required to compare first-frame "
+            "success and StopIteration; the deprecated authority listed only "
+            "the constructor."
         ),
     ),
     *tuple(
@@ -366,6 +404,8 @@ def iter_legacy_seeds(manifest: dict[str, Any]) -> Iterable[EndpointSeed]:
 
 def derive_inventory(
     authority_path: Path = AUTHORITY_PATH,
+    *,
+    include_excluded: bool = False,
 ) -> tuple[list[Endpoint], int]:
     manifest = load_authority(authority_path)
     seeds = list(iter_legacy_seeds(manifest))
@@ -439,6 +479,12 @@ def derive_inventory(
     ids = [endpoint.id for endpoint in endpoints]
     if len(ids) != len(set(ids)):
         raise ValueError("canonical endpoint IDs are not unique")
+    if not include_excluded:
+        endpoints = [
+            endpoint
+            for endpoint in endpoints
+            if endpoint.id not in EXCLUDED_ENDPOINTS
+        ]
     return endpoints, len(seeds)
 
 

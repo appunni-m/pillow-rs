@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: abb25ed0681baf2d7404711e52bfadb954c2b449d7eec4e6facfce7b76f8201d
+manifest_sha256: 2640544d6c0b5c0063bd43dcd322582bac89efe600bfc9be2b79133f524d4dd3
 statement_status: declared
 ```
 
@@ -17,11 +17,11 @@ statement_status: declared
 - Oracle: `Pillow 12.2.0`
 - Target profiles: `python-cpu`
 - Public surfaces: 22
-- Operations: 204
-- Requirements: 1782
-- Indexed parity cases: 1389
+- Operations: 203
+- Requirements: 1776
+- Indexed parity cases: 1645
 - Indexed coverage plans: 22
-- Indexed benchmark workloads: 203
+- Indexed benchmark workloads: 202
 
 ## Declared operations
 
@@ -85,7 +85,6 @@ statement_status: declared
 | `PIL.Image.Image` | `rotate` | `method` | `PIL.Image.Image.rotate` | `pillow_rs.Image.rotate` | 23 |
 | `PIL.Image.Image` | `save` | `method` | `PIL.Image.Image.save` | `pillow_rs.Image.save` | 22 |
 | `PIL.Image.Image` | `seek` | `method` | `PIL.Image.Image.seek` | `pillow_rs.Image.seek` | 11 |
-| `PIL.Image.Image` | `show` | `method` | `PIL.Image.Image.show` | `pillow_rs.Image.show` | 4 |
 | `PIL.Image.Image` | `size` | `property_get` | `PIL.Image.Image.size` | `pillow_rs.Image.size` | 2 |
 | `PIL.Image.Image` | `split` | `method` | `PIL.Image.Image.split` | `pillow_rs.Image.split` | 8 |
 | `PIL.Image.Image` | `tell` | `method` | `PIL.Image.Image.tell` | `pillow_rs.Image.tell` | 10 |
@@ -203,7 +202,7 @@ statement_status: declared
 | `PIL.ImageOps` | `crop` | `function` | `PIL.ImageOps.crop` | `pillow_rs.ImageOps.crop` | 8 |
 | `PIL.ImageOps` | `deform` | `function` | `PIL.ImageOps.deform` | `pillow_rs.ImageOps.deform` | 5 |
 | `PIL.ImageOps` | `equalize` | `function` | `PIL.ImageOps.equalize` | `pillow_rs.ImageOps.equalize` | 8 |
-| `PIL.ImageOps` | `exif_transpose` | `function` | `PIL.ImageOps.exif_transpose` | `pillow_rs.ImageOps.exif_transpose` | 6 |
+| `PIL.ImageOps` | `exif_transpose` | `function` | `PIL.ImageOps.exif_transpose` | `pillow_rs.ImageOps.exif_transpose` | 4 |
 | `PIL.ImageOps` | `expand` | `function` | `PIL.ImageOps.expand` | `pillow_rs.ImageOps.expand` | 9 |
 | `PIL.ImageOps` | `fit` | `function` | `PIL.ImageOps.fit` | `pillow_rs.ImageOps.fit` | 11 |
 | `PIL.ImageOps` | `flip` | `function` | `PIL.ImageOps.flip` | `pillow_rs.ImageOps.flip` | 7 |

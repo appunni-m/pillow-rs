@@ -232,17 +232,18 @@ class FreeTypeFont:
         if index != 0:
             raise OSError("invalid argument")
         layout_engine = _normalize_layout_engine(layout_engine)
+        layout_engine_name = layout_engine.name if layout_engine is not None else None
         self.path = font
         if isinstance(font, (str, bytes, os.PathLike)):
             font_path = os.fspath(font)
             self._font_path = font
             self._rust_font = _core.ImageFont.truetype(
-                os.fsdecode(font_path), float(size)
+                os.fsdecode(font_path), float(size), int(index), encoding, layout_engine_name
             )
         elif hasattr(font, 'read'):
             self._font_data = font.read()
             self._rust_font = _core.ImageFont.truetype_from_bytes(
-                self._font_data, float(size)
+                self._font_data, float(size), int(index), encoding, layout_engine_name
             )
         else:
             raise TypeError("font must be a file path or file-like object")
@@ -259,11 +260,12 @@ class FreeTypeFont:
     @classmethod
     def _from_font_data(cls, data, size=10, index=0, encoding="", layout_engine=None):
         layout_engine = _normalize_layout_engine(layout_engine)
+        layout_engine_name = layout_engine.name if layout_engine is not None else None
         font = object.__new__(cls)
         font.path = None
         font._font_data = bytes(data)
         font._rust_font = _core.ImageFont.truetype_from_bytes(
-            font._font_data, float(size)
+            font._font_data, float(size), int(index), encoding, layout_engine_name
         )
         font.size = float(size)
         font.index = index
@@ -276,15 +278,21 @@ class FreeTypeFont:
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
         _validate_layout_options(features, direction, language)
+        text = str(text)
+        if mode == "" and stroke_width == 0 and anchor is None:
+            return self._rust_font.getbbox(text)
         return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
-            str(text), _none_if_empty(mode), direction, features, language,
+            text, _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor
         ))
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
         _validate_layout_options(features, direction, language)
+        text = str(text)
+        if mode == "":
+            return self._rust_font.getlength_alpha(text)
         return self._rust_font.getlength_with_options(
-            str(text), _none_if_empty(mode), direction, features, language
+            text, _none_if_empty(mode), direction, features, language
         )
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
@@ -293,8 +301,12 @@ class FreeTypeFont:
         from .image import Image as PILImage
         _validate_layout_options(features, direction, language)
         _validate_start(start)
+        text = str(text)
+        if mode == "" and stroke_width == 0 and anchor is None and ink == 0 and start is None:
+            w, h, alpha = self._rust_font.getmask_alpha(text)
+            return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
         w, h, alpha = self._rust_font.getmask_alpha_with_options(
-            str(text), _none_if_empty(mode), direction, features, language,
+            text, _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor, ink, start
         )
         return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
@@ -325,8 +337,20 @@ class FreeTypeFont:
         from .image import Image as PILImage
         _validate_layout_options(features, direction, language)
         _validate_start(start)
+        text = str(text)
+        if (
+            mode == ""
+            and stroke_width == 0
+            and anchor is None
+            and ink == 0
+            and start is None
+            and not args
+            and not kwargs
+        ):
+            image, offset = self._rust_font.getmask2_image(text)
+            return ImagingCore(PILImage(image)), offset
         image, offset = self._rust_font.getmask2_image_with_options(
-            str(text), _none_if_empty(mode), direction, features, language,
+            text, _none_if_empty(mode), direction, features, language,
             float(stroke_width), anchor, ink, start,
             bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
         )
