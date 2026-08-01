@@ -45,6 +45,20 @@ fn ycbcr_luma8(img: &crate::raster::DynamicImage) -> crate::raster::GrayImage {
     })
 }
 
+/// Per-entry alpha table Pillow applies when converting a palette image to an
+/// alpha band: a single transparent index becomes 0 with everything else 255,
+/// a PNG `tRNS` table is used verbatim.
+fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
+    match img.pending_palette_transparency()? {
+        crate::image::PaletteTransparency::Index(index) => {
+            let mut table = vec![255u8; 256];
+            table[usize::from(index)] = 0;
+            Some(table)
+        }
+        crate::image::PaletteTransparency::Table(alpha) => Some(alpha),
+    }
+}
+
 fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
     match s {
         Some("NONE") | Some("none") => Some(DitherMethod::None),
@@ -126,7 +140,14 @@ impl Image {
         // These modes store pixel data in standard DynamicImage containers but with
         // a different interpretation (e.g., CMYK values stored as RGBA). We must
         // materialize first and convert using PIL's exact algorithms.
-        if let Some(src_mode) = self.explicit_mode() {
+        // Lazy Bytes images report no explicit mode; fall back to the decoded
+        // mode so non-standard sources (P, CMYK, I, F, HSV, YCbCr) take the
+        // palette/transparency-aware conversion path even before load().
+        let effective_src_mode = self
+            .explicit_mode()
+            .map(str::to_owned)
+            .unwrap_or_else(|| src_mode.clone());
+        if let Some(src_mode) = Some(effective_src_mode.as_str()) {
             let target_is_standard = !is_nonstandard_mode(mode);
             // Non-standard sources must be materialized and converted to RGB
             // before reaching a standard target OR a CMYK target (Pillow's
@@ -151,8 +172,44 @@ impl Image {
                     } else if mode == "L" {
                         DynamicImage::ImageLuma8(color::pil_grayscale(&converted)?)
                     } else {
-                        DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&converted)?)
+                        let mut la = color::pil_grayscale_alpha(&converted)?;
+                        if src_mode == "P" {
+                            // Pillow carries palette transparency into the LA
+                            // alpha band (putpalettealpha before converting).
+                            let indices = img.to_luma8();
+                            if let Some(table) = palette_alpha_for_convert(self) {
+                                for (op, ip) in la.pixels_mut().zip(indices.pixels()) {
+                                    op[1] = table.get(usize::from(ip[0])).copied().unwrap_or(255);
+                                }
+                            }
+                        }
+                        DynamicImage::ImageLumaA8(la)
                     }
+                } else if mode == "PA" && src_mode == "P" {
+                    // Pillow P->PA keeps the palette indices with the palette
+                    // alpha band (opaque unless a transparency marks entries).
+                    let indices = img.to_luma8();
+                    let (w, h) = indices.dimensions();
+                    let mut pa = crate::raster::GrayAlphaImage::new(w, h);
+                    let table = palette_alpha_for_convert(self);
+                    for (op, ip) in pa.pixels_mut().zip(indices.pixels()) {
+                        op[0] = ip[0];
+                        op[1] = table
+                            .as_ref()
+                            .and_then(|t| t.get(usize::from(ip[0])))
+                            .copied()
+                            .unwrap_or(255);
+                    }
+                    let loaded = crate::image::Image::Loaded(crate::image::LoadedData {
+                        image: std::sync::Arc::new(crate::raster::DynamicImage::ImageLumaA8(pa)),
+                        explicit_mode: Some("PA".to_owned()),
+                        decoded_mode: crate::raster::ColorType::La8.into(),
+                        palette: palette.map(|p| p.to_vec()),
+                        palette_alpha: self.palette_alpha(),
+                        source_format: None,
+                        info: None,
+                    });
+                    return Ok(loaded);
                 } else if mode == "RGBA" {
                     // P sources with palette alpha keep per-entry alpha when
                     // converting to RGBA; the RGB-only nonstandard path would
