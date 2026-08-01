@@ -4930,6 +4930,15 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "putdata",
+            "requirement_suffix": "parameter.data",
+            "name": "l-too-many-entries",
+            "mode": "L",
+            "size": [3, 3],
+            "values": {"data": literal(list(range(10)))},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "i-mode",
             "observe_receiver": True,

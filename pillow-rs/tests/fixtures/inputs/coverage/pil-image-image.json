@@ -1012,6 +1012,7 @@
           "PIL.Image.Image.paste.nuanced.i-two-tuple-error",
           "PIL.Image.Image.alpha_composite.nuanced.offset-source",
           "PIL.Image.Image.putdata.nuanced.l-bytes",
+          "PIL.Image.Image.putdata.nuanced.l-too-many-entries",
           "PIL.Image.Image.putdata.nuanced.i-mode",
           "PIL.Image.Image.putdata.nuanced.f-mode",
           "PIL.Image.Image.putdata.nuanced.clipped-values",
