@@ -129,6 +129,21 @@ pub enum PutDataValue {
     Components(Vec<i128>),
 }
 
+#[derive(Clone, Copy)]
+enum FromBytesMode {
+    L,
+    LA,
+    RGB,
+    RGBA,
+    CMYK,
+    HSV,
+    YCbCr,
+    I,
+    F,
+    P,
+    Mode1,
+}
+
 fn putdata_clip_u8(value: f64) -> u8 {
     if value.is_nan() || value >= 255.0 {
         255
@@ -540,18 +555,26 @@ impl Image {
     /// unsupported, or `data` is shorter than the required mode layout.
     pub fn frombytes(mode: &str, size: (u32, u32), data: &[u8]) -> Result<Self, PilError> {
         let (w, h) = size;
-        if !matches!(
-            mode,
-            "L" | "LA" | "RGB" | "RGBA" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P" | "1"
-        ) {
-            return Err(PilError::ValueError("unrecognized image mode".into()));
-        }
+        let frombytes_mode = match mode {
+            "L" => FromBytesMode::L,
+            "LA" => FromBytesMode::LA,
+            "RGB" => FromBytesMode::RGB,
+            "RGBA" => FromBytesMode::RGBA,
+            "CMYK" => FromBytesMode::CMYK,
+            "HSV" => FromBytesMode::HSV,
+            "YCbCr" => FromBytesMode::YCbCr,
+            "I" => FromBytesMode::I,
+            "F" => FromBytesMode::F,
+            "P" => FromBytesMode::P,
+            "1" => FromBytesMode::Mode1,
+            _ => return Err(PilError::ValueError("unrecognized image mode".into())),
+        };
         if w == 0 || h == 0 {
             // Pillow accepts empty frombytes images and ignores the payload
             // because there are no samples to decode. Reuse the established
             // empty-image constructors while keeping CheckedDims strict for
             // all non-empty allocations.
-            if mode == "P" {
+            if matches!(frombytes_mode, FromBytesMode::P) {
                 return Ok(Image::Paletted(PalettedData {
                     indices: crate::raster::GrayImage::from_pixel(w, h, crate::raster::Luma([0u8])),
                     palette: Vec::new(),
@@ -563,41 +586,38 @@ impl Image {
             }
             return Self::new(w, h, mode, (0, 0, 0, 0));
         }
-        let expected = match mode {
-            "L" => CheckedDims::new(w, h, 1)?.total_bytes(),
-            "LA" => CheckedDims::new(w, h, 2)?.total_bytes(),
-            "RGB" | "HSV" | "YCbCr" => CheckedDims::new(w, h, 3)?.total_bytes(),
-            "RGBA" | "CMYK" | "I" | "F" => CheckedDims::new(w, h, 4)?.total_bytes(),
-            "P" => CheckedDims::new(w, h, 1)?.total_bytes(),
-            "1" => (w as usize).div_ceil(8) * h as usize,
-            _ => {
-                return Err(PilError::ValueError(format!(
-                    "frombytes: unsupported mode {}",
-                    mode
-                )));
+        let expected = match frombytes_mode {
+            FromBytesMode::L | FromBytesMode::P => CheckedDims::new(w, h, 1)?.total_bytes(),
+            FromBytesMode::LA => CheckedDims::new(w, h, 2)?.total_bytes(),
+            FromBytesMode::RGB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
+                CheckedDims::new(w, h, 3)?.total_bytes()
             }
+            FromBytesMode::RGBA | FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => {
+                CheckedDims::new(w, h, 4)?.total_bytes()
+            }
+            FromBytesMode::Mode1 => (w as usize).div_ceil(8) * h as usize,
         };
         if data.len() < expected {
             return Err(PilError::ValueError("not enough image data".into()));
         }
-        let img = match mode {
-            "L" => DynamicImage::ImageLuma8(
+        let img = match frombytes_mode {
+            FromBytesMode::L => DynamicImage::ImageLuma8(
                 crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "RGB" => DynamicImage::ImageRgb8(
+            FromBytesMode::RGB => DynamicImage::ImageRgb8(
                 crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "RGBA" => DynamicImage::ImageRgba8(
+            FromBytesMode::RGBA => DynamicImage::ImageRgba8(
                 crate::raster::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "LA" => DynamicImage::ImageLumaA8(
+            FromBytesMode::LA => DynamicImage::ImageLumaA8(
                 crate::raster::GrayAlphaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "P" => {
+            FromBytesMode::P => {
                 return Ok(Image::Paletted(PalettedData {
                     indices: crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
@@ -610,15 +630,15 @@ impl Image {
                     materialized: materialization_cache(),
                 }));
             }
-            "CMYK" | "I" | "F" => DynamicImage::ImageRgba8(
+            FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => DynamicImage::ImageRgba8(
                 crate::raster::RgbaImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "HSV" | "YCbCr" => DynamicImage::ImageRgb8(
+            FromBytesMode::HSV | FromBytesMode::YCbCr => DynamicImage::ImageRgb8(
                 crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
-            "1" => {
+            FromBytesMode::Mode1 => {
                 // PIL packs 8 pixels per byte, MSB first, rows padded to byte boundary
                 let row_bytes = (w as usize).div_ceil(8);
                 let mut pixels = CheckedDims::new(w, h, 1)?.alloc_buffer();
@@ -626,7 +646,7 @@ impl Image {
                     for x in 0..w as usize {
                         let byte_idx = y * row_bytes + x / 8;
                         let bit_idx = 7 - (x % 8); // MSB first
-                        let val = if byte_idx < data.len() && (data[byte_idx] >> bit_idx) & 1 != 0 {
+                        let val = if (data[byte_idx] >> bit_idx) & 1 != 0 {
                             255
                         } else {
                             0
@@ -639,22 +659,19 @@ impl Image {
                         .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
                 )
             }
-            _ => {
-                // CMYK, HSV, YCbCr, I, F stored as RGBA bytes
-                let expected = (w * h * 4) as usize;
-                let mut pixels = vec![0u8; expected];
-                let copy_len = data.len().min(expected);
-                pixels[..copy_len].copy_from_slice(&data[..copy_len]);
-                DynamicImage::ImageRgba8(
-                    crate::raster::RgbaImage::from_raw(w, h, pixels).ok_or_else(|| {
-                        PilError::ValueError("frombytes: RGBA buffer error".into())
-                    })?,
-                )
-            }
         };
-        let explicit_mode = match mode {
-            "1" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
-            _ => None,
+        let explicit_mode = match frombytes_mode {
+            FromBytesMode::Mode1
+            | FromBytesMode::CMYK
+            | FromBytesMode::HSV
+            | FromBytesMode::YCbCr
+            | FromBytesMode::I
+            | FromBytesMode::F => Some(mode.to_string()),
+            FromBytesMode::L
+            | FromBytesMode::LA
+            | FromBytesMode::RGB
+            | FromBytesMode::RGBA
+            | FromBytesMode::P => None,
         };
         Ok(Image::from_dynamic(img, explicit_mode))
     }
