@@ -1153,6 +1153,8 @@
           "PIL.Image.Image.quantize.nuanced.mediancut-kmeans-2",
           "PIL.Image.Image.quantize.nuanced.mediancut-default",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency",
+          "PIL.Image.Image.convert.nuanced.opened-p-transparency",
+          "PIL.Image.Image.convert.nuanced.opened-p-transparency-to-rgb",
           "PIL.Image.Image.histogram.nuanced.opened-rgba",
           "PIL.Image.Image.entropy.nuanced.opened-l",
           "PIL.Image.Image.save.nuanced.opened-rgb-bmp",

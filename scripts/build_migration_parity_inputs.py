@@ -4625,6 +4625,22 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgba",
+            "name": "opened-p-transparency",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "opened-p-transparency-to-rgb",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "histogram",
             "requirement_suffix": "mode.rgba",
             "name": "opened-rgba",

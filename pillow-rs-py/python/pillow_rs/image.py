@@ -390,6 +390,14 @@ class Image:
         img = Image(rust_image)
         if mode in ("CMYK", "YCbCr", "HSV", "I", "F", "P", "1"):
             img._explicit_mode = mode
+        # Pillow carries a single palette transparency index through convert
+        # to RGB/L as the palette-converted color and drops it for alpha
+        # modes; the Rust core computes the transformed value.
+        transparency = self._rust_image.converted_palette_transparency(mode)
+        if transparency is not None:
+            img._info["transparency"] = (
+                transparency[0] if len(transparency) == 1 else tuple(transparency)
+            )
         return img
 
     def paste(
