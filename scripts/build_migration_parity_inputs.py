@@ -4877,6 +4877,34 @@ def build_nuanced_cases(
             "name": "webp-rgba-opened",
             "scenario_asset": "image/rgba-small.webp",
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "entropy",
+            "requirement_suffix": "parameter.mask",
+            "name": "mask-size-mismatch",
+            "mode": "L",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "entropy",
+            "requirement_suffix": "parameter.mask",
+            "name": "bad-mask-mode",
+            "mode": "L",
+            "mask_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "p-mode-rgb-color",
+            "mode": "P",
+            "values": {
+                "xy": literal([1, 1]),
+                "value": literal([255, 0, 0]),
+            },
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}

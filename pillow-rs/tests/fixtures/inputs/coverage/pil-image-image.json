@@ -1186,7 +1186,10 @@
           "PIL.Image.Image.verify.nuanced.bmp-rgb-opened",
           "PIL.Image.Image.verify.nuanced.tiff-rgb-opened",
           "PIL.Image.Image.verify.nuanced.webp-rgb-opened",
-          "PIL.Image.Image.verify.nuanced.webp-rgba-opened"
+          "PIL.Image.Image.verify.nuanced.webp-rgba-opened",
+          "PIL.Image.Image.entropy.nuanced.mask-size-mismatch",
+          "PIL.Image.Image.entropy.nuanced.bad-mask-mode",
+          "PIL.Image.Image.putpixel.nuanced.p-mode-rgb-color"
         ],
         "command_ids": [
           "coverage-imagecore-native"
