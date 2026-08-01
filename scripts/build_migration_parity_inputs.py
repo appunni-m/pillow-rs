@@ -5822,6 +5822,14 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "la-scalar-float",
+            "mode": "LA",
+            "values": {"data": literal([1.5] * 9)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "rgb-invalid-component-count",
             "mode": "RGB",
             "values": {

@@ -28,6 +28,7 @@ use pyo3::types::PyBytes;
 use pyo3::types::PyBytesMethods;
 use pyo3::types::PyDict;
 use pyo3::types::PyDictMethods;
+use pyo3::types::PyFloat;
 use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyListMethods;
@@ -110,7 +111,10 @@ fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
 fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<PutDataValue> {
     if matches!(mode, "1" | "L" | "P" | "I" | "F") {
         if python_is_sequence(value) {
-            return Err(PyTypeError::new_err("sequence must be flattened"));
+            // Preserve the shape distinction for the core's canonical
+            // "sequence must be flattened" error instead of terminating in
+            // the binding before putdata_bytes sees the value.
+            return Ok(PutDataValue::Components(Vec::new()));
         }
         // Pillow's numeric `_putdata` path deliberately clears conversion
         // errors after writing the sentinel returned by PyFloat_AsDouble.
@@ -119,6 +123,14 @@ fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<P
 
     if value.is_instance_of::<PyInt>() {
         return value.extract::<i64>().map(PutDataValue::Packed);
+    }
+
+    // Multiband Pillow putdata rejects scalar floats through the same shape
+    // validation as other non-tuple values. Preserve the numeric distinction
+    // for the core so it owns the public error contract instead of the
+    // binding short-circuiting that path.
+    if value.is_instance_of::<PyFloat>() {
+        return value.extract::<f64>().map(PutDataValue::Number);
     }
 
     let Ok(tuple) = value.downcast::<PyTuple>() else {

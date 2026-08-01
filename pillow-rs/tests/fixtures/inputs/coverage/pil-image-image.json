@@ -1040,6 +1040,7 @@
           "PIL.Image.Image.putdata.nuanced.cmyk-tuples",
           "PIL.Image.Image.putdata.nuanced.la-tuples",
           "PIL.Image.Image.putdata.nuanced.la-invalid-component-count",
+          "PIL.Image.Image.putdata.nuanced.la-scalar-float",
           "PIL.Image.Image.putdata.nuanced.rgb-invalid-component-count",
           "PIL.Image.Image.putdata.nuanced.l-nested-sequence",
           "PIL.Image.Image.paste.nuanced.l-from-rgb",
