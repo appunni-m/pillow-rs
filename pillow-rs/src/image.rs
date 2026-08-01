@@ -1586,9 +1586,11 @@ impl Image {
             let sum2: f64 = band.iter().map(|&x| (x as f64) * (x as f64)).sum();
             let mean = sum / count;
             let rms = (sum2 / count).sqrt();
-            // PIL computes variance as: (sum2 - sum*sum/count) / count — avoids rms rounding
+            // Pillow 12.2 returns the raw floating-point expression here. It
+            // intentionally preserves tiny negative round-off values (for
+            // example, a 7,292,605-pixel uniform L=182 image produces
+            // -4.184729342258356e-12), so do not clamp the result.
             let var = (sum2 - sum * sum / count) / count;
-            let var = if var < 0.0 { 0.0 } else { var };
             let stddev = var.sqrt();
             let min = band[0] as f64;
             let max = band[band.len() - 1] as f64;
