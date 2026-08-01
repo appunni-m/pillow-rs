@@ -90,3 +90,21 @@ fn p_and_pa_pipelines_materialize() {
     pa.putalpha(255).expect("putalpha");
     let _ = pa.materialize().expect("pa materialize");
 }
+
+#[test]
+fn constructor_and_mode_arms() {
+    // P tuple color allocates palette entry zero (Image::new "P" arm).
+    let p = Image::new(4, 4, "P", (255, 0, 0, 255)).expect("new p tuple");
+    let _ = p.materialize().expect("materialize p");
+    // Bilevel and 4-band construction paths.
+    let _ = Image::new(4, 4, "1", (1, 0, 0, 0)).expect("new 1");
+    let _ = Image::new(4, 4, "LA", (100, 0, 0, 128)).expect("new la");
+    let _ = Image::new(4, 4, "PA", (100, 0, 0, 128)).expect("new pa");
+    // frombytes per-mode arms, including the packed "1" layout.
+    let packed = vec![0b1010_1010u8; 4];
+    let _ = Image::frombytes("1", (4, 4), &packed).expect("frombytes 1");
+    let _ = Image::frombytes("CMYK", (2, 2), &[0u8; 16]).expect("frombytes cmyk");
+    let _ = Image::frombytes("I", (2, 2), &[0u8; 16]).expect("frombytes i");
+    let _ = Image::frombytes("F", (2, 2), &[0u8; 16]).expect("frombytes f");
+    assert!(Image::frombytes("PA", (2, 2), &[0u8; 8]).is_err());
+}
