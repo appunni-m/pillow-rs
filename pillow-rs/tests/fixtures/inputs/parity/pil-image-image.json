@@ -59518,6 +59518,153 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.putpixel.nuanced.p-after-bitmap-no-palette-tuple",
+      "surface": "PIL.Image.Image",
+      "operation": "putpixel",
+      "covers": [
+        "PIL.Image.Image.putpixel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "raw-p-no-palette-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAw==",
+          "sha256": "c709faa7d08bbfafc87e29d350f3947c9b7b2ec5a498f2dcfda45fe87435a383",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "raw-p-no-palette-data"
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "bitmap",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "bitmap": {
+              "kind": "binding",
+              "step_id": "setup-bitmap-2"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": 7
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                9,
+                8,
+                7
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.putpixel.nuanced.rgb-y-out-of-bounds-tuple",
       "surface": "PIL.Image.Image",
       "operation": "putpixel",

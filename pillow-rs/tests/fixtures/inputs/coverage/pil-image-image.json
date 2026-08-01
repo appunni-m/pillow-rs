@@ -1359,6 +1359,7 @@
           "PIL.Image.Image.putpixel.nuanced.p-attached-palette-exact-match",
           "PIL.Image.Image.putpixel.nuanced.p-full-palette-exhausted",
           "PIL.Image.Image.putpixel.nuanced.raw-p-no-palette-tuple",
+          "PIL.Image.Image.putpixel.nuanced.p-after-bitmap-no-palette-tuple",
           "PIL.Image.Image.putpixel.nuanced.rgb-y-out-of-bounds-tuple",
           "PIL.Image.Image.putpixel.nuanced.p-full-palette-transparent-slot",
           "PIL.Image.Image.convert.nuanced.raw-p-without-palette-to-rgb",
