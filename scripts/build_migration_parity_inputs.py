@@ -607,6 +607,36 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "stat-median" and label == "image":
+            if requested_mode not in {"I", "F"}:
+                raise ValueError("stat-median edge requires I or F mode")
+            # The public wrapper accepts integer scalar values for putpixel;
+            # Pillow coerces the same values to float samples in F mode.
+            values = [0, 1, 2, 3]
+            step_id = self.add_step(
+                "PIL.Image",
+                "new",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal([4, 1]),
+                    "color": literal(0),
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            for index, value in enumerate(values):
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal([index, 0]),
+                        "value": literal(value),
+                    },
+                    step_id=f"setup-stat-median-{index}",
+                )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge == "raw-p-no-palette" and label == "image":
             if requested_mode != "P":
                 raise ValueError("raw-p-no-palette edge requires P mode")
@@ -5534,6 +5564,22 @@ def build_nuanced_cases(
             "mode": "F",
             "edge": "nonzero-pixel",
             "pixel": 200,
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "i-median-scan",
+            "mode": "I",
+            "edge": "stat-median",
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "f-median-scan",
+            "mode": "F",
+            "edge": "stat-median",
         },
         {
             "surface": "PIL.ImageStat.Stat",

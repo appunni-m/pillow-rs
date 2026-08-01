@@ -1479,9 +1479,10 @@ impl Image {
                 } else {
                     ((v - min_val) * scale).clamp(0.0, 255.0) as usize
                 };
-                if bin < 256 {
-                    hist[bin] += 1;
-                }
+                // `clamp` bounds every finite value to the histogram domain;
+                // Rust's float-to-`usize` conversion also maps NaN to zero.
+                // The index is therefore always one of the 256 slots.
+                hist[bin] += 1;
             }
             let count = n_pixels as f64;
             let sum: f64 = hist
