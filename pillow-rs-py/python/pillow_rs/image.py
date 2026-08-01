@@ -513,7 +513,7 @@ class Image:
         if kmeans < 0:
             raise ValueError("kmeans must not be negative")
         result = Image(
-            self._rust_image.quantize(colors, int(method), dither != 0)
+            self._rust_image.quantize(colors, int(method), int(kmeans), dither != 0)
         )
         # PIL: quantize returns a P-mode image with palette attached
         p = result._rust_image.palette()
