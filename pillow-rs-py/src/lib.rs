@@ -1773,6 +1773,10 @@ impl PyFont {
         pillow_rs::imagefont_getbbox(&self.inner, text).map_err(map_error)
     }
 
+    fn getbbox_bytes(&self, text: Vec<u8>) -> PyResult<(i32, i32, i32, i32)> {
+        pillow_rs::imagefont_getbbox_bytes(&self.inner, &text).map_err(map_error)
+    }
+
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn getbbox_with_options(
         &self,
@@ -1796,8 +1800,36 @@ impl PyFont {
         pillow_rs::imagefont_getbbox_with_options(&self.inner, text, &options).map_err(map_error)
     }
 
+    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
+    fn getbbox_bytes_with_options(
+        &self,
+        text: Vec<u8>,
+        mode: Option<String>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
+    ) -> PyResult<(f32, f32, f32, f32)> {
+        let options = pillow_rs::ImageFontTextOptions {
+            mode,
+            direction,
+            features,
+            language,
+            stroke_width,
+            anchor,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
+        pillow_rs::imagefont_getbbox_bytes_with_options(&self.inner, &text, &options)
+            .map_err(map_error)
+    }
+
     fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
         pillow_rs::imagefont_getmask(&self.inner, text).map_err(map_error)
+    }
+
+    fn getmask_alpha_bytes(&self, text: Vec<u8>) -> PyResult<(u32, u32, Vec<u8>)> {
+        pillow_rs::imagefont_getmask_bytes(&self.inner, &text).map_err(map_error)
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
@@ -1827,6 +1859,34 @@ impl PyFont {
         pillow_rs::imagefont_getmask_with_options(&self.inner, text, &options).map_err(map_error)
     }
 
+    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
+    fn getmask_alpha_bytes_with_options(
+        &self,
+        text: Vec<u8>,
+        mode: Option<String>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
+        ink: Option<i64>,
+        start: Option<(f64, f64)>,
+    ) -> PyResult<(u32, u32, Vec<u8>)> {
+        let options = pillow_rs::ImageFontTextOptions {
+            mode,
+            direction,
+            features,
+            language,
+            stroke_width,
+            anchor,
+            ink,
+            start,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
+        pillow_rs::imagefont_getmask_bytes_with_options(&self.inner, &text, &options)
+            .map_err(map_error)
+    }
+
     fn get_transposed_mask_image(
         &self,
         text: &str,
@@ -1848,6 +1908,23 @@ impl PyFont {
         let (width, height, pixels, offset) = match start {
             None => pillow_rs::imagefont_getmask2(&self.inner, text),
             Some(start) => pillow_rs::imagefont_getmask2_with_start(&self.inner, text, start),
+        }
+        .map_err(map_error)?;
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok((PyImage { inner }, offset))
+    }
+
+    #[pyo3(signature = (text, start=None))]
+    fn getmask2_image_bytes(
+        &self,
+        text: Vec<u8>,
+        start: Option<(f64, f64)>,
+    ) -> PyResult<(PyImage, (i32, i32))> {
+        let (width, height, pixels, offset) = match start {
+            None => pillow_rs::imagefont_getmask2_bytes(&self.inner, &text),
+            Some(start) => {
+                pillow_rs::imagefont_getmask2_bytes_with_start(&self.inner, &text, start)
+            }
         }
         .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
@@ -1890,12 +1967,52 @@ impl PyFont {
         Ok((PyImage { inner }, offset))
     }
 
+    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None, stroke_filled=false, has_args=false, has_kwargs=false))]
+    fn getmask2_image_bytes_with_options(
+        &self,
+        text: Vec<u8>,
+        mode: Option<String>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+        stroke_width: f32,
+        anchor: Option<String>,
+        ink: Option<i64>,
+        start: Option<(f64, f64)>,
+        stroke_filled: bool,
+        has_args: bool,
+        has_kwargs: bool,
+    ) -> PyResult<(PyImage, (i32, i32))> {
+        let options = pillow_rs::ImageFontTextOptions {
+            mode,
+            direction,
+            features,
+            language,
+            stroke_width,
+            stroke_filled,
+            anchor,
+            ink,
+            start,
+            has_args,
+            has_kwargs,
+        };
+        let (width, height, pixels, offset) =
+            pillow_rs::imagefont_getmask2_bytes_with_options(&self.inner, &text, &options)
+                .map_err(map_error)?;
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok((PyImage { inner }, offset))
+    }
+
     fn getlength(&self, text: &str) -> PyResult<i32> {
         pillow_rs::imagefont_native_getlength_26dot6(&self.inner, text).map_err(map_error)
     }
 
     fn getlength_alpha(&self, text: &str) -> PyResult<f32> {
         pillow_rs::imagefont_getlength(&self.inner, text).map_err(map_error)
+    }
+
+    fn getlength_bytes(&self, text: Vec<u8>) -> PyResult<f32> {
+        pillow_rs::imagefont_getlength_bytes(&self.inner, &text).map_err(map_error)
     }
 
     fn getsize(&self, text: &str) -> PyResult<((i32, i32), (i32, i32))> {
@@ -1996,6 +2113,26 @@ impl PyFont {
         pillow_rs::imagefont_getlength_with_options(&self.inner, text, &options).map_err(map_error)
     }
 
+    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None))]
+    fn getlength_bytes_with_options(
+        &self,
+        text: Vec<u8>,
+        mode: Option<String>,
+        direction: Option<String>,
+        features: Option<Vec<String>>,
+        language: Option<String>,
+    ) -> PyResult<f32> {
+        let options = pillow_rs::ImageFontTextOptions {
+            mode,
+            direction,
+            features,
+            language,
+            ..pillow_rs::ImageFontTextOptions::default()
+        };
+        pillow_rs::imagefont_getlength_bytes_with_options(&self.inner, &text, &options)
+            .map_err(map_error)
+    }
+
     fn getmetrics(&self) -> (u32, u32) {
         pillow_rs::imagefont_getmetrics(&self.inner)
     }
@@ -2066,7 +2203,7 @@ impl PyFont {
     }
 
     fn get_name(&self) -> (Option<String>, Option<String>) {
-        let (family, style) = pillow_rs::imagefont_getname(&self.inner);
+        let (family, style) = pillow_rs::imagefont_getname_optional(&self.inner);
         (family.map(ToOwned::to_owned), style.map(ToOwned::to_owned))
     }
 

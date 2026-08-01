@@ -278,6 +278,13 @@ class FreeTypeFont:
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
         _validate_layout_options(features, direction, language)
+        if isinstance(text, bytes):
+            if mode == "" and stroke_width == 0 and anchor is None:
+                return self._rust_font.getbbox_bytes(text)
+            return _pillow_bbox_tuple(self._rust_font.getbbox_bytes_with_options(
+                text, _none_if_empty(mode), direction, features, language,
+                float(stroke_width), anchor
+            ))
         text = str(text)
         if mode == "" and stroke_width == 0 and anchor is None:
             return self._rust_font.getbbox(text)
@@ -288,6 +295,12 @@ class FreeTypeFont:
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
         _validate_layout_options(features, direction, language)
+        if isinstance(text, bytes):
+            if mode == "":
+                return self._rust_font.getlength_bytes(text)
+            return self._rust_font.getlength_bytes_with_options(
+                text, _none_if_empty(mode), direction, features, language
+            )
         text = str(text)
         if mode == "":
             return self._rust_font.getlength_alpha(text)
@@ -301,6 +314,15 @@ class FreeTypeFont:
         from .image import Image as PILImage
         _validate_layout_options(features, direction, language)
         _validate_start(start)
+        if isinstance(text, bytes):
+            if mode == "" and stroke_width == 0 and anchor is None and ink == 0 and start is None:
+                w, h, alpha = self._rust_font.getmask_alpha_bytes(text)
+            else:
+                w, h, alpha = self._rust_font.getmask_alpha_bytes_with_options(
+                    text, _none_if_empty(mode), direction, features, language,
+                    float(stroke_width), anchor, ink, start
+                )
+            return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
         text = str(text)
         if mode == "" and stroke_width == 0 and anchor is None and ink == 0 and start is None:
             w, h, alpha = self._rust_font.getmask_alpha(text)
@@ -337,17 +359,33 @@ class FreeTypeFont:
         from .image import Image as PILImage
         _validate_layout_options(features, direction, language)
         _validate_start(start)
+        if isinstance(text, bytes):
+            if (
+                mode == ""
+                and stroke_width == 0
+                and anchor is None
+                and ink == 0
+                and not args
+                and not kwargs
+            ):
+                image, offset = self._rust_font.getmask2_image_bytes(text, start)
+                return ImagingCore(PILImage(image)), offset
+            image, offset = self._rust_font.getmask2_image_bytes_with_options(
+                text, _none_if_empty(mode), direction, features, language,
+                float(stroke_width), anchor, ink, start,
+                bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
+            )
+            return ImagingCore(PILImage(image)), offset
         text = str(text)
         if (
             mode == ""
             and stroke_width == 0
             and anchor is None
             and ink == 0
-            and start is None
             and not args
             and not kwargs
         ):
-            image, offset = self._rust_font.getmask2_image(text)
+            image, offset = self._rust_font.getmask2_image(text, start)
             return ImagingCore(PILImage(image)), offset
         image, offset = self._rust_font.getmask2_image_with_options(
             text, _none_if_empty(mode), direction, features, language,
@@ -495,6 +533,8 @@ class TransposedFont:
         """Create a bitmap for the text, optionally transposed."""
         if isinstance(self.font, FreeTypeFont):
             from .image import Image as PILImage
+            if isinstance(text, bytes):
+                text = text.decode("latin-1")
             image = self.font._rust_font.get_transposed_mask_image(
                 str(text), self._orientation_name
             )
