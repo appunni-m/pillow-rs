@@ -1137,7 +1137,15 @@
           "PIL.Image.Image.getbbox.nuanced.png-rgba-opened",
           "PIL.Image.Image.getbbox.nuanced.png-p-transparency",
           "PIL.Image.Image.getextrema.nuanced.png-rgba-opened",
-          "PIL.Image.Image.save.nuanced.opened-rgb"
+          "PIL.Image.Image.save.nuanced.opened-rgb",
+          "PIL.Image.Image.histogram.nuanced.nonzero-rgb",
+          "PIL.Image.Image.histogram.nuanced.mask-size-mismatch",
+          "PIL.Image.Image.convert.nuanced.from-one-to-l",
+          "PIL.Image.Image.convert.nuanced.from-one-to-rgb",
+          "PIL.Image.Image.convert.nuanced.from-cmyk-to-l",
+          "PIL.Image.Image.convert.nuanced.from-ycbcr",
+          "PIL.Image.Image.convert.nuanced.from-hsv-to-rgb",
+          "PIL.Image.Image.convert.nuanced.from-f-to-l"
         ],
         "command_ids": [
           "coverage-imagecore-native"

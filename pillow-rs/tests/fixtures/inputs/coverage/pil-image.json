@@ -267,6 +267,8 @@
           "PIL.Image.effect_mandelbrot.nuanced.quality-200",
           "PIL.Image.eval.nuanced.rgb-replicated-lut",
           "PIL.Image.eval.nuanced.clamp-shift-callable",
+          "PIL.Image.composite.nuanced.one-mask",
+          "PIL.Image.composite.nuanced.rgba-mask",
           "PIL.Image.alpha_composite.nuanced.mismatched-sizes"
         ],
         "command_ids": [
