@@ -249,6 +249,30 @@ def run(args: argparse.Namespace) -> int:
             check=True,
         )
 
+        # Exercise image-core internal paths the PIL surface cannot reach
+        # (backend lock routing, P/PA pipeline materialization) through the
+        # same instrumented toolchain so the merged report measures them.
+        subprocess.run(
+            [
+                "cargo",
+                "+nightly",
+                "test",
+                "--manifest-path",
+                str(ROOT / "pillow-rs" / "Cargo.toml"),
+                "--test",
+                "image_core_internal",
+            ],
+            env={
+                **os.environ,
+                "RUSTUP_TOOLCHAIN": "nightly",
+                "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
+                "LLVM_PROFILE_FILE": str(args.profile),
+                "CARGO_TARGET_DIR": str(LLVM_COV_TARGET),
+            },
+            cwd=ROOT,
+            check=True,
+        )
+
         llvm_version = subprocess.run(
             ["cargo", "+nightly", "llvm-cov", "--version"],
             capture_output=True,
