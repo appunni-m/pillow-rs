@@ -253,6 +253,21 @@ impl Image {
             }
         }
 
+        if mode == "PA" && src_mode == "L" {
+            // Pillow's Convert.c represents L->PA as the luma sample plus an
+            // opaque alpha byte. This path is used by Image.paste when a
+            // luma image is pasted into a palette-alpha destination.
+            let luma = self.materialize()?.to_luma8();
+            let (width, height) = luma.dimensions();
+            let pa = crate::raster::GrayAlphaImage::from_fn(width, height, |x, y| {
+                crate::raster::LumaA([luma.get_pixel(x, y)[0], 255])
+            });
+            return Ok(Image::from_dynamic(
+                DynamicImage::ImageLumaA8(pa),
+                Some("PA".to_owned()),
+            ));
+        }
+
         let dither_enum = parse_dither(dither);
 
         // Special case: converting to binary mode "1" — must eagerly execute

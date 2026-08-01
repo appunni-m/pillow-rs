@@ -1058,6 +1058,7 @@
           "PIL.Image.Image.paste.nuanced.color-pa-int",
           "PIL.Image.Image.paste.nuanced.color-pa-two-tuple",
           "PIL.Image.Image.paste.nuanced.pa-from-p",
+          "PIL.Image.Image.paste.nuanced.pa-from-l",
           "PIL.Image.Image.convert.nuanced.alpha-conversion",
           "PIL.Image.Image.convert.nuanced.rgb-to-cmyk",
           "PIL.Image.Image.convert.nuanced.hsv-to-cmyk",
