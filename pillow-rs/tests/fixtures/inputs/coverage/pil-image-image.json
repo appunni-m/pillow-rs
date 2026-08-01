@@ -1227,6 +1227,7 @@
           "PIL.Image.Image.entropy.nuanced.opened-l",
           "PIL.Image.Image.save.nuanced.opened-rgb-bmp",
           "PIL.Image.Image.getpalette.nuanced.opened-p",
+          "PIL.Image.Image.getpalette.nuanced.rgb-none-rgba",
           "PIL.Image.Image.getpalette.nuanced.opened-p-rgba",
           "PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha",
           "PIL.Image.Image.split.nuanced.opened-rgba",
