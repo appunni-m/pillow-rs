@@ -81,6 +81,8 @@
           "PIL.ImageStat.Stat.extrema.nuanced.rgba-empty-frombytes",
           "PIL.ImageStat.Stat.extrema.nuanced.i-varied",
           "PIL.ImageStat.Stat.extrema.nuanced.f-varied",
+          "PIL.ImageStat.Stat.extrema.nuanced.i-median-scan",
+          "PIL.ImageStat.Stat.extrema.nuanced.f-median-scan",
           "PIL.ImageStat.Stat.var.nuanced.l-large-uniform-rounding",
           "PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.one-mode",
