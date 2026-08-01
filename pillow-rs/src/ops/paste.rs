@@ -143,14 +143,24 @@ impl Image {
                 (x, y, width, height)
             }
             PastePlacement::Region(left, top, right, bottom) => {
-                let width = right
+                let raw_width = right
                     .checked_sub(left)
-                    .and_then(|value| u32::try_from(value).ok())
+                    .and_then(|value| u32::try_from(value).ok());
+                let raw_height = bottom
+                    .checked_sub(top)
+                    .and_then(|value| u32::try_from(value).ok());
+                let degenerate = raw_width.map_or(true, |value| value == 0)
+                    || raw_height.map_or(true, |value| value == 0);
+                // Pillow Paste.c no-ops a solid-color fill whose box is
+                // degenerate (zero area or inverted edges); image pastes still
+                // raise the mismatch error.
+                if degenerate && !matches!(source, PasteSource::Image(_)) {
+                    return Ok(());
+                }
+                let width = raw_width
                     .filter(|value| *value != 0)
                     .ok_or_else(|| PilError::ValueError("images do not match".to_owned()))?;
-                let height = bottom
-                    .checked_sub(top)
-                    .and_then(|value| u32::try_from(value).ok())
+                let height = raw_height
                     .filter(|value| *value != 0)
                     .ok_or_else(|| PilError::ValueError("images do not match".to_owned()))?;
                 (left, top, width, height)

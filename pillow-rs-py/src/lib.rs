@@ -354,10 +354,16 @@ impl PyImage {
         let src_la = im.extract::<(u8, u8)>().ok();
         let src_rgb = im.extract::<(u8, u8, u8)>().ok();
         let src_rgba = im.extract::<(u8, u8, u8, u8)>().ok();
-        let source = if let Some(img) = src_image {
-            PasteSource::Image(img)
-        } else if let Some((r, g, b, a)) = src_rgba {
-            PasteSource::Rgba(r, g, b, a)
+        let source = if src_image.is_some() || src_rgba.is_some() {
+            // Route the image/four-channel forms through the shared
+            // constructor so every binding reuses the same core path.
+            PasteSource::from_parts(
+                src_image,
+                src_rgba.map_or(0, |v| v.0),
+                src_rgba.map_or(0, |v| v.1),
+                src_rgba.map_or(0, |v| v.2),
+                src_rgba.map_or(0, |v| v.3),
+            )
         } else if let Some((r, g, b)) = src_rgb {
             PasteSource::Rgb(r, g, b)
         } else if let Some((l, a)) = src_la {

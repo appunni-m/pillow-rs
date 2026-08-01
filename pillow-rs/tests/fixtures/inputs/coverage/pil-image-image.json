@@ -1120,7 +1120,11 @@
           "PIL.Image.Image.getbands.nuanced.hsv",
           "PIL.Image.Image.getbands.nuanced.i-mode",
           "PIL.Image.Image.getbands.nuanced.f-mode",
-          "PIL.Image.Image.getbands.nuanced.pa-mode"
+          "PIL.Image.Image.getbands.nuanced.pa-mode",
+          "PIL.Image.Image.paste.nuanced.color-two-tuple-box",
+          "PIL.Image.Image.paste.nuanced.color-zero-region",
+          "PIL.Image.Image.paste.nuanced.region-mask-mismatch",
+          "PIL.Image.Image.paste.nuanced.p-source-into-pa"
         ],
         "command_ids": [
           "coverage-imagecore-native"
