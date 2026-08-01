@@ -1333,6 +1333,7 @@
           "PIL.Image.Image.putpixel.nuanced.p-full-palette-transparent-slot",
           "PIL.Image.Image.convert.nuanced.raw-p-without-palette-to-rgb",
           "PIL.Image.Image.putdata.nuanced.pa-tuples",
+          "PIL.Image.Image.putdata.nuanced.pa-invalid-component-count",
           "PIL.Image.Image.putdata.nuanced.rgb-four-tuples",
           "PIL.Image.Image.putdata.nuanced.rgba-three-tuples",
           "PIL.Image.Image.putdata.nuanced.l-nan-clips-high"

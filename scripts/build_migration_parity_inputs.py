@@ -8845,6 +8845,16 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "pa-invalid-component-count",
+            "mode": "PA",
+            "values": {
+                "data": literal([[1, 2, 3]] * 4),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "rgb-four-tuples",
             "observe_receiver": True,
             "mode": "RGB",
