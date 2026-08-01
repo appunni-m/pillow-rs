@@ -4616,6 +4616,35 @@ def build_nuanced_cases(
             "edge": "noise-fill",
             "seed": 12,
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency",
+            "scenario_asset": "image/p-transparency.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "mode.rgba",
+            "name": "opened-rgba",
+            "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "entropy",
+            "requirement_suffix": "mode.l",
+            "name": "opened-l",
+            "scenario_asset": "image/l-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.bmp",
+            "name": "opened-rgb-bmp",
+            "scenario_asset": "image/rgb-small.png",
+            "values": {"format": literal("BMP")},
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
