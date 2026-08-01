@@ -928,6 +928,13 @@ class WorkflowBuilder:
                         label="alpha",
                     )
                 )
+            if name == "mask" and self.scenario_mask_mode is not None:
+                return binding(
+                    self.ensure_image(
+                        mode=self.scenario_mask_mode,
+                        label="mask",
+                    )
+                )
             return binding(self.ensure_image(label=slug(parameter_id)))
         if name == "mask":
             if self.scenario_mask_mode is not None:
@@ -4421,6 +4428,114 @@ def build_nuanced_cases(
             "name": "opened-rgb",
             "scenario_asset": "image/rgb-small.png",
             "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "mode.rgb",
+            "name": "nonzero-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "mask-size-mismatch",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "bad-mask-mode",
+            "mode": "RGB",
+            "mask_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.l",
+            "name": "from-one-to-l",
+            "mode": "1",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+            "values": {"mode": literal("L")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "from-one-to-rgb",
+            "mode": "1",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.l",
+            "name": "from-cmyk-to-l",
+            "mode": "CMYK",
+            "edge": "nonzero-pixel",
+            "pixel": [100, 0, 0, 0],
+            "values": {"mode": literal("L")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgba",
+            "name": "from-cmyk-to-rgba",
+            "mode": "CMYK",
+            "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.l",
+            "name": "from-ycbcr",
+            "mode": "YCbCr",
+            "edge": "nonzero-pixel",
+            "pixel": [100, 150, 200],
+            "values": {"mode": literal("L")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "from-hsv-to-rgb",
+            "mode": "HSV",
+            "edge": "nonzero-pixel",
+            "pixel": [100, 200, 150],
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "from-i-to-rgb",
+            "mode": "I",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "from-f-to-rgb",
+            "mode": "F",
+            "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.l",
+            "name": "from-f-to-l",
+            "mode": "F",
+            "values": {"mode": literal("L")},
         },
     )
 
