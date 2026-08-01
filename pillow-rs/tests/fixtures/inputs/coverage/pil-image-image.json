@@ -1107,7 +1107,14 @@
           "PIL.Image.Image.quantize.nuanced.maxcoverage-32-colors",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-1",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-2",
-          "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-5"
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-5",
+          "PIL.Image.Image.putpalette.nuanced.la-palette",
+          "PIL.Image.Image.putpalette.nuanced.rgba-palette",
+          "PIL.Image.Image.putpalette.nuanced.la-palette-l-image",
+          "PIL.Image.Image.putalpha.nuanced.l-mask",
+          "PIL.Image.Image.putdata.nuanced.rgb-tuples-scale-offset",
+          "PIL.Image.Image.putdata.nuanced.rgba-clipped-tuples",
+          "PIL.Image.Image.save.nuanced.rgb-nonzero"
         ],
         "command_ids": [
           "coverage-imagecore-native"
