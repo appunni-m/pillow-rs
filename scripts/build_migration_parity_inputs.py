@@ -4662,10 +4662,26 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgba-alpha",
+            "scenario_asset": "image/rgba-small.png",
+            "values": {"channel": literal(3)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "split",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba",
             "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgb",
+            "scenario_asset": "image/rgb-small.png",
+            "values": {"size": literal([4, 4])},
         },
         {
             "surface": "PIL.Image.Image",

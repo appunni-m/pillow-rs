@@ -40447,6 +40447,58 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha",
+      "surface": "PIL.Image.Image",
+      "operation": "getchannel",
+      "covers": [
+        "PIL.Image.Image.getchannel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgba-small.png",
+          "sha256": "f3c46bd4ab629a8049d3e1b12fa5c6369df527b0930cd34dc789e1cd7e9986d7",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getchannel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "channel": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.split.nuanced.opened-rgba",
       "surface": "PIL.Image.Image",
       "operation": "split",
@@ -40487,6 +40539,61 @@
             "step_id": "setup-image-1"
           },
           "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "resize",
+      "covers": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "resize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                4
+              ]
+            }
+          }
         }
       ],
       "observations": [
