@@ -660,9 +660,6 @@ class Image:
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
         if band is not None:
-            names = self.getbands()
-            if not isinstance(band, int) or band < 0 or band >= len(names):
-                raise ValueError("band index out of range")
             values = self._rust_image.getdata_formatted(band)
             return ImagingCore(values, "L", self.size)
         return ImagingCore(

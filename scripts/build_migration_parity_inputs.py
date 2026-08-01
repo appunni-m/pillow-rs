@@ -8397,6 +8397,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-band",
+            "mode": "RGBA",
+            "values": {"band": literal(-1)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getprojection",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",

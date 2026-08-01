@@ -2611,10 +2611,16 @@ impl Image {
     /// Returns [`PilError`] when materialization fails.
     pub fn getdata(&self, band: Option<i32>) -> Result<Vec<u8>, PilError> {
         let img = self.materialized_shared()?;
-        let band = band.unwrap_or(-1);
-        if band >= 0 {
+        if let Some(band) = band {
+            // Pillow validates the requested logical band before extracting
+            // it. Keep this check in the core so every binding observes the
+            // same contract instead of silently clamping to RGBA channel 3.
+            let band_count = self.getbands()?.len();
+            if band < 0 || band as usize >= band_count {
+                return Err(PilError::ValueError("band index out of range".into()));
+            }
             let rgba = img.to_rgba8();
-            let b = band.min(3) as usize;
+            let b = band as usize;
             return Ok(rgba.pixels().map(|p| p[b]).collect());
         }
         match img.color() {
