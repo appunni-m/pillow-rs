@@ -625,6 +625,39 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "palette-pipeline" and label == "image2":
+            if requested_mode != "P":
+                raise ValueError("palette-pipeline edge requires P mode")
+            image_step = self.add_step(
+                "PIL.Image",
+                "new",
+                receiver=None,
+                arguments={
+                    "mode": literal("P"),
+                    "size": literal(self.scenario_size or [16, 16]),
+                    "color": literal(0),
+                },
+                step_id=self.next_step_id("setup-image2"),
+            )
+            self.add_step(
+                "PIL.Image.Image",
+                "putpalette",
+                receiver=binding(image_step),
+                arguments={
+                    "data": literal([10, 20, 30, 40, 50, 60]),
+                    "rawmode": literal("RGB"),
+                },
+                step_id="setup-image2-palette",
+            )
+            step_id = self.add_step(
+                "PIL.ImageOps",
+                "flip",
+                receiver=None,
+                arguments={"image": binding(image_step)},
+                step_id="setup-image2-pipeline",
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge == "noise-fill":
             # Deterministic diverse images (used by quantize MAXCOVERAGE and
             # median-cut cases) are built through the public frombytes
@@ -6399,6 +6432,15 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "materialized-p",
             "mode": "P",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "palette-pipeline-second",
+            "mode": "P",
+            "edge": "palette-pipeline",
             "observe_result": "tobytes",
         },
         {

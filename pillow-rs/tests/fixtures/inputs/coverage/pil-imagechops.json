@@ -223,7 +223,8 @@
           "PIL.ImageChops.subtract.nuanced.scale-offset",
           "PIL.ImageChops.subtract.nuanced.materialized-p",
           "PIL.ImageChops.blend.nuanced.extrapolate-alpha",
-          "PIL.ImageChops.blend.nuanced.materialized-p"
+          "PIL.ImageChops.blend.nuanced.materialized-p",
+          "PIL.ImageChops.blend.nuanced.palette-pipeline-second"
         ],
         "command_ids": []
       },
