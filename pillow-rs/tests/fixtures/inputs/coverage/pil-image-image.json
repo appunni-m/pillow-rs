@@ -1155,7 +1155,14 @@
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency",
           "PIL.Image.Image.histogram.nuanced.opened-rgba",
           "PIL.Image.Image.entropy.nuanced.opened-l",
-          "PIL.Image.Image.save.nuanced.opened-rgb-bmp"
+          "PIL.Image.Image.save.nuanced.opened-rgb-bmp",
+          "PIL.Image.Image.getpalette.nuanced.opened-p",
+          "PIL.Image.Image.getpalette.nuanced.opened-p-rgba",
+          "PIL.Image.Image.split.nuanced.opened-rgba",
+          "PIL.Image.Image.getcolors.nuanced.opened-rgba",
+          "PIL.Image.Image.getdata.nuanced.opened-rgb",
+          "PIL.Image.Image.getprojection.nuanced.opened-rgb",
+          "PIL.Image.Image.getextrema.nuanced.opened-rgb"
         ],
         "command_ids": [
           "coverage-imagecore-native"

@@ -4645,6 +4645,56 @@ def build_nuanced_cases(
             "scenario_asset": "image/rgb-small.png",
             "values": {"format": literal("BMP")},
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-p",
+            "scenario_asset": "image/p-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "opened-p-rgba",
+            "scenario_asset": "image/p-small.png",
+            "values": {"rawmode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgba",
+            "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgba",
+            "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgb",
+            "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getprojection",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgb",
+            "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getextrema",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgb",
+            "scenario_asset": "image/rgb-small.png",
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
