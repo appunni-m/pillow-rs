@@ -4781,6 +4781,62 @@ def build_nuanced_cases(
             "scenario_asset": "image/l-small.png",
             "values": {"mode": literal("RGB")},
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "bmp-rgb-opened",
+            "scenario_asset": "image/rgb-small.bmp",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "tiff-rgb-opened",
+            "scenario_asset": "image/rgb-small.tiff",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "webp-rgb-opened",
+            "scenario_asset": "image/rgb-small.webp",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "webp-rgba-opened",
+            "scenario_asset": "image/rgba-small.webp",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "bmp-rgb-opened",
+            "scenario_asset": "image/rgb-small.bmp",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "tiff-rgb-opened",
+            "scenario_asset": "image/rgb-small.tiff",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "webp-rgb-opened",
+            "scenario_asset": "image/rgb-small.webp",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "webp-rgba-opened",
+            "scenario_asset": "image/rgba-small.webp",
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
