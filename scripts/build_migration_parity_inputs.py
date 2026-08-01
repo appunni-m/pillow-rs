@@ -1298,9 +1298,10 @@ class WorkflowBuilder:
             )
         if name in {"filename"}:
             if self.primary_surface.startswith("PIL.ImageFont"):
+                pilfont_path = self.scenario_asset or "font/pilfont/courb08.pil"
                 return self.ref(
                     "pilfont",
-                    "font/pilfont/courb08.pil",
+                    pilfont_path,
                     "application/x-pilfont",
                 )
             return self.builtin("input-path", "encoded-png-input-path")
@@ -1554,7 +1555,7 @@ class WorkflowBuilder:
                 arguments={
                     "filename": self.ref(
                         "pilfont",
-                        "font/pilfont/courb08.pil",
+                        self.scenario_asset or "font/pilfont/courb08.pil",
                         "application/x-pilfont",
                     )
                 },
@@ -2315,6 +2316,23 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "loaded-pilfont-mode1-mask",
             "chain": "pilfont-load-getmask",
+        },
+        {
+            "surface": "PIL.ImageFont.ImageFont",
+            "operation": "getmask",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-pilfont-luma-mask",
+            "chain": "pilfont-load-getmask",
+            "scenario_asset": "font/pilfont/courb08_l.pil",
+        },
+        {
+            "surface": "PIL.ImageFont.ImageFont",
+            "operation": "getmask",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-pilfont-luma-empty-mask",
+            "chain": "pilfont-load-getmask",
+            "scenario_asset": "font/pilfont/courb08_l.pil",
+            "values": {"text": literal("")},
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
