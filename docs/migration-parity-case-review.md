@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1885
-- Unique active workflow signatures: 1885
+- Active parity workflows: 1887
+- Unique active workflow signatures: 1887
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 716
+- Deliberate nuanced workflows: 718
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 154 |
-| `PIL.Image.Image` | 804 |
+| `PIL.Image.Image` | 806 |
 | `PIL.ImageChops` | 82 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
@@ -276,6 +276,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.la-mask`
 - `PIL.Image.Image.paste.nuanced.la-source-into-rgb`
 - `PIL.Image.Image.paste.nuanced.p-from-l`
+- `PIL.Image.Image.paste.nuanced.p-pipeline-source`
 - `PIL.Image.Image.paste.nuanced.p-source-into-pa`
 - `PIL.Image.Image.paste.nuanced.pa-from-p`
 - `PIL.Image.Image.paste.nuanced.region-mask-mismatch`
@@ -397,6 +398,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.save.nuanced.i-png`
 - `PIL.Image.Image.save.nuanced.opened-rgb`
 - `PIL.Image.Image.save.nuanced.opened-rgb-bmp`
+- `PIL.Image.Image.save.nuanced.p-invert-pipeline`
 - `PIL.Image.Image.save.nuanced.p-png`
 - `PIL.Image.Image.save.nuanced.p-short-palette`
 - `PIL.Image.Image.save.nuanced.quantized-pipeline`
