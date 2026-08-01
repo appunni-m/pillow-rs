@@ -67,7 +67,6 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs-py/python/pillow_rs/image.py",
         "pillow-rs-py/python/pillow_rs/operations.py",
         "pillow-rs/src/image.rs",
-        "pillow-rs/src/lib.rs",
         "pillow-rs/src/pipeline.rs",
         "pillow-rs/src/ops/module_fns.rs",
         "pillow-rs/src/ops/analysis.rs",
