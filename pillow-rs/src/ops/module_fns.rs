@@ -28,10 +28,10 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
         "LA" => 2,
         "L" => 1,
         _ => {
-            return Err(PilError::ValueError(format!(
-                "Unsupported merge mode: {}",
-                mode
-            )));
+            // Pillow 12.2 looks up the mode in ``ImageMode.getmode`` before
+            // validating the band sequence, so an unknown mode is surfaced as
+            // ``KeyError(mode)`` rather than a generic value error.
+            return Err(PilError::KeyError(mode.to_owned()));
         }
     };
 

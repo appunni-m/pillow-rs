@@ -5498,6 +5498,35 @@
       ]
     },
     {
+      "case_id": "PIL.Image.linear_gradient.nuanced.invalid-single-character-mode",
+      "surface": "PIL.Image",
+      "operation": "linear_gradient",
+      "covers": [
+        "PIL.Image.linear_gradient.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "linear_gradient",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "X"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.radial_gradient.nuanced.i-mode",
       "surface": "PIL.Image",
       "operation": "radial_gradient",
@@ -5547,6 +5576,35 @@
             "mode": {
               "kind": "literal",
               "value": "F"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.radial_gradient.nuanced.invalid-single-character-mode",
+      "surface": "PIL.Image",
+      "operation": "radial_gradient",
+      "covers": [
+        "PIL.Image.radial_gradient.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "radial_gradient",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "X"
             }
           }
         }
@@ -5682,6 +5740,96 @@
             "quality": {
               "kind": "literal",
               "value": 200
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.zero-height",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                0
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                -2.5,
+                -1.5,
+                2.5,
+                1.5
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 100
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.negative-height",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                4
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                1.0,
+                1.0,
+                -1.0
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 10
             }
           }
         }
@@ -5835,6 +5983,39 @@
                 "setup-band-3",
                 "setup-band-4"
               ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.merge.nuanced.invalid-mode",
+      "surface": "PIL.Image",
+      "operation": "merge",
+      "covers": [
+        "PIL.Image.merge.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "merge",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "NOT_A_MODE"
+            },
+            "bands": {
+              "kind": "literal",
+              "value": []
             }
           }
         }
