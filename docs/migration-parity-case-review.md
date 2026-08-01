@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1901
-- Unique active workflow signatures: 1901
+- Active parity workflows: 1910
+- Unique active workflow signatures: 1910
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 732
+- Deliberate nuanced workflows: 741
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -35,7 +35,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageEnhance.Sharpness` | 1 |
 | `PIL.ImageFilter` | 104 |
 | `PIL.ImageFont` | 25 |
-| `PIL.ImageFont.FreeTypeFont` | 78 |
+| `PIL.ImageFont.FreeTypeFont` | 87 |
 | `PIL.ImageFont.ImageFont` | 13 |
 | `PIL.ImageFont.TransposedFont` | 13 |
 | `PIL.ImageOps` | 132 |
@@ -686,14 +686,20 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font`
 - `PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.named-instances`
 - `PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.variable-font`
+- `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.bytes-latin1`
+- `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.bytes-latin1-anchor`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.empty-default-route`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.invalid-anchor`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unicode-multiline`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-direction`
 - `PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-features`
+- `PIL.ImageFont.FreeTypeFont.getlength.nuanced.bytes-latin1`
+- `PIL.ImageFont.FreeTypeFont.getlength.nuanced.bytes-latin1-mode`
 - `PIL.ImageFont.FreeTypeFont.getlength.nuanced.empty-default-route`
 - `PIL.ImageFont.FreeTypeFont.getlength.nuanced.kerning-pair`
 - `PIL.ImageFont.FreeTypeFont.getlength.nuanced.unsupported-language`
+- `PIL.ImageFont.FreeTypeFont.getmask.nuanced.bytes-latin1`
+- `PIL.ImageFont.FreeTypeFont.getmask.nuanced.bytes-latin1-mode`
 - `PIL.ImageFont.FreeTypeFont.getmask.nuanced.embedded-strike-private-base`
 - `PIL.ImageFont.FreeTypeFont.getmask.nuanced.empty-default-route`
 - `PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-bgra-private-base`
@@ -706,6 +712,9 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-gray4-private-base`
 - `PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-missing-small-metrics-private-base`
 - `PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-mono-private-base`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.bytes-latin1`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.bytes-latin1-start`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.bytes-latin1-stroked`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.empty-default-route`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.empty-stroked`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start`
