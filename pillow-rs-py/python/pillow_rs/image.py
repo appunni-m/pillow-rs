@@ -567,7 +567,7 @@ class Image:
             ch = names.index(channel)
         else:
             ch = channel
-            if not isinstance(ch, int) or ch < 0 or ch >= len(self.getbands()):
+            if not isinstance(ch, int):
                 raise ValueError("band index out of range")
         return Image(self._rust_image.getchannel(ch))
 

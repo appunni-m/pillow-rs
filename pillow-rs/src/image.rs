@@ -2803,8 +2803,6 @@ impl Image {
 
     /// Extracts one channel as an `L` image.
     ///
-    /// Negative indices count from the end, matching Pillow band indexing.
-    ///
     /// # Errors
     ///
     /// Returns [`PilError::ValueError`] when `channel` is out of range, or
@@ -2813,18 +2811,10 @@ impl Image {
         // Validate channel index (requires materialized image for band count)
         let img = self.materialized_shared()?;
         let bands = img.color().channel_count();
-        let ch = if channel < 0 {
-            (bands as i32 + channel) as usize
-        } else {
-            channel as usize
-        };
-        if ch >= bands as usize {
-            return Err(PilError::ValueError(format!(
-                "Channel {} out of range (0-{})",
-                channel,
-                bands - 1
-            )));
+        if channel < 0 || channel >= bands as i32 {
+            return Err(PilError::ValueError("band index out of range".into()));
         }
+        let ch = channel as usize;
         // Pillow treats a single-band P image's only band as the palette-index
         // image itself, preserving its mode and retained palette. Extracting
         // it through the generic raster path would expand the indices to L and
