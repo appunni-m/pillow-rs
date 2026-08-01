@@ -1822,6 +1822,29 @@ class WorkflowBuilder:
                     step_id="setup-transparency-load",
                 )
                 receiver_step = image_step
+            elif chain == "opened-p-load-getpalette":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-opened-p-load",
+                )
+                receiver_step = image_step
+            elif chain == "opened-p-putpalette-getpalette":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-opened-p-putpalette",
+                )
+                receiver_step = image_step
             elif chain == "p-short-palette-save":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -8012,6 +8035,22 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "opened-p",
             "scenario_asset": "image/p-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-p-after-load",
+            "scenario_asset": "image/p-small.png",
+            "chain": "opened-p-load-getpalette",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-p-after-putpalette",
+            "scenario_asset": "image/p-small.png",
+            "chain": "opened-p-putpalette-getpalette",
         },
         {
             "surface": "PIL.Image.Image",
