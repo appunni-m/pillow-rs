@@ -1206,11 +1206,13 @@ coverage artifact:
 | Area | Verified baseline |
 |---|---|
 | Coverage MCP schema | 7 |
-| Approved managed commands | 4 |
-| Managed runs | 41 |
-| Ingested coverage snapshots | **0** |
+| Approved managed commands | 3 |
+| Managed runs | 270 |
+| Ingested coverage snapshots | **138** |
 | Python thin-binding violations | **26 actionable executable violations** |
-| Last Python managed parity result | 1,659 passed, 18 failed |
+| Last managed migration-parity input-only result | 1,921 passed, 0 failed; run `4a3aaeea-e211-4f27-9e53-567c17f0bce3` |
+| Current migration-parity Rust coverage | snapshot `f6b7af0b-077f-47b8-b6eb-adf80a7530ae`; 31,657 / 61,634 lines; 5,019 / 12,815 branches; 2,491 / 4,717 functions; 48,867 / 96,191 regions |
+| Current image-core region report | `pillow-rs/src/image.rs` 3,364 / 3,877; `PIL.Image.Image.getbbox` 7,745 / 8,623; 73 / 205 operations below 90% |
 | Python ABI Rust oracle-only diagnostic | 1,580 passed, 18 failed; 11,834 / 20,856 lines; 1,345 / 3,528 branches; 1,001 / 1,600 functions; 19,852 / 36,378 regions |
 | Python wrapper oracle-only diagnostic | 981 / 1,237 statements; 119 / 276 branches across 14 files |
 | CPU registered operations | 86 |
