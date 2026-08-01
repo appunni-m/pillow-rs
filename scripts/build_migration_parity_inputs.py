@@ -4954,6 +4954,20 @@ def build_nuanced_cases(
                 "box": literal([1, 1, 5, 5]),
             },
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "p-mode",
+            "mode": "P",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "split",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-p",
+            "scenario_asset": "image/p-small.png",
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}

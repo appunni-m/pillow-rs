@@ -1193,7 +1193,9 @@
           "PIL.Image.Image.paste.nuanced.la-source-into-rgb",
           "PIL.Image.Image.paste.nuanced.rgba-source-into-rgb",
           "PIL.Image.Image.paste.nuanced.l-source-into-rgb",
-          "PIL.Image.Image.paste.nuanced.scalar-color-la"
+          "PIL.Image.Image.paste.nuanced.scalar-color-la",
+          "PIL.Image.Image.split.nuanced.p-mode",
+          "PIL.Image.Image.split.nuanced.opened-p"
         ],
         "command_ids": [
           "coverage-imagecore-native"
