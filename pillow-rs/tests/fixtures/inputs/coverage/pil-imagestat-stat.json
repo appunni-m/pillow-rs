@@ -74,6 +74,13 @@
           "PIL.ImageStat.Stat.extrema.nuanced.p-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.i-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.f-mode",
+          "PIL.ImageStat.Stat.extrema.nuanced.i-empty",
+          "PIL.ImageStat.Stat.extrema.nuanced.f-empty",
+          "PIL.ImageStat.Stat.extrema.nuanced.l-empty-frombytes",
+          "PIL.ImageStat.Stat.extrema.nuanced.rgb-empty-frombytes",
+          "PIL.ImageStat.Stat.extrema.nuanced.rgba-empty-frombytes",
+          "PIL.ImageStat.Stat.extrema.nuanced.i-varied",
+          "PIL.ImageStat.Stat.extrema.nuanced.f-varied",
           "PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.one-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.la-mode"

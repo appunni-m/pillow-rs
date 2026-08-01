@@ -189,6 +189,7 @@ input_index:
   - inputs/parity/pil-imagepalette.json
   - inputs/parity/pil-imagepalette-imagepalette.json
   - inputs/parity/pil-imagesequence.json
+  - inputs/parity/pil-imagesequence-iterator.json
   - inputs/parity/pil-imagestat.json
   - inputs/parity/pil-imagestat-stat.json
   coverage:
@@ -212,6 +213,7 @@ input_index:
   - inputs/coverage/pil-imagepalette.json
   - inputs/coverage/pil-imagepalette-imagepalette.json
   - inputs/coverage/pil-imagesequence.json
+  - inputs/coverage/pil-imagesequence-iterator.json
   - inputs/coverage/pil-imagestat.json
   - inputs/coverage/pil-imagestat-stat.json
   benchmark:
@@ -235,6 +237,7 @@ input_index:
   - inputs/benchmark/pil-imagepalette.json
   - inputs/benchmark/pil-imagepalette-imagepalette.json
   - inputs/benchmark/pil-imagesequence.json
+  - inputs/benchmark/pil-imagesequence-iterator.json
   - inputs/benchmark/pil-imagestat.json
   - inputs/benchmark/pil-imagestat-stat.json
 coverage_components:
@@ -2886,21 +2889,13 @@ surfaces:
           - 0
           - 0
       result:
-        shape: image
+        shape: none
         observations:
         - path: value
           value_types:
-          - image
           - 'null'
           comparison:
-            kind: image
-            pixel_mode: exact
-            maximum_channel_delta: 0
-            metadata_mode: ignored
-            reason: >-
-              JPEG decode metadata (format/info) legitimately differs between
-              the Pillow and Rust decoder paths; the public contract compares
-              the transposed pixels exactly.
+            kind: exact
         error:
           fields:
           - class
@@ -3310,7 +3305,6 @@ surfaces:
         value_types:
         - 'null'
         - enum
-        - integer
         omission:
           kind: literal
           value: null
@@ -9989,105 +9983,6 @@ surfaces:
     - id: PIL.Image.Image.seek.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.Image.Image.seek.
-      lanes:
-      - parity
-      - benchmark
-      target_profiles:
-      - python-cpu
-    parity:
-      applicability: required
-      target_profiles:
-      - python-cpu
-    coverage:
-      applicability: required
-      target_profiles:
-      - python-cpu
-      component_ids:
-      - image-core
-    benchmark:
-      applicability: required
-      target_profiles:
-      - python-cpu
-      metrics:
-      - latency
-      - throughput
-  - id: show
-    kind: method
-    classification: endpoint
-    lifecycle:
-      status: current
-    source:
-      oracle_id: pillow
-      path: PIL.Image.Image.show
-      signature: 'show(self, title: ''str | None'' = None) -> ''None'''
-      parameters:
-      - id: self
-        style: receiver
-        value_types:
-        - handle
-        omission:
-          kind: required
-      - id: title
-        style: positional_or_keyword
-        value_types:
-        - 'null'
-        - string
-        omission:
-          kind: literal
-          value: null
-      result:
-        shape: none
-        observations:
-        - path: value
-          value_types:
-          - 'null'
-          comparison:
-            kind: exact
-        error:
-          fields:
-          - class
-          - kind
-          - message
-          - stage
-          - code
-          message:
-            mode: exact
-            transforms: []
-            reason: null
-    targets:
-    - target_id: pillow-rs-python
-      path: pillow_rs.Image.show
-      signature: show(self, title=None)
-      support:
-        status: supported
-    requirements:
-    - id: PIL.Image.Image.show.behavior.default
-      dimension: success_path
-      description: Default public behavior of PIL.Image.Image.show.
-      lanes:
-      - parity
-      - coverage
-      target_profiles:
-      - python-cpu
-    - id: PIL.Image.Image.show.parameter.title
-      dimension: parameter
-      description: Public parameter title with its declared type union and omission semantics.
-      lanes:
-      - parity
-      - coverage
-      target_profiles:
-      - python-cpu
-    - id: PIL.Image.Image.show.parameter-combination.legacy-001
-      dimension: parameter_combination
-      description: 'Deprecated-authority parameter combination: {}'
-      lanes:
-      - parity
-      - coverage
-      target_profiles:
-      - python-cpu
-    - id: PIL.Image.Image.show.performance.standard
-      dimension: performance
-      description: Deterministic standard workload for PIL.Image.Image.show.
       lanes:
       - parity
       - benchmark
@@ -18268,7 +18163,7 @@ surfaces:
       - id: shape
         style: positional_or_keyword
         value_types:
-        - image
+        - handle
         omission:
           kind: required
       - id: fill
@@ -26804,22 +26699,6 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
-    - id: PIL.ImageOps.exif_transpose.input-family.jpeg-exif
-      dimension: input_family
-      description: Transpose an image whose JPEG container carries EXIF orientation 6.
-      lanes:
-      - parity
-      - coverage
-      target_profiles:
-      - python-cpu
-    - id: PIL.ImageOps.exif_transpose.input-family.jpeg-exif-in-place
-      dimension: input_family
-      description: In-place transpose of an image whose JPEG container carries EXIF orientation 6.
-      lanes:
-      - parity
-      - coverage
-      target_profiles:
-      - python-cpu
     - id: PIL.ImageOps.exif_transpose.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageOps.exif_transpose.
@@ -29015,6 +28894,165 @@ surfaces:
     - id: PIL.ImageSequence.Iterator.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageSequence.Iterator.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-sequence
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+- id: PIL.ImageSequence.Iterator
+  kind: type
+  source_path: PIL.ImageSequence.Iterator
+  storage_slug: pil-imagesequence-iterator
+  operations:
+  - id: __iter__
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageSequence.Iterator.__iter__
+      signature: __iter__(self) -> 'Iterator'
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      result:
+        shape: handle
+        observations:
+        - path: value.type
+          value_types:
+          - string
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.ImageSequence.Iterator.__iter__
+      signature: __iter__(self)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageSequence.Iterator.__iter__.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageSequence.Iterator.__iter__.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageSequence.Iterator.__iter__.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageSequence.Iterator.__iter__.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-sequence
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: __next__
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageSequence.Iterator.__next__
+      signature: __next__(self) -> 'Image.Image'
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      result:
+        shape: image
+        observations:
+        - path: value
+          value_types:
+          - image
+          comparison:
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.ImageSequence.Iterator.__next__
+      signature: __next__(self)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageSequence.Iterator.__next__.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageSequence.Iterator.__next__.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageSequence.Iterator.__next__.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageSequence.Iterator.__next__.
       lanes:
       - parity
       - benchmark

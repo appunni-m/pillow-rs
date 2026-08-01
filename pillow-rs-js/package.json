@@ -21,11 +21,11 @@
   "type": "module",
   "scripts": {
     "build": "npm run build:core",
-    "build:core": "wasm-pack build --target web --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
-    "build:extra": "wasm-pack build --target web --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
+    "build:core": "wasm-pack build --target web --out-dir pkg/core --no-default-features --features wasm-all && node scripts/prepare_package.mjs core",
+    "build:extra": "wasm-pack build --target web --out-dir pkg/extra --no-default-features --features wasm-all && node scripts/prepare_package.mjs extra",
     "build:release": "npm run build:core:release && npm run build:extra:release",
-    "build:core:release": "wasm-pack build --target web --release --out-dir pkg/core --no-default-features --features wasm-core && node scripts/prepare_package.mjs core",
-    "build:extra:release": "wasm-pack build --target web --release --out-dir pkg/extra --no-default-features --features wasm-extra && node scripts/prepare_package.mjs extra",
+    "build:core:release": "wasm-pack build --target web --release --out-dir pkg/core --no-default-features --features wasm-all && node scripts/prepare_package.mjs core",
+    "build:extra:release": "wasm-pack build --target web --release --out-dir pkg/extra --no-default-features --features wasm-all && node scripts/prepare_package.mjs extra",
     "test:package": "node scripts/check_package.mjs",
     "size": "node scripts/measure_wasm_sizes.mjs"
   },

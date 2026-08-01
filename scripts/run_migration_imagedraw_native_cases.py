@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Exercise ImageDraw core paths the parity corpus cannot reach.
+"""Exercise residual ImageDraw core paths the parity corpus cannot reach.
 
-The `shape()` endpoint's success path requires a real `Outline` object built
-through the move/line/curve/close protocol, which the parity case generator
-does not emit.  This coverage-only command drives the target facade's shape
-surface with a valid outline plus fill/outline combinations.
+Valid ``Draw.shape`` inputs are represented by the input-only parity protocol
+and are therefore intentionally absent here.  This coverage-only command
+keeps only bitmap mode/validation and polygon/line edge paths that are not
+selected by the public parity cases.
 
 This is a coverage-only command: it never compares oracle values and cannot
 satisfy parity requirements.
@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 
 from pillow_rs import Image, ImageDraw
-from pillow_rs._core import Outline
 
 
 def json_dump(value: dict[str, int]) -> str:
@@ -37,21 +36,7 @@ def run_native_cases() -> tuple[int, int, int]:
         except Exception:
             passed += 1
 
-    def build_outline() -> Outline:
-        outline = Outline()
-        outline.move(2, 2)
-        outline.line(12, 2)
-        outline.line(12, 10)
-        outline.line(2, 10)
-        outline.close()
-        return outline
-
     probes: list[tuple[str, callable]] = [
-        ("shape-fill", lambda: _shape(fill=255)),
-        ("shape-outline", lambda: _shape(outline=255)),
-        ("shape-fill-outline", lambda: _shape(fill=255, outline=100)),
-        ("shape-invalid-object", lambda: _shape_invalid()),
-        ("shape-curve-outline", lambda: _shape_curve()),
         ("bitmap-i-canvas", lambda: _bitmap("I")),
         ("bitmap-f-canvas", lambda: _bitmap("F")),
         ("bitmap-i-canvas-mask255", lambda: _bitmap("I", mask_value=255)),
@@ -62,23 +47,6 @@ def run_native_cases() -> tuple[int, int, int]:
         ("polygon-out-of-bounds", lambda: _polygon_oob()),
         ("line-out-of-bounds", lambda: _line_oob()),
     ]
-
-    def _shape(**kwargs) -> None:
-        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
-        draw.shape(build_outline(), **kwargs)
-
-    def _shape_invalid() -> None:
-        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
-        draw.shape("not-an-outline")
-
-    def _shape_curve() -> None:
-        outline = Outline()
-        outline.move(1, 1)
-        outline.curve(4, 8, 8, 8, 12, 1)
-        outline.line(12, 10)
-        outline.close()
-        draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
-        draw.shape(outline, fill=255)
 
     def _bitmap(mode: str, mask_value: int = 128) -> None:
         mask = Image.new("L", (8, 8), mask_value)

@@ -217,6 +217,17 @@ impl Image {
                     // PA's two raw bands use the same physical layout as LA;
                     // the destination retains the palette and PA mode tag.
                     Image::new(width, height, "LA", color)?
+                } else if destination_mode == "F" {
+                    // Pillow's Paste.c writes scalar F-mode colors as the
+                    // destination's float32 sample, not as an integer byte.
+                    // Image::new stores F samples as their four raw LE bytes.
+                    let bytes = f32::from(color.0).to_le_bytes();
+                    Image::new(
+                        width,
+                        height,
+                        "F",
+                        (bytes[0], bytes[1], bytes[2], bytes[3]),
+                    )?
                 } else {
                     Image::new(width, height, &destination_mode, color)?
                 }

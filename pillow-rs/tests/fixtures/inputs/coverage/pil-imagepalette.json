@@ -15,9 +15,7 @@
           "PIL.ImagePalette.ImagePalette.parameter.mode",
           "PIL.ImagePalette.ImagePalette.parameter.palette"
         ],
-        "command_ids": [
-          "coverage-imagepalette-native"
-        ]
+        "command_ids": []
       },
       "component_ids": [
         "image-palette"

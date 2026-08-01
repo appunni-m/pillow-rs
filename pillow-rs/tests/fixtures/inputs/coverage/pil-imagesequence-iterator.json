@@ -1,0 +1,24 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagesequence-iterator.coverage-plan",
+      "covers": [
+        "PIL.ImageSequence.Iterator.__iter__.behavior.default",
+        "PIL.ImageSequence.Iterator.__next__.behavior.default"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageSequence.Iterator.__iter__.behavior.default",
+          "PIL.ImageSequence.Iterator.__next__.behavior.default"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-sequence"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

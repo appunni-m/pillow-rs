@@ -184,6 +184,7 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
     text = "" if annotation is inspect.Parameter.empty else str(annotation)
     lower = text.lower()
     types: list[str] = []
+    is_outline = "_outline" in lower or re.search(r"\boutline\b", lower)
 
     def include(value_type: str) -> None:
         if value_type in ALLOWED_VALUE_TYPES:
@@ -205,8 +206,10 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
         include("path")
     if re.search(r"\bio\[|binaryio|textio|file", lower):
         include("stream")
-    if re.search(r"\bimage\b|imagefile|imagingcore", lower):
+    if not is_outline and re.search(r"\bimage\b|imagefile|imagingcore", lower):
         include("image")
+    if is_outline:
+        include("handle")
     if re.search(r"\bfont\b|freetypefont|transposedfont", lower):
         include("font")
     if re.search(r"\bsequence\b|\blist\b|\btuple\b|\bcoords\b", lower):
@@ -493,6 +496,11 @@ def result_shape(
     if endpoint.kind == "type":
         return "handle", ["handle"]
 
+    if endpoint.source_path == "PIL.ImageSequence.Iterator.__iter__":
+        # Pillow annotates this protocol method with the iterator class name;
+        # the parity value is still a public handle, not a sequence to drain.
+        return "handle", ["handle"]
+
     annotation = return_annotation_text(signature)
     if re.search(r"\bnone\b", annotation):
         return "none", ["null"]
@@ -535,7 +543,6 @@ def result_shape(
         "seek",
         "set_variation_by_axes",
         "set_variation_by_name",
-        "show",
         "thumbnail",
         "verify",
     }
@@ -810,6 +817,7 @@ def surface_kind(surface: str) -> str:
         "PIL.ImageFont.ImageFont",
         "PIL.ImageFont.TransposedFont",
         "PIL.ImagePalette.ImagePalette",
+        "PIL.ImageSequence.Iterator",
         "PIL.ImageStat.Stat",
     }
     return "type" if surface in type_surfaces else "namespace"
@@ -1049,6 +1057,36 @@ def build_manifest() -> dict[str, Any]:
             command(
                 "coverage-font-native",
                 "migration-parity-font-native-coverage",
+                600,
+            ),
+            command(
+                "coverage-imageops-native",
+                "migration-parity-imageops-native-coverage",
+                600,
+            ),
+            command(
+                "coverage-imagesequence-native",
+                "migration-parity-imagesequence-native-coverage",
+                600,
+            ),
+            command(
+                "coverage-imagecore-native",
+                "migration-parity-imagecore-native-coverage",
+                600,
+            ),
+            command(
+                "coverage-imagedraw-native",
+                "migration-parity-imagedraw-native-coverage",
+                600,
+            ),
+            command(
+                "coverage-imagecolor-native",
+                "migration-parity-imagecolor-native-coverage",
+                600,
+            ),
+            command(
+                "coverage-imagepalette-native",
+                "migration-parity-imagepalette-native-coverage",
                 600,
             ),
             command("benchmark", "migration-parity-benchmark", 7200),

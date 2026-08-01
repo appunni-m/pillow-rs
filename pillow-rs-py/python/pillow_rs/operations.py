@@ -208,6 +208,10 @@ def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw"
 
 def eval(image: Image, *args):
     """Apply a function to each pixel. The first arg is a callable."""
+    if args and isinstance(args[0], str):
+        # Pillow's callable/LUT normalization reports this legacy diagnostic
+        # before its point implementation sees the invalid string value.
+        raise TypeError("type str doesn't define __round__ method")
     return image.point(args[0])
 
 

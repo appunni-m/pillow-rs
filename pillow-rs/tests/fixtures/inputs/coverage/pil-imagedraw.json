@@ -16,9 +16,7 @@
           "PIL.ImageDraw.Draw.parameter.mode",
           "PIL.ImageDraw.Outline.behavior.default"
         ],
-        "command_ids": [
-          "coverage-imagedraw-native"
-        ]
+        "command_ids": []
       },
       "component_ids": [
         "image-draw"

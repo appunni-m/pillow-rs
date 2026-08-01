@@ -159,12 +159,31 @@ def run(args: argparse.Namespace) -> int:
     args.python_report.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.llvm_report.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.profile.resolve().parent.mkdir(parents=True, exist_ok=True)
+
+    # cargo-llvm-cov can discover stale instrumented libraries left in its
+    # target directory, even when their old profile data was removed. That
+    # merges duplicate source revisions into one report and makes the measured
+    # line/region denominator larger than the current checkout. This directory
+    # is a generated coverage cache, so rebuild it for every authoritative run.
+    if LLVM_COV_TARGET.exists():
+        shutil.rmtree(LLVM_COV_TARGET)
+    LLVM_COV_TARGET.mkdir(parents=True, exist_ok=True)
     if args.profile.exists():
         args.profile.unlink()
 
     had_extension = EXTENSION.is_file()
-    restore_path = ROOT / "target" / "coverage" / "_core.abi3.so.migration-backup"
+    restore_path: Path | None = None
     if had_extension:
+        # Keep the backup outside the coverage artifact directory. The managed
+        # runner may replace or clean that directory while producing the LLVM
+        # report, which previously deleted the backup before this finally
+        # block could restore the normal extension.
+        with tempfile.NamedTemporaryFile(
+            prefix="pillow-rs-core-",
+            suffix=".migration-backup",
+            delete=False,
+        ) as handle:
+            restore_path = Path(handle.name)
         shutil.copy2(EXTENSION, restore_path)
 
     started = now()
@@ -223,51 +242,21 @@ def run(args: argparse.Namespace) -> int:
         child = json.loads(child_output.read_text(encoding="utf-8"))
         child_output.unlink()
 
-        # Exercise the legacy FreeTypeFont core variants that the PyO3
-        # binding bypasses (getlength, getmask2_with_start, native_getvaraxes,
-        # native_getvarnames, native_setvaraxes, native_setvarname, ...)
-        # through a maintained Rust integration test under the same
-        # instrumented toolchain, so the report merges those regions too.
+        # Exercise the legacy FreeTypeFont core variants that the ordinary
+        # parity facade does not select (getlength, getmask2_with_start,
+        # native_getvaraxes, native_getvarnames, native_setvaraxes,
+        # native_setvarname, ...) through the maintained input-only corpus.
+        # Keep this in the public Python surface: cargo tests must not inflate
+        # migration coverage.
         subprocess.run(
             [
-                "cargo",
-                "+nightly",
-                "test",
-                "--manifest-path",
-                str(ROOT / "pillow-rs" / "Cargo.toml"),
-                "--test",
-                "font_native_public_api",
+                sys.executable,
+                str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
             ],
             env={
                 **os.environ,
-                "RUSTUP_TOOLCHAIN": "nightly",
                 "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
                 "LLVM_PROFILE_FILE": str(args.profile),
-                "CARGO_TARGET_DIR": str(LLVM_COV_TARGET),
-            },
-            cwd=ROOT,
-            check=True,
-        )
-
-        # Exercise image-core internal paths the PIL surface cannot reach
-        # (backend lock routing, P/PA pipeline materialization) through the
-        # same instrumented toolchain so the merged report measures them.
-        subprocess.run(
-            [
-                "cargo",
-                "+nightly",
-                "test",
-                "--manifest-path",
-                str(ROOT / "pillow-rs" / "Cargo.toml"),
-                "--test",
-                "image_core_internal",
-            ],
-            env={
-                **os.environ,
-                "RUSTUP_TOOLCHAIN": "nightly",
-                "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
-                "LLVM_PROFILE_FILE": str(args.profile),
-                "CARGO_TARGET_DIR": str(LLVM_COV_TARGET),
             },
             cwd=ROOT,
             check=True,
@@ -291,6 +280,9 @@ def run(args: argparse.Namespace) -> int:
                 "--output-path",
                 str(args.llvm_report),
             ],
+            # cargo-llvm-cov's default target root is ``target/llvm-cov-target``;
+            # setting CARGO_TARGET_DIR here would make it append that directory
+            # a second time while locating the freshly emitted profiles.
             env={**os.environ, "RUSTUP_TOOLCHAIN": "nightly"},
             cwd=ROOT,
             check=True,
@@ -373,7 +365,11 @@ def run(args: argparse.Namespace) -> int:
         args.output.write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
         print(json.dumps(result["summary"], sort_keys=True))
     finally:
-        if had_extension:
+        if had_extension and restore_path is not None:
+            if not restore_path.is_file():
+                raise RuntimeError(
+                    f"missing extension backup during coverage cleanup: {restore_path}"
+                )
             shutil.copy2(restore_path, EXTENSION)
             restore_path.unlink()
             print(f"restored extension: {EXTENSION}")

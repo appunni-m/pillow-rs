@@ -203,14 +203,24 @@ impl PyImage {
     }
 
     #[classmethod]
-    fn open(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<Self> {
+    #[pyo3(signature = (fp, formats=None))]
+    fn open(
+        _cls: &Bound<'_, PyType>,
+        fp: &Bound<'_, PyAny>,
+        formats: Option<Vec<String>>,
+    ) -> PyResult<Self> {
+        let format_refs = formats
+            .as_deref()
+            .map(|formats| formats.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
             let bytes = std::fs::read(path).map_err(|error| map_error(error.into()))?;
-            let img = RsImage::open_bytes(bytes).map_err(map_error)?;
+            let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
+                .map_err(map_error)?;
             Ok(PyImage { inner: img })
         } else {
             let bytes = fp.call_method0("read")?.extract::<Vec<u8>>()?;
-            let img = RsImage::open_bytes(bytes).map_err(map_error)?;
+            let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
+                .map_err(map_error)?;
             Ok(PyImage { inner: img })
         }
     }
@@ -825,6 +835,13 @@ impl PyImage {
         let raw = self.inner.getdata(band).map_err(map_error)?;
         let mode = self.inner.mode().map_err(map_error)?;
         Python::with_gil(|py| {
+            if band.is_some() {
+                let out = pyo3::types::PyList::empty(py);
+                for value in raw {
+                    out.append(value)?;
+                }
+                return Ok(out.to_object(py));
+            }
             let n_bands = match mode.as_str() {
                 "L" | "1" | "P" | "I" | "F" => 1,
                 "LA" | "PA" => 2,
@@ -1202,6 +1219,14 @@ impl PyImage {
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
     fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
         let mode = self.inner.mode().map_err(map_error)?;
+        if matches!(mode.as_str(), "I" | "F") {
+            if let Ok(v) = value.extract::<f64>() {
+                return self
+                    .inner
+                    .putpixel_mode_scalar(xy.0, xy.1, v, &mode)
+                    .map_err(map_error);
+            }
+        }
         if let Ok(v) = value.extract::<u8>() {
             return self
                 .inner
@@ -1698,17 +1723,43 @@ pub struct PyFont {
 #[pymethods]
 impl PyFont {
     #[staticmethod]
-    fn truetype(fp: &str, size: f64) -> PyResult<Self> {
+    #[pyo3(signature = (fp, size, index=0, encoding="", layout_engine=None))]
+    fn truetype(
+        fp: &str,
+        size: f64,
+        index: usize,
+        encoding: &str,
+        layout_engine: Option<String>,
+    ) -> PyResult<Self> {
         let data = std::fs::read(fp).map_err(|e| {
             pyo3::exceptions::PyOSError::new_err(format!("Cannot read font file: {}", e))
         })?;
-        let font = pillow_rs::imagefont_from_bytes(data, size as f32).map_err(map_error)?;
+        let options = pillow_rs::ImageFontLoadOptions {
+            index: Some(index),
+            encoding: (!encoding.is_empty()).then(|| encoding.to_owned()),
+            layout_engine,
+        };
+        let font = pillow_rs::imagefont_from_bytes_with_options(data, size as f32, &options)
+            .map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
     #[staticmethod]
-    fn truetype_from_bytes(data: Vec<u8>, size: f64) -> PyResult<Self> {
-        let font = pillow_rs::imagefont_from_bytes(data, size as f32).map_err(map_error)?;
+    #[pyo3(signature = (data, size, index=0, encoding="", layout_engine=None))]
+    fn truetype_from_bytes(
+        data: Vec<u8>,
+        size: f64,
+        index: usize,
+        encoding: &str,
+        layout_engine: Option<String>,
+    ) -> PyResult<Self> {
+        let options = pillow_rs::ImageFontLoadOptions {
+            index: Some(index),
+            encoding: (!encoding.is_empty()).then(|| encoding.to_owned()),
+            layout_engine,
+        };
+        let font = pillow_rs::imagefont_from_bytes_with_options(data, size as f32, &options)
+            .map_err(map_error)?;
         Ok(PyFont { inner: font })
     }
 
@@ -1796,11 +1847,10 @@ impl PyFont {
         text: &str,
         start: Option<(f64, f64)>,
     ) -> PyResult<(PyImage, (i32, i32))> {
-        let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_with_start(
-            &self.inner,
-            text,
-            start.unwrap_or((0.0, 0.0)),
-        )
+        let (width, height, pixels, offset) = match start {
+            None => pillow_rs::imagefont_getmask2(&self.inner, text),
+            Some(start) => pillow_rs::imagefont_getmask2_with_start(&self.inner, text, start),
+        }
         .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
         Ok((PyImage { inner }, offset))
@@ -1844,6 +1894,10 @@ impl PyFont {
 
     fn getlength(&self, text: &str) -> PyResult<i32> {
         pillow_rs::imagefont_native_getlength_26dot6(&self.inner, text).map_err(map_error)
+    }
+
+    fn getlength_alpha(&self, text: &str) -> PyResult<f32> {
+        pillow_rs::imagefont_getlength(&self.inner, text).map_err(map_error)
     }
 
     fn getsize(&self, text: &str) -> PyResult<((i32, i32), (i32, i32))> {
@@ -2190,7 +2244,7 @@ impl PyOutline {
         })?;
         self.points.extend(pillow_rs::outline_curve_points(
             &[x0 as f64, y0 as f64, x1, y1, x2, y2, x3, y3],
-            20,
+            32,
         ));
         Ok(())
     }

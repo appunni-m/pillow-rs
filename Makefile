@@ -176,7 +176,7 @@ build-dev: ## Build Python package (debug, faster compile)
 
 build-wasm: build-wasm-core ## Build the default core WASM package (dev)
 
-build-wasm-core: ## Build PNG-only core WASM package (dev)
+build-wasm-core: ## Build all-codec core WASM package (dev)
 	cd $(JS_SRC) && npm run build:core
 
 build-wasm-extra: ## Build Rust-codec extra WASM package (dev)

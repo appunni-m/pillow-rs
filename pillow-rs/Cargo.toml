@@ -13,13 +13,13 @@ default = ["gpu", "image-codecs-all", "parallel"]
 gpu = ["wgpu", "pollster"]
 parallel = ["rayon"]
 image-codecs-all = [
-    "image-jpeg",
-    "image-png",
-    "image-gif",
-    "image-bmp",
-    "image-tiff",
-    "image-webp",
-    "image-ico",
+    "image-slash-star/jpeg",
+    "image-slash-star/png",
+    "image-slash-star/gif",
+    "image-slash-star/bmp",
+    "image-slash-star/tiff",
+    "image-slash-star/webp",
+    "image-slash-star/ico",
 ]
 image-jpeg = ["image-slash-star/jpeg"]
 image-gif = ["image-slash-star/gif"]

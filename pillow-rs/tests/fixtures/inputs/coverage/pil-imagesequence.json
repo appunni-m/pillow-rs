@@ -15,9 +15,7 @@
           "PIL.ImageSequence.Iterator.behavior.default",
           "PIL.ImageSequence.Iterator.mode.l"
         ],
-        "command_ids": [
-          "coverage-imagesequence-native"
-        ]
+        "command_ids": []
       },
       "component_ids": [
         "image-sequence"

@@ -1,0 +1,142 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImageSequence.Iterator.__iter__.behavior.default",
+      "surface": "PIL.ImageSequence.Iterator",
+      "operation": "__iter__",
+      "covers": [
+        "PIL.ImageSequence.Iterator.__iter__.behavior.default",
+        "PIL.ImageSequence.Iterator.__iter__.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-iterator-2",
+          "surface": "PIL.ImageSequence",
+          "operation": "Iterator",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageSequence.Iterator",
+          "operation": "__iter__",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-iterator-2"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageSequence.Iterator.__next__.behavior.default",
+      "surface": "PIL.ImageSequence.Iterator",
+      "operation": "__next__",
+      "covers": [
+        "PIL.ImageSequence.Iterator.__next__.behavior.default",
+        "PIL.ImageSequence.Iterator.__next__.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-iterator-2",
+          "surface": "PIL.ImageSequence",
+          "operation": "Iterator",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageSequence.Iterator",
+          "operation": "__next__",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-iterator-2"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-stop-iteration",
+          "surface": "PIL.ImageSequence.Iterator",
+          "operation": "__next__",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-iterator-2"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-stop-iteration"
+      ]
+    }
+  ]
+}

@@ -66,6 +66,27 @@ impl Draw {
         }
     }
 
+    /// Return the ink Pillow's experimental `Outline` API uses when both
+    /// `fill` and `outline` are omitted.
+    fn default_shape_ink(&self) -> Option<(u8, u8, u8, u8)> {
+        match self.effective_mode().as_str() {
+            // ImageDraw._getink() starts an RGB-family outline with
+            // draw_ink(-1), which resolves to an all-255 sample.
+            "RGB" | "RGBA" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => {
+                Some((255, 255, 255, 255))
+            }
+            // I/F contexts initialize their ink with draw_ink(1). These
+            // tuples are the native little-endian representations carried by
+            // the explicit-mode RGBA canvas used by this crate.
+            "I" => Some((1, 0, 0, 0)),
+            "F" => Some((0, 0, 128, 63)),
+            // Pillow's draw_ink(-1) is not a valid ink for these single-byte
+            // and palette-indexed modes, so shape() remains a no-op.
+            "1" | "L" | "P" => None,
+            _ => None,
+        }
+    }
+
     /// Set the output image from a drawn RGBA canvas.
     /// image_clone() handles RGBA→native mode conversion for standard modes.
     /// Only F/I/CMYK need explicit_mode tagging (their RGBA data IS the final format).
@@ -251,7 +272,11 @@ impl Draw {
         fill: Option<(u8, u8, u8, u8)>,
         outline: Option<(u8, u8, u8, u8)>,
     ) -> Result<(), PilError> {
-        let Some(ink) = outline.or(fill) else {
+        // Pillow's ImageDraw._getink() supplies the context's default ink
+        // when both arguments are omitted. This is deliberately shape-only:
+        // the experimental API calls draw_outline directly, and its default
+        // differs from the wrapper's ordinary color parser.
+        let Some(ink) = outline.or(fill).or_else(|| self.default_shape_ink()) else {
             return Ok(());
         };
         self.polygon(points, Some(ink), None, 1)
@@ -1631,27 +1656,36 @@ fn text_mask_to_rgba(mask: Vec<u8>, fill: (u8, u8, u8, u8)) -> Vec<u8> {
 /// Compute cubic Bezier curve subdivision points.
 /// Returns a flat list of (x, y) integer pairs for the curve from t=1..steps.
 /// `control_points` must have at least 8 elements: [x0, y0, x1, y1, x2, y2, x3, y3].
-/// Matches PIL's Outline.curve() algorithm exactly.
+/// Matches Pillow's `src/libImaging/Draw.c::ImagingOutlineCurve` algorithm.
 pub fn outline_curve_points(control_points: &[f64], steps: u32) -> Vec<(i32, i32)> {
     if control_points.len() < 8 || steps == 0 {
         return vec![];
     }
-    let x0 = control_points[0];
-    let y0 = control_points[1];
-    let x1 = control_points[2];
-    let y1 = control_points[3];
-    let x2 = control_points[4];
-    let y2 = control_points[5];
-    let x3 = control_points[6];
-    let y3 = control_points[7];
+    // Pillow receives these values as C `float`s, not doubles. Keep the
+    // subdivision arithmetic in f32 so points near a half-pixel boundary
+    // follow the oracle's rounding decisions.
+    let x0 = control_points[0] as f32;
+    let y0 = control_points[1] as f32;
+    let x1 = control_points[2] as f32;
+    let y1 = control_points[3] as f32;
+    let x2 = control_points[4] as f32;
+    let y2 = control_points[5] as f32;
+    let x3 = control_points[6] as f32;
+    let y3 = control_points[7] as f32;
 
     let mut points = Vec::with_capacity(steps as usize);
     for i in 1..=steps {
-        let t = i as f64 / steps as f64;
-        let u = 1.0 - t;
-        let x = u * u * u * x0 + 3.0 * u * u * t * x1 + 3.0 * u * t * t * x2 + t * t * t * x3;
-        let y = u * u * u * y0 + 3.0 * u * u * t * y1 + 3.0 * u * t * t * y2 + t * t * t * y3;
-        points.push((x.round() as i32, y.round() as i32));
+        let t = i as f32 / steps as f32;
+        let t2 = t * t;
+        let t3 = t2 * t;
+        let u = 1.0_f32 - t;
+        let u2 = u * u;
+        let u3 = u2 * u;
+        // C adds 0.5 and casts to int (truncating toward zero), rather than
+        // using the host language's nearest-integer rounding rule.
+        let x = x0 * u3 + 3.0 * (x1 * t * u2 + x2 * t2 * u) + x3 * t3 + 0.5;
+        let y = y0 * u3 + 3.0 * (y1 * t * u2 + y2 * t2 * u) + y3 * t3 + 0.5;
+        points.push((x.trunc() as i32, y.trunc() as i32));
     }
     points
 }

@@ -169,12 +169,18 @@ def run_case(case: dict[str, Any]) -> str:
         font._rust_font.font_variant(size=params.get("size"))
     elif operation == "has_variations":
         font._rust_font.has_variations()
-    elif operation in {"get_variation_axes", "native_getvaraxes"}:
+    elif operation == "get_variation_axes":
         font.get_variation_axes()
-    elif operation in {"get_variation_names", "native_getvarnames"}:
+    elif operation == "native_getvaraxes":
+        font._rust_font.getvaraxes()
+    elif operation == "get_variation_names":
         font.get_variation_names()
-    elif operation in {"set_variation_by_axes", "native_setvaraxes"}:
+    elif operation == "native_getvarnames":
+        font._rust_font.getvarnames()
+    elif operation == "set_variation_by_axes":
         font.set_variation_by_axes(params.get("axes", [100.0]))
+    elif operation == "native_setvaraxes":
+        font._rust_font.setvaraxes(params.get("axes", [100.0]))
     elif operation == "set_variation_by_name":
         name = params.get("name", "Bold")
         if isinstance(name, list):

@@ -743,11 +743,9 @@ pub(crate) fn getmask2_with_options(
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
-    if options.mode.as_deref() == Some("RGBA") {
-        return Err(PilError::TypeError(
-            "'tuple' object cannot be interpreted as an integer".into(),
-        ));
-    }
+    // Pillow's BASIC `getmask2` accepts mode="RGBA" as a renderer hint and
+    // still returns the ordinary grayscale mask. The mode is used by some
+    // drivers, but it is not an error condition for this public endpoint.
     let load_flags = text_load_flags(options);
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
     let start = options.start.unwrap_or((0.0, 0.0));

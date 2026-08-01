@@ -285,6 +285,105 @@
       ]
     },
     {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.green-hsv",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(0, 255, 0)"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.blue-hsv",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(0, 0, 255)"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.gray-hsv",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(128, 128, 128)"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "HSV"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageColor.getcolor.nuanced.named-i",
       "surface": "PIL.ImageColor",
       "operation": "getcolor",
@@ -309,6 +408,204 @@
             "mode": {
               "kind": "literal",
               "value": "I"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-la",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "red"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-f",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "blue"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "F"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-i16",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "green"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-i16b",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "white"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "I;16B"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-rgba",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgba(1, 2, 3, 128)"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getcolor.nuanced.named-cmyk",
+      "surface": "PIL.ImageColor",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImageColor.getcolor.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getcolor",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "#204080"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
             }
           }
         }
@@ -396,6 +693,209 @@
             "color": {
               "kind": "literal",
               "value": "transparent"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-currentcolor",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "currentcolor"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgb-unclosed",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(1, 2, 3"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgb-nondigit",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(1, x, 3)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgb-empty-component",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(, 1, 2)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgba-unclosed",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgba(1, 2, 3, 4"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgba-nondigit",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgba(1, x, 3, 4)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgba-empty-component",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgba(1,, 3, 4)"
             }
           }
         }
@@ -541,6 +1041,151 @@
             "color": {
               "kind": "literal",
               "value": "hsla(120, 100%, 50%, 0.5)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-leading-whitespace",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": " red"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-trailing-whitespace",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "red "
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgb-mixed-percent",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(100%, 50, 0%)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-rgb-short",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "rgb(1, 2)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.rejected-overlong",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "#fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"
             }
           }
         }

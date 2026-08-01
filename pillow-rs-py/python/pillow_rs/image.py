@@ -41,15 +41,33 @@ class ImagingCore:
 
 
 class _ExifCompat:
-    """Empty Pillow ``Exif`` object shape for images without EXIF metadata."""
+    """Small Pillow ``Exif`` object shape for the public ``getexif`` result.
 
-    def __init__(self):
+    The Rust core retains the encoded EXIF payload but deliberately does not
+    expose Python's mutable ``Exif`` mapping type.  Keep the binding result
+    shaped like Pillow's lazily-loaded object; tag decoding remains a future
+    core concern and is not needed merely to expose the loaded record.
+    """
+
+    def __init__(self, raw=None, *, loaded_exif=True):
         self._data = {}
         self._hidden_data = {}
         self._ifds = {}
         self._info = None
-        self._loaded_exif = None
+        self._loaded_exif = raw if raw and loaded_exif else None
         self._loaded = True
+        if raw:
+            payload = raw[6:] if raw.startswith(b"Exif\x00\x00") else raw
+            self.fp = None
+            self.head = payload[:8]
+            # Pillow only records Exif.endian after accepting the TIFF magic;
+            # malformed metadata still exposes ``head`` but has no endian
+            # attribute.  Keep the compatibility record aligned for public
+            # encoded-input parity cases.
+            if len(payload) >= 4 and payload[2:4] in {b"\x2a\x00", b"\x00\x2a"}:
+                self.endian = "<" if payload[:2] == b"II" else ">"
+            if not loaded_exif:
+                self.bigtiff = False
 
 
 class PyCapsule:
@@ -148,7 +166,7 @@ class Image:
         if isinstance(fp, str) and not Path(fp).exists():
             raise FileNotFoundError(2, "No such file or directory", fp)
         try:
-            rust_image = RustImage.open(fp)
+            rust_image = RustImage.open(fp, formats)
         except FileNotFoundError:
             raise
         except Exception as exc:
@@ -472,7 +490,13 @@ class Image:
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
         if encoder_name != "raw":
             raise OSError(f"encoder {encoder_name} not available")
-        if args and args[0] != self.mode:
+        raw_mode = args[0] if args else self.mode
+        supported_raw_modes = {self.mode}
+        if self.mode == "RGB":
+            supported_raw_modes.add("BGR")
+        elif self.mode == "RGBA":
+            supported_raw_modes.add("BGRA")
+        if raw_mode not in supported_raw_modes:
             raise OSError(f"encoder {args[0]} not available")
         return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
 
@@ -635,18 +659,15 @@ class Image:
 
     def getdata(self, band=None):
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
-        names = self.getbands()
         if band is not None:
+            names = self.getbands()
             if not isinstance(band, int) or band < 0 or band >= len(names):
                 raise ValueError("band index out of range")
-            all_values = self._rust_image.getdata_formatted(None)
-            if len(names) == 1:
-                values = all_values
-            else:
-                values = [value[band] for value in all_values]
+            values = self._rust_image.getdata_formatted(band)
             return ImagingCore(values, "L", self.size)
-        values = self._rust_image.getdata_formatted(None)
-        return ImagingCore(values, self.mode, self.size)
+        return ImagingCore(
+            self._rust_image.getdata_formatted(None), self.mode, self.size
+        )
 
     def putdata(self, data, scale=1.0, offset=0.0):
         """Replace pixels from scalar samples or multiband color tuples."""
@@ -715,7 +736,7 @@ class Image:
     def getexif(self):
         """Return EXIF data as dict, matching PIL's Image.Exif."""
         raw = bytes(self._rust_image.getexif())
-        return _ExifCompat() if not raw else raw
+        return _ExifCompat(raw, loaded_exif=self.format != "TIFF")
 
     def getim(self):
         """Return internal C capsule. Not applicable for Rust."""

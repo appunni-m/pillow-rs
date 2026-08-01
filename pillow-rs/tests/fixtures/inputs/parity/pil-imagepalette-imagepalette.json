@@ -403,6 +403,89 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.opaque-rgba-tuple-rgb-mode",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                255
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImagePalette.ImagePalette.getcolor.nuanced.empty-tuple-rejected",
+      "surface": "PIL.ImagePalette.ImagePalette",
+      "operation": "getcolor",
+      "covers": [
+        "PIL.ImagePalette.ImagePalette.getcolor.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-palette-1",
+          "surface": "PIL.ImagePalette",
+          "operation": "ImagePalette",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImagePalette.ImagePalette",
+          "operation": "getcolor",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-palette-1"
+          },
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": []
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

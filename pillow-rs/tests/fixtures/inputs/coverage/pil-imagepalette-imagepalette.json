@@ -39,11 +39,11 @@
           "PIL.ImagePalette.ImagePalette.tobytes.behavior.default",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgb-tuple-append",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-tuple-append",
-          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.short-tuple-append"
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.short-tuple-append",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.opaque-rgba-tuple-rgb-mode",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.empty-tuple-rejected"
         ],
-        "command_ids": [
-          "coverage-imagepalette-native"
-        ]
+        "command_ids": []
       },
       "component_ids": [
         "image-palette"

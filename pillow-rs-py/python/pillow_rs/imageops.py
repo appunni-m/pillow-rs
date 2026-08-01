@@ -93,13 +93,10 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
 
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
-    # PIL: assert image.mode == "L" (raises for "1" as well)
+    # Keep the public mode check ahead of color conversion (Pillow raises this
+    # AssertionError even when a color argument is otherwise malformed). Point
+    # ordering remains in the Rust core so its compatibility checks are shared.
     if image.mode != "L":
-        raise AssertionError()
-    if mid is None:
-        if not (0 <= blackpoint <= whitepoint <= 255):
-            raise AssertionError()
-    elif not (0 <= blackpoint <= midpoint <= whitepoint <= 255):
         raise AssertionError()
     if isinstance(black, str):
         black = _core.getrgb(black)
@@ -125,8 +122,17 @@ def exif_transpose(image: Image, *, in_place=False):
     # lazy Bytes source, and Pillow's exif_transpose reads orientation before
     # any pixels are needed.
     exif_data = image.getexif()
+    # Pillow's getexif() returns an Exif mapping object, while this binding
+    # keeps the encoded payload on the compatibility object.  Feed that
+    # retained payload to the core parser before loading pixels; otherwise
+    # JPEG orientation is silently treated as the default value.
+    raw_exif = (
+        exif_data
+        if isinstance(exif_data, bytes)
+        else getattr(exif_data, "_loaded_exif", None)
+    )
     image.load()
-    orientation = _core.exif_get_orientation(exif_data) if isinstance(exif_data, bytes) else None
+    orientation = _core.exif_get_orientation(raw_exif) if raw_exif is not None else None
     orientation = orientation or 1
 
     method_map = {
@@ -144,8 +150,8 @@ def exif_transpose(image: Image, *, in_place=False):
         else:
             result = image.transpose(method)
 
-        if isinstance(exif_data, bytes) and len(exif_data) >= 14:
-            _core.exif_remove_orientation(exif_data)
+        if raw_exif is not None and len(raw_exif) >= 14:
+            _core.exif_remove_orientation(raw_exif)
 
         if not in_place:
             return result

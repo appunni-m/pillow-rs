@@ -50,10 +50,49 @@
               "step_id": "setup-im-1"
             }
           }
+        },
+        {
+          "step_id": "setup-image-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-frame-zero",
+          "surface": "PIL.Image.Image",
+          "operation": "seek",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-2"
+          },
+          "arguments": {
+            "frame": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-frame-zero"
       ]
     },
     {
@@ -102,10 +141,49 @@
               "step_id": "setup-im-1"
             }
           }
+        },
+        {
+          "step_id": "setup-image-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-frame-zero",
+          "surface": "PIL.Image.Image",
+          "operation": "seek",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-2"
+          },
+          "arguments": {
+            "frame": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-frame-zero"
       ]
     }
   ]
