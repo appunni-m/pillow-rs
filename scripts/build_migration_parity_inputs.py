@@ -147,6 +147,13 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
     if len(base) < 2 or base[:2] != b"\xff\xd8":
         raise ValueError("EXIF variant base must be a JPEG")
 
+    if variant == "empty-app1":
+        segment = b"\xff\xe1\x00\x02"
+        return base[:2] + segment + base[2:]
+    if variant == "short-app1-length":
+        segment = b"\xff\xe1\x00\x01"
+        return base[:2] + segment + base[2:]
+
     if variant in {"le-orientation2", "standalone-soi", "standalone-rst0"}:
         tiff = (
             b"II\x2a\x00"
@@ -1514,6 +1521,69 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "opened-rgb-resize-verify":
+                image_step = self.ensure_image(mode="RGB")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+            elif chain == "p-resize-verify":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+            elif chain == "p-resize-convert-verify":
+                image_step = self.ensure_image(mode="P")
+                resized_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "convert",
+                    receiver=binding(resized_step),
+                    arguments={"mode": literal("RGB")},
+                    step_id="setup-convert",
+                )
+            elif chain == "p-resize-putalpha-verify":
+                image_step = self.ensure_image(mode="P")
+                resized_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putalpha",
+                    receiver=binding(resized_step),
+                    arguments={"alpha": literal(192)},
+                    step_id="setup-putalpha",
+                )
+                receiver_step = resized_step
             elif chain in {
                 "quantize-load",
                 "quantize-save",
@@ -8525,6 +8595,20 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "getexif",
             "requirement_suffix": "behavior.default",
+            "name": "jpeg-empty-app1",
+            "exif_variant": "empty-app1",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-short-app1-length",
+            "exif_variant": "short-app1-length",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
             "name": "png-without-exif",
             "scenario_asset": "image/rgb-small.png",
         },
@@ -8616,6 +8700,38 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "resize-pipeline",
             "chain": "resize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgb-resize-pipeline",
+            "scenario_asset": "image/rgb-small.png",
+            "chain": "opened-rgb-resize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-pipeline",
+            "mode": "P",
+            "chain": "p-resize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-convert-pipeline",
+            "mode": "P",
+            "chain": "p-resize-convert-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-putalpha-pipeline",
+            "mode": "P",
+            "chain": "p-resize-putalpha-verify",
         },
         {
             "surface": "PIL.Image.Image",
