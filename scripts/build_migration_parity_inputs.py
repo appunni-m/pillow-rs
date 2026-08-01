@@ -1833,6 +1833,16 @@ class WorkflowBuilder:
                     step_id="setup-opened-p-load",
                 )
                 receiver_step = image_step
+            elif chain == "opened-p-load-save":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-opened-p-load",
+                )
+                receiver_step = image_step
             elif chain == "opened-p-putpalette-getpalette":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -7496,6 +7506,15 @@ def build_nuanced_cases(
             "name": "p-short-palette",
             "mode": "P",
             "chain": "p-short-palette-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "opened-p-load-save",
+            "scenario_asset": "image/p-small.png",
+            "chain": "opened-p-load-save",
             "values": {"format": literal("PNG")},
         },
         {
