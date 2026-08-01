@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1912
-- Unique active workflow signatures: 1912
+- Active parity workflows: 1914
+- Unique active workflow signatures: 1914
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 743
+- Deliberate nuanced workflows: 745
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,7 +22,7 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 159 |
+| `PIL.Image` | 161 |
 | `PIL.Image.Image` | 813 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 45 |
@@ -445,6 +445,7 @@ are not copied into the active lane by name.
 - `PIL.Image.composite.nuanced.one-mask`
 - `PIL.Image.composite.nuanced.p-output-l-mask`
 - `PIL.Image.composite.nuanced.rgba-mask`
+- `PIL.Image.composite.nuanced.source-mode-conversion`
 - `PIL.Image.effect_mandelbrot.nuanced.height-one`
 - `PIL.Image.effect_mandelbrot.nuanced.negative-extent`
 - `PIL.Image.effect_mandelbrot.nuanced.negative-height`
@@ -478,6 +479,7 @@ are not copied into the active lane by name.
 - `PIL.Image.linear_gradient.nuanced.p-mode`
 - `PIL.Image.merge.nuanced.cmyk-mode`
 - `PIL.Image.merge.nuanced.invalid-mode`
+- `PIL.Image.merge.nuanced.wrong-band-count`
 - `PIL.Image.new.nuanced.float-scalar-f`
 - `PIL.Image.new.nuanced.integer-scalar-i`
 - `PIL.Image.new.nuanced.rejected-leading-space-string`

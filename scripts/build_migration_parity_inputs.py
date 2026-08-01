@@ -535,6 +535,11 @@ class WorkflowBuilder:
             requested_mode = "RGBA"
         if self.edge == "mode-mismatch" and label not in {"image", "mask"}:
             requested_mode = "L" if requested_mode != "L" else "RGB"
+        if self.edge == "composite-mode-mismatch":
+            if label == "image1":
+                requested_mode = "L"
+            elif label == "mask":
+                requested_mode = "L"
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
@@ -2039,6 +2044,8 @@ class WorkflowBuilder:
             }.get(self.mode)
             if band_count is None:
                 raise ValueError(f"merge workflow does not support mode {self.mode}")
+            if self.edge == "wrong-band-count":
+                band_count -= 1
             band_steps = []
             for index in range(band_count):
                 band_steps.append(
@@ -5239,6 +5246,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "wrong-band-count",
+            "mode": "RGB",
+            "edge": "wrong-band-count",
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "blend",
             "requirement_suffix": "behavior.default",
             "name": "mismatched-sizes",
@@ -5261,6 +5276,15 @@ def build_nuanced_cases(
             "name": "bad-mask-mode",
             "mode": "RGB",
             "mask_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-mode-conversion",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "composite-mode-mismatch",
         },
         {
             "surface": "PIL.Image",
