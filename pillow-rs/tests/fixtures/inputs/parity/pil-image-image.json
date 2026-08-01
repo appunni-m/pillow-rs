@@ -40787,6 +40787,738 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.Image.Image.crop.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "crop",
+      "covers": [
+        "PIL.Image.Image.crop.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "crop",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "box": {
+              "kind": "literal",
+              "value": [
+                1,
+                1,
+                7,
+                7
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.rotate.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "rotate",
+      "covers": [
+        "PIL.Image.Image.rotate.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "rotate",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "angle": {
+              "kind": "literal",
+              "value": 90
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transpose.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "transpose",
+      "covers": [
+        "PIL.Image.Image.transpose.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transpose",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "method": {
+              "kind": "literal",
+              "value": "NEAREST"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.copy.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "copy",
+      "covers": [
+        "PIL.Image.Image.copy.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "copy",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.point.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "point",
+      "covers": [
+        "PIL.Image.Image.point.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "point",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "lut": {
+              "kind": "literal",
+              "value": [
+                0,
+                2,
+                4,
+                6,
+                8,
+                10,
+                12,
+                14,
+                16,
+                18,
+                20,
+                22,
+                24,
+                26,
+                28,
+                30,
+                32,
+                34,
+                36,
+                38,
+                40,
+                42,
+                44,
+                46,
+                48,
+                50,
+                52,
+                54,
+                56,
+                58,
+                60,
+                62,
+                64,
+                66,
+                68,
+                70,
+                72,
+                74,
+                76,
+                78,
+                80,
+                82,
+                84,
+                86,
+                88,
+                90,
+                92,
+                94,
+                96,
+                98,
+                100,
+                102,
+                104,
+                106,
+                108,
+                110,
+                112,
+                114,
+                116,
+                118,
+                120,
+                122,
+                124,
+                126,
+                128,
+                130,
+                132,
+                134,
+                136,
+                138,
+                140,
+                142,
+                144,
+                146,
+                148,
+                150,
+                152,
+                154,
+                156,
+                158,
+                160,
+                162,
+                164,
+                166,
+                168,
+                170,
+                172,
+                174,
+                176,
+                178,
+                180,
+                182,
+                184,
+                186,
+                188,
+                190,
+                192,
+                194,
+                196,
+                198,
+                200,
+                202,
+                204,
+                206,
+                208,
+                210,
+                212,
+                214,
+                216,
+                218,
+                220,
+                222,
+                224,
+                226,
+                228,
+                230,
+                232,
+                234,
+                236,
+                238,
+                240,
+                242,
+                244,
+                246,
+                248,
+                250,
+                252,
+                254,
+                0,
+                2,
+                4,
+                6,
+                8,
+                10,
+                12,
+                14,
+                16,
+                18,
+                20,
+                22,
+                24,
+                26,
+                28,
+                30,
+                32,
+                34,
+                36,
+                38,
+                40,
+                42,
+                44,
+                46,
+                48,
+                50,
+                52,
+                54,
+                56,
+                58,
+                60,
+                62,
+                64,
+                66,
+                68,
+                70,
+                72,
+                74,
+                76,
+                78,
+                80,
+                82,
+                84,
+                86,
+                88,
+                90,
+                92,
+                94,
+                96,
+                98,
+                100,
+                102,
+                104,
+                106,
+                108,
+                110,
+                112,
+                114,
+                116,
+                118,
+                120,
+                122,
+                124,
+                126,
+                128,
+                130,
+                132,
+                134,
+                136,
+                138,
+                140,
+                142,
+                144,
+                146,
+                148,
+                150,
+                152,
+                154,
+                156,
+                158,
+                160,
+                162,
+                164,
+                166,
+                168,
+                170,
+                172,
+                174,
+                176,
+                178,
+                180,
+                182,
+                184,
+                186,
+                188,
+                190,
+                192,
+                194,
+                196,
+                198,
+                200,
+                202,
+                204,
+                206,
+                208,
+                210,
+                212,
+                214,
+                216,
+                218,
+                220,
+                222,
+                224,
+                226,
+                228,
+                230,
+                232,
+                234,
+                236,
+                238,
+                240,
+                242,
+                244,
+                246,
+                248,
+                250,
+                252,
+                254
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-blur-2",
+          "surface": "PIL.ImageFilter",
+          "operation": "BLUR",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-blur-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.opened-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "convert",
+      "covers": [
+        "PIL.Image.Image.convert.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.opened-rgba",
+      "surface": "PIL.Image.Image",
+      "operation": "convert",
+      "covers": [
+        "PIL.Image.Image.convert.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgba-small.png",
+          "sha256": "f3c46bd4ab629a8049d3e1b12fa5c6369df527b0930cd34dc789e1cd7e9986d7",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.convert.nuanced.opened-l",
+      "surface": "PIL.Image.Image",
+      "operation": "convert",
+      "covers": [
+        "PIL.Image.Image.convert.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/l-small.png",
+          "sha256": "0cc8bf64478a5dc8ea685dc32893024213dd0eb0dc3cfddced849ba52195ab33",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

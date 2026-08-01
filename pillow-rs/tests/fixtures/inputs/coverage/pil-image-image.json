@@ -1164,7 +1164,16 @@
           "PIL.Image.Image.getcolors.nuanced.opened-rgba",
           "PIL.Image.Image.getdata.nuanced.opened-rgb",
           "PIL.Image.Image.getprojection.nuanced.opened-rgb",
-          "PIL.Image.Image.getextrema.nuanced.opened-rgb"
+          "PIL.Image.Image.getextrema.nuanced.opened-rgb",
+          "PIL.Image.Image.crop.nuanced.opened-rgb",
+          "PIL.Image.Image.rotate.nuanced.opened-rgb",
+          "PIL.Image.Image.transpose.nuanced.opened-rgb",
+          "PIL.Image.Image.copy.nuanced.opened-rgb",
+          "PIL.Image.Image.point.nuanced.opened-rgb",
+          "PIL.Image.Image.filter.nuanced.opened-rgb",
+          "PIL.Image.Image.convert.nuanced.opened-rgb",
+          "PIL.Image.Image.convert.nuanced.opened-rgba",
+          "PIL.Image.Image.convert.nuanced.opened-l"
         ],
         "command_ids": [
           "coverage-imagecore-native"
