@@ -78,8 +78,12 @@ fn backend_locks_cover_every_op_family() {
 #[test]
 fn p_and_pa_pipelines_materialize() {
     let source = multi_color_rgb();
-    let quantized = source.quantize(16, 0, None, true, 1).expect("quantize");
+    let mut quantized = source.quantize(16, 0, None, true, 1).expect("quantize");
+    quantized.verify().expect("verify pipeline");
+    assert!(!quantized.is_materialized());
     let _ = quantized.materialize().expect("materialize");
+    quantized.load().expect("load");
+    assert!(quantized.is_materialized());
     let _ = quantized
         .materialize_indices()
         .expect("materialize_indices");
