@@ -414,6 +414,14 @@ class Image:
             img._info["transparency"] = (
                 transparency[0] if len(transparency) == 1 else tuple(transparency)
             )
+        elif self.mode == "PA" and mode in ("LA", "RGBA"):
+            # Pillow preserves pending palette transparency when a PA image
+            # is converted to an alpha-bearing mode.  The Rust core keeps the
+            # marker on the source image; carry the public metadata across
+            # this binding-level image construction as well.
+            pending = self.info.get("transparency")
+            if pending is not None:
+                img._info["transparency"] = pending
         return img
 
     def paste(

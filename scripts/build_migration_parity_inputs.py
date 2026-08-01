@@ -1825,7 +1825,10 @@ class WorkflowBuilder:
                     arguments={"fp": image_asset},
                     step_id="setup-duplicate-transparency",
                 )
-            elif chain == "p-full-palette-index-transparency-putpixel":
+            elif chain in {
+                "p-full-palette-index-transparency-putpixel",
+                "p-full-palette-index-transparency-apply",
+            }:
                 image_asset = self.inline_bytes(
                     "p-full-palette-index-transparency",
                     indexed_png_with_full_palette_index_alpha(),
@@ -1838,6 +1841,16 @@ class WorkflowBuilder:
                     arguments={"fp": image_asset},
                     step_id="setup-full-palette-index-transparency",
                 )
+            elif chain == "p-transparency-putalpha-apply":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putalpha",
+                    receiver=binding(image_step),
+                    arguments={"alpha": literal(192)},
+                    step_id="setup-transparency-putalpha",
+                )
+                receiver_step = image_step
             elif chain == "p-transparency-resize-apply":
                 image_step = self.ensure_image(mode="P")
                 receiver_step = self.add_step(
@@ -8188,6 +8201,24 @@ def build_nuanced_cases(
             "name": "png-p-transparency-putpalette",
             "scenario_asset": "image/p-transparency.png",
             "chain": "p-transparency-putpalette-apply",
+            "observe_receiver": True,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-single-index-transparency",
+            "mode": "P",
+            "chain": "p-full-palette-index-transparency-apply",
+            "observe_receiver": True,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "p-transparency-pa-boundary-putalpha",
+            "scenario_asset": "image/p-transparency.png",
+            "chain": "p-transparency-putalpha-apply",
             "observe_receiver": True,
         },
         {

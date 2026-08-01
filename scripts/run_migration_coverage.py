@@ -252,6 +252,14 @@ def coverage_case_failed(observations: list[dict[str, Any]]) -> bool:
         if status == "error":
             saw_public_error = True
         elif status == "not_run" and not saw_public_error:
+            # The parity runner only emits the dependency failure on the
+            # blocked observation when the failing setup step is not itself
+            # observed.  That reason carries the same public-error evidence
+            # as an earlier ``error`` observation and must not make the
+            # coverage workflow look incomplete.
+            reason = observation.get("reason", "")
+            if reason.startswith("dependency step ") and reason.endswith(" failed"):
+                continue
             return True
     return False
 

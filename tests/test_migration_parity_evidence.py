@@ -100,6 +100,16 @@ class MigrationParityEvidenceTests(unittest.TestCase):
         observations = [{"step_id": "call", "status": "not_run"}]
         self.assertTrue(coverage_case_failed(observations))
 
+    def test_blocked_not_run_with_dependency_failure_is_complete(self) -> None:
+        observations = [
+            {
+                "step_id": "call",
+                "status": "not_run",
+                "reason": "dependency step setup failed",
+            }
+        ]
+        self.assertFalse(coverage_case_failed(observations))
+
     def test_empty_join_is_complete_schema_and_not_proven(self) -> None:
         with tempfile.TemporaryDirectory(prefix="migration-status-test-") as directory:
             output = Path(directory) / "status.json"
@@ -122,7 +132,7 @@ class MigrationParityEvidenceTests(unittest.TestCase):
                 if item["dimension"] == "parity_outcome"
             )
             self.assertEqual(parity["numerator"], 0)
-            self.assertEqual(parity["denominator"], 1924)
+            self.assertEqual(parity["denominator"], 1926)
             self.assertTrue(all(item["parity"]["outcome"] == "not_proven" for item in result["operations"]))
 
     def test_unknown_status_field_is_rejected(self) -> None:
