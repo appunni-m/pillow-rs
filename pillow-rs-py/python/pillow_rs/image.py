@@ -310,8 +310,6 @@ class Image:
         resample = Resampling.from_int(resample)
         # Ensure size is a tuple (JSON deserialization may produce a list)
         size = tuple(size)
-        if size[0] <= 0 or size[1] <= 0:
-            raise ValueError("height and width must be > 0")
         source = self if box is None else self.crop(tuple(box))
         rust_image = source._rust_image.resize(size, resample)
         return Image(rust_image)
@@ -481,8 +479,12 @@ class Image:
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
         del reducing_gap
-        if size[0] <= 0 or size[1] <= 0:
+        # Pillow returns immediately for an all-zero target, but its
+        # single-zero aspect-ratio path raises the native division error.
+        if size[0] == 0 and size[1] == 0:
             return None
+        if size[0] <= 0 or size[1] <= 0:
+            raise ZeroDivisionError("division by zero")
         if isinstance(resample, int):
             resample = Resampling.from_int(resample)
         self._rust_image.thumbnail(size, resample)

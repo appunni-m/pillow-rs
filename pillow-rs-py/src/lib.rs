@@ -109,26 +109,18 @@ fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<P
         ));
     }
 
-    let valid_arity = match mode {
-        "LA" | "PA" => tuple_len == 2,
-        "RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV" => {
-            matches!(tuple_len, 3 | 4)
-        }
-        _ => false,
-    };
-    if !valid_arity {
-        let message = if matches!(mode, "LA" | "PA") {
-            "color must be int, or tuple of one or two elements"
-        } else {
-            "color must be int, or tuple of one, three or four elements"
-        };
-        return Err(PyTypeError::new_err(message));
-    }
-
+    // Keep tuple extraction in the binding, but let the core own arity
+    // validation.  That preserves one canonical error path for every backend
+    // and lets public parity inputs exercise the same shape checks as the
+    // Rust API.
     let mut components = Vec::with_capacity(tuple_len);
-    components.push(tuple.get_item(0)?.extract::<i64>()? as i128);
-    for index in 1..tuple_len {
-        components.push(tuple.get_item(index)?.extract::<i32>()? as i128);
+    for (index, item) in tuple.iter().enumerate() {
+        let component = if index == 0 {
+            item.extract::<i64>()? as i128
+        } else {
+            item.extract::<i32>()? as i128
+        };
+        components.push(component);
     }
     Ok(PutDataValue::Components(components))
 }

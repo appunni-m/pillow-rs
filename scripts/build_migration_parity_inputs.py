@@ -4254,6 +4254,30 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": "unknown-filter",
+            "values": {
+                "size": literal([7, 5]),
+                "resample": literal(999),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-width",
+            "values": {"size": literal([0, 5])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-height",
+            "values": {"size": literal([5, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "reduce",
             "requirement_suffix": "behavior.default",
             "name": "odd-size-factor-three",
@@ -7544,6 +7568,20 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-width",
+            "values": {"size": literal([0, 5])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-height",
+            "values": {"size": literal([5, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba",
@@ -7942,6 +7980,28 @@ def build_nuanced_cases(
             "mode": "P",
             "edge": "zero-size",
             "values": {
+                "data": bytes_literal([]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-width",
+            "mode": "L",
+            "values": {
+                "size": literal([0, 1]),
+                "data": bytes_literal([]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-height",
+            "mode": "L",
+            "values": {
+                "size": literal([1, 0]),
                 "data": bytes_literal([]),
             },
         },

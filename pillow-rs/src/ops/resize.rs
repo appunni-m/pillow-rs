@@ -37,7 +37,7 @@ impl Image {
     pub fn resize(&self, size: (u32, u32), filter: Option<&str>) -> Result<Image, PilError> {
         let (w, h) = size;
         if w == 0 || h == 0 {
-            return Err(PilError::ValueError("resize dimensions must be > 0".into()));
+            return Err(PilError::ValueError("height and width must be > 0".into()));
         }
         let mut filter = parse_resample(filter)?;
         // PIL forces NEAREST for mode "1" and "P" to avoid non-binary gray values
