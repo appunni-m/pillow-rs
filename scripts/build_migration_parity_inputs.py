@@ -4278,6 +4278,52 @@ def build_nuanced_cases(
             "name": "pa-mode",
             "mode": "PA",
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "color-two-tuple-box",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal([0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-zero-region",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal([1, 1, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "edge.mask-size-mismatch",
+            "name": "region-mask-mismatch",
+            "mode": "RGBA",
+            "im_mode": "RGBA",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
+            "values": {
+                "box": literal([0, 0, 16, 16]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "mode.pa",
+            "name": "p-source-into-pa",
+            "mode": "PA",
+            "im_mode": "P",
+            "values": {
+                "box": literal([2, 2, 6, 6]),
+            },
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}

@@ -321,7 +321,7 @@ class Image:
                 )
                 out.paste(clipped, (clip_left - left, clip_top - top))
             return out
-        rust_image = self._rust_image.crop_box(left, top, right, bottom)
+        rust_image = self._rust_image.crop((left, top, right - left, bottom - top))
         return Image(rust_image)
 
     def rotate(
