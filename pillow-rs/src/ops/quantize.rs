@@ -443,7 +443,12 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
 /// Pillow's unshifted_pixel_hash: XOR-mix of channels (Quant.c PIXEL_HASH).
 #[inline]
 fn maxcoverage_pixel_hash(r: u8, g: u8, b: u8) -> u32 {
-    (u32::from(r) * 463) ^ ((u32::from(g) << 8) * 10069) ^ ((u32::from(b) << 16) * 64997)
+    // Quant.c PIXEL_HASH uses unsigned int arithmetic, which wraps on
+    // overflow; the (b << 16) * 64997 term overflows u32, so wrap explicitly
+    // to keep debug builds panic-free and identical to C.
+    (u32::from(r) * 463)
+        ^ (u32::from(g) << 8).wrapping_mul(10069)
+        ^ (u32::from(b) << 16).wrapping_mul(64997)
 }
 
 /// Pillow's unshifted_pixel_cmp: lexicographic RGB ordering.
