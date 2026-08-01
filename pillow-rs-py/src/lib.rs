@@ -557,6 +557,7 @@ impl PyImage {
         &self,
         colors: Option<i32>,
         method: Option<i32>,
+        kmeans: Option<i32>,
         dither: Option<bool>,
     ) -> PyResult<PyImage> {
         let colors = colors.unwrap_or(256);
@@ -567,7 +568,7 @@ impl PyImage {
             .inner
             .quantize(
                 colors as u32,
-                0,
+                kmeans.unwrap_or(0).max(0) as u32,
                 None,
                 dither.unwrap_or(true),
                 method.unwrap_or(0) as u32,
