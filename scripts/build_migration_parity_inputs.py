@@ -377,10 +377,16 @@ class WorkflowBuilder:
             # Stimulus workflows that open an encoded container (for example
             # the JPEG-with-EXIF `ImageOps.exif_transpose` cases) build the
             # primary image from a committed asset instead of `Image.new`.
+            asset_media_type = {
+                ".png": "image/png",
+                ".gif": "image/gif",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+            }.get(Path(self.scenario_asset).suffix.lower(), "image/jpeg")
             fp_descriptor = self.ref(
                 f"{label}-asset",
                 self.scenario_asset,
-                "image/jpeg",
+                asset_media_type,
             )
             step_id = self.add_step(
                 "PIL.Image",
@@ -4324,6 +4330,98 @@ def build_nuanced_cases(
                 "box": literal([2, 2, 6, 6]),
             },
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-rgb-opened",
+            "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-rgba-opened",
+            "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-l-opened",
+            "scenario_asset": "image/l-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-opened",
+            "scenario_asset": "image/p-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency",
+            "scenario_asset": "image/p-transparency.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "gif-p-opened",
+            "scenario_asset": "image/p-small.gif",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-rgb-opened",
+            "scenario_asset": "image/rgb-small.jpg",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "png-rgb-opened",
+            "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-rgb-opened",
+            "scenario_asset": "image/rgb-small.jpg",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "png-rgba-opened",
+            "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency",
+            "scenario_asset": "image/p-transparency.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getextrema",
+            "requirement_suffix": "behavior.default",
+            "name": "png-rgba-opened",
+            "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "opened-rgb",
+            "scenario_asset": "image/rgb-small.png",
+            "values": {"format": literal("PNG")},
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
@@ -4371,6 +4469,7 @@ def build_nuanced_cases(
                 scenario_im_mode=spec.get("im_mode"),
                 scenario_mask_mode=spec.get("mask_mode"),
                 scenario_noise_seed=spec.get("seed"),
+                scenario_asset=spec.get("scenario_asset"),
             )
         )
     return cases

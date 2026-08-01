@@ -1124,7 +1124,20 @@
           "PIL.Image.Image.paste.nuanced.color-two-tuple-box",
           "PIL.Image.Image.paste.nuanced.color-zero-region",
           "PIL.Image.Image.paste.nuanced.region-mask-mismatch",
-          "PIL.Image.Image.paste.nuanced.p-source-into-pa"
+          "PIL.Image.Image.paste.nuanced.p-source-into-pa",
+          "PIL.Image.Image.load.nuanced.png-rgb-opened",
+          "PIL.Image.Image.load.nuanced.png-rgba-opened",
+          "PIL.Image.Image.load.nuanced.png-l-opened",
+          "PIL.Image.Image.load.nuanced.png-p-opened",
+          "PIL.Image.Image.load.nuanced.png-p-transparency",
+          "PIL.Image.Image.load.nuanced.gif-p-opened",
+          "PIL.Image.Image.load.nuanced.jpeg-rgb-opened",
+          "PIL.Image.Image.verify.nuanced.png-rgb-opened",
+          "PIL.Image.Image.verify.nuanced.jpeg-rgb-opened",
+          "PIL.Image.Image.getbbox.nuanced.png-rgba-opened",
+          "PIL.Image.Image.getbbox.nuanced.png-p-transparency",
+          "PIL.Image.Image.getextrema.nuanced.png-rgba-opened",
+          "PIL.Image.Image.save.nuanced.opened-rgb"
         ],
         "command_ids": [
           "coverage-imagecore-native"
