@@ -913,6 +913,15 @@ class WorkflowBuilder:
                         label="im",
                     )
                 )
+            if name == "alpha" and self.scenario_mask_mode is not None:
+                # putalpha accepts an "L"/"1" alpha layer; honor the scenario
+                # mask mode so the bound argument is a compatible mask.
+                return binding(
+                    self.ensure_image(
+                        mode=self.scenario_mask_mode,
+                        label="alpha",
+                    )
+                )
             return binding(self.ensure_image(label=slug(parameter_id)))
         if name == "mask":
             if self.scenario_mask_mode is not None:
@@ -4152,6 +4161,80 @@ def build_nuanced_cases(
                 "method": literal(1),
                 "kmeans": literal(5),
             },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "la-palette",
+            "mode": "P",
+            "values": {
+                "data": literal([0, 255, 1, 254]),
+                "rawmode": literal("LA"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "rgba-palette",
+            "mode": "P",
+            "values": {
+                "data": literal([10, 20, 30, 254, 40, 50, 60, 255]),
+                "rawmode": literal("RGBA"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpalette",
+            "requirement_suffix": "mode.l",
+            "name": "la-palette-l-image",
+            "mode": "L",
+            "values": {
+                "data": literal([0, 255, 1, 254]),
+                "rawmode": literal("LA"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mask",
+            "mode": "RGBA",
+            "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "parameter.scale",
+            "name": "rgb-tuples-scale-offset",
+            "mode": "RGB",
+            "values": {
+                "data": literal([[1, 2, 3], [4, 5, 6], [7, 8, 9]] * 3),
+                "scale": literal(2),
+                "offset": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "parameter.offset",
+            "name": "rgba-clipped-tuples",
+            "mode": "RGBA",
+            "values": {
+                "data": literal([[300, -5, 128, 0], [255, 200, 100, 400], [1, 2, 3, 4]] * 3),
+                "offset": literal(0.5),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "rgb-nonzero",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"format": literal("PNG")},
         },
     )
 

@@ -1845,16 +1845,33 @@ impl Image {
     /// Converts the retained RGB palette to a Pillow ``getpalette(rawmode)``
     /// layout.
     ///
-    /// Pillow's C `getpalette` accepts ``"RGB"``, ``"RGBA"``/``"RGBX"`` (alpha
-    /// forced to 255) and the single-channel selectors ``"R"``/``"G"``/``"B"``;
+    /// Pillow's C `getpalette` accepts ``"RGB"``, ``"RGBA"`` (real per-entry
+    /// alpha), ``"RGBX"`` (alpha forced to 255, only for palettes without
+    /// alpha data), and the single-channel selectors ``"R"``/``"G"``/``"B"``;
     /// every other rawmode raises ``ValueError: unrecognized raw mode``.
     pub fn getpalette_rawmode(&self, rawmode: &str) -> Result<Option<Vec<u8>>, PilError> {
         let Some(palette) = self.getpalette_trimmed() else {
             return Ok(None);
         };
+        let palette_alpha = self.palette_alpha().unwrap_or_default();
+        let has_alpha = !palette_alpha.is_empty();
         match rawmode {
             "RGB" => Ok(Some(palette)),
-            "RGBA" | "RGBX" => {
+            "RGBA" => {
+                let mut out = Vec::with_capacity(palette.len() / 3 * 4);
+                for (index, color) in palette.chunks_exact(3).enumerate() {
+                    out.extend_from_slice(color);
+                    out.push(palette_alpha.get(index).copied().unwrap_or(255));
+                }
+                Ok(Some(out))
+            }
+            "RGBX" => {
+                // Pillow has no RGBA->RGBX packer, so palettes carrying alpha
+                // data raise "unrecognized raw mode" for RGBX; palettes
+                // without alpha pack to RGB plus a 255 pad byte.
+                if has_alpha {
+                    return Err(PilError::ValueError("unrecognized raw mode".into()));
+                }
                 let mut out = Vec::with_capacity(palette.len() / 3 * 4);
                 for color in palette.chunks_exact(3) {
                     out.extend_from_slice(color);
@@ -3222,11 +3239,28 @@ fn split_palette_data(data: &[u8], rawmode: &str) -> Result<(Vec<u8>, Vec<u8>), 
             }
             Ok((rgb, alpha))
         }
+        "LA" => {
+            // Pillow ImagePalette compiles an LA palette to RGB triples with
+            // the L channel replicated and the A channel carried as palette
+            // alpha (ImagePalette.py `_raw`/mode transforms); getpalette
+            // therefore returns (L,L,L,A) per entry.
+            let complete = data.len() / 2 * 2;
+            if complete > 512 {
+                return Err(PilError::ValueError("invalid palette size".to_owned()));
+            }
+            let mut rgb = Vec::with_capacity(complete / 2 * 3);
+            let mut alpha = Vec::with_capacity(complete / 2);
+            for color in data[..complete].chunks_exact(2) {
+                rgb.extend_from_slice(&[color[0], color[0], color[0]]);
+                alpha.push(color[1]);
+            }
+            Ok((rgb, alpha))
+        }
         _ => Err(PilError::ValueError("unrecognized raw mode".to_owned())),
     }
 }
 
-fn expand_palette(
+pub(crate) fn expand_palette(
     indices: &crate::raster::GrayImage,
     palette: &[u8],
     palette_alpha: &[u8],

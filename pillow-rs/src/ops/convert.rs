@@ -154,6 +154,20 @@ impl Image {
                         DynamicImage::ImageLumaA8(color::pil_grayscale_alpha(&converted)?)
                     }
                 } else if mode == "RGBA" {
+                    // P sources with palette alpha keep per-entry alpha when
+                    // converting to RGBA; the RGB-only nonstandard path would
+                    // force every pixel opaque.
+                    if src_mode == "P" {
+                        let palette_alpha = self.palette_alpha().unwrap_or_default();
+                        if !palette_alpha.is_empty() {
+                            let indices = img.to_luma8();
+                            let pal = palette.as_deref().unwrap_or_default();
+                            return Ok(Image::from_dynamic(
+                                crate::image::expand_palette(&indices, pal, &palette_alpha),
+                                explicit_mode_for(mode),
+                            ));
+                        }
+                    }
                     DynamicImage::ImageRgba8(converted.to_rgba8())
                 } else {
                     converted
