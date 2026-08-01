@@ -5745,6 +5745,18 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
+            "name": "pa-from-l",
+            "observe_receiver": True,
+            "mode": "PA",
+            "im_mode": "L",
+            "values": {
+                "box": literal([0, 0, 16, 16]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
             "name": "i-two-tuple-mode-error",
             "mode": "I",
             "values": {
