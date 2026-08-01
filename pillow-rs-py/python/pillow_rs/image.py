@@ -359,7 +359,7 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
-        allowed_modes = {"1", "L", "LA", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F", "P"}
+        allowed_modes = {"1", "L", "LA", "PA", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F", "P"}
         if isinstance(palette, Image):
             palette = None
         if mode is None:
@@ -388,7 +388,7 @@ class Image:
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
         )
         img = Image(rust_image)
-        if mode in ("CMYK", "YCbCr", "HSV", "I", "F", "P", "1"):
+        if mode in ("CMYK", "YCbCr", "HSV", "I", "F", "P", "PA", "1"):
             img._explicit_mode = mode
         # Pillow carries a single palette transparency index through convert
         # to RGB/L as the palette-converted color and drops it for alpha
