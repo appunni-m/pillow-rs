@@ -6,21 +6,6 @@ from . import _core
 from ._core import Image as RustImage
 from .enums import Palette, Resampling, Transpose
 
-_BAND_NAMES = {
-    "L": ("L",),
-    "LA": ("L", "A"),
-    "PA": ("P", "A"),
-    "RGB": ("R", "G", "B"),
-    "RGBA": ("R", "G", "B", "A"),
-    "CMYK": ("C", "M", "Y", "K"),
-    "YCbCr": ("Y", "Cb", "Cr"),
-    "HSV": ("H", "S", "V"),
-    "I": ("I",),
-    "F": ("F",),
-    "1": ("1",),
-    "P": ("P",),
-}
-
 
 class ImagingCore:
     """Sequence view matching Pillow's internal ``ImagingCore`` contract."""
@@ -430,7 +415,7 @@ class Image:
         return tuple(map(Image, self._rust_image.split()))
 
     def getbands(self) -> Tuple[str, ...]:
-        return _BAND_NAMES.get(self.mode, (self.mode,))
+        return self._rust_image.getbands()
 
     def copy(self) -> "Image":
         new = Image(self._rust_image.copy())
