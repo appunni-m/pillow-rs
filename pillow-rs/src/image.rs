@@ -776,6 +776,11 @@ impl Image {
             // ImageChops.invert applies 255-index directly to P samples. Its
             // newly allocated core image intentionally has no palette.
             | PipelineOp::InvertChops
+            // Pillow's Chops.c arithmetic also operates on raw indexed
+            // samples for P images. The result remains P, but its newly
+            // allocated core has no palette attached.
+            | PipelineOp::Add { .. }
+            | PipelineOp::Subtract { .. }
             // Image.remap_palette builds an inverse index LUT and separately
             // installs the reordered palette on the result.
             | PipelineOp::RemapPalette { .. }

@@ -5932,6 +5932,96 @@
       ]
     },
     {
+      "case_id": "PIL.ImageChops.add.nuanced.materialized-p",
+      "surface": "PIL.ImageChops",
+      "operation": "add",
+      "covers": [
+        "PIL.ImageChops.add.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "add",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageChops.subtract.nuanced.scale-offset",
       "surface": "PIL.ImageChops",
       "operation": "subtract",
@@ -6045,6 +6135,96 @@
       ]
     },
     {
+      "case_id": "PIL.ImageChops.subtract.nuanced.materialized-p",
+      "surface": "PIL.ImageChops",
+      "operation": "subtract",
+      "covers": [
+        "PIL.ImageChops.subtract.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "subtract",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageChops.blend.nuanced.extrapolate-alpha",
       "surface": "PIL.ImageChops",
       "operation": "blend",
@@ -6151,6 +6331,100 @@
       ],
       "observations": [
         "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.blend.nuanced.materialized-p",
+      "surface": "PIL.ImageChops",
+      "operation": "blend",
+      "covers": [
+        "PIL.ImageChops.blend.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "blend",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            },
+            "alpha": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
       ]
     }
   ]

@@ -41,13 +41,24 @@ static SOFT_LIGHT_LUT: [u8; 65536] = {
     arr
 };
 
+fn materialize_chops_other(other: &Arc<Image>) -> Result<DynamicImage, PilError> {
+    // Chops.c receives the logical image core. For indexed inputs that means
+    // one-byte palette indices, not the visible RGB expansion used by color
+    // operations.
+    if matches!(other.mode()?.as_str(), "P" | "PA") {
+        other.materialize_indices()
+    } else {
+        other.materialize_for_ops()
+    }
+}
+
 /// Per-channel binary operation.
 fn channel_op_binary(
     img: &DynamicImage,
     other: &Arc<Image>,
     op: impl Fn(u8, u8) -> u8,
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize_for_ops()?;
+    let other_img = materialize_chops_other(other)?;
     let channels = img.color().channel_count() as usize;
     let other_channels = other_img.color().channel_count() as usize;
     let ch = channels.min(other_channels);
@@ -110,7 +121,7 @@ fn channel_op_binary_lut(
     other: &Arc<Image>,
     lut: &[u8; 65536],
 ) -> Result<DynamicImage, PilError> {
-    let other_img = other.materialize_for_ops()?;
+    let other_img = materialize_chops_other(other)?;
     let channels = img.color().channel_count() as usize;
     let other_channels = other_img.color().channel_count() as usize;
     let ch = channels.min(other_channels);

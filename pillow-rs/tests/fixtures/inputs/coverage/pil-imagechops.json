@@ -219,8 +219,11 @@
           "PIL.ImageChops.invert.nuanced.la",
           "PIL.ImageChops.invert.nuanced.rgba",
           "PIL.ImageChops.add.nuanced.scale-offset",
+          "PIL.ImageChops.add.nuanced.materialized-p",
           "PIL.ImageChops.subtract.nuanced.scale-offset",
-          "PIL.ImageChops.blend.nuanced.extrapolate-alpha"
+          "PIL.ImageChops.subtract.nuanced.materialized-p",
+          "PIL.ImageChops.blend.nuanced.extrapolate-alpha",
+          "PIL.ImageChops.blend.nuanced.materialized-p"
         ],
         "command_ids": []
       },
