@@ -21,11 +21,16 @@ class Stat:
             self.stddev = result['stddev']
             self.extrema = result['extrema']
         elif isinstance(image_or_list, list):
-            result = _core.stat_from_list(list(image_or_list))
+            result = _core.stat_from_histogram(list(image_or_list))
             self.count = result['count']
             self.sum = result['sum']
+            self.sum2 = result['sum2']
             self.mean = result['mean']
-            self.extrema = (result['min'], result['max'])
+            self.median = result['median']
+            self.rms = result['rms']
+            self.var = result['var']
+            self.stddev = result['stddev']
+            self.extrema = result['extrema']
         else:
             # PIL accepts only an Image or an exact list (not a tuple).
             raise TypeError("first argument must be image or list")

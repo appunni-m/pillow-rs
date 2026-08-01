@@ -3594,6 +3594,66 @@ pub fn raw_bytes_to_image(
     }
 }
 
+/// Computes Pillow `ImageStat.Stat` values from a precomputed histogram.
+///
+/// A histogram is partitioned into 256-bin bands. Each returned band contains
+/// `[count, sum, sum2, mean, median, rms, var, stddev, min, max]`, matching the
+/// representation used by [`Image::stat`].
+pub fn stat_from_histogram(data: &[f64]) -> StatResult {
+    let bands: Vec<Vec<f64>> = data
+        .chunks(256)
+        .map(|histogram| {
+            let count: f64 = histogram.iter().sum();
+            let sum: f64 = histogram
+                .iter()
+                .enumerate()
+                .map(|(index, &frequency)| index as f64 * frequency)
+                .sum();
+            let sum2: f64 = histogram
+                .iter()
+                .enumerate()
+                .map(|(index, &frequency)| {
+                    let value = index as f64;
+                    value * value * frequency
+                })
+                .sum();
+            let mean = if count > 0.0 { sum / count } else { 0.0 };
+            let rms = if count > 0.0 {
+                (sum2 / count).sqrt()
+            } else {
+                0.0
+            };
+            let variance = if count > 0.0 {
+                ((sum2 - (sum * sum) / count) / count).max(0.0)
+            } else {
+                0.0
+            };
+            let stddev = variance.sqrt();
+
+            let mut cumulative = 0.0;
+            let half = (count / 2.0).floor();
+            let mut median: f64 = 255.0;
+            let mut min_bin: f64 = 255.0;
+            let mut max_bin: f64 = 0.0;
+            for (index, &frequency) in histogram.iter().enumerate() {
+                cumulative += frequency;
+                if cumulative > half && median == 255.0 {
+                    median = index as f64;
+                }
+                if frequency > 0.0 {
+                    min_bin = min_bin.min(index as f64);
+                    max_bin = max_bin.max(index as f64);
+                }
+            }
+
+            vec![
+                count, sum, sum2, mean, median, rms, variance, stddev, min_bin, max_bin,
+            ]
+        })
+        .collect();
+    StatResult::from_bands(&bands)
+}
+
 /// Computes basic statistics for non-image numeric input.
 ///
 /// This is the Pillow `ImageStat` fallback for plain lists. The returned tuple

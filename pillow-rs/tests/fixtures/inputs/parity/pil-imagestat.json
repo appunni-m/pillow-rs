@@ -519,10 +519,622 @@
               ]
             }
           }
+        },
+        {
+          "step_id": "observe-count",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "count",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum2",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-mean",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "mean",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-median",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "median",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-rms",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "rms",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-var",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "var",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-stddev",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "stddev",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-extrema",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "extrema",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-count",
+        "observe-sum",
+        "observe-sum2",
+        "observe-mean",
+        "observe-median",
+        "observe-rms",
+        "observe-var",
+        "observe-stddev",
+        "observe-extrema"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageStat.Stat.nuanced.empty-list",
+      "surface": "PIL.ImageStat",
+      "operation": "Stat",
+      "covers": [
+        "PIL.ImageStat.Stat.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageStat",
+          "operation": "Stat",
+          "receiver": null,
+          "arguments": {
+            "image_or_list": {
+              "kind": "literal",
+              "value": []
+            }
+          }
+        },
+        {
+          "step_id": "observe-count",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "count",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum2",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-mean",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "mean",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-median",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "median",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-rms",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "rms",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-var",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "var",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-stddev",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "stddev",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-extrema",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "extrema",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-count",
+        "observe-sum",
+        "observe-sum2",
+        "observe-mean",
+        "observe-median",
+        "observe-rms",
+        "observe-var",
+        "observe-stddev",
+        "observe-extrema"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageStat.Stat.nuanced.zero-histogram-list",
+      "surface": "PIL.ImageStat",
+      "operation": "Stat",
+      "covers": [
+        "PIL.ImageStat.Stat.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageStat",
+          "operation": "Stat",
+          "receiver": null,
+          "arguments": {
+            "image_or_list": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-count",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "count",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum2",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-mean",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "mean",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-median",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "median",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-rms",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "rms",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-var",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "var",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-stddev",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "stddev",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-extrema",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "extrema",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-count",
+        "observe-sum",
+        "observe-sum2",
+        "observe-mean",
+        "observe-median",
+        "observe-rms",
+        "observe-var",
+        "observe-stddev",
+        "observe-extrema"
       ]
     }
   ]

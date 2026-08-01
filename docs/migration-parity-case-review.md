@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1862
-- Unique active workflow signatures: 1862
+- Active parity workflows: 1864
+- Unique active workflow signatures: 1864
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 693
+- Deliberate nuanced workflows: 695
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -43,7 +43,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImagePalette.ImagePalette` | 11 |
 | `PIL.ImageSequence` | 2 |
 | `PIL.ImageSequence.Iterator` | 2 |
-| `PIL.ImageStat` | 5 |
+| `PIL.ImageStat` | 7 |
 | `PIL.ImageStat.Stat` | 40 |
 
 ## Deprecated corpus accounting
@@ -751,7 +751,9 @@ are not copied into the active lane by name.
 - `PIL.ImageStat.Stat.extrema.nuanced.p-mode`
 - `PIL.ImageStat.Stat.extrema.nuanced.rgb-empty-frombytes`
 - `PIL.ImageStat.Stat.extrema.nuanced.rgba-empty-frombytes`
+- `PIL.ImageStat.Stat.nuanced.empty-list`
 - `PIL.ImageStat.Stat.nuanced.from-histogram-list`
+- `PIL.ImageStat.Stat.nuanced.zero-histogram-list`
 
 These cases cover high-risk behavior families that a broad default
 matrix does not distinguish: Unicode/combining/multiline font text,

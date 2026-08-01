@@ -421,6 +421,7 @@ class WorkflowBuilder:
     scenario_chain: str | None = None
     scenario_observe_result: str | None = None
     scenario_observe_receiver: bool = False
+    scenario_observe_stat_properties: bool = False
     scenario_outline_curve: bool = False
 
     @property
@@ -1895,6 +1896,32 @@ class WorkflowBuilder:
                 )
             )
 
+        if self.scenario_observe_stat_properties:
+            # A list passed to ImageStat.Stat is a public precomputed
+            # histogram, so observing the properties is necessary to make
+            # this an actual behavioral parity workflow rather than a
+            # constructor-only handle check.
+            for property_name in (
+                "count",
+                "sum",
+                "sum2",
+                "mean",
+                "median",
+                "rms",
+                "var",
+                "stddev",
+                "extrema",
+            ):
+                observations.append(
+                    self.add_step(
+                        "PIL.ImageStat.Stat",
+                        property_name,
+                        receiver=binding(call_id),
+                        arguments={},
+                        step_id=f"observe-{slug(property_name)}",
+                    )
+                )
+
         if self.scenario_observe_result is not None:
             # Materialize a returned image through a public Image method.  This
             # keeps nuanced ImageOps cases behavioral: the lazy operation and
@@ -1990,6 +2017,7 @@ def build_parity_case(
     scenario_chain: str | None = None,
     scenario_observe_result: str | None = None,
     scenario_observe_receiver: bool = False,
+    scenario_observe_stat_properties: bool = False,
     scenario_outline_curve: bool = False,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
@@ -2033,6 +2061,7 @@ def build_parity_case(
         scenario_chain=scenario_chain,
         scenario_observe_result=scenario_observe_result,
         scenario_observe_receiver=scenario_observe_receiver,
+        scenario_observe_stat_properties=scenario_observe_stat_properties,
         scenario_outline_curve=scenario_outline_curve,
     )
     assets, steps, observations = builder.build()
@@ -5210,11 +5239,28 @@ def build_nuanced_cases(
             "operation": "Stat",
             "requirement_suffix": "behavior.default",
             "name": "from-histogram-list",
+            "observe_stat_properties": True,
             "values": {
                 "image_or_list": literal(
                     [10 if index == 5 else 54 if index == 200 else 0 for index in range(256)]
                 ),
             },
+        },
+        {
+            "surface": "PIL.ImageStat",
+            "operation": "Stat",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-list",
+            "observe_stat_properties": True,
+            "values": {"image_or_list": literal([])},
+        },
+        {
+            "surface": "PIL.ImageStat",
+            "operation": "Stat",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-histogram-list",
+            "observe_stat_properties": True,
+            "values": {"image_or_list": literal([0] * 256)},
         },
         {
             "surface": "PIL.Image.Image",
@@ -8936,6 +8982,9 @@ def build_nuanced_cases(
                 scenario_chain=spec.get("chain"),
                 scenario_observe_result=spec.get("observe_result"),
                 scenario_observe_receiver=spec.get("observe_receiver", False),
+                scenario_observe_stat_properties=spec.get(
+                    "observe_stat_properties", False
+                ),
                 scenario_outline_curve=spec.get("outline_curve", False),
             )
         )

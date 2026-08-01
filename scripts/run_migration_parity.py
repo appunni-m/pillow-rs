@@ -166,15 +166,23 @@ def decode_outline(value: dict[str, Any], *, side: str) -> Any:
     return outline
 
 
-def decode_literal(value: Any, *, side: str = "source") -> Any:
+def decode_literal(
+    value: Any,
+    *,
+    side: str = "source",
+    preserve_lists: bool = False,
+) -> Any:
     if isinstance(value, list):
-        converted = [decode_literal(item, side=side) for item in value]
+        converted = [
+            decode_literal(item, side=side, preserve_lists=preserve_lists)
+            for item in value
+        ]
         # JSON has one sequence representation.  The public Pillow contract
         # accepts both list and tuple for these values, while the PyO3 target
         # exposes tuples for size/box/bands/matrices/coordinates.  Canonicalize
         # the language-neutral sequence for both independent adapters so a
         # Python implementation detail does not make setup itself not-run.
-        return tuple(converted)
+        return converted if preserve_lists else tuple(converted)
     if isinstance(value, dict):
         protocol = value.get("protocol")
         if protocol == "outline":
@@ -330,11 +338,20 @@ def operation_definition(
 
 
 def resolve_descriptor(
-    descriptor: dict[str, Any], bindings: dict[str, Any], assets: AssetStore, *, side: str
+    descriptor: dict[str, Any],
+    bindings: dict[str, Any],
+    assets: AssetStore,
+    *,
+    side: str,
+    preserve_lists: bool = False,
 ) -> Any:
     kind = descriptor["kind"]
     if kind == "literal":
-        return decode_literal(descriptor.get("value"), side=side)
+        return decode_literal(
+            descriptor.get("value"),
+            side=side,
+            preserve_lists=preserve_lists,
+        )
     if kind == "binding":
         return bindings[descriptor["step_id"]]
     if kind == "bindings":
@@ -385,7 +402,23 @@ def _call_arguments(
     for name, descriptor in descriptors.items():
         if name in handled:
             continue
-        value = resolve_descriptor(descriptor, bindings, assets, side=side)
+        # ``ImageStat.Stat`` deliberately accepts an exact ``list`` as a
+        # precomputed histogram.  The generic JSON decoder canonicalizes
+        # sequences to tuples for PyO3 coordinate/size parameters, but doing
+        # that here changes this public type check into the same adapter-level
+        # TypeError on both sides and prevents the Rust path from running.
+        preserve_lists = (
+            opdef["source"].get("path") == "PIL.ImageStat.Stat"
+            and name == "image_or_list"
+            and descriptor.get("kind") == "literal"
+        )
+        value = resolve_descriptor(
+            descriptor,
+            bindings,
+            assets,
+            side=side,
+            preserve_lists=preserve_lists,
+        )
         param = params.get(name, {})
         style = param.get("style", "positional_or_keyword")
         if style == "positional" or (

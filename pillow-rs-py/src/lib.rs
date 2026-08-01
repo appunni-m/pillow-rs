@@ -68,6 +68,37 @@ fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> 
     }
 }
 
+fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
+    use pillow_rs::StatValue;
+
+    Python::with_gil(|py| {
+        let dict = pyo3::types::PyDict::new(py);
+        macro_rules! set {
+            ($key:expr, $field:ident) => {
+                let value = match &result.$field {
+                    StatValue::Int(value) => value.to_object(py),
+                    StatValue::Float(value) => value.to_object(py),
+                    StatValue::IntList(value) => value.to_object(py),
+                    StatValue::FloatList(value) => value.to_object(py),
+                    StatValue::ExtremaSingle(value) => value.to_object(py),
+                    StatValue::ExtremaList(value) => value.to_object(py),
+                };
+                dict.set_item($key, value)?;
+            };
+        }
+        set!("count", count);
+        set!("sum", sum);
+        set!("sum2", sum2);
+        set!("mean", mean);
+        set!("median", median);
+        set!("rms", rms);
+        set!("var", var);
+        set!("stddev", stddev);
+        set!("extrema", extrema);
+        Ok(dict.to_object(py))
+    })
+}
+
 #[allow(unsafe_code)]
 fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
     // SAFETY: `Bound` guarantees a non-null, GIL-bound borrowed pointer for
@@ -625,34 +656,8 @@ impl PyImage {
     }
 
     fn stat_formatted(&self) -> PyResult<PyObject> {
-        use pillow_rs::StatValue;
         let result = self.inner.stat_formatted().map_err(map_error)?;
-        Python::with_gil(|py| {
-            let dict = pyo3::types::PyDict::new(py);
-            macro_rules! set {
-                ($key:expr, $field:ident) => {
-                    let v = match &result.$field {
-                        StatValue::Int(v) => v.to_object(py),
-                        StatValue::Float(v) => v.to_object(py),
-                        StatValue::IntList(v) => v.to_object(py),
-                        StatValue::FloatList(v) => v.to_object(py),
-                        StatValue::ExtremaSingle(v) => v.to_object(py),
-                        StatValue::ExtremaList(v) => v.to_object(py),
-                    };
-                    dict.set_item($key, v)?;
-                };
-            }
-            set!("count", count);
-            set!("sum", sum);
-            set!("sum2", sum2);
-            set!("mean", mean);
-            set!("median", median);
-            set!("rms", rms);
-            set!("var", var);
-            set!("stddev", stddev);
-            set!("extrema", extrema);
-            Ok(dict.to_object(py))
-        })
+        stat_result_to_python(&result)
     }
 
     fn histogram(&self) -> PyResult<Vec<u32>> {
@@ -1671,6 +1676,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // ImageStat module helpers
     m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
+    m.add_function(wrap_pyfunction!(stat_from_histogram, m)?)?;
 
     // Image module functions
     m.add_function(wrap_pyfunction!(image_merge, m)?)?;
@@ -3559,6 +3565,13 @@ fn stat_from_list(data: Vec<f64>) -> PyObject {
         let _ = dict.set_item("max", max_val);
         dict.to_object(py)
     })
+}
+
+/// Compute Pillow ImageStat values from a precomputed histogram.
+#[pyfunction]
+fn stat_from_histogram(data: Vec<f64>) -> PyResult<PyObject> {
+    let result = pillow_rs::stat_from_histogram(&data);
+    stat_result_to_python(&result)
 }
 
 // --- ImageFilter helper functions ---

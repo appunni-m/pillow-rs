@@ -166,6 +166,7 @@ pub use crate::image::PaletteTransparency;
 pub use crate::image::PutDataValue;
 pub use crate::image::StatResult;
 pub use crate::image::StatValue;
+pub use crate::image::stat_from_histogram;
 pub use crate::image::stat_from_list;
 pub use crate::ops::array::ArrayLayout;
 pub use crate::ops::array::resolve_array_layout;
