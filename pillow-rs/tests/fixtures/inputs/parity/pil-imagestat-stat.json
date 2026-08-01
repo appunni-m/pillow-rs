@@ -2385,6 +2385,68 @@
       ]
     },
     {
+      "case_id": "PIL.ImageStat.Stat.var.nuanced.l-large-uniform-rounding",
+      "surface": "PIL.ImageStat.Stat",
+      "operation": "var",
+      "covers": [
+        "PIL.ImageStat.Stat.var.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                7292605,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 182
+            }
+          }
+        },
+        {
+          "step_id": "setup-stat-2",
+          "surface": "PIL.ImageStat",
+          "operation": "Stat",
+          "receiver": null,
+          "arguments": {
+            "image_or_list": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "var",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-stat-2"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode",
       "surface": "PIL.ImageStat.Stat",
       "operation": "extrema",

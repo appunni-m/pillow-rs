@@ -728,7 +728,9 @@ class WorkflowBuilder:
                 "mode": literal(requested_mode),
                 "size": literal(size),
                 "color": literal(
-                    self.scenario_bitmap_color
+                    self.scenario_pixel
+                    if self.edge == "uniform-fill" and label == "image"
+                    else self.scenario_bitmap_color
                     if label == "bitmap" and self.scenario_bitmap_color is not None
                     else 0
                 ),
@@ -5487,6 +5489,16 @@ def build_nuanced_cases(
             "mode": "F",
             "edge": "nonzero-pixel",
             "pixel": 200,
+        },
+        {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "var",
+            "requirement_suffix": "mode.l",
+            "name": "l-large-uniform-rounding",
+            "mode": "L",
+            "edge": "uniform-fill",
+            "pixel": 182,
+            "size": [7292605, 1],
         },
         {
             "surface": "PIL.ImageStat.Stat",
