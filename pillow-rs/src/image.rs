@@ -1057,7 +1057,6 @@ impl Image {
         } else {
             None
         };
-        let source_format = source.source_format();
         match source {
             // Keep a concrete sample-layout boundary around palette expansion
             // and P↔PA transitions. A flattened batch has only one external
@@ -1072,7 +1071,10 @@ impl Image {
                 Image::Pipeline {
                     source: Arc::new(source.clone()),
                     ops: vec![op],
-                    format: source_format,
+                    // Pillow derived images (resize, crop, getchannel,
+                    // convert, rotate, ...) report format None; only the
+                    // originally opened image carries the container format.
+                    format: None,
                     explicit_mode,
                     backend: source.backend(),
                     palette: source_palette,
@@ -1083,7 +1085,6 @@ impl Image {
             Image::Pipeline {
                 source: pipeline_source,
                 ops,
-                format,
                 backend,
                 ..
             } => {
@@ -1092,7 +1093,7 @@ impl Image {
                 Image::Pipeline {
                     source: Arc::clone(pipeline_source),
                     ops: new_ops,
-                    format: *format,
+                    format: None,
                     explicit_mode,
                     backend: *backend,
                     palette: source_palette,
@@ -1103,7 +1104,7 @@ impl Image {
             other => Image::Pipeline {
                 source: Arc::new(other.clone()),
                 ops: vec![op],
-                format: source_format,
+                format: None,
                 explicit_mode,
                 backend: other.backend(),
                 palette: source_palette,
@@ -1126,7 +1127,7 @@ impl Image {
         Image::Pipeline {
             source: Arc::new(source.clone()),
             ops: vec![op],
-            format: source.source_format(),
+            format: None,
             explicit_mode: Some(output_mode.to_owned()),
             backend: source.backend(),
             palette: None,
@@ -2409,7 +2410,17 @@ impl Image {
 
     /// Returns a logically independent image sharing immutable caches until mutation.
     pub fn copy(&self) -> Self {
-        self.clone()
+        // Pillow's copy returns a fresh image whose `format` is None even when
+        // the source came from a file; only the originally opened image
+        // carries the container format.
+        let mut copy = self.clone();
+        match &mut copy {
+            Image::Loaded(data) => data.source_format = None,
+            Image::Paletted(data) => data.source_format = None,
+            Image::Bytes { format, .. } => *format = None,
+            Image::Pipeline { format, .. } => *format = None,
+        }
+        copy
     }
 
     /// Returns pixel data as a flat sequence of channel bytes.
