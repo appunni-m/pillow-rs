@@ -17,6 +17,7 @@ import argparse
 import base64
 import hashlib
 import json
+import random
 import re
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -266,6 +267,7 @@ class WorkflowBuilder:
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
     scenario_asset: str | None = None
+    scenario_noise_seed: int | None = None
 
     @property
     def mode(self) -> str:
@@ -385,6 +387,40 @@ class WorkflowBuilder:
                 "open",
                 receiver=None,
                 arguments={"fp": fp_descriptor},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "noise-fill":
+            # Deterministic diverse images (used by quantize MAXCOVERAGE and
+            # median-cut cases) are built through the public frombytes
+            # endpoint with an inline base64 payload so both the oracle and
+            # the target decode the exact same pixels.
+            size = self.scenario_size or [16, 16]
+            rng = random.Random(self.scenario_noise_seed or 0)
+            n_pixels = size[0] * size[1]
+            if requested_mode == "RGB":
+                data = bytes(rng.randrange(256) for _ in range(n_pixels * 3))
+            elif requested_mode == "RGBA":
+                data = bytes(rng.randrange(256) for _ in range(n_pixels * 4))
+            elif requested_mode == "L":
+                data = bytes(rng.randrange(256) for _ in range(n_pixels))
+            else:
+                raise ValueError(f"noise-fill edge unsupported for mode {requested_mode}")
+            data_desc = self.inline_bytes(
+                f"{label}-noise",
+                data,
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
                 step_id=self.next_step_id(f"setup-{label}"),
             )
             self._image_steps[cache_key] = step_id
@@ -1201,6 +1237,7 @@ def build_parity_case(
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
     scenario_asset: str | None = None,
+    scenario_noise_seed: int | None = None,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -1238,6 +1275,7 @@ def build_parity_case(
         scenario_im_mode=scenario_im_mode,
         scenario_mask_mode=scenario_mask_mode,
         scenario_asset=scenario_asset,
+        scenario_noise_seed=scenario_noise_seed,
     )
     assets, steps, observations = builder.build()
     return {
@@ -3923,6 +3961,198 @@ def build_nuanced_cases(
             "name": "invalid-filter",
             "values": {"filter": literal("BOGUS")},
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "mode.l",
+            "name": "nonzero-l",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "mode.1",
+            "name": "nonzero-1",
+            "mode": "1",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "mode.p",
+            "name": "nonzero-p",
+            "mode": "P",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "mode.rgb",
+            "name": "corner-pixel",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [255, 0, 0],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "mode.la",
+            "name": "nonzero-alpha",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 128],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "mode.rgba",
+            "name": "nonzero-alpha-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 128],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "edge.blank-image",
+            "name": "blank-rgb",
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "edge.blank-image",
+            "name": "blank-rgba",
+            "mode": "RGBA",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "la-zero-rgb-nonzero-alpha",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 200],
+            "values": {"alpha_only": literal(False)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "rgba-zero-rgb-nonzero-alpha",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [0, 0, 0, 200],
+            "values": {"alpha_only": literal(False)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter.alpha-only",
+            "name": "rgba-nonzero-rgb-zero-alpha",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 0],
+            "values": {"alpha_only": literal(False)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "parameter-combination.legacy-003",
+            "name": "alpha-only-false-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"alpha_only": literal(False)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "maxcoverage-16",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 1,
+            "values": {
+                "colors": literal(16),
+                "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "maxcoverage-4",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 2,
+            "values": {
+                "colors": literal(4),
+                "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.colors",
+            "name": "maxcoverage-32-colors",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 3,
+            "values": {
+                "colors": literal(32),
+                "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.kmeans",
+            "name": "maxcoverage-kmeans-1",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 4,
+            "values": {
+                "colors": literal(16),
+                "method": literal(1),
+                "kmeans": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.kmeans",
+            "name": "maxcoverage-kmeans-2",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 5,
+            "values": {
+                "colors": literal(16),
+                "method": literal(1),
+                "kmeans": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.kmeans",
+            "name": "maxcoverage-kmeans-5",
+            "mode": "RGB",
+            "edge": "noise-fill",
+            "seed": 6,
+            "values": {
+                "colors": literal(16),
+                "method": literal(1),
+                "kmeans": literal(5),
+            },
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
@@ -3969,6 +4199,7 @@ def build_nuanced_cases(
                 scenario_size=spec.get("size"),
                 scenario_im_mode=spec.get("im_mode"),
                 scenario_mask_mode=spec.get("mask_mode"),
+                scenario_noise_seed=spec.get("seed"),
             )
         )
     return cases

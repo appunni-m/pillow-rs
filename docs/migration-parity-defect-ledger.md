@@ -157,6 +157,7 @@ details to model explicitly, not reasons to omit the endpoints.
 | COV-005 | high | Existing “trusted” coverage is based on at least one passing parity test, which is not the same as 100% function, line, branch, or region coverage. | Report contract mapping and code coverage as separate dimensions with explicit thresholds. |
 | COV-006 | high | There is no many-to-many operation-to-component mapping for the full inventory. | Declare reusable components and verify that required paths exist and are instrumented. |
 | COV-007 | medium | No anti-exclusion gate proves that files, branches, or profiles were not omitted to improve coverage. | Audit include/exclude configuration and record it in the coverage result. |
+| COV-008 | high | `Image.quantize` method 0 (median cut) diverges from Pillow 12.2.0 on diverse RGB images: palette centroids differ by 1-2 units and 1..=thousands of pixels map to a different box, while method 1 (MAXCOVERAGE) is byte-identical after the Quant.c `quantize2` port. Found by a deterministic noise-image sweep (seeds 1-12, colors 2..=32, kmeans 0..=4) that the solid-color parity inputs never exercise. The divergence reproduces at kmeans=0, so it is in the median-cut tree/palette/map path, not the shared k-means refinement. | Port Pillow's `quantize` median-cut pipeline (`create_pixel_hash`/`mergesort_pixels`/`median_cut`/`annotate_hash_table`/`compute_palette_from_median_cut`/`map_image_pixels_from_median_box`) exactly, then add diverse-image quantize parity cases. |
 
 ## F. Benchmark defects
 
