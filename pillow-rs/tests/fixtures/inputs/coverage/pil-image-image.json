@@ -1145,7 +1145,13 @@
           "PIL.Image.Image.convert.nuanced.from-cmyk-to-l",
           "PIL.Image.Image.convert.nuanced.from-ycbcr",
           "PIL.Image.Image.convert.nuanced.from-hsv-to-rgb",
-          "PIL.Image.Image.convert.nuanced.from-f-to-l"
+          "PIL.Image.Image.convert.nuanced.from-f-to-l",
+          "PIL.Image.Image.quantize.nuanced.mediancut-16",
+          "PIL.Image.Image.quantize.nuanced.mediancut-4",
+          "PIL.Image.Image.quantize.nuanced.mediancut-32-colors",
+          "PIL.Image.Image.quantize.nuanced.mediancut-kmeans-1",
+          "PIL.Image.Image.quantize.nuanced.mediancut-kmeans-2",
+          "PIL.Image.Image.quantize.nuanced.mediancut-default"
         ],
         "command_ids": [
           "coverage-imagecore-native"

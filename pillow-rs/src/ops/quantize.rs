@@ -278,13 +278,67 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
         right: None,
     });
 
-    use std::cmp::Reverse;
-    use std::collections::BinaryHeap;
+    // Exact port of QuantHeap.c: 1-indexed max-heap on pixelCount with the
+    // same sift rules, so equal-count boxes pop in Pillow's order (the
+    // BinaryHeap tie-break by insertion index does not match the C sift).
+    struct BoxHeap {
+        heap: Vec<usize>, // index 0 unused, 1-indexed like C
+        counts: Vec<u32>, // tree node pixelCount by node index
+    }
+    impl BoxHeap {
+        fn new(counts: &[u32]) -> Self {
+            Self {
+                heap: vec![0],
+                counts: counts.to_vec(),
+            }
+        }
+        fn cmp(&self, a: usize, b: usize) -> i64 {
+            i64::from(self.counts[a]) - i64::from(self.counts[b])
+        }
+        fn note_count(&mut self, count: u32) {
+            self.counts.push(count);
+        }
+        fn add(&mut self, val: usize) {
+            self.heap.push(0);
+            let mut k = self.heap.len() - 1;
+            while k != 1 {
+                if self.cmp(val, self.heap[k >> 1]) <= 0 {
+                    break;
+                }
+                self.heap[k] = self.heap[k >> 1];
+                k >>= 1;
+            }
+            self.heap[k] = val;
+        }
+        fn remove(&mut self) -> Option<usize> {
+            if self.heap.len() <= 1 {
+                return None;
+            }
+            let root = self.heap[1];
+            let v = self.heap.pop().expect("heap non-empty");
+            if self.heap.len() == 1 {
+                return Some(root);
+            }
+            let mut k = 1usize;
+            let count = self.heap.len() - 1;
+            while k * 2 <= count {
+                let mut l = k * 2;
+                if l < count && self.cmp(self.heap[l], self.heap[l + 1]) < 0 {
+                    l += 1;
+                }
+                if self.cmp(v, self.heap[l]) > 0 {
+                    break;
+                }
+                self.heap[k] = self.heap[l];
+                k = l;
+            }
+            self.heap[k] = v;
+            Some(root)
+        }
+    }
 
-    // Max-heap: primary key pixelCount (descending),
-    // tie-break key Reverse(index) so older boxes (lower index) come first.
-    let mut heap: BinaryHeap<(u32, Reverse<usize>)> = BinaryHeap::new();
-    heap.push((boxes[0].pixel_count, Reverse(0)));
+    let mut heap = BoxHeap::new(&boxes.iter().map(|b| b.pixel_count).collect::<Vec<_>>());
+    heap.add(0);
 
     let max_colors = n_colors;
     let mut num_splits = 0usize;
@@ -292,8 +346,8 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
     while num_splits + 1 < max_colors {
         // Pop leaf with largest pixelCount (splittable only)
         let leaf_idx = loop {
-            match heap.pop() {
-                Some((_, Reverse(idx))) => {
+            match heap.remove() {
+                Some(idx) => {
                     if tree[idx].left.is_none()
                         && tree[idx].vbox.pixel_count > 1
                         && tree[idx].vbox.volume > 0
@@ -328,8 +382,10 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
                 tree[leaf_idx].left = Some(left_idx);
                 tree[leaf_idx].right = Some(right_idx);
 
-                heap.push((left.pixel_count, Reverse(left_idx)));
-                heap.push((right.pixel_count, Reverse(right_idx)));
+                heap.note_count(left.pixel_count);
+                heap.note_count(right.pixel_count);
+                heap.add(left_idx);
+                heap.add(right_idx);
                 num_splits += 1;
             }
             None => {
@@ -343,9 +399,10 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
     fn collect_tree_leaves(tree: &[TreeNode], idx: usize, leaves: &mut Vec<usize>) {
         match (tree[idx].left, tree[idx].right) {
             (Some(l), Some(r)) => {
-                // PIL visits right (higher values) before left (lower values).
-                collect_tree_leaves(tree, r, leaves);
+                // Quant.c annotate_hash_table visits the left subtree first,
+                // so the high-value box receives the lower palette index.
                 collect_tree_leaves(tree, l, leaves);
+                collect_tree_leaves(tree, r, leaves);
             }
             (None, None) => leaves.push(idx),
             (_, _) => unreachable!("node must have both or no children"),
@@ -936,18 +993,26 @@ fn try_split(vbox: &VBox, entries: &[HistEntry]) -> Option<(VBox, VBox)> {
         return None;
     }
 
-    // Find median split
+    // Quant.c splitlists walks the axis list from the highest value down
+    // (head -> tail) and accumulates counts until `left * 2 > pixelCount`;
+    // the first group that crosses the midpoint stays on the HIGH (left)
+    // side. The walk direction matters when the accumulated count lands
+    // exactly on half. If every group lands high, C falls back to moving
+    // the lowest-value group to the right so both sides are non-empty.
     let mut cum = 0u32;
-    let mut split_idx = 0usize;
-    let midpoint = vbox.pixel_count / 2;
-
-    for (j, &(_, cnt)) in deduped.iter().enumerate() {
-        cum += cnt;
-        if cum > midpoint {
-            split_idx = j;
+    let mut high_start = deduped.len();
+    for j in (0..deduped.len()).rev() {
+        cum += deduped[j].1;
+        if cum * 2 > vbox.pixel_count {
+            high_start = j;
             break;
         }
     }
+    if high_start == 0 {
+        high_start = 1;
+    }
+    let high_min = deduped[high_start].0;
+    let low_max = deduped[high_start - 1].0;
 
     // Determine the axis min/max for validation
     let (box_min, box_max) = match best_axis {
@@ -957,20 +1022,8 @@ fn try_split(vbox: &VBox, entries: &[HistEntry]) -> Option<(VBox, VBox)> {
         _ => unreachable!(),
     };
 
-    // Compute split value: split BETWEEN the last group that is at/below
-    // midpoint (group split_idx-1) and the first group above midpoint
-    // (group split_idx).  The entry at split_idx goes to the RIGHT box.
-    //
-    // When split_idx == 0 the first group alone exceeds midpoint — we
-    // split AFTER it (value+1) so the group goes to the LEFT box.
-    let split_val = if split_idx > 0 {
-        deduped[split_idx - 1].0.saturating_add(1)
-    } else {
-        deduped[0].0.saturating_add(1)
-    };
-
-    // Validate: left and right must both be non-empty.
-    if split_val <= box_min || split_val > box_max {
+    // Validate: left (high) and right (low) must both be non-empty.
+    if high_min <= box_min || low_max >= box_max || high_min > box_max || low_max < box_min {
         return None;
     }
 
@@ -985,38 +1038,38 @@ fn try_split(vbox: &VBox, entries: &[HistEntry]) -> Option<(VBox, VBox)> {
     // Build left and right boxes
     let (mut left, mut right) = match best_axis {
         0 => {
-            if split_val <= vbox.r_min || split_val > vbox.r_max {
+            if high_min <= vbox.r_min || low_max >= vbox.r_max {
                 return None;
             }
             let mut l = *vbox;
-            l.r_max = split_val - 1;
+            l.r_min = high_min;
             l.volume = box_volume(l.r_min, l.r_max, l.g_min, l.g_max, l.b_min, l.b_max);
             let mut r = *vbox;
-            r.r_min = split_val;
+            r.r_max = low_max;
             r.volume = box_volume(r.r_min, r.r_max, r.g_min, r.g_max, r.b_min, r.b_max);
             (l, r)
         }
         1 => {
-            if split_val <= vbox.g_min || split_val > vbox.g_max {
+            if high_min <= vbox.g_min || low_max >= vbox.g_max {
                 return None;
             }
             let mut l = *vbox;
-            l.g_max = split_val - 1;
+            l.g_min = high_min;
             l.volume = box_volume(l.r_min, l.r_max, l.g_min, l.g_max, l.b_min, l.b_max);
             let mut r = *vbox;
-            r.g_min = split_val;
+            r.g_max = low_max;
             r.volume = box_volume(r.r_min, r.r_max, r.g_min, r.g_max, r.b_min, r.b_max);
             (l, r)
         }
         2 => {
-            if split_val <= vbox.b_min || split_val > vbox.b_max {
+            if high_min <= vbox.b_min || low_max >= vbox.b_max {
                 return None;
             }
             let mut l = *vbox;
-            l.b_max = split_val - 1;
+            l.b_min = high_min;
             l.volume = box_volume(l.r_min, l.r_max, l.g_min, l.g_max, l.b_min, l.b_max);
             let mut r = *vbox;
-            r.b_min = split_val;
+            r.b_max = low_max;
             r.volume = box_volume(r.r_min, r.r_max, r.g_min, r.g_max, r.b_min, r.b_max);
             (l, r)
         }
