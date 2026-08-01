@@ -53,10 +53,12 @@ def bytes_literal(value: list[int]) -> dict[str, Any]:
     return {"kind": "bytes", "value": value}
 
 
-def outline_literal(*, curve: bool = False) -> dict[str, Any]:
+def outline_literal(*, curve: bool = False, empty: bool = False) -> dict[str, Any]:
     """Build a real public ``ImageDraw.Outline`` input for shape parity."""
 
-    if curve:
+    if empty:
+        commands: list[dict[str, Any]] = []
+    elif curve:
         commands = [
             {"name": "move", "args": [1, 1]},
             {"name": "curve", "args": [4, 8, 8, 8, 12, 1]},
@@ -430,6 +432,7 @@ class WorkflowBuilder:
     scenario_observe_receiver: bool = False
     scenario_observe_stat_properties: bool = False
     scenario_outline_curve: bool = False
+    scenario_outline_empty: bool = False
 
     @property
     def mode(self) -> str:
@@ -768,7 +771,10 @@ class WorkflowBuilder:
         return self._font_step
 
     def outline_value(self) -> dict[str, Any]:
-        return outline_literal(curve=self.scenario_outline_curve)
+        return outline_literal(
+            curve=self.scenario_outline_curve,
+            empty=self.scenario_outline_empty,
+        )
 
     def receiver_for(self, surface: str) -> dict[str, str] | None:
         if surface == "PIL.Image.Image":
@@ -2115,6 +2121,7 @@ def build_parity_case(
     scenario_observe_receiver: bool = False,
     scenario_observe_stat_properties: bool = False,
     scenario_outline_curve: bool = False,
+    scenario_outline_empty: bool = False,
 ) -> dict[str, Any]:
     prefix = operation_prefix(surface, operation["id"])
     suffix = requirement["id"].removeprefix(prefix + ".")
@@ -2159,6 +2166,7 @@ def build_parity_case(
         scenario_observe_receiver=scenario_observe_receiver,
         scenario_observe_stat_properties=scenario_observe_stat_properties,
         scenario_outline_curve=scenario_outline_curve,
+        scenario_outline_empty=scenario_outline_empty,
     )
     assets, steps, observations = builder.build()
     return {
@@ -3301,6 +3309,14 @@ def build_nuanced_cases(
             "name": "curve-outline",
             "outline_curve": True,
             "values": {"fill": literal([255, 0, 0])},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "shape",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-outline-no-op",
+            "outline_empty": True,
+            "values": {},
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
@@ -9223,6 +9239,7 @@ def build_nuanced_cases(
                     "observe_stat_properties", False
                 ),
                 scenario_outline_curve=spec.get("outline_curve", False),
+                scenario_outline_empty=spec.get("outline_empty", False),
             )
         )
     return cases

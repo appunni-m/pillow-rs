@@ -563,6 +563,7 @@
           "PIL.ImageDraw.ImageDraw.polygon.nuanced.two-points-outline",
           "PIL.ImageDraw.ImageDraw.shape.nuanced.filled-and-outlined",
           "PIL.ImageDraw.ImageDraw.shape.nuanced.curve-outline",
+          "PIL.ImageDraw.ImageDraw.shape.nuanced.empty-outline-no-op",
           "PIL.ImageDraw.ImageDraw.shape.nuanced.canvas-l-default-ink",
           "PIL.ImageDraw.ImageDraw.shape.nuanced.canvas-i-default-ink",
           "PIL.ImageDraw.ImageDraw.shape.nuanced.canvas-f-default-ink",

@@ -22975,6 +22975,87 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.shape.nuanced.empty-outline-no-op",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "shape",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.shape.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "shape",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "shape": {
+              "kind": "literal",
+              "value": {
+                "protocol": "outline",
+                "commands": []
+              }
+            }
+          }
+        },
+        {
+          "step_id": "observe-image",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-image"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.shape.nuanced.canvas-l-default-ink",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "shape",
