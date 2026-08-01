@@ -8384,6 +8384,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "parameter.rawmode",
+            "name": "opened-p-transparency-rgba",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"rawmode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getchannel",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba-alpha",

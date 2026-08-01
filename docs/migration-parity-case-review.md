@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1914
-- Unique active workflow signatures: 1914
+- Active parity workflows: 1927
+- Unique active workflow signatures: 1927
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 745
+- Deliberate nuanced workflows: 758
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 161 |
-| `PIL.Image.Image` | 813 |
+| `PIL.Image.Image` | 823 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
@@ -44,7 +44,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageSequence` | 2 |
 | `PIL.ImageSequence.Iterator` | 2 |
 | `PIL.ImageStat` | 7 |
-| `PIL.ImageStat.Stat` | 40 |
+| `PIL.ImageStat.Stat` | 43 |
 
 ## Deprecated corpus accounting
 
@@ -66,8 +66,11 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.alpha_composite.nuanced.source-larger-than-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.source-smaller-offset-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.source-smaller-than-dest`
+- `PIL.Image.Image.apply_transparency.nuanced.p-transparency-pa-boundary-putalpha`
+- `PIL.Image.Image.apply_transparency.nuanced.png-p-single-index-transparency`
 - `PIL.Image.Image.apply_transparency.nuanced.png-p-transparency`
 - `PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-loaded`
+- `PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-putpalette`
 - `PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized`
 - `PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table`
 - `PIL.Image.Image.convert.nuanced.alpha-conversion`
@@ -189,6 +192,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getbbox.nuanced.rgba-nonzero-rgb-zero-alpha`
 - `PIL.Image.Image.getbbox.nuanced.rgba-zero-rgb-nonzero-alpha`
 - `PIL.Image.Image.getbbox.nuanced.transparent-alpha-rgba`
+- `PIL.Image.Image.getchannel.nuanced.negative-index`
+- `PIL.Image.Image.getchannel.nuanced.numeric-out-of-range`
 - `PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha`
 - `PIL.Image.Image.getchannel.nuanced.p-resize-preserves-p-channel`
 - `PIL.Image.Image.getchannel.nuanced.pa-alpha-channel`
@@ -199,6 +204,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getcolors.nuanced.la-odd-nonzero`
 - `PIL.Image.Image.getcolors.nuanced.opened-p`
 - `PIL.Image.Image.getcolors.nuanced.opened-rgba`
+- `PIL.Image.Image.getdata.nuanced.negative-band`
 - `PIL.Image.Image.getdata.nuanced.opened-rgb`
 - `PIL.Image.Image.getexif.nuanced.jpeg-empty-app1`
 - `PIL.Image.Image.getexif.nuanced.jpeg-exif`
@@ -227,6 +233,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getpalette.nuanced.opened-p-after-load`
 - `PIL.Image.Image.getpalette.nuanced.opened-p-after-putpalette`
 - `PIL.Image.Image.getpalette.nuanced.opened-p-rgba`
+- `PIL.Image.Image.getpalette.nuanced.opened-p-transparency-rgba`
 - `PIL.Image.Image.getpalette.nuanced.opened-transparency-auto-rawmode`
 - `PIL.Image.Image.getpalette.nuanced.rgb-none-rgba`
 - `PIL.Image.Image.getpixel.nuanced.y-out-of-bounds`
@@ -299,6 +306,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putalpha.nuanced.f-unsupported`
 - `PIL.Image.Image.putalpha.nuanced.hsv-unsupported`
 - `PIL.Image.Image.putalpha.nuanced.i-unsupported`
+- `PIL.Image.Image.putalpha.nuanced.invalid-mask-mode`
 - `PIL.Image.Image.putalpha.nuanced.l-mask`
 - `PIL.Image.Image.putalpha.nuanced.l-scalar`
 - `PIL.Image.Image.putalpha.nuanced.la-mask`
@@ -320,6 +328,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putdata.nuanced.l-too-many-entries`
 - `PIL.Image.Image.putdata.nuanced.la-invalid-component-count`
 - `PIL.Image.Image.putdata.nuanced.la-packed`
+- `PIL.Image.Image.putdata.nuanced.la-scalar-float`
 - `PIL.Image.Image.putdata.nuanced.la-tuples`
 - `PIL.Image.Image.putdata.nuanced.one-mode`
 - `PIL.Image.Image.putdata.nuanced.p-indices`
@@ -350,6 +359,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putpixel.nuanced.i-x-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.i-y-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.one-tuple-equals-scalar`
+- `PIL.Image.Image.putpixel.nuanced.p-after-bitmap-no-palette-tuple`
 - `PIL.Image.Image.putpixel.nuanced.p-attached-palette-exact-match`
 - `PIL.Image.Image.putpixel.nuanced.p-full-palette-exhausted`
 - `PIL.Image.Image.putpixel.nuanced.p-full-palette-replace`
@@ -790,9 +800,11 @@ are not copied into the active lane by name.
 - `PIL.ImagePalette.ImagePalette.getcolor.nuanced.short-tuple-append`
 - `PIL.ImageStat.Stat.extrema.nuanced.cmyk-mode`
 - `PIL.ImageStat.Stat.extrema.nuanced.f-empty`
+- `PIL.ImageStat.Stat.extrema.nuanced.f-median-scan`
 - `PIL.ImageStat.Stat.extrema.nuanced.f-mode`
 - `PIL.ImageStat.Stat.extrema.nuanced.f-varied`
 - `PIL.ImageStat.Stat.extrema.nuanced.i-empty`
+- `PIL.ImageStat.Stat.extrema.nuanced.i-median-scan`
 - `PIL.ImageStat.Stat.extrema.nuanced.i-mode`
 - `PIL.ImageStat.Stat.extrema.nuanced.i-varied`
 - `PIL.ImageStat.Stat.extrema.nuanced.l-empty-frombytes`
@@ -804,6 +816,7 @@ are not copied into the active lane by name.
 - `PIL.ImageStat.Stat.nuanced.empty-list`
 - `PIL.ImageStat.Stat.nuanced.from-histogram-list`
 - `PIL.ImageStat.Stat.nuanced.zero-histogram-list`
+- `PIL.ImageStat.Stat.var.nuanced.l-large-uniform-rounding`
 
 These cases cover high-risk behavior families that a broad default
 matrix does not distinguish: Unicode/combining/multiline font text,

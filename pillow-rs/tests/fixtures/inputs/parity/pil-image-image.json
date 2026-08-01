@@ -49291,6 +49291,58 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getpalette.nuanced.opened-p-transparency-rgba",
+      "surface": "PIL.Image.Image",
+      "operation": "getpalette",
+      "covers": [
+        "PIL.Image.Image.getpalette.parameter.rawmode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/p-transparency.png",
+          "sha256": "889294aa717aa8df6544604054e880483073c17d6651839d0b6a4a08ea6eb984",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGBA"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha",
       "surface": "PIL.Image.Image",
       "operation": "getchannel",
