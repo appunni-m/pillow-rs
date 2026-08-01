@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1871
-- Unique active workflow signatures: 1871
+- Active parity workflows: 1877
+- Unique active workflow signatures: 1877
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 702
+- Deliberate nuanced workflows: 708
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 154 |
-| `PIL.Image.Image` | 796 |
+| `PIL.Image.Image` | 802 |
 | `PIL.ImageChops` | 79 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
@@ -200,11 +200,13 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getcolors.nuanced.opened-p`
 - `PIL.Image.Image.getcolors.nuanced.opened-rgba`
 - `PIL.Image.Image.getdata.nuanced.opened-rgb`
+- `PIL.Image.Image.getexif.nuanced.jpeg-empty-app1`
 - `PIL.Image.Image.getexif.nuanced.jpeg-exif`
 - `PIL.Image.Image.getexif.nuanced.jpeg-invalid-magic`
 - `PIL.Image.Image.getexif.nuanced.jpeg-le-orientation2`
 - `PIL.Image.Image.getexif.nuanced.jpeg-no-exif-prefix`
 - `PIL.Image.Image.getexif.nuanced.jpeg-no-orientation`
+- `PIL.Image.Image.getexif.nuanced.jpeg-short-app1-length`
 - `PIL.Image.Image.getexif.nuanced.jpeg-standalone-rst0`
 - `PIL.Image.Image.getexif.nuanced.jpeg-standalone-soi`
 - `PIL.Image.Image.getexif.nuanced.jpeg-without-exif`
@@ -416,6 +418,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transpose.nuanced.opened-rgb`
 - `PIL.Image.Image.verify.nuanced.bmp-rgb-opened`
 - `PIL.Image.Image.verify.nuanced.jpeg-rgb-opened`
+- `PIL.Image.Image.verify.nuanced.opened-rgb-resize-pipeline`
+- `PIL.Image.Image.verify.nuanced.p-resize-convert-pipeline`
+- `PIL.Image.Image.verify.nuanced.p-resize-pipeline`
+- `PIL.Image.Image.verify.nuanced.p-resize-putalpha-pipeline`
 - `PIL.Image.Image.verify.nuanced.png-rgb-opened`
 - `PIL.Image.Image.verify.nuanced.quantized-pipeline`
 - `PIL.Image.Image.verify.nuanced.resize-pipeline`
