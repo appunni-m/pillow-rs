@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1889
-- Unique active workflow signatures: 1889
+- Active parity workflows: 1894
+- Unique active workflow signatures: 1894
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 720
+- Deliberate nuanced workflows: 725
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,7 +22,7 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 154 |
+| `PIL.Image` | 159 |
 | `PIL.Image.Image` | 807 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 45 |
@@ -441,9 +441,11 @@ are not copied into the active lane by name.
 - `PIL.Image.composite.nuanced.rgba-mask`
 - `PIL.Image.effect_mandelbrot.nuanced.height-one`
 - `PIL.Image.effect_mandelbrot.nuanced.negative-extent`
+- `PIL.Image.effect_mandelbrot.nuanced.negative-height`
 - `PIL.Image.effect_mandelbrot.nuanced.quality-200`
 - `PIL.Image.effect_mandelbrot.nuanced.quality-one-error`
 - `PIL.Image.effect_mandelbrot.nuanced.width-one`
+- `PIL.Image.effect_mandelbrot.nuanced.zero-height`
 - `PIL.Image.effect_mandelbrot.nuanced.zero-size`
 - `PIL.Image.eval.nuanced.clamp-shift-callable`
 - `PIL.Image.eval.nuanced.invalid-lut-length`
@@ -466,8 +468,10 @@ are not copied into the active lane by name.
 - `PIL.Image.frombytes.nuanced.zero-width`
 - `PIL.Image.linear_gradient.nuanced.f-mode`
 - `PIL.Image.linear_gradient.nuanced.i-mode`
+- `PIL.Image.linear_gradient.nuanced.invalid-single-character-mode`
 - `PIL.Image.linear_gradient.nuanced.p-mode`
 - `PIL.Image.merge.nuanced.cmyk-mode`
+- `PIL.Image.merge.nuanced.invalid-mode`
 - `PIL.Image.new.nuanced.float-scalar-f`
 - `PIL.Image.new.nuanced.integer-scalar-i`
 - `PIL.Image.new.nuanced.rejected-leading-space-string`
@@ -486,6 +490,7 @@ are not copied into the active lane by name.
 - `PIL.Image.open.nuanced.formats-rejected`
 - `PIL.Image.radial_gradient.nuanced.f-mode`
 - `PIL.Image.radial_gradient.nuanced.i-mode`
+- `PIL.Image.radial_gradient.nuanced.invalid-single-character-mode`
 - `PIL.Image.radial_gradient.nuanced.p-mode`
 - `PIL.ImageChops.add.nuanced.materialized-p`
 - `PIL.ImageChops.add.nuanced.scale-offset`

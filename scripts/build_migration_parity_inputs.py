@@ -974,6 +974,8 @@ class WorkflowBuilder:
             return 99
         if name == "bands" and edge == "mode-band-mismatch":
             return ["L"]
+        if name == "bands" and edge == "invalid-mode":
+            return []
         if name == "format" and edge.startswith("webp-"):
             return "WEBP"
         if name == "format" and edge == "unsupported-format":
@@ -1988,7 +1990,7 @@ class WorkflowBuilder:
         if (
             self.primary_surface == "PIL.Image"
             and self.primary_operation == "merge"
-            and self.edge != "mode-band-mismatch"
+            and self.edge not in {"mode-band-mismatch", "invalid-mode"}
         ):
             # ``Image.merge`` takes a sequence of single-band Image objects.
             # A single binding is useful for error coverage but cannot reach
@@ -4994,6 +4996,13 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-single-character-mode",
+            "values": {"mode": literal("X")},
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "radial_gradient",
             "requirement_suffix": "behavior.default",
             "name": "i-mode",
@@ -5012,6 +5021,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "rgb-error",
             "values": {"mode": literal("RGB")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-single-character-mode",
+            "values": {"mode": literal("X")},
         },
         {
             "surface": "PIL.Image",
@@ -5048,10 +5064,40 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-height",
+            "values": {
+                "size": literal([4, 0]),
+                "extent": literal([-2.5, -1.5, 2.5, 1.5]),
+                "quality": literal(100),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-height",
+            "values": {
+                "size": literal([4, 4]),
+                "extent": literal([-1.0, 1.0, 1.0, -1.0]),
+                "quality": literal(10),
+            },
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "merge",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-mode",
             "mode": "CMYK",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-mode",
+            "edge": "invalid-mode",
+            "values": {"mode": literal("NOT_A_MODE")},
         },
         {
             "surface": "PIL.Image",
