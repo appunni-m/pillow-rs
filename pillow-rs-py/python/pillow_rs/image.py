@@ -574,8 +574,6 @@ class Image:
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
         if isinstance(alpha, Image):
-            if alpha.mode not in ("L", "1"):
-                raise ValueError("illegal image mode")
             mask = alpha.convert("L") if alpha.mode == "1" else alpha
             # The core promotes to the matching alpha mode (LA/PA/RGBA) and
             # installs the mask as the alpha band, mirroring Pillow.
@@ -682,8 +680,6 @@ class Image:
     def entropy(self, mask=None, extrema=None):
         """Calculate image entropy."""
         if isinstance(mask, Image):
-            if mask.mode not in ("1", "L"):
-                raise ValueError("bad transparency mask")
             return self._rust_image.entropy_with_mask(mask._rust_image)
         if mask is not None:
             raise ValueError("bad transparency mask")

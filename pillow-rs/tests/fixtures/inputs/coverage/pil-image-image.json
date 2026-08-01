@@ -1163,6 +1163,7 @@
           "PIL.Image.Image.putalpha.nuanced.ycbcr-unsupported",
           "PIL.Image.Image.putalpha.nuanced.hsv-unsupported",
           "PIL.Image.Image.putalpha.nuanced.one-mask",
+          "PIL.Image.Image.putalpha.nuanced.invalid-mask-mode",
           "PIL.Image.Image.putalpha.nuanced.mask-size-mismatch",
           "PIL.Image.Image.putdata.nuanced.rgb-tuples-scale-offset",
           "PIL.Image.Image.putdata.nuanced.rgba-clipped-tuples",
