@@ -1800,6 +1800,27 @@ class WorkflowBuilder:
                     step_id="setup-putpalette",
                 )
                 receiver_step = image_step
+            elif chain == "p-pipeline-paste":
+                destination_step = self.ensure_image(mode="RGB")
+                source_step = self.ensure_image(mode="P", label="source")
+                flipped_step = self.add_step(
+                    "PIL.ImageOps",
+                    "flip",
+                    receiver=None,
+                    arguments={"image": binding(source_step)},
+                    step_id="setup-pipeline-flip",
+                )
+                self.scenario_values["im"] = binding(flipped_step)
+                receiver_step = destination_step
+            elif chain == "p-invert-save":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.ImageChops",
+                    "invert",
+                    receiver=None,
+                    arguments={"image": binding(image_step)},
+                    step_id="setup-chops-invert",
+                )
             elif chain == "p-full-palette-putpixel":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -1916,10 +1937,7 @@ class WorkflowBuilder:
                 step_id="call",
             )
             observations = [call_id]
-            if (
-                self.primary_surface == "PIL.ImageDraw.ImageDraw"
-                and self.scenario_observe_receiver
-            ):
+            if self.scenario_observe_receiver:
                 observations.append(
                     self.add_step(
                         "PIL.Image.Image",
@@ -7332,6 +7350,15 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "p-invert-pipeline",
+            "mode": "P",
+            "chain": "p-invert-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "filter",
             "requirement_suffix": "mode.p",
             "name": "p-mode-filter",
@@ -7424,6 +7451,18 @@ def build_nuanced_cases(
             "im_mode": "P",
             "values": {
                 "box": literal([2, 2, 6, 6]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "p-pipeline-source",
+            "mode": "RGB",
+            "chain": "p-pipeline-paste",
+            "observe_receiver": True,
+            "values": {
+                "box": literal([0, 0, 16, 16]),
             },
         },
         {
