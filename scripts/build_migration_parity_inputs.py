@@ -1535,12 +1535,16 @@ class WorkflowBuilder:
             return self.assets, self.steps, [call_id]
 
         if self.scenario_chain is not None:
-            if self.primary_surface != "PIL.Image.Image":
+            if self.primary_surface not in {
+                "PIL.Image.Image",
+                "PIL.ImageDraw.ImageDraw",
+            }:
                 raise ValueError(
-                    "scenario chains currently require PIL.Image.Image methods"
+                    "scenario chains require supported image or image-draw methods"
                 )
 
             chain = self.scenario_chain
+            observation_step: str | None = None
             if chain == "resize-verify":
                 image_step = self.ensure_image(mode="RGB")
                 receiver_step = self.add_step(
@@ -1811,7 +1815,7 @@ class WorkflowBuilder:
                     step_id="setup-putpalette",
                 )
                 receiver_step = image_step
-            elif chain == "p-attached-palette-putpixel":
+            elif chain in {"p-attached-palette-putpixel", "p-attached-palette-bitmap"}:
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
                     "PIL.Image.Image",
@@ -1823,7 +1827,17 @@ class WorkflowBuilder:
                     },
                     step_id="setup-putpalette",
                 )
-                receiver_step = image_step
+                if self.primary_surface == "PIL.ImageDraw.ImageDraw":
+                    receiver_step = self.add_step(
+                        "PIL.ImageDraw",
+                        "Draw",
+                        receiver=None,
+                        arguments={"im": binding(image_step)},
+                        step_id="setup-draw",
+                    )
+                    observation_step = image_step
+                else:
+                    receiver_step = image_step
             elif chain == "p-full-palette-exhausted-putpixel":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -1901,7 +1915,21 @@ class WorkflowBuilder:
                 arguments=self.primary_arguments(operation),
                 step_id="call",
             )
-            return self.assets, self.steps, [call_id]
+            observations = [call_id]
+            if (
+                self.primary_surface == "PIL.ImageDraw.ImageDraw"
+                and self.scenario_observe_receiver
+            ):
+                observations.append(
+                    self.add_step(
+                        "PIL.Image.Image",
+                        "tobytes",
+                        receiver=binding(observation_step or receiver_step),
+                        arguments={},
+                        step_id="observe-receiver",
+                    )
+                )
+            return self.assets, self.steps, observations
 
         receiver = self.receiver_for(self.primary_surface)
         arguments = self.primary_arguments(operation)
@@ -2664,6 +2692,22 @@ def build_nuanced_cases(
             "name": "raw-p-no-palette-fallback",
             "mode": "P",
             "edge": "raw-p-no-palette",
+            "observe_receiver": True,
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(7),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "attached-palette",
+            "chain": "p-attached-palette-bitmap",
+            "mode": "P",
+            "observe_receiver": True,
             "bitmap_mode": "L",
             "bitmap_color": 128,
             "values": {

@@ -510,6 +510,7 @@
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.raw-p-no-palette-fallback",
+          "PIL.ImageDraw.ImageDraw.bitmap.nuanced.attached-palette",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgba-rgba-mask",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-one-mask",
           "PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-zero-one-mask",
