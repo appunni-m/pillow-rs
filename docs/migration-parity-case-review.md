@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1910
-- Unique active workflow signatures: 1910
+- Active parity workflows: 1912
+- Unique active workflow signatures: 1912
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 741
+- Deliberate nuanced workflows: 743
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 159 |
-| `PIL.Image.Image` | 812 |
+| `PIL.Image.Image` | 813 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
@@ -38,7 +38,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 87 |
 | `PIL.ImageFont.ImageFont` | 13 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 132 |
+| `PIL.ImageOps` | 133 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 11 |
 | `PIL.ImageSequence` | 2 |
@@ -243,6 +243,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.load.nuanced.bmp-rgb-opened`
 - `PIL.Image.Image.load.nuanced.gif-p-opened`
 - `PIL.Image.Image.load.nuanced.jpeg-rgb-opened`
+- `PIL.Image.Image.load.nuanced.p-resize-pipeline`
 - `PIL.Image.Image.load.nuanced.p-resize-putalpha`
 - `PIL.Image.Image.load.nuanced.png-l-opened`
 - `PIL.Image.Image.load.nuanced.png-p-opened`
@@ -754,6 +755,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.crop.nuanced.materialized-border`
 - `PIL.ImageOps.equalize.nuanced.materialized-l`
 - `PIL.ImageOps.equalize.nuanced.materialized-p`
+- `PIL.ImageOps.equalize.nuanced.opened-palette`
 - `PIL.ImageOps.equalize.nuanced.palette-mode`
 - `PIL.ImageOps.equalize.nuanced.unsupported-mode-cmyk`
 - `PIL.ImageOps.equalize.nuanced.unsupported-mode-f`

@@ -1188,6 +1188,7 @@
           "PIL.Image.Image.load.nuanced.png-p-opened",
           "PIL.Image.Image.load.nuanced.png-p-transparency",
           "PIL.Image.Image.load.nuanced.gif-p-opened",
+          "PIL.Image.Image.load.nuanced.p-resize-pipeline",
           "PIL.Image.Image.load.nuanced.jpeg-rgb-opened",
           "PIL.Image.Image.verify.nuanced.png-rgb-opened",
           "PIL.Image.Image.verify.nuanced.jpeg-rgb-opened",

@@ -233,6 +233,7 @@
           "PIL.ImageOps.autocontrast.nuanced.materialized-l",
           "PIL.ImageOps.equalize.nuanced.materialized-l",
           "PIL.ImageOps.equalize.nuanced.materialized-p",
+          "PIL.ImageOps.equalize.nuanced.opened-palette",
           "PIL.ImageOps.invert.nuanced.materialized-rgb",
           "PIL.ImageOps.flip.nuanced.materialized-rgb",
           "PIL.ImageOps.mirror.nuanced.materialized-rgb",

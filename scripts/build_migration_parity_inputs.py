@@ -6669,6 +6669,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-palette",
+            "scenario_asset": "image/p-small.png",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "invert",
             "requirement_suffix": "behavior.default",
             "name": "materialized-rgb",
@@ -7753,6 +7761,14 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "gif-p-opened",
             "scenario_asset": "image/p-small.gif",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-pipeline",
+            "mode": "P",
+            "chain": "p-resize-verify",
         },
         {
             "surface": "PIL.Image.Image",
