@@ -38,8 +38,15 @@ impl Image {
         for y in 0..img_h {
             for x in 0..img_w {
                 let px = rgba.get_pixel(x, y);
+                // Pillow GetBBox.c: 3-band modes zero the alpha byte of the mask
+                // (RGB only), 4-band alpha modes (LA/RGBA/PA/RGBa) use the alpha byte
+                // when alpha_only is set, and every other 32-bit mode keeps the full
+                // 0xffffffff mask — so alpha_only=false still counts a pixel whose
+                // alpha is nonzero even when all RGB channels are zero.
                 let is_nonzero = if alpha_only && has_alpha {
                     px[3] > 0
+                } else if has_alpha {
+                    px[0] > 0 || px[1] > 0 || px[2] > 0 || px[3] > 0
                 } else {
                     px[0] > 0 || px[1] > 0 || px[2] > 0
                 };

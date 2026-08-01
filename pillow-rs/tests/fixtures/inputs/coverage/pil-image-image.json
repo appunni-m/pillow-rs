@@ -1090,7 +1090,24 @@
           "PIL.Image.Image.histogram.nuanced.masked-region",
           "PIL.Image.Image.entropy.nuanced.masked-region",
           "PIL.Image.Image.filter.nuanced.f-mode",
-          "PIL.Image.Image.filter.nuanced.invalid-filter"
+          "PIL.Image.Image.filter.nuanced.invalid-filter",
+          "PIL.Image.Image.getbbox.nuanced.nonzero-l",
+          "PIL.Image.Image.getbbox.nuanced.nonzero-1",
+          "PIL.Image.Image.getbbox.nuanced.nonzero-p",
+          "PIL.Image.Image.getbbox.nuanced.corner-pixel",
+          "PIL.Image.Image.getbbox.nuanced.nonzero-alpha",
+          "PIL.Image.Image.getbbox.nuanced.nonzero-alpha-rgba",
+          "PIL.Image.Image.getbbox.nuanced.blank-rgba",
+          "PIL.Image.Image.getbbox.nuanced.la-zero-rgb-nonzero-alpha",
+          "PIL.Image.Image.getbbox.nuanced.rgba-zero-rgb-nonzero-alpha",
+          "PIL.Image.Image.getbbox.nuanced.rgba-nonzero-rgb-zero-alpha",
+          "PIL.Image.Image.getbbox.nuanced.alpha-only-false-rgb",
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-16",
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-4",
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-32-colors",
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-1",
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-2",
+          "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-5"
         ],
         "command_ids": [
           "coverage-imagecore-native"
