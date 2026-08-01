@@ -2172,14 +2172,39 @@ impl Image {
     ///
     /// Returns an error if a lazy/deferred indexed image cannot be materialized.
     pub fn apply_transparency(&mut self) -> Result<(), PilError> {
-        if !self.has_palette_mode() || self.pending_palette_transparency().is_none() {
+        let Some(pending) = self.pending_palette_transparency() else {
+            return Ok(());
+        };
+        if !self.has_palette_mode() {
             return Ok(());
         }
 
-        if !matches!(self, Image::Paletted(_)) {
+        // Pillow's Image.py:apply_transparency starts from getpalette("RGBA")
+        // and overlays the pending info value. That matters after putpalette:
+        // the new palette may have no alpha table even though the source image
+        // still carries an indexed transparency marker.
+        let palette = self.palette().unwrap_or_else(default_palette);
+        let palette_entries = palette.len() / 3;
+        let mut palette_alpha = self.palette_alpha().unwrap_or_default();
+        palette_alpha.resize(palette_entries, 255);
+        palette_alpha.truncate(palette_entries);
+        match pending {
+            PaletteTransparency::Index(index) => {
+                if let Some(alpha) = palette_alpha.get_mut(usize::from(index)) {
+                    *alpha = 0;
+                }
+            }
+            PaletteTransparency::Table(table) => {
+                for (alpha, value) in palette_alpha.iter_mut().zip(table) {
+                    *alpha = value;
+                }
+            }
+        }
+
+        if let Image::Paletted(data) = self {
+            data.palette_alpha = palette_alpha;
+        } else {
             let indices = self.materialize()?.to_luma8();
-            let palette = self.palette().unwrap_or_else(default_palette);
-            let palette_alpha = self.palette_alpha().unwrap_or_default();
             let source_format = self.source_format();
             let info = self.image_info();
             *self = Image::Paletted(PalettedData {

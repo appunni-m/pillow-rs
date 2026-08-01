@@ -1830,6 +1830,19 @@ class WorkflowBuilder:
                     step_id="setup-transparency-load",
                 )
                 receiver_step = image_step
+            elif chain == "p-transparency-putpalette-apply":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-transparency-putpalette",
+                )
+                receiver_step = image_step
             elif chain == "opened-p-load-getpalette":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -2014,12 +2027,22 @@ class WorkflowBuilder:
             )
             observations = [call_id]
             if self.scenario_observe_receiver:
+                observation_operation = (
+                    "convert"
+                    if self.primary_operation == "apply_transparency"
+                    else "tobytes"
+                )
+                observation_arguments = (
+                    {"mode": literal("RGBA")}
+                    if observation_operation == "convert"
+                    else {}
+                )
                 observations.append(
                     self.add_step(
                         "PIL.Image.Image",
-                        "tobytes",
+                        observation_operation,
                         receiver=binding(observation_step or receiver_step),
-                        arguments={},
+                        arguments=observation_arguments,
                         step_id="observe-receiver",
                     )
                 )
@@ -8073,6 +8096,15 @@ def build_nuanced_cases(
             "name": "png-p-transparency-loaded",
             "scenario_asset": "image/p-transparency.png",
             "chain": "p-transparency-load-apply",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-putpalette",
+            "scenario_asset": "image/p-transparency.png",
+            "chain": "p-transparency-putpalette-apply",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
