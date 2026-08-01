@@ -4905,6 +4905,55 @@ def build_nuanced_cases(
                 "value": literal([255, 0, 0]),
             },
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "la-source-into-rgb",
+            "mode": "RGB",
+            "im_mode": "LA",
+            "values": {"box": literal([0, 0, 4, 4])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "rgba-source-into-rgb",
+            "mode": "RGB",
+            "im_mode": "RGBA",
+            "values": {"box": literal([0, 0, 4, 4])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "l-source-into-rgb",
+            "mode": "RGB",
+            "im_mode": "L",
+            "values": {"box": literal([0, 0, 4, 4])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "scalar-color-rgb",
+            "mode": "RGB",
+            "values": {
+                "im": literal(255),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "scalar-color-la",
+            "mode": "LA",
+            "values": {
+                "im": literal(255),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}

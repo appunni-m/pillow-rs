@@ -1189,7 +1189,11 @@
           "PIL.Image.Image.verify.nuanced.webp-rgba-opened",
           "PIL.Image.Image.entropy.nuanced.mask-size-mismatch",
           "PIL.Image.Image.entropy.nuanced.bad-mask-mode",
-          "PIL.Image.Image.putpixel.nuanced.p-mode-rgb-color"
+          "PIL.Image.Image.putpixel.nuanced.p-mode-rgb-color",
+          "PIL.Image.Image.paste.nuanced.la-source-into-rgb",
+          "PIL.Image.Image.paste.nuanced.rgba-source-into-rgb",
+          "PIL.Image.Image.paste.nuanced.l-source-into-rgb",
+          "PIL.Image.Image.paste.nuanced.scalar-color-la"
         ],
         "command_ids": [
           "coverage-imagecore-native"
