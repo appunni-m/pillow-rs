@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1853
-- Unique active workflow signatures: 1853
+- Active parity workflows: 1861
+- Unique active workflow signatures: 1861
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 684
+- Deliberate nuanced workflows: 692
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -27,7 +27,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageChops` | 79 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 339 |
+| `PIL.ImageDraw.ImageDraw` | 347 |
 | `PIL.ImageEnhance` | 16 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
@@ -519,9 +519,12 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-1-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk-half-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-f-half-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-f-mask-out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-f-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-f-tuple-fill-error`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-f-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-hsv`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-i-half-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-i-one-mask`
@@ -529,16 +532,21 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-l-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-zero-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-l-zero-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-la`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-la-half-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-la-opaque-destination`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-la-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-one-half-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p-half-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-l-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-rgba-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgba-rgba-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-ycbcr`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-ycbcr-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.partial-cmyk-mask-out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.partial-l-mask-out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.partial-la-mask-out-of-bounds`
