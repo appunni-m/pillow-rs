@@ -1173,7 +1173,15 @@
           "PIL.Image.Image.filter.nuanced.opened-rgb",
           "PIL.Image.Image.convert.nuanced.opened-rgb",
           "PIL.Image.Image.convert.nuanced.opened-rgba",
-          "PIL.Image.Image.convert.nuanced.opened-l"
+          "PIL.Image.Image.convert.nuanced.opened-l",
+          "PIL.Image.Image.load.nuanced.bmp-rgb-opened",
+          "PIL.Image.Image.load.nuanced.tiff-rgb-opened",
+          "PIL.Image.Image.load.nuanced.webp-rgb-opened",
+          "PIL.Image.Image.load.nuanced.webp-rgba-opened",
+          "PIL.Image.Image.verify.nuanced.bmp-rgb-opened",
+          "PIL.Image.Image.verify.nuanced.tiff-rgb-opened",
+          "PIL.Image.Image.verify.nuanced.webp-rgb-opened",
+          "PIL.Image.Image.verify.nuanced.webp-rgba-opened"
         ],
         "command_ids": [
           "coverage-imagecore-native"
