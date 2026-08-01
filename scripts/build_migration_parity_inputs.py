@@ -8285,6 +8285,22 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-index",
+            "mode": "RGBA",
+            "values": {"channel": literal(-1)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "numeric-out-of-range",
+            "mode": "RGB",
+            "values": {"channel": literal(3)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "split",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba",
