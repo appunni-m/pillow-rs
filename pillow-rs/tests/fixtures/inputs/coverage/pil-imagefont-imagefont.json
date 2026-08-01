@@ -30,7 +30,8 @@
           "PIL.ImageFont.ImageFont.getmask.behavior.default",
           "PIL.ImageFont.ImageFont.getmask.parameter.mode",
           "PIL.ImageFont.ImageFont.getmask.parameter.args",
-          "PIL.ImageFont.ImageFont.getmask.parameter.kwargs"
+          "PIL.ImageFont.ImageFont.getmask.parameter.kwargs",
+          "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask"
         ],
         "command_ids": []
       },

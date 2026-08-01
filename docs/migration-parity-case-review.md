@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1877
-- Unique active workflow signatures: 1877
+- Active parity workflows: 1878
+- Unique active workflow signatures: 1878
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 708
+- Deliberate nuanced workflows: 709
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -36,7 +36,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFilter` | 104 |
 | `PIL.ImageFont` | 25 |
 | `PIL.ImageFont.FreeTypeFont` | 78 |
-| `PIL.ImageFont.ImageFont` | 10 |
+| `PIL.ImageFont.ImageFont` | 11 |
 | `PIL.ImageFont.TransposedFont` | 13 |
 | `PIL.ImageOps` | 132 |
 | `PIL.ImagePalette` | 3 |
@@ -694,6 +694,7 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.multiline-stroked`
 - `PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font`
 - `PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font`
+- `PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask`
 - `PIL.ImageFont.TransposedFont.getbbox.nuanced.rotate-270`
 - `PIL.ImageFont.TransposedFont.getlength.nuanced.rotate-90-length-error`
 - `PIL.ImageFont.TransposedFont.getmask.nuanced.rotate-90`

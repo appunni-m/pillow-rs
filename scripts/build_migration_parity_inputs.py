@@ -1501,6 +1501,32 @@ class WorkflowBuilder:
         operation = self.operations[
             operation_key(self.primary_surface, self.primary_operation)
         ]
+        if self.scenario_chain == "pilfont-load-getmask":
+            if self.primary_surface != "PIL.ImageFont.ImageFont":
+                raise ValueError(
+                    "PILfont chains require PIL.ImageFont.ImageFont methods"
+                )
+            receiver_step = self.add_step(
+                "PIL.ImageFont",
+                "load",
+                receiver=None,
+                arguments={
+                    "filename": self.ref(
+                        "pilfont",
+                        "font/pilfont/courb08.pil",
+                        "application/x-pilfont",
+                    )
+                },
+                step_id="setup-pilfont",
+            )
+            call_id = self.add_step(
+                self.primary_surface,
+                self.primary_operation,
+                receiver=binding(receiver_step),
+                arguments=self.primary_arguments(operation),
+                step_id="call",
+            )
+            return self.assets, self.steps, [call_id]
 
         if self.scenario_chain is not None:
             if self.primary_surface != "PIL.Image.Image":
@@ -2170,6 +2196,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "seek-frame-zero",
             "mode": "L",
+        },
+        {
+            "surface": "PIL.ImageFont.ImageFont",
+            "operation": "getmask",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-pilfont-mode1-mask",
+            "chain": "pilfont-load-getmask",
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",

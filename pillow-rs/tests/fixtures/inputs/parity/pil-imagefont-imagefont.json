@@ -430,6 +430,58 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask",
+      "surface": "PIL.ImageFont.ImageFont",
+      "operation": "getmask",
+      "covers": [
+        "PIL.ImageFont.ImageFont.getmask.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "pilfont",
+          "kind": "ref",
+          "path": "font/pilfont/courb08.pil",
+          "sha256": "5e85438582f0e790b6b115d1afd66fa439d9fc45875af5cc760af7034d67187a",
+          "media_type": "application/x-pilfont"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-pilfont",
+          "surface": "PIL.ImageFont",
+          "operation": "load",
+          "receiver": null,
+          "arguments": {
+            "filename": {
+              "kind": "asset",
+              "asset_id": "pilfont"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.ImageFont",
+          "operation": "getmask",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-pilfont"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": "Hello"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }
