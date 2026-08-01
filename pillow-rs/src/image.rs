@@ -1979,6 +1979,39 @@ impl Image {
             .or_else(|| Some(PaletteTransparency::Table(alpha)))
     }
 
+    /// Returns the `info["transparency"]` value a Pillow `convert` to
+    /// `target_mode` would carry for a palette image.
+    ///
+    /// Pillow converts a single transparency index through the palette when
+    /// the target has no alpha band (RGB keeps the palette color, L its BT.601
+    /// gray level) and drops transparency entirely for alpha targets (RGBA,
+    /// LA, PA) and for byte-table transparency.
+    pub fn converted_palette_transparency(&self, target_mode: &str) -> Option<Vec<u8>> {
+        if !matches!(target_mode, "L" | "RGB") {
+            return None;
+        }
+        let index = match self.pending_palette_transparency()? {
+            PaletteTransparency::Index(index) => index,
+            PaletteTransparency::Table(_) => return None,
+        };
+        let palette = self.palette()?;
+        let base = usize::from(index) * 3;
+        let r = *palette.get(base)?;
+        let g = *palette.get(base + 1)?;
+        let b = *palette.get(base + 2)?;
+        if target_mode == "RGB" {
+            Some(vec![r, g, b])
+        } else {
+            // BT.601 fixed-point with the same rounding bias as pil_grayscale.
+            let y = (19595u32 * u32::from(r)
+                + 38470u32 * u32::from(g)
+                + 7471u32 * u32::from(b)
+                + 32768)
+                >> 16;
+            Some(vec![y.min(255) as u8])
+        }
+    }
+
     /// Returns the observable Pillow palette mode.
     pub fn palette_mode(&self) -> Option<&'static str> {
         (self.has_palette_mode() || self.explicit_mode() == Some("PA")).then(|| {

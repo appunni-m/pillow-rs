@@ -513,6 +513,10 @@ impl PyImage {
         }
     }
 
+    fn converted_palette_transparency(&self, mode: &str) -> Option<Vec<u8>> {
+        self.inner.converted_palette_transparency(mode)
+    }
+
     fn has_transparency_data(&self) -> bool {
         self.inner.has_transparency_data()
     }
