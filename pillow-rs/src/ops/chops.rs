@@ -9,6 +9,23 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
+fn clear_palette_for_index_result(image: &Image, result: &mut Image) -> Result<(), PilError> {
+    if image.mode()? == "P"
+        && let Image::Pipeline {
+            palette,
+            palette_alpha,
+            ..
+        } = result
+    {
+        // Pillow 12.2.0 libImaging/Chops.c allocates a new P core for these
+        // arithmetic operations and does not copy Image.palette. Keep the
+        // output's raw indices while exposing an empty retained palette.
+        *palette = Some(Vec::new());
+        *palette_alpha = None;
+    }
+    Ok(())
+}
+
 /// Adds two images with scale and offset.
 ///
 /// # Errors
@@ -16,14 +33,16 @@ use crate::pipeline::PipelineOp;
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
-    Ok(Image::push_op(
+    let mut result = Image::push_op(
         image1,
         PipelineOp::Add {
             other: Arc::new(image2.clone()),
             scale,
             offset,
         },
-    ))
+    );
+    clear_palette_for_index_result(image1, &mut result)?;
+    Ok(result)
 }
 
 /// Subtracts `image2` from `image1` with scale and offset.
@@ -38,14 +57,16 @@ pub fn subtract(
     scale: f64,
     offset: f64,
 ) -> Result<Image, PilError> {
-    Ok(Image::push_op(
+    let mut result = Image::push_op(
         image1,
         PipelineOp::Subtract {
             other: Arc::new(image2.clone()),
             scale,
             offset,
         },
-    ))
+    );
+    clear_palette_for_index_result(image1, &mut result)?;
+    Ok(result)
 }
 
 /// Multiplies two images channel-by-channel.

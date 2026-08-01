@@ -68,6 +68,9 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] when image dimensions differ, or another
 /// [`PilError`] when size lookup fails.
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
+    if image1.mode()? == "P" || image2.mode()? == "P" {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
     let (w1, h1) = image1.size()?;
     let (w2, h2) = image2.size()?;
     if (w1, h1) != (w2, h2) {

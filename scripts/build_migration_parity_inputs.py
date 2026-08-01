@@ -6324,6 +6324,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageChops",
+            "operation": "add",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-p",
+            "mode": "P",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageChops",
             "operation": "subtract",
             "requirement_suffix": "behavior.default",
             "name": "scale-offset",
@@ -6337,6 +6345,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageChops",
+            "operation": "subtract",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-p",
+            "mode": "P",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageChops",
             "operation": "blend",
             "requirement_suffix": "behavior.default",
             "name": "extrapolate-alpha",
@@ -6346,6 +6362,14 @@ def build_nuanced_cases(
             "values": {
                 "alpha": literal(2),
             },
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-p",
+            "mode": "P",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.ImageOps",
