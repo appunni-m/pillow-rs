@@ -7643,6 +7643,15 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-scalar",
+            "observe_receiver": True,
+            "mode": "PA",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
             "requirement_suffix": "mode.cmyk",
             "name": "cmyk-scalar",
             "observe_receiver": True,
@@ -8413,6 +8422,14 @@ def build_nuanced_cases(
             "name": "numeric-out-of-range",
             "mode": "RGB",
             "values": {"channel": literal(3)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-direct-index-channel",
+            "mode": "PA",
+            "values": {"channel": literal(0)},
         },
         {
             "surface": "PIL.Image.Image",

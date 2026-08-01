@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 205
 - Manifest requirements: 1780
-- Active parity workflows: 1927
-- Unique active workflow signatures: 1927
+- Active parity workflows: 1929
+- Unique active workflow signatures: 1929
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 758
+- Deliberate nuanced workflows: 760
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 161 |
-| `PIL.Image.Image` | 823 |
+| `PIL.Image.Image` | 825 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 45 |
 | `PIL.ImageDraw` | 3 |
@@ -197,6 +197,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha`
 - `PIL.Image.Image.getchannel.nuanced.p-resize-preserves-p-channel`
 - `PIL.Image.Image.getchannel.nuanced.pa-alpha-channel`
+- `PIL.Image.Image.getchannel.nuanced.pa-direct-index-channel`
 - `PIL.Image.Image.getchannel.nuanced.pa-index-channel`
 - `PIL.Image.Image.getcolors.nuanced.i-nonzero`
 - `PIL.Image.Image.getcolors.nuanced.l-two-colors-limit`
@@ -315,6 +316,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putalpha.nuanced.one-mask`
 - `PIL.Image.Image.putalpha.nuanced.p-mask`
 - `PIL.Image.Image.putalpha.nuanced.p-scalar`
+- `PIL.Image.Image.putalpha.nuanced.pa-scalar`
 - `PIL.Image.Image.putalpha.nuanced.rgb-scalar`
 - `PIL.Image.Image.putalpha.nuanced.rgba-scalar`
 - `PIL.Image.Image.putalpha.nuanced.ycbcr-unsupported`
