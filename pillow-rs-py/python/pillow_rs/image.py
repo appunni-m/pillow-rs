@@ -551,8 +551,8 @@ class Image:
     def histogram(self, mask=None, extrema=None):
         """Image histogram per band."""
         if isinstance(mask, Image):
-            if mask.mode not in ("1", "L"):
-                raise ValueError("bad transparency mask")
+            # Keep image-mask validation in the Rust core alongside the
+            # masked histogram implementation.
             return self._rust_image.histogram_with_mask(mask._rust_image)
         if mask is not None:
             raise ValueError("bad transparency mask")
