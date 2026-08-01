@@ -1214,6 +1214,7 @@
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-loaded",
+          "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-putpalette",
           "PIL.Image.Image.convert.nuanced.opened-p-transparency",
           "PIL.Image.Image.convert.nuanced.opened-p-transparency-auto",
           "PIL.Image.Image.convert.nuanced.opened-p-auto",
