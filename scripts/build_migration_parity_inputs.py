@@ -2919,9 +2919,23 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image",
             "operation": "open",
+            "requirement_suffix": "parameter.formats",
+            "name": "formats-single-string",
+            "values": {"formats": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
             "requirement_suffix": "parameter.mode",
             "name": "read-mode",
             "values": {"mode": literal("r")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.mode",
+            "name": "invalid-mode",
+            "values": {"mode": literal("w")},
         },
         {
             "surface": "PIL.Image",

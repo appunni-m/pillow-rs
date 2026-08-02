@@ -5440,6 +5440,45 @@
       ]
     },
     {
+      "case_id": "PIL.Image.open.nuanced.formats-single-string",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.formats"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "encoded-input",
+          "kind": "builtin",
+          "name": "encoded-png-input"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "encoded-input"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": "PNG"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.open.nuanced.read-mode",
       "surface": "PIL.Image",
       "operation": "open",
@@ -5470,6 +5509,45 @@
             "mode": {
               "kind": "literal",
               "value": "r"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.open.nuanced.invalid-mode",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "encoded-input",
+          "kind": "builtin",
+          "name": "encoded-png-input"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "w"
             }
           }
         }
