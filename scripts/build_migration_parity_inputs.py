@@ -3149,6 +3149,17 @@ def build_nuanced_cases(
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask2",
             "requirement_suffix": "parameter.text",
+            "name": "sbit-cbdt-stroked",
+            "font": "font/fonts/sbit-cblc-cbdt-gray-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
             "name": "space-default-route",
             "values": {"text": literal(" ")},
         },
@@ -3160,6 +3171,16 @@ def build_nuanced_cases(
             "values": {
                 "text": literal(" "),
                 "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.anchor",
+            "name": "valid-anchor-route",
+            "values": {
+                "text": literal("A"),
+                "anchor": literal("la"),
             },
         },
         {
@@ -3297,10 +3318,30 @@ def build_nuanced_cases(
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask2",
             "requirement_suffix": "parameter.start",
+            "name": "negative-start-vertical-clipped",
+            "values": {
+                "text": literal("A"),
+                "start": literal([0.0, -10.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
             "name": "negative-start-collapse",
             "values": {
                 "text": literal("A"),
                 "start": literal([-100.0, -100.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "negative-start-height-collapse",
+            "values": {
+                "text": literal("A"),
+                "start": literal([0.0, -100.0]),
             },
         },
         {
@@ -3312,6 +3353,17 @@ def build_nuanced_cases(
                 "text": literal("A"),
                 "stroke_width": literal(1),
                 "start": literal([-100.0, -100.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "negative-start-stroked-height-collapse",
+            "values": {
+                "text": literal("A"),
+                "stroke_width": literal(1),
+                "start": literal([0.0, -100.0]),
             },
         },
         {
@@ -3331,6 +3383,14 @@ def build_nuanced_cases(
             "name": "variable-font",
             "font": "font/fonts/variable-name-platform1-fallback.ttf",
             "values": {"axes": literal([100.0, 600.0])},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "set_variation_by_axes",
+            "requirement_suffix": "parameter.axes",
+            "name": "variable-font-extra-axis",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+            "values": {"axes": literal([100.0, 600.0, 100.0])},
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
