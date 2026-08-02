@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@2
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 62e916cfee9bd3c231c2af4d63af289de44c0a04a744223e484db172aeb3d9eb
-coverage_run_id: migration-coverage-c6118ab1ad704865b7fdba810cff892f
+coverage_run_id: migration-coverage-7c04b7822e5e4cbc9a08b4ccd3e8f238
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -123,24 +123,24 @@ component's measured coverage by design.
 | `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 1991/2200 | 90.5% |
 | `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 1991/2200 | 90.5% |
 | `PIL.ImageDraw.Outline` | `image-draw` | 1991/2200 | 90.5% |
-| `PIL.ImageOps.autocontrast` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.colorize` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.contain` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.cover` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.crop` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.deform` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.equalize` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.exif_transpose` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.expand` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.fit` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.flip` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.grayscale` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.invert` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.mirror` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.pad` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.posterize` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.scale` | `image-ops` | 313/345 | 90.7% |
-| `PIL.ImageOps.solarize` | `image-ops` | 313/345 | 90.7% |
+| `PIL.ImageOps.autocontrast` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.colorize` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.contain` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.cover` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.crop` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.deform` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.equalize` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.exif_transpose` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.expand` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.fit` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.flip` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.grayscale` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.invert` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.mirror` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.pad` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.posterize` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.scale` | `image-ops` | 319/345 | 92.5% |
+| `PIL.ImageOps.solarize` | `image-ops` | 319/345 | 92.5% |
 | `PIL.ImageFont.FreeTypeFont` | `image-font` | 2347/2511 | 93.5% |
 | `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 2347/2511 | 93.5% |
 | `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 2347/2511 | 93.5% |
@@ -204,7 +204,7 @@ component's measured coverage by design.
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 510/554 | 92.1% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1409/1469 | 95.9% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
-| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 313/345 | 90.7% |
+| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 319/345 | 92.5% |
 | `image-ops` | `pillow-rs-py/python/pillow_rs/imageops.py` | 0/0 | n/a |
 | `image-palette` | `pillow-rs/src/color.rs` | 1131/1207 | 93.7% |
 | `image-palette` | `pillow-rs-py/python/pillow_rs/imagepalette.py` | 0/0 | n/a |
