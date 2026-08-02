@@ -318,16 +318,7 @@ class Image:
         ] = None,
         mask: Optional["Image"] = None,
     ) -> None:
-        if isinstance(im, Image):
-            rust_im = im._rust_image
-        else:
-            rust_im = im
-        if isinstance(box, Image):
-            rust_box = box._rust_image
-        else:
-            rust_box = box
-        rust_mask = mask._rust_image if isinstance(mask, Image) else mask
-        self._rust_image.paste(rust_im, rust_box, rust_mask)
+        self._rust_image.paste(im, box, mask)
 
     def split(self) -> Tuple["Image", ...]:
         return tuple(map(Image, self._rust_image.split()))
