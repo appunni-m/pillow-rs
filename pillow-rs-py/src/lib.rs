@@ -2559,6 +2559,16 @@ fn draw_points_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawPoints
     pillow_rs::DrawPointsInput::Invalid
 }
 
+fn draw_box_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawBoxInput {
+    if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
+        return pillow_rs::DrawBoxInput::Nested(points);
+    }
+    if let Ok(values) = xy.extract::<Vec<i32>>() {
+        return pillow_rs::DrawBoxInput::Flat(values);
+    }
+    pillow_rs::DrawBoxInput::Invalid
+}
+
 fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
     if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
         return Ok(points);
@@ -2601,7 +2611,7 @@ impl PyDraw {
 
     fn rectangle(
         &mut self,
-        xy: (i32, i32, i32, i32),
+        xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
@@ -2616,6 +2626,8 @@ impl PyDraw {
         } else {
             None
         };
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
             .rectangle(
                 xy.0,
@@ -2631,7 +2643,7 @@ impl PyDraw {
 
     fn ellipse(
         &mut self,
-        xy: (i32, i32, i32, i32),
+        xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
@@ -2646,6 +2658,8 @@ impl PyDraw {
         } else {
             None
         };
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
             .ellipse(
                 xy.0,
@@ -2770,13 +2784,15 @@ impl PyDraw {
     #[pyo3(signature = (xy, start, end, fill=None, width=1))]
     fn arc(
         &mut self,
-        xy: (i32, i32, i32, i32),
+        xy: &Bound<'_, PyAny>,
         start: f64,
         end: f64,
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
             .arc(
                 xy.0,
@@ -2794,7 +2810,7 @@ impl PyDraw {
     #[pyo3(signature = (xy, start, end, fill=None, outline=None, width=1))]
     fn chord(
         &mut self,
-        xy: (i32, i32, i32, i32),
+        xy: &Bound<'_, PyAny>,
         start: f64,
         end: f64,
         fill: Option<&Bound<'_, PyAny>>,
@@ -2803,6 +2819,8 @@ impl PyDraw {
     ) -> PyResult<()> {
         let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
         let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
             .chord(
                 xy.0,
@@ -2821,7 +2839,7 @@ impl PyDraw {
     #[pyo3(signature = (xy, start, end, fill=None, outline=None, width=1))]
     fn pieslice(
         &mut self,
-        xy: (i32, i32, i32, i32),
+        xy: &Bound<'_, PyAny>,
         start: f64,
         end: f64,
         fill: Option<&Bound<'_, PyAny>>,
@@ -2830,6 +2848,8 @@ impl PyDraw {
     ) -> PyResult<()> {
         let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
         let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
+        let xy =
+            pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
             .pieslice(
                 xy.0,

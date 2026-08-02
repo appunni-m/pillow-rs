@@ -45,7 +45,7 @@ class Draw:
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
         try:
-            self._draw.rectangle(self._box(xy), fill, outline, width)
+            self._draw.rectangle(xy, fill, outline, width)
         except ValueError:
             invalid_color = fill if isinstance(fill, str) else outline if isinstance(outline, str) else None
             if invalid_color is None:
@@ -54,7 +54,7 @@ class Draw:
         self._sync()
 
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):
-        self._draw.ellipse(self._box(xy), fill, outline, width)
+        self._draw.ellipse(xy, fill, outline, width)
         self._sync()
 
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
@@ -66,15 +66,15 @@ class Draw:
         self._sync()
 
     def arc(self, xy, start, end, fill=None, width=1):
-        self._draw.arc(self._box(xy), float(start), float(end), fill, width)
+        self._draw.arc(xy, float(start), float(end), fill, width)
         self._sync()
 
     def chord(self, xy, start, end, fill=None, outline=None, width=1):
-        self._draw.chord(self._box(xy), float(start), float(end), fill, outline, width)
+        self._draw.chord(xy, float(start), float(end), fill, outline, width)
         self._sync()
 
     def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
-        self._draw.pieslice(self._box(xy), float(start), float(end), fill, outline, width)
+        self._draw.pieslice(xy, float(start), float(end), fill, outline, width)
         self._sync()
 
     def circle(self, xy, radius, fill=None, outline=None, width=1):

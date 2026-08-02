@@ -34,6 +34,33 @@ pub enum DrawPointsInput {
     Invalid,
 }
 
+/// Host-neutral coordinate input for ImageDraw rectangle-like primitives.
+#[derive(Debug, Clone)]
+pub enum DrawBoxInput {
+    /// Flat `x0, y0, x1, y1` values.
+    Flat(Vec<i32>),
+    /// Nested `((x0, y0), (x1, y1))` values.
+    Nested(Vec<Vec<i32>>),
+    /// A value that could not be represented as a supported sequence.
+    Invalid,
+}
+
+/// Normalizes a flat or nested ImageDraw bounding box.
+pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), PilError> {
+    let error = || PilError::TypeError("coordinate list must contain exactly 2 coordinates".into());
+    match input {
+        DrawBoxInput::Flat(values) if values.len() == 4 => {
+            Ok((values[0], values[1], values[2], values[3]))
+        }
+        DrawBoxInput::Nested(values)
+            if values.len() == 2 && values.iter().all(|point| point.len() == 2) =>
+        {
+            Ok((values[0][0], values[0][1], values[1][0], values[1][1]))
+        }
+        DrawBoxInput::Flat(_) | DrawBoxInput::Nested(_) | DrawBoxInput::Invalid => Err(error()),
+    }
+}
+
 fn normalize_draw_points(
     input: DrawPointsInput,
     allow_short: bool,
