@@ -13050,6 +13050,30 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
+            "requirement_suffix": "parameter.args",
+            "name": "rgb-rgba-raw",
+            "mode": "RGB",
+            "edge": "uniform-fill",
+            "pixel": [1, 2, 3],
+            "values": {
+                "encoder_name": literal("raw"),
+                "args": literal(["RGBA"]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "requirement_suffix": "parameter.args",
+            "name": "rgb-invalid-raw-mode",
+            "mode": "RGB",
+            "values": {
+                "encoder_name": literal("raw"),
+                "args": literal(["LA"]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
             "requirement_suffix": "parameter.encoder-name",
             "name": "unknown-encoder-error",
             "mode": "RGB",
