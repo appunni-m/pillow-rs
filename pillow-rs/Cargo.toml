@@ -38,7 +38,7 @@ required-features = ["test-api"]
 
 [dependencies]
 image-slash-star = { git = "https://github.com/appunni-m/image-slash-star.git", rev = "d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a", default-features = false }
-fontdone = { path = "../../fontdone" }
+fontdone = { version = "=2.14.3-alpha.1", path = "../../fontdone" }
 log = "0.4"
 thiserror = "2"
 csscolorparser = "0.8"
