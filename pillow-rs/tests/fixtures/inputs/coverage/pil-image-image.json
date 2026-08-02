@@ -1426,6 +1426,7 @@
           "PIL.Image.Image.rotate.nuanced.mode-rgba-90-non-expand",
           "PIL.Image.Image.rotate.nuanced.opened-rgb-270-expand",
           "PIL.Image.Image.transpose.nuanced.opened-rgb",
+          "PIL.Image.Image.transpose.nuanced.unknown-integer",
           "PIL.Image.Image.copy.nuanced.opened-rgb",
           "PIL.Image.Image.point.nuanced.opened-rgb",
           "PIL.Image.Image.filter.nuanced.opened-rgb",
