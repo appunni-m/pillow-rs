@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 2640544d6c0b5c0063bd43dcd322582bac89efe600bfc9be2b79133f524d4dd3
+manifest_sha256: a76dead8510189e6c09013d2bd0a35105e4f2c3d431653f6ca039352eca9176b
 statement_status: declared
 ```
 
@@ -16,12 +16,12 @@ statement_status: declared
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
 - Target profiles: `python-cpu`
-- Public surfaces: 22
-- Operations: 203
-- Requirements: 1776
-- Indexed parity cases: 1645
-- Indexed coverage plans: 22
-- Indexed benchmark workloads: 202
+- Public surfaces: 23
+- Operations: 205
+- Requirements: 1780
+- Indexed parity cases: 1932
+- Indexed coverage plans: 23
+- Indexed benchmark workloads: 204
 
 ## Declared operations
 
@@ -220,6 +220,8 @@ statement_status: declared
 | `PIL.ImagePalette.ImagePalette` | `save` | `method` | `PIL.ImagePalette.ImagePalette.save` | `pillow_rs.ImagePalette.ImagePalette.save` | 6 |
 | `PIL.ImagePalette.ImagePalette` | `tobytes` | `method` | `PIL.ImagePalette.ImagePalette.tobytes` | `pillow_rs.ImagePalette.ImagePalette.tobytes` | 5 |
 | `PIL.ImageSequence` | `Iterator` | `type` | `PIL.ImageSequence.Iterator` | `pillow_rs.ImageSequence.Iterator` | 5 |
+| `PIL.ImageSequence.Iterator` | `__iter__` | `method` | `PIL.ImageSequence.Iterator.__iter__` | `pillow_rs.ImageSequence.Iterator.__iter__` | 2 |
+| `PIL.ImageSequence.Iterator` | `__next__` | `method` | `PIL.ImageSequence.Iterator.__next__` | `pillow_rs.ImageSequence.Iterator.__next__` | 2 |
 | `PIL.ImageStat` | `Stat` | `type` | `PIL.ImageStat.Stat` | `pillow_rs.ImageStat.Stat` | 7 |
 | `PIL.ImageStat.Stat` | `count` | `property_get` | `PIL.ImageStat.Stat.count` | `pillow_rs.ImageStat.Stat.count` | 5 |
 | `PIL.ImageStat.Stat` | `extrema` | `property_get` | `PIL.ImageStat.Stat.extrema` | `pillow_rs.ImageStat.Stat.extrema` | 5 |
@@ -239,6 +241,6 @@ accepted as input truth.
 
 | Lane | Documents |
 | --- | ---: |
-| parity | 22 |
-| coverage | 22 |
-| benchmark | 22 |
+| parity | 23 |
+| coverage | 23 |
+| benchmark | 23 |
