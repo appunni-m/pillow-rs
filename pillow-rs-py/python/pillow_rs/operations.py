@@ -18,7 +18,7 @@ def open(
 def new(
     mode: str,
     size: Tuple[int, int],
-    color: Union[int, Tuple[int, ...], str] = 0,
+    color: Union[int, Tuple[int, ...], str, None] = None,
 ) -> Image:
     return Image.new(mode, size, color)
 

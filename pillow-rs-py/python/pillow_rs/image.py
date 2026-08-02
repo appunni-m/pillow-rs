@@ -134,8 +134,10 @@ class Image:
         cls,
         mode: str,
         size: Tuple[int, int],
-        color: Union[int, Tuple[int, ...], str, None] = 0,
+        color: Union[int, Tuple[int, ...], str, None] = None,
     ) -> "Image":
+        # Preserve omission across the Python facade so the Rust core owns
+        # Pillow's mode-specific default-color path.
         return cls(RustImage.new(mode, size, color))
 
     @classmethod
