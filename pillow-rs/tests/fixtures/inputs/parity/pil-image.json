@@ -8720,6 +8720,55 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-i16n",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAABAAIAAwA=",
+          "sha256": "245bbd9d484dcf27c714e2690cd6544973de5d54aa9cd82eab23d6046a65faa8",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16N"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.frombytes.nuanced.valid-ycbcr",
       "surface": "PIL.Image",
       "operation": "frombytes",

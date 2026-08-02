@@ -495,7 +495,10 @@ pub fn getcolor(
         let (h, s, v) = rgb_to_hsv_i32(r, g, b);
         return Ok(ColorValue::Hsv(h, s, v));
     }
-    if matches!(mode, "L" | "LA" | "1" | "I" | "F" | "I;16" | "I;16B") {
+    if matches!(
+        mode,
+        "L" | "LA" | "1" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+    ) {
         return if mode == "LA" {
             Ok(ColorValue::GrayAlpha(luma, a))
         } else {

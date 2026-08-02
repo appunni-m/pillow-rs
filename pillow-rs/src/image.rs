@@ -18,8 +18,9 @@
 //! Mode strings follow Pillow names. Raw byte APIs use the current image mode:
 //! `L` is one byte per pixel, `RGB` is tightly packed triplets, `RGBA` is
 //! tightly packed quadruplets, and `P` returns palette indices. Non-standard
-//! modes such as `CMYK`, `HSV`, `YCbCr`, `I`, and `F` may be carried through
-//! Pillow-owned raster buffers with an explicit mode tag.
+//! modes such as `CMYK`, `HSV`, `YCbCr`, `I`, `F`, and the 16-bit luma raw
+//! modes may be carried through Pillow-owned raster buffers with an explicit
+//! mode tag.
 //!
 //! # Lazy Execution
 //!
@@ -133,6 +134,7 @@ pub enum PutDataValue {
 enum FromBytesMode {
     L,
     LA,
+    L16,
     RGB,
     RGBA,
     CMYK,
@@ -159,7 +161,7 @@ fn putdata_clip_component(value: i128) -> u8 {
 }
 
 fn is_l16_mode(mode: &str) -> bool {
-    matches!(mode, "I;16" | "I;16L" | "I;16B")
+    matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
 }
 
 fn putdata_l16_sample(value: &PutDataValue, scale: f64, offset: f64) -> Result<u16, PilError> {
@@ -560,6 +562,9 @@ impl Image {
     ///
     /// `mode` uses Pillow mode names. Modes `L`, `LA`, `RGB`, `RGBA`, `CMYK`,
     /// `HSV`, `YCbCr`, `I`, `F`, and `P` expect one full pixel after another.
+    /// The unsigned 16-bit luma raw modes `I;16`, `I;16L`, `I;16B`, and
+    /// `I;16N` consume two bytes per sample with the mode's declared byte
+    /// order.
     /// Mode `"1"` expects Pillow's packed bitmap layout: eight pixels per byte,
     /// most-significant bit first, with each row padded to a byte boundary.
     ///
@@ -575,6 +580,7 @@ impl Image {
         let frombytes_mode = match mode {
             "L" => FromBytesMode::L,
             "LA" => FromBytesMode::LA,
+            "I;16" | "I;16L" | "I;16B" | "I;16N" => FromBytesMode::L16,
             "RGB" => FromBytesMode::RGB,
             "RGBA" => FromBytesMode::RGBA,
             "CMYK" => FromBytesMode::CMYK,
@@ -601,11 +607,22 @@ impl Image {
                     materialized: materialization_cache(),
                 }));
             }
+            if matches!(frombytes_mode, FromBytesMode::L16) {
+                return Ok(Self::from_dynamic(
+                    DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+                        w,
+                        h,
+                        crate::raster::Luma([0u16]),
+                    )),
+                    Some(mode.to_owned()),
+                ));
+            }
             return Self::new(w, h, mode, (0, 0, 0, 0));
         }
         let expected = match frombytes_mode {
             FromBytesMode::L | FromBytesMode::P => CheckedDims::new(w, h, 1)?.total_bytes(),
             FromBytesMode::LA => CheckedDims::new(w, h, 2)?.total_bytes(),
+            FromBytesMode::L16 => CheckedDims::new(w, h, 2)?.total_bytes(),
             FromBytesMode::RGB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
                 CheckedDims::new(w, h, 3)?.total_bytes()
             }
@@ -622,6 +639,22 @@ impl Image {
                 crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
             ),
+            FromBytesMode::L16 => {
+                let pixels = data[..expected]
+                    .chunks_exact(2)
+                    .map(|sample| match mode {
+                        "I;16B" => u16::from_be_bytes([sample[0], sample[1]]),
+                        "I;16N" if cfg!(target_endian = "big") => {
+                            u16::from_be_bytes([sample[0], sample[1]])
+                        }
+                        _ => u16::from_le_bytes([sample[0], sample[1]]),
+                    })
+                    .collect();
+                DynamicImage::ImageLuma16(
+                    crate::raster::ImageBuffer::from_raw(w, h, pixels)
+                        .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
+                )
+            }
             FromBytesMode::RGB => DynamicImage::ImageRgb8(
                 crate::raster::RgbImage::from_raw(w, h, data[..expected].to_vec())
                     .ok_or_else(|| PilError::ValueError("frombytes: buffer error".into()))?,
@@ -684,6 +717,7 @@ impl Image {
             | FromBytesMode::YCbCr
             | FromBytesMode::I
             | FromBytesMode::F => Some(mode.to_string()),
+            FromBytesMode::L16 => Some(mode.to_string()),
             FromBytesMode::L
             | FromBytesMode::LA
             | FromBytesMode::RGB
@@ -2904,7 +2938,7 @@ impl Image {
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let mode_name = self.mode()?;
         if let Some(target) = match mode_name.as_str() {
-            "1" | "I" | "I;16" | "I;16L" | "I;16B" | "F" => Some("LA"),
+            "1" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F" => Some("LA"),
             "YCbCr" | "HSV" => Some("RGBA"),
             _ => None,
         } {

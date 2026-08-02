@@ -619,22 +619,40 @@ class WorkflowBuilder:
             self._image_steps[cache_key] = step_id
             return step_id
         if self.scenario_inline_image is not None:
-            if self.scenario_inline_image != "l16-tiff":
+            if self.scenario_inline_image == "l16-tiff":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-l16-tiff",
+                    little_endian_l16_tiff(),
+                    "image/tiff",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "i16n-frombytes":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-i16n-data",
+                    bytes([0, 0, 1, 0, 2, 0, 3, 0]),
+                    "application/octet-stream",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "frombytes",
+                    receiver=None,
+                    arguments={
+                        "mode": literal("I;16N"),
+                        "size": literal([2, 2]),
+                        "data": data_descriptor,
+                    },
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            else:
                 raise ValueError(
                     f"unknown inline image stimulus: {self.scenario_inline_image}"
                 )
-            data_descriptor = self.inline_bytes(
-                f"{label}-l16-tiff",
-                little_endian_l16_tiff(),
-                "image/tiff",
-            )
-            step_id = self.add_step(
-                "PIL.Image",
-                "open",
-                receiver=None,
-                arguments={"fp": data_descriptor},
-                step_id=self.next_step_id(f"setup-{label}"),
-            )
             self._image_steps[cache_key] = step_id
             return step_id
         if self.scenario_asset is not None:
@@ -5102,6 +5120,19 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
+            "name": "opened-i16n-scalar",
+            "observe_receiver": True,
+            "mode": "I;16N",
+            "scenario_inline_image": "i16n-frombytes",
+            "values": {
+                "im": literal(7),
+                "box": literal([0, 0, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
             "name": "color-rgb",
             "observe_receiver": True,
             "mode": "RGB",
@@ -5294,6 +5325,18 @@ def build_nuanced_cases(
             "scenario_inline_image": "l16-tiff",
             "values": {
                 "data": literal([[1], [2], [3], [4]]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-i16n-values",
+            "observe_receiver": True,
+            "mode": "I;16N",
+            "scenario_inline_image": "i16n-frombytes",
+            "values": {
+                "data": literal([1, 2, 3, 4]),
             },
         },
         {
@@ -9074,6 +9117,17 @@ def build_nuanced_cases(
             "name": "valid-f",
             "mode": "F",
             "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
+            "name": "valid-i16n",
+            "mode": "I;16N",
+            "values": {
+                "size": literal([2, 2]),
+                "data": bytes_literal([0, 0, 1, 0, 2, 0, 3, 0]),
+            },
         },
         {
             "surface": "PIL.Image",

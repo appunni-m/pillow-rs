@@ -66,8 +66,10 @@ impl PasteSource {
             ("RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
             ("I" | "F", PasteSource::Scalar(value)) => Ok((*value, 0, 0, 0)),
             ("I" | "F", _) => Err(bad_single()),
-            ("I;16" | "I;16L" | "I;16B", PasteSource::Scalar(value)) => Ok((*value, 0, 0, 0)),
-            ("I;16" | "I;16L" | "I;16B", _) => Err(bad_single()),
+            ("I;16" | "I;16L" | "I;16B" | "I;16N", PasteSource::Scalar(value)) => {
+                Ok((*value, 0, 0, 0))
+            }
+            ("I;16" | "I;16L" | "I;16B" | "I;16N", _) => Err(bad_single()),
             (_, _) => Err(PilError::ValueError(format!(
                 "unsupported paste destination mode {mode}"
             ))),
@@ -225,7 +227,10 @@ impl Image {
                     // Image::new stores F samples as their four raw LE bytes.
                     let bytes = f32::from(color.0).to_le_bytes();
                     Image::new(width, height, "F", (bytes[0], bytes[1], bytes[2], bytes[3]))?
-                } else if matches!(destination_mode.as_str(), "I;16" | "I;16L" | "I;16B") {
+                } else if matches!(
+                    destination_mode.as_str(),
+                    "I;16" | "I;16L" | "I;16B" | "I;16N"
+                ) {
                     // Pillow's Paste.c keeps I;16 scalar fills in unsigned
                     // 16-bit storage. Construct the source with the same
                     // native sample width; routing it through Image::new's

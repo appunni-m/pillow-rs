@@ -299,6 +299,7 @@
           "PIL.Image.frombytes.nuanced.valid-hsv",
           "PIL.Image.frombytes.nuanced.valid-i",
           "PIL.Image.frombytes.nuanced.valid-f",
+          "PIL.Image.frombytes.nuanced.valid-i16n",
           "PIL.Image.frombytes.nuanced.valid-ycbcr",
           "PIL.Image.frombytes.nuanced.invalid-mode",
           "PIL.Image.frombytes.nuanced.zero-size",
