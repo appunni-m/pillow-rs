@@ -1,5 +1,4 @@
 """ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
-import os
 import warnings
 from enum import IntEnum
 
@@ -208,18 +207,9 @@ class FreeTypeFont:
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
         layout_engine_name = _normalize_layout_engine(layout_engine)
         self.path = font
-        if isinstance(font, (str, bytes, os.PathLike)):
-            font_path = os.fspath(font)
-            self._rust_font = _core.ImageFont.truetype(
-                os.fsdecode(font_path), float(size), int(index), encoding, layout_engine_name
-            )
-        elif hasattr(font, 'read'):
-            font_data = font.read()
-            self._rust_font = _core.ImageFont.truetype_from_bytes(
-                font_data, float(size), int(index), encoding, layout_engine_name
-            )
-        else:
-            raise TypeError("font must be a file path or file-like object")
+        self._rust_font = _core.ImageFont.truetype(
+            font, float(size), int(index), encoding, layout_engine_name
+        )
         self.size = float(size)
         self.index = index
         self.encoding = encoding
@@ -360,17 +350,12 @@ class FreeTypeFont:
                 encoding,
                 layout_engine_name,
             )
-            source_path = (
-                self.path
-                if isinstance(self.path, (str, bytes, os.PathLike))
-                else None
-            )
             return self._from_rust_font(
                 variant,
                 size=self.size if size is None else float(size),
                 index=self.index if index is None else index,
                 encoding=self.encoding if encoding is None else encoding,
-                path=source_path,
+                path=self.path if isinstance(self.path, (str, bytes)) else None,
             )
         return FreeTypeFont(
             font=font,

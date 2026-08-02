@@ -165,6 +165,7 @@ pub use crate::font::FreeTypeFont;
 pub use crate::font::ImageFont;
 pub use crate::font::ImageFontBBoxValue;
 pub use crate::font::ImageFontLoadOptions;
+pub use crate::font::ImageFontSourceInput;
 pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxesInput;
@@ -352,6 +353,15 @@ pub fn imagefont_from_bytes_with_options(
     options: &ImageFontLoadOptions,
 ) -> Result<FreeTypeFont, PilError> {
     FreeTypeFont::from_bytes_with_options(data, size, options)
+}
+
+/// Load a TrueType/OpenType face from a host-marshaled source.
+pub fn imagefont_from_source(
+    source: ImageFontSourceInput,
+    size: f32,
+    options: &ImageFontLoadOptions,
+) -> Result<FreeTypeFont, PilError> {
+    FreeTypeFont::from_source(source, size, options)
 }
 
 /// Loads the same embedded default font subset as Pillow.
@@ -573,6 +583,45 @@ pub fn imagefont_getbbox_with_options(
     font.getbbox_with_options(text, options)
 }
 
+/// Return a text bounding box using Pillow's optional draw-font rules.
+pub fn imagefont_getbbox_with_optional_font(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    text: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(f32, f32, f32, f32), PilError> {
+    crate::font::with_text_font(font, size, |font| font.getbbox_with_options(text, options))
+}
+
+/// Return an offset text bounding box using Pillow's optional draw-font rules.
+pub fn imagefont_textbbox_at_with_optional_font(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    xy: (i32, i32),
+    text: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    let bbox = imagefont_getbbox_with_optional_font(font, size, text, options)?;
+    Ok((
+        xy.0 + bbox.0 as i32,
+        xy.1 + bbox.1 as i32,
+        xy.0 + bbox.2 as i32,
+        xy.1 + bbox.3 as i32,
+    ))
+}
+
+/// Return text length using Pillow's optional draw-font rules.
+pub fn imagefont_getlength_with_optional_font(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    text: &str,
+    options: &ImageFontTextOptions,
+) -> Result<f32, PilError> {
+    crate::font::with_text_font(font, size, |font| {
+        font.getlength_with_options(text, options)
+    })
+}
+
 /// Return Pillow's public multiline text bounding box.
 pub fn imagefont_multiline_textbbox(
     font: &FreeTypeFont,
@@ -583,6 +632,21 @@ pub fn imagefont_multiline_textbbox(
     options: &ImageFontTextOptions,
 ) -> Result<(i32, i32, i32, i32), PilError> {
     font.multiline_textbbox(xy, text, spacing, align, options)
+}
+
+/// Return a multiline text bounding box using Pillow's optional draw-font rules.
+pub fn imagefont_multiline_textbbox_with_optional_font(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    xy: (i32, i32),
+    text: &str,
+    spacing: i32,
+    align: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    crate::font::with_text_font(font, size, |font| {
+        font.multiline_textbbox(xy, text, spacing, align, options)
+    })
 }
 
 /// Return Pillow's public text bounding box for byte text with optional layout arguments.
