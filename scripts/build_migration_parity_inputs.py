@@ -6066,6 +6066,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "palette-mode-error",
+            "mode": "P",
+            "values": {"alpha": literal(0.25)},
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "composite",
             "requirement_suffix": "behavior.default",
             "name": "mask-size-mismatch",
