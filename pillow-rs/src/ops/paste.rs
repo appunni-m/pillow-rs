@@ -24,6 +24,15 @@ pub enum PasteSource {
     Color((u8, u8, u8, u8)),
 }
 
+/// Host-neutral coordinate input for public `Image.alpha_composite` calls.
+#[derive(Debug, Clone)]
+pub enum AlphaCompositeBox {
+    /// A Python list/tuple represented as integer coordinates.
+    Values(Vec<i64>),
+    /// A value that was not an integer coordinate sequence.
+    Invalid,
+}
+
 impl PasteSource {
     /// Builds a paste source from binding-normalized values.
     ///
@@ -84,6 +93,117 @@ enum PastePlacement {
 }
 
 impl Image {
+    /// Performs Pillow's high-level in-place alpha composite workflow.
+    ///
+    /// The low-level [`Image::alpha_composite`] primitive requires equal-sized
+    /// images. Pillow's public method first crops the source, crops or creates
+    /// the destination background, composites the matching regions, and pastes
+    /// the result back. Keeping that geometry here prevents Python/FFI copies
+    /// of the same validation and clipping rules.
+    pub fn alpha_composite_public(
+        &mut self,
+        source: &Image,
+        dest: AlphaCompositeBox,
+        source_box: AlphaCompositeBox,
+    ) -> Result<(), PilError> {
+        let source_box = match source_box {
+            AlphaCompositeBox::Values(values) if matches!(values.len(), 2 | 4) => values,
+            AlphaCompositeBox::Values(_) => {
+                return Err(PilError::ValueError(
+                    "Source must be a sequence of length 2 or 4".into(),
+                ));
+            }
+            AlphaCompositeBox::Invalid => {
+                return Err(PilError::ValueError(
+                    "Source must be a list or tuple".into(),
+                ));
+            }
+        };
+        let dest = match dest {
+            AlphaCompositeBox::Values(values) if values.len() == 2 => values,
+            AlphaCompositeBox::Values(_) => {
+                return Err(PilError::ValueError(
+                    "Destination must be a sequence of length 2".into(),
+                ));
+            }
+            AlphaCompositeBox::Invalid => {
+                return Err(PilError::ValueError(
+                    "Destination must be a list or tuple".into(),
+                ));
+            }
+        };
+        if source_box.iter().any(|value| *value < 0) {
+            return Err(PilError::ValueError("Source must be non-negative".into()));
+        }
+
+        let (source_width, source_height) = source.size()?;
+        let source_box = if source_box.len() == 2 {
+            (
+                i32::try_from(source_box[0])
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+                i32::try_from(source_box[1])
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+                i32::try_from(source_width)
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+                i32::try_from(source_height)
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+            )
+        } else {
+            (
+                i32::try_from(source_box[0])
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+                i32::try_from(source_box[1])
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+                i32::try_from(source_box[2])
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+                i32::try_from(source_box[3])
+                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
+            )
+        };
+        let overlay = if source_box == (0, 0, source_width as i32, source_height as i32) {
+            source.clone()
+        } else {
+            source.crop(Some(source_box))?
+        };
+
+        let dest_x = i32::try_from(dest[0])
+            .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?;
+        let dest_y = i32::try_from(dest[1])
+            .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?;
+        let (overlay_width, overlay_height) = overlay.size()?;
+        let right = dest_x
+            .checked_add(
+                i32::try_from(overlay_width)
+                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
+            )
+            .ok_or_else(|| PilError::ValueError("Destination coordinate overflow".into()))?;
+        let bottom = dest_y
+            .checked_add(
+                i32::try_from(overlay_height)
+                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
+            )
+            .ok_or_else(|| PilError::ValueError("Destination coordinate overflow".into()))?;
+        let box_coords = (dest_x, dest_y, right, bottom);
+        let destination_size = self.size()?;
+        let background = if box_coords
+            == (
+                0,
+                0,
+                i32::try_from(destination_size.0)
+                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
+                i32::try_from(destination_size.1)
+                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
+            ) {
+            self.clone()
+        } else {
+            self.crop(Some(box_coords))?
+        };
+
+        let mut result = background.copy();
+        result.alpha_composite(&overlay, (0, 0), (0, 0))?;
+        self.paste(PasteSource::Image(result), Some(box_coords), None)
+    }
+
     /// Queues a Pillow-style paste into this image.
     ///
     /// Image sources default to pasting at `(0, 0)` when `box_coords` is absent.

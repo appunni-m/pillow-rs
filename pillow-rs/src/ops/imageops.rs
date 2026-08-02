@@ -5,8 +5,132 @@
 
 use crate::error::PilError;
 use crate::image::Image;
-use crate::ops::resize::parse_resample;
+use crate::ops::resize::{ResampleInput, parse_resample, parse_resample_input};
 use crate::pipeline::PipelineOp;
+
+/// Host-neutral centering input for `ImageOps.fit` and `ImageOps.pad`.
+#[derive(Debug, Clone)]
+pub enum CenteringInput {
+    /// Use Pillow's default `(0.5, 0.5)`.
+    Default,
+    /// A scalar supplied where a pair was expected.
+    Scalar(f64),
+    /// A sequence supplied by the caller.
+    Values(Vec<f64>),
+    /// A value that could not be represented as a numeric sequence.
+    Invalid,
+}
+
+/// Host-neutral mask input for ImageOps functions.
+#[derive(Debug, Clone)]
+pub enum ImageOpsMask {
+    /// No mask was supplied.
+    None,
+    /// A mask image extracted by a binding.
+    Image(Image),
+    /// A non-image value was supplied.
+    Invalid,
+}
+
+/// Host-neutral color input for `ImageOps.pad`.
+#[derive(Debug, Clone)]
+pub enum ImageOpsColor {
+    /// No explicit color was supplied; use the operation default.
+    None,
+    /// A scalar color value extracted from the host object.
+    Scalar(i64),
+    /// A color component sequence extracted from the host object.
+    Components(Vec<i64>),
+    /// A value that was not a supported color representation.
+    Invalid,
+}
+
+fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), PilError> {
+    let ImageOpsMask::Image(mask) = mask else {
+        return match mask {
+            ImageOpsMask::None => Ok(()),
+            ImageOpsMask::Invalid => Err(PilError::ValueError("bad transparency mask".into())),
+            ImageOpsMask::Image(_) => unreachable!(),
+        };
+    };
+    let mode = mask.mode()?;
+    let size = mask.size()?;
+    if !matches!(mode.as_str(), "1" | "L") || size != image.size()? {
+        return Err(PilError::ValueError("bad transparency mask".into()));
+    }
+    Ok(())
+}
+
+fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), PilError> {
+    match input {
+        CenteringInput::Default => Ok((0.5, 0.5)),
+        CenteringInput::Scalar(_) if pad => Ok((0.5, 0.5)),
+        CenteringInput::Scalar(_) => Err(PilError::TypeError(
+            "cannot unpack non-iterable float object".into(),
+        )),
+        CenteringInput::Values(values) if values.len() == 2 => Ok((values[0], values[1])),
+        CenteringInput::Values(values) => Err(PilError::ValueError(format!(
+            "centering must be a 2-item sequence, not {}",
+            values.len()
+        ))),
+        CenteringInput::Invalid => Err(PilError::TypeError(
+            "centering must be a 2-item sequence".into(),
+        )),
+    }
+}
+
+fn resolve_pad_color(input: ImageOpsColor) -> Option<(u8, u8, u8, u8)> {
+    match input {
+        ImageOpsColor::None | ImageOpsColor::Invalid => None,
+        ImageOpsColor::Scalar(value) => u8::try_from(value)
+            .ok()
+            .map(|value| (value, value, value, u8::MAX)),
+        ImageOpsColor::Components(values) => match values.as_slice() {
+            [r, g, b] => Some((
+                u8::try_from(*r).ok()?,
+                u8::try_from(*g).ok()?,
+                u8::try_from(*b).ok()?,
+                u8::MAX,
+            )),
+            [r, g, b, a] => Some((
+                u8::try_from(*r).ok()?,
+                u8::try_from(*g).ok()?,
+                u8::try_from(*b).ok()?,
+                u8::try_from(*a).ok()?,
+            )),
+            _ => None,
+        },
+    }
+}
+
+fn parse_imageops_filter(
+    input: Option<ResampleInput>,
+) -> Result<crate::pipeline::ResampleFilter, PilError> {
+    match input {
+        Some(ResampleInput::Name(name)) => Err(PilError::ValueError(format!(
+            "Unknown resampling filter ({name}). Use Image.Resampling.NEAREST (0), \
+             Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), \
+             Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or \
+             Image.Resampling.HAMMING (5)"
+        ))),
+        input => parse_resample_input(input),
+    }
+}
+
+/// Validates the resampling argument accepted by `ImageOps.deform`.
+///
+/// Pillow's compatibility wrapper rejects string names for this entry point;
+/// numeric values and omission are accepted and the current mesh backend uses
+/// its established nearest-neighbor sampling.
+pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilError> {
+    if let Some(ResampleInput::Name(name)) = input {
+        return Err(PilError::ValueError(format!(
+            "Unknown resampling filter ({name}). Use Image.Resampling.NEAREST (0), \
+             Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
+        )));
+    }
+    Ok(())
+}
 
 /// Normalizes image contrast by clipping darkest and lightest values.
 ///
@@ -15,6 +139,16 @@ use crate::pipeline::PipelineOp;
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
+    autocontrast_with_mask(image, cutoff, ImageOpsMask::None)
+}
+
+/// Normalizes contrast after validating an optional Pillow mask.
+pub fn autocontrast_with_mask(
+    image: &Image,
+    cutoff: f64,
+    mask: ImageOpsMask,
+) -> Result<Image, PilError> {
+    validate_imageops_mask(image, mask)?;
     let mode = image.mode()?;
     // Pillow 12.2.0 `ImageOps._lut` accepts only "L" and "RGB"; "P" raises
     // NotImplementedError and every other mode raises the OSError below.
@@ -36,6 +170,12 @@ pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
+    equalize_with_mask(image, ImageOpsMask::None)
+}
+
+/// Equalizes an image after validating an optional Pillow mask.
+pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, PilError> {
+    validate_imageops_mask(image, mask)?;
     let mode = image.mode()?;
     // Pillow 12.2.0 converts "P" to "RGB" before building the LUT and then
     // `_lut` accepts only "L" and "RGB"; all other modes raise the OSError.
@@ -211,7 +351,22 @@ pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Imag
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
-    let filter = parse_resample(filter)?;
+    contain_with_input(
+        image,
+        w,
+        h,
+        filter.map(|name| ResampleInput::Name(name.to_owned())),
+    )
+}
+
+/// `ImageOps.contain` with a host-neutral public filter value.
+pub fn contain_with_input(
+    image: &Image,
+    w: u32,
+    h: u32,
+    filter: Option<ResampleInput>,
+) -> Result<Image, PilError> {
+    let filter = parse_imageops_filter(filter)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
@@ -221,7 +376,22 @@ pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Im
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
-    let filter = parse_resample(filter)?;
+    cover_with_input(
+        image,
+        w,
+        h,
+        filter.map(|name| ResampleInput::Name(name.to_owned())),
+    )
+}
+
+/// `ImageOps.cover` with a host-neutral public filter value.
+pub fn cover_with_input(
+    image: &Image,
+    w: u32,
+    h: u32,
+    filter: Option<ResampleInput>,
+) -> Result<Image, PilError> {
+    let filter = parse_imageops_filter(filter)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
@@ -253,6 +423,29 @@ pub fn fit(
     ))
 }
 
+/// `ImageOps.fit` with filter and centering validation owned by core.
+pub fn fit_with_input(
+    image: &Image,
+    w: u32,
+    h: u32,
+    filter: Option<ResampleInput>,
+    bleed: f64,
+    centering: CenteringInput,
+) -> Result<Image, PilError> {
+    let filter = parse_imageops_filter(filter)?;
+    let centering = resolve_centering(centering, false)?;
+    Ok(Image::push_op(
+        image,
+        PipelineOp::Fit {
+            w,
+            h,
+            filter,
+            bleed,
+            centering,
+        },
+    ))
+}
+
 /// Resizes and pads an image to exactly `(w, h)`.
 ///
 /// # Errors
@@ -267,6 +460,30 @@ pub fn pad(
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
+    Ok(Image::push_op(
+        image,
+        PipelineOp::Pad {
+            w,
+            h,
+            filter,
+            color,
+            centering,
+        },
+    ))
+}
+
+/// `ImageOps.pad` with filter and centering validation owned by core.
+pub fn pad_with_input(
+    image: &Image,
+    w: u32,
+    h: u32,
+    filter: Option<ResampleInput>,
+    color: ImageOpsColor,
+    centering: CenteringInput,
+) -> Result<Image, PilError> {
+    let filter = parse_imageops_filter(filter)?;
+    let centering = resolve_centering(centering, true)?;
+    let color = resolve_pad_color(color);
     Ok(Image::push_op(
         image,
         PipelineOp::Pad {

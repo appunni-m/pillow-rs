@@ -223,8 +223,6 @@ class Draw:
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
-        if not isinstance(n_sides, int) or n_sides <= 2:
-            raise ValueError("n_sides should be an int > 2")
         self._draw.regular_polygon(bounding_circle, n_sides, float(rotation), fill, outline, width)
         self._sync()
 

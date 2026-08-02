@@ -503,23 +503,8 @@ class Image:
         self._explicit_mode = self._rust_image.explicit_mode()
 
     def reduce(self, factor, box=None):
-        """Reduce image by integer factor."""
-        if isinstance(factor, (tuple, list)):
-            if len(factor) != 2:
-                raise TypeError(
-                    f"argument 1 must be sequence of length 2, not {len(factor)}"
-                )
-            x_factor, y_factor = int(factor[0]), int(factor[1])
-        elif isinstance(factor, int):
-            x_factor = y_factor = factor
-        else:
-            raise TypeError(
-                f"'{type(factor).__name__}' object cannot be interpreted as an integer"
-            )
-        if x_factor <= 0 or y_factor <= 0:
-            raise ValueError("scale must be > 0")
-        source = self if box is None else self.crop(tuple(box))
-        return Image(source._rust_image.reduce(x_factor, y_factor))
+        """Reduce image by integer factor through the Rust core."""
+        return Image(self._rust_image.reduce(factor, box))
 
     def load(self):
         """Load pixel data and return a mutable Pillow-style pixel view."""
@@ -527,46 +512,8 @@ class Image:
         return PixelAccess(self)
 
     def alpha_composite(self, im, dest=(0, 0), source=(0, 0)):
-        """Alpha composite im over self. Returns None (mutates in-place).
-
-        Mirrors Pillow's in-place ``Image.alpha_composite``: the overlay is
-        cropped to the source bounds and the composited result is pasted back
-        at the destination offset, so mismatched sizes compose over the
-        overlapping region instead of raising.
-        """
-        if not isinstance(source, (list, tuple)):
-            raise ValueError("Source must be a list or tuple")
-        if not isinstance(dest, (list, tuple)):
-            raise ValueError("Destination must be a list or tuple")
-        if len(source) == 4:
-            overlay_crop_box = tuple(source)
-        elif len(source) == 2:
-            overlay_crop_box = tuple(source) + im.size
-        else:
-            raise ValueError("Source must be a sequence of length 2 or 4")
-        if not len(dest) == 2:
-            raise ValueError("Destination must be a sequence of length 2")
-        if min(source) < 0:
-            raise ValueError("Source must be non-negative")
-
-        # Overlay image, cropped when it is not the whole image.
-        if overlay_crop_box == (0, 0) + im.size:
-            overlay = im
-        else:
-            overlay = im.crop(overlay_crop_box)
-
-        # Target box for the paste.
-        box = tuple(dest) + (dest[0] + overlay.width, dest[1] + overlay.height)
-
-        # Destination region; the whole image when the box covers it.
-        if box == (0, 0) + self.size:
-            background = self
-        else:
-            background = self.crop(box)
-
-        result = background.copy()
-        result._rust_image.alpha_composite(overlay._rust_image)
-        self.paste(result, box)
+        """Alpha composite im over self in-place through the Rust core."""
+        self._rust_image.alpha_composite(im._rust_image, dest, source)
 
     def getcolors(self, maxcolors=256):
         """Return list of [count, color] pairs or None if too many colors."""
@@ -878,31 +825,8 @@ class Image:
         return None
 
     def transform(self, size, method, data=None, resample=0, fill=1, fillcolor=None):
-        """General affine/perspective/mesh transform."""
-        if isinstance(method, str):
-            # PIL requires the integer transform-method enum; names like
-            # "AFFINE" raise before any geometry is computed.
-            raise ValueError("unknown transformation method")
-        if isinstance(resample, str):
-            raise ValueError(
-                f"Unknown resampling filter ({resample}). "
-                "Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) "
-                "or Image.Resampling.BICUBIC (3)"
-            )
-        if method == 0:
-            if data is None:
-                raise ValueError("missing method data")
-            return Image(self._rust_image.transform(size, "AFFINE", data, resample, fill, fillcolor))
-        is_mesh = method == 4
-        if is_mesh:
-            if data is None:
-                raise ValueError("missing method data")
-            if isinstance(data, (list, tuple)) and data and isinstance(data[0], (list, tuple)):
-                mesh_flat = _core.mesh_flatten(data)
-            else:
-                mesh_flat = _core.mesh_flatten([data])
-            return Image(self._rust_image.transform(size, "MESH", mesh_flat, resample, fill, fillcolor))
-        raise ValueError("unknown transformation method")
+        """General affine/perspective/mesh transform delegated to Rust."""
+        return Image(self._rust_image.transform(size, method, data, resample, fill, fillcolor))
 
     def verify(self):
         """Verify file contents. Raises exception if corrupted."""
