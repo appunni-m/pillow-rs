@@ -30,17 +30,22 @@ use crate::raster::{ColorType, DynamicImage, RgbImage};
 /// # Returns
 ///
 /// A static mode identifier such as `"L"`, `"LA"`, `"RGB"`, `"RGBA"`, or
-/// `"I;16"`. Unsupported color types currently fall back to `"RGB"` because
-/// the core image APIs operate on RGB-compatible buffers for unknown modes.
+/// `"I;16"`. Unknown color types fall back to `"RGB"` because the core image
+/// APIs operate on RGB-compatible buffers for forward-compatible codec
+/// metadata.
 pub fn color_type_to_mode(ct: ColorType) -> &'static str {
     match ct {
         ColorType::L8 => "L",
         ColorType::La8 => "LA",
         ColorType::Rgb8 => "RGB",
         ColorType::Rgba8 => "RGBA",
+        ColorType::Cmyk8 => "CMYK",
         ColorType::L16 => "I;16",
-        ColorType::Rgb16 => "I;16",
-        ColorType::Rgba16 => "I;16",
+        ColorType::La16 => "LA",
+        ColorType::Rgb16 | ColorType::Rgb32F => "RGB",
+        ColorType::Rgba16 | ColorType::Rgba32F => "RGBA",
+        ColorType::L32F => "F",
+        ColorType::L32I => "I",
         _ => "RGB",
     }
 }
@@ -432,10 +437,7 @@ pub fn resolve_new_color(
                 "must be real number, not tuple".to_owned(),
             ));
         }
-        if matches!(
-            mode,
-            "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"
-        ) {
+        if matches!(mode, "I" | "I;16" | "I;16L" | "I;16B" | "I;16N") {
             return Err(crate::error::PilError::TypeError(
                 "color must be int or single-element tuple".to_owned(),
             ));
@@ -566,12 +568,7 @@ pub fn getcolor(
 ///
 /// The palette index when found, or `None` when the RGB triple is absent.
 pub fn palette_getcolor(palette: &[u8], r: u8, g: u8, b: u8) -> Option<usize> {
-    for i in (0..palette.len()).step_by(3) {
-        if i + 2 < palette.len() && palette[i] == r && palette[i + 1] == g && palette[i + 2] == b {
-            return Some(i / 3);
-        }
-    }
-    None
+    palette.chunks_exact(3).position(|entry| entry == [r, g, b])
 }
 
 /// Finds or appends a color in a Pillow-compatible palette.
@@ -598,31 +595,12 @@ pub fn palette_getcolor_append(
     a: u8,
     mode: &str,
 ) -> Result<usize, String> {
-    let step = if mode == "RGBA" { 4 } else { 3 };
-
-    // Search for existing color
-    for i in (0..palette.len()).step_by(step) {
-        if palette[i] == r
-            && palette[i + 1] == g
-            && palette[i + 2] == b
-            && (step == 3 || palette[i + 3] == a)
-        {
-            return Ok(i / step);
-        }
-    }
-
-    // Not found — append
-    let idx = palette.len() / step;
-    if idx >= 256 {
-        return Err("cannot allocate more than 256 colors".into());
-    }
-    palette.push(r);
-    palette.push(g);
-    palette.push(b);
-    if step == 4 {
-        palette.push(a);
-    }
-    Ok(idx)
+    let color = if mode == "RGBA" {
+        vec![r, g, b, a]
+    } else {
+        vec![r, g, b]
+    };
+    palette_getcolor_validate(palette, &color, mode)
 }
 
 /// Formats a palette as Pillow-compatible text.
@@ -1056,30 +1034,19 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
 
 /// Converts `P` palette-index storage to RGB.
 ///
-/// `img` is interpreted as one index byte per pixel. When `palette` is present,
-/// it must be a flat sequence of RGB triples; missing entries map to black.
-/// Without a palette, each index maps to the grayscale ramp `RGB(i, i, i)`.
+/// `img` is interpreted as one index byte per pixel. A missing palette or a
+/// missing entry maps to black, matching Pillow's empty/default `P` palette.
 pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     let luma = img.to_luma8();
     let (w, h) = luma.dimensions();
     let mut out = crate::raster::RgbImage::new(w, h);
+    let palette = palette.unwrap_or(&[]);
     for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
         let idx = ip[0] as usize;
-        if let Some(pal) = palette {
-            if idx * 3 + 2 < pal.len() {
-                op[0] = pal[idx * 3];
-                op[1] = pal[idx * 3 + 1];
-                op[2] = pal[idx * 3 + 2];
-            } else {
-                op[0] = 0;
-                op[1] = 0;
-                op[2] = 0;
-            }
-        } else {
-            // PIL default palette: grayscale ramp
-            op[0] = ip[0];
-            op[1] = ip[0];
-            op[2] = ip[0];
+        if idx * 3 + 2 < palette.len() {
+            op[0] = palette[idx * 3];
+            op[1] = palette[idx * 3 + 1];
+            op[2] = palette[idx * 3 + 2];
         }
     }
     DynamicImage::ImageRgb8(out)
@@ -1094,15 +1061,14 @@ pub fn pa_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     let indices = img.to_luma8();
     let (w, h) = indices.dimensions();
     let mut out = crate::raster::RgbImage::new(w, h);
+    let palette = palette.unwrap_or(&[]);
     for (op, ip) in out.pixels_mut().zip(indices.pixels()) {
         let index = usize::from(ip[0]);
-        if let Some(pal) = palette {
-            let base = index * 3;
-            if base + 2 < pal.len() {
-                op[0] = pal[base];
-                op[1] = pal[base + 1];
-                op[2] = pal[base + 2];
-            }
+        let base = index * 3;
+        if base + 2 < palette.len() {
+            op[0] = palette[base];
+            op[1] = palette[base + 1];
+            op[2] = palette[base + 2];
         }
     }
     DynamicImage::ImageRgb8(out)
@@ -1143,7 +1109,7 @@ pub fn convert_from_nonstandard(
 /// Returns an error string when the color is invalid for the palette mode or
 /// cannot be appended because the palette is full. An empty color returns the
 /// next slot index without changing the palette, matching Pillow.
-pub fn palette_getcolor_validate(
+fn palette_getcolor_validate_impl(
     palette: &mut Vec<u8>,
     color: &[u8],
     mode: &str,
@@ -1168,6 +1134,11 @@ pub fn palette_getcolor_validate(
     if stored.len() > mode_len {
         stored.truncate(mode_len);
     }
+    if mode == "RGB" && stored.len() == 3 {
+        if let Some(index) = palette_getcolor(palette, stored[0], stored[1], stored[2]) {
+            return Ok(index);
+        }
+    }
     let entries = palette.len() / mode_len;
     for i in 0..entries {
         let start = i * mode_len;
@@ -1181,6 +1152,15 @@ pub fn palette_getcolor_validate(
     }
     palette.extend_from_slice(&stored);
     Ok(idx)
+}
+
+/// Validates and stores a palette color from a host-neutral component slice.
+pub fn palette_getcolor_validate(
+    palette: &mut Vec<u8>,
+    color: &[u8],
+    mode: &str,
+) -> Result<usize, String> {
+    palette_getcolor_validate_impl(palette, color, mode)
 }
 
 /// Host-neutral input for `ImagePalette.getcolor`.
@@ -1200,7 +1180,22 @@ pub fn palette_getcolor_validate_input(
     mode: &str,
 ) -> Result<usize, String> {
     match color {
-        PaletteColorInput::Components(color) => palette_getcolor_validate(palette, &color, mode),
+        PaletteColorInput::Components(color)
+            if (mode == "RGB" && color.len() == 3)
+                || (mode == "RGBA" && matches!(color.len(), 3 | 4)) =>
+        {
+            palette_getcolor_append(
+                palette,
+                color[0],
+                color[1],
+                color[2],
+                color.get(3).copied().unwrap_or(255),
+                mode,
+            )
+        }
+        PaletteColorInput::Components(color) => {
+            palette_getcolor_validate_impl(palette, &color, mode)
+        }
         PaletteColorInput::Invalid(repr) => Err(format!("unknown color specifier: {repr}")),
     }
 }

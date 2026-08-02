@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 5f6d393d5c454d810f0a506192f85ef762ed055fda2017f306bfcb24ca597e2b
-coverage_run_id: migration-coverage-a32e9a5dc4a847b7b5dae35059f98778
+coverage_run_id: migration-coverage-3a77073e92e44e3ca833a8f9c0822545
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -28,7 +28,7 @@ Component aggregate for backlog ordering: `9883/11021` (89.7%).
 
 ## Operations below 95% region coverage
 
-151 of 208 coverage-required operations are below 95%.
+143 of 208 coverage-required operations are below 95%.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -152,14 +152,6 @@ Component aggregate for backlog ordering: `9883/11021` (89.7%).
 | `PIL.Image.new` | `image-core` | 9883/11021 | 89.7% |
 | `PIL.Image.open` | `image-core` | 9883/11021 | 89.7% |
 | `PIL.Image.radial_gradient` | `image-core` | 9883/11021 | 89.7% |
-| `PIL.ImageColor.getcolor` | `image-color` | 1153/1229 | 93.8% |
-| `PIL.ImageColor.getrgb` | `image-color` | 1153/1229 | 93.8% |
-| `PIL.ImagePalette.ImagePalette` | `image-palette` | 1153/1229 | 93.8% |
-| `PIL.ImagePalette.ImagePalette.copy` | `image-palette` | 1153/1229 | 93.8% |
-| `PIL.ImagePalette.ImagePalette.getcolor` | `image-palette` | 1153/1229 | 93.8% |
-| `PIL.ImagePalette.ImagePalette.getdata` | `image-palette` | 1153/1229 | 93.8% |
-| `PIL.ImagePalette.ImagePalette.save` | `image-palette` | 1153/1229 | 93.8% |
-| `PIL.ImagePalette.ImagePalette.tobytes` | `image-palette` | 1153/1229 | 93.8% |
 | `PIL.ImageFilter.BLUR` | `image-filter` | 630/667 | 94.5% |
 | `PIL.ImageFilter.BoxBlur` | `image-filter` | 630/667 | 94.5% |
 | `PIL.ImageFilter.CONTOUR` | `image-filter` | 630/667 | 94.5% |
@@ -188,8 +180,6 @@ Component aggregate for backlog ordering: `9883/11021` (89.7%).
 
 | Component | File | Region coverage | Percent |
 | --- | --- | ---: | ---: |
-| `image-color` | `pillow-rs/src/color.rs` | 1153/1229 | 93.8% |
-| `image-color` | `pillow-rs-py/python/pillow_rs/imagecolor.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs/src/ops/paste.rs` | 704/848 | 83.0% |
 | `image-core` | `pillow-rs/src/pipeline.rs` | 32/38 | 84.2% |
 | `image-core` | `pillow-rs/src/ops/crop.rs` | 160/183 | 87.4% |
@@ -215,8 +205,6 @@ Component aggregate for backlog ordering: `9883/11021` (89.7%).
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 558/614 | 90.9% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1501/1591 | 94.3% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
-| `image-palette` | `pillow-rs/src/color.rs` | 1153/1229 | 93.8% |
-| `image-palette` | `pillow-rs-py/python/pillow_rs/imagepalette.py` | 0/0 | n/a |
 | `image-sequence` | `pillow-rs/src/image.rs` | 4104/4686 | 87.6% |
 | `image-sequence` | `pillow-rs-py/python/pillow_rs/imagesequence.py` | 0/0 | n/a |
 

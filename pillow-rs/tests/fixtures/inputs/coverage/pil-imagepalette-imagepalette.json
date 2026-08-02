@@ -45,6 +45,7 @@
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.full-rgb-palette-existing-color",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.full-rgb-palette-exhausted",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-mode-three-tuple",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-mode-short-tuple",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-mode-four-tuple",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.full-rgba-palette-existing-color",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.full-rgba-palette-exhausted"
