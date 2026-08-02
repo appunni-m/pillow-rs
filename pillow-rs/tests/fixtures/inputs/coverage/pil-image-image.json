@@ -1214,6 +1214,7 @@
           "PIL.Image.Image.convert.nuanced.l-to-p",
           "PIL.Image.Image.convert.nuanced.rgb-matrix-four",
           "PIL.Image.Image.convert.nuanced.rgb-matrix-twelve",
+          "PIL.Image.Image.convert.nuanced.rgb-matrix-wrong-length",
           "PIL.Image.Image.convert.nuanced.unknown-mode",
           "PIL.Image.Image.convert.nuanced.l-to-rgba",
           "PIL.Image.Image.convert.nuanced.rgba-to-l",
