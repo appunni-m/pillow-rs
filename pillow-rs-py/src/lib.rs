@@ -360,14 +360,18 @@ fn open_formats_input_from_python(
     }
 }
 
-fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ImageOpsMask {
+fn imageops_mask_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::ImageOpsMask> {
     let Some(value) = value else {
-        return pillow_rs::ImageOpsMask::None;
+        return Ok(pillow_rs::ImageOpsMask::None);
     };
     if let Some(mask) = image_from_python(value) {
-        return pillow_rs::ImageOpsMask::Image(mask);
+        return Ok(pillow_rs::ImageOpsMask::Image(mask));
     }
-    pillow_rs::ImageOpsMask::Invalid
+    Ok(pillow_rs::ImageOpsMask::Invalid(
+        value.get_type().name()?.to_string(),
+    ))
 }
 
 fn image_analysis_mask_from_python(
@@ -950,7 +954,7 @@ impl PyImage {
 
     #[pyo3(signature = (mask=None))]
     fn stat_formatted(&self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<PyObject> {
-        let mask = imageops_mask_from_python(mask);
+        let mask = imageops_mask_from_python(mask)?;
         let result = self
             .inner
             .stat_formatted_with_mask(mask)
@@ -3508,7 +3512,7 @@ fn ops_autocontrast(
 ) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let c = cutoff.unwrap_or(0.0);
-    let mask = imageops_mask_from_python(mask);
+    let mask = imageops_mask_from_python(mask)?;
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs::imageops_autocontrast_with_mask(&inner, c, mask))
     })
@@ -3519,7 +3523,7 @@ fn ops_autocontrast(
 #[pyfunction]
 fn ops_equalize(image: &Bound<'_, PyImage>, mask: Option<&Bound<'_, PyAny>>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let mask = imageops_mask_from_python(mask);
+    let mask = imageops_mask_from_python(mask)?;
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| pillow_rs::imageops_equalize_with_mask(&inner, mask))
     })

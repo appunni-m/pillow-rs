@@ -1929,6 +1929,7 @@ class WorkflowBuilder:
             if self.primary_surface not in {
                 "PIL.Image.Image",
                 "PIL.ImageDraw.ImageDraw",
+                "PIL.ImageOps",
             }:
                 raise ValueError(
                     "scenario chains require supported image or image-draw methods"
@@ -1958,6 +1959,25 @@ class WorkflowBuilder:
                     step_id="setup-non-image-mask",
                 )
                 self.scenario_values["mask"] = binding(non_image_step)
+                receiver_step = image_step
+            elif chain == "image-color-input":
+                image_step = self.ensure_image()
+                color_step = self.ensure_image(label="color")
+                self.scenario_values["color"] = binding(color_step)
+                receiver_step = image_step
+            elif chain == "none-centering-input":
+                image_step = self.ensure_image(mode="RGB")
+                none_step = self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(image_step),
+                    arguments={
+                        "xy": literal([0, 0]),
+                        "value": literal([1, 2, 3]),
+                    },
+                    step_id="setup-none-centering",
+                )
+                self.scenario_values["centering"] = binding(none_step)
                 receiver_step = image_step
             elif chain == "opened-rgb-resize-verify":
                 image_step = self.ensure_image(mode="RGB")
@@ -9136,6 +9156,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "parameter.mask",
+            "name": "invalid-mask-type",
+            "mode": "RGB",
+            "chain": "truthy-non-image-mask",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "equalize",
             "requirement_suffix": "parameter.mask",
             "name": "valid-l-mask",
@@ -9153,6 +9181,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "parameter.mask",
+            "name": "invalid-mask-type",
+            "mode": "RGB",
+            "chain": "truthy-non-image-mask",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "fit",
             "requirement_suffix": "parameter.centering",
             "name": "short-centering",
@@ -9164,6 +9200,21 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.centering",
             "name": "long-centering",
             "values": {"centering": literal([0.5, 0.5, 0.5])},
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.centering",
+            "name": "default-centering-pair",
+            "values": {"centering": literal([0.5, 0.5])},
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.centering",
+            "name": "invalid-centering-none",
+            "mode": "RGB",
+            "chain": "none-centering-input",
         },
         {
             "surface": "PIL.ImageOps",
@@ -9349,6 +9400,122 @@ def build_nuanced_cases(
             "values": {
                 "color": literal("red"),
                 "size": literal([20, 12]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "p-scalar-color",
+            "mode": "P",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal(5),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "p-three-components",
+            "mode": "P",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([5, 6, 7]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "pa-scalar-color",
+            "mode": "PA",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal(5),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "pa-two-components",
+            "mode": "PA",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([5, 7]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "rgba-scalar-color",
+            "mode": "RGBA",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal(5),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "invalid-color-type",
+            "mode": "RGB",
+            "chain": "image-color-input",
+            "values": {
+                "size": literal([20, 12]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "invalid-l-three-components",
+            "mode": "L",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "invalid-l-four-components",
+            "mode": "L",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "invalid-la-four-components",
+            "mode": "LA",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "rgba-three-components",
+            "mode": "RGBA",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([1, 2, 3]),
             },
             "observe_result": "tobytes",
         },
