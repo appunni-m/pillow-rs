@@ -2665,6 +2665,27 @@ fn draw_box_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawBoxInput 
     pillow_rs::DrawBoxInput::Invalid
 }
 
+fn draw_color_input_from_python(
+    val: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::DrawColorInput> {
+    let Some(val) = val else {
+        return Ok(pillow_rs::DrawColorInput::None);
+    };
+    if let Ok(value) = val.extract::<String>() {
+        return Ok(pillow_rs::DrawColorInput::String(value));
+    }
+    if let Ok(value) = val.extract::<i64>() {
+        return Ok(pillow_rs::DrawColorInput::Integer(value));
+    }
+    if let Ok(value) = val.extract::<f64>() {
+        return Ok(pillow_rs::DrawColorInput::Float(value));
+    }
+    if let Ok(value) = val.extract::<Vec<i64>>() {
+        return Ok(pillow_rs::DrawColorInput::Components(value));
+    }
+    Ok(pillow_rs::DrawColorInput::Invalid)
+}
+
 fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
     if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
         return Ok(points);
@@ -2775,12 +2796,11 @@ impl PyDraw {
         bitmap: &Bound<'_, PyImage>,
         fill: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        let fill_color = self.color(fill)?;
+        let fill_input = draw_color_input_from_python(fill)?;
         let bmp = bitmap.borrow();
         self.draw
-            .bitmap(xy.0 as i32, xy.1 as i32, &bmp.inner, Some(fill_color))
-            .map_err(map_error)?;
-        Ok(())
+            .bitmap_with_input(xy.0 as i32, xy.1 as i32, &bmp.inner, fill_input)
+            .map_err(map_error)
     }
 
     fn regular_polygon(
@@ -3201,100 +3221,9 @@ impl PyDraw {
 
     /// Parse a draw color, using the image mode to determine byte representation.
     fn color(&self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
-        parse_draw_color(val, self.draw.mode())
-    }
-}
-
-fn parse_draw_color(
-    val: Option<&Bound<'_, PyAny>>,
-    mode: Option<&str>,
-) -> PyResult<(u8, u8, u8, u8)> {
-    let v = match val {
-        Some(v) => v,
-        // Pillow's ImageDraw context starts with ink=-1, which is an all-255
-        // `(index, alpha)` sample in PA. Other modes retain the wrapper's
-        // existing black default.
-        None if mode == Some("PA") => return Ok((255, 255, 255, 255)),
-        None => return Ok((0, 0, 0, 255)),
-    };
-    // F mode (float32): convert color to f32 LE bytes
-    if mode == Some("F") {
-        if let Ok(f) = v.extract::<f64>() {
-            let raw = f as f32;
-            let bytes = raw.to_le_bytes();
-            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-        }
-    }
-    // I mode (int32): convert color to i32 LE bytes
-    if mode == Some("I") {
-        if let Ok(i) = v.extract::<i32>() {
-            let bytes = i.to_le_bytes();
-            return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
-        }
-    }
-    // PA uses a palette index plus a per-pixel alpha byte. Pillow accepts
-    // scalar/one-item ink as (index, 0) and a two-item tuple verbatim.
-    if mode == Some("PA") {
-        if let Ok((index, alpha)) = v.extract::<(u8, u8)>() {
-            return Ok((index, index, index, alpha));
-        }
-        if let Ok((index,)) = v.extract::<(u8,)>() {
-            return Ok((index, index, index, 0));
-        }
-        if let Ok(index) = v.extract::<u8>() {
-            return Ok((index, index, index, 0));
-        }
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "color must be int, or tuple of one or two elements",
-        ));
-    }
-    // Pillow's `Draw._getink` accepts a one-item tuple for single-channel
-    // modes; the value becomes the channel ink.
-    if matches!(mode, Some("L") | Some("1") | Some("P")) {
-        if let Ok((value,)) = v.extract::<(u8,)>() {
-            return Ok((value, value, value, 255));
-        }
-    }
-    if mode == Some("LA") {
-        if let Ok((luma, alpha)) = v.extract::<(u8, u8)>() {
-            return Ok((luma, luma, luma, alpha));
-        }
-        if let Ok(luma) = v.extract::<u8>() {
-            return Ok((luma, luma, luma, 0));
-        }
-        return Err(pyo3::exceptions::PyTypeError::new_err(
-            "color must be int, or tuple of one or two elements",
-        ));
-    }
-    // Standard modes: extract as u8
-    if let Ok(s) = v.extract::<String>() {
-        pillow_rs::parse_color_str(&s).map_err(map_error)
-    } else if let Ok((r, g, b)) = v.extract::<(u8, u8, u8)>() {
-        Ok((r, g, b, 255))
-    } else if let Ok((r, g, b, a)) = v.extract::<(u8, u8, u8, u8)>() {
-        Ok((r, g, b, a))
-    } else if let Ok(i) = v.extract::<u8>() {
-        // Match PIL's _getink per-mode behavior for int fills:
-        //   RGB: (R=i, G=0, B=0, A=255) — PIL puts int fill in RED only
-        //   RGBA: (R=i, G=0, B=0, A=0) — PIL puts int fill in RED only, A=0
-        //   LA: (L=i, A=0) — alpha=0 means "use value directly"
-        //   CMYK: (C=i, M=0, Y=0, K=0)
-        //   L/1/P: (i, i, i, 255) — single channel, G/B irrelevant
-        //   F/I: already handled above
-        match mode {
-            // Pillow's `Draw._getink` writes integer inks into the first
-            // channel only for every multi-band mode (RGB, YCbCr, HSV, ...).
-            Some("RGB") | Some("YCbCr") | Some("HSV") => Ok((i, 0, 0, 255)),
-            Some("RGBA") => Ok((i, 0, 0, 0)),
-            // PIL's _getink for LA: (L=value, A=0) where A=0 means full opacity
-            Some("LA") => Ok((i, i, i, 0)),
-            Some("CMYK") => Ok((i, 0, 0, 0)),
-            _ => Ok((i, i, i, 255)),
-        }
-    } else {
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            "Expected color tuple, int, or string",
-        ))
+        self.draw
+            .color_with_input(draw_color_input_from_python(val)?)
+            .map_err(map_error)
     }
 }
 
