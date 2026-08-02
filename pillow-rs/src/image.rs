@@ -2452,6 +2452,24 @@ impl Image {
         Ok(palette)
     }
 
+    /// Returns RGB triples for an indexed Qt-compatible color table.
+    ///
+    /// Qt owns the final `qRgb` packing and `QImage` object construction; the
+    /// Rust core owns the mode-aware table values so palette traversal is
+    /// shared with every binding.
+    pub fn indexed_color_table(&self, mode: &str) -> Result<Vec<(u8, u8, u8)>, PilError> {
+        match mode {
+            "L" => Ok((0..=u8::MAX).map(|value| (value, value, value)).collect()),
+            "P" => Ok(self
+                .getpalette_with_input(Some("RGB"))?
+                .unwrap_or_default()
+                .chunks_exact(3)
+                .map(|color| (color[0], color[1], color[2]))
+                .collect()),
+            _ => Ok(Vec::new()),
+        }
+    }
+
     /// Attaches a palette without changing the image's sample bytes.
     ///
     /// Pillow reinterprets `L` samples as palette indices (`P`) and `LA`

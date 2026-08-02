@@ -760,6 +760,10 @@ impl PyImage {
             .map_err(map_error)
     }
 
+    fn indexed_color_table(&self, mode: &str) -> PyResult<Vec<(u8, u8, u8)>> {
+        self.inner.indexed_color_table(mode).map_err(map_error)
+    }
+
     fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
     }
