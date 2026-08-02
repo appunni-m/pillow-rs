@@ -1,0 +1,22 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagefilter-color3dlut.coverage-plan",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-filter"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}

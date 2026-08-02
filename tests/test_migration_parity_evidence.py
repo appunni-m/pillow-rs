@@ -124,7 +124,7 @@ class MigrationParityEvidenceTests(unittest.TestCase):
             )
             status_report(result)
             self.assertEqual(result["schema"], "migration-parity/status-report@1")
-            self.assertEqual(len(result["operations"]), 205)
+            self.assertEqual(len(result["operations"]), 206)
             self.assertEqual(result["evidence"], [])
             parity = next(
                 item
@@ -132,7 +132,7 @@ class MigrationParityEvidenceTests(unittest.TestCase):
                 if item["dimension"] == "parity_outcome"
             )
             self.assertEqual(parity["numerator"], 0)
-            self.assertEqual(parity["denominator"], 1978)
+            self.assertEqual(parity["denominator"], 1988)
             self.assertTrue(all(item["parity"]["outcome"] == "not_proven" for item in result["operations"]))
 
     def test_unknown_status_field_is_rejected(self) -> None:

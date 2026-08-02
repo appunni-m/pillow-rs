@@ -178,6 +178,19 @@ CORRECTIONS: tuple[Endpoint, ...] = (
             "the constructor."
         ),
     ),
+    Endpoint(
+        surface="PIL.ImageFilter.Color3DLUT",
+        operation="__repr__",
+        kind="method",
+        source_path="PIL.ImageFilter.Color3DLUT.__repr__",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "The Color3DLUT representation is a public method used by the "
+            "target wrapper and is required to measure its Rust formatter."
+        ),
+    ),
     *tuple(
         Endpoint(
             surface=f"PIL.ImageEnhance.{class_name}",

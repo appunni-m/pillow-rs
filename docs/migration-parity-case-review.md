@@ -6,12 +6,12 @@ outputs.
 
 ## Selection outcome
 
-- Manifest operations: 205
-- Manifest requirements: 1780
-- Active parity workflows: 1978
-- Unique active workflow signatures: 1978
+- Manifest operations: 206
+- Manifest requirements: 1782
+- Active parity workflows: 1988
+- Unique active workflow signatures: 1988
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 809
+- Deliberate nuanced workflows: 818
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -33,7 +33,8 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageEnhance.Color` | 1 |
 | `PIL.ImageEnhance.Contrast` | 1 |
 | `PIL.ImageEnhance.Sharpness` | 1 |
-| `PIL.ImageFilter` | 104 |
+| `PIL.ImageFilter` | 113 |
+| `PIL.ImageFilter.Color3DLUT` | 1 |
 | `PIL.ImageFont` | 25 |
 | `PIL.ImageFont.FreeTypeFont` | 87 |
 | `PIL.ImageFont.ImageFont` | 13 |
@@ -740,10 +741,19 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.text.nuanced.unicode-anchor`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.zero-size-rgba`
 - `PIL.ImageDraw.ImageDraw.textbbox.nuanced.unicode-anchor`
+- `PIL.ImageFilter.Color3DLUT.nuanced.target-too-narrow`
+- `PIL.ImageFilter.Color3DLUT.nuanced.valid-rgba-target`
+- `PIL.ImageFilter.Color3DLUT.nuanced.wrong-source-mode`
 - `PIL.ImageFilter.Kernel.nuanced.bad-size`
 - `PIL.ImageFilter.Kernel.nuanced.five-by-five`
 - `PIL.ImageFilter.Kernel.nuanced.short-kernel`
 - `PIL.ImageFilter.Kernel.nuanced.three-by-three-edge`
+- `PIL.ImageFilter.ModeFilter.nuanced.explicit-one-mode`
+- `PIL.ImageFilter.ModeFilter.nuanced.no-majority`
+- `PIL.ImageFilter.ModeFilter.nuanced.nonzero-mode-selection`
+- `PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-in-range-clip`
+- `PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-threshold`
+- `PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-rgba-threshold`
 - `PIL.ImageFont.FreeTypeFont.font_variant.nuanced.variable-font-size`
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.named-instances`
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font`

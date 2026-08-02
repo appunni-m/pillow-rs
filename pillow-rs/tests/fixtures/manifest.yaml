@@ -181,6 +181,7 @@ input_index:
   - inputs/parity/pil-imageenhance-contrast.json
   - inputs/parity/pil-imageenhance-sharpness.json
   - inputs/parity/pil-imagefilter.json
+  - inputs/parity/pil-imagefilter-color3dlut.json
   - inputs/parity/pil-imagefont.json
   - inputs/parity/pil-imagefont-freetypefont.json
   - inputs/parity/pil-imagefont-imagefont.json
@@ -205,6 +206,7 @@ input_index:
   - inputs/coverage/pil-imageenhance-contrast.json
   - inputs/coverage/pil-imageenhance-sharpness.json
   - inputs/coverage/pil-imagefilter.json
+  - inputs/coverage/pil-imagefilter-color3dlut.json
   - inputs/coverage/pil-imagefont.json
   - inputs/coverage/pil-imagefont-freetypefont.json
   - inputs/coverage/pil-imagefont-imagefont.json
@@ -229,6 +231,7 @@ input_index:
   - inputs/benchmark/pil-imageenhance-contrast.json
   - inputs/benchmark/pil-imageenhance-sharpness.json
   - inputs/benchmark/pil-imagefilter.json
+  - inputs/benchmark/pil-imagefilter-color3dlut.json
   - inputs/benchmark/pil-imagefont.json
   - inputs/benchmark/pil-imagefont-freetypefont.json
   - inputs/benchmark/pil-imagefont-imagefont.json
@@ -297,6 +300,7 @@ coverage_components:
   paths:
   - pillow-rs-py/python/pillow_rs/imagefilter.py
   - pillow-rs/src/ops/filter.rs
+  - pillow-rs/src/ops/param_filters.rs
   dimensions:
   - function
   - line
@@ -22413,6 +22417,86 @@ surfaces:
     - id: PIL.ImageFilter.UnsharpMask.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageFilter.UnsharpMask.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-filter
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+- id: PIL.ImageFilter.Color3DLUT
+  kind: namespace
+  source_path: PIL.ImageFilter.Color3DLUT
+  storage_slug: pil-imagefilter-color3dlut
+  operations:
+  - id: __repr__
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageFilter.Color3DLUT.__repr__
+      signature: __repr__(self) -> 'str'
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      result:
+        shape: scalar
+        observations:
+        - path: value
+          value_types:
+          - string
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.imagefilter.Color3DLUT.__repr__
+      signature: __repr__(self)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageFilter.Color3DLUT.__repr__.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageFilter.Color3DLUT.__repr__.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.__repr__.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageFilter.Color3DLUT.__repr__.
       lanes:
       - parity
       - benchmark

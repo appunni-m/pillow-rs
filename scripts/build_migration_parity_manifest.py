@@ -87,6 +87,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
     "image-filter": (
         "pillow-rs-py/python/pillow_rs/imagefilter.py",
         "pillow-rs/src/ops/filter.rs",
+        "pillow-rs/src/ops/param_filters.rs",
     ),
     "image-enhance": (
         "pillow-rs-py/python/pillow_rs/imageenhance.py",
@@ -422,6 +423,9 @@ def target_candidates(endpoint: Endpoint) -> list[str]:
     if surface.startswith("PIL.ImageFont."):
         class_name = surface.rsplit(".", 1)[1]
         return [f"pillow_rs.ImageFont.{class_name}.{operation}"]
+    if surface.startswith("PIL.ImageFilter."):
+        class_name = surface.rsplit(".", 1)[1]
+        return [f"pillow_rs.imagefilter.{class_name}.{operation}"]
     if surface == "PIL.ImageStat":
         return [f"pillow_rs.ImageStat.{operation}"]
     if surface == "PIL.ImageStat.Stat":

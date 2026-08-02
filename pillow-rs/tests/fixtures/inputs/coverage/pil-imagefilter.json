@@ -238,7 +238,16 @@
           "PIL.ImageFilter.Kernel.nuanced.three-by-three-edge",
           "PIL.ImageFilter.Kernel.nuanced.five-by-five",
           "PIL.ImageFilter.Kernel.nuanced.bad-size",
-          "PIL.ImageFilter.Kernel.nuanced.short-kernel"
+          "PIL.ImageFilter.Kernel.nuanced.short-kernel",
+          "PIL.ImageFilter.ModeFilter.nuanced.nonzero-mode-selection",
+          "PIL.ImageFilter.ModeFilter.nuanced.no-majority",
+          "PIL.ImageFilter.ModeFilter.nuanced.explicit-one-mode",
+          "PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-threshold",
+          "PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-rgba-threshold",
+          "PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-in-range-clip",
+          "PIL.ImageFilter.Color3DLUT.nuanced.valid-rgba-target",
+          "PIL.ImageFilter.Color3DLUT.nuanced.wrong-source-mode",
+          "PIL.ImageFilter.Color3DLUT.nuanced.target-too-narrow"
         ],
         "command_ids": []
       },

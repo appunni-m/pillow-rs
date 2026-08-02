@@ -1,0 +1,74 @@
+{
+  "schema": "migration-parity/parity-input@1",
+  "cases": [
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "__repr__",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.__repr__.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "__repr__",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}
