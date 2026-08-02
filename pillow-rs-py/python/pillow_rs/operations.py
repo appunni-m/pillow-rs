@@ -19,12 +19,7 @@ def new(
     size: Tuple[int, int],
     color: Union[int, Tuple[int, ...], str] = 0,
 ) -> Image:
-    try:
-        return Image.new(mode, size, color)
-    except ValueError as exc:
-        if str(exc) == f"Unsupported mode: {mode}":
-            raise ValueError("unrecognized image mode") from exc
-        raise
+    return Image.new(mode, size, color)
 
 
 def save(

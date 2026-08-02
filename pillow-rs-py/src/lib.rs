@@ -1864,6 +1864,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(color3dlut_repr, m)?)?;
     m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
     m.add_function(wrap_pyfunction!(kernel_prepare, m)?)?;
+    m.add_function(wrap_pyfunction!(kernel_validate_coefficients, m)?)?;
 
     // Utility functions (moved from Python)
     m.add_function(wrap_pyfunction!(align_row_to_32, m)?)?;
@@ -3870,34 +3871,13 @@ fn stat_from_histogram(data: Vec<f64>) -> PyResult<PyObject> {
 /// or sequence of 3 ints. Each dimension must be in [2, 65].
 #[pyfunction]
 fn color3dlut_check_size(size: &Bound<'_, PyAny>) -> PyResult<(u32, u32, u32)> {
-    // Try as a sequence first
-    if let Ok(len) = size.len() {
-        if len == 3 {
-            let s0: f64 = size.get_item(0)?.extract()?;
-            let s1: f64 = size.get_item(1)?.extract()?;
-            let s2: f64 = size.get_item(2)?.extract()?;
-            let s = [s0 as i32, s1 as i32, s2 as i32];
-            for &si in &s {
-                if !(2..=65).contains(&si) {
-                    return Err(PyValueError::new_err("Size should be in [2, 65] range."));
-                }
-            }
-            return Ok((s[0] as u32, s[1] as u32, s[2] as u32));
-        }
-        return Err(PyValueError::new_err(
-            "Size should be either an integer or a tuple of three integers.",
-        ));
-    }
-
-    // Single value (int or float)
-    let s: f64 = size.extract().map_err(|_| {
-        PyValueError::new_err("Size should be either an integer or a tuple of three integers.")
-    })?;
-    let si = s as i32;
-    if !(2..=65).contains(&si) {
-        return Err(PyValueError::new_err("Size should be in [2, 65] range."));
-    }
-    Ok((si as u32, si as u32, si as u32))
+    let values = match size.extract::<Vec<f64>>() {
+        Ok(values) => values,
+        Err(_) => vec![size.extract::<f64>().map_err(|_| {
+            PyValueError::new_err("Size should be either an integer or a tuple of three integers.")
+        })?],
+    };
+    pillow_rs::color3dlut_check_size(&values).map_err(map_error)
 }
 
 /// Validate and flatten a 3D LUT table from Python object.
@@ -3912,62 +3892,16 @@ fn color3dlut_new(
     copy_table: bool,
 ) -> PyResult<Vec<f64>> {
     let _ = copy_table;
-    let items = size.0 as usize * size.1 as usize * size.2 as usize;
-    let expected_len = items * channels as usize;
-
-    // Check if table is empty
-    let table_len = table_obj.len().unwrap_or(0);
-    if table_len == 0 {
-        return Err(PyValueError::new_err(format!(
-            "The table should have either channels * size**3 float items              or size**3 items of channels-sized tuples with floats.              Table should be: {}x{}x{}x{}. Actual length: 0",
-            channels, size.0, size.1, size.2
-        )));
-    }
-
-    // Check if first element is a sequence (tuple/list of values) -> flatten
-    let first_item = table_obj.get_item(0)?;
-    let is_nested = first_item.extract::<Vec<f64>>().is_ok();
-
-    let table: Vec<f64> = if is_nested {
-        let mut flat = Vec::with_capacity(expected_len);
-        for item in table_obj.iter()? {
-            let item = item?;
-            let pixel: Vec<f64> = item.extract().map_err(|_| {
-                PyValueError::new_err(format!(
-                    "The elements of the table should have a length of {}.",
-                    channels
-                ))
-            })?;
-            if pixel.len() != channels as usize {
-                return Err(PyValueError::new_err(format!(
-                    "The elements of the table should have a length of {}.",
-                    channels
-                )));
-            }
-            flat.extend(pixel);
-        }
-        flat
+    let table = if let Ok(table) = table_obj.extract::<Vec<Vec<f64>>>() {
+        pillow_rs::Color3DLutTable::Nested(table)
     } else {
-        // Flat table: extract as Vec<f64>
-        table_obj.extract::<Vec<f64>>().map_err(|_| {
+        pillow_rs::Color3DLutTable::Flat(table_obj.extract::<Vec<f64>>().map_err(|_| {
             PyValueError::new_err(
                 "Table must be a sequence of floats or a sequence of tuples of floats.",
             )
-        })?
+        })?)
     };
-
-    if table.len() != expected_len {
-        return Err(PyValueError::new_err(format!(
-            "The table should have either channels * size**3 float items              or size**3 items of channels-sized tuples with floats.              Table should be: {}x{}x{}x{}. Actual length: {}",
-            channels,
-            size.0,
-            size.1,
-            size.2,
-            table.len()
-        )));
-    }
-
-    Ok(table)
+    pillow_rs::color3dlut_prepare_table(table, size, channels).map_err(map_error)
 }
 
 /// Generate a 3D LUT table by calling a Python callback for each position.
@@ -3980,29 +3914,15 @@ fn color3dlut_generate(
     callback: PyObject,
     py: Python,
 ) -> PyResult<Vec<f64>> {
-    let (s1, s2, s3) = size;
-    let ch = channels as usize;
-    let total = (s1 as usize) * (s2 as usize) * (s3 as usize) * ch;
-    let mut table = vec![0.0_f64; total];
-    let mut idx = 0;
-    for b in 0..s3 {
-        for g in 0..s2 {
-            for r in 0..s1 {
-                let args = (
-                    r as f64 / (s1 - 1) as f64,
-                    g as f64 / (s2 - 1) as f64,
-                    b as f64 / (s3 - 1) as f64,
-                );
-                let result = callback.call(py, args, None)?;
-                let values: Vec<f64> = result.extract(py)?;
-                for (i, &v) in values.iter().enumerate().take(ch) {
-                    table[idx + i] = v;
-                }
-                idx += ch;
-            }
-        }
-    }
-    Ok(table)
+    pillow_rs::color3dlut_generate_table(
+        size,
+        channels,
+        |args| {
+            let point = PyTuple::new(py, args)?;
+            callback.call(py, &point, None)?.extract(py)
+        },
+        map_error,
+    )
 }
 
 /// Transform a 3D LUT table by calling a Python callback for each entry.
@@ -4014,51 +3934,23 @@ fn color3dlut_transform(
     table: Vec<f64>,
     size: (u32, u32, u32),
     channels_in: u32,
-    channels_out: u32,
+    channels_out: Option<u32>,
     with_normals: bool,
     callback: PyObject,
     py: Python,
-) -> PyResult<Vec<f64>> {
-    let (s1, s2, s3) = size;
-    let ci = channels_in as usize;
-    let co = channels_out as usize;
-    let total = (s1 as usize) * (s2 as usize) * (s3 as usize) * co;
-    let mut out_table = vec![0.0_f64; total];
-    let mut idx_in = 0;
-    let mut idx_out = 0;
-    for b in 0..s3 {
-        for g in 0..s2 {
-            for r in 0..s1 {
-                let values = &table[idx_in..idx_in + ci];
-                let result = if with_normals {
-                    let mut normals = Vec::with_capacity(3 + ci);
-                    normals.push(r as f64 / (s1 - 1) as f64);
-                    normals.push(g as f64 / (s2 - 1) as f64);
-                    normals.push(b as f64 / (s3 - 1) as f64);
-                    normals.extend_from_slice(values);
-                    let pt = PyTuple::new(py, &normals)?;
-                    callback.call(py, &pt, None)?
-                } else {
-                    let pt = PyTuple::new(py, values)?;
-                    callback.call(py, &pt, None)?
-                };
-                let new_values: Vec<f64> = result.extract(py)?;
-                if new_values.len() != co {
-                    return Err(PyValueError::new_err(format!(
-                        "Callback returned {} values, expected {}",
-                        new_values.len(),
-                        co
-                    )));
-                }
-                for (i, &v) in new_values.iter().enumerate() {
-                    out_table[idx_out + i] = v;
-                }
-                idx_in += ci;
-                idx_out += co;
-            }
-        }
-    }
-    Ok(out_table)
+) -> PyResult<(Vec<f64>, u32)> {
+    pillow_rs::color3dlut_transform_table(
+        &table,
+        size,
+        channels_in,
+        channels_out,
+        with_normals,
+        |args| {
+            let point = PyTuple::new(py, args)?;
+            callback.call(py, &point, None)?.extract(py)
+        },
+        map_error,
+    )
 }
 
 #[pyfunction]
@@ -4085,18 +3977,10 @@ fn kernel_prepare(
     offset: f64,
     size: (u32, u32),
 ) -> PyResult<(Vec<f64>, f64, i32, u32)> {
-    let (size_x, size_y) = size;
-    if size_x != size_y || (size_x != 3 && size_x != 5) {
-        return Err(PyValueError::new_err("bad kernel size"));
-    }
-    let numel = (size_x * size_y) as usize;
-    let k: Vec<f64> = match kernel {
-        Some(k) => k,
-        None => vec![1.0_f64; numel],
-    };
-    if k.len() != numel {
-        return Err(PyValueError::new_err("not enough coefficients in kernel"));
-    }
-    let computed_scale = scale.unwrap_or_else(|| k.iter().sum());
-    Ok((k, computed_scale, offset as i32, size_x))
+    pillow_rs::prepare_kernel(kernel, scale, offset, size).map_err(map_error)
+}
+
+#[pyfunction]
+fn kernel_validate_coefficients(kernel: Option<Vec<f64>>, size: (u32, u32)) -> PyResult<()> {
+    pillow_rs::validate_kernel_coefficients(kernel.as_deref(), size).map_err(map_error)
 }

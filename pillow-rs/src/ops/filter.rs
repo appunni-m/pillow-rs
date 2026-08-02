@@ -7,6 +7,49 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
+/// Normalizes the arguments accepted by `ImageFilter.Kernel`.
+///
+/// The Python facade only converts host values to Rust primitives. Keeping
+/// the default kernel, scale derivation, size validation, and offset
+/// conversion here means every binding observes the same convolution
+/// contract.
+pub fn prepare_kernel(
+    kernel: Option<Vec<f64>>,
+    scale: Option<f64>,
+    offset: f64,
+    size: (u32, u32),
+) -> Result<(Vec<f64>, f64, i32, u32), PilError> {
+    let (size_x, size_y) = size;
+    if size_x != size_y || (size_x != 3 && size_x != 5) {
+        return Err(PilError::ValueError("bad kernel size".into()));
+    }
+    let numel = (size_x * size_y) as usize;
+    let kernel = kernel.unwrap_or_else(|| vec![1.0; numel]);
+    if kernel.len() != numel {
+        return Err(PilError::ValueError(
+            "not enough coefficients in kernel".into(),
+        ));
+    }
+    let scale = scale.unwrap_or_else(|| kernel.iter().sum());
+    Ok((kernel, scale, offset as i32, size_x))
+}
+
+/// Validates the coefficient count at `ImageFilter.Kernel` construction time.
+/// Size-shape validation intentionally remains in [`prepare_kernel`], because
+/// Pillow defers that particular error until the filter is applied.
+pub fn validate_kernel_coefficients(
+    kernel: Option<&[f64]>,
+    size: (u32, u32),
+) -> Result<(), PilError> {
+    let expected = (size.0 as usize).saturating_mul(size.1 as usize);
+    if kernel.is_some_and(|values| values.len() != expected) {
+        return Err(PilError::ValueError(
+            "not enough coefficients in kernel".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Pre-defined filter kernels matching PIL's ImageFilter module exactly.
 struct FilterKernel {
     kernel: [f32; 9],

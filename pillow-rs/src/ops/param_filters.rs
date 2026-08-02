@@ -40,6 +40,213 @@ pub fn color3dlut_repr(
     )
 }
 
+/// Host-neutral table input accepted by `ImageFilter.Color3DLUT`.
+pub enum Color3DLutTable {
+    /// A flat sequence of channel values.
+    Flat(Vec<f64>),
+    /// One channel-valued sequence per table entry.
+    Nested(Vec<Vec<f64>>),
+}
+
+fn validate_color3dlut_size_tuple(size: (u32, u32, u32)) -> Result<(), PilError> {
+    if !(2..=65).contains(&size.0) || !(2..=65).contains(&size.1) || !(2..=65).contains(&size.2) {
+        return Err(PilError::ValueError(
+            "Size should be in [2, 65] range.".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_color3dlut_channels(channels: u32) -> Result<(), PilError> {
+    if channels != 3 && channels != 4 {
+        return Err(PilError::ValueError(
+            "Only 3 or 4 output channels are supported".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn color3dlut_expected_len(size: (u32, u32, u32), channels: u32) -> usize {
+    size.0 as usize * size.1 as usize * size.2 as usize * channels as usize
+}
+
+fn color3dlut_table_length_error(
+    size: (u32, u32, u32),
+    channels: u32,
+    actual_len: usize,
+) -> PilError {
+    PilError::ValueError(format!(
+        "The table should have either channels * size**3 float items              or size**3 items of channels-sized tuples with floats.              Table should be: {}x{}x{}x{}. Actual length: {}",
+        channels, size.0, size.1, size.2, actual_len
+    ))
+}
+
+/// Validates and normalizes the user-facing Color3DLUT size argument.
+pub fn color3dlut_check_size(values: &[f64]) -> Result<(u32, u32, u32), PilError> {
+    let dimensions = match values {
+        [value] => [*value as i32; 3],
+        [s1, s2, s3] => [*s1 as i32, *s2 as i32, *s3 as i32],
+        _ => {
+            return Err(PilError::ValueError(
+                "Size should be either an integer or a tuple of three integers.".into(),
+            ));
+        }
+    };
+    if dimensions.iter().any(|&value| !(2..=65).contains(&value)) {
+        return Err(PilError::ValueError(
+            "Size should be in [2, 65] range.".into(),
+        ));
+    }
+    Ok((
+        dimensions[0] as u32,
+        dimensions[1] as u32,
+        dimensions[2] as u32,
+    ))
+}
+
+/// Validates and flattens a Color3DLUT table.
+pub fn color3dlut_prepare_table(
+    table: Color3DLutTable,
+    size: (u32, u32, u32),
+    channels: u32,
+) -> Result<Vec<f64>, PilError> {
+    validate_color3dlut_size_tuple(size)?;
+    validate_color3dlut_channels(channels)?;
+    let expected_len = color3dlut_expected_len(size, channels);
+    let table = match table {
+        Color3DLutTable::Flat(table) => table,
+        Color3DLutTable::Nested(table) => {
+            let mut flat = Vec::with_capacity(expected_len);
+            for pixel in table {
+                if pixel.len() != channels as usize {
+                    return Err(PilError::ValueError(format!(
+                        "The elements of the table should have a length of {}.",
+                        channels
+                    )));
+                }
+                flat.extend(pixel);
+            }
+            flat
+        }
+    };
+    if table.is_empty() || table.len() != expected_len {
+        return Err(color3dlut_table_length_error(size, channels, table.len()));
+    }
+    Ok(table)
+}
+
+/// Generates a Color3DLUT table while keeping traversal and callback result
+/// policy in the runtime-independent core.
+pub fn color3dlut_generate_table<E, F, M>(
+    size: (u32, u32, u32),
+    channels: u32,
+    mut callback: F,
+    map_error: M,
+) -> Result<Vec<f64>, E>
+where
+    F: FnMut(&[f64]) -> Result<Vec<f64>, E>,
+    M: Fn(PilError) -> E,
+{
+    if let Err(error) = validate_color3dlut_size_tuple(size) {
+        return Err(map_error(error));
+    }
+    if let Err(error) = validate_color3dlut_channels(channels) {
+        return Err(map_error(error));
+    }
+
+    let (s1, s2, s3) = size;
+    let channel_count = channels as usize;
+    let mut table = vec![0.0; color3dlut_expected_len(size, channels)];
+    let mut index = 0;
+    for b in 0..s3 {
+        for g in 0..s2 {
+            for r in 0..s1 {
+                let args = [
+                    r as f64 / (s1 - 1) as f64,
+                    g as f64 / (s2 - 1) as f64,
+                    b as f64 / (s3 - 1) as f64,
+                ];
+                let values = callback(&args)?;
+                for (offset, value) in values.into_iter().take(channel_count).enumerate() {
+                    table[index + offset] = value;
+                }
+                index += channel_count;
+            }
+        }
+    }
+    Ok(table)
+}
+
+/// Transforms a Color3DLUT table while keeping traversal and callback result
+/// validation in the runtime-independent core.
+pub fn color3dlut_transform_table<E, F, M>(
+    table: &[f64],
+    size: (u32, u32, u32),
+    channels_in: u32,
+    channels_out: Option<u32>,
+    with_normals: bool,
+    mut callback: F,
+    map_error: M,
+) -> Result<(Vec<f64>, u32), E>
+where
+    F: FnMut(&[f64]) -> Result<Vec<f64>, E>,
+    M: Fn(PilError) -> E,
+{
+    if let Err(error) = validate_color3dlut_size_tuple(size) {
+        return Err(map_error(error));
+    }
+    if let Err(error) = validate_color3dlut_channels(channels_in) {
+        return Err(map_error(error));
+    }
+    let channels_out = channels_out.unwrap_or(channels_in);
+    if let Err(error) = validate_color3dlut_channels(channels_out) {
+        return Err(map_error(error));
+    }
+    let expected_input_len = color3dlut_expected_len(size, channels_in);
+    if table.len() != expected_input_len {
+        return Err(map_error(color3dlut_table_length_error(
+            size,
+            channels_in,
+            table.len(),
+        )));
+    }
+
+    let (s1, s2, s3) = size;
+    let input_channels = channels_in as usize;
+    let output_channels = channels_out as usize;
+    let mut output = vec![0.0; color3dlut_expected_len(size, channels_out)];
+    let mut index_in = 0;
+    let mut index_out = 0;
+    for b in 0..s3 {
+        for g in 0..s2 {
+            for r in 0..s1 {
+                let values = &table[index_in..index_in + input_channels];
+                let mut args = Vec::with_capacity(input_channels + usize::from(with_normals) * 3);
+                if with_normals {
+                    args.extend([
+                        r as f64 / (s1 - 1) as f64,
+                        g as f64 / (s2 - 1) as f64,
+                        b as f64 / (s3 - 1) as f64,
+                    ]);
+                }
+                args.extend_from_slice(values);
+                let new_values = callback(&args)?;
+                if new_values.len() != output_channels {
+                    return Err(map_error(PilError::ValueError(format!(
+                        "Callback returned {} values, expected {}",
+                        new_values.len(),
+                        output_channels
+                    ))));
+                }
+                output[index_out..index_out + output_channels].copy_from_slice(&new_values);
+                index_in += input_channels;
+                index_out += output_channels;
+            }
+        }
+    }
+    Ok((output, channels_out))
+}
+
 impl Image {
     /// Applies Gaussian blur with the given radius.
     ///
@@ -324,6 +531,9 @@ impl Image {
             "RGB" => PixelMode::RGB,
             "RGBA" => PixelMode::RGBA,
             "CMYK" => PixelMode::CMYK,
+            _ if target_mode.is_some() => {
+                return Err(PilError::ValueError("unrecognized image mode".into()));
+            }
             _ => return Err(PilError::ValueError("image has wrong mode".into())),
         };
         if target.channels() < channels as usize {
