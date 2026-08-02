@@ -1281,6 +1281,19 @@ fn color_mask_from_run_with_start(
     start: (f64, f64),
     foreground: (u8, u8, u8),
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
+    // COLR foreground-index paints resolve through the face's foreground
+    // color. Set it before the first glyph load so fontdone applies the same
+    // state to every glyph in this render run; embedded BGRA strikes remain
+    // unchanged because they do not consult the face foreground state.
+    check_ft_error(ffi::FT_Palette_Set_Foreground_Color(
+        Some(&ttf.engine.face),
+        ffi::FT_Color {
+            blue: foreground.2,
+            green: foreground.1,
+            red: foreground.0,
+            alpha: 255,
+        },
+    ))?;
     let run = glyph_run(ttf, text, load_flags)?;
     if run.glyphs.is_empty() {
         return Ok((0, 0, vec![]));

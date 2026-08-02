@@ -45,21 +45,6 @@ pub struct PyImage {
     inner: RsImage,
 }
 
-fn imagefont_mask_image(
-    width: u32,
-    height: u32,
-    pixels: Vec<u8>,
-    options: &pillow_rs::ImageFontTextOptions,
-) -> PyResult<PyImage> {
-    let mode = if options.uses_color_mask() {
-        "RGBA"
-    } else {
-        "L"
-    };
-    let inner = RsImage::frombytes(mode, (width, height), &pixels).map_err(map_error)?;
-    Ok(PyImage { inner })
-}
-
 /// Thin host handle for the Rust-owned ImageSequence iterator state.
 #[pyclass(name = "Iterator", unsendable)]
 pub struct PyImageSequenceIterator {
@@ -2405,7 +2390,9 @@ impl PyFont {
             &options,
         )
         .map_err(map_error)?;
-        imagefont_mask_image(width, height, pixels, &options)
+        let inner =
+            pillow_rs::imagefont_mask_image(width, height, pixels, &options).map_err(map_error)?;
+        Ok(PyImage { inner })
     }
 
     fn get_transposed_mask_image(
@@ -2419,7 +2406,13 @@ impl PyFont {
             orientation,
         )
         .map_err(map_error)?;
-        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        let inner = pillow_rs::imagefont_mask_image(
+            width,
+            height,
+            pixels,
+            &pillow_rs::ImageFontTextOptions::default(),
+        )
+        .map_err(map_error)?;
         Ok(PyImage { inner })
     }
 
@@ -2434,7 +2427,13 @@ impl PyFont {
             Some(start) => pillow_rs::imagefont_getmask2_with_start(&self.inner, text, start),
         }
         .map_err(map_error)?;
-        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        let inner = pillow_rs::imagefont_mask_image(
+            width,
+            height,
+            pixels,
+            &pillow_rs::ImageFontTextOptions::default(),
+        )
+        .map_err(map_error)?;
         Ok((PyImage { inner }, offset))
     }
 
@@ -2451,7 +2450,13 @@ impl PyFont {
             }
         }
         .map_err(map_error)?;
-        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        let inner = pillow_rs::imagefont_mask_image(
+            width,
+            height,
+            pixels,
+            &pillow_rs::ImageFontTextOptions::default(),
+        )
+        .map_err(map_error)?;
         Ok((PyImage { inner }, offset))
     }
 
@@ -2496,8 +2501,9 @@ impl PyFont {
             &options,
         )
         .map_err(map_error)?;
-        let image = imagefont_mask_image(width, height, pixels, &options)?;
-        Ok((image, offset))
+        let image =
+            pillow_rs::imagefont_mask_image(width, height, pixels, &options).map_err(map_error)?;
+        Ok((PyImage { inner: image }, offset))
     }
 
     fn getlength(&self, text: &str) -> PyResult<i32> {
@@ -2556,8 +2562,9 @@ impl PyFont {
             &options,
         )
         .map_err(map_error)?;
-        let image = imagefont_mask_image(width, height, pixels, &options)?;
-        Ok((image, offset))
+        let image =
+            pillow_rs::imagefont_mask_image(width, height, pixels, &options).map_err(map_error)?;
+        Ok((PyImage { inner: image }, offset))
     }
 
     #[getter]
