@@ -31,7 +31,7 @@ pub fn parse_mode(s: &str) -> Result<ColorMode, PilError> {
 /// These modes store pixel data in a non-standard interpretation within
 /// standard DynamicImage variants (e.g., CMYK values stored as RGBA).
 fn is_nonstandard_mode(mode: &str) -> bool {
-    matches!(mode, "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P")
+    matches!(mode, "CMYK" | "HSV" | "YCbCr" | "I" | "F" | "P" | "PA")
 }
 
 /// Extracts the Y band of a YCbCr image as luma bytes.
@@ -152,12 +152,25 @@ impl Image {
             // Non-standard sources must be materialized and converted to RGB
             // before reaching a standard target OR a CMYK target (Pillow's
             // CMYK inverse runs on the RGB values).  CMYK->CMYK is identity.
-            if is_nonstandard_mode(src_mode) && (target_is_standard || mode == "CMYK") {
+            if is_nonstandard_mode(src_mode)
+                && (target_is_standard || mode == "CMYK" || (mode == "PA" && src_mode == "P"))
+            {
                 // Extract palette before materializing (P-mode palette may be on Pipeline)
                 let palette = self.palette();
                 let img = self.materialize()?;
-                let converted = color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
-                    .unwrap_or_else(|| img.to_rgb8().into());
+                let converted = if src_mode == "PA" {
+                    // PA stores a palette index and a per-pixel alpha byte.
+                    // Expand both before grayscale/CMYK conversion; treating
+                    // the index as luma makes an unpaletted PA image produce
+                    // visible color where Pillow correctly returns black.
+                    crate::image::expand_palette_alpha(
+                        &img.to_luma_alpha8(),
+                        palette.as_deref().unwrap_or_default(),
+                    )
+                } else {
+                    color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
+                        .unwrap_or_else(|| img.to_rgb8().into())
+                };
                 // For mode "L" etc., derive from the RGB result.
                 let result = if mode == "CMYK" {
                     if matches!(src_mode, "I" | "F") {
@@ -275,16 +288,17 @@ impl Image {
         if mode == "1" {
             let img = self.materialize()?;
             // Use truncated grayscale (PIL uses integer truncation, not rounding)
-            let gray = if let Some(src_mode) = self.explicit_mode() {
-                if src_mode == "CMYK" {
-                    crate::color::cmyk_to_grayscale(&img)?
-                } else if is_nonstandard_mode(src_mode) {
-                    let rgb = crate::color::convert_from_nonstandard(src_mode, &img, None)
-                        .unwrap_or_else(|| img.to_rgb8().into());
-                    crate::color::pil_grayscale_truncate(&rgb)?
-                } else {
-                    crate::color::pil_grayscale_truncate(&img)?
-                }
+            let gray = if effective_src_mode == "CMYK" {
+                crate::color::cmyk_to_grayscale(&img)?
+            } else if is_nonstandard_mode(&effective_src_mode) {
+                let palette = self.palette();
+                let rgb = crate::color::convert_from_nonstandard(
+                    &effective_src_mode,
+                    &img,
+                    palette.as_deref(),
+                )
+                .unwrap_or_else(|| img.to_rgb8().into());
+                crate::color::pil_grayscale_truncate(&rgb)?
             } else {
                 crate::color::pil_grayscale_truncate(&img)?
             };
@@ -310,9 +324,7 @@ impl Image {
                     // Non-standard sources (HSV/YCbCr) are stored in RGB
                     // containers but their byte values are not RGB; their
                     // true luminance is in the pre-computed `gray`.
-                    let source_is_nonstandard = self
-                        .explicit_mode()
-                        .is_some_and(|mode| is_nonstandard_mode(mode));
+                    let source_is_nonstandard = is_nonstandard_mode(&effective_src_mode);
                     let is_rgb = matches!(img.color(), crate::raster::ColorType::Rgb8)
                         && !source_is_nonstandard;
                     let mut errors = vec![0i32; (w + 1) as usize];

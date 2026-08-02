@@ -238,6 +238,13 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
         # enum (or None); callers pass ints such as 2 (ROTATE_90).
         include("integer")
         include("enum")
+    if parameter_name.lower() == "dither":
+        # Pillow exposes Dither as an IntEnum.  The Python binding accepts the
+        # enum's integer value, while a string spelling is rejected before the
+        # core conversion path.  Keep both the source enum and its public
+        # integer representation in the input contract.
+        include("integer")
+        include("enum")
     if re.search(r"\bany\b|\bobject\b", lower):
         include("any_json")
 
