@@ -6,6 +6,17 @@
 use crate::error::PilError;
 use crate::image::Image;
 
+/// Host-neutral optional mask input for image analysis operations.
+#[derive(Debug, Clone)]
+pub enum ImageAnalysisMask {
+    /// No mask was supplied.
+    None,
+    /// A mask image extracted by a binding.
+    Image(Image),
+    /// A non-image value was supplied.
+    Invalid,
+}
+
 /// Validate a Pillow transparency/statistics mask without touching host types.
 pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), PilError> {
     let mode = mask.mode()?;
@@ -14,6 +25,26 @@ pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), Pil
         return Err(PilError::ValueError("bad transparency mask".into()));
     }
     Ok(())
+}
+
+impl Image {
+    /// Computes a histogram after validating a host-neutral optional mask.
+    pub fn histogram_with_input(&self, mask: ImageAnalysisMask) -> Result<Vec<u32>, PilError> {
+        match mask {
+            ImageAnalysisMask::None => self.histogram_with_mask(None),
+            ImageAnalysisMask::Image(mask) => self.histogram_with_mask(Some(&mask)),
+            ImageAnalysisMask::Invalid => Err(PilError::ValueError("bad transparency mask".into())),
+        }
+    }
+
+    /// Computes entropy after validating a host-neutral optional mask.
+    pub fn entropy_with_input(&self, mask: ImageAnalysisMask) -> Result<f64, PilError> {
+        match mask {
+            ImageAnalysisMask::None => self.entropy_with_mask(None),
+            ImageAnalysisMask::Image(mask) => self.entropy_with_mask(Some(&mask)),
+            ImageAnalysisMask::Invalid => Err(PilError::ValueError("bad transparency mask".into())),
+        }
+    }
 }
 
 impl Image {

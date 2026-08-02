@@ -423,14 +423,8 @@ class Image:
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
         """Reduce colors using median cut algorithm."""
-        if isinstance(palette, Image) and self.mode != "P":
-            raise ValueError("bad mode for palette image")
-        if method is None:
-            method = 2 if self.mode == "RGBA" else 0
-        if kmeans < 0:
-            raise ValueError("kmeans must not be negative")
         result = Image(
-            self._rust_image.quantize(colors, int(method), int(kmeans), dither != 0)
+            self._rust_image.quantize(colors, method, kmeans, dither != 0, palette)
         )
         # PIL: quantize returns a P-mode image with palette attached
         p = result._rust_image.palette()
@@ -448,13 +442,7 @@ class Image:
 
     def histogram(self, mask=None, extrema=None):
         """Image histogram per band."""
-        if isinstance(mask, Image):
-            # Keep image-mask validation in the Rust core alongside the
-            # masked histogram implementation.
-            return self._rust_image.histogram_with_mask(mask._rust_image)
-        if mask is not None:
-            raise ValueError("bad transparency mask")
-        return self._rust_image.histogram()
+        return self._rust_image.histogram_with_input(mask)
 
     def getchannel(self, channel):
         """Extract a single channel as an L-mode image."""
@@ -512,11 +500,7 @@ class Image:
 
     def entropy(self, mask=None, extrema=None):
         """Calculate image entropy."""
-        if isinstance(mask, Image):
-            return self._rust_image.entropy_with_mask(mask._rust_image)
-        if mask is not None:
-            raise ValueError("bad transparency mask")
-        return self._rust_image.entropy()
+        return self._rust_image.entropy_with_input(mask)
 
     def seek(self, frame):
         """Seek to frame in multi-frame image."""

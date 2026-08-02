@@ -31,9 +31,7 @@ class ImagePalette:
 
     def getcolor(self, color, image=None):
         """Given an rgb tuple, allocate palette entry."""
-        if not isinstance(color, (tuple, list)):
-            raise ValueError(f"unknown color specifier: {repr(color)}")
-        palette_bytes, idx = _core.palette_getcolor_validate(self.palette, list(color), self.mode)
+        palette_bytes, idx = _core.palette_getcolor_validate(self.palette, color, self.mode)
         self.palette = bytearray(palette_bytes)
         return idx
 

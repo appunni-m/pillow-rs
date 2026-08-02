@@ -18,6 +18,18 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 
+/// Host-neutral palette argument for the public quantize entry point.
+#[derive(Debug, Clone)]
+pub enum QuantizePalette {
+    /// No palette argument was supplied.
+    None,
+    /// An image object was supplied as the palette argument.
+    Image(Image),
+    /// A non-image palette argument was supplied and is ignored by Pillow's
+    /// compatibility path until a real palette image is provided.
+    Other,
+}
+
 // ── VBox: rectangular volume in scaled RGB color space ──
 
 #[derive(Debug, Clone, Copy)]
@@ -2029,6 +2041,45 @@ fn find_nearest_web(r: u8, g: u8, b: u8) -> (u8, u8, u8, u8) {
 // ── Image method ──
 
 impl Image {
+    /// Applies Pillow's public quantize defaults and validation before the
+    /// algorithm-specific implementation runs.
+    pub fn quantize_with_input(
+        &self,
+        colors: Option<i32>,
+        method: Option<i32>,
+        kmeans: Option<i32>,
+        palette: QuantizePalette,
+        dither: Option<bool>,
+    ) -> Result<Image, PilError> {
+        let colors = colors.unwrap_or(256);
+        if !(1..=256).contains(&colors) {
+            return Err(PilError::ValueError("bad number of colors".to_owned()));
+        }
+        if matches!(palette, QuantizePalette::Image(_)) && self.mode()? != "P" {
+            return Err(PilError::ValueError(
+                "bad mode for palette image".to_owned(),
+            ));
+        }
+        let method = match method {
+            Some(method) => method,
+            None if self.mode()? == "RGBA" => 2,
+            None => 0,
+        };
+        let kmeans = kmeans.unwrap_or(0);
+        if kmeans < 0 {
+            return Err(PilError::ValueError(
+                "kmeans must not be negative".to_owned(),
+            ));
+        }
+        self.quantize(
+            colors as u32,
+            kmeans as u32,
+            None,
+            dither.unwrap_or(true),
+            method as u32,
+        )
+    }
+
     /// Reduces the image to a `P` image with at most `colors` palette entries.
     ///
     /// RGB-family images use Pillow-compatible median cut. RGBA images use the
