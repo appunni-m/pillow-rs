@@ -175,7 +175,15 @@ impl Image {
 
     fn thumbnail_height_for_width(&self, width: u32) -> Result<u32, PilError> {
         let (source_width, source_height) = self.size()?;
-        if source_width == 0 || source_height == 0 {
+        if source_width == 0 {
+            let message = if source_height == 0 {
+                "division by zero"
+            } else {
+                "float division by zero"
+            };
+            return Err(PilError::ZeroDivisionError(message.into()));
+        }
+        if source_height == 0 {
             return Err(PilError::ZeroDivisionError("division by zero".into()));
         }
         let aspect = source_width as f64 / source_height as f64;
