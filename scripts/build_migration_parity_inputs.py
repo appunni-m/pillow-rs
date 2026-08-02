@@ -1873,14 +1873,21 @@ class WorkflowBuilder:
                     step_id="setup-transparency-load",
                 )
                 receiver_step = image_step
-            elif chain == "p-transparency-putpalette-apply":
+            elif chain in {
+                "p-transparency-putpalette-apply",
+                "p-transparency-putpalette-short",
+            }:
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
                     "PIL.Image.Image",
                     "putpalette",
                     receiver=binding(image_step),
                     arguments={
-                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "data": literal(
+                            [10, 20, 30]
+                            if chain == "p-transparency-putpalette-short"
+                            else [10, 20, 30, 40, 50, 60]
+                        ),
                         "rawmode": literal("RGB"),
                     },
                     step_id="setup-transparency-putpalette",
@@ -8222,6 +8229,15 @@ def build_nuanced_cases(
             "name": "png-p-transparency-putpalette",
             "scenario_asset": "image/p-transparency.png",
             "chain": "p-transparency-putpalette-apply",
+            "observe_receiver": True,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-putpalette-short",
+            "scenario_asset": "image/p-transparency.png",
+            "chain": "p-transparency-putpalette-short",
             "observe_receiver": True,
         },
         {
