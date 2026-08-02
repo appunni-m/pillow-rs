@@ -1948,6 +1948,17 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "truthy-non-image-mask":
+                image_step = self.ensure_image()
+                non_image_step = self.add_step(
+                    "PIL.Image.Image",
+                    "getextrema",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-non-image-mask",
+                )
+                self.scenario_values["mask"] = binding(non_image_step)
+                receiver_step = image_step
             elif chain == "opened-rgb-resize-verify":
                 image_step = self.ensure_image(mode="RGB")
                 receiver_step = self.add_step(
@@ -9116,11 +9127,29 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "parameter.mask",
+            "name": "mask-size-mismatch",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "equalize",
             "requirement_suffix": "parameter.mask",
             "name": "valid-l-mask",
             "mode": "RGB",
             "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "parameter.mask",
+            "name": "mask-size-mismatch",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "edge": "mask-size-mismatch",
         },
         {
             "surface": "PIL.ImageOps",
@@ -10992,6 +11021,14 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "histogram",
             "requirement_suffix": "parameter.mask",
+            "name": "truthy-non-image-mask",
+            "mode": "RGB",
+            "chain": "truthy-non-image-mask",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
             "name": "opened-png-without-idat-mask",
             "mode": "RGB",
             "scenario_inline_mask_image": "png-no-idat",
@@ -11977,6 +12014,14 @@ def build_nuanced_cases(
             "name": "bad-mask-mode",
             "mode": "L",
             "mask_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "entropy",
+            "requirement_suffix": "parameter.mask",
+            "name": "truthy-non-image-mask",
+            "mode": "L",
+            "chain": "truthy-non-image-mask",
         },
         {
             "surface": "PIL.Image.Image",

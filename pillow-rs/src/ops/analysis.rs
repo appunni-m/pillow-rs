@@ -23,8 +23,14 @@ pub enum ImageAnalysisMask {
 pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), PilError> {
     let mode = mask.mode()?;
     let size = mask.size()?;
-    if !matches!(mode.as_str(), "1" | "L") || size != image.size()? {
+    if !matches!(mode.as_str(), "1" | "L") {
         return Err(PilError::ValueError("bad transparency mask".into()));
+    }
+    // Pillow's ImageOps mask path distinguishes an unsupported mode from a
+    // same-mode size mismatch: the former is "bad transparency mask", while
+    // the latter is "images do not match".
+    if size != image.size()? {
+        return Err(PilError::ValueError("images do not match".into()));
     }
     Ok(())
 }
