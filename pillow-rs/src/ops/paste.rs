@@ -33,6 +33,8 @@ pub enum PythonPasteSource {
     Scalar(i64),
     /// A tuple/list color before mode-specific arity validation.
     Components(Vec<i64>),
+    /// A Pillow color string before mode-specific conversion.
+    String(String),
     /// A value that is neither an image nor a supported color value.
     Invalid,
 }
@@ -162,8 +164,11 @@ impl Image {
                 ),
                 _ => return Err(invalid_component_error(&destination_mode)),
             },
+            PythonPasteSource::String(value) => {
+                paste_source_from_color_string(&value, &destination_mode)?
+            }
             PythonPasteSource::Invalid => {
-                return Err(PilError::TypeError("im must be Image or color".to_owned()));
+                return Err(invalid_component_error(&destination_mode));
             }
         };
 
@@ -574,6 +579,36 @@ impl Image {
 
 fn byte_color(value: i64) -> Result<u8, PilError> {
     u8::try_from(value).map_err(|_| PilError::TypeError("im must be Image or color".to_owned()))
+}
+
+fn paste_source_from_color_string(value: &str, mode: &str) -> Result<PasteSource, PilError> {
+    // Pillow resolves a string through ImageColor.getcolor for the
+    // destination mode before entering Paste.c. Preserve that distinction
+    // from tuple colors: luma/alpha and RGBA modes carry different arities.
+    let (r, g, b, a) = crate::color::parse_color_str_unclamped(value)?;
+    let color = crate::color::getcolor(r, g, b, a, mode)?;
+    match color {
+        crate::color::ColorValue::Gray(value) => {
+            Ok(PasteSource::Scalar(byte_color(i64::from(value))?))
+        }
+        crate::color::ColorValue::GrayAlpha(value, alpha) => Ok(PasteSource::LumaAlpha(
+            byte_color(i64::from(value))?,
+            byte_color(i64::from(alpha))?,
+        )),
+        crate::color::ColorValue::Rgb(r, g, b) | crate::color::ColorValue::Hsv(r, g, b) => {
+            Ok(PasteSource::Rgb(
+                byte_color(i64::from(r))?,
+                byte_color(i64::from(g))?,
+                byte_color(i64::from(b))?,
+            ))
+        }
+        crate::color::ColorValue::Rgba(r, g, b, a) => Ok(PasteSource::Rgba(
+            byte_color(i64::from(r))?,
+            byte_color(i64::from(g))?,
+            byte_color(i64::from(b))?,
+            byte_color(i64::from(a))?,
+        )),
+    }
 }
 
 fn coordinate(value: i64) -> Result<i32, PilError> {

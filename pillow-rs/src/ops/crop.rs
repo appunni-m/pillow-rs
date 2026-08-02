@@ -20,7 +20,7 @@ impl Image {
             i32::try_from(box_coords.3)
                 .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
         );
-        self.crop(Some(coordinates))
+        self.crop_signed(Some(coordinates))
     }
 
     /// Crops using Pillow's optional `(left, top, right, bottom)` box.
@@ -35,6 +35,27 @@ impl Image {
     /// Returns [`PilError`] when dimensions, mode, or deferred source data
     /// cannot be resolved.
     pub fn crop(&self, box_coords: Option<(i32, i32, i32, i32)>) -> Result<Image, PilError> {
+        let Some(coordinates) = box_coords else {
+            return Ok(self.copy());
+        };
+
+        // Route the common non-negative path through the same checked
+        // conversion used by the unsigned WASM entry point. This keeps the
+        // coordinate contract in core and makes both bindings exercise one
+        // implementation instead of duplicating dispatch at their boundary.
+        if coordinates.0 >= 0 && coordinates.1 >= 0 && coordinates.2 >= 0 && coordinates.3 >= 0 {
+            return self.crop_unsigned((
+                coordinates.0 as u32,
+                coordinates.1 as u32,
+                coordinates.2 as u32,
+                coordinates.3 as u32,
+            ));
+        }
+
+        self.crop_signed(Some(coordinates))
+    }
+
+    fn crop_signed(&self, box_coords: Option<(i32, i32, i32, i32)>) -> Result<Image, PilError> {
         let Some((left, top, right, bottom)) = box_coords else {
             return Ok(self.copy());
         };
