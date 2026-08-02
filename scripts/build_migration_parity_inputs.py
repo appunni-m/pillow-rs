@@ -6940,6 +6940,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "box-noninteger-sequence-error",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal(["left", "top", "right"]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "offset-source",
@@ -6947,6 +6958,16 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "values": {
                 "source": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-scalar-error",
+            "mode": "RGBA",
+            "values": {
+                "source": literal(1),
             },
         },
         {
@@ -7941,6 +7962,16 @@ def build_nuanced_cases(
             "edge": "source-smaller-than-dest",
             "values": {
                 "dest": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "dest-scalar-error",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal(1),
             },
         },
         {
@@ -11237,6 +11268,30 @@ def build_nuanced_cases(
             "name": "top-padded-box",
             "mode": "RGB",
             "values": {"box": literal([2, -2, 8, 8])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-left-box",
+            "mode": "RGB",
+            "values": {"box": literal([-2, 2, 8, 8])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-right-box",
+            "mode": "RGB",
+            "values": {"box": literal([2, 2, -1, 8])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "requirement_suffix": "behavior.default",
+            "name": "negative-bottom-box",
+            "mode": "RGB",
+            "values": {"box": literal([2, 2, 8, -1])},
         },
         {
             "surface": "PIL.Image.Image",

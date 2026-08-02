@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2167
-- Unique active workflow signatures: 2167
+- Active parity workflows: 2173
+- Unique active workflow signatures: 2173
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 991
+- Deliberate nuanced workflows: 997
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 179 |
-| `PIL.Image.Image` | 980 |
+| `PIL.Image.Image` | 986 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -60,6 +60,7 @@ are not copied into the active lane by name.
 
 ## Nuanced workflows
 
+- `PIL.Image.Image.alpha_composite.nuanced.dest-scalar-error`
 - `PIL.Image.Image.alpha_composite.nuanced.dest-wrong-arity`
 - `PIL.Image.Image.alpha_composite.nuanced.offset-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.offset-source`
@@ -67,6 +68,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.alpha_composite.nuanced.source-four-tuple`
 - `PIL.Image.Image.alpha_composite.nuanced.source-larger-than-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.source-negative-coordinate`
+- `PIL.Image.Image.alpha_composite.nuanced.source-scalar-error`
 - `PIL.Image.Image.alpha_composite.nuanced.source-smaller-offset-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.source-smaller-than-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.source-wrong-arity`
@@ -164,6 +166,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.crop.nuanced.bottom-padded-box`
 - `PIL.Image.Image.crop.nuanced.box-omitted`
 - `PIL.Image.Image.crop.nuanced.disjoint-box`
+- `PIL.Image.Image.crop.nuanced.negative-bottom-box`
+- `PIL.Image.Image.crop.nuanced.negative-left-box`
+- `PIL.Image.Image.crop.nuanced.negative-right-box`
 - `PIL.Image.Image.crop.nuanced.opened-rgb`
 - `PIL.Image.Image.crop.nuanced.padded-palette`
 - `PIL.Image.Image.crop.nuanced.reversed-box`
@@ -304,6 +309,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.load.nuanced.tiff-rgb-opened`
 - `PIL.Image.Image.load.nuanced.webp-rgb-opened`
 - `PIL.Image.Image.load.nuanced.webp-rgba-opened`
+- `PIL.Image.Image.paste.nuanced.box-noninteger-sequence-error`
 - `PIL.Image.Image.paste.nuanced.box-scalar-error`
 - `PIL.Image.Image.paste.nuanced.box-three-items-error`
 - `PIL.Image.Image.paste.nuanced.color-cmyk`
