@@ -125,8 +125,12 @@ const SMOOTH: FilterKernel =
 impl Image {
     /// Validates whether a Python-facing filter may run for this image mode.
     pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
-        if self.mode()? == "P" && filter_name != "Mode" {
+        let mode = self.mode()?;
+        if mode == "P" && filter_name != "Mode" {
             return Err(PilError::ValueError("cannot filter palette images".into()));
+        }
+        if mode == "F" {
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
         Ok(())
     }
@@ -148,12 +152,6 @@ impl Image {
         // by operating on int32 pixel values with no [0,255] clipping.
         if self.explicit_mode() == Some("I") {
             return self.filter_push(filter_type);
-        }
-        // Pillow raises for built-in filters on F-mode images instead of
-        // converting; the C filter checks the mode and returns
-        // "image has wrong mode".
-        if self.explicit_mode() == Some("F") {
-            return Err(PilError::ValueError("image has wrong mode".into()));
         }
         // Mode "1" (binary): stored as Luma8 (0/255), filter applies on L data.
         // No conversion needed.

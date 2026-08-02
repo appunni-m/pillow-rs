@@ -31,5 +31,12 @@ class Contrast(_Enhance):
 
 class Sharpness(_Enhance):
     """Adjust sharpness. 1.0 = unchanged, <1.0 = blur, >1.0 = sharpen."""
+    def __init__(self, image: Image):
+        super().__init__(image)
+        # Pillow builds the degenerate image with ImageFilter.SMOOTH during
+        # construction, so palette-mode rejection is observable before
+        # enhance(). The mode rule remains in the Rust core.
+        image._rust_image.validate_filter("SMOOTH")
+
     def _apply(self, factor):
         return self.image._rust_image.enhance_sharpness(factor)
