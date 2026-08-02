@@ -56,8 +56,13 @@ fn f_kernel_lanczos(x: f64, a: f64) -> f64 {
 fn f_kernel_hamming(x: f64) -> f64 {
     if x.abs() >= 1.0 {
         0.0
+    } else if x.abs() < 1e-10 {
+        1.0
     } else {
-        0.54 + 0.46 * (std::f64::consts::PI * x).cos()
+        // Keep the numeric F/I paths aligned with Pillow's Hamming
+        // windowed-sinc resampler (Resample.c), including its sinc factor.
+        let pix = std::f64::consts::PI * x;
+        (pix.sin() / pix) * (0.54 + 0.46 * pix.cos())
     }
 }
 

@@ -55,8 +55,14 @@ fn kernel_lanczos(x: f64, a: f64) -> f64 {
 fn kernel_hamming(x: f64) -> f64 {
     if x.abs() >= 1.0 {
         0.0
+    } else if x.abs() < 1e-10 {
+        1.0
     } else {
-        0.54 + 0.46 * (std::f64::consts::PI * x).cos()
+        // Pillow's Hamming resampler is a windowed sinc, not only the
+        // cosine window. This mirrors the Hamming branch in Pillow's
+        // Resample.c and is observable on downsampled impulses.
+        let pix = std::f64::consts::PI * x;
+        (pix.sin() / pix) * (0.54 + 0.46 * pix.cos())
     }
 }
 
@@ -444,9 +450,11 @@ fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
                 let a = p[3] as f64;
                 if a > 0.0 {
                     let inv = 255.0 / a;
-                    p[0] = (p[0] as f64 * inv + 0.5) as u8;
-                    p[1] = (p[1] as f64 * inv + 0.5) as u8;
-                    p[2] = (p[2] as f64 * inv + 0.5) as u8;
+                    // Pillow's RGBa -> RGBA conversion truncates the
+                    // unpremultiplied channel; it does not round to nearest.
+                    p[0] = (p[0] as f64 * inv) as u8;
+                    p[1] = (p[1] as f64 * inv) as u8;
+                    p[2] = (p[2] as f64 * inv) as u8;
                 }
             }
             DynamicImage::ImageRgba8(out)
@@ -456,7 +464,8 @@ fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
             for p in out.pixels_mut() {
                 let a = p[1] as f64;
                 if a > 0.0 {
-                    p[0] = (p[0] as f64 * 255.0 / a + 0.5) as u8;
+                    // Match Pillow's La -> LA conversion truncation.
+                    p[0] = (p[0] as f64 * 255.0 / a) as u8;
                 }
             }
             DynamicImage::ImageLumaA8(out)
