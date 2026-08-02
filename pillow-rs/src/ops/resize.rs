@@ -28,8 +28,8 @@ pub fn parse_resample(s: Option<&str>) -> Result<ResampleFilter, PilError> {
 impl Image {
     /// Returns a resized image with dimensions `size`.
     ///
-    /// The original image is unchanged. Mode `"1"` and `"P"` force nearest
-    /// sampling to avoid creating interpolated palette indices or binary pixels.
+    /// The original image is unchanged. Indexed modes, including `"PA"`, force
+    /// nearest sampling to avoid interpolating palette indices or alpha bytes.
     ///
     /// # Errors
     ///
@@ -40,8 +40,10 @@ impl Image {
             return Err(PilError::ValueError("height and width must be > 0".into()));
         }
         let mut filter = parse_resample(filter)?;
-        // PIL forces NEAREST for mode "1" and "P" to avoid non-binary gray values
-        if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+        // PIL forces NEAREST for indexed samples, including PA's raw
+        // index/alpha pairs, to avoid interpolating palette indices or alpha
+        // bytes. The result remains PA rather than expanding to RGBA.
+        if self.has_palette_mode() || matches!(self.explicit_mode(), Some("1") | Some("PA")) {
             filter = ResampleFilter::Nearest;
         }
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
@@ -49,8 +51,8 @@ impl Image {
 
     /// Queues an in-place Pillow-style thumbnail resize.
     ///
-    /// Mode `"1"` and `"P"` force nearest sampling to preserve binary pixels and
-    /// palette indices.
+    /// Indexed modes, including `"PA"`, force nearest sampling to preserve the
+    /// raw sample layout.
     ///
     /// # Errors
     ///
@@ -65,8 +67,9 @@ impl Image {
             return Err(PilError::ValueError("thumbnail size must be > 0".into()));
         }
         let mut filter = filter.unwrap_or(ResampleFilter::Bicubic);
-        // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
-        if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+        // PIL forces NEAREST for indexed samples, including PA's raw
+        // index/alpha pairs, to preserve the sample layout.
+        if self.has_palette_mode() || matches!(self.explicit_mode(), Some("1") | Some("PA")) {
             filter = ResampleFilter::Nearest;
         }
         let new_self = Image::push_op(self, PipelineOp::Thumbnail { w, h, filter });

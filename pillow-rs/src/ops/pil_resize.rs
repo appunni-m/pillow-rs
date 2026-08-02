@@ -639,7 +639,13 @@ pub fn pil_resize(
                 let sx = xintab[dx as usize];
                 let p = pixel_at(&work, sx, sy);
                 for c in 0..channels {
-                    out_bytes.push(pil_round(p[c]));
+                    // `pixel_at` exposes grayscale-alpha pixels as RGBA
+                    // (`[luma, luma, luma, alpha]`), while the resize buffer
+                    // keeps their native two-byte `[luma, alpha]` layout.
+                    // Select the alpha lane explicitly so PA/LA nearest
+                    // resize does not copy luma into the alpha sample.
+                    let rgba_channel = if channels == 2 && c == 1 { 3 } else { c };
+                    out_bytes.push(pil_round(p[rgba_channel]));
                 }
             }
             yo += scale_y;
