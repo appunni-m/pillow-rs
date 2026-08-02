@@ -109,6 +109,37 @@ fn rotate_expand_input_from_python(
     }
 }
 
+fn convert_mode_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::PythonConvertModeInput> {
+    match value {
+        None => Ok(pillow_rs::PythonConvertModeInput::None),
+        Some(value) => match value.extract::<String>() {
+            Ok(value) => Ok(pillow_rs::PythonConvertModeInput::Name(value)),
+            Err(_) => Ok(pillow_rs::PythonConvertModeInput::Invalid(
+                value.get_type().name()?.to_string(),
+            )),
+        },
+    }
+}
+
+fn convert_palette_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::PythonConvertPaletteInput> {
+    match value {
+        None => Ok(pillow_rs::PythonConvertPaletteInput::None),
+        Some(value) if value.downcast::<PyImage>().is_ok() => {
+            Ok(pillow_rs::PythonConvertPaletteInput::Image)
+        }
+        Some(value) => match value.extract::<String>() {
+            Ok(value) => Ok(pillow_rs::PythonConvertPaletteInput::Name(value)),
+            Err(_) => Ok(pillow_rs::PythonConvertPaletteInput::Invalid(
+                value.get_type().name()?.to_string(),
+            )),
+        },
+    }
+}
+
 fn transform_data_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Option<pillow_rs::TransformData>> {
@@ -511,13 +542,13 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    #[pyo3(signature = (mode, matrix=None, dither=None, palette=None, colors=None))]
+    #[pyo3(signature = (mode=None, matrix=None, dither=None, palette=None, colors=None))]
     fn convert(
         &self,
-        mode: &str,
+        mode: Option<&Bound<'_, PyAny>>,
         matrix: Option<Vec<f64>>,
         dither: Option<&Bound<'_, PyAny>>,
-        palette: Option<String>,
+        palette: Option<&Bound<'_, PyAny>>,
         colors: Option<u32>,
     ) -> PyResult<PyImage> {
         let dither = match dither {
@@ -535,7 +566,13 @@ impl PyImage {
         let dither = pillow_rs::normalize_python_convert_dither(dither).map_err(map_error)?;
         let rs = self
             .inner
-            .convert(mode, matrix, dither.as_deref(), palette.as_deref(), colors)
+            .convert_with_input(
+                convert_mode_input_from_python(mode)?,
+                matrix,
+                dither.as_deref(),
+                convert_palette_input_from_python(palette)?,
+                colors,
+            )
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }

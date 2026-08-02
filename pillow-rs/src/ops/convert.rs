@@ -123,8 +123,81 @@ pub fn normalize_python_convert_dither(
     }
 }
 
+/// Host-neutral destination mode input for the Python conversion wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonConvertModeInput {
+    /// No destination mode was supplied.
+    None,
+    /// A destination mode name.
+    Name(String),
+    /// A value of another host type.
+    Invalid(String),
+}
+
+/// Host-neutral palette input for the Python conversion wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonConvertPaletteInput {
+    /// No palette object was supplied.
+    None,
+    /// A symbolic palette name.
+    Name(String),
+    /// A host image object, which Pillow treats as the palette argument.
+    Image,
+    /// A value of another host type.
+    Invalid(String),
+}
+
 /// Pillow-compatible image mode conversion methods.
 impl Image {
+    /// Applies Python's default-mode, palette, and matrix validation before
+    /// entering the shared conversion implementation.
+    pub fn convert_with_input(
+        &self,
+        mode: PythonConvertModeInput,
+        matrix: Option<Vec<f64>>,
+        dither: Option<&str>,
+        palette: PythonConvertPaletteInput,
+        colors: Option<u32>,
+    ) -> Result<Image, PilError> {
+        let source_mode = self.mode()?;
+        let target_mode = match mode {
+            PythonConvertModeInput::None => {
+                if source_mode != "P" {
+                    return Ok(self.copy());
+                }
+                let mut target = self.palette_mode().unwrap_or("RGB").to_owned();
+                if target == "RGB" && self.has_transparency_data() {
+                    target = "RGBA".to_owned();
+                }
+                target
+            }
+            PythonConvertModeInput::Name(target) => target,
+            PythonConvertModeInput::Invalid(type_name) => {
+                return Err(PilError::TypeError(format!(
+                    "'{type_name}' object cannot be interpreted as a string"
+                )));
+            }
+        };
+
+        if target_mode == source_mode && matrix.is_none() {
+            return Ok(self.copy());
+        }
+        if matrix.is_some() && !matches!(target_mode.as_str(), "L" | "RGB") {
+            return Err(PilError::ValueError("illegal conversion".to_owned()));
+        }
+
+        let palette = match palette {
+            PythonConvertPaletteInput::None | PythonConvertPaletteInput::Image => None,
+            PythonConvertPaletteInput::Name(name) => Some(name),
+            PythonConvertPaletteInput::Invalid(type_name) => {
+                return Err(PilError::TypeError(format!(
+                    "'{type_name}' object cannot be interpreted as a string"
+                )));
+            }
+        };
+        self.convert(&target_mode, matrix, dither, palette.as_deref(), colors)
+    }
+
     /// Converts this image to another Pillow mode.
     ///
     /// # Inputs
