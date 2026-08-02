@@ -78,20 +78,6 @@ class UnidentifiedImageError(OSError):
     """Pillow-compatible class for bytes that no registered decoder accepts."""
 
 
-class _SyntheticImage:
-    """Minimal zero-area image used for Pillow's valid empty crop result."""
-
-    def __init__(self, mode, size):
-        self.mode = mode
-        self.size = size
-        self.format = None
-        self.info = {}
-        self.palette = None
-
-    def tobytes(self):
-        return b""
-
-
 class _ClosedImage:
     """Released image storage that preserves Pillow's closed-image error."""
 
@@ -315,30 +301,7 @@ class Image:
         return Image(rust_image)
 
     def crop(self, box: Optional[Tuple[int, int, int, int]] = None) -> "Image":
-        if box is None:
-            return self.copy()
-        left, top, right, bottom = box
-        width = right - left
-        height = bottom - top
-        if width == 0 or height == 0:
-            return _SyntheticImage(self.mode, (max(width, 0), max(height, 0)))
-        if left < 0 or top < 0 or right > self.width or bottom > self.height:
-            # Pillow pads out-of-bounds crop regions with zero-valued pixels.
-            out = Image.new(self.mode, (width, height), 0)
-            clip_left = max(left, 0)
-            clip_top = max(top, 0)
-            clip_right = min(right, self.width)
-            clip_bottom = min(bottom, self.height)
-            if clip_right > clip_left and clip_bottom > clip_top:
-                clipped = Image(
-                    self._rust_image.crop_box(
-                        clip_left, clip_top, clip_right, clip_bottom
-                    )
-                )
-                out.paste(clipped, (clip_left - left, clip_top - top))
-            return out
-        rust_image = self._rust_image.crop((left, top, right - left, bottom - top))
-        return Image(rust_image)
+        return Image(self._rust_image.crop(box))
 
     def rotate(
         self,
