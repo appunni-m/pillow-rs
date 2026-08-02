@@ -27,9 +27,9 @@ pub type ImageFont = pilfont::PilFont;
 pub struct ImageFontLoadOptions {
     /// Pillow `index` argument, selecting a face from a collection.
     pub index: Option<usize>,
-    /// Pillow `encoding` argument. The BASIC Unicode-compatible Rust path
-    /// preserves this as a public API option while selecting the Unicode
-    /// charmap, matching the active Pillow oracle rows.
+    /// Pillow `encoding` argument. The Rust core maps recognized FreeType
+    /// encoding tags to the requested charmap and preserves Pillow's default
+    /// fallback for unknown tags.
     pub encoding: Option<String>,
     /// Pillow `layout_engine` argument. In the no-raqm oracle configuration,
     /// Pillow accepts this and falls back to BASIC layout.
@@ -163,8 +163,9 @@ pub struct ImageFontVariantOptions {
     pub size: Option<f32>,
     /// Replacement face index for Pillow's `index` argument.
     pub index: Option<usize>,
-    /// Pillow `encoding` argument. BASIC Unicode-compatible rows preserve this
-    /// for public signature parity while fontdone selects the Unicode charmap.
+    /// Pillow `encoding` argument. The Rust core maps recognized FreeType
+    /// encoding tags to the requested charmap and preserves Pillow's default
+    /// fallback for unknown tags.
     pub encoding: Option<String>,
     /// Pillow `layout_engine` argument. In the no-raqm oracle configuration,
     /// Pillow accepts this argument and falls back to BASIC layout.
