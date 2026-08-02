@@ -405,11 +405,31 @@ pub fn resolve_new_color(
         return Ok((l, l, l, a));
     }
     if let Some((r, g, b)) = rgb {
-        // PIL rejects color tuples for single-channel modes (L, 1, P)
-        // The Python Image.new wrapper uses this path for P-mode by converting
-        // "P" to "L" internally. Match PIL's P-mode behavior: index 0 with
-        // the color stored in the palette (palette managed on Python side).
+        // Pillow accepts only a scalar or one-element tuple for single-band
+        // modes. The F path uses a distinct native conversion error, while
+        // integer/luma modes share the standard color-type message.
+        if mode == "F" {
+            return Err(crate::error::PilError::TypeError(
+                "must be real number, not tuple".to_owned(),
+            ));
+        }
+        if matches!(
+            mode,
+            "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        ) {
+            return Err(crate::error::PilError::TypeError(
+                "color must be int or single-element tuple".to_owned(),
+            ));
+        }
         if mode == "L" || mode == "1" || mode == "P" {
+            if mode != "P" {
+                return Err(crate::error::PilError::TypeError(
+                    "color must be int or single-element tuple".to_owned(),
+                ));
+            }
+            // The Python Image.new wrapper preserves P-mode tuple provenance
+            // and allocates the tuple color into the palette after resolution.
+            // Keep the resolver's zero-index sentinel for that binding path.
             return Ok((0, 0, 0, 0));
         }
         return Ok((r, g, b, 255));

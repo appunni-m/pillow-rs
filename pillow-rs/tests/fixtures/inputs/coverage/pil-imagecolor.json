@@ -1,0 +1,73 @@
+{
+  "schema": "migration-parity/coverage-input@1",
+  "plans": [
+    {
+      "plan_id": "pil-imagecolor.coverage-plan",
+      "covers": [
+        "PIL.ImageColor.getcolor.behavior.default",
+        "PIL.ImageColor.getcolor.parameter.color",
+        "PIL.ImageColor.getcolor.parameter.mode",
+        "PIL.ImageColor.getcolor.mode.l",
+        "PIL.ImageColor.getcolor.mode.rgb",
+        "PIL.ImageColor.getrgb.behavior.default",
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profile": "python-cpu",
+      "selectors": {
+        "parity_case_ids": [
+          "PIL.ImageColor.getcolor.behavior.default",
+          "PIL.ImageColor.getcolor.mode.l",
+          "PIL.ImageColor.getrgb.behavior.default",
+          "PIL.ImageColor.getrgb.nuanced.named-css-color",
+          "PIL.ImageColor.getrgb.nuanced.rgba-syntax",
+          "PIL.ImageColor.getrgb.nuanced.hsl-syntax",
+          "PIL.ImageColor.getrgb.nuanced.hex-with-alpha",
+          "PIL.ImageColor.getrgb.nuanced.hex-short-alpha",
+          "PIL.ImageColor.getcolor.nuanced.named-l",
+          "PIL.ImageColor.getcolor.nuanced.named-hsv",
+          "PIL.ImageColor.getcolor.nuanced.green-hsv",
+          "PIL.ImageColor.getcolor.nuanced.blue-hsv",
+          "PIL.ImageColor.getcolor.nuanced.gray-hsv",
+          "PIL.ImageColor.getcolor.nuanced.named-i",
+          "PIL.ImageColor.getcolor.nuanced.named-la",
+          "PIL.ImageColor.getcolor.nuanced.named-f",
+          "PIL.ImageColor.getcolor.nuanced.named-i16",
+          "PIL.ImageColor.getcolor.nuanced.named-i16b",
+          "PIL.ImageColor.getcolor.nuanced.named-rgba",
+          "PIL.ImageColor.getcolor.nuanced.named-cmyk",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-float-alpha",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-short",
+          "PIL.ImageColor.getrgb.nuanced.rejected-transparent",
+          "PIL.ImageColor.getrgb.nuanced.rejected-currentcolor",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgb-unclosed",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgb-nondigit",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgb-empty-component",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-unclosed",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-nondigit",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgba-empty-component",
+          "PIL.ImageColor.getrgb.nuanced.rgb-percent",
+          "PIL.ImageColor.getrgb.nuanced.rgb-over-range",
+          "PIL.ImageColor.getrgb.nuanced.rgb-percent-over-range",
+          "PIL.ImageColor.getrgb.nuanced.rgba-over-range",
+          "PIL.ImageColor.getrgb.nuanced.rejected-hsla",
+          "PIL.ImageColor.getrgb.nuanced.rejected-leading-whitespace",
+          "PIL.ImageColor.getrgb.nuanced.rejected-trailing-whitespace",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgb-mixed-percent",
+          "PIL.ImageColor.getrgb.nuanced.rejected-rgb-short",
+          "PIL.ImageColor.getrgb.nuanced.rejected-overlong",
+          "PIL.ImageColor.getcolor.nuanced.over-range-hsv",
+          "PIL.ImageColor.getcolor.nuanced.over-range-l",
+          "PIL.ImageColor.getcolor.nuanced.hex-rgba",
+          "PIL.ImageColor.getcolor.nuanced.rgb-syntax-l",
+          "PIL.ImageColor.getcolor.nuanced.named-one",
+          "PIL.ImageColor.getcolor.nuanced.hex-la-alpha"
+        ],
+        "command_ids": []
+      },
+      "component_ids": [
+        "image-color"
+      ],
+      "command_id": "coverage"
+    }
+  ]
+}
