@@ -56,14 +56,7 @@ def convert(image: Image, mode: str) -> Image:
 def merge(mode: str, bands):
     """Merge single-band images into a multi-band image."""
     from . import _core
-    if isinstance(bands, Image):
-        raise TypeError("object of type 'Image' has no len()")
-    if not isinstance(bands, (tuple, list)):
-        raise TypeError(f"object of type '{type(bands).__name__}' has no len()")
-    if any(not isinstance(band, Image) for band in bands):
-        raise ValueError("wrong number of bands")
-    rust_bands = tuple(map(lambda b: b._rust_image, bands))
-    return Image(_core.image_merge(mode, rust_bands))
+    return Image(_core.image_merge(mode, bands))
 
 
 def blend(im1: Image, im2: Image, alpha: float) -> Image:
@@ -105,23 +98,13 @@ def frombytes(mode, size, data, decoder_name="raw", *args):
 def linear_gradient(mode: str) -> Image:
     """Generate 256x256 linear gradient from black to white, top to bottom."""
     from . import _core
-    try:
-        return Image(_core.image_linear_gradient(mode))
-    except ValueError as exc:
-        if str(exc).startswith("linear_gradient: unsupported mode"):
-            raise ValueError("image has wrong mode") from exc
-        raise
+    return Image(_core.image_linear_gradient(mode))
 
 
 def radial_gradient(mode: str) -> Image:
     """Generate 256x256 radial gradient from white (center) to black (edges)."""
     from . import _core
-    try:
-        return Image(_core.image_radial_gradient(mode))
-    except ValueError as exc:
-        if str(exc).startswith("radial_gradient: unsupported mode"):
-            raise ValueError("image has wrong mode") from exc
-        raise
+    return Image(_core.image_radial_gradient(mode))
 
 
 def effect_mandelbrot(

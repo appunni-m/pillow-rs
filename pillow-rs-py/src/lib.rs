@@ -167,19 +167,24 @@ fn centering_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::Centeri
     pillow_rs::CenteringInput::Invalid
 }
 
+fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
+    if let Ok(image) = value.downcast::<PyImage>() {
+        return Some(image.borrow().inner.clone());
+    }
+    value.getattr("_rust_image").ok().and_then(|inner| {
+        inner
+            .downcast::<PyImage>()
+            .ok()
+            .map(|image| image.borrow().inner.clone())
+    })
+}
+
 fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ImageOpsMask {
     let Some(value) = value else {
         return pillow_rs::ImageOpsMask::None;
     };
-    if let Ok(mask) = value.downcast::<PyImage>() {
-        return pillow_rs::ImageOpsMask::Image(mask.borrow().inner.clone());
-    }
-    // The public Python ImageOps facade supplies its high-level Image wrapper;
-    // unwrap only its opaque core handle here so validation remains in Rust.
-    if let Ok(inner) = value.getattr("_rust_image")
-        && let Ok(mask) = inner.downcast::<PyImage>()
-    {
-        return pillow_rs::ImageOpsMask::Image(mask.borrow().inner.clone());
+    if let Some(mask) = image_from_python(value) {
+        return pillow_rs::ImageOpsMask::Image(mask);
     }
     pillow_rs::ImageOpsMask::Invalid
 }
@@ -792,8 +797,13 @@ impl PyImage {
         self.inner.stat().map_err(map_error)
     }
 
-    fn stat_formatted(&self) -> PyResult<PyObject> {
-        let result = self.inner.stat_formatted().map_err(map_error)?;
+    #[pyo3(signature = (mask=None))]
+    fn stat_formatted(&self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<PyObject> {
+        let mask = imageops_mask_from_python(mask);
+        let result = self
+            .inner
+            .stat_formatted_with_mask(mask)
+            .map_err(map_error)?;
         stat_result_to_python(&result)
     }
 
@@ -3648,9 +3658,13 @@ fn chops_logical_xor(
 }
 
 #[pyfunction]
-fn chops_offset(image: &Bound<'_, PyImage>, xoffset: i32, yoffset: i32) -> PyResult<PyImage> {
+fn chops_offset(
+    image: &Bound<'_, PyImage>,
+    xoffset: i32,
+    yoffset: Option<i32>,
+) -> PyResult<PyImage> {
     let b = image.borrow();
-    pillow_rs::chops_offset(&b.inner, xoffset, yoffset)
+    pillow_rs::chops_offset_with_default(&b.inner, xoffset, yoffset)
         .map(|i| PyImage { inner: i })
         .map_err(map_error)
 }
@@ -3660,12 +3674,20 @@ fn chops_offset(image: &Bound<'_, PyImage>, xoffset: i32, yoffset: i32) -> PyRes
 #[pyfunction]
 fn image_merge(mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
     let mut band_images: Vec<pillow_rs::Image> = Vec::new();
+    let mut invalid_band = false;
     for item in bands.iter()? {
         let obj = item?;
-        let py_img = obj.downcast::<PyImage>().map_err(|_| {
-            pyo3::exceptions::PyTypeError::new_err("bands must be a sequence of Image objects")
-        })?;
-        band_images.push(py_img.borrow().inner.clone());
+        if let Some(image) = image_from_python(&obj) {
+            band_images.push(image);
+        } else {
+            invalid_band = true;
+        }
+    }
+    if invalid_band {
+        // Preserve Pillow's core-owned mode/arity error ordering. The host
+        // adapter records only that extraction failed; Rust decides whether
+        // the public result is a mode or band-count error.
+        band_images.clear();
     }
     let rs = pillow_rs::image_merge(mode, &band_images).map_err(map_error)?;
     Ok(PyImage { inner: rs })

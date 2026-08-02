@@ -8,9 +8,7 @@ class Stat:
 
     def __init__(self, image_or_list, mask=None):
         if isinstance(image_or_list, Image):
-            if mask is not None and (mask.mode not in ("1", "L") or mask.size != image_or_list.size):
-                raise ValueError("bad transparency mask")
-            result = image_or_list._rust_image.stat_formatted()
+            result = image_or_list._rust_image.stat_formatted(mask)
             self.count = result['count']
             self.sum = result['sum']
             self.sum2 = result['sum2']

@@ -45,7 +45,7 @@ pub enum ImageOpsColor {
     Invalid,
 }
 
-fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), PilError> {
+pub fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), PilError> {
     let ImageOpsMask::Image(mask) = mask else {
         return match mask {
             ImageOpsMask::None => Ok(()),
@@ -53,12 +53,7 @@ fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), PilEr
             ImageOpsMask::Image(_) => unreachable!(),
         };
     };
-    let mode = mask.mode()?;
-    let size = mask.size()?;
-    if !matches!(mode.as_str(), "1" | "L") || size != image.size()? {
-        return Err(PilError::ValueError("bad transparency mask".into()));
-    }
-    Ok(())
+    crate::ops::analysis::validate_transparency_mask(image, &mask)
 }
 
 fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), PilError> {
@@ -69,9 +64,10 @@ fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), Pil
             "cannot unpack non-iterable float object".into(),
         )),
         CenteringInput::Values(values) if values.len() == 2 => Ok((values[0], values[1])),
-        CenteringInput::Values(values) if values.len() < 2 => Err(PilError::ValueError(
-            format!("not enough values to unpack (expected 2, got {})", values.len()),
-        )),
+        CenteringInput::Values(values) if values.len() < 2 => Err(PilError::ValueError(format!(
+            "not enough values to unpack (expected 2, got {})",
+            values.len()
+        ))),
         CenteringInput::Values(_) => Err(PilError::ValueError(
             "too many values to unpack (expected 2)".into(),
         )),
@@ -88,12 +84,9 @@ fn resolve_pad_color(input: ImageOpsColor) -> Result<Option<(u8, u8, u8, u8)>, P
 
     match input {
         ImageOpsColor::None | ImageOpsColor::Invalid => Ok(None),
-        ImageOpsColor::Scalar(value) => Ok(Some((
-            clamp(value),
-            clamp(value),
-            clamp(value),
-            u8::MAX,
-        ))),
+        ImageOpsColor::Scalar(value) => {
+            Ok(Some((clamp(value), clamp(value), clamp(value), u8::MAX)))
+        }
         ImageOpsColor::Components(values) => match values.as_slice() {
             [r, g, b] => Ok(Some((clamp(*r), clamp(*g), clamp(*b), u8::MAX))),
             [r, g, b, a] => Ok(Some((clamp(*r), clamp(*g), clamp(*b), clamp(*a)))),
