@@ -221,6 +221,36 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
         tiff = b"II\x2b\x00" + struct.pack("<I", 8) + struct.pack("<H", 0)
     elif variant == "invalid-byte-order":
         tiff = b"ZZ\x2a\x00" + struct.pack("<I", 8) + struct.pack("<H", 0)
+    elif variant == "invalid-offset":
+        # A retained Exif payload with a valid TIFF header but an IFD0 offset
+        # beyond the payload. Pillow accepts the JPEG and treats orientation
+        # as absent; this reaches the public ImageOps.exif_transpose parser.
+        tiff = b"II\x2a\x00" + struct.pack("<I", 0x1000) + struct.pack("<H", 0)
+    elif variant == "truncated-entry":
+        # The IFD advertises one entry but the payload ends before its 12-byte
+        # record is available. Keep the container valid so this remains an
+        # encoded-image oracle input rather than a direct parser probe.
+        tiff = b"II\x2a\x00" + struct.pack("<I", 8) + struct.pack("<H", 1)
+    elif variant == "non-orientation-before-orientation":
+        entries = [
+            (0x0100, 3, 1, struct.pack("<H", 2) + b"\x00\x00"),
+            (0x0112, 3, 1, struct.pack("<H", 6) + b"\x00\x00"),
+        ]
+        tiff = bytearray(b"II\x2a\x00" + struct.pack("<I", 8))
+        tiff += struct.pack("<H", len(entries))
+        for tag, kind, count, value in entries:
+            tiff += struct.pack("<HHI", tag, kind, count) + value
+        tiff += struct.pack("<I", 0)
+        tiff = bytes(tiff)
+    elif variant == "invalid-orientation":
+        tiff = (
+            b"II\x2a\x00"
+            + struct.pack("<I", 8)
+            + struct.pack("<H", 1)
+            + struct.pack("<HHI", 0x0112, 3, 1)
+            + struct.pack("<H", 9)
+            + b"\x00\x00"
+        )
     elif variant == "short-exif-payload":
         # Keep the JPEG and APP1 framing valid while exposing the public
         # extractor's shortest retained Exif payload to the Rust parser.
@@ -7831,6 +7861,38 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "jpeg-short-exif-payload",
             "exif_variant": "short-exif-payload",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-invalid-offset",
+            "exif_variant": "invalid-offset",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-truncated-entry",
+            "exif_variant": "truncated-entry",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-non-orientation-before-orientation",
+            "exif_variant": "non-orientation-before-orientation",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-invalid-orientation",
+            "exif_variant": "invalid-orientation",
             "observe_result": "tobytes",
         },
         {
