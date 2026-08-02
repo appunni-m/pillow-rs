@@ -59,13 +59,35 @@ fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
     }
 }
 
-fn parse_dither(s: Option<&str>) -> Option<DitherMethod> {
+fn parse_dither(s: Option<&str>) -> Result<Option<DitherMethod>, PilError> {
     match s {
-        Some("NONE") | Some("none") => Some(DitherMethod::None),
-        Some("FLOYDSTEINBERG") | Some("floydsteinberg") => Some(DitherMethod::FloydSteinberg),
-        None => Some(DitherMethod::FloydSteinberg), // PIL default: FloydSteinberg dither
-        _ => None,
+        Some("NONE") | Some("none") => Ok(Some(DitherMethod::None)),
+        Some("FLOYDSTEINBERG") | Some("floydsteinberg") => Ok(Some(DitherMethod::FloydSteinberg)),
+        None => Ok(Some(DitherMethod::FloydSteinberg)), // PIL default: FloydSteinberg dither
+        // Pillow's Python converter rejects string dither values before the C
+        // converter interprets the integer enum.
+        _ => Err(PilError::TypeError(
+            "'str' object cannot be interpreted as an integer".into(),
+        )),
     }
+}
+
+/// Validates a Python-facing dither argument that arrived as a string.
+///
+/// Pillow's Python API accepts the dither enum as an integer, even though the
+/// shared Rust/JavaScript API uses symbolic strings internally. Parse the
+/// symbolic value through the same core helper, then preserve Pillow's Python
+/// type error for the host string input.
+///
+/// # Errors
+///
+/// Always returns [`PilError::TypeError`] because Python strings are not valid
+/// dither enum arguments.
+pub fn validate_python_convert_dither(value: &str) -> Result<(), PilError> {
+    let _ = parse_dither(Some(value));
+    Err(PilError::TypeError(
+        "'str' object cannot be interpreted as an integer".into(),
+    ))
 }
 
 /// Pillow-compatible image mode conversion methods.
@@ -290,7 +312,7 @@ impl Image {
             ));
         }
 
-        let dither_enum = parse_dither(dither);
+        let dither_enum = parse_dither(dither)?;
 
         // Special case: converting to binary mode "1" — must eagerly execute
         // because the pipeline's scalar::convert doesn't handle binary threshold/dither.

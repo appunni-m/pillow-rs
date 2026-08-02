@@ -358,6 +358,10 @@ impl PyImage {
                         .to_string(),
                     )
                 } else if let Ok(string_value) = value.extract::<String>() {
+                    if matrix.is_none() {
+                        pillow_rs::validate_python_convert_dither(&string_value)
+                            .map_err(map_error)?;
+                    }
                     Some(string_value)
                 } else {
                     return Err(pyo3::exceptions::PyTypeError::new_err(
