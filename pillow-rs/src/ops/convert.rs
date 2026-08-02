@@ -99,6 +99,15 @@ impl Image {
         _palette: Option<&str>,
         _colors: Option<u32>,
     ) -> Result<Image, PilError> {
+        // Validate the target before source-specific conversion dispatch. The
+        // Python wrapper used to reject unknown modes first, which made this
+        // public Rust error path unreachable and allowed an unknown target to
+        // slip through for some non-standard source modes. PA is handled by
+        // the explicit palette-alpha path below but is not a ColorMode enum.
+        if mode != "PA" {
+            parse_mode(mode).map_err(|_| PilError::ValueError("image has wrong mode".into()))?;
+        }
+
         // PIL: convert() without mode arg keeps same mode for most types,
         // but converts P→RGB (palette images default to RGB when no mode given).
         let src_mode = self.mode()?;

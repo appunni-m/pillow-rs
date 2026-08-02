@@ -375,7 +375,6 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
-        allowed_modes = {"1", "L", "LA", "PA", "RGB", "RGBA", "CMYK", "YCbCr", "HSV", "I", "F", "P"}
         if isinstance(palette, Image):
             palette = None
         if mode is None:
@@ -393,10 +392,6 @@ class Image:
             # L or RGB; anything else fails before the C converter runs.
             if mode not in ("L", "RGB"):
                 raise ValueError("illegal conversion")
-        elif mode not in allowed_modes:
-            # Without a matrix, unknown target modes fail in the C converter
-            # with this message.
-            raise ValueError("image has wrong mode")
         if isinstance(dither, str) and matrix is None:
             raise TypeError("'str' object cannot be interpreted as an integer")
         matrix_list = list(matrix) if matrix is not None else None
