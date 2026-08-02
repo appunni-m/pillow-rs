@@ -216,9 +216,6 @@ fn centering_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::Centeri
         return pillow_rs::CenteringInput::Scalar(value);
     }
     if let Ok(values) = value.extract::<Vec<f64>>() {
-        if values == [0.5, 0.5] {
-            return pillow_rs::CenteringInput::Default;
-        }
         return pillow_rs::CenteringInput::Values(values);
     }
     pillow_rs::CenteringInput::Invalid
