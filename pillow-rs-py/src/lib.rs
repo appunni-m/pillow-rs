@@ -1150,6 +1150,19 @@ impl PyImage {
             return Err(PyTypeError::new_err("too many data entries"));
         }
 
+        // Pillow's I;16 bytes fast path copies the supplied bytes into the
+        // raw two-byte sample buffer. It does not coerce each byte into a
+        // separate numeric sample as the generic sequence path does.
+        if matches!(mode.as_str(), "I;16" | "I;16L" | "I;16B" | "I;16N") {
+            if let Ok(bytes) = data.downcast::<PyBytes>() {
+                return slf
+                    .try_borrow_mut()?
+                    .inner
+                    .putdata_l16_bytes(bytes.as_bytes())
+                    .map_err(map_error);
+            }
+        }
+
         // Pillow's image8 fast path reads the underlying bytes directly, even
         // for a bytes subclass that overrides Python iteration.
         if matches!(mode.as_str(), "1" | "L" | "P") {
