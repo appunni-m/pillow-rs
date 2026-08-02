@@ -1118,6 +1118,7 @@
           "PIL.Image.Image.getextrema.nuanced.nonzero-rgba",
           "PIL.Image.Image.histogram.nuanced.nonzero-rgba",
           "PIL.Image.Image.histogram.nuanced.masked-region",
+          "PIL.Image.Image.histogram.nuanced.one-mask",
           "PIL.Image.Image.histogram.nuanced.masked-nonzero-rgb",
           "PIL.Image.Image.histogram.nuanced.masked-nonzero-l",
           "PIL.Image.Image.histogram.nuanced.masked-nonzero-la",
