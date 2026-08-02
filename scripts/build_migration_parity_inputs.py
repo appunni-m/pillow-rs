@@ -1667,6 +1667,14 @@ class WorkflowBuilder:
                     "encoded-input",
                     f"encoded-{self.image_format.lower()}-input",
                 )
+            if (
+                self.primary_operation == "save"
+                and self.edge == "no-extension"
+            ):
+                return self.builtin(
+                    "output-no-extension",
+                    "temporary-output-no-extension-path",
+                )
             return self.builtin("output", "temporary-output-path")
         if name in {"shape"} and self.primary_surface.startswith(
             "PIL.ImageDraw"
@@ -8218,6 +8226,13 @@ def build_nuanced_cases(
             "name": "p-png",
             "mode": "P",
             "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "behavior.default",
+            "name": "no-extension-default-format",
+            "edge": "no-extension",
         },
         {
             "surface": "PIL.Image.Image",

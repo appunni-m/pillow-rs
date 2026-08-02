@@ -2173,7 +2173,9 @@ impl Image {
                 .map_err(|_| PilError::KeyError(format.to_owned()))
         } else {
             let extension = extension.ok_or_else(|| {
-                PilError::UnknownFormat("Cannot determine format from path".into())
+                // Pillow's Image.save extension lookup reports an empty
+                // suffix as a ValueError with this exact public message.
+                PilError::ValueError("unknown file extension: ".into())
             })?;
             parse_format_str(extension)
                 .map(|_| extension.to_owned())

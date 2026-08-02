@@ -254,6 +254,8 @@ class AssetStore:
             return self._write_asset(asset_id, ENCODED_INPUTS[name], ".bin")
         if name == "temporary-output-path":
             return str(self._tempdir / f"{asset_id}.out")
+        if name == "temporary-output-no-extension-path":
+            return str(self._tempdir / asset_id)
         if name == "read-only-directory":
             path = self._tempdir / f"{asset_id}.dir"
             path.mkdir(parents=True, exist_ok=True)

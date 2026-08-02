@@ -41157,6 +41157,67 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.save.nuanced.no-extension-default-format",
+      "surface": "PIL.Image.Image",
+      "operation": "save",
+      "covers": [
+        "PIL.Image.Image.save.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output-no-extension",
+          "kind": "builtin",
+          "name": "temporary-output-no-extension-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output-no-extension"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.save.nuanced.i-png",
       "surface": "PIL.Image.Image",
       "operation": "save",
