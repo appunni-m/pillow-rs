@@ -5752,6 +5752,34 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.factor",
+            "name": "zero-factor",
+            "values": {
+                "factor": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.factor",
+            "name": "wrong-factor-arity",
+            "values": {
+                "factor": literal([2, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.box",
+            "name": "wrong-box-arity",
+            "values": {
+                "factor": literal([2, 2]),
+                "box": literal([0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "quantize",
             "requirement_suffix": "parameter.method",
             "name": "fast-octree-rgb",
@@ -5848,6 +5876,21 @@ def build_nuanced_cases(
                 "size": literal([6, 6]),
                 "method": literal(4),
                 "data": literal([[[0, 0, 6, 6]]]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "identity-mesh",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6]],
+                ]),
             },
         },
         {
