@@ -2615,6 +2615,27 @@ impl PyFont {
             .map_err(map_error)
     }
 
+    #[pyo3(signature = (font_bytes=None, size=None, index=None, encoding=None, layout_engine=None))]
+    fn font_variant_with_options(
+        &self,
+        font_bytes: Option<Vec<u8>>,
+        size: Option<f32>,
+        index: Option<usize>,
+        encoding: Option<String>,
+        layout_engine: Option<String>,
+    ) -> PyResult<Self> {
+        let options = pillow_rs::ImageFontVariantOptions {
+            font_bytes,
+            size,
+            index,
+            encoding,
+            layout_engine,
+        };
+        pillow_rs::imagefont_variant_with_options(&self.inner, &options)
+            .map(|inner| PyFont { inner })
+            .map_err(map_error)
+    }
+
     fn get_name(&self) -> (Option<String>, Option<String>) {
         let (family, style) = pillow_rs::imagefont_getname_optional(&self.inner);
         (family.map(ToOwned::to_owned), style.map(ToOwned::to_owned))

@@ -210,14 +210,13 @@ class FreeTypeFont:
         self.path = font
         if isinstance(font, (str, bytes, os.PathLike)):
             font_path = os.fspath(font)
-            self._font_path = font
             self._rust_font = _core.ImageFont.truetype(
                 os.fsdecode(font_path), float(size), int(index), encoding, layout_engine_name
             )
         elif hasattr(font, 'read'):
-            self._font_data = font.read()
+            font_data = font.read()
             self._rust_font = _core.ImageFont.truetype_from_bytes(
-                self._font_data, float(size), int(index), encoding, layout_engine_name
+                font_data, float(size), int(index), encoding, layout_engine_name
             )
         else:
             raise TypeError("font must be a file path or file-like object")
@@ -232,14 +231,10 @@ class FreeTypeFont:
         self._pil_font = None
 
     @classmethod
-    def _from_font_data(cls, data, size=10, index=0, encoding="", layout_engine=None):
-        layout_engine_name = _normalize_layout_engine(layout_engine)
+    def _from_rust_font(cls, rust_font, size, index=0, encoding="", path=None):
         font = object.__new__(cls)
-        font.path = None
-        font._font_data = bytes(data)
-        font._rust_font = _core.ImageFont.truetype_from_bytes(
-            font._font_data, float(size), int(index), encoding, layout_engine_name
-        )
+        font.path = path
+        font._rust_font = rust_font
         font.size = float(size)
         font.index = index
         font.encoding = encoding
@@ -352,36 +347,38 @@ class FreeTypeFont:
         :return: A FreeTypeFont object.
         :raises OSError: If the font could not be read.
         """
-        if font is None and size is None and index is None and encoding is None and layout_engine is None:
-            return self
-        # Default font (loaded via load_default) has no source path/bytes.
-        # Fall back to calling load_default again with the new size.
-        if getattr(self, '_is_default', False):
-            new_size = self.size if size is None else float(size)
-            return load_default(size=new_size)
-        if font is None and hasattr(self, '_font_data'):
-            return FreeTypeFont._from_font_data(
-                self._font_data,
+        if font is None:
+            layout_engine_name = (
+                None
+                if layout_engine is None
+                else _normalize_layout_engine(layout_engine)
+            )
+            variant = self._rust_font.font_variant_with_options(
+                None,
+                size,
+                index,
+                encoding,
+                layout_engine_name,
+            )
+            source_path = (
+                self.path
+                if isinstance(self.path, (str, bytes, os.PathLike))
+                else None
+            )
+            return self._from_rust_font(
+                variant,
                 size=self.size if size is None else float(size),
                 index=self.index if index is None else index,
                 encoding=self.encoding if encoding is None else encoding,
-                layout_engine=layout_engine if layout_engine is not None else self.layout_engine,
+                path=source_path,
             )
         return FreeTypeFont(
-            font=font if font is not None else self._font_source(),
+            font=font,
             size=self.size if size is None else float(size),
             index=self.index if index is None else index,
             encoding=self.encoding if encoding is None else encoding,
             layout_engine=layout_engine if layout_engine is not None else self.layout_engine,
         )
-
-    def _font_source(self):
-        """Return the original font source (path or bytes)."""
-        if hasattr(self, '_font_path'):
-            return self._font_path
-        if hasattr(self, '_font_data'):
-            return self._font_data
-        raise OSError("cannot reconstruct font source for font_variant")
 
     def get_variation_names(self):
         """Get list of named styles in a variation font.
@@ -486,14 +483,10 @@ def load_default(size=None):
     """Load Pillow's embedded Aileron Regular subset with BASIC layout."""
     if size is None:
         size = 10
-    font = object.__new__(FreeTypeFont)
-    font._rust_font = _core.ImageFont.load_default(float(size))
-    font.size = float(size)
-    font.layout_engine = Layout.BASIC
-    font.font = _NativeFont(font._rust_font)
-    font._is_default = True
-    font._pil_font = None
-    return font
+    return FreeTypeFont._from_rust_font(
+        _core.ImageFont.load_default(float(size)),
+        size=size,
+    )
 
 
 def load_default_imagefont():
