@@ -562,14 +562,14 @@ impl Image {
     #[wasm_bindgen(js_name = "quantize")]
     pub fn quantize(&self, c: u32) -> Result<Image, JsValue> {
         self.inner
-            .quantize(c, 0, None, true)
+            .quantize(c, 0, None, true, 0)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "reduce")]
     pub fn reduce(&self, f: u32) -> Result<Image, JsValue> {
         self.inner
-            .reduce(f)
+            .reduce(f, f)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -1669,6 +1669,10 @@ impl ImageOps {
             &img.inner,
             (black_r, black_g, black_b),
             (white_r, white_g, white_b),
+            None,
+            0,
+            127,
+            255,
         )
         .map(|i| Image { inner: i })
         .map_err(err)
@@ -2070,23 +2074,39 @@ pub fn merge_fn(mode: &str, bands: Vec<Image>) -> Result<Image, JsValue> {
 
 #[wasm_bindgen(js_name = "getColor")]
 pub fn getcolor(color: &str, mode: &str) -> Result<JsValue, JsValue> {
-    let (r, g, b, a) =
-        pillow_rs::parse_color_str(color).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let (r, g, b, a) =
-        pillow_rs::getcolor(r, g, b, mode).map_err(|e| JsValue::from_str(&e.to_string()))?;
-    let arr = js_sys::Array::new();
-    arr.push(&JsValue::from(r));
-    if mode == "LA" || mode == "RGBA" {
-        arr.push(&JsValue::from(a));
-    }
-    if mode != "L" && mode != "1" && mode != "LA" {
-        arr.push(&JsValue::from(g));
-        arr.push(&JsValue::from(b));
-        if mode == "RGBA" {
-            arr.push(&JsValue::from(a));
+    let (r, g, b, a) = pillow_rs::parse_color_str_unclamped(color).map_err(err)?;
+    let value = pillow_rs::getcolor(r, g, b, a, mode).map_err(err)?;
+    match value {
+        pillow_rs::ColorValue::Gray(value) => Ok(JsValue::from(value)),
+        pillow_rs::ColorValue::GrayAlpha(gray, alpha) => {
+            let arr = js_sys::Array::new();
+            arr.push(&JsValue::from(gray));
+            arr.push(&JsValue::from(alpha));
+            Ok(arr.into())
+        }
+        pillow_rs::ColorValue::Rgb(red, green, blue) => {
+            let arr = js_sys::Array::new();
+            arr.push(&JsValue::from(red));
+            arr.push(&JsValue::from(green));
+            arr.push(&JsValue::from(blue));
+            Ok(arr.into())
+        }
+        pillow_rs::ColorValue::Rgba(red, green, blue, alpha) => {
+            let arr = js_sys::Array::new();
+            arr.push(&JsValue::from(red));
+            arr.push(&JsValue::from(green));
+            arr.push(&JsValue::from(blue));
+            arr.push(&JsValue::from(alpha));
+            Ok(arr.into())
+        }
+        pillow_rs::ColorValue::Hsv(hue, saturation, value) => {
+            let arr = js_sys::Array::new();
+            arr.push(&JsValue::from(hue));
+            arr.push(&JsValue::from(saturation));
+            arr.push(&JsValue::from(value));
+            Ok(arr.into())
         }
     }
-    Ok(arr.into())
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

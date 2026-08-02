@@ -410,6 +410,71 @@ pub fn exif_get_orientation(raw: &[u8]) -> Option<u32> {
     None
 }
 
+/// Remove the usable EXIF Orientation value without changing TIFF offsets.
+///
+/// Pillow's EXIF transpose path deletes the orientation tag before saving the
+/// result.  Clearing the SHORT value preserves the encoded payload layout and
+/// makes the tag non-operative for readers that accept the same TIFF IFD.
+pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
+    let mut cleaned = raw.to_vec();
+    let data_offset = if cleaned.starts_with(b"Exif\x00\x00") {
+        6
+    } else {
+        0
+    };
+    if cleaned.len() < data_offset + 8 {
+        return cleaned;
+    }
+    let data = &cleaned[data_offset..];
+    let le = match &data[..2] {
+        b"II" => true,
+        b"MM" => false,
+        _ => return cleaned,
+    };
+    let magic = if le {
+        u16::from_le_bytes([data[2], data[3]])
+    } else {
+        u16::from_be_bytes([data[2], data[3]])
+    };
+    if magic != 42 {
+        return cleaned;
+    }
+    let ifd_offset = if le {
+        u32::from_le_bytes([data[4], data[5], data[6], data[7]])
+    } else {
+        u32::from_be_bytes([data[4], data[5], data[6], data[7]])
+    } as usize;
+    if ifd_offset + 2 > data.len() {
+        return cleaned;
+    }
+    let num_entries = if le {
+        u16::from_le_bytes([data[ifd_offset], data[ifd_offset + 1]])
+    } else {
+        u16::from_be_bytes([data[ifd_offset], data[ifd_offset + 1]])
+    } as usize;
+    for index in 0..num_entries {
+        let entry_start = ifd_offset + 2 + index * 12;
+        if entry_start + 12 > data.len() {
+            break;
+        }
+        let tag = if le {
+            u16::from_le_bytes([data[entry_start], data[entry_start + 1]])
+        } else {
+            u16::from_be_bytes([data[entry_start], data[entry_start + 1]])
+        };
+        if tag == 0x0112 {
+            let value_offset = data_offset + entry_start + 8;
+            if le {
+                cleaned[value_offset..value_offset + 2].copy_from_slice(&0u16.to_le_bytes());
+            } else {
+                cleaned[value_offset..value_offset + 2].copy_from_slice(&0u16.to_be_bytes());
+            }
+            break;
+        }
+    }
+    cleaned
+}
+
 #[cfg(test)]
 mod tests {
     use super::exif_get_orientation;

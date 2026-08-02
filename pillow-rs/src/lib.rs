@@ -195,6 +195,8 @@ pub use crate::ops::imageops::contain as imageops_contain;
 pub use crate::ops::imageops::cover as imageops_cover;
 pub use crate::ops::imageops::crop as imageops_crop;
 pub use crate::ops::imageops::equalize as imageops_equalize;
+pub use crate::ops::imageops::exif_get_orientation;
+pub use crate::ops::imageops::exif_remove_orientation;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 pub use crate::ops::imageops::expand as imageops_expand;
 pub use crate::ops::imageops::fit as imageops_fit;
