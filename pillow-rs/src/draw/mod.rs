@@ -71,6 +71,11 @@ pub enum DrawColorInput {
     Invalid,
 }
 
+/// Normalize Pillow's optional draw width at the core boundary.
+pub fn normalize_draw_width(width: Option<u32>) -> u32 {
+    width.filter(|value| *value > 0).unwrap_or(1)
+}
+
 /// Normalizes a flat or nested ImageDraw bounding box.
 pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), PilError> {
     let error = || PilError::TypeError("coordinate list must contain exactly 2 coordinates".into());
@@ -574,6 +579,17 @@ impl Draw {
     ) -> Result<(), PilError> {
         let points = normalize_draw_points(input, false)?;
         self.polygon(&points, fill, outline, width)
+    }
+
+    /// Normalize and draw a public `ImageDraw.shape` point sequence.
+    pub fn shape_with_input(
+        &mut self,
+        input: DrawPointsInput,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+    ) -> Result<(), PilError> {
+        let points = normalize_draw_point_input(input)?;
+        self.shape(&points, fill, outline)
     }
 
     /// Draws a regular polygon from Pillow's bounding-circle representation.

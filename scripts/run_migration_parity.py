@@ -253,6 +253,14 @@ class AssetStore:
             # Return values outside the [0, 255] LUT range so both adapters
             # exercise Pillow's CLIP8 saturation in `_imaging.c::_point`.
             return lambda value: value + 100
+        if name == "color3dlut-generate-identity":
+            return lambda *values: tuple(values[:3])
+        if name == "color3dlut-transform-identity":
+            return lambda *values: tuple(values[-3:])
+        if name == "color3dlut-transform-rgba":
+            return lambda *values: tuple(values[-3:]) + (1.0,)
+        if name == "color3dlut-short-result":
+            return lambda *values: tuple(values[:2])
         if name in {"font-byte-stream", "in-memory-byte-stream"}:
             return io.BytesIO()
         raise ValueError(f"unsupported builtin asset: {name}")

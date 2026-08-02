@@ -69,6 +69,829 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.generate.behavior.default",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "generate",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.generate.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.size",
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.callback",
+        "PIL.ImageFilter.Color3DLUT.generate.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-generate-identity",
+          "kind": "builtin",
+          "name": "color3dlut-generate-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "generate",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-generate-identity"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.generate.parameter.channels",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "generate",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.channels"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-generate-identity",
+          "kind": "builtin",
+          "name": "color3dlut-generate-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "generate",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-generate-identity"
+            },
+            "channels": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.generate.parameter.target-mode",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "generate",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.target-mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-generate-identity",
+          "kind": "builtin",
+          "name": "color3dlut-generate-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "generate",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-generate-identity"
+            },
+            "target_mode": {
+              "kind": "literal",
+              "value": "value"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.transform.behavior.default",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "transform",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.callback",
+        "PIL.ImageFilter.Color3DLUT.transform.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-transform-identity",
+          "kind": "builtin",
+          "name": "color3dlut-transform-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-transform-identity"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.transform.parameter.with-normals",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "transform",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.with-normals"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-transform-identity",
+          "kind": "builtin",
+          "name": "color3dlut-transform-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-transform-identity"
+            },
+            "with_normals": {
+              "kind": "literal",
+              "value": true
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.transform.parameter.channels",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "transform",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.channels"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-transform-identity",
+          "kind": "builtin",
+          "name": "color3dlut-transform-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-transform-identity"
+            },
+            "channels": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.transform.parameter.target-mode",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "transform",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.target-mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-transform-identity",
+          "kind": "builtin",
+          "name": "color3dlut-transform-identity"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-transform-identity"
+            },
+            "target_mode": {
+              "kind": "literal",
+              "value": "value"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.generate.nuanced.short-callback-result",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "generate",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.callback"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-short-result",
+          "kind": "builtin",
+          "name": "color3dlut-short-result"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "generate",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-short-result"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.transform.nuanced.short-callback-result",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "transform",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.callback"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-short-result",
+          "kind": "builtin",
+          "name": "color3dlut-short-result"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-short-result"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.transform.nuanced.rgba-result",
+      "surface": "PIL.ImageFilter.Color3DLUT",
+      "operation": "transform",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.channels"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "callback-color3dlut-transform-rgba",
+          "kind": "builtin",
+          "name": "color3dlut-transform-rgba"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-filter-color3dlut-1",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter.Color3DLUT",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-filter-color3dlut-1"
+          },
+          "arguments": {
+            "callback": {
+              "kind": "asset",
+              "asset_id": "callback-color3dlut-transform-rgba"
+            },
+            "channels": {
+              "kind": "literal",
+              "value": 4
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

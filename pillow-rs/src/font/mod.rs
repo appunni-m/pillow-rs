@@ -69,6 +69,15 @@ pub fn normalize_font_bbox(bbox: (f64, f64, f64, f64)) -> [ImageFontBBoxValue; 4
     })
 }
 
+/// Normalize Pillow's public layout-engine selector for the no-raqm build.
+///
+/// Pillow accepts BASIC, RAQM, and invalid values here. This build exposes
+/// only the BASIC engine, so every selector maps to BASIC while the caller can
+/// preserve the RAQM compatibility warning for the Python API.
+pub fn normalize_layout_engine(value: Option<i64>) -> (&'static str, bool) {
+    ("BASIC", value == Some(1))
+}
+
 /// Optional Pillow `FreeTypeFont` text-layout/render arguments.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ImageFontTextOptions {

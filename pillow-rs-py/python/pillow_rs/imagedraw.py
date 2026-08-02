@@ -1,6 +1,6 @@
 """ImageDraw — drawing primitives. Pillow-compatible module."""
 from ._core import ImageDraw as RustDraw
-from ._core import Outline
+from ._core import Outline  # public compatibility re-export
 from .image import Image
 
 
@@ -133,8 +133,6 @@ class Draw:
 
     def shape(self, shape, fill=None, outline=None):
         """Draw a shape using Rust's Pillow-compatible outline semantics."""
-        if not isinstance(shape, Outline):
-            raise TypeError("expected outline object")
         self._draw.shape(shape, fill, outline)
         self._sync()
 

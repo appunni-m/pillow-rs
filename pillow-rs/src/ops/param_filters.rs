@@ -76,9 +76,27 @@ fn color3dlut_table_length_error(
     actual_len: usize,
 ) -> PilError {
     PilError::ValueError(format!(
-        "The table should have either channels * size**3 float items              or size**3 items of channels-sized tuples with floats.              Table should be: {}x{}x{}x{}. Actual length: {}",
+        "The table should have either channels * size**3 float items or size**3 items of channels-sized tuples with floats. Table should be: {}x{}x{}x{}. Actual length: {}",
         channels, size.0, size.1, size.2, actual_len
     ))
+}
+
+/// Apply the slice-assignment semantics used by Pillow's Python callbacks.
+///
+/// Pillow starts with a zero-filled table and assigns each callback result to
+/// a fixed-width slice. A result with the wrong length can therefore resize
+/// the list, including the append behavior when a shortened list moves the
+/// next slice beyond its end. Preserve that behavior before the constructor
+/// performs the final exact-length validation.
+fn color3dlut_assign_callback_values(
+    table: &mut Vec<f64>,
+    index: usize,
+    width: usize,
+    values: Vec<f64>,
+) {
+    let start = index.min(table.len());
+    let end = index.saturating_add(width).min(table.len());
+    table.splice(start..end, values);
 }
 
 /// Validates and normalizes the user-facing Color3DLUT size argument.
@@ -167,9 +185,7 @@ where
                     b as f64 / (s3 - 1) as f64,
                 ];
                 let values = callback(&args)?;
-                for (offset, value) in values.into_iter().take(channel_count).enumerate() {
-                    table[index + offset] = value;
-                }
+                color3dlut_assign_callback_values(&mut table, index, channel_count, values);
                 index += channel_count;
             }
         }
@@ -231,14 +247,12 @@ where
                 }
                 args.extend_from_slice(values);
                 let new_values = callback(&args)?;
-                if new_values.len() != output_channels {
-                    return Err(map_error(PilError::ValueError(format!(
-                        "Callback returned {} values, expected {}",
-                        new_values.len(),
-                        output_channels
-                    ))));
-                }
-                output[index_out..index_out + output_channels].copy_from_slice(&new_values);
+                color3dlut_assign_callback_values(
+                    &mut output,
+                    index_out,
+                    output_channels,
+                    new_values,
+                );
                 index_in += input_channels;
                 index_out += output_channels;
             }

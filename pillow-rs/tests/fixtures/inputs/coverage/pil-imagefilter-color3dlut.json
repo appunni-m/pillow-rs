@@ -4,12 +4,32 @@
     {
       "plan_id": "pil-imagefilter-color3dlut.coverage-plan",
       "covers": [
-        "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default"
+        "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.generate.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.size",
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.callback",
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.channels",
+        "PIL.ImageFilter.Color3DLUT.generate.parameter.target-mode",
+        "PIL.ImageFilter.Color3DLUT.transform.behavior.default",
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.callback",
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.with-normals",
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.channels",
+        "PIL.ImageFilter.Color3DLUT.transform.parameter.target-mode"
       ],
       "target_profile": "python-cpu",
       "selectors": {
         "parity_case_ids": [
-          "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default"
+          "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default",
+          "PIL.ImageFilter.Color3DLUT.generate.behavior.default",
+          "PIL.ImageFilter.Color3DLUT.generate.parameter.channels",
+          "PIL.ImageFilter.Color3DLUT.generate.parameter.target-mode",
+          "PIL.ImageFilter.Color3DLUT.transform.behavior.default",
+          "PIL.ImageFilter.Color3DLUT.transform.parameter.with-normals",
+          "PIL.ImageFilter.Color3DLUT.transform.parameter.channels",
+          "PIL.ImageFilter.Color3DLUT.transform.parameter.target-mode",
+          "PIL.ImageFilter.Color3DLUT.generate.nuanced.short-callback-result",
+          "PIL.ImageFilter.Color3DLUT.transform.nuanced.short-callback-result",
+          "PIL.ImageFilter.Color3DLUT.transform.nuanced.rgba-result"
         ],
         "command_ids": []
       },

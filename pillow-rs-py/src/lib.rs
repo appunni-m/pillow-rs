@@ -499,9 +499,9 @@ impl PyImage {
         let format_names = match formats {
             pillow_rs::PythonOpenFormatsInput::None => None,
             pillow_rs::PythonOpenFormatsInput::Names(names) => Some(names),
-            pillow_rs::PythonOpenFormatsInput::Invalid(_) => unreachable!(
-                "validated Image.open formats cannot remain invalid"
-            ),
+            pillow_rs::PythonOpenFormatsInput::Invalid(_) => {
+                unreachable!("validated Image.open formats cannot remain invalid")
+            }
         };
         let format_refs = format_names
             .as_deref()
@@ -2067,6 +2067,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(imaging_core_to_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(exif_compat_fields, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
+    m.add_function(wrap_pyfunction!(imagefont_normalize_layout_engine, m)?)?;
 
     Ok(())
 }
@@ -2097,6 +2098,17 @@ fn imagefont_normalize_bbox(
         font_bbox_value_to_python(py, values[2]),
         font_bbox_value_to_python(py, values[3]),
     )
+}
+
+#[pyfunction]
+fn imagefont_normalize_layout_engine(layout_engine: &Bound<'_, PyAny>) -> PyResult<(String, bool)> {
+    let value = if layout_engine.is_none() {
+        None
+    } else {
+        layout_engine.extract::<i64>().ok()
+    };
+    let (name, requested_raqm) = pillow_rs::normalize_layout_engine(value);
+    Ok((name.to_owned(), requested_raqm))
 }
 
 fn variation_axes_to_python(
@@ -2854,22 +2866,6 @@ fn draw_features_from_python(features: Option<&Bound<'_, PyAny>>) -> (Option<Vec
     }
 }
 
-fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
-    if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
-        return Ok(points);
-    }
-    let flat = xy.extract::<Vec<i32>>()?;
-    if flat.len() < 2 || flat.len() % 2 != 0 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "wrong number of coordinates",
-        ));
-    }
-    Ok(flat
-        .chunks_exact(2)
-        .map(|point| (point[0], point[1]))
-        .collect())
-}
-
 #[pymethods]
 impl PyDraw {
     #[new]
@@ -2888,7 +2884,7 @@ impl PyDraw {
     ) -> PyResult<()> {
         let color = self.color(fill)?;
         let points = draw_points_input_from_python(xy);
-        let w = width.map_or(1, |w| if w > 0 { w } else { 1 });
+        let w = pillow_rs::normalize_draw_width(width);
         self.draw
             .polyline_with_input(points, color, w)
             .map_err(map_error)
@@ -2921,7 +2917,7 @@ impl PyDraw {
                 xy.3,
                 fill_color,
                 out_color,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -2953,7 +2949,7 @@ impl PyDraw {
                 xy.3,
                 fill_color,
                 out_color,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3008,7 +3004,7 @@ impl PyDraw {
                 rotation.unwrap_or(0.0),
                 fill_color,
                 out_color,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3035,7 +3031,7 @@ impl PyDraw {
                 draw_points_input_from_python(xy),
                 fill_color,
                 out_color,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3057,8 +3053,13 @@ impl PyDraw {
             rust_outline.close();
             rust_outline.points.clone()
         } else {
-            extract_draw_points(shape)
-                .map_err(|_| pyo3::exceptions::PyTypeError::new_err("Unsupported shape format"))?
+            let input = draw_points_input_from_python(shape);
+            let fill = fill.map(|_| self.color(fill)).transpose()?;
+            let outline = outline.map(|_| self.color(outline)).transpose()?;
+            return self
+                .draw
+                .shape_with_input(input, fill, outline)
+                .map_err(map_error);
         };
         let fill = fill.map(|_| self.color(fill)).transpose()?;
         let outline = outline.map(|_| self.color(outline)).transpose()?;
@@ -3086,7 +3087,7 @@ impl PyDraw {
                 start,
                 end,
                 color,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3101,8 +3102,8 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill)).transpose()?;
+        let oc = outline.map(|_| self.color(outline)).transpose()?;
         let xy =
             pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
@@ -3115,7 +3116,7 @@ impl PyDraw {
                 end,
                 fc,
                 oc,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3130,8 +3131,8 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill)).transpose()?;
+        let oc = outline.map(|_| self.color(outline)).transpose()?;
         let xy =
             pillow_rs::normalize_draw_box(draw_box_input_from_python(xy)).map_err(map_error)?;
         self.draw
@@ -3144,7 +3145,7 @@ impl PyDraw {
                 end,
                 fc,
                 oc,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3158,15 +3159,15 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill)).transpose()?;
+        let oc = outline.map(|_| self.color(outline)).transpose()?;
         self.draw
             .circle_with_input(
                 draw_circle_center_input_from_python(xy),
                 radius,
                 fc,
                 oc,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
@@ -3180,15 +3181,15 @@ impl PyDraw {
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
-        let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
+        let fc = fill.map(|_| self.color(fill)).transpose()?;
+        let oc = outline.map(|_| self.color(outline)).transpose()?;
         self.draw
             .rounded_rectangle_with_input(
                 draw_box_input_from_python(xy),
                 radius,
                 fc,
                 oc,
-                width.unwrap_or(1),
+                pillow_rs::normalize_draw_width(width),
             )
             .map_err(map_error)
     }
