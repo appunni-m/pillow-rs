@@ -146,6 +146,7 @@ impl Image {
         box_input: PythonPasteBox,
         mask_input: PythonPasteMask,
     ) -> Result<(), PilError> {
+        let destination_mode = self.mode()?;
         let source = match source {
             PythonPasteSource::Image(image) => PasteSource::Image(image),
             PythonPasteSource::Scalar(value) => PasteSource::Scalar(byte_color(value)?),
@@ -159,7 +160,7 @@ impl Image {
                     byte_color(*b)?,
                     byte_color(*a)?,
                 ),
-                _ => return Err(PilError::TypeError("im must be Image or color".to_owned())),
+                _ => return Err(invalid_component_error(&destination_mode)),
             },
             PythonPasteSource::Invalid => {
                 return Err(PilError::TypeError("im must be Image or color".to_owned()));
@@ -577,4 +578,16 @@ fn byte_color(value: i64) -> Result<u8, PilError> {
 
 fn coordinate(value: i64) -> Result<i32, PilError> {
     i32::try_from(value).map_err(|_| PilError::TypeError("coordinates must be integers".to_owned()))
+}
+
+fn invalid_component_error(mode: &str) -> PilError {
+    let message = match mode {
+        "F" => "must be real number, not tuple",
+        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+            "color must be int or single-element tuple"
+        }
+        "LA" | "PA" => "color must be int, or tuple of one or two elements",
+        _ => "color must be int, or tuple of one, three or four elements",
+    };
+    PilError::TypeError(message.to_owned())
 }

@@ -6097,6 +6097,28 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "empty-tuple-error",
+            "mode": "L",
+            "values": {
+                "im": literal([]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "five-tuple-error",
+            "mode": "RGB",
+            "values": {
+                "im": literal([1, 2, 3, 4, 5]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "offset-source",
@@ -7056,6 +7078,36 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "values": {
                 "source": literal([2, 2, 8, 8]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-wrong-arity",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-negative-coordinate",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([-1, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.dest",
+            "name": "dest-wrong-arity",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal([0]),
             },
         },
         {
