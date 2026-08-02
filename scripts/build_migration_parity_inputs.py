@@ -11199,6 +11199,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "info",
+            "requirement_suffix": "behavior.default",
+            "name": "p-transparency-table",
+            "mode": "P",
+            "chain": "p-table-transparency",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "apply_transparency",
             "requirement_suffix": "behavior.default",
             "name": "png-p-transparency-table",
