@@ -1361,6 +1361,7 @@ class WorkflowBuilder:
             parameter_id == "size"
             and self.primary_surface == "PIL.ImageFilter.Color3DLUT"
             and self.primary_operation in {"generate", "transform"}
+            and parameter_id not in self.scenario_values
         ):
             return literal(2)
 
@@ -9627,6 +9628,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "requirement_suffix": "behavior.default",
+            "name": "non-square-size",
+            "values": {
+                "size": literal([3, 5]),
+                "kernel": literal([1.0] * 15),
+            },
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.ImageFilter",
             "operation": "ModeFilter",
             "requirement_suffix": "behavior.default",
             "name": "nonzero-mode-selection",
@@ -9819,6 +9831,17 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.table",
+            "name": "empty-table",
+            "mode": "RGB",
+            "values": {
+                "size": literal(2),
+                "table": literal([]),
+            },
+        },
+        {
             "surface": "PIL.ImageFilter.Color3DLUT",
             "operation": "generate",
             "requirement_suffix": "parameter.callback",
@@ -9826,6 +9849,25 @@ def build_nuanced_cases(
             "values": {
                 "size": literal(2),
                 "callback": literal("color3dlut-short-result"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "generate",
+            "requirement_suffix": "parameter.size",
+            "name": "invalid-size",
+            "values": {
+                "size": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "generate",
+            "requirement_suffix": "parameter.channels",
+            "name": "invalid-channels",
+            "values": {
+                "size": literal(2),
+                "channels": literal(2),
             },
         },
         {
@@ -9845,6 +9887,15 @@ def build_nuanced_cases(
             "values": {
                 "callback": literal("color3dlut-transform-rgba"),
                 "channels": literal(4),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "transform",
+            "requirement_suffix": "parameter.channels",
+            "name": "invalid-channels",
+            "values": {
+                "channels": literal(2),
             },
         },
         {
