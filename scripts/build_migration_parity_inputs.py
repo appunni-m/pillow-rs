@@ -1745,6 +1745,28 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "p-putpalette-resize":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
             elif chain == "p-resize-convert-verify":
                 image_step = self.ensure_image(mode="P")
                 resized_step = self.add_step(
@@ -2045,6 +2067,28 @@ class WorkflowBuilder:
             elif chain == "p-pipeline-paste":
                 destination_step = self.ensure_image(mode="RGB")
                 source_step = self.ensure_image(mode="P", label="source")
+                flipped_step = self.add_step(
+                    "PIL.ImageOps",
+                    "flip",
+                    receiver=None,
+                    arguments={"image": binding(source_step)},
+                    step_id="setup-pipeline-flip",
+                )
+                self.scenario_values["im"] = binding(flipped_step)
+                receiver_step = destination_step
+            elif chain == "p-putpalette-pipeline-paste":
+                destination_step = self.ensure_image(mode="RGB")
+                source_step = self.ensure_image(mode="P", label="source")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(source_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-source-putpalette",
+                )
                 flipped_step = self.add_step(
                     "PIL.ImageOps",
                     "flip",
@@ -8177,6 +8221,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "p-pipeline-source-with-palette",
+            "mode": "RGB",
+            "chain": "p-putpalette-pipeline-paste",
+            "observe_receiver": True,
+            "values": {
+                "box": literal([0, 0, 16, 16]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "load",
             "requirement_suffix": "behavior.default",
             "name": "png-rgb-opened",
@@ -8224,6 +8280,14 @@ def build_nuanced_cases(
             "name": "p-resize-pipeline",
             "mode": "P",
             "chain": "p-resize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "p-putpalette-resize-pipeline",
+            "mode": "P",
+            "chain": "p-putpalette-resize",
         },
         {
             "surface": "PIL.Image.Image",
@@ -9963,6 +10027,14 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "verify",
             "requirement_suffix": "behavior.default",
+            "name": "p-putpalette-resize-pipeline",
+            "mode": "P",
+            "chain": "p-putpalette-resize",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "verify",
+            "requirement_suffix": "behavior.default",
             "name": "p-resize-convert-pipeline",
             "mode": "P",
             "chain": "p-resize-convert-verify",
@@ -10029,6 +10101,7 @@ def build_nuanced_cases(
             "name": "p-putpalette-putalpha-to-rgba",
             "mode": "P",
             "chain": "p-putpalette-putalpha-convert",
+            "observe_receiver": True,
             "values": {"mode": literal("RGBA")},
         },
         {
