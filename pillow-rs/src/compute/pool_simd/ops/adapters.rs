@@ -936,6 +936,7 @@ pub fn simd_pad(
     {
         let fill = match color {
             Some(c) => pack_rgba(*c),
+            None if mode_code == 1 || mode_code == 3 => 0,
             None => 0xFF00_0000u32,
         };
         let (result, nw, nh) = super::scalar::pad(&pixels, w, h, mode_code, *dw, *dh, fill);

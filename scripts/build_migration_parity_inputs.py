@@ -7760,6 +7760,41 @@ def build_nuanced_cases(
             "surface": "PIL.ImageOps",
             "operation": "pad",
             "requirement_suffix": "parameter.color",
+            "name": "rgb-color-name",
+            "mode": "RGB",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal("red"),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "rgba-color-name",
+            "mode": "RGBA",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal("red"),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "invalid-color-name",
+            "mode": "RGB",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal("bad"),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
             "name": "invalid-color-length",
             "mode": "RGB",
             "values": {

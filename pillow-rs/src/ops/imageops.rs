@@ -37,6 +37,8 @@ pub enum ImageOpsMask {
 pub enum ImageOpsColor {
     /// No explicit color was supplied; use the operation default.
     None,
+    /// A named or CSS-style color extracted from the host object.
+    Name(String),
     /// A scalar color value extracted from the host object.
     Scalar(i64),
     /// A color component sequence extracted from the host object.
@@ -77,22 +79,115 @@ fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), Pil
     }
 }
 
-fn resolve_pad_color(input: ImageOpsColor) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
+fn resolve_pad_color(
+    input: ImageOpsColor,
+    mode: &str,
+) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
     fn clamp(value: i64) -> u8 {
         value.clamp(0, i64::from(u8::MAX)) as u8
     }
 
-    match input {
-        ImageOpsColor::None | ImageOpsColor::Invalid => Ok(None),
-        ImageOpsColor::Scalar(value) => {
-            Ok(Some((clamp(value), clamp(value), clamp(value), u8::MAX)))
+    fn is_luma_mode(mode: &str) -> bool {
+        matches!(
+            mode,
+            "1" | "L" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        )
+    }
+
+    fn is_alpha_mode(mode: &str) -> bool {
+        matches!(mode, "LA" | "RGBA" | "PA")
+    }
+
+    fn invalid_color(mode: &str) -> PilError {
+        if mode == "F" {
+            PilError::TypeError("must be real number, not tuple".into())
+        } else if is_luma_mode(mode) {
+            PilError::TypeError("color must be int or single-element tuple".into())
+        } else if mode == "LA" {
+            PilError::TypeError("color must be int, or tuple of one or two elements".into())
+        } else {
+            PilError::TypeError("color must be int, or tuple of one, three or four elements".into())
         }
+    }
+
+    fn scalar(value: i64, mode: &str) -> (u8, u8, u8, u8) {
+        let value = clamp(value);
+        if is_luma_mode(mode) {
+            return (value, value, value, u8::MAX);
+        }
+        if mode == "LA" {
+            return (value, value, value, 0);
+        }
+        if mode == "P" {
+            return (value, 0, 0, u8::MAX);
+        }
+        (value, 0, 0, if is_alpha_mode(mode) { 0 } else { u8::MAX })
+    }
+
+    fn color_value(value: crate::color::ColorValue, mode: &str) -> (u8, u8, u8, u8) {
+        match value {
+            crate::color::ColorValue::Gray(value) => scalar(i64::from(value), mode),
+            crate::color::ColorValue::GrayAlpha(value, alpha) => (
+                clamp(i64::from(value)),
+                clamp(i64::from(value)),
+                clamp(i64::from(value)),
+                clamp(i64::from(alpha)),
+            ),
+            crate::color::ColorValue::Rgb(r, g, b) => (
+                clamp(i64::from(r)),
+                clamp(i64::from(g)),
+                clamp(i64::from(b)),
+                u8::MAX,
+            ),
+            crate::color::ColorValue::Rgba(r, g, b, a) => (
+                clamp(i64::from(r)),
+                clamp(i64::from(g)),
+                clamp(i64::from(b)),
+                clamp(i64::from(a)),
+            ),
+            crate::color::ColorValue::Hsv(h, s, v) => (
+                clamp(i64::from(h)),
+                clamp(i64::from(s)),
+                clamp(i64::from(v)),
+                u8::MAX,
+            ),
+        }
+    }
+
+    match input {
+        ImageOpsColor::None => Ok(None),
+        ImageOpsColor::Invalid => Err(PilError::TypeError("color must be int or tuple".into())),
+        ImageOpsColor::Name(name) => {
+            let (r, g, b, a) = crate::color::parse_color_str(&name)?;
+            let value = crate::color::getcolor(
+                i32::from(r),
+                i32::from(g),
+                i32::from(b),
+                i32::from(a),
+                mode,
+            )?;
+            Ok(Some(color_value(value, mode)))
+        }
+        ImageOpsColor::Scalar(value) => Ok(Some(scalar(value, mode))),
         ImageOpsColor::Components(values) => match values.as_slice() {
-            [r, g, b] => Ok(Some((clamp(*r), clamp(*g), clamp(*b), u8::MAX))),
-            [r, g, b, a] => Ok(Some((clamp(*r), clamp(*g), clamp(*b), clamp(*a)))),
-            _ => Err(PilError::TypeError(
-                "color must be int, or tuple of one, three or four elements".into(),
-            )),
+            [value] => Ok(Some(scalar(*value, mode))),
+            [value, alpha] if mode == "LA" => Ok(Some((
+                clamp(*value),
+                clamp(*value),
+                clamp(*value),
+                clamp(*alpha),
+            ))),
+            [r, g, b] | [r, g, b, _] if !is_luma_mode(mode) && mode != "LA" => Ok(Some((
+                clamp(*r),
+                clamp(*g),
+                clamp(*b),
+                if mode == "RGBA" && values.len() == 4 {
+                    clamp(values[3])
+                } else {
+                    u8::MAX
+                },
+            ))),
+            _ => Err(invalid_color(mode)),
         },
     }
 }
@@ -492,7 +587,7 @@ pub fn pad_with_input(
     let color_was_none = matches!(&color, ImageOpsColor::None);
     let filter = parse_imageops_filter(filter)?;
     let centering = resolve_centering(centering, true)?;
-    let color = resolve_pad_color(color)?;
+    let color = resolve_pad_color(color, &image.mode()?)?;
     if filter_was_none && color_was_none && centering == (0.5, 0.5) {
         return pad(image, w, h, None, color, centering);
     }
