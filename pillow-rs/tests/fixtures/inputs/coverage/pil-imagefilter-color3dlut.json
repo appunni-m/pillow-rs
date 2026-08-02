@@ -28,8 +28,11 @@
           "PIL.ImageFilter.Color3DLUT.transform.parameter.channels",
           "PIL.ImageFilter.Color3DLUT.transform.parameter.target-mode",
           "PIL.ImageFilter.Color3DLUT.generate.nuanced.short-callback-result",
+          "PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-size",
+          "PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-channels",
           "PIL.ImageFilter.Color3DLUT.transform.nuanced.short-callback-result",
-          "PIL.ImageFilter.Color3DLUT.transform.nuanced.rgba-result"
+          "PIL.ImageFilter.Color3DLUT.transform.nuanced.rgba-result",
+          "PIL.ImageFilter.Color3DLUT.transform.nuanced.invalid-channels"
         ],
         "command_ids": []
       },

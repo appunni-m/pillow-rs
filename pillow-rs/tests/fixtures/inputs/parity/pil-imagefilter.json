@@ -7157,6 +7157,97 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFilter.Kernel.nuanced.non-square-size",
+      "surface": "PIL.ImageFilter",
+      "operation": "Kernel",
+      "covers": [
+        "PIL.ImageFilter.Kernel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                5
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0,
+                1.0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-filter"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFilter.ModeFilter.nuanced.nonzero-mode-selection",
       "surface": "PIL.ImageFilter",
       "operation": "ModeFilter",
@@ -8643,6 +8734,78 @@
               "value": [
                 0.0
               ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-filter"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFilter.Color3DLUT.nuanced.empty-table",
+      "surface": "PIL.ImageFilter",
+      "operation": "Color3DLUT",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.parameter.table"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "Color3DLUT",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 2
+            },
+            "table": {
+              "kind": "literal",
+              "value": []
             }
           }
         },

@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2195
-- Unique active workflow signatures: 2195
+- Active parity workflows: 2200
+- Unique active workflow signatures: 2200
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1019
+- Deliberate nuanced workflows: 1024
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -33,8 +33,8 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageEnhance.Color` | 1 |
 | `PIL.ImageEnhance.Contrast` | 1 |
 | `PIL.ImageEnhance.Sharpness` | 1 |
-| `PIL.ImageFilter` | 119 |
-| `PIL.ImageFilter.Color3DLUT` | 11 |
+| `PIL.ImageFilter` | 121 |
+| `PIL.ImageFilter.Color3DLUT` | 14 |
 | `PIL.ImageFont` | 25 |
 | `PIL.ImageFont.FreeTypeFont` | 87 |
 | `PIL.ImageFont.ImageFont` | 13 |
@@ -896,7 +896,10 @@ are not copied into the active lane by name.
 - `PIL.ImageEnhance.Contrast.nuanced.mode-p-reject`
 - `PIL.ImageEnhance.Sharpness.nuanced.mode-1-reject`
 - `PIL.ImageEnhance.Sharpness.nuanced.mode-p-reject`
+- `PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-channels`
+- `PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-size`
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.short-callback-result`
+- `PIL.ImageFilter.Color3DLUT.nuanced.empty-table`
 - `PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-range`
 - `PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-shape`
 - `PIL.ImageFilter.Color3DLUT.nuanced.nested-table`
@@ -906,10 +909,12 @@ are not copied into the active lane by name.
 - `PIL.ImageFilter.Color3DLUT.nuanced.tuple-size`
 - `PIL.ImageFilter.Color3DLUT.nuanced.valid-rgba-target`
 - `PIL.ImageFilter.Color3DLUT.nuanced.wrong-source-mode`
+- `PIL.ImageFilter.Color3DLUT.transform.nuanced.invalid-channels`
 - `PIL.ImageFilter.Color3DLUT.transform.nuanced.rgba-result`
 - `PIL.ImageFilter.Color3DLUT.transform.nuanced.short-callback-result`
 - `PIL.ImageFilter.Kernel.nuanced.bad-size`
 - `PIL.ImageFilter.Kernel.nuanced.five-by-five`
+- `PIL.ImageFilter.Kernel.nuanced.non-square-size`
 - `PIL.ImageFilter.Kernel.nuanced.short-kernel`
 - `PIL.ImageFilter.Kernel.nuanced.three-by-three-edge`
 - `PIL.ImageFilter.ModeFilter.nuanced.explicit-one-mode`
