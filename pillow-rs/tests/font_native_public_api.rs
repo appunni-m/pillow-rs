@@ -416,3 +416,18 @@ fn legacy_core_variants_are_reachable() {
         );
     }
 }
+
+#[test]
+fn fontdone_face_capabilities_reach_pillow_core() {
+    let cff = std::fs::read(fixture_root().join("assets/font/fonts/pure-cff-cubic.otf"))
+        .expect("CFF fixture exists");
+    let cff_font = FreeTypeFont::from_bytes(cff, 20.0).expect("CFF face opens");
+    assert_eq!(cff_font.font_format(), "CFF");
+    assert!(cff_font.is_scalable());
+
+    let type1 = std::fs::read(fixture_root().join("assets/font/fonts/type1-mm-two-axis.pfb"))
+        .expect("Type 1 fixture exists");
+    let type1_font = FreeTypeFont::from_bytes(type1, 20.0).expect("Type 1 face opens");
+    assert_eq!(type1_font.font_format(), "Type 1");
+    assert!(type1_font.is_scalable());
+}

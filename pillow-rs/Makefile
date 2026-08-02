@@ -20,6 +20,7 @@ help:
 	@printf "\nTest:\n"
 	@printf "  make test             Run all Rust tests\n"
 	@printf "  make test-core        Run unit tests (src/)\n"
+	@printf "  make test-font-native Run focused fontdone face integration tests\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make migration-parity-test Run canonical live-oracle migration parity\n"
 	@printf "  make migration-parity-coverage Run target coverage from indexed plans\n"
@@ -54,6 +55,10 @@ test: test-core
 .PHONY: test-core
 test-core:
 	$(CARGO) test --lib --locked
+
+.PHONY: test-font-native
+test-font-native:
+	$(CARGO) test --test font_native_public_api fontdone_face_capabilities_reach_pillow_core --locked
 
 .PHONY: backend-support-matrix
 backend-support-matrix:

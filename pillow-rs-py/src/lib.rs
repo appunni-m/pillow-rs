@@ -2627,6 +2627,16 @@ impl PyFont {
         pillow_rs::imagefont_native_face_attrs(&self.inner).7
     }
 
+    #[getter]
+    fn font_format(&self) -> &'static str {
+        pillow_rs::imagefont_font_format(&self.inner)
+    }
+
+    #[getter]
+    fn is_scalable(&self) -> bool {
+        pillow_rs::imagefont_is_scalable(&self.inner)
+    }
+
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None))]
     fn getlength_with_options(
         &self,

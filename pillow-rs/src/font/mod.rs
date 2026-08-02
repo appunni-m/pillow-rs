@@ -13,7 +13,7 @@ pub(crate) mod pilfont;
 
 /// Pillow `FreeTypeFont`-compatible handle backed by the pure-Rust FreeType path.
 pub struct FreeTypeFont {
-    engine: imagingft::TrueTypeEngine,
+    engine: imagingft::FontEngine,
 }
 
 /// Pillow `ImageFont.ImageFont`-compatible bitmap font handle.
@@ -57,6 +57,37 @@ pub enum ImageFontTextInput {
     Text(String),
     /// Pillow byte text, interpreted as one Latin-1 code point per byte.
     Bytes(Vec<u8>),
+}
+
+/// Native face attributes shared by Pillow's font facade and fontdone.
+///
+/// The loader uses fontdone's generic memory-face entry point, so a
+/// `FreeTypeFont` may represent CFF, Type 1, bitmap, or other supported
+/// FreeType driver formats in addition to TrueType.  Keeping these capability
+/// values in the Rust core prevents bindings from inferring them from a path
+/// suffix or from the Python class name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImageFontFaceInfo<'a> {
+    /// Family name reported by the loaded face, if present.
+    pub family: Option<&'a str>,
+    /// Style name reported by the loaded face, if present.
+    pub style: Option<&'a str>,
+    /// Rounded pixel ascent for the active size.
+    pub ascent: u32,
+    /// Rounded pixel descent for the active size.
+    pub descent: u32,
+    /// Rounded pixel line height for the active size.
+    pub height: u32,
+    /// Horizontal pixels-per-em for the active size.
+    pub x_ppem: u32,
+    /// Vertical pixels-per-em for the active size.
+    pub y_ppem: u32,
+    /// Number of addressable glyphs reported by the face.
+    pub glyphs: i64,
+    /// Font-driver format reported by fontdone.
+    pub format: &'static str,
+    /// Whether the loaded face has scalable outlines.
+    pub is_scalable: bool,
 }
 
 impl ImageFontTextInput {
@@ -309,12 +340,16 @@ impl FreeTypeFont {
         self.multiline_textbbox(xy, &text, spacing, align, options)
     }
 
-    /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
+    /// Load a font face from bytes at the requested Pillow point size.
+    ///
+    /// Pillow calls this constructor `truetype`, but fontdone opens the bytes
+    /// through its generic FreeType-compatible memory-face path.  Supported
+    /// non-TrueType driver formats retain their native face metadata.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
         imagingft::load_truetype(data, size)
     }
 
-    /// Load a TrueType/OpenType face from bytes using Pillow constructor options.
+    /// Load a font face from bytes using Pillow constructor options.
     pub fn from_bytes_with_options(
         data: Vec<u8>,
         size: f32,
@@ -461,6 +496,21 @@ impl FreeTypeFont {
     /// Return Pillow native `_imagingft.Font` public face attributes.
     pub fn native_face_attrs(&self) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
         imagingft::native_face_attrs(self)
+    }
+
+    /// Return the active face capabilities reported by fontdone.
+    pub fn native_face_info(&self) -> ImageFontFaceInfo<'_> {
+        imagingft::native_face_info(self)
+    }
+
+    /// Return the active font-driver format reported by fontdone.
+    pub fn font_format(&self) -> &'static str {
+        self.native_face_info().format
+    }
+
+    /// Return whether the active face has scalable outlines.
+    pub fn is_scalable(&self) -> bool {
+        self.native_face_info().is_scalable
     }
 
     /// Return Pillow's public text length for a Python `bytes` text argument.

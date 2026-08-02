@@ -164,6 +164,7 @@ pub use crate::error::PilError;
 pub use crate::font::FreeTypeFont;
 pub use crate::font::ImageFont;
 pub use crate::font::ImageFontBBoxValue;
+pub use crate::font::ImageFontFaceInfo;
 pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontSourceInput;
 pub use crate::font::ImageFontTextInput;
@@ -448,6 +449,21 @@ pub fn imagefont_native_face_attrs(
     font: &FreeTypeFont,
 ) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
     font.native_face_attrs()
+}
+
+/// Return the active font face capabilities reported by fontdone.
+pub fn imagefont_native_face_info(font: &FreeTypeFont) -> ImageFontFaceInfo<'_> {
+    font.native_face_info()
+}
+
+/// Return the active font-driver format reported by fontdone.
+pub fn imagefont_font_format(font: &FreeTypeFont) -> &'static str {
+    font.font_format()
+}
+
+/// Return whether the active font face has scalable outlines.
+pub fn imagefont_is_scalable(font: &FreeTypeFont) -> bool {
+    font.is_scalable()
 }
 
 /// Return Pillow's public text length for byte text.
