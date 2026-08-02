@@ -65,29 +65,32 @@ class Draw:
         self._draw.bitmap(xy, bitmap._rust_image, fill)
         self._sync()
 
-    def _get_font(self, font, size=None):
-        """Get font, loading default if needed (PIL-compatible)."""
-        if font is not None:
-            if size is not None and hasattr(font, "font_variant"):
-                return font.font_variant(size=size)
-            return font
-        if self._font is not None and size is None:
-            return self._font
-        from . import imagefont as ImageFont
-        self._font = ImageFont.load_default(size=size)
-        return self._font
-
     def multiline_text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
                        align="left", direction=None, features=None, language=None,
                        stroke_width=0, stroke_fill=None, embedded_color=False, **kwargs):
-        """Draw multiple lines of text. Delegates to text() for PIL-parity rendering."""
-        self.text(xy, text, fill=fill, font=font, anchor=anchor, spacing=spacing,
-                  align=align, direction=direction, features=features,
-                  language=language, stroke_width=stroke_width,
-                  stroke_fill=stroke_fill, embedded_color=embedded_color)
+        """Draw multiple lines of text through the Rust drawing path."""
+        if hasattr(font, "_rust_font"):
+            self._draw.multiline_text(
+                xy, str(text), fill, font._rust_font, spacing, direction,
+                features, language, float(stroke_width), anchor,
+                kwargs.get("font_size"),
+            )
+        elif hasattr(font, "getmask"):
+            return self.text(
+                xy, text, fill=fill, font=font, anchor=anchor, spacing=spacing,
+                align=align, direction=direction, features=features,
+                language=language, stroke_width=stroke_width,
+                stroke_fill=stroke_fill, embedded_color=embedded_color,
+            )
+        else:
+            self._draw.multiline_text(
+                xy, str(text), fill, font, spacing, direction, features,
+                language, float(stroke_width), anchor, kwargs.get("font_size"),
+            )
+        self._sync()
+        self._font = font
 
     def textbbox(self, xy, text, font=None, **kwargs):
-        font = self._get_font(font, kwargs.get("font_size"))
         return self._draw.textbbox(
             xy,
             str(text),
@@ -97,27 +100,31 @@ class Draw:
             kwargs.get("language"),
             float(kwargs.get("stroke_width", 0)),
             kwargs.get("anchor"),
+            kwargs.get("font_size"),
         )
 
     def textlength(self, text, font=None, **kwargs):
-        font = self._get_font(font, kwargs.get("font_size"))
         return self._draw.textlength(
             str(text),
             font._rust_font if hasattr(font, "_rust_font") else font,
             kwargs.get("direction"),
             kwargs.get("features"),
             kwargs.get("language"),
+            kwargs.get("font_size"),
         )
 
     def getfont(self):
         """Return the current font."""
-        return self._get_font(None)
+        if self._font is not None:
+            return self._font
+        from . import imagefont as ImageFont
+        self._font = ImageFont.load_default()
+        return self._font
 
     def multiline_textbbox(self, xy, text, font=None, anchor=None, spacing=4, align='left',
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
-        font = self._get_font(font, font_size)
         return self._draw.multiline_textbbox(
             xy,
             str(text),
@@ -129,6 +136,7 @@ class Draw:
             language,
             float(stroke_width),
             anchor,
+            font_size,
         )
 
     def shape(self, shape, fill=None, outline=None):
@@ -144,7 +152,6 @@ class Draw:
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):
-        font = self._get_font(font)
         if hasattr(font, '_rust_font'):
             self._draw.text(
                 (float(xy[0]), float(xy[1])),
@@ -161,6 +168,9 @@ class Draw:
             mask = font.getmask(text, mode="1" if self._orig_mode == "1" else "L")
             self.bitmap(xy, mask, fill=fill)
         else:
-            self._draw.text((float(xy[0]), float(xy[1])), str(text), fill, font)
+            self._draw.text(
+                (float(xy[0]), float(xy[1])), str(text), fill, font,
+                direction, features, language, float(stroke_width), anchor,
+            )
         self._sync()
         self._font = font

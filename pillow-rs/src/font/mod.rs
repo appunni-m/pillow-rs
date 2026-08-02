@@ -36,6 +36,15 @@ pub struct ImageFontLoadOptions {
     pub layout_engine: Option<String>,
 }
 
+/// Host-neutral source supplied to `ImageFont.truetype`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImageFontSourceInput {
+    /// Font bytes read by the host binding from a path or file-like object.
+    Bytes(Vec<u8>),
+    /// A value that was neither a supported path nor a readable stream.
+    Invalid,
+}
+
 /// One Pillow `FreeTypeFont.get_variation_axes()` axis record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImageFontVariationAxis {
@@ -143,6 +152,30 @@ pub enum ImageFontVariationAxesInput {
     Invalid,
 }
 
+/// Run a text operation with Pillow's effective drawing font.
+///
+/// `ImageDraw` resolves an omitted font to the embedded default font and
+/// applies `font_size` by creating a variant. Keeping that policy here lets
+/// every binding pass only an optional Rust font handle and the requested
+/// size; neither binding needs to duplicate the default/variant rules.
+pub(crate) fn with_text_font<T>(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    operation: impl FnOnce(&FreeTypeFont) -> Result<T, PilError>,
+) -> Result<T, PilError> {
+    match (font, size) {
+        (Some(font), None) => operation(font),
+        (Some(font), Some(size)) => {
+            let variant = font.font_variant(Some(size))?;
+            operation(&variant)
+        }
+        (None, size) => {
+            let default = FreeTypeFont::load_default(size.unwrap_or(10.0))?;
+            operation(&default)
+        }
+    }
+}
+
 impl FreeTypeFont {
     /// Computes Pillow's multiline text bounding box.
     ///
@@ -212,6 +245,21 @@ impl FreeTypeFont {
             return Err(PilError::OsError("invalid argument".into()));
         }
         imagingft::load_truetype_with_options(data, size, options)
+    }
+
+    /// Load a font from a host-marshaled source, preserving the public type
+    /// error for values that are not paths or readable file-like objects.
+    pub fn from_source(
+        source: ImageFontSourceInput,
+        size: f32,
+        options: &ImageFontLoadOptions,
+    ) -> Result<Self, PilError> {
+        match source {
+            ImageFontSourceInput::Bytes(data) => Self::from_bytes_with_options(data, size, options),
+            ImageFontSourceInput::Invalid => Err(PilError::TypeError(
+                "font must be a file path or file-like object".into(),
+            )),
+        }
     }
 
     /// Loads the same embedded Aileron Regular subset as Pillow 12.2.0.

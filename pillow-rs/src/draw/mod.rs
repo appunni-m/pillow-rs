@@ -1509,6 +1509,22 @@ impl Draw {
         self.text_with_options_inner(x, y, text, font, fill, options, true)
     }
 
+    /// Draw text using Pillow's optional-font and `font_size` rules.
+    pub fn text_with_optional_font(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: &str,
+        font: Option<&crate::font::FreeTypeFont>,
+        fill: (u8, u8, u8, u8),
+        size: Option<f32>,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        crate::font::with_text_font(font, size, |font| {
+            self.text_with_options(x, y, text, font, fill, options)
+        })
+    }
+
     /// Draws multiline text using the same line stepping as Pillow's public
     /// `ImageDraw.multiline_text` path.
     pub fn multiline_text_with_options(
@@ -1532,6 +1548,23 @@ impl Draw {
             line_y += height as f64 + spacing;
         }
         Ok(())
+    }
+
+    /// Draw multiline text using Pillow's optional-font and `font_size` rules.
+    pub fn multiline_text_with_optional_font(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font: Option<&crate::font::FreeTypeFont>,
+        fill: (u8, u8, u8, u8),
+        spacing: f64,
+        size: Option<f32>,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        crate::font::with_text_font(font, size, |font| {
+            self.multiline_text_with_options(x, y, text, font, fill, spacing, options)
+        })
     }
 
     fn text_with_options_inner(
