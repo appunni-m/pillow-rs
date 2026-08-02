@@ -194,16 +194,27 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
 
     if variant in {
         "le-orientation2",
+        "le-orientation4",
+        "le-orientation5",
+        "le-orientation7",
+        "le-orientation8",
         "standalone-soi",
         "standalone-rst0",
         "eoi-before-app1",
     }:
+        orientation = {
+            "le-orientation2": 2,
+            "le-orientation4": 4,
+            "le-orientation5": 5,
+            "le-orientation7": 7,
+            "le-orientation8": 8,
+        }.get(variant, 2)
         tiff = (
             b"II\x2a\x00"
             + struct.pack("<I", 8)
             + struct.pack("<H", 1)
             + struct.pack("<HHI", 0x0112, 3, 1)
-            + struct.pack("<H", 2)
+            + struct.pack("<H", orientation)
             + b"\x00\x00"
         )
     elif variant == "be-orientation3":
@@ -7819,6 +7830,38 @@ def build_nuanced_cases(
             "surface": "PIL.ImageOps",
             "operation": "exif_transpose",
             "requirement_suffix": "behavior.default",
+            "name": "jpeg-le-orientation4-materialized",
+            "exif_variant": "le-orientation4",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-le-orientation5-materialized",
+            "exif_variant": "le-orientation5",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-le-orientation7-materialized",
+            "exif_variant": "le-orientation7",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-le-orientation8-materialized",
+            "exif_variant": "le-orientation8",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
             "name": "jpeg-be-orientation3-materialized",
             "exif_variant": "be-orientation3",
             "observe_result": "tobytes",
@@ -7903,6 +7946,14 @@ def build_nuanced_cases(
             "exif_variant": "le-orientation2",
             "values": {"in_place": literal(True)},
             "observe_receiver": True,
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "tiff-no-orientation",
+            "scenario_asset": "image/rgb-small.tiff",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.ImageOps",

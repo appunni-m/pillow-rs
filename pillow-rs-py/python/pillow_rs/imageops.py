@@ -99,47 +99,8 @@ def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255,
 
 
 def exif_transpose(image: Image, *, in_place=False):
-    # Capture EXIF before load(): the core retains encoded EXIF only on the
-    # lazy Bytes source, and Pillow's exif_transpose reads orientation before
-    # any pixels are needed.
-    exif_data = image.getexif()
-    # Pillow's getexif() returns an Exif mapping object, while this binding
-    # keeps the encoded payload on the compatibility object.  Feed that
-    # retained payload to the core parser before loading pixels; otherwise
-    # JPEG orientation is silently treated as the default value.
-    raw_exif = (
-        exif_data
-        if isinstance(exif_data, bytes)
-        else getattr(exif_data, "_loaded_exif", None)
-    )
-    image.load()
-    orientation = _core.exif_get_orientation(raw_exif) if raw_exif is not None else None
-    orientation = orientation or 1
-
-    method_map = {
-        # Pillow's Image.Transpose IntEnum values; the target facade converts
-        # the integer back to its canonical transpose name.
-        2: 0, 3: 3, 4: 1, 5: 5, 6: 4, 7: 6, 8: 2,
-    }
-    method = method_map.get(orientation)
-
-    if method is not None:
-        if in_place:
-            transposed = image.transpose(method)
-            image._rust_image = transposed._rust_image
-            image._explicit_mode = transposed._explicit_mode
-        else:
-            result = image.transpose(method)
-
-        if raw_exif is not None and len(raw_exif) >= 14:
-            _core.exif_remove_orientation(raw_exif)
-
-        if not in_place:
-            return result
-        return None
-    elif not in_place:
-        return image.copy()
-    return None
+    result = _core.ops_exif_transpose(image._rust_image, in_place)
+    return None if result is None else Image(result)
 
 
 def deform(image: Image, deformer, resample=None):

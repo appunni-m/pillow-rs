@@ -6,6 +6,7 @@
 
 use pillow_rs::PilError;
 use pillow_rs::{Image as RsImage, PutDataValue};
+use pyo3::ToPyObject;
 use pyo3::exceptions::{
     PyAttributeError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
 };
@@ -37,7 +38,6 @@ use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
-use pyo3::ToPyObject;
 use std::path::PathBuf;
 
 #[pyclass(name = "Image")]
@@ -1674,8 +1674,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(ops_scale, m)?)?;
     m.add_function(wrap_pyfunction!(ops_expand, m)?)?;
     m.add_function(wrap_pyfunction!(ops_crop_border, m)?)?;
-    m.add_function(wrap_pyfunction!(exif_get_orientation, m)?)?;
-    m.add_function(wrap_pyfunction!(exif_remove_orientation, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_exif_transpose, m)?)?;
 
     // ImageChops functions
     m.add_function(wrap_pyfunction!(chops_add, m)?)?;
@@ -3398,16 +3397,23 @@ fn ops_crop_border(image: &Bound<'_, PyImage>, border: u32) -> PyResult<PyImage>
     Ok(PyImage { inner: rs })
 }
 
-/// Extract Orientation tag (0x0112) from raw EXIF bytes. Returns None if not found.
 #[pyfunction]
-fn exif_get_orientation(raw: Vec<u8>) -> Option<u32> {
-    pillow_rs::exif_get_orientation(&raw)
-}
+#[pyo3(signature = (image, in_place=false))]
+fn ops_exif_transpose(image: &Bound<'_, PyImage>, in_place: bool) -> PyResult<Option<PyImage>> {
+    let inner = image.borrow().inner.clone();
+    let result = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs::imageops_exif_transpose(&inner, in_place))
+    })
+    .map_err(map_error)?;
 
-/// Remove Orientation tag from EXIF bytes by zeroing its tag field.
-#[pyfunction]
-fn exif_remove_orientation(raw: Vec<u8>) -> Vec<u8> {
-    pillow_rs::exif_remove_orientation(&raw)
+    if in_place {
+        if let Some(transposed) = result {
+            image.borrow_mut().inner = transposed;
+        }
+        Ok(None)
+    } else {
+        Ok(result.map(|inner| PyImage { inner }))
+    }
 }
 
 // --- ImageChops module-level functions ---
