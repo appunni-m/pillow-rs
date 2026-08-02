@@ -31234,6 +31234,64 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.thumbnail.nuanced.negative-height-zero-size-source",
+      "surface": "PIL.Image.Image",
+      "operation": "thumbnail",
+      "covers": [
+        "PIL.Image.Image.thumbnail.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "thumbnail",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                -1
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.thumbnail.nuanced.negative-height-candidate-zero",
       "surface": "PIL.Image.Image",
       "operation": "thumbnail",
