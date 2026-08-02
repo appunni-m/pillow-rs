@@ -166,6 +166,7 @@ pub use crate::font::ImageFont;
 pub use crate::font::ImageFontBBoxValue;
 pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontSourceInput;
+pub use crate::font::ImageFontTextInput;
 pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxesInput;
@@ -176,6 +177,7 @@ pub use crate::font::pilfont::PilFont;
 pub use crate::font::pilfont::PilFontGlyphImage;
 pub use crate::font::pilfont::PilFontMask;
 pub use crate::font::pilfont::PilFontMode;
+pub use crate::font::pilfont::PilFontTextInput;
 pub use crate::font::transposed_bbox;
 pub use crate::font::validate_transposed_length;
 pub use crate::image::ChannelSelector;
@@ -270,6 +272,7 @@ pub use crate::ops::module_fns::composite as image_composite;
 pub use crate::ops::module_fns::effect_mandelbrot as image_effect_mandelbrot;
 pub use crate::ops::module_fns::effect_mandelbrot_with_extent as image_effect_mandelbrot_with_extent;
 pub use crate::ops::module_fns::effect_noise as image_effect_noise;
+pub use crate::ops::module_fns::effect_noise_from_size as image_effect_noise_from_size;
 pub use crate::ops::module_fns::effect_spread as image_effect_spread;
 pub use crate::ops::module_fns::eval as image_eval;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
@@ -294,6 +297,7 @@ pub use crate::ops::quantize::QuantizePalette;
 pub use crate::ops::resize::ResampleInput;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
+pub use crate::ops::resize::resampling_name_from_int;
 pub use crate::ops::rotate::RotateExpandInput;
 pub use crate::ops::rotate::RotateResampleInput;
 pub use crate::ops::rotate::normalize_python_rotate;
@@ -304,6 +308,7 @@ pub use crate::ops::transform::TransformFill;
 pub use crate::ops::transpose::TransposeInput;
 pub use crate::ops::transpose::normalize_transpose_input;
 pub use crate::ops::transpose::normalize_transposed_font_input;
+pub use crate::ops::transpose::transpose_name_from_int;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]
@@ -424,6 +429,15 @@ pub fn imagefont_native_render(
     options: &ImageFontTextOptions,
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     font.native_render(text, options)
+}
+
+/// Return Pillow native render output for host-classified text input.
+pub fn imagefont_native_render_input(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.native_render_input(text, options)
 }
 
 /// Return Pillow native `_imagingft.Font` public face attributes.
@@ -658,6 +672,15 @@ pub fn imagefont_getbbox_bytes_with_options(
     font.getbbox_bytes_with_options(text, options)
 }
 
+/// Return Pillow's public text bounding box for host-classified text input.
+pub fn imagefont_getbbox_input_with_options(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<(f32, f32, f32, f32), PilError> {
+    font.getbbox_input_with_options(text, options)
+}
+
 /// Return the Pillow-compatible grayscale text mask.
 pub fn imagefont_getmask(font: &FreeTypeFont, text: &str) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.getmask(text)
@@ -705,6 +728,15 @@ pub fn imagefont_getmask_bytes_with_options(
     font.getmask_bytes_with_options(text, options)
 }
 
+/// Return the Pillow-compatible grayscale text mask for host-classified text.
+pub fn imagefont_getmask_input_with_options(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.getmask_input_with_options(text, options)
+}
+
 /// Render a Pillow-compatible mask with a fractional raster start.
 pub fn imagefont_getmask2_with_start(
     font: &FreeTypeFont,
@@ -741,6 +773,24 @@ pub fn imagefont_getmask2_bytes_with_options(
     font.getmask2_bytes_with_options(text, options)
 }
 
+/// Render a Pillow-compatible mask with offset for host-classified text.
+pub fn imagefont_getmask2_input_with_options(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+    font.getmask2_input_with_options(text, options)
+}
+
+/// Return text length for host-classified text input with optional layout.
+pub fn imagefont_getlength_input_with_options(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<f32, PilError> {
+    font.getlength_input_with_options(text, options)
+}
+
 /// Render a font mask and apply Pillow's optional transpose operation.
 pub fn imagefont_get_transposed_mask(
     font: &FreeTypeFont,
@@ -748,6 +798,15 @@ pub fn imagefont_get_transposed_mask(
     orientation: Option<&str>,
 ) -> Result<(u32, u32, Vec<u8>), PilError> {
     font.get_transposed_mask(text, orientation)
+}
+
+/// Return a transposed mask for host-classified text input.
+pub fn imagefont_get_transposed_mask_input(
+    font: &FreeTypeFont,
+    text: ImageFontTextInput,
+    orientation: Option<&str>,
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    font.get_transposed_mask_input(text, orientation)
 }
 
 /// Return Pillow-compatible binary-mode RGBA text rendering.

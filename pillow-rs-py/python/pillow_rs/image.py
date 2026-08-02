@@ -166,9 +166,7 @@ class Image:
     @classmethod
     def effect_noise(cls, size: Tuple[int, int], sigma: float) -> "Image":
         """Generate Gaussian noise image."""
-        blank = cls.new("L", size, 0)
-        result = blank._rust_image.effect_noise(sigma)
-        return cls(result)
+        return cls(RustImage.effect_noise_from_size(size, sigma))
 
     def save(
         self, fp: Union[str, Path], format: Optional[str] = None, **options

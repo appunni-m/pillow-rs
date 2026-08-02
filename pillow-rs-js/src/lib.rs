@@ -2033,8 +2033,7 @@ pub fn effect_mandelbrot(
 
 #[wasm_bindgen(js_name = "effectNoiseFn")]
 pub fn effect_noise(width: u32, height: u32, sigma: f64) -> Result<Image, JsValue> {
-    let blank = RsImage::new(width, height, "L", (0, 0, 0, 255)).map_err(err)?;
-    pillow_rs::image_effect_noise(&blank, sigma)
+    pillow_rs::image_effect_noise_from_size((width, height), sigma)
         .map(|i| Image { inner: i })
         .map_err(err)
 }

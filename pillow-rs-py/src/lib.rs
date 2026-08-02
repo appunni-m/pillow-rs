@@ -7,7 +7,7 @@
 use pillow_rs::PilError;
 use pillow_rs::{Image as RsImage, PutDataValue};
 use pyo3::ToPyObject;
-use pyo3::exceptions::{PySystemError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PySystemError, PyTypeError, PyUserWarning, PyValueError};
 use pyo3::prelude::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
@@ -488,6 +488,13 @@ impl PyImage {
         );
         let img = RsImage::new_with_input(size.0, size.1, mode, input).map_err(map_error)?;
         Ok(PyImage { inner: img })
+    }
+
+    #[staticmethod]
+    #[pyo3(name = "effect_noise_from_size")]
+    fn effect_noise_from_size(size: (u32, u32), sigma: f64) -> PyResult<Self> {
+        let image = pillow_rs::image_effect_noise_from_size(size, sigma).map_err(map_error)?;
+        Ok(PyImage { inner: image })
     }
 
     #[classmethod]
@@ -2073,6 +2080,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(exif_compat_fields, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_layout_engine, m)?)?;
+    m.add_function(wrap_pyfunction!(resampling_from_int, m)?)?;
+    m.add_function(wrap_pyfunction!(transpose_from_int, m)?)?;
 
     Ok(())
 }
@@ -2106,14 +2115,37 @@ fn imagefont_normalize_bbox(
 }
 
 #[pyfunction]
-fn imagefont_normalize_layout_engine(layout_engine: &Bound<'_, PyAny>) -> PyResult<(String, bool)> {
+fn imagefont_normalize_layout_engine(
+    py: Python<'_>,
+    layout_engine: &Bound<'_, PyAny>,
+) -> PyResult<String> {
     let value = if layout_engine.is_none() {
         None
     } else {
         layout_engine.extract::<i64>().ok()
     };
     let (name, requested_raqm) = pillow_rs::normalize_layout_engine(value);
-    Ok((name.to_owned(), requested_raqm))
+    if requested_raqm {
+        PyErr::warn(
+            py,
+            &py.get_type::<PyUserWarning>(),
+            pyo3::ffi::c_str!(
+                "Raqm layout was requested, but Raqm is not available. Falling back to basic layout."
+            ),
+            3,
+        )?;
+    }
+    Ok(name.to_owned())
+}
+
+#[pyfunction]
+fn resampling_from_int(value: i64) -> &'static str {
+    pillow_rs::resampling_name_from_int(value)
+}
+
+#[pyfunction]
+fn transpose_from_int(value: i64) -> &'static str {
+    pillow_rs::transpose_name_from_int(value)
 }
 
 /// Marshal Python's path/file-like font source into core-owned input.
@@ -2133,6 +2165,45 @@ fn imagefont_source_from_python(
         return Ok(pillow_rs::ImageFontSourceInput::Bytes(data));
     }
     Ok(pillow_rs::ImageFontSourceInput::Invalid)
+}
+
+/// Classify a Python font text argument before handing it to the core.
+///
+/// This is deliberately limited to host-object conversion: the core owns the
+/// byte-text interpretation and every font operation consumes the same input
+/// enum.
+fn imagefont_text_input_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::ImageFontTextInput> {
+    if let Ok(bytes) = value.downcast::<PyBytes>() {
+        return Ok(pillow_rs::ImageFontTextInput::Bytes(
+            bytes.as_bytes().to_vec(),
+        ));
+    }
+    Ok(pillow_rs::ImageFontTextInput::Text(
+        value.str()?.to_string(),
+    ))
+}
+
+fn imagefont_start_from_python(value: Option<&Bound<'_, PyAny>>) -> (Option<(f64, f64)>, bool) {
+    let Some(value) = value else {
+        return (None, false);
+    };
+    match value.extract::<(f64, f64)>() {
+        Ok(start) => (Some(start), false),
+        Err(_) => (None, true),
+    }
+}
+
+fn pilfont_text_input_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::PilFontTextInput> {
+    if let Ok(text) = value.extract::<String>() {
+        return Ok(pillow_rs::PilFontTextInput::Text(text));
+    }
+    value
+        .extract::<Vec<u8>>()
+        .map(pillow_rs::PilFontTextInput::Bytes)
 }
 
 fn variation_axes_to_python(
@@ -2211,50 +2282,31 @@ impl PyFont {
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn getbbox_with_options(
         &self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         mode: Option<String>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
     ) -> PyResult<(f32, f32, f32, f32)> {
+        let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
             features,
-            features_invalid: false,
+            features_invalid,
             language,
             stroke_width,
             anchor,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        pillow_rs::imagefont_getbbox_with_options(&self.inner, text, &options).map_err(map_error)
-    }
-
-    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
-    fn getbbox_bytes_with_options(
-        &self,
-        text: Vec<u8>,
-        mode: Option<String>,
-        direction: Option<String>,
-        features: Option<Vec<String>>,
-        language: Option<String>,
-        stroke_width: f32,
-        anchor: Option<String>,
-    ) -> PyResult<(f32, f32, f32, f32)> {
-        let options = pillow_rs::ImageFontTextOptions {
-            mode,
-            direction,
-            features,
-            features_invalid: false,
-            language,
-            stroke_width,
-            anchor,
-            ..pillow_rs::ImageFontTextOptions::default()
-        };
-        pillow_rs::imagefont_getbbox_bytes_with_options(&self.inner, &text, &options)
-            .map_err(map_error)
+        pillow_rs::imagefont_getbbox_input_with_options(
+            &self.inner,
+            imagefont_text_input_from_python(text)?,
+            &options,
+        )
+        .map_err(map_error)
     }
 
     fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
@@ -2268,67 +2320,50 @@ impl PyFont {
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
     fn getmask_alpha_with_options(
         &self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         mode: Option<String>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
         ink: Option<i64>,
-        start: Option<(f64, f64)>,
+        start: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<(u32, u32, Vec<u8>)> {
+        let (features, features_invalid) = draw_features_from_python(features);
+        let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
             features,
-            features_invalid: false,
+            features_invalid,
             language,
             stroke_width,
             anchor,
             ink,
             start,
+            start_invalid,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        pillow_rs::imagefont_getmask_with_options(&self.inner, text, &options).map_err(map_error)
-    }
-
-    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
-    fn getmask_alpha_bytes_with_options(
-        &self,
-        text: Vec<u8>,
-        mode: Option<String>,
-        direction: Option<String>,
-        features: Option<Vec<String>>,
-        language: Option<String>,
-        stroke_width: f32,
-        anchor: Option<String>,
-        ink: Option<i64>,
-        start: Option<(f64, f64)>,
-    ) -> PyResult<(u32, u32, Vec<u8>)> {
-        let options = pillow_rs::ImageFontTextOptions {
-            mode,
-            direction,
-            features,
-            language,
-            stroke_width,
-            anchor,
-            ink,
-            start,
-            ..pillow_rs::ImageFontTextOptions::default()
-        };
-        pillow_rs::imagefont_getmask_bytes_with_options(&self.inner, &text, &options)
-            .map_err(map_error)
+        pillow_rs::imagefont_getmask_input_with_options(
+            &self.inner,
+            imagefont_text_input_from_python(text)?,
+            &options,
+        )
+        .map_err(map_error)
     }
 
     fn get_transposed_mask_image(
         &self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         orientation: Option<&str>,
     ) -> PyResult<PyImage> {
-        let (width, height, pixels) =
-            pillow_rs::imagefont_get_transposed_mask(&self.inner, text, orientation)
-                .map_err(map_error)?;
+        let (width, height, pixels) = pillow_rs::imagefont_get_transposed_mask_input(
+            &self.inner,
+            imagefont_text_input_from_python(text)?,
+            orientation,
+        )
+        .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
         Ok(PyImage { inner })
     }
@@ -2368,73 +2403,43 @@ impl PyFont {
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None, stroke_filled=false, has_args=false, has_kwargs=false))]
     fn getmask2_image_with_options(
         &self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         mode: Option<String>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
         ink: Option<i64>,
-        start: Option<(f64, f64)>,
+        start: Option<&Bound<'_, PyAny>>,
         stroke_filled: bool,
         has_args: bool,
         has_kwargs: bool,
     ) -> PyResult<(PyImage, (i32, i32))> {
+        let (features, features_invalid) = draw_features_from_python(features);
+        let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
             features,
-            features_invalid: false,
+            features_invalid,
             language,
             stroke_width,
             stroke_filled,
             anchor,
+            anchor_invalid_length_error: false,
             ink,
             start,
+            start_invalid,
             has_args,
             has_kwargs,
         };
-        let (width, height, pixels, offset) =
-            pillow_rs::imagefont_getmask2_with_options(&self.inner, text, &options)
-                .map_err(map_error)?;
-        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
-        Ok((PyImage { inner }, offset))
-    }
-
-    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None, stroke_filled=false, has_args=false, has_kwargs=false))]
-    fn getmask2_image_bytes_with_options(
-        &self,
-        text: Vec<u8>,
-        mode: Option<String>,
-        direction: Option<String>,
-        features: Option<Vec<String>>,
-        language: Option<String>,
-        stroke_width: f32,
-        anchor: Option<String>,
-        ink: Option<i64>,
-        start: Option<(f64, f64)>,
-        stroke_filled: bool,
-        has_args: bool,
-        has_kwargs: bool,
-    ) -> PyResult<(PyImage, (i32, i32))> {
-        let options = pillow_rs::ImageFontTextOptions {
-            mode,
-            direction,
-            features,
-            features_invalid: false,
-            language,
-            stroke_width,
-            stroke_filled,
-            anchor,
-            ink,
-            start,
-            has_args,
-            has_kwargs,
-        };
-        let (width, height, pixels, offset) =
-            pillow_rs::imagefont_getmask2_bytes_with_options(&self.inner, &text, &options)
-                .map_err(map_error)?;
+        let (width, height, pixels, offset) = pillow_rs::imagefont_getmask2_input_with_options(
+            &self.inner,
+            imagefont_text_input_from_python(text)?,
+            &options,
+        )
+        .map_err(map_error)?;
         let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
         Ok((PyImage { inner }, offset))
     }
@@ -2459,32 +2464,43 @@ impl PyFont {
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, stroke_filled=false, anchor=None, ink=None, start=None))]
     fn render_with_options(
         &self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         mode: Option<String>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         stroke_filled: bool,
         anchor: Option<String>,
         ink: Option<i64>,
-        start: Option<(f64, f64)>,
-    ) -> PyResult<(u32, u32, Vec<u8>, (i32, i32))> {
+        start: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<(PyImage, (i32, i32))> {
+        let (features, features_invalid) = draw_features_from_python(features);
+        let (start, start_invalid) = imagefont_start_from_python(start);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
             features,
-            features_invalid: false,
+            features_invalid,
             language,
             stroke_width,
             stroke_filled,
             anchor,
+            anchor_invalid_length_error: false,
             ink,
             start,
+            start_invalid,
             has_args: false,
             has_kwargs: false,
         };
-        pillow_rs::imagefont_native_render(&self.inner, text, &options).map_err(map_error)
+        let (width, height, pixels, offset) = pillow_rs::imagefont_native_render_input(
+            &self.inner,
+            imagefont_text_input_from_python(text)?,
+            &options,
+        )
+        .map_err(map_error)?;
+        let inner = RsImage::from_luma_mask(width, height, pixels).map_err(map_error)?;
+        Ok((PyImage { inner }, offset))
     }
 
     #[getter]
@@ -2534,40 +2550,27 @@ impl PyFont {
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None))]
     fn getlength_with_options(
         &self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         mode: Option<String>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
     ) -> PyResult<f32> {
+        let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             mode,
             direction,
             features,
+            features_invalid,
             language,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        pillow_rs::imagefont_getlength_with_options(&self.inner, text, &options).map_err(map_error)
-    }
-
-    #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None))]
-    fn getlength_bytes_with_options(
-        &self,
-        text: Vec<u8>,
-        mode: Option<String>,
-        direction: Option<String>,
-        features: Option<Vec<String>>,
-        language: Option<String>,
-    ) -> PyResult<f32> {
-        let options = pillow_rs::ImageFontTextOptions {
-            mode,
-            direction,
-            features,
-            language,
-            ..pillow_rs::ImageFontTextOptions::default()
-        };
-        pillow_rs::imagefont_getlength_bytes_with_options(&self.inner, &text, &options)
-            .map_err(map_error)
+        pillow_rs::imagefont_getlength_input_with_options(
+            &self.inner,
+            imagefont_text_input_from_python(text)?,
+            &options,
+        )
+        .map_err(map_error)
     }
 
     fn getmetrics(&self) -> (u32, u32) {
@@ -2730,16 +2733,30 @@ impl PyPilFont {
             .collect()
     }
 
-    fn getsize(&self, text: Vec<u8>) -> PyResult<(i32, i32)> {
-        self.inner.getsize(&text).map_err(map_error)
+    fn getsize(&self, text: &Bound<'_, PyAny>) -> PyResult<(i32, i32)> {
+        self.inner
+            .getsize_input(pilfont_text_input_from_python(text)?)
+            .map_err(map_error)
+    }
+
+    fn getbbox(&self, text: &Bound<'_, PyAny>) -> PyResult<(i32, i32, i32, i32)> {
+        self.inner
+            .getbbox_input(pilfont_text_input_from_python(text)?)
+            .map_err(map_error)
+    }
+
+    fn getlength(&self, text: &Bound<'_, PyAny>) -> PyResult<i32> {
+        self.inner
+            .getlength_input(pilfont_text_input_from_python(text)?)
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (text, mode=""))]
-    fn getmask(&self, text: Vec<u8>, mode: &str) -> PyResult<PyImage> {
+    fn getmask(&self, text: &Bound<'_, PyAny>, mode: &str) -> PyResult<PyImage> {
         let _ = mode;
         let image = self
             .inner
-            .getmask(&text)
+            .getmask_input(pilfont_text_input_from_python(text)?)
             .and_then(|mask| mask.to_image())
             .map_err(map_error)?;
         Ok(PyImage { inner: image })
@@ -3259,6 +3276,7 @@ impl PyDraw {
             language,
             stroke_width,
             anchor,
+            anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
         };
         let borrowed = font.map(|font| font.borrow());
@@ -3299,6 +3317,7 @@ impl PyDraw {
             language,
             stroke_width,
             anchor,
+            anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
         };
         let borrowed = font.map(|font| font.borrow());
@@ -3339,6 +3358,7 @@ impl PyDraw {
             language,
             stroke_width,
             anchor,
+            anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
         };
         let borrowed = font.map(|font| font.borrow());
@@ -3406,6 +3426,7 @@ impl PyDraw {
             language,
             stroke_width,
             anchor,
+            anchor_invalid_length_error: true,
             ..pillow_rs::ImageFontTextOptions::default()
         };
         let borrowed = font.map(|font| font.borrow());
