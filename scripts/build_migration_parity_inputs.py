@@ -8758,6 +8758,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "requirement_suffix": "behavior.default",
+            "name": "p-forces-nearest",
+            "observe_receiver": True,
+            "mode": "P",
+            "values": {
+                "size": literal([4, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba",

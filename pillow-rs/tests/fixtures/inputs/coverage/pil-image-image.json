@@ -1267,6 +1267,7 @@
           "PIL.Image.Image.resize.nuanced.p-pipeline-resize-resize",
           "PIL.Image.Image.thumbnail.nuanced.zero-width",
           "PIL.Image.Image.thumbnail.nuanced.zero-height",
+          "PIL.Image.Image.thumbnail.nuanced.p-forces-nearest",
           "PIL.Image.Image.getcolors.nuanced.opened-rgba",
           "PIL.Image.Image.getcolors.nuanced.opened-p",
           "PIL.Image.Image.getcolors.nuanced.la-nonzero",
