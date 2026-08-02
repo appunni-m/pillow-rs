@@ -45,6 +45,28 @@ pub enum ImageFontSourceInput {
     Invalid,
 }
 
+/// Host-neutral text input for Pillow's font methods.
+///
+/// Bindings only classify the host value as text or byte text. The conversion
+/// to Pillow's byte-preserving text representation belongs to the core so all
+/// font-facing bindings use the same behavior.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImageFontTextInput {
+    /// Unicode text supplied by the host.
+    Text(String),
+    /// Pillow byte text, interpreted as one Latin-1 code point per byte.
+    Bytes(Vec<u8>),
+}
+
+impl ImageFontTextInput {
+    fn into_text(self) -> String {
+        match self {
+            Self::Text(text) => text,
+            Self::Bytes(bytes) => pillow_bytes_to_text(&bytes),
+        }
+    }
+}
+
 /// One Pillow `FreeTypeFont.get_variation_axes()` axis record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImageFontVariationAxis {
@@ -112,8 +134,14 @@ pub struct ImageFontTextOptions {
     pub stroke_filled: bool,
     /// Pillow two-character anchor code.
     pub anchor: Option<String>,
+    /// Whether the ImageDraw compatibility surface uses its legacy
+    /// diagnostic for an anchor with the wrong length.
+    pub anchor_invalid_length_error: bool,
     /// Pillow fractional rendering start.
     pub start: Option<(f64, f64)>,
+    /// Whether the host supplied a value that is not a two-item start
+    /// sequence. The public error is produced by the core renderer.
+    pub start_invalid: bool,
     /// Pillow foreground ink for mask rendering. Grayscale BASIC masks accept
     /// the integer but render coverage bytes independent of its value.
     pub ink: Option<i64>,
@@ -375,6 +403,16 @@ impl FreeTypeFont {
         imagingft::native_render(self, text, options)
     }
 
+    /// Return native render output after applying Pillow's text-input rules.
+    pub fn native_render_input(
+        &self,
+        text: ImageFontTextInput,
+        options: &ImageFontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        let text = text.into_text();
+        self.native_render(&text, options)
+    }
+
     /// Return Pillow native `_imagingft.Font` public face attributes.
     pub fn native_face_attrs(&self) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
         imagingft::native_face_attrs(self)
@@ -480,6 +518,46 @@ impl FreeTypeFont {
         self.getbbox_with_options(&text, options)
     }
 
+    /// Return a text bounding box after applying Pillow's text-input rules.
+    pub fn getbbox_input_with_options(
+        &self,
+        text: ImageFontTextInput,
+        options: &ImageFontTextOptions,
+    ) -> Result<(f32, f32, f32, f32), PilError> {
+        let text = text.into_text();
+        self.getbbox_with_options(&text, options)
+    }
+
+    /// Return text length after applying Pillow's text-input rules.
+    pub fn getlength_input_with_options(
+        &self,
+        text: ImageFontTextInput,
+        options: &ImageFontTextOptions,
+    ) -> Result<f32, PilError> {
+        let text = text.into_text();
+        self.getlength_with_options(&text, options)
+    }
+
+    /// Render a mask after applying Pillow's text-input rules.
+    pub fn getmask_input_with_options(
+        &self,
+        text: ImageFontTextInput,
+        options: &ImageFontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        let text = text.into_text();
+        self.getmask_with_options(&text, options)
+    }
+
+    /// Render a mask with offset after applying Pillow's text-input rules.
+    pub fn getmask2_input_with_options(
+        &self,
+        text: ImageFontTextInput,
+        options: &ImageFontTextOptions,
+    ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        let text = text.into_text();
+        self.getmask2_with_options(&text, options)
+    }
+
     /// Return Pillow's public binary-mode text bounding box.
     #[cfg(feature = "test-api")]
     pub fn getbbox_binary(&self, text: &str) -> Result<(i32, i32, i32, i32), PilError> {
@@ -549,6 +627,16 @@ impl FreeTypeFont {
         orientation: Option<&str>,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
         imagingft::get_transposed_mask(self, text, orientation)
+    }
+
+    /// Return a transposed mask after applying Pillow's text-input rules.
+    pub fn get_transposed_mask_input(
+        &self,
+        text: ImageFontTextInput,
+        orientation: Option<&str>,
+    ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        let text = text.into_text();
+        self.get_transposed_mask(&text, orientation)
     }
 
     /// Return Pillow-compatible binary-mode RGBA text rendering.

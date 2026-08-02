@@ -280,6 +280,12 @@ pub fn effect_noise(image: &Image, sigma: f64) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::EffectNoise { sigma }))
 }
 
+/// Generates a Gaussian-noise `L` image for Pillow's module-level effect.
+pub fn effect_noise_from_size(size: (u32, u32), sigma: f64) -> Result<Image, PilError> {
+    let source = Image::new(size.0, size.1, "L", (0, 0, 0, 255))?;
+    effect_noise(&source, sigma)
+}
+
 /// Spreads pixels outward by up to `distance` pixels.
 ///
 /// # Errors

@@ -17,6 +17,19 @@ const RESAMPLE_GUIDANCE: &str = concat!(
     "Image.Resampling.BOX (4) or Image.Resampling.HAMMING (5)"
 );
 
+/// Returns Pillow's symbolic resampling name for an integer enum value.
+pub fn resampling_name_from_int(value: i64) -> &'static str {
+    match value {
+        0 => "NEAREST",
+        1 => "LANCZOS",
+        2 => "BILINEAR",
+        3 => "BICUBIC",
+        4 => "BOX",
+        5 => "HAMMING",
+        _ => "BILINEAR",
+    }
+}
+
 fn unknown_resample(value: impl std::fmt::Display) -> PilError {
     PilError::ValueError(format!(
         "Unknown resampling filter ({}). {}",

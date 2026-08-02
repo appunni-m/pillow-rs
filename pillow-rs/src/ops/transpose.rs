@@ -13,6 +13,20 @@ pub enum TransposeInput {
     Invalid(String),
 }
 
+/// Returns Pillow's symbolic transpose name for an integer enum value.
+pub fn transpose_name_from_int(value: i64) -> &'static str {
+    match value {
+        0 => "FLIP_LEFT_RIGHT",
+        1 => "FLIP_TOP_BOTTOM",
+        2 => "ROTATE_90",
+        3 => "ROTATE_180",
+        4 => "ROTATE_270",
+        5 => "TRANSPOSE",
+        6 => "TRANSVERSE",
+        _ => "FLIP_LEFT_RIGHT",
+    }
+}
+
 /// Normalize the integer-or-name orientation accepted by `TransposedFont`.
 ///
 /// The Python facade stores the public value unchanged; this helper owns the

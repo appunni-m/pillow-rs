@@ -707,7 +707,12 @@ pub(crate) fn getbbox_with_options(
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
     let bbox = bbox_from_run_with_flags(font, text, text_load_flags(options))?;
-    let (left, top, right, bottom) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
+    let (left, top, right, bottom) = anchored_bbox(
+        font,
+        bbox,
+        options.anchor.as_deref(),
+        options.anchor_invalid_length_error,
+    )?;
     let stroke = options.stroke_width;
     Ok((left - stroke, top - stroke, right + stroke, bottom + stroke))
 }
@@ -765,6 +770,11 @@ pub(crate) fn getmask2_with_options(
 ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
+    if options.start_invalid {
+        return Err(PilError::TypeError(
+            "render() argument 11 must be 2-item sequence, not float".into(),
+        ));
+    }
     // Pillow's BASIC `getmask2` accepts mode="RGBA" as a renderer hint and
     // still returns the ordinary grayscale mask. The mode is used by some
     // drivers, but it is not an error condition for this public endpoint.
@@ -792,7 +802,12 @@ pub(crate) fn getmask2_with_options(
             load_flags
         },
     )?;
-    let (left, top, _, _) = anchored_bbox(font, bbox, options.anchor.as_deref())?;
+    let (left, top, _, _) = anchored_bbox(
+        font,
+        bbox,
+        options.anchor.as_deref(),
+        options.anchor_invalid_length_error,
+    )?;
     let left = left - options.stroke_width;
     let top = top - options.stroke_width;
     let offset = if options.stroke_width != 0.0 {
@@ -849,14 +864,18 @@ fn anchored_bbox(
     font: &FreeTypeFont,
     (left, top, right, bottom): (i32, i32, i32, i32),
     anchor: Option<&str>,
+    invalid_length_uses_legacy_error: bool,
 ) -> Result<(f32, f32, f32, f32), PilError> {
     let Some(anchor) = anchor else {
         return Ok((left as f32, top as f32, right as f32, bottom as f32));
     };
     if anchor.len() != 2 {
-        return Err(PilError::ValueError(
-            "anchor must be a 2 character string".into(),
-        ));
+        if invalid_length_uses_legacy_error {
+            return Err(PilError::ValueError(
+                "anchor must be a 2 character string".into(),
+            ));
+        }
+        return Err(bad_anchor_error(anchor));
     }
     let width = right - left;
     let ascent = pixel(font.engine.metrics.ascender);

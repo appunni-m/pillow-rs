@@ -1,4 +1,5 @@
 """Enumerations and constants matching Pillow's API."""
+from . import _core
 
 
 class ImageMode:
@@ -40,15 +41,7 @@ class Resampling:
 
     @classmethod
     def from_int(cls, value: int) -> str:
-        mapping = {
-            0: "NEAREST",
-            1: "LANCZOS",
-            2: "BILINEAR",
-            3: "BICUBIC",
-            4: "BOX",
-            5: "HAMMING",
-        }
-        return mapping.get(value, "BILINEAR")
+        return _core.resampling_from_int(value)
 
 
 class Transpose:
@@ -62,16 +55,7 @@ class Transpose:
 
     @classmethod
     def from_int(cls, value: int) -> str:
-        mapping = {
-            0: "FLIP_LEFT_RIGHT",
-            1: "FLIP_TOP_BOTTOM",
-            2: "ROTATE_90",
-            3: "ROTATE_180",
-            4: "ROTATE_270",
-            5: "TRANSPOSE",
-            6: "TRANSVERSE",
-        }
-        return mapping.get(value, "FLIP_LEFT_RIGHT")
+        return _core.transpose_from_int(value)
 
 
 class Dither:

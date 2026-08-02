@@ -3361,6 +3361,38 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_textbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "three-line-spacing",
+            "values": {
+                "text": literal("A\nBB\nC"),
+                "spacing": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_textbbox",
+            "requirement_suffix": "parameter.align",
+            "name": "centered-lines",
+            "values": {
+                "text": literal("A\nBBB\nC"),
+                "spacing": literal(2),
+                "align": literal("center"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_textbbox",
+            "requirement_suffix": "parameter.align",
+            "name": "right-aligned-lines",
+            "values": {
+                "text": literal("A\nBBB\nC"),
+                "spacing": literal(2),
+                "align": literal("right"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "textbbox",
             "requirement_suffix": "parameter.text",
             "name": "unicode-anchor",

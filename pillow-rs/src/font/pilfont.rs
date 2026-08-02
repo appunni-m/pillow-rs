@@ -26,6 +26,33 @@ pub enum PilFontMode {
     Luma,
 }
 
+/// Host-neutral text input for the legacy PILfont API.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PilFontTextInput {
+    /// Unicode text that must be representable in Pillow's Latin-1 font table.
+    Text(String),
+    /// Raw Pillow byte text.
+    Bytes(Vec<u8>),
+}
+
+impl PilFontTextInput {
+    fn into_bytes(self) -> Result<Vec<u8>, PilError> {
+        match self {
+            Self::Bytes(bytes) => Ok(bytes),
+            Self::Text(text) => text
+                .chars()
+                .map(|character| {
+                    u8::try_from(character as u32).map_err(|_| {
+                        PilError::ValueError(
+                            "character cannot be encoded in the PILfont Latin-1 table".into(),
+                        )
+                    })
+                })
+                .collect(),
+        }
+    }
+}
+
 impl PilFontMode {
     /// Returns Pillow's mode name.
     pub fn as_str(self) -> &'static str {
@@ -280,6 +307,32 @@ impl PilFont {
         Ok((self.textwidth(text)?, self.ysize))
     }
 
+    /// Returns the size after applying the host text-input rules.
+    pub fn getsize_input(&self, text: PilFontTextInput) -> Result<(i32, i32), PilError> {
+        self.getsize(&text.into_bytes()?)
+    }
+
+    /// Returns the Pillow bitmap-font bounding box for Latin-1 bytes.
+    pub fn getbbox(&self, text: &[u8]) -> Result<(i32, i32, i32, i32), PilError> {
+        let (width, height) = self.getsize(text)?;
+        Ok((0, 0, width, height))
+    }
+
+    /// Returns the bounding box after applying the host text-input rules.
+    pub fn getbbox_input(&self, text: PilFontTextInput) -> Result<(i32, i32, i32, i32), PilError> {
+        self.getbbox(&text.into_bytes()?)
+    }
+
+    /// Returns the Pillow bitmap-font horizontal advance for Latin-1 bytes.
+    pub fn getlength(&self, text: &[u8]) -> Result<i32, PilError> {
+        self.getsize(text).map(|(width, _)| width)
+    }
+
+    /// Returns the horizontal advance after applying the host text-input rules.
+    pub fn getlength_input(&self, text: PilFontTextInput) -> Result<i32, PilError> {
+        self.getlength(&text.into_bytes()?)
+    }
+
     /// Renders Latin-1 bytes using Pillow's PILfont placement rules.
     pub fn getmask(&self, text: &[u8]) -> Result<PilFontMask, PilError> {
         validate_text_length(text)?;
@@ -328,6 +381,11 @@ impl PilFont {
             mode: self.mode,
             pixels,
         })
+    }
+
+    /// Renders a mask after applying the host text-input rules.
+    pub fn getmask_input(&self, text: PilFontTextInput) -> Result<PilFontMask, PilError> {
+        self.getmask(&text.into_bytes()?)
     }
 
     fn textwidth(&self, text: &[u8]) -> Result<i32, PilError> {

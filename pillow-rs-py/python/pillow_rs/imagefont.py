@@ -1,5 +1,4 @@
 """ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
-import warnings
 from enum import IntEnum
 
 from . import _core
@@ -14,14 +13,7 @@ class Layout(IntEnum):
 
 
 def _normalize_layout_engine(layout_engine):
-    layout_engine_name, requested_raqm = _core.imagefont_normalize_layout_engine(layout_engine)
-    if requested_raqm:
-        warnings.warn(
-            "Raqm layout was requested, but Raqm is not available. "
-            "Falling back to basic layout.",
-            stacklevel=3,
-        )
-    return layout_engine_name
+    return _core.imagefont_normalize_layout_engine(layout_engine)
 
 
 class ImagingCore:
@@ -141,23 +133,21 @@ class _NativeFont:
     ):
         from .image import Image as PILImage
 
-        width, height, pixels, offset = self._rust_font.render_with_options(
-            str(text),
+        image, offset = self._rust_font.render_with_options(
+            text,
             mode,
             direction,
             features,
             language,
-            float(stroke_width),
-            bool(stroke_filled),
+            stroke_width,
+            stroke_filled,
             anchor,
             ink,
             start,
         )
-        size = (width, height)
+        size = image.size
         fill(*size)
-        if width == 0 or height == 0:
-            return ImagingCore(None, "L", size, bytes(pixels)), offset
-        return ImagingCore(PILImage.frombytes("L", size, bytes(pixels))), offset
+        return ImagingCore(PILImage(image)), offset
 
 
 class ImageFont:
@@ -165,24 +155,16 @@ class ImageFont:
 
     def getbbox(self, text, *args, **kwargs):
         """Return the bitmap font's bounding box."""
-        width, height = self.font.getsize(_pilfont_text(text))
-        return 0, 0, width, height
+        return self.font.getbbox(text)
 
     def getlength(self, text, *args, **kwargs):
         """Return the bitmap font's horizontal advance."""
-        width, _height = self.font.getsize(_pilfont_text(text))
-        return width
+        return self.font.getlength(text)
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Return the loaded bitmap font's native mask object."""
         from .image import Image as PILImage
-        return ImagingCore(PILImage(self.font.getmask(_pilfont_text(text), mode)))
-
-
-def _pilfont_text(text):
-    if isinstance(text, str):
-        return text.encode("latin-1")
-    return text
+        return ImagingCore(PILImage(self.font.getmask(text, mode)))
 
 
 def _pillow_bbox_tuple(bbox):
@@ -235,23 +217,12 @@ class FreeTypeFont:
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
-        if isinstance(text, bytes):
-            return _pillow_bbox_tuple(self._rust_font.getbbox_bytes_with_options(
-                text, mode, direction, features, language,
-                float(stroke_width), anchor
-            ))
-        text = str(text)
         return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
             text, mode, direction, features, language,
-            float(stroke_width), anchor
+            stroke_width, anchor
         ))
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
-        if isinstance(text, bytes):
-            return self._rust_font.getlength_bytes_with_options(
-                text, mode, direction, features, language
-            )
-        text = str(text)
         return self._rust_font.getlength_with_options(
             text, mode, direction, features, language
         )
@@ -260,17 +231,10 @@ class FreeTypeFont:
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
-        if isinstance(text, bytes):
-            w, h, alpha = self._rust_font.getmask_alpha_bytes_with_options(
-                text, mode, direction, features, language,
-                float(stroke_width), anchor, ink, start
-            )
-        else:
-            text = str(text)
-            w, h, alpha = self._rust_font.getmask_alpha_with_options(
-                text, mode, direction, features, language,
-                float(stroke_width), anchor, ink, start
-            )
+        w, h, alpha = self._rust_font.getmask_alpha_with_options(
+            text, mode, direction, features, language,
+            stroke_width, anchor, ink, start
+        )
         return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
@@ -297,19 +261,11 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
-        if isinstance(text, bytes):
-            image, offset = self._rust_font.getmask2_image_bytes_with_options(
-                text, mode, direction, features, language,
-                float(stroke_width), anchor, ink, start,
-                bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
-            )
-        else:
-            text = str(text)
-            image, offset = self._rust_font.getmask2_image_with_options(
-                text, mode, direction, features, language,
-                float(stroke_width), anchor, ink, start,
-                bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
-            )
+        image, offset = self._rust_font.getmask2_image_with_options(
+            text, mode, direction, features, language,
+            stroke_width, anchor, ink, start,
+            bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
+        )
         return ImagingCore(PILImage(image)), offset
 
     def getmetrics(self):
@@ -422,10 +378,8 @@ class TransposedFont:
         """Create a bitmap for the text, optionally transposed."""
         if isinstance(self.font, FreeTypeFont):
             from .image import Image as PILImage
-            if isinstance(text, bytes):
-                text = text.decode("latin-1")
             image = self.font._rust_font.get_transposed_mask_image(
-                str(text), self._orientation_name
+                text, self._orientation_name
             )
             return ImagingCore(PILImage(image))
         im = self.font.getmask(text, mode, *args, **kwargs)
@@ -466,12 +420,8 @@ def load_path(filename):
 
 def load_default(size=None):
     """Load Pillow's embedded Aileron Regular subset with BASIC layout."""
-    if size is None:
-        size = 10
-    return FreeTypeFont._from_rust_font(
-        _core.ImageFont.load_default(float(size)),
-        size=size,
-    )
+    rust_font = _core.ImageFont.load_default(size)
+    return FreeTypeFont._from_rust_font(rust_font, size=rust_font.get_size())
 
 
 def load_default_imagefont():
