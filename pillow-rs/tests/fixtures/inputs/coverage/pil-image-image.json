@@ -1306,6 +1306,7 @@
           "PIL.Image.Image.paste.nuanced.color-two-tuple-box",
           "PIL.Image.Image.paste.nuanced.color-zero-region",
           "PIL.Image.Image.paste.nuanced.region-mask-mismatch",
+          "PIL.Image.Image.paste.nuanced.truthy-non-image-mask",
           "PIL.Image.Image.paste.nuanced.p-source-into-pa",
           "PIL.Image.Image.paste.nuanced.p-pipeline-source",
           "PIL.Image.Image.paste.nuanced.p-pipeline-source-with-palette",
