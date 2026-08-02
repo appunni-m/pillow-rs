@@ -5293,6 +5293,85 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.autocontrast.nuanced.mask-size-mismatch",
+      "surface": "PIL.ImageOps",
+      "operation": "autocontrast",
+      "covers": [
+        "PIL.ImageOps.autocontrast.parameter.mask"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-mask-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "autocontrast",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "mask": {
+              "kind": "binding",
+              "step_id": "setup-mask-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.equalize.nuanced.valid-l-mask",
       "surface": "PIL.ImageOps",
       "operation": "equalize",
@@ -5342,6 +5421,85 @@
               "value": [
                 16,
                 16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "equalize",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "mask": {
+              "kind": "binding",
+              "step_id": "setup-mask-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.equalize.nuanced.mask-size-mismatch",
+      "surface": "PIL.ImageOps",
+      "operation": "equalize",
+      "covers": [
+        "PIL.ImageOps.equalize.parameter.mask"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-mask-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
               ]
             },
             "color": {
