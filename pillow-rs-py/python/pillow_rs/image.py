@@ -52,20 +52,7 @@ class _ExifCompat:
         self._hidden_data = {}
         self._ifds = {}
         self._info = None
-        self._loaded_exif = raw if raw and loaded_exif else None
-        self._loaded = True
-        if raw:
-            payload = raw[6:] if raw.startswith(b"Exif\x00\x00") else raw
-            self.fp = None
-            self.head = payload[:8]
-            # Pillow only records Exif.endian after accepting the TIFF magic;
-            # malformed metadata still exposes ``head`` but has no endian
-            # attribute.  Keep the compatibility record aligned for public
-            # encoded-input parity cases.
-            if len(payload) >= 4 and payload[2:4] in {b"\x2a\x00", b"\x00\x2a"}:
-                self.endian = "<" if payload[:2] == b"II" else ">"
-            if not loaded_exif:
-                self.bigtiff = False
+        self.__dict__.update(_core.exif_compat_fields(raw, loaded_exif))
 
 
 class PyCapsule:
