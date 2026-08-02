@@ -358,8 +358,6 @@ fn legacy_core_variants_are_reachable() {
     let _ = font.native_getvaraxes();
     let _ = font.native_setvarname(1);
     let _ = font.set_variation_by_name(b"Missing");
-    // Negative fractional start collapses the mask canvas ("bad image size").
-    let _ = font.getmask2_with_start("A", (-100.0, -100.0));
     // The stroked mask path has its own collapse check.
     let _ = font.getmask2_with_options(
         "A",

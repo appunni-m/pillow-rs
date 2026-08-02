@@ -148,6 +148,8 @@
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.fractional-start",
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped",
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-vertical-clipped",
+          "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.zero-height-mask",
+          "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.vertical-glyph-clipped",
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-collapse",
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-height-collapse",
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-stroked-collapse",

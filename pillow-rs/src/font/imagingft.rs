@@ -1485,7 +1485,11 @@ fn new_stroker(library: &ffi::FT_Library) -> Result<StrokerGuard, PilError> {
 }
 
 fn positive_dimension_collapsed(base: i32, adjusted: i32) -> bool {
-    base > 0 && adjusted <= 0
+    // Pillow 12.2.0 `_imagingft.c::font_render_impl` accepts an exactly
+    // zero-sized mask dimension when `start` consumes the base dimension;
+    // only a negative result raises "bad image size".  `Image::from_luma_mask`
+    // likewise preserves a legal `(width, 0)` mask with no pixel bytes.
+    base > 0 && adjusted < 0
 }
 
 fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
