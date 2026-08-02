@@ -157,7 +157,7 @@ impl Image {
             }
             ReduceBox::Sequence(values) => {
                 return Err(PilError::TypeError(format!(
-                    "box must be a 4-item sequence, not {}",
+                    "argument 2 must be sequence of length 4, not {}",
                     values.len()
                 )));
             }
