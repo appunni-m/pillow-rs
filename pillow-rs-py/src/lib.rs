@@ -6,7 +6,6 @@
 
 use pillow_rs::PilError;
 use pillow_rs::{Image as RsImage, PutDataValue};
-use pyo3::ToPyObject;
 use pyo3::exceptions::{
     PyAttributeError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
 };
@@ -38,6 +37,7 @@ use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
+use pyo3::ToPyObject;
 use std::path::PathBuf;
 
 #[pyclass(name = "Image")]
@@ -3205,14 +3205,18 @@ fn ops_grayscale(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
 #[pyfunction]
 fn ops_colorize(
     image: &Bound<'_, PyImage>,
-    black: (u8, u8, u8),
-    white: (u8, u8, u8),
-    mid: Option<(u8, u8, u8)>,
+    black: &Bound<'_, PyAny>,
+    white: &Bound<'_, PyAny>,
+    mid: Option<&Bound<'_, PyAny>>,
     blackpoint: u8,
     midpoint: u8,
     whitepoint: u8,
 ) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
+    pillow_rs::imageops_validate_colorize_mode(&inner).map_err(map_error)?;
+    let black = parse_colorize_color(black)?;
+    let white = parse_colorize_color(white)?;
+    let mid = mid.map(parse_colorize_color).transpose()?;
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
             pillow_rs::imageops_colorize(
@@ -3222,6 +3226,23 @@ fn ops_colorize(
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
+}
+
+fn parse_colorize_color(value: &Bound<'_, PyAny>) -> PyResult<(u8, u8, u8)> {
+    if let Ok(color) = value.extract::<String>() {
+        let (r, g, b, _) = pillow_rs::parse_color_str(&color).map_err(map_error)?;
+        return Ok((r, g, b));
+    }
+    if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
+        return Ok((r, g, b));
+    }
+    if let Ok((r, g, b, _)) = value.extract::<(u8, u8, u8, u8)>() {
+        return Ok((r, g, b));
+    }
+    if value.is_instance_of::<PyInt>() {
+        return Err(PyTypeError::new_err("'int' object is not subscriptable"));
+    }
+    Err(PyTypeError::new_err("color must be a color name or tuple"))
 }
 
 #[pyfunction]

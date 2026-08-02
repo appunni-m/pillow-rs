@@ -206,6 +206,7 @@ pub use crate::ops::imageops::pad as imageops_pad;
 pub use crate::ops::imageops::posterize as imageops_posterize;
 pub use crate::ops::imageops::scale as imageops_scale;
 pub use crate::ops::imageops::solarize as imageops_solarize;
+pub use crate::ops::imageops::validate_colorize_mode as imageops_validate_colorize_mode;
 pub use crate::ops::module_fns::blend as image_blend;
 pub use crate::ops::module_fns::composite as image_composite;
 pub use crate::ops::module_fns::effect_mandelbrot as image_effect_mandelbrot;
