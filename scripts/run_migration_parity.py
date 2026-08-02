@@ -421,6 +421,15 @@ def _call_arguments(
             and name == "image_or_list"
             and descriptor.get("kind") == "literal"
         )
+        # ImageFont.FreeTypeFont.set_variation_by_axes has a list-only public
+        # contract. Preserve that host sequence so the fixture reaches the
+        # Rust variation setter instead of failing in the PyO3 type adapter.
+        preserve_lists = preserve_lists or (
+            opdef["source"].get("path")
+            == "PIL.ImageFont.FreeTypeFont.set_variation_by_axes"
+            and name == "axes"
+            and descriptor.get("kind") == "literal"
+        )
         value = resolve_descriptor(
             descriptor,
             bindings,
