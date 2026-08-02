@@ -8769,6 +8769,153 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-i16",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "cBE=",
+          "sha256": "07130c0071b1e03ff2d95e7127f342f94fbdb67de8b46e77afa094bcb4395649",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-i16l",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "cBE=",
+          "sha256": "07130c0071b1e03ff2d95e7127f342f94fbdb67de8b46e77afa094bcb4395649",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-i16b",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "EXA=",
+          "sha256": "a519b4462ef694cc40ac88af6c6cc7b51887880b81b634f66ee958f829bdb858",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16B"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.frombytes.nuanced.valid-ycbcr",
       "surface": "PIL.Image",
       "operation": "frombytes",
@@ -8945,6 +9092,55 @@
             "mode": {
               "kind": "literal",
               "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.nuanced.zero-size-i16n",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16N"
             },
             "size": {
               "kind": "literal",
@@ -9578,6 +9774,166 @@
             "color": {
               "kind": "literal",
               "value": -123456
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.integer-scalar-i16",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 70000
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.integer-scalar-i16l",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 70000
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.integer-scalar-i16b",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16B"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 70000
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.integer-scalar-i16n",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16N"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 70000
             }
           }
         }

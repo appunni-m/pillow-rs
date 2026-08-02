@@ -391,6 +391,12 @@ pub fn resolve_new_color(
             return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
         }
     }
+    if matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N") {
+        if let Some(v) = int32_val {
+            let bytes = (v as u16).to_le_bytes();
+            return Ok((bytes[0], bytes[1], 0, 0));
+        }
+    }
     if let Some(v) = single_value {
         // PIL: single int for multi-band images = first band = value, rest = 0
         return Ok((v, 0, 0, 0));
