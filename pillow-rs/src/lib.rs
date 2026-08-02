@@ -149,6 +149,7 @@ pub use crate::compute::backend_enabled;
 pub use crate::compute::disable_backend;
 pub use crate::compute::enable_backend;
 pub use crate::draw::Draw;
+pub use crate::draw::DrawPointsInput;
 pub use crate::draw::RegularPolygonCircle;
 pub use crate::draw::RegularPolygonSides;
 pub use crate::draw::outline_curve_points;

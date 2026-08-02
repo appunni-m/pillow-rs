@@ -33,23 +33,6 @@ class Draw:
         raise TypeError("coordinate list must contain exactly 2 coordinates")
 
     @staticmethod
-    def _points(xy):
-        """Normalize flat and paired point sequences with Pillow errors."""
-        try:
-            values = list(xy)
-        except TypeError as exc:
-            raise TypeError("coordinate list must contain at least 2 coordinates") from exc
-        if not values:
-            raise TypeError("coordinate list must contain at least 2 coordinates")
-        if isinstance(values[0], (list, tuple)):
-            if len(values) < 2 or any(len(point) != 2 for point in values):
-                raise TypeError("coordinate list must contain at least 2 coordinates")
-            return tuple((int(point[0]), int(point[1])) for point in values)
-        if len(values) < 4 or len(values) % 2:
-            raise TypeError("coordinate list must contain at least 2 coordinates")
-        return tuple((int(values[index]), int(values[index + 1])) for index in range(0, len(values), 2))
-
-    @staticmethod
     def _text_options(anchor, direction, features, language):
         if anchor is not None and (not isinstance(anchor, str) or len(anchor) != 2):
             raise ValueError("anchor must be a 2 character string")
@@ -57,13 +40,7 @@ class Draw:
             raise KeyError("setting text direction, language or font features is not supported without libraqm")
 
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
-        if len(xy) < 2 or (
-            len(xy) == 2
-            and not isinstance(xy[0], (list, tuple))
-            and not isinstance(xy[1], (list, tuple))
-        ):
-            return None
-        self._draw.line(self._points(xy), fill, width if width > 0 else 1)
+        self._draw.line(xy, fill, width)
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
@@ -81,7 +58,7 @@ class Draw:
         self._sync()
 
     def polygon(self, xy, fill=None, outline=None, width: int = 1):
-        self._draw.polygon(self._points(xy), fill, outline, width)
+        self._draw.polygon(xy, fill, outline, width)
         self._sync()
 
     def point(self, xy, fill=None):
