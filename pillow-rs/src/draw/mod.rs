@@ -1607,6 +1607,13 @@ impl Draw {
         if binary && options.mode.is_none() {
             options.mode = Some("1".to_string());
         }
+        if options.stroke_width != 0.0 {
+            // Pillow's ImageDraw.text path requests the outside-border
+            // variant of the FreeType stroke helper. Keep this policy in the
+            // Rust draw core so Python/JS bindings only forward public text
+            // arguments and cannot silently select the getmask2 default.
+            options.stroke_filled = true;
+        }
         let color_mask = options.uses_color_mask();
         if color_mask && options.ink.is_none() {
             // Pillow's RGBA font mask stores the draw fill in the mask's RGB

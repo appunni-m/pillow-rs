@@ -17363,6 +17363,136 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgba-stroked",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "text",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.text.parameter.stroke-width"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/sbit-bgra-format1.ttf",
+          "sha256": "20189ba8c4c98024ff5887cba2099c7a5d8d46d7f4dd5e2d31be8815718f881d",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-font-3",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "text",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "literal",
+              "value": "\ue000"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                200,
+                10,
+                20,
+                200
+              ]
+            },
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-3"
+            },
+            "stroke_width": {
+              "kind": "literal",
+              "value": 1
+            },
+            "embedded_color": {
+              "kind": "literal",
+              "value": true
+            }
+          }
+        },
+        {
+          "step_id": "observe-image",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-image"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.three-line-spacing",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "multiline_text",
@@ -17428,6 +17558,84 @@
             "text": {
               "kind": "literal",
               "value": "A\nB\nC"
+            },
+            "spacing": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.empty-line-spacing",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "multiline_text",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.multiline_text.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "multiline_text",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "literal",
+              "value": "A\n\nB"
             },
             "spacing": {
               "kind": "literal",
