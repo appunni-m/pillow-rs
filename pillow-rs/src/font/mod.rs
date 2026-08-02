@@ -5,6 +5,7 @@
 //! FreeType-core helper APIs.
 
 use crate::error::PilError;
+use crate::image::Image;
 
 mod default_aileron;
 pub(crate) mod imagingft;
@@ -167,6 +168,25 @@ impl ImageFontTextOptions {
     #[must_use]
     pub fn uses_color_mask(&self) -> bool {
         self.mode.as_deref() == Some("RGBA") || (self.embedded_color && self.stroke_width == 0.0)
+    }
+}
+
+/// Wrap font-rendered mask bytes in the Pillow image representation.
+///
+/// Font rendering and mask-mode selection belong to the Rust core. Bindings
+/// only translate the resulting [`Image`] into their host-language image
+/// handle; they do not decide whether a render is an `L` or `RGBA` mask or
+/// reconstruct the pixel storage themselves.
+pub fn mask_image(
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+    options: &ImageFontTextOptions,
+) -> Result<Image, PilError> {
+    if options.uses_color_mask() {
+        Image::frombytes("RGBA", (width, height), &pixels)
+    } else {
+        Image::from_luma_mask(width, height, pixels)
     }
 }
 

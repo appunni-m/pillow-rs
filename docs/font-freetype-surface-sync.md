@@ -42,7 +42,7 @@ Observed through the repo-local Pillow `11.3.0` oracle
 | `FT_Glyph_Stroke` | stroke rendering | one lower-level glyph-stroke route implemented; general Font mask path still blocked |
 | `FT_Glyph_StrokeBorder` | stroke rendering | missing from current Font surface |
 | `FT_Stroker_Done` | stroke cleanup | implemented in lower-level stroker lifecycle; Font mask path still blocked |
-| `FT_Palette_Set_Foreground_Color` | color glyph foreground | missing from current Font surface |
+| `FT_Palette_Set_Foreground_Color` | color glyph foreground | used before color-mask glyph loads; fontdone resolves COLR foreground-index paints from the requested Pillow ink |
 | `FT_Get_MM_Var` | variation names/axes | exposed through variation names/axes and manifest rows |
 | `FT_Done_MM_Var` | variation cleanup | not used |
 | `FT_Get_Sfnt_Name_Count` | variation display names | behavior covered through parsed name-table fallback rows |
@@ -66,6 +66,7 @@ Function endpoints used:
 - `FT_Load_Glyph`
 - `FT_Set_Named_Instance`
 - `FT_Set_Var_Design_Coordinates`
+- `FT_Palette_Set_Foreground_Color`
 
 Constants, flags, error codes, and data structs are used only to drive those
 paths or classify their results. They are not public `pillow-rs` API.
@@ -85,8 +86,10 @@ Known gaps to add fixtures or implementation for:
   `font_variant` remain separate from the core plumbing; recognized tags now
   reach `fontdone::ffi::FT_Select_Charmap`, while unknown tags retain Pillow's
   default fallback.
-- Color glyph foreground/palette behavior beyond the current grayscale/BGRA
-  fixture rows.
+- Color glyph palette compositing beyond the current grayscale/BGRA fixture
+  rows. The Pillow adapter now forwards the requested RGB ink into
+  `fontdone`'s face foreground state before each color-mask render, but
+  broader COLR/CPAL compositing remains lower-engine scope.
 - `getbbox` still computes from the loaded slot CBox instead of exactly routing
   through Pillow's copied-glyph `FT_Get_Glyph` + `FT_Glyph_Get_CBox` sequence.
   Current public rows match, but this is still an implementation-shape

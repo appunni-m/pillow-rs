@@ -171,6 +171,7 @@ pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxesInput;
 pub use crate::font::ImageFontVariationAxis;
+pub use crate::font::mask_image as imagefont_mask_image;
 pub use crate::font::normalize_font_bbox;
 pub use crate::font::normalize_layout_engine;
 pub use crate::font::pilfont::PilFont;
