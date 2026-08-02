@@ -3386,7 +3386,9 @@ fn ops_pad(
     let color = match color {
         None => pillow_rs::ImageOpsColor::None,
         Some(color) => {
-            if let Ok(value) = color.extract::<i64>() {
+            if let Ok(value) = color.extract::<String>() {
+                pillow_rs::ImageOpsColor::Name(value)
+            } else if let Ok(value) = color.extract::<i64>() {
                 pillow_rs::ImageOpsColor::Scalar(value)
             } else if let Ok(values) = color.extract::<Vec<i64>>() {
                 pillow_rs::ImageOpsColor::Components(values)

@@ -96,6 +96,17 @@ pub fn parse_color_str(s: &str) -> Result<(u8, u8, u8, u8), crate::error::PilErr
             "unknown color specifier: '{lowered}'"
         )));
     }
+    // `csscolorparser` accepts bare hexadecimal words such as `bad` and
+    // `deadbeef`, while Pillow only accepts hexadecimal colors with a leading
+    // `#`; unprefixed values are looked up as named colors instead.
+    if !lowered.starts_with('#')
+        && matches!(lowered.len(), 3 | 4 | 6 | 8)
+        && lowered.bytes().all(|byte| byte.is_ascii_hexdigit())
+    {
+        return Err(crate::error::PilError::ValueError(format!(
+            "unknown color specifier: '{lowered}'"
+        )));
+    }
     let c = csscolorparser::parse(s).map_err(|_| {
         crate::error::PilError::ValueError(format!("unknown color specifier: '{lowered}'"))
     })?;
