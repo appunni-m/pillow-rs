@@ -3268,6 +3268,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.mode",
+            "name": "mode-rgba-embedded-bgra",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "mode": literal("RGBA"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "get_variation_axes",
             "requirement_suffix": "behavior.default",
             "name": "variable-font",
@@ -3570,12 +3581,48 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.embedded-color",
+            "name": "embedded-bgra-rgb",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "fill": literal([200, 10, 20]),
+                "embedded_color": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.embedded-color",
+            "name": "embedded-bgra-rgba",
+            "mode": "RGBA",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "fill": literal([200, 10, 20, 200]),
+                "embedded_color": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "multiline_text",
             "requirement_suffix": "parameter.text",
             "name": "three-line-spacing",
             "values": {
                 "text": literal("A\nB\nC"),
                 "spacing": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_text",
+            "requirement_suffix": "parameter.font-size",
+            "name": "explicit-font-size",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": literal("Hello\nworld"),
+                "font_size": literal(24),
             },
         },
         {
