@@ -187,6 +187,7 @@ pub use crate::image::FormattedImageData;
 pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
+pub use crate::image::ImageSequenceIterator;
 pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;

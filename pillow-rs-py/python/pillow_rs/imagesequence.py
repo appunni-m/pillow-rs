@@ -1,25 +1,10 @@
 """ImageSequence — multi-frame image iteration. Pillow-compatible module."""
 
+from . import _core
 
-class Iterator:
-    """Iterate over frames in a multi-frame image."""
 
-    def __init__(self, im):
-        if not hasattr(im, "seek"):
-            raise AttributeError("im must have seek method")
-        self.im = im
-        self.position = getattr(self.im, "_min_frame", 0)
+# The iterator state machine and public error behavior live in Rust. Keep this
+# module as the stable Pillow-shaped import path for the extension type.
+Iterator = _core.Iterator
 
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        try:
-            self.im.seek(self.position)
-            self.position += 1
-            return self.im
-        except EOFError as error:
-            # Match Pillow's ImageSequence.Iterator: only the image's public
-            # end-of-sequence signal becomes StopIteration. Other seek errors
-            # remain observable to callers.
-            raise StopIteration("end of sequence") from error
+__all__ = ["Iterator"]
