@@ -8769,6 +8769,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode-specialized-path",
+            "observe_result": "tobytes",
+            "mode": "F",
+            "values": {
+                "size": literal([4, 4]),
+                "resample": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgba",
