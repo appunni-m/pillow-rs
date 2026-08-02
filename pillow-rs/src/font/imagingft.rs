@@ -25,13 +25,15 @@ pub(super) struct TrueTypeEngine {
     font_bytes: Vec<u8>,
     face_index: usize,
     pub(super) size_pt: f32,
+    encoding: Option<String>,
+    layout_engine: Option<String>,
     family_name: Option<String>,
     style_name: Option<String>,
     metrics: ffi::FT_Size_Metrics,
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
-    load_truetype_with_index(data, size, 0)
+    load_truetype_with_index(data, size, 0, None, None)
 }
 
 pub(super) fn load_truetype_with_options(
@@ -39,14 +41,21 @@ pub(super) fn load_truetype_with_options(
     size: f32,
     options: &ImageFontLoadOptions,
 ) -> Result<FreeTypeFont, PilError> {
-    let _pillow_accepted_public_options = (&options.encoding, &options.layout_engine);
-    load_truetype_with_index(data, size, options.index.unwrap_or(0))
+    load_truetype_with_index(
+        data,
+        size,
+        options.index.unwrap_or(0),
+        options.encoding.clone(),
+        options.layout_engine.clone(),
+    )
 }
 
 fn load_truetype_with_index(
     data: Vec<u8>,
     size: f32,
     face_index: usize,
+    encoding: Option<String>,
+    layout_engine: Option<String>,
 ) -> Result<FreeTypeFont, PilError> {
     if !(size > 0.0) {
         return Err(PilError::ValueError(format!(
@@ -84,6 +93,8 @@ fn load_truetype_with_index(
         font_bytes: data,
         face_index,
         size_pt: size,
+        encoding,
+        layout_engine,
         family_name,
         style_name,
         metrics,
@@ -464,13 +475,24 @@ pub(crate) fn font_variant_with_options(
     font: &FreeTypeFont,
     options: &ImageFontVariantOptions,
 ) -> Result<FreeTypeFont, PilError> {
-    load_truetype_with_index(
+    let load_options = ImageFontLoadOptions {
+        index: Some(options.index.unwrap_or(font.engine.face_index)),
+        encoding: options
+            .encoding
+            .clone()
+            .or_else(|| font.engine.encoding.clone()),
+        layout_engine: options
+            .layout_engine
+            .clone()
+            .or_else(|| font.engine.layout_engine.clone()),
+    };
+    load_truetype_with_options(
         options
             .font_bytes
             .clone()
             .unwrap_or_else(|| font.engine.font_bytes.clone()),
         options.size.unwrap_or(font.engine.size_pt),
-        options.index.unwrap_or(font.engine.face_index),
+        &load_options,
     )
 }
 

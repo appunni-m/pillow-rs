@@ -163,9 +163,9 @@ def run_case(case: dict[str, Any]) -> str:
     elif operation == "font_size":
         font.size
     elif operation == "font_variant":
-        # The public wrapper reconstructs the font without touching the core
-        # variant path; this coverage-only command exercises the binding's
-        # native font_variant so the core function is measured.
+        # Keep one direct native call in this coverage-only corpus so the
+        # public PyO3 method and the core variant implementation are both
+        # measured even when the public Python object only observes its type.
         font._rust_font.font_variant(size=params.get("size"))
     elif operation == "has_variations":
         font._rust_font.has_variations()
