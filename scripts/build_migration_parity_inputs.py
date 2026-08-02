@@ -3343,6 +3343,26 @@ def build_nuanced_cases(
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask2",
             "requirement_suffix": "parameter.start",
+            "name": "zero-height-mask",
+            "values": {
+                "text": literal("Aj"),
+                "start": literal([0.0, -19.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "vertical-glyph-clipped",
+            "values": {
+                "text": literal("Aj"),
+                "start": literal([0.0, -18.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
             "name": "negative-start-collapse",
             "values": {
                 "text": literal("A"),
