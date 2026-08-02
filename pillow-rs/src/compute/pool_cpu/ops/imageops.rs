@@ -3,7 +3,7 @@
 //! invert, flip, mirror, posterize, solarize, grayscale, colorize,
 //! contain, cover, fit, pad, scale, expand, and crop border.
 
-use crate::raster::{DynamicImage, GenericImage, GenericImageView};
+use crate::raster::{DynamicImage, GenericImage};
 
 use crate::color::pil_grayscale;
 
@@ -447,8 +447,8 @@ pub fn op_pad(
     let cx = centering.0.clamp(0.0, 1.0);
     let cy = centering.1.clamp(0.0, 1.0);
     let src_rgba = resized.to_rgba8();
-    // For RGBA images, PIL's paste alpha-composites the source over the destination.
-    // We match this by blending source alpha with destination background.
+    // Pillow's ImageOps.pad uses Image.paste without a mask, so the resized
+    // source replaces the destination pixels even when the source has alpha.
     if nw != w {
         let ox = bankers_round((w as f64 - nw as f64) * cx) as u32;
         for py in 0..nh.min(h) {
@@ -456,19 +456,7 @@ pub fn op_pad(
                 let dx = ox + px;
                 if dx < w {
                     let sp = *src_rgba.get_pixel(px, py);
-                    let dp = padded.get_pixel(dx, py);
-                    let sa = sp[3] as u32;
-                    let da = dp[3] as u32;
-                    let oa = sa + (da * (255u32 - sa)) / 255;
-                    if oa > 0 {
-                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255)
-                            / oa) as u8;
-                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255)
-                            / oa) as u8;
-                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255)
-                            / oa) as u8;
-                        padded.put_pixel(dx, py, crate::raster::Rgba([or, og, ob, oa as u8]));
-                    }
+                    padded.put_pixel(dx, py, sp);
                 }
             }
         }
@@ -479,19 +467,7 @@ pub fn op_pad(
                 let dy = oy + py;
                 if dy < h {
                     let sp = *src_rgba.get_pixel(px, py);
-                    let dp = padded.get_pixel(px, dy);
-                    let sa = sp[3] as u32;
-                    let da = dp[3] as u32;
-                    let oa = sa + (da * (255u32 - sa)) / 255;
-                    if oa > 0 {
-                        let or = ((sp[0] as u32 * sa + dp[0] as u32 * da * (255u32 - sa) / 255)
-                            / oa) as u8;
-                        let og = ((sp[1] as u32 * sa + dp[1] as u32 * da * (255u32 - sa) / 255)
-                            / oa) as u8;
-                        let ob = ((sp[2] as u32 * sa + dp[2] as u32 * da * (255u32 - sa) / 255)
-                            / oa) as u8;
-                        padded.put_pixel(px, dy, crate::raster::Rgba([or, og, ob, oa as u8]));
-                    }
+                    padded.put_pixel(px, dy, sp);
                 }
             }
         }

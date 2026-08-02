@@ -159,6 +159,9 @@ fn centering_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::Centeri
         return pillow_rs::CenteringInput::Scalar(value);
     }
     if let Ok(values) = value.extract::<Vec<f64>>() {
+        if values == [0.5, 0.5] {
+            return pillow_rs::CenteringInput::Default;
+        }
         return pillow_rs::CenteringInput::Values(values);
     }
     pillow_rs::CenteringInput::Invalid
@@ -168,10 +171,17 @@ fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::Ima
     let Some(value) = value else {
         return pillow_rs::ImageOpsMask::None;
     };
-    value
-        .downcast::<PyImage>()
-        .map(|mask| pillow_rs::ImageOpsMask::Image(mask.borrow().inner.clone()))
-        .unwrap_or(pillow_rs::ImageOpsMask::Invalid)
+    if let Ok(mask) = value.downcast::<PyImage>() {
+        return pillow_rs::ImageOpsMask::Image(mask.borrow().inner.clone());
+    }
+    // The public Python ImageOps facade supplies its high-level Image wrapper;
+    // unwrap only its opaque core handle here so validation remains in Rust.
+    if let Ok(inner) = value.getattr("_rust_image")
+        && let Ok(mask) = inner.downcast::<PyImage>()
+    {
+        return pillow_rs::ImageOpsMask::Image(mask.borrow().inner.clone());
+    }
+    pillow_rs::ImageOpsMask::Invalid
 }
 
 #[pyfunction]
@@ -3334,10 +3344,10 @@ fn ops_fit(
     size: (u32, u32),
     filter: Option<&Bound<'_, PyAny>>,
     bleed: Option<f64>,
-    centering: Option<&Bound<'_, PyAny>>,
+    centering: &Bound<'_, PyAny>,
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
-    let centering = centering_from_python(centering);
+    let centering = centering_from_python(Some(centering));
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
@@ -3361,10 +3371,10 @@ fn ops_pad(
     size: (u32, u32),
     filter: Option<&Bound<'_, PyAny>>,
     color: Option<&Bound<'_, PyAny>>,
-    centering: Option<&Bound<'_, PyAny>>,
+    centering: &Bound<'_, PyAny>,
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
-    let centering = centering_from_python(centering);
+    let centering = centering_from_python(Some(centering));
     let color = match color {
         None => pillow_rs::ImageOpsColor::None,
         Some(color) => {

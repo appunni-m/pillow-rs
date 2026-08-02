@@ -69,36 +69,37 @@ fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), Pil
             "cannot unpack non-iterable float object".into(),
         )),
         CenteringInput::Values(values) if values.len() == 2 => Ok((values[0], values[1])),
-        CenteringInput::Values(values) => Err(PilError::ValueError(format!(
-            "centering must be a 2-item sequence, not {}",
-            values.len()
-        ))),
+        CenteringInput::Values(values) if values.len() < 2 => Err(PilError::ValueError(
+            format!("not enough values to unpack (expected 2, got {})", values.len()),
+        )),
+        CenteringInput::Values(_) => Err(PilError::ValueError(
+            "too many values to unpack (expected 2)".into(),
+        )),
         CenteringInput::Invalid => Err(PilError::TypeError(
-            "centering must be a 2-item sequence".into(),
+            "cannot unpack non-iterable NoneType object".into(),
         )),
     }
 }
 
-fn resolve_pad_color(input: ImageOpsColor) -> Option<(u8, u8, u8, u8)> {
+fn resolve_pad_color(input: ImageOpsColor) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
+    fn clamp(value: i64) -> u8 {
+        value.clamp(0, i64::from(u8::MAX)) as u8
+    }
+
     match input {
-        ImageOpsColor::None | ImageOpsColor::Invalid => None,
-        ImageOpsColor::Scalar(value) => u8::try_from(value)
-            .ok()
-            .map(|value| (value, value, value, u8::MAX)),
+        ImageOpsColor::None | ImageOpsColor::Invalid => Ok(None),
+        ImageOpsColor::Scalar(value) => Ok(Some((
+            clamp(value),
+            clamp(value),
+            clamp(value),
+            u8::MAX,
+        ))),
         ImageOpsColor::Components(values) => match values.as_slice() {
-            [r, g, b] => Some((
-                u8::try_from(*r).ok()?,
-                u8::try_from(*g).ok()?,
-                u8::try_from(*b).ok()?,
-                u8::MAX,
+            [r, g, b] => Ok(Some((clamp(*r), clamp(*g), clamp(*b), u8::MAX))),
+            [r, g, b, a] => Ok(Some((clamp(*r), clamp(*g), clamp(*b), clamp(*a)))),
+            _ => Err(PilError::TypeError(
+                "color must be int, or tuple of one, three or four elements".into(),
             )),
-            [r, g, b, a] => Some((
-                u8::try_from(*r).ok()?,
-                u8::try_from(*g).ok()?,
-                u8::try_from(*b).ok()?,
-                u8::try_from(*a).ok()?,
-            )),
-            _ => None,
         },
     }
 }
@@ -139,16 +140,6 @@ pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilE
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
-    autocontrast_with_mask(image, cutoff, ImageOpsMask::None)
-}
-
-/// Normalizes contrast after validating an optional Pillow mask.
-pub fn autocontrast_with_mask(
-    image: &Image,
-    cutoff: f64,
-    mask: ImageOpsMask,
-) -> Result<Image, PilError> {
-    validate_imageops_mask(image, mask)?;
     let mode = image.mode()?;
     // Pillow 12.2.0 `ImageOps._lut` accepts only "L" and "RGB"; "P" raises
     // NotImplementedError and every other mode raises the OSError below.
@@ -163,6 +154,19 @@ pub fn autocontrast_with_mask(
     Ok(Image::push_op(image, PipelineOp::Autocontrast { cutoff }))
 }
 
+/// Normalizes contrast after validating an optional Pillow mask.
+pub fn autocontrast_with_mask(
+    image: &Image,
+    cutoff: f64,
+    mask: ImageOpsMask,
+) -> Result<Image, PilError> {
+    if matches!(&mask, ImageOpsMask::None) {
+        return autocontrast(image, cutoff);
+    }
+    validate_imageops_mask(image, mask)?;
+    autocontrast(image, cutoff)
+}
+
 /// Equalizes the image histogram.
 ///
 /// # Errors
@@ -170,12 +174,6 @@ pub fn autocontrast_with_mask(
 /// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
 /// or another [`PilError`] when mode detection fails.
 pub fn equalize(image: &Image) -> Result<Image, PilError> {
-    equalize_with_mask(image, ImageOpsMask::None)
-}
-
-/// Equalizes an image after validating an optional Pillow mask.
-pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, PilError> {
-    validate_imageops_mask(image, mask)?;
     let mode = image.mode()?;
     // Pillow 12.2.0 converts "P" to "RGB" before building the LUT and then
     // `_lut` accepts only "L" and "RGB"; all other modes raise the OSError.
@@ -183,6 +181,15 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
     Ok(Image::push_op(image, PipelineOp::Equalize))
+}
+
+/// Equalizes an image after validating an optional Pillow mask.
+pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, PilError> {
+    if matches!(&mask, ImageOpsMask::None) {
+        return equalize(image);
+    }
+    validate_imageops_mask(image, mask)?;
+    equalize(image)
 }
 
 /// Inverts all pixel values.
@@ -351,12 +358,8 @@ pub fn expand(image: &Image, border: u32, fill: (u8, u8, u8, u8)) -> Result<Imag
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn contain(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
-    contain_with_input(
-        image,
-        w,
-        h,
-        filter.map(|name| ResampleInput::Name(name.to_owned())),
-    )
+    let filter = parse_resample(filter)?;
+    Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
 
 /// `ImageOps.contain` with a host-neutral public filter value.
@@ -366,6 +369,9 @@ pub fn contain_with_input(
     h: u32,
     filter: Option<ResampleInput>,
 ) -> Result<Image, PilError> {
+    if filter.is_none() {
+        return contain(image, w, h, None);
+    }
     let filter = parse_imageops_filter(filter)?;
     Ok(Image::push_op(image, PipelineOp::Contain { w, h, filter }))
 }
@@ -376,12 +382,8 @@ pub fn contain_with_input(
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
-    cover_with_input(
-        image,
-        w,
-        h,
-        filter.map(|name| ResampleInput::Name(name.to_owned())),
-    )
+    let filter = parse_resample(filter)?;
+    Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
 /// `ImageOps.cover` with a host-neutral public filter value.
@@ -391,6 +393,9 @@ pub fn cover_with_input(
     h: u32,
     filter: Option<ResampleInput>,
 ) -> Result<Image, PilError> {
+    if filter.is_none() {
+        return cover(image, w, h, None);
+    }
     let filter = parse_imageops_filter(filter)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
@@ -432,8 +437,17 @@ pub fn fit_with_input(
     bleed: f64,
     centering: CenteringInput,
 ) -> Result<Image, PilError> {
+    let filter_was_none = filter.is_none();
     let filter = parse_imageops_filter(filter)?;
+    if matches!(&centering, CenteringInput::Values(values) if values.len() == 2
+        && values[0] == 0.5 && values[1] == 0.5)
+    {
+        return fit(image, w, h, None, bleed, (0.5, 0.5));
+    }
     let centering = resolve_centering(centering, false)?;
+    if filter_was_none && centering == (0.5, 0.5) {
+        return fit(image, w, h, None, bleed, centering);
+    }
     Ok(Image::push_op(
         image,
         PipelineOp::Fit {
@@ -481,9 +495,14 @@ pub fn pad_with_input(
     color: ImageOpsColor,
     centering: CenteringInput,
 ) -> Result<Image, PilError> {
+    let filter_was_none = filter.is_none();
+    let color_was_none = matches!(&color, ImageOpsColor::None);
     let filter = parse_imageops_filter(filter)?;
     let centering = resolve_centering(centering, true)?;
-    let color = resolve_pad_color(color);
+    let color = resolve_pad_color(color)?;
+    if filter_was_none && color_was_none && centering == (0.5, 0.5) {
+        return pad(image, w, h, None, color, centering);
+    }
     Ok(Image::push_op(
         image,
         PipelineOp::Pad {
@@ -625,71 +644,6 @@ pub fn exif_get_orientation(raw: &[u8]) -> Option<u32> {
     }
 
     None
-}
-
-/// Remove the usable EXIF Orientation value without changing TIFF offsets.
-///
-/// Pillow's EXIF transpose path deletes the orientation tag before saving the
-/// result.  Clearing the SHORT value preserves the encoded payload layout and
-/// makes the tag non-operative for readers that accept the same TIFF IFD.
-pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
-    let mut cleaned = raw.to_vec();
-    let data_offset = if cleaned.starts_with(b"Exif\x00\x00") {
-        6
-    } else {
-        0
-    };
-    if cleaned.len() < data_offset + 8 {
-        return cleaned;
-    }
-    let data = &cleaned[data_offset..];
-    let le = match &data[..2] {
-        b"II" => true,
-        b"MM" => false,
-        _ => return cleaned,
-    };
-    let magic = if le {
-        u16::from_le_bytes([data[2], data[3]])
-    } else {
-        u16::from_be_bytes([data[2], data[3]])
-    };
-    if magic != 42 {
-        return cleaned;
-    }
-    let ifd_offset = if le {
-        u32::from_le_bytes([data[4], data[5], data[6], data[7]])
-    } else {
-        u32::from_be_bytes([data[4], data[5], data[6], data[7]])
-    } as usize;
-    if ifd_offset + 2 > data.len() {
-        return cleaned;
-    }
-    let num_entries = if le {
-        u16::from_le_bytes([data[ifd_offset], data[ifd_offset + 1]])
-    } else {
-        u16::from_be_bytes([data[ifd_offset], data[ifd_offset + 1]])
-    } as usize;
-    for index in 0..num_entries {
-        let entry_start = ifd_offset + 2 + index * 12;
-        if entry_start + 12 > data.len() {
-            break;
-        }
-        let tag = if le {
-            u16::from_le_bytes([data[entry_start], data[entry_start + 1]])
-        } else {
-            u16::from_be_bytes([data[entry_start], data[entry_start + 1]])
-        };
-        if tag == 0x0112 {
-            let value_offset = data_offset + entry_start + 8;
-            if le {
-                cleaned[value_offset..value_offset + 2].copy_from_slice(&0u16.to_le_bytes());
-            } else {
-                cleaned[value_offset..value_offset + 2].copy_from_slice(&0u16.to_be_bytes());
-            }
-            break;
-        }
-    }
-    cleaned
 }
 
 #[cfg(test)]
