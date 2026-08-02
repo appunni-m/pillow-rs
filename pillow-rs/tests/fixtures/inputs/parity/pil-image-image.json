@@ -58659,6 +58659,54 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.info.nuanced.p-transparency-table",
+      "surface": "PIL.Image.Image",
+      "operation": "info",
+      "covers": [
+        "PIL.Image.Image.info.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "p-table-transparency",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAMAAADD/I+4AAAABlBMVEUKFB4oMjzVG7TpAAAAAnRSTlMAgJsrThgAAAALSURBVHicY2BgBAAABAACv3o/SgAAAABJRU5ErkJggg==",
+          "sha256": "b7d70b88477b6b8e9dc34288dd3237196b4abf938cf8ebd2e95b8afd39092e7c",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-table-transparency",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "p-table-transparency"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-table-transparency"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table",
       "surface": "PIL.Image.Image",
       "operation": "apply_transparency",

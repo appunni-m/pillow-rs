@@ -1350,6 +1350,7 @@
           "PIL.Image.Image.quantize.nuanced.mediancut-kmeans-2",
           "PIL.Image.Image.quantize.nuanced.mediancut-default",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency",
+          "PIL.Image.Image.info.nuanced.p-transparency-table",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized-bilinear",
