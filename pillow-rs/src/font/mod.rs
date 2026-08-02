@@ -269,9 +269,6 @@ impl FreeTypeFont {
         size: f32,
         options: &ImageFontLoadOptions,
     ) -> Result<Self, PilError> {
-        if options.index.is_some_and(|index| index != 0) {
-            return Err(PilError::OsError("invalid argument".into()));
-        }
         imagingft::load_truetype_with_options(data, size, options)
     }
 
@@ -314,9 +311,6 @@ impl FreeTypeFont {
         &self,
         options: &ImageFontVariantOptions,
     ) -> Result<Self, PilError> {
-        if options.index.is_some_and(|index| index != 0) {
-            return Err(PilError::OsError("invalid argument".into()));
-        }
         imagingft::font_variant_with_options(self, options)
     }
 

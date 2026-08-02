@@ -69,8 +69,10 @@ fn load_truetype_with_index(
     }
 
     let library = ffi::FT_Init_FreeType();
-    let mut face = ffi::FT_New_Memory_Face(&library, &data, face_index as ffi::FT_Long, size)
-        .map_err(ft_error_to_pil)?;
+    let face_index_ffi = ffi::FT_Long::try_from(face_index)
+        .map_err(|_| PilError::OsError("invalid argument".into()))?;
+    let mut face =
+        ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size).map_err(ft_error_to_pil)?;
 
     // Pillow _imagingft.c:getfont requests nominal size with width/height
     // set to size * 64 after FT_New_Memory_Face.
@@ -1494,6 +1496,13 @@ fn gray_for_premultiplied_srgb_bgra(bgra: &[u8]) -> u8 {
 }
 
 fn refresh_engine_metadata(font: &mut FreeTypeFont) {
+    if let Ok(face_index) = usize::try_from(font.engine.face.face_index) {
+        // `fontdone` refreshes the public face record after named-instance or
+        // design-coordinate changes. Keep the adapter's constructor state in
+        // sync so a later `font_variant()` reopens the same collection face
+        // and variation instance instead of silently falling back to face 0.
+        font.engine.face_index = face_index;
+    }
     font.engine.family_name = font.engine.face.family_name.clone();
     font.engine.style_name = font.engine.face.style_name.clone();
     font.engine.metrics = font.engine.face.size_metrics;
@@ -1503,7 +1512,12 @@ fn variation_tables(
     font: &FreeTypeFont,
 ) -> Result<(tt::fvar::FvarTable, tt::name::NameTable), PilError> {
     let data = &font.engine.font_bytes;
-    let (_, face_offset) = tt::resolve_face_index(data, 0)
+    // `fontdone` encodes a selected named instance in bits 16..30 of the
+    // face index; the collection face remains in the low 16 bits. The table
+    // directory is face-specific, so resolving face 0 here returns the wrong
+    // variation metadata for a non-zero TTC face.
+    let collection_face_index = font.engine.face_index & 0xFFFF;
+    let (_, face_offset) = tt::resolve_face_index(data, collection_face_index)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
     let directory = tt::parse_table_directory_at(data, face_offset)
         .map_err(|_| PilError::OsError("invalid argument".into()))?;
@@ -1580,4 +1594,104 @@ fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
     )
     .map(|value| value.unwrap_or(char::REPLACEMENT_CHARACTER))
     .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{FreeTypeFont, ImageFontLoadOptions};
+
+    fn make_ttc(fonts: &[&[u8]]) -> Vec<u8> {
+        assert!(!fonts.is_empty());
+        let header_len = 12 + fonts.len() * 4;
+        let first_face = (header_len + 3) & !3;
+        let mut ttc = vec![0; first_face];
+        ttc[0..4].copy_from_slice(b"ttcf");
+        ttc[4..8].copy_from_slice(&0x0001_0000_u32.to_be_bytes());
+        let face_count = match u32::try_from(fonts.len()) {
+            Ok(count) => count,
+            Err(_) => return Vec::new(),
+        };
+        ttc[8..12].copy_from_slice(&face_count.to_be_bytes());
+        let mut cursor = first_face;
+        let mut offsets = Vec::with_capacity(fonts.len());
+        for font in fonts {
+            cursor = (cursor + 3) & !3;
+            let Some(base) = u32::try_from(cursor).ok() else {
+                return Vec::new();
+            };
+            offsets.push(base);
+            let end = cursor.saturating_add(font.len());
+            ttc.resize(end, 0);
+            ttc[cursor..end].copy_from_slice(font);
+
+            let Some(table_count) = font
+                .get(4..6)
+                .map(|bytes| u16::from_be_bytes([bytes[0], bytes[1]]))
+            else {
+                return Vec::new();
+            };
+            for table in 0..usize::from(table_count) {
+                let offset = cursor.saturating_add(12 + table * 16 + 8);
+                let Some(bytes) = ttc.get(offset..offset + 4) else {
+                    return Vec::new();
+                };
+                let old = u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                let Some(adjusted) = old.checked_add(base) else {
+                    return Vec::new();
+                };
+                ttc[offset..offset + 4].copy_from_slice(&adjusted.to_be_bytes());
+            }
+            cursor = end;
+        }
+        for (index, offset) in offsets.into_iter().enumerate() {
+            let start = 12 + index * 4;
+            ttc[start..start + 4].copy_from_slice(&offset.to_be_bytes());
+        }
+        ttc
+    }
+
+    #[test]
+    fn nonzero_ttc_face_and_variant_preserve_fontdone_selection() {
+        let ttc = make_ttc(&[
+            include_bytes!("../../tests/fixtures/assets/font/fonts/DejaVuSans.ttf"),
+            include_bytes!("../../tests/fixtures/assets/font/fonts/variable-named-instances.ttf"),
+        ]);
+        let first = FreeTypeFont::from_bytes_with_options(
+            ttc.clone(),
+            20.0,
+            &ImageFontLoadOptions {
+                index: Some(0),
+                ..ImageFontLoadOptions::default()
+            },
+        )
+        .unwrap_or_else(|error| panic!("TTC face 0 must load: {error}"));
+        let second = FreeTypeFont::from_bytes_with_options(
+            ttc,
+            20.0,
+            &ImageFontLoadOptions {
+                index: Some(1),
+                ..ImageFontLoadOptions::default()
+            },
+        )
+        .unwrap_or_else(|error| panic!("TTC face 1 must load: {error}"));
+
+        assert_ne!(first.getname(), second.getname());
+        assert!(
+            !second
+                .get_variation_axes()
+                .unwrap_or_else(|error| panic!("TTC face 1 variation metadata: {error}"))
+                .is_empty()
+        );
+
+        let variant = second
+            .font_variant(None)
+            .unwrap_or_else(|error| panic!("TTC face 1 variant must load: {error}"));
+        assert_eq!(variant.getname(), second.getname());
+        assert!(
+            !variant
+                .get_variation_axes()
+                .unwrap_or_else(|error| panic!("TTC variant variation metadata: {error}"))
+                .is_empty()
+        );
+    }
 }
