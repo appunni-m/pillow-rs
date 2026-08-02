@@ -12,6 +12,10 @@ pub enum TransformData {
     Affine(Vec<f64>),
     /// `(bbox, quad)` mesh records before core validation and flattening.
     Mesh(Vec<(Vec<f64>, Vec<f64>)>),
+    /// Nested mesh records whose item arity still belongs to core validation.
+    RawMesh(Vec<Vec<Vec<f64>>>),
+    /// A value that could not be interpreted as affine or mesh data.
+    Invalid,
 }
 
 /// Host-neutral fill-color input for public `Image.transform` calls.
@@ -54,6 +58,38 @@ fn transform_component(value: i64) -> Result<u8, PilError> {
 fn flatten_mesh_data(items: &[(Vec<f64>, Vec<f64>)]) -> Result<Vec<f64>, PilError> {
     let mut flat = Vec::with_capacity(items.len().saturating_mul(12));
     for (bbox, quad) in items {
+        if bbox.len() != 4 {
+            return Err(PilError::ValueError(
+                "mesh_flatten: each bbox must have exactly 4 values [x0, y0, x1, y1]".into(),
+            ));
+        }
+        if quad.len() != 8 {
+            return Err(PilError::ValueError(
+                "mesh_flatten: each quad must have exactly 8 values [x0, y0, …, x3, y3]".into(),
+            ));
+        }
+        flat.extend_from_slice(bbox);
+        flat.extend_from_slice(quad);
+    }
+    Ok(flat)
+}
+
+fn flatten_raw_mesh_data(items: &[Vec<Vec<f64>>]) -> Result<Vec<f64>, PilError> {
+    let mut flat = Vec::with_capacity(items.len().saturating_mul(12));
+    for item in items {
+        if item.len() != 2 {
+            let message = if item.len() < 2 {
+                format!(
+                    "not enough values to unpack (expected 2, got {})",
+                    item.len()
+                )
+            } else {
+                "too many values to unpack (expected 2)".into()
+            };
+            return Err(PilError::ValueError(message));
+        }
+        let bbox = &item[0];
+        let quad = &item[1];
         if bbox.len() != 4 {
             return Err(PilError::ValueError(
                 "mesh_flatten: each bbox must have exactly 4 values [x0, y0, x1, y1]".into(),
@@ -213,10 +249,16 @@ impl Image {
                 self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill)
             }
             4 => {
-                let Some(TransformData::Mesh(items)) = data else {
-                    return Err(PilError::ValueError("MESH requires data".into()));
+                let data = match data {
+                    Some(TransformData::Mesh(items)) => flatten_mesh_data(&items)?,
+                    Some(TransformData::RawMesh(items)) => flatten_raw_mesh_data(&items)?,
+                    Some(TransformData::Invalid) => {
+                        return Err(PilError::TypeError(
+                            "transform data must be a sequence".into(),
+                        ));
+                    }
+                    _ => return Err(PilError::ValueError("MESH requires data".into())),
                 };
-                let data = flatten_mesh_data(&items)?;
                 self.transform_mesh(size, data, fill)
             }
             _ => Err(PilError::NotImplementedError(format!(
