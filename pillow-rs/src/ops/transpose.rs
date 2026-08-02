@@ -37,6 +37,15 @@ pub fn normalize_transpose_input(input: TransposeInput) -> Result<String, PilErr
     }
 }
 
+/// Normalize the orientation stored by `ImageFont.TransposedFont`.
+///
+/// Pillow defers errors for an object used as the orientation until a font
+/// operation needs to interpret it. Preserve that constructor timing by
+/// representing an unconvertible host value as an absent normalized name.
+pub fn normalize_transposed_font_input(input: TransposeInput) -> Option<String> {
+    normalize_transpose_input(input).ok()
+}
+
 impl Image {
     /// Applies the Python-facing integer/name transpose contract.
     pub fn transpose_with_input(&self, input: TransposeInput) -> Result<Image, PilError> {

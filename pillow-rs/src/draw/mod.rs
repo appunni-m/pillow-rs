@@ -34,6 +34,15 @@ pub enum DrawPointsInput {
     Invalid,
 }
 
+/// Host-neutral center input for `ImageDraw.circle`.
+#[derive(Debug, Clone)]
+pub enum DrawCircleCenterInput {
+    /// A sequence whose first two values are the center coordinates.
+    Values(Vec<f64>),
+    /// A value that could not be represented as a numeric sequence.
+    Invalid,
+}
+
 /// Host-neutral coordinate input for ImageDraw rectangle-like primitives.
 #[derive(Debug, Clone)]
 pub enum DrawBoxInput {
@@ -155,6 +164,16 @@ fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>,
                 .collect())
         }
         DrawPointsInput::Invalid => Err(error()),
+    }
+}
+
+/// Normalizes the center accepted by Pillow's circle wrapper.
+pub fn normalize_draw_circle_center(input: DrawCircleCenterInput) -> Result<(f64, f64), PilError> {
+    match input {
+        DrawCircleCenterInput::Values(values) if values.len() >= 2 => Ok((values[0], values[1])),
+        DrawCircleCenterInput::Values(_) | DrawCircleCenterInput::Invalid => Err(
+            PilError::TypeError("coordinate list must contain at least 2 coordinates".into()),
+        ),
     }
 }
 
@@ -1349,6 +1368,19 @@ impl Draw {
             },
         );
         Ok(())
+    }
+
+    /// Normalizes and draws a Python-facing circle center.
+    pub fn circle_with_input(
+        &mut self,
+        input: DrawCircleCenterInput,
+        radius: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    ) -> Result<(), PilError> {
+        let (cx, cy) = normalize_draw_circle_center(input)?;
+        self.circle(cx as i32, cy as i32, radius, fill, outline, width)
     }
 
     /// Draws a rounded rectangle.

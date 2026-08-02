@@ -806,7 +806,11 @@ pub(crate) fn render_text_binary(
 }
 
 fn validate_basic_layout_options(options: &ImageFontTextOptions) -> Result<(), PilError> {
-    if options.direction.is_some() || options.features.is_some() || options.language.is_some() {
+    if options.direction.is_some()
+        || options.features.is_some()
+        || options.features_invalid
+        || options.language.is_some()
+    {
         return Err(PilError::unsupported_libraqm());
     }
     Ok(())
@@ -828,7 +832,9 @@ fn anchored_bbox(
         return Ok((left as f32, top as f32, right as f32, bottom as f32));
     };
     if anchor.len() != 2 {
-        return Err(bad_anchor_error(anchor));
+        return Err(PilError::ValueError(
+            "anchor must be a 2 character string".into(),
+        ));
     }
     let width = right - left;
     let ascent = pixel(font.engine.metrics.ascender);

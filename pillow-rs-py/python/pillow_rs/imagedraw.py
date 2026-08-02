@@ -41,28 +41,28 @@ class Draw:
         self._sync()
 
     def arc(self, xy, start, end, fill=None, width=1):
-        self._draw.arc(xy, float(start), float(end), fill, width)
+        self._draw.arc(xy, start, end, fill, width)
         self._sync()
 
     def chord(self, xy, start, end, fill=None, outline=None, width=1):
-        self._draw.chord(xy, float(start), float(end), fill, outline, width)
+        self._draw.chord(xy, start, end, fill, outline, width)
         self._sync()
 
     def pieslice(self, xy, start, end, fill=None, outline=None, width=1):
-        self._draw.pieslice(xy, float(start), float(end), fill, outline, width)
+        self._draw.pieslice(xy, start, end, fill, outline, width)
         self._sync()
 
     def circle(self, xy, radius, fill=None, outline=None, width=1):
-        self._draw.circle((float(xy[0]), float(xy[1])), float(radius), fill, outline, width)
+        self._draw.circle(xy, radius, fill, outline, width)
         self._sync()
 
     def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1, *, corners=None):
-        self._draw.rounded_rectangle(xy, float(radius), fill, outline, width)
+        self._draw.rounded_rectangle(xy, radius, fill, outline, width)
         self._sync()
 
     def bitmap(self, xy, bitmap, fill=None):
         """Draw a bitmap. Pixel iteration done in Rust."""
-        self._draw.bitmap((float(xy[0]), float(xy[1])), bitmap._rust_image, fill)
+        self._draw.bitmap(xy, bitmap._rust_image, fill)
         self._sync()
 
     def _get_font(self, font, size=None):
@@ -140,7 +140,7 @@ class Draw:
 
     def regular_polygon(self, bounding_circle, n_sides, rotation=0, fill=None, outline=None, width=1):
         """Draw a regular polygon. Vertex computation done in Rust."""
-        self._draw.regular_polygon(bounding_circle, n_sides, float(rotation), fill, outline, width)
+        self._draw.regular_polygon(bounding_circle, n_sides, rotation, fill, outline, width)
         self._sync()
 
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,

@@ -79,6 +79,9 @@ pub struct ImageFontTextOptions {
     pub direction: Option<String>,
     /// Pillow OpenType feature list. Requires libraqm in Pillow.
     pub features: Option<Vec<String>>,
+    /// Whether the host supplied an unrepresentable feature-list value.
+    /// Validation of the resulting layout error remains in the core.
+    pub features_invalid: bool,
     /// Pillow language tag. Requires libraqm in Pillow.
     pub language: Option<String>,
     /// Pillow text stroke width in pixels.
