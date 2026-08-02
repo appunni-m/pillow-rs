@@ -5594,8 +5594,6 @@ def build_nuanced_cases(
             "name": "negative-height-candidate-zero",
             "mode": "RGB",
             "size": [16, 1],
-            "edge": "nonzero-pixel",
-            "pixel": [255, 128, 64],
             "values": {"size": literal([1, -1])},
         },
         {

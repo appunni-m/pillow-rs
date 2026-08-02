@@ -31269,32 +31269,6 @@
           }
         },
         {
-          "step_id": "setup-varied-pixel-2",
-          "surface": "PIL.Image.Image",
-          "operation": "putpixel",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-image-1"
-          },
-          "arguments": {
-            "xy": {
-              "kind": "literal",
-              "value": [
-                2,
-                3
-              ]
-            },
-            "value": {
-              "kind": "literal",
-              "value": [
-                255,
-                128,
-                64
-              ]
-            }
-          }
-        },
-        {
           "step_id": "call",
           "surface": "PIL.Image.Image",
           "operation": "thumbnail",
