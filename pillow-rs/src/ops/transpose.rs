@@ -13,28 +13,35 @@ pub enum TransposeInput {
     Invalid(String),
 }
 
+/// Normalize the integer-or-name orientation accepted by `TransposedFont`.
+///
+/// The Python facade stores the public value unchanged; this helper owns the
+/// shared enum-to-name mapping used by the font and image paths.
+pub fn normalize_transpose_input(input: TransposeInput) -> Result<String, PilError> {
+    match input {
+        TransposeInput::Index(index) => Ok(match index {
+            0 => "FLIP_LEFT_RIGHT",
+            1 => "FLIP_TOP_BOTTOM",
+            2 => "ROTATE_90",
+            3 => "ROTATE_180",
+            4 => "ROTATE_270",
+            5 => "TRANSPOSE",
+            6 => "TRANSVERSE",
+            _ => "FLIP_LEFT_RIGHT",
+        }
+        .to_owned()),
+        TransposeInput::Name(name) => Ok(name),
+        TransposeInput::Invalid(type_name) => Err(PilError::TypeError(format!(
+            "'{type_name}' object cannot be interpreted as an integer"
+        ))),
+    }
+}
+
 impl Image {
     /// Applies the Python-facing integer/name transpose contract.
     pub fn transpose_with_input(&self, input: TransposeInput) -> Result<Image, PilError> {
-        let method = match input {
-            TransposeInput::Index(index) => match index {
-                0 => "FLIP_LEFT_RIGHT",
-                1 => "FLIP_TOP_BOTTOM",
-                2 => "ROTATE_90",
-                3 => "ROTATE_180",
-                4 => "ROTATE_270",
-                5 => "TRANSPOSE",
-                6 => "TRANSVERSE",
-                _ => "FLIP_LEFT_RIGHT",
-            },
-            TransposeInput::Name(name) => return self.transpose(&name),
-            TransposeInput::Invalid(type_name) => {
-                return Err(PilError::TypeError(format!(
-                    "'{type_name}' object cannot be interpreted as an integer"
-                )));
-            }
-        };
-        self.transpose(method)
+        let method = normalize_transpose_input(input)?;
+        self.transpose(&method)
     }
 
     /// Applies a Pillow transpose method.

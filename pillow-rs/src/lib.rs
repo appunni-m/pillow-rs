@@ -296,6 +296,7 @@ pub use crate::ops::transform::ReduceFactor;
 pub use crate::ops::transform::TransformData;
 pub use crate::ops::transform::TransformFill;
 pub use crate::ops::transpose::TransposeInput;
+pub use crate::ops::transpose::normalize_transpose_input;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]

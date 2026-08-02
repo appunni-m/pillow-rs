@@ -630,13 +630,7 @@ impl PyImage {
     }
 
     fn transpose(&self, method: &Bound<'_, PyAny>) -> PyResult<PyImage> {
-        let input = if let Ok(value) = method.extract::<i64>() {
-            pillow_rs::TransposeInput::Index(value)
-        } else if let Ok(value) = method.extract::<String>() {
-            pillow_rs::TransposeInput::Name(value)
-        } else {
-            pillow_rs::TransposeInput::Invalid(method.get_type().name()?.to_string())
-        };
+        let input = transpose_input_from_python(method)?;
         let rs = self.inner.transpose_with_input(input).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1621,6 +1615,28 @@ fn map_error(e: PilError) -> PyErr {
     }
 }
 
+fn transpose_input_from_python(method: &Bound<'_, PyAny>) -> PyResult<pillow_rs::TransposeInput> {
+    if let Ok(value) = method.extract::<i64>() {
+        return Ok(pillow_rs::TransposeInput::Index(value));
+    }
+    if let Ok(value) = method.extract::<String>() {
+        return Ok(pillow_rs::TransposeInput::Name(value));
+    }
+    Ok(pillow_rs::TransposeInput::Invalid(
+        method.get_type().name()?.to_string(),
+    ))
+}
+
+#[pyfunction]
+fn transposed_font_orientation(orientation: &Bound<'_, PyAny>) -> PyResult<Option<String>> {
+    if orientation.is_none() {
+        return Ok(None);
+    }
+    pillow_rs::normalize_transpose_input(transpose_input_from_python(orientation)?)
+        .map(Some)
+        .map_err(map_error)
+}
+
 #[pyfunction]
 fn transposed_font_bbox(
     bbox: (i32, i32, i32, i32),
@@ -1966,6 +1982,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPilFont>()?;
     m.add_function(wrap_pyfunction!(transposed_font_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(validate_transposed_font_length, m)?)?;
+    m.add_function(wrap_pyfunction!(transposed_font_orientation, m)?)?;
     m.add_function(wrap_pyfunction!(resolve_array_layout, m)?)?;
 
     // ImageOps functions
