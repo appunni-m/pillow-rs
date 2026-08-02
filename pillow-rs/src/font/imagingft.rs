@@ -1494,7 +1494,18 @@ fn positive_dimension_collapsed(base: i32, adjusted: i32) -> bool {
 
 fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
     let pitch = bitmap.pitch.unsigned_abs() as usize;
-    let row_start = row * pitch;
+    // `fontdone` preserves FreeType's signed-pitch convention: with a
+    // negative pitch the buffer starts at the last logical row and rows are
+    // addressed backwards.  `_imagingft.c` consumes that same descriptor
+    // directly, so do not normalize the bitmap by reversing its owned bytes
+    // here.  This matters for embedded bitmap strikes and any future
+    // fontdone route that returns a bottom-up glyph bitmap.
+    let physical_row = if bitmap.pitch < 0 {
+        bitmap.rows.saturating_sub(1).saturating_sub(row as u32) as usize
+    } else {
+        row
+    };
+    let row_start = physical_row.saturating_mul(pitch);
     match bitmap.pixel_mode {
         ffi::FT_PIXEL_MODE_MONO => {
             let byte = bitmap
