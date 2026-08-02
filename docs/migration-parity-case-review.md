@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2181
-- Unique active workflow signatures: 2181
+- Active parity workflows: 2193
+- Unique active workflow signatures: 2193
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1005
+- Deliberate nuanced workflows: 1017
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 87 |
 | `PIL.ImageFont.ImageFont` | 13 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 152 |
+| `PIL.ImageOps` | 164 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 17 |
 | `PIL.ImageSequence` | 3 |
@@ -986,7 +986,9 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.colorize.nuanced.three-color`
 - `PIL.ImageOps.colorize.nuanced.two-color`
 - `PIL.ImageOps.contain.nuanced.materialized-aspect`
+- `PIL.ImageOps.contain.nuanced.numeric-method`
 - `PIL.ImageOps.cover.nuanced.materialized-aspect`
+- `PIL.ImageOps.cover.nuanced.numeric-method`
 - `PIL.ImageOps.crop.nuanced.materialized-border`
 - `PIL.ImageOps.equalize.nuanced.materialized-l`
 - `PIL.ImageOps.equalize.nuanced.materialized-p`
@@ -1024,13 +1026,23 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.invert.nuanced.materialized-rgb`
 - `PIL.ImageOps.invert.nuanced.p-mode`
 - `PIL.ImageOps.mirror.nuanced.materialized-rgb`
+- `PIL.ImageOps.pad.nuanced.hsv-color-name`
 - `PIL.ImageOps.pad.nuanced.invalid-color-length`
 - `PIL.ImageOps.pad.nuanced.invalid-color-name`
+- `PIL.ImageOps.pad.nuanced.invalid-f-color`
+- `PIL.ImageOps.pad.nuanced.invalid-l-color`
+- `PIL.ImageOps.pad.nuanced.invalid-la-color`
+- `PIL.ImageOps.pad.nuanced.l-color-name`
+- `PIL.ImageOps.pad.nuanced.l-one-component`
+- `PIL.ImageOps.pad.nuanced.la-color-name`
+- `PIL.ImageOps.pad.nuanced.la-color-two-components`
+- `PIL.ImageOps.pad.nuanced.la-scalar`
 - `PIL.ImageOps.pad.nuanced.materialized-padding`
 - `PIL.ImageOps.pad.nuanced.rgb-color`
 - `PIL.ImageOps.pad.nuanced.rgb-color-name`
 - `PIL.ImageOps.pad.nuanced.rgba-color`
 - `PIL.ImageOps.pad.nuanced.rgba-color-name`
+- `PIL.ImageOps.pad.nuanced.rgba-explicit-alpha-name`
 - `PIL.ImageOps.posterize.nuanced.materialized-rgb`
 - `PIL.ImageOps.scale.nuanced.materialized-upscale`
 - `PIL.ImageOps.solarize.nuanced.materialized-l`
