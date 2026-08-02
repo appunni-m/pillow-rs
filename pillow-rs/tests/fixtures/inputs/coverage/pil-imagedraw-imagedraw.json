@@ -583,6 +583,7 @@
           "PIL.ImageDraw.ImageDraw.line.nuanced.canvas-ycbcr-int-fill",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.canvas-hsv-int-fill",
           "PIL.ImageDraw.ImageDraw.point.nuanced.flat-points",
+          "PIL.ImageDraw.ImageDraw.point.nuanced.rejected-rgb-empty-component",
           "PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius-zero-fallback",
           "PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.degenerate-box-fallback",
           "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-i",

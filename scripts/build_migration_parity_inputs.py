@@ -4102,6 +4102,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rejected-rgb-empty-component",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal("rgb(, 1, 2)"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rounded_rectangle",
             "requirement_suffix": "behavior.default",
             "name": "radius-zero-fallback",
