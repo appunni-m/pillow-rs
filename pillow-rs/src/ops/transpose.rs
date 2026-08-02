@@ -33,7 +33,10 @@ pub fn transpose_name_from_int(value: i64) -> &'static str {
 /// shared enum-to-name mapping used by the font and image paths.
 pub fn normalize_transpose_input(input: TransposeInput) -> Result<String, PilError> {
     match input {
-        TransposeInput::Index(index) => Ok(transpose_name_from_int(index).to_owned()),
+        TransposeInput::Index(index) if (0..=6).contains(&index) => {
+            Ok(transpose_name_from_int(index).to_owned())
+        }
+        TransposeInput::Index(_) => Err(PilError::ValueError("No such transpose operation".into())),
         TransposeInput::Name(name) => Ok(name),
         TransposeInput::Invalid(type_name) => Err(PilError::TypeError(format!(
             "'{type_name}' object cannot be interpreted as an integer"

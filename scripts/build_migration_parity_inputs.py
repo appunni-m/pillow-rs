@@ -12082,6 +12082,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "requirement_suffix": "parameter.method",
+            "name": "unknown-integer",
+            "mode": "RGB",
+            "values": {"method": literal(99)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "copy",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
