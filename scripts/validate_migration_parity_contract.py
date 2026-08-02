@@ -646,6 +646,15 @@ def _literal_type(value: Any) -> str:
     if isinstance(value, dict):
         if value.get("protocol") == "outline":
             return "handle"
+        if (
+            value.get("protocol") == "text-repeat"
+            and isinstance(value.get("text"), str)
+            and type(value.get("repeat")) is int
+            and value["repeat"] > 0
+        ):
+            # The runner materializes this compact boundary descriptor as a
+            # string before calling the public operation.
+            return "string"
         return "mapping"
     return "any_json"
 

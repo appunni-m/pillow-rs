@@ -60,9 +60,13 @@ def load_font(params: dict[str, Any], assets: dict[str, Any]) -> Any:
 
 
 def case_text(params: dict[str, Any]) -> str | bytes:
+    # Keep oversized boundary inputs compact in the maintained corpus while
+    # still sending the repeated text through the public font method.
+    repeat = params.get("text_repeat", 1)
     if "text_bytes_hex" in params:
-        return bytes.fromhex(params["text_bytes_hex"])
-    return params.get("text", "Hello")
+        return bytes.fromhex(params["text_bytes_hex"]) * repeat
+    text = params.get("text", "Hello")
+    return text * repeat if isinstance(text, str) else text
 
 
 def run_case(case: dict[str, Any]) -> str:
@@ -74,7 +78,7 @@ def run_case(case: dict[str, Any]) -> str:
     operation = str(case.get("operation", "")).removeprefix("font.")
     params = case.get("inputs", {}).get("params", {})
     assets = case.get("inputs", {}).get("assets", {})
-    text = params.get("text", "Hello")
+    text = case_text(params)
     orientation = params.get("orientation")
 
     font = load_font(params, assets)

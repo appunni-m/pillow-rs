@@ -192,6 +192,17 @@ def decode_literal(
             return ArrayInterfaceValue(value)
         if protocol == "getmesh":
             return DeformerValue(value)
+        if protocol == "text-repeat":
+            text = value.get("text")
+            repeat = value.get("repeat")
+            if (
+                not isinstance(text, str)
+                or not isinstance(repeat, int)
+                or isinstance(repeat, bool)
+                or repeat < 1
+            ):
+                raise ValueError("text-repeat requires text and a positive repeat")
+            return text * repeat
         return {key: decode_literal(item, side=side) for key, item in value.items()}
     return value
 
