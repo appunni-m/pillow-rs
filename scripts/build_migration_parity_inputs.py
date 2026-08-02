@@ -9133,6 +9133,39 @@ def build_nuanced_cases(
             "surface": "PIL.Image",
             "operation": "frombytes",
             "requirement_suffix": "parameter.mode",
+            "name": "valid-i16",
+            "mode": "I;16",
+            "values": {
+                "size": literal([1, 1]),
+                "data": bytes_literal([0x70, 0x11]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
+            "name": "valid-i16l",
+            "mode": "I;16L",
+            "values": {
+                "size": literal([1, 1]),
+                "data": bytes_literal([0x70, 0x11]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
+            "name": "valid-i16b",
+            "mode": "I;16B",
+            "values": {
+                "size": literal([1, 1]),
+                "data": bytes_literal([0x11, 0x70]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.mode",
             "name": "valid-ycbcr",
             "mode": "YCbCr",
             "edge": "valid-frombytes",
@@ -9165,6 +9198,17 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "zero-size-p",
             "mode": "P",
+            "edge": "zero-size",
+            "values": {
+                "data": bytes_literal([]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size-i16n",
+            "mode": "I;16N",
             "edge": "zero-size",
             "values": {
                 "data": bytes_literal([]),
@@ -9405,6 +9449,50 @@ def build_nuanced_cases(
                 "mode": literal("I"),
                 "size": literal([2, 2]),
                 "color": literal(-123456),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "integer-scalar-i16",
+            "values": {
+                "mode": literal("I;16"),
+                "size": literal([2, 1]),
+                "color": literal(70000),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "integer-scalar-i16l",
+            "values": {
+                "mode": literal("I;16L"),
+                "size": literal([2, 1]),
+                "color": literal(70000),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "integer-scalar-i16b",
+            "values": {
+                "mode": literal("I;16B"),
+                "size": literal([2, 1]),
+                "color": literal(70000),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "integer-scalar-i16n",
+            "values": {
+                "mode": literal("I;16N"),
+                "size": literal([2, 1]),
+                "color": literal(70000),
             },
         },
         {

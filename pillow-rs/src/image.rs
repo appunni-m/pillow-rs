@@ -164,6 +164,15 @@ fn is_l16_mode(mode: &str) -> bool {
     matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
 }
 
+fn l16_uses_big_endian(mode: &str) -> bool {
+    match mode {
+        "I;16B" => true,
+        "I;16L" => false,
+        "I;16" | "I;16N" => cfg!(target_endian = "big"),
+        _ => false,
+    }
+}
+
 fn putdata_l16_sample(value: &PutDataValue, scale: f64, offset: f64) -> Result<u16, PilError> {
     match value {
         // _imaging.c:_putdata treats I;16 as an unsigned 16-bit sample
@@ -480,6 +489,17 @@ impl Image {
                 height,
                 crate::raster::LumaA([color.0, color.3]),
             )),
+            // The binding packs the low 16 bits of an Image.new scalar into
+            // color.0/color.1 in little-endian order. Keep the logical sample
+            // native in the raster and apply the requested raw byte order only
+            // when the public byte representation is requested.
+            "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+                DynamicImage::ImageLuma16(crate::raster::ImageBuffer::from_pixel(
+                    width,
+                    height,
+                    crate::raster::Luma([u16::from_le_bytes([color.0, color.1])]),
+                ))
+            }
             "PA" => DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::from_pixel(
                 width,
                 height,
@@ -530,7 +550,11 @@ impl Image {
             )),
             _ => return Err(PilError::ValueError(format!("Unsupported mode: {}", mode))),
         };
-        let explicit = if matches!(mode, "CMYK" | "YCbCr" | "HSV" | "I" | "F" | "PA" | "1") {
+        let explicit = if matches!(
+            mode,
+            "CMYK" | "YCbCr" | "HSV" | "I" | "F" | "PA" | "1"
+                | "I;16" | "I;16L" | "I;16B" | "I;16N"
+        ) {
             Some(mode.to_string())
         } else {
             None
@@ -642,12 +666,12 @@ impl Image {
             FromBytesMode::L16 => {
                 let pixels = data[..expected]
                     .chunks_exact(2)
-                    .map(|sample| match mode {
-                        "I;16B" => u16::from_be_bytes([sample[0], sample[1]]),
-                        "I;16N" if cfg!(target_endian = "big") => {
+                    .map(|sample| {
+                        if l16_uses_big_endian(mode) {
                             u16::from_be_bytes([sample[0], sample[1]])
+                        } else {
+                            u16::from_le_bytes([sample[0], sample[1]])
                         }
-                        _ => u16::from_le_bytes([sample[0], sample[1]]),
                     })
                     .collect();
                 DynamicImage::ImageLuma16(
@@ -1781,6 +1805,20 @@ impl Image {
         // f32/i32 LE representation (4 bytes per pixel).
         if matches!(mode, "F" | "I") {
             return Ok(img.as_bytes().to_vec());
+        }
+
+        if is_l16_mode(mode) {
+            let native_is_big = cfg!(target_endian = "big");
+            let raw_is_big = l16_uses_big_endian(mode);
+            let bytes = img.as_bytes();
+            if native_is_big == raw_is_big {
+                return Ok(bytes.to_vec());
+            }
+            let mut swapped = Vec::with_capacity(bytes.len());
+            for sample in bytes.chunks_exact(2) {
+                swapped.extend_from_slice(&[sample[1], sample[0]]);
+            }
+            return Ok(swapped);
         }
 
         // For mode "1" images, pack 8 pixels per byte (MSB first) matching PIL.
