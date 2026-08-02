@@ -1707,6 +1707,7 @@ impl Image {
                 "HSV" => vec!["H".to_string(), "S".to_string(), "V".to_string()],
                 "PA" => vec!["P".to_string(), "A".to_string()],
                 "I" | "F" | "P" | "1" => vec![m.to_owned()],
+                "I;16" | "I;16L" | "I;16B" | "I;16N" => vec!["I".to_owned()],
                 _ => vec![],
             };
             if !bands.is_empty() {
@@ -2818,6 +2819,40 @@ impl Image {
         })?;
         let data = putdata_bytes(mode, values, scale, offset)?;
         self.putdata(&data)
+    }
+
+    /// Replaces raw I;16 samples from Pillow's bytes fast path.
+    ///
+    /// Pillow treats a `bytes` argument to `putdata` as packed storage for
+    /// I;16 modes, rather than as one numeric sample per byte. The payload is
+    /// copied into the image's raw two-byte sample buffer; an incomplete final
+    /// sample remains zero-filled, and excess bytes are ignored by the binding
+    /// before this method is called.
+    pub fn putdata_l16_bytes(&mut self, data: &[u8]) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        let dimensions = CheckedDims::new(width, height, 2)?;
+        let mode = self.mode()?;
+        let mut raw = dimensions.alloc_buffer();
+        let copy_len = data.len().min(raw.len());
+        raw[..copy_len].copy_from_slice(&data[..copy_len]);
+        self.load()?;
+        if let Image::Loaded(image_data) = self {
+            let image = Arc::make_mut(&mut image_data.image);
+            let destination = image.as_mut_luma16().ok_or_else(|| {
+                PilError::InternalError("putdata I;16 storage mismatch".into())
+            })?;
+            for (pixel, sample) in destination.as_mut().iter_mut().zip(raw.chunks_exact(2)) {
+                *pixel = if l16_uses_big_endian(&mode) {
+                    u16::from_be_bytes([sample[0], sample[1]])
+                } else {
+                    u16::from_le_bytes([sample[0], sample[1]])
+                };
+            }
+            return Ok(());
+        }
+        Err(PilError::InternalError(
+            "putdata I;16 did not materialize writable storage".into(),
+        ))
     }
 
     /// Writes one normalized `putdata` value immediately at a pixel offset.
