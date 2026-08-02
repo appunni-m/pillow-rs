@@ -138,6 +138,30 @@ def indexed_png_with_full_palette_index_alpha() -> bytes:
     )
 
 
+def little_endian_l16_tiff() -> bytes:
+    """Return a minimal valid unsigned-16-bit grayscale TIFF stimulus."""
+
+    entries = [
+        (256, 4, 1, struct.pack("<I", 2)),
+        (257, 4, 1, struct.pack("<I", 2)),
+        (258, 3, 1, struct.pack("<H", 16) + b"\x00\x00"),
+        (259, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+        (262, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+        (273, 4, 1, struct.pack("<I", 134)),
+        (277, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+        (278, 4, 1, struct.pack("<I", 2)),
+        (279, 4, 1, struct.pack("<I", 8)),
+        (339, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+    ]
+    data = bytearray(b"II*\x00" + struct.pack("<I", 8))
+    data += struct.pack("<H", len(entries))
+    for tag, kind, count, value in entries:
+        data += struct.pack("<HHI", tag, kind, count) + value
+    data += struct.pack("<I", 0)
+    data += struct.pack("<4H", 0, 32768, 65535, 16384)
+    return bytes(data)
+
+
 def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
     """Add one deterministic EXIF APP1 variant to a valid JPEG stimulus.
 
@@ -442,6 +466,7 @@ class WorkflowBuilder:
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
     scenario_asset: str | None = None
+    scenario_inline_image: str | None = None
     scenario_exif_variant: str | None = None
     scenario_noise_seed: int | None = None
     scenario_chain: str | None = None
@@ -571,6 +596,25 @@ class WorkflowBuilder:
                 f"{label}-exif-{slug(self.scenario_exif_variant)}",
                 data,
                 "image/jpeg",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "open",
+                receiver=None,
+                arguments={"fp": data_descriptor},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.scenario_inline_image is not None:
+            if self.scenario_inline_image != "l16-tiff":
+                raise ValueError(
+                    f"unknown inline image stimulus: {self.scenario_inline_image}"
+                )
+            data_descriptor = self.inline_bytes(
+                f"{label}-l16-tiff",
+                little_endian_l16_tiff(),
+                "image/tiff",
             )
             step_id = self.add_step(
                 "PIL.Image",
@@ -2350,6 +2394,7 @@ def build_parity_case(
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
     scenario_asset: str | None = None,
+    scenario_inline_image: str | None = None,
     scenario_exif_variant: str | None = None,
     scenario_noise_seed: int | None = None,
     scenario_chain: str | None = None,
@@ -2395,6 +2440,7 @@ def build_parity_case(
         scenario_im_mode=scenario_im_mode,
         scenario_mask_mode=scenario_mask_mode,
         scenario_asset=scenario_asset,
+        scenario_inline_image=scenario_inline_image,
         scenario_exif_variant=scenario_exif_variant,
         scenario_noise_seed=scenario_noise_seed,
         scenario_chain=scenario_chain,
@@ -5005,6 +5051,19 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
+            "name": "opened-i16-scalar",
+            "observe_receiver": True,
+            "mode": "I;16",
+            "scenario_inline_image": "l16-tiff",
+            "values": {
+                "im": literal(7),
+                "box": literal([0, 0, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
             "name": "color-rgb",
             "observe_receiver": True,
             "mode": "RGB",
@@ -5175,6 +5234,18 @@ def build_nuanced_cases(
                 "data": bytes_literal(
                     [0, 32, 64, 96, 128, 160, 192, 224, 255]
                 ),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-i16-values",
+            "observe_receiver": True,
+            "mode": "I;16",
+            "scenario_inline_image": "l16-tiff",
+            "values": {
+                "data": literal([1, 2, 3, 4]),
             },
         },
         {
@@ -9923,6 +9994,7 @@ def build_nuanced_cases(
                 scenario_mask_mode=spec.get("mask_mode"),
                 scenario_noise_seed=spec.get("seed"),
                 scenario_asset=spec.get("scenario_asset"),
+                scenario_inline_image=spec.get("scenario_inline_image"),
                 scenario_exif_variant=spec.get("exif_variant"),
                 scenario_chain=spec.get("chain"),
                 scenario_observe_result=spec.get("observe_result"),
