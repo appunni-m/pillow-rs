@@ -1035,11 +1035,16 @@ class WorkflowBuilder:
             )
             return binding(transposed)
         if surface == "PIL.ImagePalette.ImagePalette":
+            arguments: dict[str, dict[str, Any]] = {}
+            for parameter_id in ("mode", "palette"):
+                descriptor = self.scenario_values.get(parameter_id)
+                if descriptor is not None:
+                    arguments[parameter_id] = descriptor
             palette = self.add_step(
                 "PIL.ImagePalette",
                 "ImagePalette",
                 receiver=None,
-                arguments={},
+                arguments=arguments,
                 step_id=self.next_step_id("setup-palette"),
             )
             return binding(palette)
@@ -4986,6 +4991,38 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "empty-tuple-rejected",
             "values": {"color": literal([])},
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "full-rgb-palette-existing-color",
+            "values": {
+                "color": literal([42, 42, 42]),
+                "palette": literal(
+                    [
+                        component
+                        for index in range(256)
+                        for component in (index, index, index)
+                    ]
+                ),
+            },
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "full-rgb-palette-exhausted",
+            "values": {
+                "color": literal([9, 8, 7]),
+                "palette": literal(
+                    [
+                        component
+                        for index in range(256)
+                        for component in (index, index, index)
+                    ]
+                ),
+            },
         },
         {
             "surface": "PIL.ImagePalette.ImagePalette",

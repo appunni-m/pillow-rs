@@ -41,7 +41,9 @@
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.rgba-tuple-append",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.short-tuple-append",
           "PIL.ImagePalette.ImagePalette.getcolor.nuanced.opaque-rgba-tuple-rgb-mode",
-          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.empty-tuple-rejected"
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.empty-tuple-rejected",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.full-rgb-palette-existing-color",
+          "PIL.ImagePalette.ImagePalette.getcolor.nuanced.full-rgb-palette-exhausted"
         ],
         "command_ids": []
       },
