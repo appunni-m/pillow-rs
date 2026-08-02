@@ -46,6 +46,10 @@ pub enum PilError {
     #[error("{0}")]
     KeyError(String),
 
+    /// Attribute lookup failed on a host object supplied to a public API.
+    #[error("{0}")]
+    AttributeError(String),
+
     /// End-of-sequence error raised when seeking beyond the available frames.
     #[error("{0}")]
     EOFError(String),

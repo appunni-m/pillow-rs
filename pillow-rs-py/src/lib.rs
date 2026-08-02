@@ -7,7 +7,7 @@
 use pillow_rs::PilError;
 use pillow_rs::{Image as RsImage, PutDataValue};
 use pyo3::ToPyObject;
-use pyo3::exceptions::{PyAttributeError, PySystemError, PyTypeError, PyValueError};
+use pyo3::exceptions::{PySystemError, PyTypeError, PyValueError};
 use pyo3::prelude::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
@@ -234,6 +234,49 @@ fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
             .ok()
             .map(|image| image.borrow().inner.clone())
     })
+}
+
+fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PythonPasteSource {
+    if let Some(image) = image_from_python(value) {
+        return pillow_rs::PythonPasteSource::Image(image);
+    }
+    if let Ok(value) = value.extract::<i64>() {
+        return pillow_rs::PythonPasteSource::Scalar(value);
+    }
+    if let Ok(values) = value.extract::<Vec<i64>>() {
+        return pillow_rs::PythonPasteSource::Components(values);
+    }
+    pillow_rs::PythonPasteSource::Invalid
+}
+
+fn paste_box_from_python(value: Option<&Bound<'_, PyAny>>) -> PyResult<pillow_rs::PythonPasteBox> {
+    let Some(value) = value else {
+        return Ok(pillow_rs::PythonPasteBox::None);
+    };
+    if let Some(image) = image_from_python(value) {
+        return Ok(pillow_rs::PythonPasteBox::Image(image));
+    }
+    if let Ok(values) = value.extract::<Vec<i64>>() {
+        return Ok(pillow_rs::PythonPasteBox::Values(values));
+    }
+    Ok(pillow_rs::PythonPasteBox::Invalid {
+        length: value.len().ok(),
+        type_name: value.get_type().name()?.to_string(),
+    })
+}
+
+fn paste_mask_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::PythonPasteMask> {
+    let Some(value) = value else {
+        return Ok(pillow_rs::PythonPasteMask::None);
+    };
+    if let Some(image) = image_from_python(value) {
+        return Ok(pillow_rs::PythonPasteMask::Image(image));
+    }
+    Ok(pillow_rs::PythonPasteMask::Invalid(
+        value.get_type().name()?.to_string(),
+    ))
 }
 
 fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ImageOpsMask {
@@ -584,95 +627,13 @@ impl PyImage {
         box_coords: Option<&Bound<'_, PyAny>>,
         mask: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<()> {
-        use pillow_rs::PasteSource;
-        // Thin binding: extract Python types, core handles all logic
-        let is_abbreviated = box_coords.is_some_and(|b| b.downcast::<PyImage>().is_ok());
-        if is_abbreviated && mask.is_some() {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "If using second argument as mask, third argument must be None",
-            ));
-        }
-        let effective_mask = if is_abbreviated { box_coords } else { mask };
-
-        let src_image = im
-            .downcast::<PyImage>()
-            .ok()
-            .map(|p| p.borrow().inner.clone());
-        let src_single = im
-            .extract::<(u8,)>()
-            .ok()
-            .map(|value| value.0)
-            .or_else(|| im.extract::<u8>().ok());
-        let src_la = im.extract::<(u8, u8)>().ok();
-        let src_rgb = im.extract::<(u8, u8, u8)>().ok();
-        let src_rgba = im.extract::<(u8, u8, u8, u8)>().ok();
-        let source = if src_image.is_some() || src_rgba.is_some() {
-            // Route the image/four-channel forms through the shared
-            // constructor so every binding reuses the same core path.
-            PasteSource::from_parts(
-                src_image,
-                src_rgba.map_or(0, |v| v.0),
-                src_rgba.map_or(0, |v| v.1),
-                src_rgba.map_or(0, |v| v.2),
-                src_rgba.map_or(0, |v| v.3),
+        self.inner
+            .paste_with_input(
+                paste_source_from_python(im),
+                paste_box_from_python(box_coords)?,
+                paste_mask_from_python(mask)?,
             )
-        } else if let Some((r, g, b)) = src_rgb {
-            PasteSource::Rgb(r, g, b)
-        } else if let Some((l, a)) = src_la {
-            PasteSource::LumaAlpha(l, a)
-        } else if let Some(value) = src_single {
-            PasteSource::Scalar(value)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "im must be Image or color",
-            ));
-        };
-
-        let (parsed_region, parsed_position) = if is_abbreviated {
-            (None, None)
-        } else {
-            (
-                box_coords.and_then(|b| b.extract::<(i32, i32, i32, i32)>().ok()),
-                box_coords.and_then(|b| b.extract::<(i32, i32)>().ok()),
-            )
-        };
-        if !is_abbreviated
-            && box_coords.is_some()
-            && parsed_region.is_none()
-            && parsed_position.is_none()
-        {
-            let length = if let Some(box_coords) = box_coords {
-                box_coords.len()?
-            } else {
-                0
-            };
-            return Err(PyTypeError::new_err(format!(
-                "argument 2 must be sequence of length 4, not {length}"
-            )));
-        }
-
-        let parsed_mask = match effective_mask {
-            Some(value) => match value.downcast::<PyImage>() {
-                Ok(image) => Some(image.borrow().inner.clone()),
-                Err(_) => {
-                    let type_name = value.get_type().name()?;
-                    return Err(PyAttributeError::new_err(format!(
-                        "'{type_name}' object has no attribute 'load'"
-                    )));
-                }
-            },
-            None => None,
-        };
-
-        if let Some(region) = parsed_region {
-            self.inner
-                .paste(source, Some(region), parsed_mask.as_ref())
-                .map_err(map_error)
-        } else {
-            self.inner
-                .paste_at(source, parsed_position, parsed_mask.as_ref())
-                .map_err(map_error)
-        }
+            .map_err(map_error)
     }
 
     fn split(&self) -> PyResult<Vec<PyImage>> {
@@ -1552,6 +1513,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::AssertionError(msg) => pyo3::exceptions::PyAssertionError::new_err(msg),
         PilError::IndexError(msg) => pyo3::exceptions::PyIndexError::new_err(msg),
         PilError::KeyError(msg) => pyo3::exceptions::PyKeyError::new_err(msg),
+        PilError::AttributeError(msg) => pyo3::exceptions::PyAttributeError::new_err(msg),
         PilError::EOFError(msg) => pyo3::exceptions::PyEOFError::new_err(msg),
         PilError::UnsupportedLibraqm => {
             let message = PilError::UnsupportedLibraqm.to_string();

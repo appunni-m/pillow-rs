@@ -24,6 +24,48 @@ pub enum PasteSource {
     Color((u8, u8, u8, u8)),
 }
 
+/// Host-neutral source input for the Python `Image.paste` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonPasteSource {
+    /// Another image object.
+    Image(Image),
+    /// A scalar color value before mode-specific validation.
+    Scalar(i64),
+    /// A tuple/list color before mode-specific arity validation.
+    Components(Vec<i64>),
+    /// A value that is neither an image nor a supported color value.
+    Invalid,
+}
+
+/// Host-neutral box input for the Python `Image.paste` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonPasteBox {
+    /// No second argument was supplied.
+    None,
+    /// The abbreviated `(image, mask)` form.
+    Image(Image),
+    /// A coordinate list/tuple.
+    Values(Vec<i64>),
+    /// A value that could not be interpreted as a coordinate sequence.
+    Invalid {
+        /// The sequence length when the host object exposed one.
+        length: Option<usize>,
+        /// The host type name for objects without a length.
+        type_name: String,
+    },
+}
+
+/// Host-neutral mask input for the Python `Image.paste` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonPasteMask {
+    /// No mask was supplied.
+    None,
+    /// An image mask.
+    Image(Image),
+    /// A non-image object.
+    Invalid(String),
+}
+
 /// Host-neutral coordinate input for public `Image.alpha_composite` calls.
 #[derive(Debug, Clone)]
 pub enum AlphaCompositeBox {
@@ -93,6 +135,96 @@ enum PastePlacement {
 }
 
 impl Image {
+    /// Applies the Python `Image.paste` input contract before queuing paste.
+    ///
+    /// Python and PyO3 bindings only classify host values into these neutral
+    /// records. Coordinate arity, abbreviated-box semantics, color arity,
+    /// mask errors, and the actual paste path all remain shared Rust logic.
+    pub fn paste_with_input(
+        &mut self,
+        source: PythonPasteSource,
+        box_input: PythonPasteBox,
+        mask_input: PythonPasteMask,
+    ) -> Result<(), PilError> {
+        let source = match source {
+            PythonPasteSource::Image(image) => PasteSource::Image(image),
+            PythonPasteSource::Scalar(value) => PasteSource::Scalar(byte_color(value)?),
+            PythonPasteSource::Components(values) => match values.as_slice() {
+                [value] => PasteSource::Scalar(byte_color(*value)?),
+                [luma, alpha] => PasteSource::LumaAlpha(byte_color(*luma)?, byte_color(*alpha)?),
+                [r, g, b] => PasteSource::Rgb(byte_color(*r)?, byte_color(*g)?, byte_color(*b)?),
+                [r, g, b, a] => PasteSource::Rgba(
+                    byte_color(*r)?,
+                    byte_color(*g)?,
+                    byte_color(*b)?,
+                    byte_color(*a)?,
+                ),
+                _ => return Err(PilError::TypeError("im must be Image or color".to_owned())),
+            },
+            PythonPasteSource::Invalid => {
+                return Err(PilError::TypeError("im must be Image or color".to_owned()));
+            }
+        };
+
+        let abbreviated_mask = match &box_input {
+            PythonPasteBox::Image(mask) => Some(mask.clone()),
+            _ => None,
+        };
+        if abbreviated_mask.is_some() && !matches!(&mask_input, PythonPasteMask::None) {
+            return Err(PilError::ValueError(
+                "If using second argument as mask, third argument must be None".to_owned(),
+            ));
+        }
+        let mask = if let Some(image) = abbreviated_mask {
+            Some(image)
+        } else {
+            match mask_input {
+                PythonPasteMask::None => None,
+                PythonPasteMask::Image(image) => Some(image),
+                PythonPasteMask::Invalid(type_name) => {
+                    return Err(PilError::AttributeError(format!(
+                        "'{type_name}' object has no attribute 'load'"
+                    )));
+                }
+            }
+        };
+
+        match box_input {
+            PythonPasteBox::None | PythonPasteBox::Image(_) => {
+                self.paste_at(source, None, mask.as_ref())
+            }
+            PythonPasteBox::Values(values) => match values.as_slice() {
+                [x, y] => self.paste_at(
+                    source,
+                    Some((coordinate(*x)?, coordinate(*y)?)),
+                    mask.as_ref(),
+                ),
+                [left, top, right, bottom] => self.paste(
+                    source,
+                    Some((
+                        coordinate(*left)?,
+                        coordinate(*top)?,
+                        coordinate(*right)?,
+                        coordinate(*bottom)?,
+                    )),
+                    mask.as_ref(),
+                ),
+                _ => Err(PilError::TypeError(format!(
+                    "argument 2 must be sequence of length 4, not {}",
+                    values.len()
+                ))),
+            },
+            PythonPasteBox::Invalid { length, type_name } => match length {
+                Some(length) => Err(PilError::TypeError(format!(
+                    "argument 2 must be sequence of length 4, not {length}"
+                ))),
+                None => Err(PilError::TypeError(format!(
+                    "object of type '{type_name}' has no len()"
+                ))),
+            },
+        }
+    }
+
     /// Performs Pillow's high-level in-place alpha composite workflow.
     ///
     /// The low-level [`Image::alpha_composite`] primitive requires equal-sized
@@ -437,4 +569,12 @@ impl Image {
         *self = new_self;
         Ok(())
     }
+}
+
+fn byte_color(value: i64) -> Result<u8, PilError> {
+    u8::try_from(value).map_err(|_| PilError::TypeError("im must be Image or color".to_owned()))
+}
+
+fn coordinate(value: i64) -> Result<i32, PilError> {
+    i32::try_from(value).map_err(|_| PilError::TypeError("coordinates must be integers".to_owned()))
 }
