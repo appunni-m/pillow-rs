@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 69af3ac55db9c2c6161d44c3fd5e4755e34d1941e66aee76af14bcc5096e0c28
-coverage_run_id: migration-coverage-23ce833fdd3345b89cb93a58c81792d3
+coverage_run_id: migration-coverage-799a616a1bbb4855bc9ae4fdb3acec5c
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%
@@ -21,7 +21,7 @@ component's measured coverage by design.
 
 ## PIL.Image.Image.getbbox
 
-`PIL.Image.Image.getbbox -> region coverage 7988/8872 (90.0%)`
+`PIL.Image.Image.getbbox -> region coverage 7994/8878 (90.0%)`
 
 ## Operations below 90% region coverage
 
