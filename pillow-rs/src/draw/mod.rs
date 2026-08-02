@@ -45,6 +45,23 @@ pub enum DrawBoxInput {
     Invalid,
 }
 
+/// Host-neutral color input for ImageDraw operations.
+#[derive(Debug, Clone)]
+pub enum DrawColorInput {
+    /// No fill or outline was supplied.
+    None,
+    /// A Pillow color name or hexadecimal color string.
+    String(String),
+    /// An integer color value.
+    Integer(i64),
+    /// A floating-point color value, used by `F` mode.
+    Float(f64),
+    /// A tuple/list of color components.
+    Components(Vec<i64>),
+    /// A value that is not a supported color form.
+    Invalid,
+}
+
 /// Normalizes a flat or nested ImageDraw bounding box.
 pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), PilError> {
     let error = || PilError::TypeError("coordinate list must contain exactly 2 coordinates".into());
@@ -161,6 +178,70 @@ pub enum RegularPolygonSides {
     Invalid,
 }
 
+fn draw_color_error() -> PilError {
+    PilError::TypeError("Expected color tuple, int, or string".to_owned())
+}
+
+fn draw_byte(value: i64) -> Option<u8> {
+    u8::try_from(value).ok()
+}
+
+fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
+    if mode == "F" {
+        let bytes = (value as f32).to_le_bytes();
+        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+    }
+    if mode == "I" {
+        let value = i32::try_from(value).map_err(|_| draw_color_error())?;
+        let bytes = value.to_le_bytes();
+        return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
+    }
+    let value = draw_byte(value).ok_or_else(draw_color_error)?;
+    Ok(match mode {
+        "RGB" | "YCbCr" | "HSV" => (value, 0, 0, 255),
+        "RGBA" => (value, 0, 0, 0),
+        "LA" => (value, value, value, 0),
+        "CMYK" => (value, 0, 0, 0),
+        _ => (value, value, value, 255),
+    })
+}
+
+fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
+    let components = || {
+        values
+            .iter()
+            .copied()
+            .map(draw_byte)
+            .collect::<Option<Vec<_>>>()
+    };
+    if mode == "PA" {
+        return match (values.len(), components()) {
+            (1, Some(values)) => Ok((values[0], values[0], values[0], 0)),
+            (2, Some(values)) => Ok((values[0], values[0], values[0], values[1])),
+            _ => Err(PilError::TypeError(
+                "color must be int, or tuple of one or two elements".to_owned(),
+            )),
+        };
+    }
+    if mode == "LA" {
+        return match (values.len(), components()) {
+            (2, Some(values)) => Ok((values[0], values[0], values[0], values[1])),
+            _ => Err(PilError::TypeError(
+                "color must be int, or tuple of one or two elements".to_owned(),
+            )),
+        };
+    }
+    if let Some(values) = components() {
+        return match values.as_slice() {
+            [value] if matches!(mode, "L" | "1" | "P") => Ok((*value, *value, *value, 255)),
+            [r, g, b] => Ok((*r, *g, *b, 255)),
+            [r, g, b, a] => Ok((*r, *g, *b, *a)),
+            _ => Err(draw_color_error()),
+        };
+    }
+    Err(draw_color_error())
+}
+
 impl Draw {
     /// Creates a drawing context for `image`.
     ///
@@ -185,6 +266,59 @@ impl Draw {
             .clone()
             .or_else(|| self.image.mode().ok())
             .unwrap_or_else(|| "RGBA".to_string())
+    }
+
+    /// Resolves a host-neutral color according to Pillow's drawing-mode rules.
+    pub fn color_with_input(&self, input: DrawColorInput) -> Result<(u8, u8, u8, u8), PilError> {
+        let mode = self.effective_mode();
+        match input {
+            DrawColorInput::None => {
+                if mode == "PA" {
+                    Ok((255, 255, 255, 255))
+                } else {
+                    Ok((0, 0, 0, 255))
+                }
+            }
+            DrawColorInput::String(value) => crate::color::parse_color_str(&value),
+            DrawColorInput::Integer(value) => resolve_integer_color(&mode, value),
+            DrawColorInput::Float(value) if mode == "F" => {
+                let bytes = (value as f32).to_le_bytes();
+                Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
+            }
+            DrawColorInput::Float(_) => Err(draw_color_error()),
+            DrawColorInput::Components(values) => resolve_component_color(&mode, &values),
+            DrawColorInput::Invalid => Err(draw_color_error()),
+        }
+    }
+
+    /// Validates a bitmap fill and delegates the complete operation to core.
+    pub fn bitmap_with_input(
+        &mut self,
+        x: i32,
+        y: i32,
+        bitmap: &Image,
+        input: DrawColorInput,
+    ) -> Result<(), PilError> {
+        let mode = self.effective_mode();
+        if let DrawColorInput::Components(values) = &input {
+            if mode.len() == 1 && mode != "P" && values.len() != 1 {
+                if mode == "F" {
+                    return Err(PilError::TypeError(
+                        "must be real number, not tuple".to_owned(),
+                    ));
+                }
+                return Err(PilError::TypeError(
+                    "color must be int or single-element tuple".to_owned(),
+                ));
+            }
+            if mode.len() == 2 && !matches!(values.len(), 1 | 2) {
+                return Err(PilError::TypeError(
+                    "color must be int, or tuple of one or two elements".to_owned(),
+                ));
+            }
+        }
+        let color = self.color_with_input(input)?;
+        self.bitmap(x, y, bitmap, Some(color))
     }
 
     /// Returns the original Pillow mode of the drawing target.
@@ -858,8 +992,8 @@ impl Draw {
                 let img = self.image.materialize()?;
                 let (img_w, img_h) = (img.width(), img.height());
                 let mut rgba = img.to_rgba8();
-                // Write all 4 bytes of the LE representation (parse_draw_color
-                // already packed I as i32→LE bytes, F as f32→LE bytes)
+                // Write all 4 bytes of the LE representation produced by the
+                // mode-aware color normalization above.
                 let ink = [color.0, color.1, color.2, color.3];
                 for py in 0..bmp_h {
                     for px in 0..bmp_w {
