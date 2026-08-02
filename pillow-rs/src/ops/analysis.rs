@@ -13,8 +13,10 @@ pub enum ImageAnalysisMask {
     None,
     /// A mask image extracted by a binding.
     Image(Image),
-    /// A non-image value was supplied.
-    Invalid,
+    /// A truthy non-image value was supplied, retaining its host type name so
+    /// bindings can expose Pillow's attribute error without inspecting host
+    /// objects in the core.
+    Invalid(String),
 }
 
 /// Validate a Pillow transparency/statistics mask without touching host types.
@@ -31,18 +33,22 @@ impl Image {
     /// Computes a histogram after validating a host-neutral optional mask.
     pub fn histogram_with_input(&self, mask: ImageAnalysisMask) -> Result<Vec<u32>, PilError> {
         match mask {
-            ImageAnalysisMask::None => self.histogram_with_mask(None),
+            ImageAnalysisMask::None => self.histogram(),
             ImageAnalysisMask::Image(mask) => self.histogram_with_mask(Some(&mask)),
-            ImageAnalysisMask::Invalid => Err(PilError::ValueError("bad transparency mask".into())),
+            ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
+                "'{type_name}' object has no attribute 'load'"
+            ))),
         }
     }
 
     /// Computes entropy after validating a host-neutral optional mask.
     pub fn entropy_with_input(&self, mask: ImageAnalysisMask) -> Result<f64, PilError> {
         match mask {
-            ImageAnalysisMask::None => self.entropy_with_mask(None),
+            ImageAnalysisMask::None => self.entropy(),
             ImageAnalysisMask::Image(mask) => self.entropy_with_mask(Some(&mask)),
-            ImageAnalysisMask::Invalid => Err(PilError::ValueError("bad transparency mask".into())),
+            ImageAnalysisMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
+                "'{type_name}' object has no attribute 'load'"
+            ))),
         }
     }
 }
