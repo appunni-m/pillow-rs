@@ -7,9 +7,7 @@
 use pillow_rs::PilError;
 use pillow_rs::{Image as RsImage, PutDataValue};
 use pyo3::ToPyObject;
-use pyo3::exceptions::{
-    PyAttributeError, PyOverflowError, PySystemError, PyTypeError, PyValueError,
-};
+use pyo3::exceptions::{PyAttributeError, PySystemError, PyTypeError, PyValueError};
 use pyo3::prelude::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
@@ -83,6 +81,103 @@ fn resample_input_from_python(
     }
     let display = value.str()?.to_string();
     Ok(Some(pillow_rs::ResampleInput::Name(display)))
+}
+
+fn transform_data_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<pillow_rs::TransformData>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if let Ok(matrix) = value.extract::<Vec<f64>>() {
+        return Ok(Some(pillow_rs::TransformData::Affine(matrix)));
+    }
+    if let Ok(mesh) = value.extract::<Vec<(Vec<f64>, Vec<f64>)>>() {
+        return Ok(Some(pillow_rs::TransformData::Mesh(mesh)));
+    }
+    if let Ok(mesh) = value.extract::<Vec<Vec<Vec<f64>>>>() {
+        let mesh = mesh
+            .into_iter()
+            .map(|item| {
+                if item.len() == 2 {
+                    Ok((item[0].clone(), item[1].clone()))
+                } else {
+                    Err(PyTypeError::new_err(
+                        "mesh entries must contain a bbox and quad",
+                    ))
+                }
+            })
+            .collect::<PyResult<Vec<_>>>()?;
+        return Ok(Some(pillow_rs::TransformData::Mesh(mesh)));
+    }
+    Err(PyTypeError::new_err("transform data must be a sequence"))
+}
+
+fn transform_fill_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<pillow_rs::TransformFill>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if let Ok(value) = value.extract::<i64>() {
+        return Ok(Some(pillow_rs::TransformFill::Scalar(value)));
+    }
+    if let Ok(value) = value.extract::<String>() {
+        return Ok(Some(pillow_rs::TransformFill::Name(value)));
+    }
+    if let Ok(value) = value.extract::<Vec<i64>>() {
+        return Ok(Some(pillow_rs::TransformFill::Components(value)));
+    }
+    Ok(Some(pillow_rs::TransformFill::Invalid))
+}
+
+fn reduce_factor_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::ReduceFactor {
+    if let Ok(value) = value.extract::<i64>() {
+        return pillow_rs::ReduceFactor::Scalar(value);
+    }
+    if let Ok(values) = value.extract::<Vec<i64>>() {
+        return pillow_rs::ReduceFactor::Sequence(values);
+    }
+    pillow_rs::ReduceFactor::Invalid
+}
+
+fn reduce_box_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ReduceBox {
+    let Some(value) = value else {
+        return pillow_rs::ReduceBox::Invalid;
+    };
+    value
+        .extract::<Vec<i64>>()
+        .map(pillow_rs::ReduceBox::Sequence)
+        .unwrap_or(pillow_rs::ReduceBox::Invalid)
+}
+
+fn centering_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::CenteringInput {
+    let Some(value) = value else {
+        return pillow_rs::CenteringInput::Default;
+    };
+    if let Ok(value) = value.extract::<f64>() {
+        return pillow_rs::CenteringInput::Scalar(value);
+    }
+    if let Ok(values) = value.extract::<Vec<f64>>() {
+        return pillow_rs::CenteringInput::Values(values);
+    }
+    pillow_rs::CenteringInput::Invalid
+}
+
+fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ImageOpsMask {
+    let Some(value) = value else {
+        return pillow_rs::ImageOpsMask::None;
+    };
+    value
+        .downcast::<PyImage>()
+        .map(|mask| pillow_rs::ImageOpsMask::Image(mask.borrow().inner.clone()))
+        .unwrap_or(pillow_rs::ImageOpsMask::Invalid)
+}
+
+#[pyfunction]
+fn ops_validate_deform_resample(value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    let value = resample_input_from_python(value)?;
+    pillow_rs::imageops_validate_deform_resample(value).map_err(map_error)
 }
 
 fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
@@ -808,15 +903,48 @@ impl PyImage {
         self.inner.putalpha_data(&mask_inner).map_err(map_error)
     }
 
-    fn reduce(&self, x_factor: u32, y_factor: u32) -> PyResult<PyImage> {
-        let rs = self.inner.reduce(x_factor, y_factor).map_err(map_error)?;
+    fn reduce(
+        &self,
+        factor: &Bound<'_, PyAny>,
+        box_coords: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<PyImage> {
+        let factor = reduce_factor_from_python(factor);
+        let box_coords = box_coords.map(|value| reduce_box_from_python(Some(value)));
+        let rs = self
+            .inner
+            .reduce_public(factor, box_coords)
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn alpha_composite(&mut self, im: &Bound<'_, PyImage>) -> PyResult<()> {
-        let source = im.borrow().inner.clone();
+    #[pyo3(signature = (im, dest=None, source=None))]
+    fn alpha_composite(
+        &mut self,
+        im: &Bound<'_, PyImage>,
+        dest: Option<&Bound<'_, PyAny>>,
+        source: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        let source_image = im.borrow().inner.clone();
+        let dest = dest.map_or_else(
+            || pillow_rs::AlphaCompositeBox::Values(vec![0, 0]),
+            |value| {
+                value
+                    .extract::<Vec<i64>>()
+                    .map(pillow_rs::AlphaCompositeBox::Values)
+                    .unwrap_or(pillow_rs::AlphaCompositeBox::Invalid)
+            },
+        );
+        let source_box = source.map_or_else(
+            || pillow_rs::AlphaCompositeBox::Values(vec![0, 0]),
+            |value| {
+                value
+                    .extract::<Vec<i64>>()
+                    .map(pillow_rs::AlphaCompositeBox::Values)
+                    .unwrap_or(pillow_rs::AlphaCompositeBox::Invalid)
+            },
+        );
         self.inner
-            .alpha_composite(&source, (0, 0), (0, 0))
+            .alpha_composite_public(&source_image, dest, source_box)
             .map_err(map_error)
     }
 
@@ -944,65 +1072,25 @@ impl PyImage {
     fn transform(
         &self,
         size: (u32, u32),
-        method: &str,
-        data: Option<Vec<f64>>,
+        method: i32,
+        data: Option<&Bound<'_, PyAny>>,
         resample: Option<i32>,
         fill: Option<i32>,
         fillcolor: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let mode = self.inner.mode().unwrap_or_else(|_| "RGB".to_string());
-        let _ = (resample, fill);
-        // PIL's default fill for CMYK is (0,0,0,0) — white/transparent (no ink).
-        // For other modes, default fill is black (0,0,0,255).
-        let default_fill = if mode == "CMYK" {
-            (0, 0, 0, 0)
-        } else {
-            (0, 0, 0, 255)
-        };
-        let fill = if let Some(fc) = fillcolor {
-            if let Ok((r, g, b)) = fc.extract::<(u8, u8, u8)>() {
-                (r, g, b, 255)
-            } else if let Ok((r, g, b, a)) = fc.extract::<(u8, u8, u8, u8)>() {
-                (r, g, b, a)
-            } else if let Ok(i) = fc.extract::<u8>() {
-                (i, i, i, 255)
-            } else {
-                default_fill
-            }
-        } else {
-            default_fill
-        };
-
-        match method {
-            "AFFINE" => {
-                let matrix = data.ok_or_else(|| {
-                    pyo3::exceptions::PyValueError::new_err("missing method data")
-                })?;
-                let transformed = if mode == "P" {
-                    if let Some(index) = parse_palette_transform_fill(fillcolor)? {
-                        self.inner
-                            .transform_affine_palette_index(size, &matrix, index)
-                    } else {
-                        self.inner.transform_affine(size, &matrix, fill)
-                    }
-                } else {
-                    self.inner.transform_affine(size, &matrix, fill)
-                };
-                transformed.map(|i| PyImage { inner: i }).map_err(map_error)
-            }
-            "MESH" => {
-                let mesh_data = data
-                    .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("MESH requires data"))?;
-                self.inner
-                    .transform_mesh(size, mesh_data, fill)
-                    .map(|i| PyImage { inner: i })
-                    .map_err(map_error)
-            }
-            _ => Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
-                "Transform method '{}' not yet implemented",
-                method
-            ))),
-        }
+        let data = transform_data_from_python(data)?;
+        let fillcolor = transform_fill_from_python(fillcolor)?;
+        self.inner
+            .transform_public(
+                size,
+                method,
+                data,
+                resample.unwrap_or(0),
+                fill.unwrap_or(1),
+                fillcolor,
+            )
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)
     }
 
     #[staticmethod]
@@ -1365,86 +1453,6 @@ impl PyImage {
     }
 }
 
-fn palette_transform_fill_type_error() -> PyErr {
-    PyTypeError::new_err("color must be int or single-element tuple")
-}
-
-fn clamp_palette_transform_index(value: &Bound<'_, PyAny>) -> PyResult<u8> {
-    let value = value.extract::<i64>().map_err(|error| {
-        if error.is_instance_of::<PyOverflowError>(value.py()) {
-            PyOverflowError::new_err("int too big to convert")
-        } else {
-            error
-        }
-    })?;
-    Ok(value.clamp(0, i64::from(u8::MAX)) as u8)
-}
-
-fn validate_palette_transform_color<'py>(
-    values: impl IntoIterator<Item = Bound<'py, PyAny>>,
-    len: usize,
-    allow_single: bool,
-) -> PyResult<Option<u8>> {
-    let values: Vec<_> = values.into_iter().collect();
-    if allow_single && len == 1 {
-        let value = &values[0];
-        if value.is_instance_of::<PyInt>() {
-            return clamp_palette_transform_index(value).map(Some);
-        }
-        return Err(palette_transform_fill_type_error());
-    }
-    if !matches!(len, 3 | 4) || values.iter().any(|value| !value.is_instance_of::<PyInt>()) {
-        return Err(palette_transform_fill_type_error());
-    }
-
-    // Pillow 12.2 ImagePalette.getcolor rejects non-opaque RGBA before
-    // converting RGB components to bytes.
-    if len == 4 {
-        let alpha = values[3].extract::<i64>().ok();
-        if alpha != Some(i64::from(u8::MAX)) {
-            return Err(PyValueError::new_err(
-                "cannot add non-opaque RGBA color to RGB palette",
-            ));
-        }
-    }
-    for value in &values[..3] {
-        let component = value
-            .extract::<i64>()
-            .map_err(|_| PyValueError::new_err("bytes must be in range(0, 256)"))?;
-        if !(0..=i64::from(u8::MAX)).contains(&component) {
-            return Err(PyValueError::new_err("bytes must be in range(0, 256)"));
-        }
-    }
-    // Image.transform replaces the temporary color palette with the source
-    // palette, so a valid RGB/RGBA fill remains raw palette index zero.
-    Ok(None)
-}
-
-fn parse_palette_transform_fill(fillcolor: Option<&Bound<'_, PyAny>>) -> PyResult<Option<u8>> {
-    let Some(fillcolor) = fillcolor else {
-        return Ok(None);
-    };
-    if fillcolor.is_instance_of::<PyInt>() {
-        return clamp_palette_transform_index(fillcolor).map(Some);
-    }
-    if let Ok(color) = fillcolor.extract::<String>() {
-        pillow_rs::parse_color_str(&color).map_err(|_| {
-            let repr = fillcolor
-                .repr()
-                .map_or_else(|_| format!("{color:?}"), |repr| repr.to_string());
-            PyValueError::new_err(format!("unknown color specifier: {repr}"))
-        })?;
-        return Ok(None);
-    }
-    if let Ok(values) = fillcolor.downcast::<PyTuple>() {
-        return validate_palette_transform_color(values.iter(), values.len(), true);
-    }
-    if let Ok(values) = fillcolor.downcast::<PyList>() {
-        return validate_palette_transform_color(values.iter(), values.len(), false);
-    }
-    Err(palette_transform_fill_type_error())
-}
-
 fn map_error(e: PilError) -> PyErr {
     match e {
         PilError::IOError(msg) => pyo3::exceptions::PyOSError::new_err(msg),
@@ -1580,11 +1588,10 @@ fn align_row_to_32(data: Vec<u8>, width: u32, bits_per_pixel: u8) -> PyResult<Ve
 
 /// Create an Image from a flat or nested list of integer pixel values.
 ///
-/// Accepts `[0, 128, 255, …]` (flat) or `[[0, 1], [2, 3], …]` (nested rows)
-/// and returns a single-row Image with the appropriate width and mode.
+/// Python extraction is kept here at the ABI boundary; mode arity, range,
+/// width, and raw-image construction are owned by the Rust core.
 #[pyfunction]
 fn fromarray_pixel_list(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
-    // Try extracting as flat Vec<i32> first
     let flat: Vec<i32> = if let Ok(v) = data.extract::<Vec<i32>>() {
         v
     } else if let Ok(nested) = data.extract::<Vec<Vec<i32>>>() {
@@ -1595,18 +1602,98 @@ fn fromarray_pixel_list(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult
         ));
     };
 
-    let bytes = pillow_rs::flatten_pixel_list(&flat).map_err(map_error)?;
-    let n_bands = mode.map_or(1, |m| m.len() as u32);
-    let w = flat.len() as u32 / n_bands;
-    if w == 0 {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "fromarray_pixel_list: not enough pixel values for the given mode",
-        ));
-    }
-    let effective_mode = mode.unwrap_or("L");
-    pillow_rs::Image::frombytes(effective_mode, (w, 1), &bytes)
+    pillow_rs::from_array_pixel_values(&flat, mode)
         .map(|img| PyImage { inner: img })
         .map_err(map_error)
+}
+
+fn array_interface_bytes(value: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<Vec<u8>> {
+    let memoryview = value
+        .py()
+        .import("builtins")?
+        .getattr("memoryview")?
+        .call1((value,));
+    match memoryview {
+        Ok(memoryview) => memoryview.call_method0("tobytes")?.extract::<Vec<u8>>(),
+        Err(_) => {
+            let type_name = value.get_type().name()?;
+            let message = if mode == Some("RGBA") {
+                "expected string or buffer".to_owned()
+            } else {
+                format!("a bytes-like object is required, not '{type_name}'")
+            };
+            Err(PyTypeError::new_err(message))
+        }
+    }
+}
+
+fn array_interface_descriptor(value: &Bound<'_, PyAny>) -> PyResult<(Vec<usize>, String)> {
+    let interface = value.getattr("__array_interface__")?;
+    let interface = interface.downcast::<PyDict>()?;
+    let shape = interface
+        .get_item("shape")?
+        .ok_or_else(|| PyValueError::new_err("__array_interface__ has no shape"))?
+        .extract::<Vec<usize>>()?;
+    let typestr = interface
+        .get_item("typestr")?
+        .ok_or_else(|| PyValueError::new_err("__array_interface__ has no typestr"))?
+        .extract::<String>()?;
+    Ok((shape, typestr))
+}
+
+/// Create an image from a Python array-interface or list object.
+///
+/// The ABI layer only marshals Python protocols into plain Rust values. Dtype,
+/// shape, mode, and byte-layout policy are implemented by `pillow-rs` so the
+/// Python and JavaScript bindings cannot grow divergent `fromarray` logic.
+#[pyfunction]
+fn fromarray(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
+    if let Ok(bytes) = data.downcast::<PyBytes>() {
+        return pillow_rs::from_array_bytes(bytes.as_bytes(), mode)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error);
+    }
+
+    if data.hasattr("__array_interface__")? {
+        let (shape, typestr) = array_interface_descriptor(data)?;
+        // Resolve dimensions before touching the Python buffer. Pillow reports
+        // malformed shape/mode combinations before it asks the object for a
+        // byte buffer.
+        pillow_rs::resolve_array_layout(&shape, &typestr, mode).map_err(map_error)?;
+        let bytes = array_interface_bytes(data, mode)?;
+        return pillow_rs::from_array_interface(&shape, &typestr, mode, &bytes)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error);
+    }
+
+    if data.hasattr("tobytes")? {
+        let shape = data
+            .getattr("shape")
+            .and_then(|shape| shape.extract::<Vec<usize>>())?;
+        let bytes = data.call_method0("tobytes")?.extract::<Vec<u8>>()?;
+        let inferred_typestr = "|u1";
+        pillow_rs::resolve_array_layout(&shape, inferred_typestr, mode).map_err(map_error)?;
+        return pillow_rs::from_array_interface(&shape, inferred_typestr, mode, &bytes)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error);
+    }
+
+    if let Ok(flat) = data.extract::<Vec<i32>>() {
+        return pillow_rs::from_array_pixel_values(&flat, mode)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error);
+    }
+    if let Ok(nested) = data.extract::<Vec<Vec<i32>>>() {
+        let flat = nested.into_iter().flatten().collect::<Vec<_>>();
+        return pillow_rs::from_array_pixel_values(&flat, mode)
+            .map(|img| PyImage { inner: img })
+            .map_err(map_error);
+    }
+
+    Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
+        "fromarray: unsupported object type ({})",
+        data.get_type().name()?
+    )))
 }
 
 /// Flatten mesh transform data (list of (bbox, quad) tuples) into a flat f64 Vec.
@@ -1678,6 +1765,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
     m.add_function(wrap_pyfunction!(ops_equalize, m)?)?;
+    m.add_function(wrap_pyfunction!(ops_validate_deform_resample, m)?)?;
     m.add_function(wrap_pyfunction!(ops_invert, m)?)?;
     m.add_function(wrap_pyfunction!(ops_flip, m)?)?;
     m.add_function(wrap_pyfunction!(ops_mirror, m)?)?;
@@ -1736,6 +1824,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(image_merge, m)?)?;
     m.add_function(wrap_pyfunction!(image_blend, m)?)?;
     m.add_function(wrap_pyfunction!(image_composite, m)?)?;
+    m.add_function(wrap_pyfunction!(image_alpha_composite, m)?)?;
     m.add_function(wrap_pyfunction!(image_linear_gradient, m)?)?;
     m.add_function(wrap_pyfunction!(image_radial_gradient, m)?)?;
     m.add_function(wrap_pyfunction!(image_effect_mandelbrot, m)?)?;
@@ -1758,6 +1847,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     // Utility functions (moved from Python)
     m.add_function(wrap_pyfunction!(align_row_to_32, m)?)?;
+    m.add_function(wrap_pyfunction!(fromarray, m)?)?;
     m.add_function(wrap_pyfunction!(fromarray_pixel_list, m)?)?;
     m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
     m.add_function(wrap_pyfunction!(make_lut, m)?)?;
@@ -2570,51 +2660,23 @@ impl PyDraw {
     fn regular_polygon(
         &mut self,
         bounding_circle: &Bound<'_, PyAny>,
-        n_sides: u32,
+        n_sides: &Bound<'_, PyAny>,
         rotation: Option<f64>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
     ) -> PyResult<()> {
-        let (cx, cy, r): (f64, f64, f64) =
-            if let Ok((x, y, r)) = bounding_circle.extract::<(f64, f64, f64)>() {
-                (x, y, r)
-            } else if let Ok(((x, y), r)) = bounding_circle.extract::<((f64, f64), f64)>() {
-                (x, y, r)
-            } else if let Ok((x, y, r)) = bounding_circle.extract::<(i32, i32, i32)>() {
-                (x as f64, y as f64, r as f64)
-            } else {
-                return Err(PyErr::new::<pyo3::exceptions::PyValueError, _>(
-                    "bounding_circle must be (x,y,r) or ((x,y),r)",
-                ));
-            };
-        // Match PIL's _compute_regular_polygon_vertices exactly
-        // PIL: start from (radius, 0), rotate by (270 - 0.5*deg_per_side + rotation)
-        // PIL uses round(x, 2) for 2-decimal float precision, then C truncates to int
-        let rot = rotation.unwrap_or(0.0);
-        let n = n_sides as f64;
-        let deg_per_side = 360.0 / n;
-        let start_angle = 270.0 - 0.5 * deg_per_side + rot;
-        let mut pts = Vec::with_capacity(n_sides as usize);
-        for i in 0..n_sides {
-            let angle_deg = start_angle + deg_per_side * i as f64;
-            let angle_deg = if angle_deg > 360.0 {
-                angle_deg - 360.0
-            } else {
-                angle_deg
-            };
-            // PIL: point[0]*cos(360-deg) - point[1]*sin(360-deg) + centroid
-            // with start_point = (r, 0), so simplifies to r*cos(360-angle) + cx
-            let theta = (360.0 - angle_deg).to_radians();
-            // CRITICAL: match PIL's round(x,2) then truncate to int.
-            // Without round-to-2dp, fp imprecision (e.g. cos(270°)=~-6e-17)
-            // causes truncation to 24 instead of 25 for vertex (25,10).
-            let x_raw = r * theta.cos() + cx;
-            let y_raw = r * theta.sin() + cy;
-            let x = ((x_raw * 100.0).round() / 100.0) as i32;
-            let y = ((y_raw * 100.0).round() / 100.0) as i32;
-            pts.push((x, y));
-        }
+        let circle = if let Ok((x, y, radius)) = bounding_circle.extract::<(f64, f64, f64)>() {
+            pillow_rs::RegularPolygonCircle::Flat(x, y, radius)
+        } else if let Ok(((x, y), radius)) = bounding_circle.extract::<((f64, f64), f64)>() {
+            pillow_rs::RegularPolygonCircle::Nested(x, y, radius)
+        } else {
+            pillow_rs::RegularPolygonCircle::Invalid
+        };
+        let sides = n_sides
+            .extract::<i64>()
+            .map(pillow_rs::RegularPolygonSides::Value)
+            .unwrap_or(pillow_rs::RegularPolygonSides::Invalid);
         let fill_color = if let Some(_f) = fill {
             Some(self.color(fill)?)
         } else {
@@ -2626,7 +2688,14 @@ impl PyDraw {
             None
         };
         self.draw
-            .polygon(&pts, fill_color, out_color, width.unwrap_or(1))
+            .regular_polygon(
+                circle,
+                sides,
+                rotation.unwrap_or(0.0),
+                fill_color,
+                out_color,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
@@ -2990,54 +3059,8 @@ impl PyDraw {
             anchor,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        let lines: Vec<&str> = text.split('\n').collect();
-        if lines.is_empty() {
-            return Ok((xy.0, xy.1, xy.0, xy.1));
-        }
-        if lines.len() == 1 {
-            let bbox =
-                pillow_rs::imagefont_getbbox_with_options(f, text, &options).map_err(map_error)?;
-            return Ok((
-                xy.0 + bbox.0 as i32,
-                xy.1 + bbox.1 as i32,
-                xy.0 + bbox.2 as i32,
-                xy.1 + bbox.3 as i32,
-            ));
-        }
-        // Pillow ImageText.Text::_split advances by the bottom of "A"'s
-        // FreeType bbox, then unions each line's full bbox. Using only mask
-        // width/height here loses the ascender bearing (and italic overhang).
-        let line_height = spacing
-            + pillow_rs::imagefont_getbbox_with_options(f, "A", &options)
-                .map_err(map_error)?
-                .3 as i32;
-        let widths: Vec<f32> = lines
-            .iter()
-            .map(|line| pillow_rs::imagefont_getlength_with_options(f, line, &options))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(map_error)?;
-        let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
-        let x0 = xy.0 as f64;
-        let y0 = xy.1 as f64;
-        let mut left = f64::MAX;
-        let mut top = f64::MAX;
-        let mut right = f64::MIN;
-        let mut bottom = f64::MIN;
-        for (i, line) in lines.iter().enumerate() {
-            let line_y = y0 + i as f64 * line_height as f64;
-            let line_x = match align {
-                "center" => x0 + (max_width as f64 - widths[i] as f64) / 2.0,
-                "right" => x0 + max_width as f64 - widths[i] as f64,
-                _ => x0,
-            };
-            let bbox =
-                pillow_rs::imagefont_getbbox_with_options(f, line, &options).map_err(map_error)?;
-            left = left.min(line_x + bbox.0 as f64);
-            top = top.min(line_y + bbox.1 as f64);
-            right = right.max(line_x + bbox.2 as f64);
-            bottom = bottom.max(line_y + bbox.3 as f64);
-        }
-        Ok((left as i32, top as i32, right as i32, bottom as i32))
+        pillow_rs::imagefont_multiline_textbbox(f, xy, text, spacing, align, &options)
+            .map_err(map_error)
     }
 
     #[getter]
@@ -3156,20 +3179,29 @@ fn parse_draw_color(
 // --- ImageOps module-level functions ---
 
 #[pyfunction]
-fn ops_autocontrast(image: &Bound<'_, PyImage>, cutoff: Option<f64>) -> PyResult<PyImage> {
+fn ops_autocontrast(
+    image: &Bound<'_, PyImage>,
+    cutoff: Option<f64>,
+    mask: Option<&Bound<'_, PyAny>>,
+) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
     let c = cutoff.unwrap_or(0.0);
-    let rs =
-        Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_autocontrast(&inner, c)))
-            .map_err(map_error)?;
+    let mask = imageops_mask_from_python(mask);
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs::imageops_autocontrast_with_mask(&inner, c, mask))
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
 #[pyfunction]
-fn ops_equalize(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+fn ops_equalize(image: &Bound<'_, PyImage>, mask: Option<&Bound<'_, PyAny>>) -> PyResult<PyImage> {
     let inner = image.borrow().inner.clone();
-    let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::imageops_equalize(&inner)))
-        .map_err(map_error)?;
+    let mask = imageops_mask_from_python(mask);
+    let rs = Python::with_gil(|py| {
+        py.allow_threads(|| pillow_rs::imageops_equalize_with_mask(&inner, mask))
+    })
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
@@ -3270,11 +3302,12 @@ fn parse_colorize_color(value: &Bound<'_, PyAny>) -> PyResult<(u8, u8, u8)> {
 fn ops_contain(
     image: &Bound<'_, PyImage>,
     size: (u32, u32),
-    filter: Option<String>,
+    filter: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<PyImage> {
+    let filter = resample_input_from_python(filter)?;
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_contain(&inner, size.0, size.1, filter.as_deref()))
+        py.allow_threads(|| pillow_rs::imageops_contain_with_input(&inner, size.0, size.1, filter))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3284,11 +3317,12 @@ fn ops_contain(
 fn ops_cover(
     image: &Bound<'_, PyImage>,
     size: (u32, u32),
-    filter: Option<String>,
+    filter: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<PyImage> {
+    let filter = resample_input_from_python(filter)?;
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_cover(&inner, size.0, size.1, filter.as_deref()))
+        py.allow_threads(|| pillow_rs::imageops_cover_with_input(&inner, size.0, size.1, filter))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3298,20 +3332,22 @@ fn ops_cover(
 fn ops_fit(
     image: &Bound<'_, PyImage>,
     size: (u32, u32),
-    filter: Option<String>,
+    filter: Option<&Bound<'_, PyAny>>,
     bleed: Option<f64>,
-    centering: Option<(f64, f64)>,
+    centering: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<PyImage> {
+    let filter = resample_input_from_python(filter)?;
+    let centering = centering_from_python(centering);
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
-            pillow_rs::imageops_fit(
+            pillow_rs::imageops_fit_with_input(
                 &inner,
                 size.0,
                 size.1,
-                filter.as_deref(),
+                filter,
                 bleed.unwrap_or(0.0),
-                centering.unwrap_or((0.5, 0.5)),
+                centering,
             )
         })
     })
@@ -3323,23 +3359,21 @@ fn ops_fit(
 fn ops_pad(
     image: &Bound<'_, PyImage>,
     size: (u32, u32),
-    filter: Option<String>,
+    filter: Option<&Bound<'_, PyAny>>,
     color: Option<&Bound<'_, PyAny>>,
-    centering: Option<(f64, f64)>,
+    centering: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<PyImage> {
-    // Resolve color: None -> (0,0,0,255), int -> (v,v,v,255),
-    // 3-tuple -> (v0,v1,v2,255), 4-tuple as-is
-    let resolved_color: Option<(u8, u8, u8, u8)> = match color {
-        None => None,
-        Some(c) => {
-            if let Ok(i) = c.extract::<u8>() {
-                Some((i, i, i, 255))
-            } else if let Ok((r, g, b)) = c.extract::<(u8, u8, u8)>() {
-                Some((r, g, b, 255))
-            } else if let Ok((r, g, b, a)) = c.extract::<(u8, u8, u8, u8)>() {
-                Some((r, g, b, a))
+    let filter = resample_input_from_python(filter)?;
+    let centering = centering_from_python(centering);
+    let color = match color {
+        None => pillow_rs::ImageOpsColor::None,
+        Some(color) => {
+            if let Ok(value) = color.extract::<i64>() {
+                pillow_rs::ImageOpsColor::Scalar(value)
+            } else if let Ok(values) = color.extract::<Vec<i64>>() {
+                pillow_rs::ImageOpsColor::Components(values)
             } else {
-                None
+                pillow_rs::ImageOpsColor::Invalid
             }
         }
     };
@@ -3347,14 +3381,7 @@ fn ops_pad(
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
-            pillow_rs::imageops_pad(
-                &inner,
-                size.0,
-                size.1,
-                filter.as_deref(),
-                resolved_color,
-                centering.unwrap_or((0.5, 0.5)),
-            )
+            pillow_rs::imageops_pad_with_input(&inner, size.0, size.1, filter, color, centering)
         })
     })
     .map_err(map_error)?;
@@ -3657,6 +3684,18 @@ fn image_composite(
     let bm = mask.borrow();
     let rs = pillow_rs::image_composite(&b1.inner, &b2.inner, &bm.inner).map_err(map_error)?;
     Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn image_alpha_composite(
+    image1: &Bound<'_, PyImage>,
+    image2: &Bound<'_, PyImage>,
+) -> PyResult<PyImage> {
+    let b1 = image1.borrow();
+    let b2 = image2.borrow();
+    pillow_rs::image_alpha_composite(&b1.inner, &b2.inner)
+        .map(|image| PyImage { inner: image })
+        .map_err(map_error)
 }
 
 /// Generate a 256×256 linear gradient image from black to white.

@@ -103,6 +103,59 @@ pub struct ImageFontVariantOptions {
 }
 
 impl FreeTypeFont {
+    /// Computes Pillow's multiline text bounding box.
+    ///
+    /// Line splitting, alignment, line advance, and bbox union are core font
+    /// behavior so bindings only marshal the font and text options.
+    pub fn multiline_textbbox(
+        &self,
+        xy: (i32, i32),
+        text: &str,
+        spacing: i32,
+        align: &str,
+        options: &ImageFontTextOptions,
+    ) -> Result<(i32, i32, i32, i32), PilError> {
+        let lines: Vec<&str> = text.split('\n').collect();
+        if lines.len() == 1 {
+            let bbox = self.getbbox_with_options(text, options)?;
+            return Ok((
+                xy.0 + bbox.0 as i32,
+                xy.1 + bbox.1 as i32,
+                xy.0 + bbox.2 as i32,
+                xy.1 + bbox.3 as i32,
+            ));
+        }
+
+        // Pillow ImageText.Text::_split advances by the bottom of "A"'s
+        // FreeType bbox, then unions each line's full bbox.
+        let line_height = spacing + self.getbbox_with_options("A", options)?.3 as i32;
+        let widths = lines
+            .iter()
+            .map(|line| self.getlength_with_options(line, options))
+            .collect::<Result<Vec<_>, _>>()?;
+        let max_width = widths.iter().copied().fold(0.0_f32, f32::max);
+        let x0 = xy.0 as f64;
+        let y0 = xy.1 as f64;
+        let mut left = f64::MAX;
+        let mut top = f64::MAX;
+        let mut right = f64::MIN;
+        let mut bottom = f64::MIN;
+        for (index, line) in lines.iter().enumerate() {
+            let line_y = y0 + index as f64 * line_height as f64;
+            let line_x = match align {
+                "center" => x0 + (max_width as f64 - widths[index] as f64) / 2.0,
+                "right" => x0 + max_width as f64 - widths[index] as f64,
+                _ => x0,
+            };
+            let bbox = self.getbbox_with_options(line, options)?;
+            left = left.min(line_x + bbox.0 as f64);
+            top = top.min(line_y + bbox.1 as f64);
+            right = right.max(line_x + bbox.2 as f64);
+            bottom = bottom.max(line_y + bbox.3 as f64);
+        }
+        Ok((left as i32, top as i32, right as i32, bottom as i32))
+    }
+
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.
     pub fn from_bytes(data: Vec<u8>, size: f32) -> Result<Self, PilError> {
         imagingft::load_truetype(data, size)

@@ -3,30 +3,13 @@ from .image import Image
 from . import _core
 
 
-def _validate_mask(image: Image, mask) -> None:
-    if mask is not None and (mask.mode not in ("1", "L") or mask.size != image.size):
-        raise ValueError("bad transparency mask")
-
-
-def _validate_resample(method, *, deform: bool = False) -> None:
-    if not isinstance(method, str):
-        return
-    if deform:
-        choices = "NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
-    else:
-        choices = "NEAREST (0), Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or Image.Resampling.HAMMING (5)"
-    raise ValueError(f"Unknown resampling filter ({method}). Use Image.Resampling.{choices}")
-
-
 def autocontrast(image: Image, cutoff: float = 0, ignore=None, mask=None,
                  preserve_tone: bool = False) -> Image:
-    _validate_mask(image, mask)
-    return Image(_core.ops_autocontrast(image._rust_image, cutoff))
+    return Image(_core.ops_autocontrast(image._rust_image, cutoff, mask))
 
 
 def equalize(image: Image, mask=None) -> Image:
-    _validate_mask(image, mask)
-    return Image(_core.ops_equalize(image._rust_image))
+    return Image(_core.ops_equalize(image._rust_image, mask))
 
 
 def invert(image: Image) -> Image:
@@ -66,29 +49,18 @@ def scale(image: Image, factor: float, resample=None) -> Image:
 
 
 def contain(image: Image, size, method=None) -> Image:
-    _validate_resample(method)
     return Image(_core.ops_contain(image._rust_image, size, method))
 
 
 def cover(image: Image, size, method=None) -> Image:
-    _validate_resample(method)
     return Image(_core.ops_cover(image._rust_image, size, method))
 
 
 def fit(image: Image, size, method=None, bleed=0.0, centering=(0.5, 0.5)):
-    _validate_resample(method)
-    if isinstance(centering, (int, float)):
-        raise TypeError("cannot unpack non-iterable float object")
     return Image(_core.ops_fit(image._rust_image, size, method, bleed, centering))
 
 
 def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
-    _validate_resample(method)
-    # Pillow only unpacks ``centering`` when padding is required.  The fixed
-    # parity case has equal source/target dimensions, so a scalar is benign;
-    # normalize it before the PyO3 tuple conversion would reject it.
-    if isinstance(centering, (int, float)):
-        centering = (0.5, 0.5)
     return Image(_core.ops_pad(image._rust_image, size, method, color, centering))
 
 
@@ -104,11 +76,6 @@ def exif_transpose(image: Image, *, in_place=False):
 
 
 def deform(image: Image, deformer, resample=None):
-    _validate_resample(resample, deform=True)
+    _core.ops_validate_deform_resample(resample)
     mesh = deformer.getmesh(image)
-    # ``Image.transform`` accepts a tuple mesh.  The workflow deliberately
-    # models Pillow's protocol object with JSON lists, so normalize only the
-    # protocol result at this adapter boundary.
-    mesh = tuple((tuple(box), tuple(data)) for box, data in mesh)
-    result = image.transform(image.size, 4, mesh)
-    return result
+    return image.transform(image.size, 4, mesh)

@@ -11,6 +11,13 @@ use crate::image::Image;
 use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
 
+/// Composites `im2` over `im1` and returns a new image.
+pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
+    let mut result = im1.copy();
+    result.alpha_composite(im2, (0, 0), (0, 0))?;
+    Ok(result)
+}
+
 /// Merges single-band images into a multi-band image.
 ///
 /// `mode` determines the required band count: `L=1`, `LA=2`, `RGB=3`, and

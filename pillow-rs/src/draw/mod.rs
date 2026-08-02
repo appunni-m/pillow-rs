@@ -23,6 +23,26 @@ pub struct Draw {
     orig_mode: Option<String>,
 }
 
+/// Host-neutral `ImageDraw.regular_polygon` bounding-circle input.
+#[derive(Debug, Clone, Copy)]
+pub enum RegularPolygonCircle {
+    /// `(x, y, radius)` form.
+    Flat(f64, f64, f64),
+    /// `((x, y), radius)` form.
+    Nested(f64, f64, f64),
+    /// A value that was not one of the accepted forms.
+    Invalid,
+}
+
+/// Host-neutral side-count input for `ImageDraw.regular_polygon`.
+#[derive(Debug, Clone, Copy)]
+pub enum RegularPolygonSides {
+    /// The integer supplied by the caller.
+    Value(i64),
+    /// A non-integer value.
+    Invalid,
+}
+
 impl Draw {
     /// Creates a drawing context for `image`.
     ///
@@ -72,9 +92,7 @@ impl Draw {
         match self.effective_mode().as_str() {
             // ImageDraw._getink() starts an RGB-family outline with
             // draw_ink(-1), which resolves to an all-255 sample.
-            "RGB" | "RGBA" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => {
-                Some((255, 255, 255, 255))
-            }
+            "RGB" | "RGBA" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => Some((255, 255, 255, 255)),
             // I/F contexts initialize their ink with draw_ink(1). These
             // tuples are the native little-endian representations carried by
             // the explicit-mode RGBA canvas used by this crate.
@@ -259,6 +277,54 @@ impl Draw {
             },
         );
         Ok(())
+    }
+
+    /// Draws a regular polygon from Pillow's bounding-circle representation.
+    ///
+    /// Vertex generation, Pillow's two-decimal rounding, and side-count
+    /// validation live in core so every binding uses the same geometry.
+    pub fn regular_polygon(
+        &mut self,
+        bounding_circle: RegularPolygonCircle,
+        n_sides: RegularPolygonSides,
+        rotation: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    ) -> Result<(), PilError> {
+        let n_sides = match n_sides {
+            RegularPolygonSides::Value(value) if value > 2 => usize::try_from(value)
+                .map_err(|_| PilError::ValueError("n_sides should be an int > 2".into()))?,
+            RegularPolygonSides::Value(_) | RegularPolygonSides::Invalid => {
+                return Err(PilError::ValueError("n_sides should be an int > 2".into()));
+            }
+        };
+        let (cx, cy, radius) = match bounding_circle {
+            RegularPolygonCircle::Flat(x, y, radius)
+            | RegularPolygonCircle::Nested(x, y, radius) => (x, y, radius),
+            RegularPolygonCircle::Invalid => {
+                return Err(PilError::ValueError(
+                    "bounding_circle must be (x,y,r) or ((x,y),r)".into(),
+                ));
+            }
+        };
+
+        // Match PIL's _compute_regular_polygon_vertices exactly: start from
+        // (radius, 0), rotate by (270 - 0.5*degrees-per-side + rotation),
+        // round each coordinate to two decimals, then truncate to integers.
+        let n = n_sides as f64;
+        let degrees_per_side = 360.0 / n;
+        let start_angle = 270.0 - 0.5 * degrees_per_side + rotation;
+        let mut points = Vec::with_capacity(n_sides);
+        for index in 0..n_sides {
+            let angle = start_angle + degrees_per_side * index as f64;
+            let angle = if angle > 360.0 { angle - 360.0 } else { angle };
+            let theta = (360.0 - angle).to_radians();
+            let x = ((radius * theta.cos() + cx) * 100.0).round() / 100.0;
+            let y = ((radius * theta.sin() + cy) * 100.0).round() / 100.0;
+            points.push((x as i32, y as i32));
+        }
+        self.polygon(&points, fill, outline, width)
     }
 
     /// Fills a closed outline using Pillow's `ImageDraw.shape` ink order.

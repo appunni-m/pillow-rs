@@ -147,6 +147,8 @@ pub use crate::compute::backend_enabled;
 pub use crate::compute::disable_backend;
 pub use crate::compute::enable_backend;
 pub use crate::draw::Draw;
+pub use crate::draw::RegularPolygonCircle;
+pub use crate::draw::RegularPolygonSides;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::FreeTypeFont;
@@ -169,6 +171,9 @@ pub use crate::image::StatValue;
 pub use crate::image::stat_from_histogram;
 pub use crate::image::stat_from_list;
 pub use crate::ops::array::ArrayLayout;
+pub use crate::ops::array::from_array_bytes;
+pub use crate::ops::array::from_array_interface;
+pub use crate::ops::array::from_array_pixel_values;
 pub use crate::ops::array::resolve_array_layout;
 pub use crate::ops::chops::add as chops_add;
 pub use crate::ops::chops::add_modulo as chops_add_modulo;
@@ -189,26 +194,37 @@ pub use crate::ops::chops::soft_light as chops_soft_light;
 pub use crate::ops::chops::subtract as chops_subtract;
 pub use crate::ops::chops::subtract_modulo as chops_subtract_modulo;
 pub use crate::ops::convert::validate_python_convert_dither;
+pub use crate::ops::imageops::CenteringInput;
+pub use crate::ops::imageops::ImageOpsColor;
+pub use crate::ops::imageops::ImageOpsMask;
 pub use crate::ops::imageops::autocontrast as imageops_autocontrast;
+pub use crate::ops::imageops::autocontrast_with_mask as imageops_autocontrast_with_mask;
 pub use crate::ops::imageops::colorize as imageops_colorize;
 pub use crate::ops::imageops::contain as imageops_contain;
+pub use crate::ops::imageops::contain_with_input as imageops_contain_with_input;
 pub use crate::ops::imageops::cover as imageops_cover;
+pub use crate::ops::imageops::cover_with_input as imageops_cover_with_input;
 pub use crate::ops::imageops::crop as imageops_crop;
 pub use crate::ops::imageops::equalize as imageops_equalize;
+pub use crate::ops::imageops::equalize_with_mask as imageops_equalize_with_mask;
 pub use crate::ops::imageops::exif_get_orientation;
 pub use crate::ops::imageops::exif_remove_orientation;
 pub use crate::ops::imageops::exif_transpose as imageops_exif_transpose;
 pub use crate::ops::imageops::expand as imageops_expand;
 pub use crate::ops::imageops::fit as imageops_fit;
+pub use crate::ops::imageops::fit_with_input as imageops_fit_with_input;
 pub use crate::ops::imageops::flip as imageops_flip;
 pub use crate::ops::imageops::grayscale as imageops_grayscale;
 pub use crate::ops::imageops::invert_ops as imageops_invert;
 pub use crate::ops::imageops::mirror as imageops_mirror;
 pub use crate::ops::imageops::pad as imageops_pad;
+pub use crate::ops::imageops::pad_with_input as imageops_pad_with_input;
 pub use crate::ops::imageops::posterize as imageops_posterize;
 pub use crate::ops::imageops::scale as imageops_scale;
 pub use crate::ops::imageops::solarize as imageops_solarize;
 pub use crate::ops::imageops::validate_colorize_mode as imageops_validate_colorize_mode;
+pub use crate::ops::imageops::validate_deform_resample as imageops_validate_deform_resample;
+pub use crate::ops::module_fns::alpha_composite as image_alpha_composite;
 pub use crate::ops::module_fns::blend as image_blend;
 pub use crate::ops::module_fns::composite as image_composite;
 pub use crate::ops::module_fns::effect_mandelbrot as image_effect_mandelbrot;
@@ -221,10 +237,15 @@ pub use crate::ops::module_fns::linear_gradient as image_linear_gradient;
 pub use crate::ops::module_fns::merge as image_merge;
 pub use crate::ops::module_fns::radial_gradient as image_radial_gradient;
 pub use crate::ops::param_filters::color3dlut_repr;
+pub use crate::ops::paste::AlphaCompositeBox;
 pub use crate::ops::paste::PasteSource;
 pub use crate::ops::resize::ResampleInput;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
+pub use crate::ops::transform::ReduceBox;
+pub use crate::ops::transform::ReduceFactor;
+pub use crate::ops::transform::TransformData;
+pub use crate::ops::transform::TransformFill;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]
@@ -480,6 +501,18 @@ pub fn imagefont_getbbox_with_options(
     options: &ImageFontTextOptions,
 ) -> Result<(f32, f32, f32, f32), PilError> {
     font.getbbox_with_options(text, options)
+}
+
+/// Return Pillow's public multiline text bounding box.
+pub fn imagefont_multiline_textbbox(
+    font: &FreeTypeFont,
+    xy: (i32, i32),
+    text: &str,
+    spacing: i32,
+    align: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    font.multiline_textbbox(xy, text, spacing, align, options)
 }
 
 /// Return Pillow's public text bounding box for byte text with optional layout arguments.

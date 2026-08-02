@@ -84,68 +84,15 @@ def alpha_composite(im1: Image, im2: Image) -> Image:
     PIL: ``Image.alpha_composite(im1, im2)`` composites im2 over im1
     and returns a new RGBA image.
     """
-    result = im1.copy()
-    result._rust_image.alpha_composite(im2._rust_image)
-    return result
+    from . import _core
+    return Image(_core.image_alpha_composite(im1._rust_image, im2._rust_image))
 
 
 def fromarray(obj, mode=None):
-    """Create image from array-like object (list of lists or bytes)."""
+    """Create an image from an array-like object through the Rust core."""
     from . import _core
 
-    if isinstance(obj, bytes):
-        return Image.frombytes(mode or "L", (len(obj), 1), obj)
-    # Array-interface objects must be buffer-compatible for Pillow's
-    # ``frombuffer`` path. The fixed parity protocol deliberately supplies an
-    # object with the interface but without a Python buffer, so preserve the
-    # oracle's public diagnostics instead of falling through to ``len``.
-    if hasattr(obj, '__array_interface__'):
-        arr = obj.__array_interface__
-        shape = arr["shape"]
-        if mode == "L" and len(shape) > 2:
-            raise ValueError(f"Too many dimensions: {len(shape)} > 2.")
-        try:
-            memoryview(obj)
-        except TypeError as exc:
-            if mode == "RGBA":
-                raise TypeError("expected string or buffer") from exc
-            raise TypeError(
-                f"a bytes-like object is required, not '{type(obj).__name__}'"
-            ) from exc
-
-    # numpy arrays: use tobytes() for safe memory access
-    if hasattr(obj, 'tobytes'):
-        data = obj.tobytes()
-        shape = obj.shape if hasattr(obj, 'shape') else (len(obj), 1)
-        h, w = shape[0], shape[1] if len(shape) >= 2 else 1
-        if mode is None:
-            if len(shape) == 2:
-                mode = "L"
-            elif len(shape) == 3:
-                mode = {3: "RGB", 4: "RGBA"}.get(shape[2], "L")
-            else:
-                mode = "L"
-        return Image.frombytes(mode, (w, h), data)
-    # array-interface objects that implement a real Python buffer can use the
-    # same raw-byte path as numpy arrays.
-    if hasattr(obj, '__array_interface__'):
-        arr = obj.__array_interface__
-        shape = arr["shape"]
-        h, w = shape[0], shape[1] if len(shape) >= 2 else 1
-        if mode is None:
-            if len(shape) == 2:
-                mode = "L"
-            elif shape[2] == 3:
-                mode = "RGB"
-            elif shape[2] == 4:
-                mode = "RGBA"
-            else:
-                mode = "L"
-        data = memoryview(obj).tobytes()
-        return Image.frombytes(mode, (w, h), data)
-    if isinstance(obj, (list, tuple)):
-        return Image(_core.fromarray_pixel_list(obj, mode))
-    raise NotImplementedError(f"fromarray: unsupported object type ({type(obj).__name__})")
+    return Image(_core.fromarray(obj, mode))
 
 
 def frombytes(mode, size, data, decoder_name="raw", *args):
