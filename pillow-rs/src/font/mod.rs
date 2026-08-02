@@ -535,8 +535,10 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
-        let text = text.into_text();
-        self.getbbox_with_options(&text, options)
+        match text {
+            ImageFontTextInput::Text(text) => self.getbbox_with_options(&text, options),
+            ImageFontTextInput::Bytes(text) => self.getbbox_bytes_with_options(&text, options),
+        }
     }
 
     /// Return text length after applying Pillow's text-input rules.
@@ -545,8 +547,10 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
-        let text = text.into_text();
-        self.getlength_with_options(&text, options)
+        match text {
+            ImageFontTextInput::Text(text) => self.getlength_with_options(&text, options),
+            ImageFontTextInput::Bytes(text) => self.getlength_bytes_with_options(&text, options),
+        }
     }
 
     /// Render a mask after applying Pillow's text-input rules.
@@ -555,8 +559,10 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
-        let text = text.into_text();
-        self.getmask_with_options(&text, options)
+        match text {
+            ImageFontTextInput::Text(text) => self.getmask_with_options(&text, options),
+            ImageFontTextInput::Bytes(text) => self.getmask_bytes_with_options(&text, options),
+        }
     }
 
     /// Render a mask with offset after applying Pillow's text-input rules.
@@ -565,8 +571,10 @@ impl FreeTypeFont {
         text: ImageFontTextInput,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
-        let text = text.into_text();
-        self.getmask2_with_options(&text, options)
+        match text {
+            ImageFontTextInput::Text(text) => self.getmask2_with_options(&text, options),
+            ImageFontTextInput::Bytes(text) => self.getmask2_bytes_with_options(&text, options),
+        }
     }
 
     /// Return Pillow's public binary-mode text bounding box.
