@@ -10220,6 +10220,18 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageFilter",
             "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.target-mode",
+            "name": "unrecognized-target-mode",
+            "mode": "RGB",
+            "values": {
+                "size": literal(2),
+                "table": literal([0.0] * 24),
+                "target_mode": literal("XYZ"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
             "requirement_suffix": "parameter.size",
             "name": "tuple-size",
             "mode": "RGB",
