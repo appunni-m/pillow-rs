@@ -11,6 +11,24 @@ use crate::image::Image;
 use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
 
+/// Creates an image from raw bytes using Pillow's supported raw decoder.
+///
+/// Decoder selection is part of the public operation contract, not a binding
+/// concern. Host adapters pass the decoder name through after extracting it.
+pub fn frombytes(
+    mode: &str,
+    size: (u32, u32),
+    data: &[u8],
+    decoder_name: &str,
+) -> Result<Image, PilError> {
+    if decoder_name != "raw" {
+        return Err(PilError::IOError(format!(
+            "decoder {decoder_name} not available"
+        )));
+    }
+    Image::frombytes(mode, size, data)
+}
+
 /// Composites `im2` over `im1` and returns a new image.
 pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
     let mut result = im1.copy();

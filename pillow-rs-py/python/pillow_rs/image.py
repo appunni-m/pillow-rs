@@ -745,18 +745,19 @@ class Image:
         # Also handles: img.frombytes(data) where self is an instance with _rust_image
         if hasattr(self, '_rust_image'):
             # Instance method: im.frombytes(data, decoder_name, *args)
-            if decoder_name != "raw":
-                raise OSError(f"decoder {decoder_name} not available")
             mode = self.mode
             size = self.size
-            self._rust_image = RustImage.frombytes(mode, size, bytes(data))
+            self._rust_image = RustImage.frombytes(
+                mode, size, bytes(data), decoder_name
+            )
             return None
 
         # Class method: Image.frombytes(mode, size, data, ...)
         mode = self if isinstance(self, str) else data
         size = data if isinstance(self, str) else decoder_name
         pixel_data = decoder_name if isinstance(self, str) else args[0] if args else None
-        result = Image(RustImage.frombytes(mode, size, bytes(pixel_data)))
+        decoder = args[0] if isinstance(self, str) and args else "raw"
+        result = Image(RustImage.frombytes(mode, size, bytes(pixel_data), decoder))
         if mode in ("1", "P", "CMYK", "HSV", "YCbCr", "I", "F"):
             result._explicit_mode = mode
         if mode == "P":

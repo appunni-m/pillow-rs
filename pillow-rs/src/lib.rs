@@ -236,6 +236,7 @@ pub use crate::ops::module_fns::effect_spread as image_effect_spread;
 pub use crate::ops::module_fns::eval as image_eval;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
 pub use crate::ops::module_fns::eval_validated as image_eval_validated;
+pub use crate::ops::module_fns::frombytes as image_frombytes;
 pub use crate::ops::module_fns::linear_gradient as image_linear_gradient;
 pub use crate::ops::module_fns::merge as image_merge;
 pub use crate::ops::module_fns::radial_gradient as image_radial_gradient;
