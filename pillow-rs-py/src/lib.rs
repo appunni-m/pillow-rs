@@ -998,10 +998,15 @@ impl PyImage {
         dest_map: Vec<u8>,
         source_palette: Option<Vec<u8>>,
     ) -> PyResult<PyImage> {
-        self.inner
-            .remap_palette_with_source(&dest_map, source_palette.as_deref())
-            .map(|i| PyImage { inner: i })
-            .map_err(map_error)
+        let remapped = match source_palette.as_deref() {
+            None => self.inner.remap_palette(&dest_map),
+            Some(source_palette) => self
+                .inner
+                .remap_palette_with_source(&dest_map, Some(source_palette)),
+        }
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)?;
+        Ok(remapped)
     }
 
     fn tobitmap(&mut self) -> PyResult<Vec<u8>> {
