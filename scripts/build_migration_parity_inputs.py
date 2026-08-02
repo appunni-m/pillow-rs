@@ -1897,6 +1897,26 @@ class WorkflowBuilder:
                     step_id="setup-putalpha",
                 )
                 receiver_step = image_step
+            elif chain == "p-putpalette-putalpha-resize":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putalpha",
+                    receiver=binding(image_step),
+                    arguments={"alpha": literal(192)},
+                    step_id="setup-putalpha",
+                )
+                receiver_step = image_step
             elif chain == "p-putpalette-remap":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -4975,6 +4995,19 @@ def build_nuanced_cases(
             "values": {
                 "size": literal([17, 9]),
                 "resample": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": "p-putpalette-putalpha-bilinear",
+            "mode": "P",
+            "chain": "p-putpalette-putalpha-resize",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 8]),
+                "resample": literal(2),
             },
         },
         {
