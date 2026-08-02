@@ -10688,6 +10688,15 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.1",
+            "name": "p-putpalette-putalpha-to-one",
+            "mode": "P",
+            "chain": "p-putpalette-putalpha-convert",
+            "values": {"mode": literal("1")},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getchannel",
             "requirement_suffix": "behavior.default",
             "name": "pa-index-channel",
