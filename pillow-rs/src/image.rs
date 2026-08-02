@@ -376,7 +376,7 @@ pub fn validate_python_open_inputs(
     Ok(())
 }
 
-/// Validates bytes supplied directly as a Python `Image.open` path.
+/// Validates byte paths before the binding translates decode failures.
 pub fn validate_python_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
     if data.contains(&0) {
         return Err(PilError::ValueError("embedded null byte".to_owned()));

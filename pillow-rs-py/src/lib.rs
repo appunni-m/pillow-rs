@@ -498,15 +498,26 @@ impl PyImage {
     }
 
     #[classmethod]
-    #[pyo3(signature = (fp, formats=None))]
+    #[pyo3(signature = (fp, mode=None, formats=None))]
     fn open(
         _cls: &Bound<'_, PyType>,
         fp: &Bound<'_, PyAny>,
-        formats: Option<Vec<String>>,
+        mode: Option<&Bound<'_, PyAny>>,
+        formats: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        let format_refs = formats
+        let mode = open_mode_input_from_python(mode)?;
+        let formats = open_formats_input_from_python(formats)?;
+        pillow_rs::validate_python_open_inputs(mode, formats.clone()).map_err(map_error)?;
+        let format_names = match formats {
+            pillow_rs::PythonOpenFormatsInput::None => None,
+            pillow_rs::PythonOpenFormatsInput::Names(names) => Some(names),
+            pillow_rs::PythonOpenFormatsInput::Invalid(_) => unreachable!(
+                "validated Image.open formats cannot remain invalid"
+            ),
+        };
+        let format_refs = format_names
             .as_deref()
-            .map(|formats| formats.iter().map(String::as_str).collect::<Vec<_>>());
+            .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
             let bytes = std::fs::read(&path).map_err(|error| map_open_path_error(&path, error))?;
             let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
@@ -521,6 +532,14 @@ impl PyImage {
     }
 
     #[classmethod]
+    fn validate_open_source(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Ok(bytes) = fp.downcast::<PyBytes>() {
+            pillow_rs::validate_python_open_source_bytes(bytes.as_bytes()).map_err(map_error)?;
+        }
+        Ok(())
+    }
+
+    #[classmethod]
     #[pyo3(signature = (mode=None, formats=None))]
     fn validate_open_inputs(
         _cls: &Bound<'_, PyType>,
@@ -532,14 +551,6 @@ impl PyImage {
             open_formats_input_from_python(formats)?,
         )
         .map_err(map_error)
-    }
-
-    #[classmethod]
-    fn validate_open_source(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<()> {
-        if let Ok(bytes) = fp.downcast::<PyBytes>() {
-            pillow_rs::validate_python_open_source_bytes(bytes.as_bytes()).map_err(map_error)?;
-        }
-        Ok(())
     }
 
     fn save(&mut self, fp: &Bound<'_, PyAny>, format: Option<String>) -> PyResult<()> {
