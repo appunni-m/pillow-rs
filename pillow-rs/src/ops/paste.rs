@@ -150,13 +150,14 @@ impl Image {
     ) -> Result<(), PilError> {
         let destination_mode = self.mode()?;
         let source = match source {
-            PythonPasteSource::Image(image) => PasteSource::Image(image),
+            PythonPasteSource::Image(image) => PasteSource::from_parts(Some(image), 0, 0, 0, 255),
             PythonPasteSource::Scalar(value) => PasteSource::Scalar(byte_color(value)?),
             PythonPasteSource::Components(values) => match values.as_slice() {
                 [value] => PasteSource::Scalar(byte_color(*value)?),
                 [luma, alpha] => PasteSource::LumaAlpha(byte_color(*luma)?, byte_color(*alpha)?),
                 [r, g, b] => PasteSource::Rgb(byte_color(*r)?, byte_color(*g)?, byte_color(*b)?),
-                [r, g, b, a] => PasteSource::Rgba(
+                [r, g, b, a] => PasteSource::from_parts(
+                    None,
                     byte_color(*r)?,
                     byte_color(*g)?,
                     byte_color(*b)?,
