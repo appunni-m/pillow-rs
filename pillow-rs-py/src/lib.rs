@@ -753,6 +753,13 @@ impl PyImage {
         self.inner.getpalette_rawmode(rawmode).map_err(map_error)
     }
 
+    #[pyo3(signature = (rawmode=None))]
+    fn getpalette_with_input(&self, rawmode: Option<String>) -> PyResult<Option<Vec<u8>>> {
+        self.inner
+            .getpalette_with_input(rawmode.as_deref())
+            .map_err(map_error)
+    }
+
     fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
     }
@@ -1966,6 +1973,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
     m.add_function(wrap_pyfunction!(make_lut, m)?)?;
     m.add_function(wrap_pyfunction!(eval_validate_input, m)?)?;
+    m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
 
     Ok(())
 }
@@ -1975,6 +1983,30 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyclass(name = "ImageFont", unsendable)]
 pub struct PyFont {
     inner: pillow_rs::FreeTypeFont,
+}
+
+fn font_bbox_value_to_python(
+    py: Python<'_>,
+    value: pillow_rs::ImageFontBBoxValue,
+) -> PyObject {
+    match value {
+        pillow_rs::ImageFontBBoxValue::Integer(value) => value.to_object(py),
+        pillow_rs::ImageFontBBoxValue::Float(value) => value.to_object(py),
+    }
+}
+
+#[pyfunction]
+fn imagefont_normalize_bbox(
+    py: Python<'_>,
+    bbox: (f64, f64, f64, f64),
+) -> (PyObject, PyObject, PyObject, PyObject) {
+    let values = pillow_rs::normalize_font_bbox(bbox);
+    (
+        font_bbox_value_to_python(py, values[0]),
+        font_bbox_value_to_python(py, values[1]),
+        font_bbox_value_to_python(py, values[2]),
+        font_bbox_value_to_python(py, values[3]),
+    )
 }
 
 fn variation_axes_to_python(

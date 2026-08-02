@@ -2351,6 +2351,22 @@ impl Image {
         }
     }
 
+    /// Returns palette data using Pillow's public raw-mode and missing-palette
+    /// behavior.
+    pub fn getpalette_with_input(
+        &self,
+        rawmode: Option<&str>,
+    ) -> Result<Option<Vec<u8>>, PilError> {
+        let rawmode = rawmode
+            .or_else(|| self.palette_mode())
+            .unwrap_or("RGB");
+        let palette = self.getpalette_rawmode(rawmode)?;
+        if palette.is_none() && matches!(self.mode()?.as_str(), "P" | "PA") {
+            return Ok(Some(Vec::new()));
+        }
+        Ok(palette)
+    }
+
     /// Attaches a palette without changing the image's sample bytes.
     ///
     /// Pillow reinterprets `L` samples as palette indices (`P`) and `LA`

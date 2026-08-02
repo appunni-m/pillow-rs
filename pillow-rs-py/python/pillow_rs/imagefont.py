@@ -187,12 +187,8 @@ def _pilfont_text(text):
     return text
 
 
-def _pillow_bbox_value(value):
-    return int(value) if isinstance(value, float) and value.is_integer() else value
-
-
 def _pillow_bbox_tuple(bbox):
-    return tuple(_pillow_bbox_value(value) for value in bbox)
+    return _core.imagefont_normalize_bbox(bbox)
 
 
 def _wrap_pilfont(font):
