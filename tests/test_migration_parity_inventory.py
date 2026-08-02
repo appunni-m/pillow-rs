@@ -75,6 +75,7 @@ class MigrationParityInventoryTests(unittest.TestCase):
                 "PIL.ImageEnhance.Contrast::enhance",
                 "PIL.ImageEnhance.Sharpness::enhance",
                 "PIL.ImagePalette::ImagePalette",
+                "PIL.ImageFilter.Color3DLUT::__repr__",
                 "PIL.ImageSequence.Iterator::__iter__",
                 "PIL.ImageSequence.Iterator::__next__",
             },
@@ -108,7 +109,7 @@ class MigrationParityInventoryTests(unittest.TestCase):
     def test_diagnostic_json_records_authority_digest(self):
         payload = render_json(self.endpoints, self.legacy_rows)
         self.assertIn(EXPECTED_AUTHORITY_SHA256, payload)
-        self.assertIn('"endpoint_count": 205', payload)
+        self.assertIn('"endpoint_count": 206', payload)
 
 
 if __name__ == "__main__":

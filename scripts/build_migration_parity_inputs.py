@@ -364,7 +364,11 @@ def merge_duplicate_cases(
 
 def load_manifest(path: Path) -> dict[str, Any]:
     manifest = yaml.safe_load(path.read_text(encoding="utf-8"))
-    return validate_fixed_manifest(manifest, manifest_path=path)
+    # Input generation must be able to create the files newly indexed by a
+    # regenerated manifest. The active-tree validator checks those files
+    # after generation; validating their existence here would make adding a
+    # public surface require hand-created placeholder inputs.
+    return validate_fixed_manifest(manifest)
 
 
 def operation_index(
@@ -653,6 +657,47 @@ class WorkflowBuilder:
                 raise ValueError(
                     f"unknown inline image stimulus: {self.scenario_inline_image}"
                 )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge in {"mode-filter-pattern", "mode-filter-no-majority"} and label == "image":
+            if requested_mode != "L":
+                raise ValueError("mode-filter pattern edges require L mode")
+            if self.edge == "mode-filter-pattern":
+                # A public frombytes workflow with a 3x3 all-100 center makes
+                # the mode filter select a nonzero value instead of retaining
+                # the initial histogram bucket (zero). Uniform Image.new
+                # inputs do not reach that branch.
+                data = bytes(
+                    [
+                        0, 0, 0, 0, 0,
+                        0, 100, 100, 100, 0,
+                        0, 100, 100, 100, 0,
+                        0, 100, 100, 100, 0,
+                        0, 0, 0, 0, 0,
+                    ]
+                )
+                size = [5, 5]
+            else:
+                # Every value in this 3x3 window is distinct, so Pillow keeps
+                # the original pixel because no mode occurs more than twice.
+                data = bytes(range(9))
+                size = [3, 3]
+            data_desc = self.inline_bytes(
+                f"{label}-{self.edge}",
+                data,
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("L"),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
             self._image_steps[cache_key] = step_id
             return step_id
         if self.scenario_asset is not None:
@@ -998,6 +1043,8 @@ class WorkflowBuilder:
                 step_id=self.next_step_id("setup-palette"),
             )
             return binding(palette)
+        if surface == "PIL.ImageFilter.Color3DLUT":
+            return binding(self.ensure_filter_instance("Color3DLUT"))
         if surface == "PIL.ImageSequence.Iterator":
             iterator = self.add_step(
                 "PIL.ImageSequence",
@@ -1026,7 +1073,17 @@ class WorkflowBuilder:
         operation = self.operations.get(key)
         if operation is None:
             raise ValueError(f"unknown ImageFilter operation: {filter_name}")
-        arguments = self.required_arguments(operation)
+        if filter_name == "Color3DLUT":
+            # A class-method workflow such as Color3DLUT.__repr__ has no
+            # constructor parameters in its receiver operation. Build the
+            # receiver through the public constructor with a valid minimal
+            # 2x2x2 RGB table instead of replaying the method signature.
+            arguments = {
+                "size": literal(2),
+                "table": literal([0.0] * 24),
+            }
+        else:
+            arguments = self.required_arguments(operation)
         return self.add_step(
             "PIL.ImageFilter",
             filter_name,
@@ -7581,6 +7638,139 @@ def build_nuanced_cases(
                 "kernel": literal([1, 2]),
             },
             "mode": "RGB",
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "ModeFilter",
+            "requirement_suffix": "behavior.default",
+            "name": "nonzero-mode-selection",
+            "mode": "L",
+            "edge": "mode-filter-pattern",
+            "values": {"size": literal(3)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "ModeFilter",
+            "requirement_suffix": "behavior.default",
+            "name": "no-majority",
+            "mode": "L",
+            "edge": "mode-filter-no-majority",
+            "values": {"size": literal(3)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "ModeFilter",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-one-mode",
+            "mode": "1",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+            "values": {"size": literal(3)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "UnsharpMask",
+            "requirement_suffix": "behavior.default",
+            "name": "nonuniform-l-threshold",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 255,
+            "values": {
+                "radius": literal(2),
+                "percent": literal(200),
+                "threshold": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "UnsharpMask",
+            "requirement_suffix": "behavior.default",
+            "name": "nonuniform-rgba-threshold",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [255, 0, 0, 255],
+            "values": {
+                "radius": literal(2),
+                "percent": literal(200),
+                "threshold": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "UnsharpMask",
+            "requirement_suffix": "behavior.default",
+            "name": "nonuniform-l-in-range-clip",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 100,
+            "values": {
+                "radius": literal(2),
+                "percent": literal(50),
+                "threshold": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.target-mode",
+            "name": "valid-rgba-target",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [255, 128, 64],
+            "values": {
+                "size": literal(2),
+                "table": literal(
+                    [
+                        0.0, 0.0, 0.0, 0.0,
+                        1.0, 0.0, 0.0, 0.0,
+                        0.0, 1.0, 0.0, 0.0,
+                        1.0, 1.0, 0.0, 0.0,
+                        0.0, 0.0, 1.0, 0.0,
+                        1.0, 0.0, 1.0, 0.0,
+                        0.0, 1.0, 1.0, 0.0,
+                        1.0, 1.0, 1.0, 1.0,
+                    ]
+                ),
+                "channels": literal(4),
+                "target_mode": literal("RGBA"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "behavior.default",
+            "name": "wrong-source-mode",
+            "mode": "L",
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.target-mode",
+            "name": "target-too-narrow",
+            "mode": "RGB",
+            "values": {
+                "size": literal(2),
+                "table": literal(
+                    [
+                        0.0, 0.0, 0.0, 0.0,
+                        1.0, 0.0, 0.0, 0.0,
+                        0.0, 1.0, 0.0, 0.0,
+                        1.0, 1.0, 0.0, 0.0,
+                        0.0, 0.0, 1.0, 0.0,
+                        1.0, 0.0, 1.0, 0.0,
+                        0.0, 1.0, 1.0, 0.0,
+                        1.0, 1.0, 1.0, 1.0,
+                    ]
+                ),
+                "channels": literal(4),
+                "target_mode": literal("RGB"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "__repr__",
+            "requirement_suffix": "behavior.default",
+            "name": "default",
         },
         {
             "surface": "PIL.Image.Image",

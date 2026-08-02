@@ -232,7 +232,15 @@ class Color3DLUT:
                 self.size, self.table, self.channels, self.mode
             )
         except ValueError as exc:
-            if str(exc) == "image has wrong mode":
+            # Pillow distinguishes an unknown requested target mode from a
+            # valid target/source combination that cannot be applied. Keep
+            # the source error for the latter and normalize only the former.
+            if str(exc) == "image has wrong mode" and self.mode not in {
+                None,
+                "RGB",
+                "RGBA",
+                "CMYK",
+            }:
                 raise ValueError("unrecognized image mode") from exc
             raise
         return Image(result)
