@@ -11019,6 +11019,17 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "truthy-non-image-mask",
+            "mode": "RGB",
+            "chain": "truthy-non-image-mask",
+            "values": {
+                "box": literal([0, 0, 4, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
             "requirement_suffix": "mode.pa",
             "name": "p-source-into-pa",
             "mode": "PA",
