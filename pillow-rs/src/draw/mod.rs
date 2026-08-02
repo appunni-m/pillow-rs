@@ -61,6 +61,19 @@ pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), P
     }
 }
 
+/// Normalizes the rounded-rectangle box, preserving its two-scalar Pillow
+/// diagnostic before falling back to the shared box validation.
+pub fn normalize_rounded_rectangle_box(
+    input: DrawBoxInput,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    if matches!(&input, DrawBoxInput::Flat(values) if values.len() == 2) {
+        return Err(PilError::ValueError(
+            "not enough values to unpack (expected 4, got 2)".into(),
+        ));
+    }
+    normalize_draw_box(input)
+}
+
 fn normalize_draw_points(
     input: DrawPointsInput,
     allow_short: bool,
@@ -504,6 +517,19 @@ impl Draw {
     ) -> Result<(), PilError> {
         let points = normalize_draw_point_input(input)?;
         self.point(&points, fill)
+    }
+
+    /// Normalizes and draws a Python-facing rounded-rectangle box.
+    pub fn rounded_rectangle_with_input(
+        &mut self,
+        input: DrawBoxInput,
+        radius: f64,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    ) -> Result<(), PilError> {
+        let (x0, y0, x1, y1) = normalize_rounded_rectangle_box(input)?;
+        self.rounded_rectangle(x0, y0, x1, y1, radius, fill, outline, width)
     }
 
     /// Draws a bitmap mask at `(x, y)` using `fill`.

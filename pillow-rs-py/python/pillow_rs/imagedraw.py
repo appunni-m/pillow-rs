@@ -21,18 +21,6 @@ class Draw:
         self._image._rust_image = self._draw.image
 
     @staticmethod
-    def _box(xy):
-        """Normalize Pillow's flat or nested two-corner coordinate form."""
-        try:
-            if len(xy) == 2 and len(xy[0]) == 2 and len(xy[1]) == 2:
-                return (int(xy[0][0]), int(xy[0][1]), int(xy[1][0]), int(xy[1][1]))
-            if len(xy) == 4:
-                return (int(xy[0]), int(xy[1]), int(xy[2]), int(xy[3]))
-        except (IndexError, TypeError):
-            pass
-        raise TypeError("coordinate list must contain exactly 2 coordinates")
-
-    @staticmethod
     def _text_options(anchor, direction, features, language):
         if anchor is not None and (not isinstance(anchor, str) or len(anchor) != 2):
             raise ValueError("anchor must be a 2 character string")
@@ -82,17 +70,7 @@ class Draw:
         self._sync()
 
     def rounded_rectangle(self, xy, radius=0, fill=None, outline=None, width=1, *, corners=None):
-        try:
-            values = tuple(xy)
-        except TypeError:
-            values = ()
-        if len(values) == 2 and all(isinstance(value, (list, tuple)) for value in values):
-            x0, y0, x1, y1 = self._box(values)
-        elif len(values) == 2:
-            raise ValueError("not enough values to unpack (expected 4, got 2)")
-        else:
-            x0, y0, x1, y1 = int(values[0]), int(values[1]), int(values[2]), int(values[3])
-        self._draw.rounded_rectangle((x0, y0, x1, y1), float(radius), fill, outline, width)
+        self._draw.rounded_rectangle(xy, float(radius), fill, outline, width)
         self._sync()
 
     def bitmap(self, xy, bitmap, fill=None):

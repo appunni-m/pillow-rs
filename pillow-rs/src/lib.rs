@@ -154,6 +154,7 @@ pub use crate::draw::DrawPointsInput;
 pub use crate::draw::RegularPolygonCircle;
 pub use crate::draw::RegularPolygonSides;
 pub use crate::draw::normalize_draw_box;
+pub use crate::draw::normalize_rounded_rectangle_box;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::FreeTypeFont;
