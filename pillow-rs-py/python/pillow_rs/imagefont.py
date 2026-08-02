@@ -254,15 +254,11 @@ class FreeTypeFont:
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
         if isinstance(text, bytes):
-            if mode == "" and stroke_width == 0 and anchor is None:
-                return self._rust_font.getbbox_bytes(text)
             return _pillow_bbox_tuple(self._rust_font.getbbox_bytes_with_options(
                 text, mode, direction, features, language,
                 float(stroke_width), anchor
             ))
         text = str(text)
-        if mode == "" and stroke_width == 0 and anchor is None:
-            return self._rust_font.getbbox(text)
         return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
             text, mode, direction, features, language,
             float(stroke_width), anchor
@@ -270,14 +266,10 @@ class FreeTypeFont:
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
         if isinstance(text, bytes):
-            if mode == "":
-                return self._rust_font.getlength_bytes(text)
             return self._rust_font.getlength_bytes_with_options(
                 text, mode, direction, features, language
             )
         text = str(text)
-        if mode == "":
-            return self._rust_font.getlength_alpha(text)
         return self._rust_font.getlength_with_options(
             text, mode, direction, features, language
         )
@@ -287,22 +279,16 @@ class FreeTypeFont:
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
         if isinstance(text, bytes):
-            if mode == "" and stroke_width == 0 and anchor is None and ink == 0 and start is None:
-                w, h, alpha = self._rust_font.getmask_alpha_bytes(text)
-            else:
-                w, h, alpha = self._rust_font.getmask_alpha_bytes_with_options(
-                    text, mode, direction, features, language,
-                    float(stroke_width), anchor, ink, start
-                )
-            return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
-        text = str(text)
-        if mode == "" and stroke_width == 0 and anchor is None and ink == 0 and start is None:
-            w, h, alpha = self._rust_font.getmask_alpha(text)
-            return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
-        w, h, alpha = self._rust_font.getmask_alpha_with_options(
-            text, mode, direction, features, language,
-            float(stroke_width), anchor, ink, start
-        )
+            w, h, alpha = self._rust_font.getmask_alpha_bytes_with_options(
+                text, mode, direction, features, language,
+                float(stroke_width), anchor, ink, start
+            )
+        else:
+            text = str(text)
+            w, h, alpha = self._rust_font.getmask_alpha_with_options(
+                text, mode, direction, features, language,
+                float(stroke_width), anchor, ink, start
+            )
         return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
@@ -330,40 +316,19 @@ class FreeTypeFont:
         """
         from .image import Image as PILImage
         if isinstance(text, bytes):
-            if (
-                mode == ""
-                and stroke_width == 0
-                and anchor is None
-                and ink == 0
-                and not args
-                and not kwargs
-            ):
-                image, offset = self._rust_font.getmask2_image_bytes(text, start)
-                return ImagingCore(PILImage(image)), offset
             image, offset = self._rust_font.getmask2_image_bytes_with_options(
                 text, mode, direction, features, language,
                 float(stroke_width), anchor, ink, start,
                 bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
             )
-            return ImagingCore(PILImage(image)), offset
-        text = str(text)
-        if (
-            mode == ""
-            and stroke_width == 0
-            and anchor is None
-            and ink == 0
-            and not args
-            and not kwargs
-        ):
-            image, offset = self._rust_font.getmask2_image(text, start)
-            return ImagingCore(PILImage(image)), offset
-        image, offset = self._rust_font.getmask2_image_with_options(
-            text, mode, direction, features, language,
-            float(stroke_width), anchor, ink, start,
-            bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
-        )
-        mask = ImagingCore(PILImage(image))
-        return mask, offset
+        else:
+            text = str(text)
+            image, offset = self._rust_font.getmask2_image_with_options(
+                text, mode, direction, features, language,
+                float(stroke_width), anchor, ink, start,
+                bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
+            )
+        return ImagingCore(PILImage(image)), offset
 
     def getmetrics(self):
         """Get font metrics: (ascent, descent) in pixels."""
