@@ -200,6 +200,8 @@ pub use crate::ops::chops::screen as chops_screen;
 pub use crate::ops::chops::soft_light as chops_soft_light;
 pub use crate::ops::chops::subtract as chops_subtract;
 pub use crate::ops::chops::subtract_modulo as chops_subtract_modulo;
+pub use crate::ops::convert::PythonDitherInput;
+pub use crate::ops::convert::normalize_python_convert_dither;
 pub use crate::ops::convert::validate_python_convert_dither;
 pub use crate::ops::filter::prepare_kernel;
 pub use crate::ops::filter::validate_kernel_coefficients;

@@ -72,6 +72,21 @@ fn parse_dither(s: Option<&str>) -> Result<Option<DitherMethod>, PilError> {
     }
 }
 
+/// Host-neutral Python-facing dither input.
+#[derive(Debug, Clone)]
+pub enum PythonDitherInput {
+    /// No dither argument was supplied.
+    None,
+    /// Python integer enum; zero disables dithering and non-zero selects
+    /// Floyd-Steinberg.
+    Integer(u32),
+    /// Python string, which Pillow rejects for this entry point.
+    Name(String),
+    /// A value of another host type. The type name is used in Pillow's
+    /// compatibility diagnostic.
+    Invalid(String),
+}
+
 /// Validates a Python-facing dither argument that arrived as a string.
 ///
 /// Pillow's Python API accepts the dither enum as an integer, even though the
@@ -88,6 +103,24 @@ pub fn validate_python_convert_dither(value: &str) -> Result<(), PilError> {
     Err(PilError::TypeError(
         "'str' object cannot be interpreted as an integer".into(),
     ))
+}
+
+/// Normalizes a Python-facing dither value into the symbolic core form.
+pub fn normalize_python_convert_dither(
+    value: PythonDitherInput,
+) -> Result<Option<String>, PilError> {
+    match value {
+        PythonDitherInput::None => Ok(None),
+        PythonDitherInput::Integer(value) => Ok(Some(if value == 0 {
+            "NONE".to_owned()
+        } else {
+            "FLOYDSTEINBERG".to_owned()
+        })),
+        PythonDitherInput::Name(value) => validate_python_convert_dither(&value).map(|_| None),
+        PythonDitherInput::Invalid(type_name) => Err(PilError::TypeError(format!(
+            "'{type_name}' object cannot be converted to 'PyString'"
+        ))),
+    }
 }
 
 /// Pillow-compatible image mode conversion methods.
