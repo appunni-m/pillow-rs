@@ -323,14 +323,19 @@ fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::Ima
 
 fn image_analysis_mask_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::ImageAnalysisMask {
+) -> PyResult<pillow_rs::ImageAnalysisMask> {
     let Some(value) = value else {
-        return pillow_rs::ImageAnalysisMask::None;
+        return Ok(pillow_rs::ImageAnalysisMask::None);
+    };
+    if !value.is_truthy()? {
+        return Ok(pillow_rs::ImageAnalysisMask::None);
     };
     if let Some(mask) = image_from_python(value) {
-        return pillow_rs::ImageAnalysisMask::Image(mask);
+        return Ok(pillow_rs::ImageAnalysisMask::Image(mask));
     }
-    pillow_rs::ImageAnalysisMask::Invalid
+    Ok(pillow_rs::ImageAnalysisMask::Invalid(
+        value.get_type().name()?.to_string(),
+    ))
 }
 
 #[pyfunction]
@@ -905,7 +910,7 @@ impl PyImage {
     #[pyo3(signature = (mask=None))]
     fn histogram_with_input(&self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<u32>> {
         self.inner
-            .histogram_with_input(image_analysis_mask_from_python(mask))
+            .histogram_with_input(image_analysis_mask_from_python(mask)?)
             .map_err(map_error)
     }
 
@@ -1153,7 +1158,7 @@ impl PyImage {
     #[pyo3(signature = (mask=None))]
     fn entropy_with_input(&mut self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<f64> {
         self.inner
-            .entropy_with_input(image_analysis_mask_from_python(mask))
+            .entropy_with_input(image_analysis_mask_from_python(mask)?)
             .map_err(map_error)
     }
 
