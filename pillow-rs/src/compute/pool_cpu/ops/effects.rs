@@ -174,6 +174,74 @@ pub fn op_paste(
         return Ok(img.clone());
     }
 
+    if img.color() == crate::raster::ColorType::L16 {
+        // Pillow's Paste.c keeps I;16 samples as unsigned 16-bit values.
+        // The general RGBA8 path below is correct for byte-oriented modes but
+        // would truncate the high byte of an I;16 image.
+        let source_luma = src_img.to_luma16();
+        let mut destination = img.to_luma16();
+        enum Luma16PasteMask {
+            Luma(crate::raster::GrayImage),
+            Alpha(crate::raster::RgbaImage),
+        }
+        let mask_pixels = match mask {
+            Some(mask_image) => {
+                let materialized = mask_image.materialize()?;
+                if mask_alpha {
+                    Some(Luma16PasteMask::Alpha(materialized.to_rgba8()))
+                } else {
+                    Some(Luma16PasteMask::Luma(materialized.to_luma8()))
+                }
+            }
+            None => None,
+        };
+
+        for offset_y in 0..copy_height {
+            let source_y = source_top + offset_y;
+            let dest_y = dest_top + offset_y;
+            for offset_x in 0..copy_width {
+                let source_x = source_left + offset_x;
+                let dest_x = dest_left + offset_x;
+                let source_value = source_luma.get_pixel(source_x, source_y)[0];
+                let Some(mask_image) = mask_pixels.as_ref() else {
+                    destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
+                    continue;
+                };
+                let mask_value = match mask_image {
+                    Luma16PasteMask::Luma(pixels)
+                        if source_x < pixels.width() && source_y < pixels.height() =>
+                    {
+                        pixels.get_pixel(source_x, source_y)[0]
+                    }
+                    Luma16PasteMask::Alpha(pixels)
+                        if source_x < pixels.width() && source_y < pixels.height() =>
+                    {
+                        pixels.get_pixel(source_x, source_y)[3]
+                    }
+                    _ => 0,
+                };
+                if mask_value == 0 {
+                    continue;
+                }
+                if mask_value == 255 {
+                    destination.put_pixel(dest_x, dest_y, crate::raster::Luma([source_value]));
+                    continue;
+                }
+
+                let destination_value = destination.get_pixel(dest_x, dest_y)[0];
+                let mask = u32::from(mask_value);
+                let inverse = 255 - mask;
+                let blended = ((u32::from(source_value) * mask
+                    + u32::from(destination_value) * inverse
+                    + 127)
+                    / 255) as u16;
+                destination.put_pixel(dest_x, dest_y, crate::raster::Luma([blended]));
+            }
+        }
+
+        return Ok(DynamicImage::ImageLuma16(destination));
+    }
+
     let source_rgba = src_img.to_rgba8();
     let mut destination = img.to_rgba8();
     enum PasteMask {

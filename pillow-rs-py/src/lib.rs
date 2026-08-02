@@ -109,7 +109,10 @@ fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
 }
 
 fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<PutDataValue> {
-    if matches!(mode, "1" | "L" | "P" | "I" | "F") {
+    if matches!(
+        mode,
+        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "F"
+    ) {
         if python_is_sequence(value) {
             // Preserve the shape distinction for the core's canonical
             // "sequence must be flattened" error instead of terminating in

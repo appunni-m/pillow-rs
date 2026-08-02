@@ -30041,6 +30041,79 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.paste.nuanced.opened-i16-scalar",
+      "surface": "PIL.Image.Image",
+      "operation": "paste",
+      "covers": [
+        "PIL.Image.Image.paste.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-l16-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAgAAAAIBAwABAAAAEAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABUBAwABAAAAAQAAABYBBAABAAAAAgAAABcBBAABAAAACAAAAFMBAwABAAAAAQAAAAAAAAAAAACA//8AQA==",
+          "sha256": "17252164d15b4174d61d044d9abde5dddcd17c1c6afb917a1d09523ecd09e002",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-l16-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "paste",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": 7
+            },
+            "box": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                2,
+                2
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.paste.nuanced.color-rgb",
       "surface": "PIL.Image.Image",
       "operation": "paste",
@@ -31154,6 +31227,75 @@
             "data": {
               "kind": "asset",
               "asset_id": "data-inline"
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.putdata.nuanced.opened-i16-values",
+      "surface": "PIL.Image.Image",
+      "operation": "putdata",
+      "covers": [
+        "PIL.Image.Image.putdata.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-l16-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAgAAAAIBAwABAAAAEAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABUBAwABAAAAAQAAABYBBAABAAAAAgAAABcBBAABAAAACAAAAFMBAwABAAAAAQAAAAAAAAAAAACA//8AQA==",
+          "sha256": "17252164d15b4174d61d044d9abde5dddcd17c1c6afb917a1d09523ecd09e002",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-l16-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4
+              ]
             }
           }
         },

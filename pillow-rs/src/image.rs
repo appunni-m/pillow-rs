@@ -158,6 +158,22 @@ fn putdata_clip_component(value: i128) -> u8 {
     value.clamp(0, 255) as u8
 }
 
+fn is_l16_mode(mode: &str) -> bool {
+    matches!(mode, "I;16" | "I;16L" | "I;16B")
+}
+
+fn putdata_l16_sample(value: &PutDataValue, scale: f64, offset: f64) -> Result<u16, PilError> {
+    match value {
+        // _imaging.c:_putdata treats I;16 as an unsigned 16-bit sample
+        // destination. Rust's float-to-integer cast provides the same
+        // bounded conversion for the public numeric path.
+        PutDataValue::Number(number) => Ok((number * scale + offset) as u16),
+        _ => Err(PilError::TypeError(
+            "argument must be a sequence".to_owned(),
+        )),
+    }
+}
+
 fn putdata_bytes(
     mode: crate::pipeline::PixelMode,
     values: &[PutDataValue],
@@ -2716,6 +2732,14 @@ impl Image {
         }
 
         let mode_name = self.mode()?;
+        if is_l16_mode(&mode_name) {
+            // Keep I;16 out of PixelMode's byte-oriented deferred path. Its
+            // generic fallback widens to RGBA8 and loses the 16-bit sample.
+            for (pixel_index, value) in values.iter().enumerate() {
+                self.putdata_value_at(pixel_index, value, scale, offset)?;
+            }
+            return Ok(());
+        }
         let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
             PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
         })?;
@@ -2755,6 +2779,24 @@ impl Image {
         }
 
         let mode_name = self.mode()?;
+        if is_l16_mode(&mode_name) {
+            let sample = putdata_l16_sample(value, scale, offset)?;
+            self.load()?;
+            if let Image::Loaded(data) = self {
+                let image = Arc::make_mut(&mut data.image);
+                let destination = image.as_mut_luma16().ok_or_else(|| {
+                    PilError::InternalError("putdata I;16 storage mismatch".into())
+                })?;
+                let pixel = destination.as_mut().get_mut(pixel_index).ok_or_else(|| {
+                    PilError::InternalError("putdata I;16 offset out of bounds".into())
+                })?;
+                *pixel = sample;
+                return Ok(());
+            }
+            return Err(PilError::InternalError(
+                "putdata I;16 did not materialize writable storage".into(),
+            ));
+        }
         let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
             PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
         })?;
