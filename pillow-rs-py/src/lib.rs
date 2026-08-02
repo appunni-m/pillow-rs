@@ -245,6 +245,9 @@ fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PythonPasteS
     if let Ok(values) = value.extract::<Vec<i64>>() {
         return pillow_rs::PythonPasteSource::Components(values);
     }
+    if let Ok(value) = value.extract::<String>() {
+        return pillow_rs::PythonPasteSource::String(value);
+    }
     pillow_rs::PythonPasteSource::Invalid
 }
 
