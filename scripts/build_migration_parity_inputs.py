@@ -1557,6 +1557,7 @@ class WorkflowBuilder:
             if self.edge in {
                 "invalid-bytes",
                 "empty-bytes",
+                "embedded-null-bytes",
                 "webp-corrupt-vp8-bitstream",
                 "webp-truncated-riff",
                 "webp-invalid-riff-header",
@@ -1564,6 +1565,7 @@ class WorkflowBuilder:
                 edge_bytes = {
                     "invalid-bytes": b"\x00invalid",
                     "empty-bytes": b"",
+                    "embedded-null-bytes": b"/tmp\x00image.png",
                     "webp-corrupt-vp8-bitstream": b"RIFF\x10\x00\x00\x00WEBPVP8 \x00\x00\x00\x00",
                     "webp-truncated-riff": b"RIFF\x08\x00\x00\x00WEBP",
                     "webp-invalid-riff-header": b"NOTRIFF",
@@ -2913,6 +2915,20 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.formats",
             "name": "formats-rejected",
             "values": {"formats": literal(["JPEG"])},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.mode",
+            "name": "read-mode",
+            "values": {"mode": literal("r")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.fp",
+            "name": "embedded-null-bytes",
+            "edge": "embedded-null-bytes",
         },
         # Exercise the public ImageEnhance constructor plus enhance() call on
         # the modes rejected by the Rust core. These are behavioral parity
@@ -11516,6 +11532,39 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "f-float",
+            "mode": "F",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(1.25),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-float-error",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(1.25),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-component-count",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([1, 2, 3, 4, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "parameter.im",
             "name": "la-source-into-rgb",
@@ -12132,6 +12181,39 @@ def build_nuanced_cases(
                 "mode": literal("RGBA"),
                 "size": literal([2, 1]),
                 "color": literal([1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "p-opaque-rgba-tuple",
+            "values": {
+                "mode": literal("P"),
+                "size": literal([2, 2]),
+                "color": literal([10, 20, 30, 255]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "p-transparent-rgba-error",
+            "values": {
+                "mode": literal("P"),
+                "size": literal([2, 2]),
+                "color": literal([10, 20, 30, 128]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "p-la-tuple",
+            "values": {
+                "mode": literal("P"),
+                "size": literal([2, 2]),
+                "color": literal([10, 128]),
             },
         },
         {

@@ -5440,6 +5440,83 @@
       ]
     },
     {
+      "case_id": "PIL.Image.open.nuanced.read-mode",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "encoded-input",
+          "kind": "builtin",
+          "name": "encoded-png-input"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": "r"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.open.nuanced.embedded-null-bytes",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.fp"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "embedded-null-bytes-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "L3RtcABpbWFnZS5wbmc=",
+          "sha256": "59756496a5c09efebe8cacc9c947f69f149d6fbf49ff7629c67dfb9ce99c3de3",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "embedded-null-bytes-input"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.linear_gradient.nuanced.i-mode",
       "surface": "PIL.Image",
       "operation": "linear_gradient",
@@ -10364,6 +10441,139 @@
                 2,
                 3,
                 4
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.p-opaque-rgba-tuple",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                255
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.p-transparent-rgba-error",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                128
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.p-la-tuple",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                10,
+                128
               ]
             }
           }

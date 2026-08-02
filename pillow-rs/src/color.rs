@@ -413,6 +413,14 @@ pub fn resolve_new_color(
         return Ok((v, 0, 0, 0));
     }
     if let Some((l, a)) = la {
+        if mode == "P" {
+            // Pillow's single-band color validation rejects a two-component
+            // tuple before palette allocation; it does not reinterpret LA as
+            // an RGB palette entry.
+            return Err(crate::error::PilError::TypeError(
+                "color must be int or single-element tuple".to_owned(),
+            ));
+        }
         return Ok((l, l, l, a));
     }
     if let Some((r, g, b)) = rgb {

@@ -260,6 +260,8 @@
           "PIL.Image.radial_gradient.mode.l",
           "PIL.Image.open.nuanced.formats-accepted",
           "PIL.Image.open.nuanced.formats-rejected",
+          "PIL.Image.open.nuanced.read-mode",
+          "PIL.Image.open.nuanced.embedded-null-bytes",
           "PIL.Image.linear_gradient.nuanced.i-mode",
           "PIL.Image.linear_gradient.nuanced.f-mode",
           "PIL.Image.linear_gradient.nuanced.invalid-single-character-mode",
@@ -336,6 +338,9 @@
           "PIL.Image.new.nuanced.float-scalar-f",
           "PIL.Image.new.nuanced.tuple-la",
           "PIL.Image.new.nuanced.tuple-rgba",
+          "PIL.Image.new.nuanced.p-opaque-rgba-tuple",
+          "PIL.Image.new.nuanced.p-transparent-rgba-error",
+          "PIL.Image.new.nuanced.p-la-tuple",
           "PIL.Image.new.nuanced.none-color-rgb"
         ],
         "command_ids": []

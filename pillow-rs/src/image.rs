@@ -1818,7 +1818,9 @@ impl Image {
                 [value, alpha] => self.putpixel(x, y, *value, 0, 0, *alpha),
                 [r, g, b] => self.putpixel(x, y, *r, *g, *b, 255),
                 [r, g, b, a] => self.putpixel(x, y, *r, *g, *b, *a),
-                _ => Err(PilError::ValueError("invalid color length".into())),
+                _ => Err(PilError::TypeError(
+                    "color must be int, or tuple of one, three or four elements".into(),
+                )),
             },
         }
     }

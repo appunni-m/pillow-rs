@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2173
-- Unique active workflow signatures: 2173
+- Active parity workflows: 2181
+- Unique active workflow signatures: 2181
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 997
+- Deliberate nuanced workflows: 1005
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,8 +22,8 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 179 |
-| `PIL.Image.Image` | 986 |
+| `PIL.Image` | 184 |
+| `PIL.Image.Image` | 989 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -423,6 +423,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putpalette.nuanced.oversized-rgb-palette`
 - `PIL.Image.Image.putpalette.nuanced.oversized-rgba-palette`
 - `PIL.Image.Image.putpalette.nuanced.rgba-palette`
+- `PIL.Image.Image.putpixel.nuanced.f-float`
 - `PIL.Image.Image.putpixel.nuanced.f-scalar`
 - `PIL.Image.Image.putpixel.nuanced.f-x-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.f-y-out-of-bounds`
@@ -430,6 +431,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putpixel.nuanced.i-scalar`
 - `PIL.Image.Image.putpixel.nuanced.i-x-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.i-y-out-of-bounds`
+- `PIL.Image.Image.putpixel.nuanced.invalid-component-count`
 - `PIL.Image.Image.putpixel.nuanced.one-tuple-equals-scalar`
 - `PIL.Image.Image.putpixel.nuanced.p-after-bitmap-no-palette-tuple`
 - `PIL.Image.Image.putpixel.nuanced.p-attached-palette-exact-match`
@@ -447,6 +449,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putpixel.nuanced.p-y-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.pa-scalar`
 - `PIL.Image.Image.putpixel.nuanced.raw-p-no-palette-tuple`
+- `PIL.Image.Image.putpixel.nuanced.rgb-float-error`
 - `PIL.Image.Image.putpixel.nuanced.rgb-y-out-of-bounds-tuple`
 - `PIL.Image.Image.putpixel.nuanced.ycbcr-scalar`
 - `PIL.Image.Image.quantize.nuanced.fast-octree-rgb`
@@ -668,6 +671,9 @@ are not copied into the active lane by name.
 - `PIL.Image.new.nuanced.integer-scalar-i16l`
 - `PIL.Image.new.nuanced.integer-scalar-i16n`
 - `PIL.Image.new.nuanced.none-color-rgb`
+- `PIL.Image.new.nuanced.p-la-tuple`
+- `PIL.Image.new.nuanced.p-opaque-rgba-tuple`
+- `PIL.Image.new.nuanced.p-transparent-rgba-error`
 - `PIL.Image.new.nuanced.rejected-leading-space-string`
 - `PIL.Image.new.nuanced.rejected-rgb-empty-percent-component`
 - `PIL.Image.new.nuanced.rejected-rgb-nondigit-string`
@@ -687,8 +693,10 @@ are not copied into the active lane by name.
 - `PIL.Image.new.nuanced.tuple-rgb-l`
 - `PIL.Image.new.nuanced.tuple-rgb-one`
 - `PIL.Image.new.nuanced.tuple-rgba`
+- `PIL.Image.open.nuanced.embedded-null-bytes`
 - `PIL.Image.open.nuanced.formats-accepted`
 - `PIL.Image.open.nuanced.formats-rejected`
+- `PIL.Image.open.nuanced.read-mode`
 - `PIL.Image.radial_gradient.nuanced.f-mode`
 - `PIL.Image.radial_gradient.nuanced.i-mode`
 - `PIL.Image.radial_gradient.nuanced.invalid-single-character-mode`
