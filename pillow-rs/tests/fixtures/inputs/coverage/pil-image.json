@@ -275,6 +275,7 @@
           "PIL.Image.merge.nuanced.invalid-mode",
           "PIL.Image.merge.nuanced.wrong-band-count",
           "PIL.Image.blend.nuanced.mismatched-sizes",
+          "PIL.Image.blend.nuanced.palette-mode-error",
           "PIL.Image.composite.nuanced.mask-size-mismatch",
           "PIL.Image.composite.nuanced.source-mode-conversion",
           "PIL.Image.linear_gradient.nuanced.p-mode",

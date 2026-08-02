@@ -6213,6 +6213,89 @@
       ]
     },
     {
+      "case_id": "PIL.Image.blend.nuanced.palette-mode-error",
+      "surface": "PIL.Image",
+      "operation": "blend",
+      "covers": [
+        "PIL.Image.blend.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-im1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-im2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "blend",
+          "receiver": null,
+          "arguments": {
+            "im1": {
+              "kind": "binding",
+              "step_id": "setup-im1-1"
+            },
+            "im2": {
+              "kind": "binding",
+              "step_id": "setup-im2-2"
+            },
+            "alpha": {
+              "kind": "literal",
+              "value": 0.25
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.composite.nuanced.mask-size-mismatch",
       "surface": "PIL.Image",
       "operation": "composite",
