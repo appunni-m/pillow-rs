@@ -541,14 +541,14 @@ impl Image {
             _ => return Err(PilError::ValueError("image has wrong mode".into())),
         };
         let target_name = target_mode.unwrap_or(source_name.as_str());
-        let target = match target_name {
-            "RGB" => PixelMode::RGB,
-            "RGBA" => PixelMode::RGBA,
-            "CMYK" => PixelMode::CMYK,
-            _ if target_mode.is_some() => {
+        let target = match target_mode {
+            Some("RGB") => PixelMode::RGB,
+            Some("RGBA") => PixelMode::RGBA,
+            Some("CMYK") => PixelMode::CMYK,
+            Some(_) => {
                 return Err(PilError::ValueError("unrecognized image mode".into()));
             }
-            _ => return Err(PilError::ValueError("image has wrong mode".into())),
+            None => source_mode,
         };
         if target.channels() < channels as usize {
             return Err(PilError::ValueError("image has wrong mode".into()));

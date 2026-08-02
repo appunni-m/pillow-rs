@@ -249,6 +249,7 @@
           "PIL.ImageFilter.Color3DLUT.nuanced.valid-rgba-target",
           "PIL.ImageFilter.Color3DLUT.nuanced.wrong-source-mode",
           "PIL.ImageFilter.Color3DLUT.nuanced.target-too-narrow",
+          "PIL.ImageFilter.Color3DLUT.nuanced.unrecognized-target-mode",
           "PIL.ImageFilter.Color3DLUT.nuanced.tuple-size",
           "PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-shape",
           "PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-range",
