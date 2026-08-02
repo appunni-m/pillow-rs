@@ -25,13 +25,7 @@ class Draw:
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):
-        try:
-            self._draw.rectangle(xy, fill, outline, width)
-        except ValueError:
-            invalid_color = fill if isinstance(fill, str) else outline if isinstance(outline, str) else None
-            if invalid_color is None:
-                raise
-            raise ValueError(f"unknown color specifier: {invalid_color!r}") from None
+        self._draw.rectangle(xy, fill, outline, width)
         self._sync()
 
     def ellipse(self, xy, fill=None, outline=None, width: int = 1):

@@ -326,20 +326,8 @@ class Image:
         # is not a Filter instance/class.
         if callable(filter_type):
             filter_type = filter_type()
-        # PIL only allows ModeFilter on palette images; all others raise ValueError
-        if self.mode == "P":
-            # For built-in string filters, always raise
-            if isinstance(filter_type, str):
-                raise ValueError("cannot filter palette images")
-            # For parametric filter objects, check by name
-            if hasattr(filter_type, 'name'):
-                name = filter_type.name
-            elif hasattr(filter_type, '__class__'):
-                name = type(filter_type).__name__
-            else:
-                name = str(filter_type)
-            if name != "Mode":
-                raise ValueError("cannot filter palette images")
+        filter_name = getattr(filter_type, "name", type(filter_type).__name__)
+        self._rust_image.validate_filter(filter_name)
         if not hasattr(filter_type, "_apply"):
             msg = "filter argument should be ImageFilter.Filter instance or class"
             raise TypeError(msg)

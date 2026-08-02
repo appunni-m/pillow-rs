@@ -690,6 +690,10 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
+    fn validate_filter(&self, filter_name: &str) -> PyResult<()> {
+        self.inner.validate_filter(filter_name).map_err(map_error)
+    }
+
     fn kernel_filter(
         &self,
         kernel: Vec<f32>,
