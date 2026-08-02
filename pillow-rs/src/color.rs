@@ -1046,6 +1046,29 @@ pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
+/// Converts `PA` palette-index-plus-alpha storage to RGB.
+///
+/// PA has no implicit grayscale fallback: when no palette is attached, Pillow
+/// maps every index to black and preserves the alpha only for alpha-bearing
+/// destinations. RGB conversion itself ignores the per-pixel alpha byte.
+pub fn pa_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
+    let indices = img.to_luma8();
+    let (w, h) = indices.dimensions();
+    let mut out = crate::raster::RgbImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(indices.pixels()) {
+        let index = usize::from(ip[0]);
+        if let Some(pal) = palette {
+            let base = index * 3;
+            if base + 2 < pal.len() {
+                op[0] = pal[base];
+                op[1] = pal[base + 1];
+                op[2] = pal[base + 2];
+            }
+        }
+    }
+    DynamicImage::ImageRgb8(out)
+}
+
 /// Converts a non-standard Pillow mode into a standard RGB-family image.
 ///
 /// `palette` supplies `P` mode RGB triples when `src_mode == "P"`.
@@ -1053,7 +1076,7 @@ pub fn p_to_rgb(img: &DynamicImage, palette: Option<&[u8]>) -> DynamicImage {
 /// # Returns
 ///
 /// `Some(image)` for modes that need reinterpretation (`CMYK`, `HSV`, `YCbCr`,
-/// `I`, `F`, `P`) and `None` for modes that are already standard.
+/// `I`, `F`, `P`, `PA`) and `None` for modes that are already standard.
 pub fn convert_from_nonstandard(
     src_mode: &str,
     img: &DynamicImage,
@@ -1066,6 +1089,7 @@ pub fn convert_from_nonstandard(
         "I" => Some(i_to_rgb(img)),
         "F" => Some(f_to_rgb(img)),
         "P" => Some(p_to_rgb(img, palette)),
+        "PA" => Some(pa_to_rgb(img, palette)),
         _ => None,
     }
 }

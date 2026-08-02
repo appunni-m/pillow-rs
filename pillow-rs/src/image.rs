@@ -1181,13 +1181,20 @@ impl Image {
         let explicit_mode = if matches!(&op, PipelineOp::ExtractBand { .. }) {
             None
         } else if source_is_paletted {
-            palette_safe.then(|| {
-                if source.explicit_mode() == Some("PA") {
-                    "PA".to_owned()
-                } else {
-                    "P".to_owned()
-                }
-            })
+            if source.explicit_mode() == Some("PA") && matches!(&op, PipelineOp::PutPixel { .. }) {
+                // PA writes keep the raw index/alpha sample layout even when
+                // no RGB palette is attached, so later conversion still sees
+                // the source as PA rather than generic LA.
+                Some("PA".to_owned())
+            } else {
+                palette_safe.then(|| {
+                    if source.explicit_mode() == Some("PA") {
+                        "PA".to_owned()
+                    } else {
+                        "P".to_owned()
+                    }
+                })
+            }
         } else {
             match &op {
                 PipelineOp::Grayscale
@@ -3655,7 +3662,7 @@ pub(crate) fn expand_palette(
 ///
 /// Unlike `P`, `PA` owns alpha per pixel. Pillow therefore ignores any alpha
 /// attached to the palette while converting `PA` to `RGBA`.
-fn expand_palette_alpha(
+pub(crate) fn expand_palette_alpha(
     indices_alpha: &crate::raster::GrayAlphaImage,
     palette: &[u8],
 ) -> DynamicImage {

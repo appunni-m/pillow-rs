@@ -41,10 +41,8 @@ impl Image {
         }
         let mut filter = parse_resample(filter)?;
         // PIL forces NEAREST for mode "1" and "P" to avoid non-binary gray values
-        if let Some(m) = self.explicit_mode() {
-            if m == "1" || m == "P" {
-                filter = ResampleFilter::Nearest;
-            }
+        if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+            filter = ResampleFilter::Nearest;
         }
         Ok(Image::push_op(self, PipelineOp::Resize { w, h, filter }))
     }
@@ -68,10 +66,8 @@ impl Image {
         }
         let mut filter = filter.unwrap_or(ResampleFilter::Bicubic);
         // PIL forces NEAREST for mode "1" and "P" to avoid non-binary/interpolated values
-        if let Some(m) = self.explicit_mode() {
-            if m == "1" || m == "P" {
-                filter = ResampleFilter::Nearest;
-            }
+        if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+            filter = ResampleFilter::Nearest;
         }
         let new_self = Image::push_op(self, PipelineOp::Thumbnail { w, h, filter });
         *self = new_self;

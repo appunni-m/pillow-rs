@@ -1954,6 +1954,18 @@ class WorkflowBuilder:
                     },
                     step_id="setup-transparency-resize",
                 )
+            elif chain == "p-transparency-resize-bilinear-apply":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([2, 2]),
+                        "resample": literal(2),
+                    },
+                    step_id="setup-transparency-resize-bilinear",
+                )
             elif chain == "p-transparency-load-apply":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -8312,6 +8324,53 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "parameter.dither",
+            "name": "integer-none-dither",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"mode": literal("1"), "dither": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.dither",
+            "name": "integer-floydsteinberg-dither",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"mode": literal("1"), "dither": literal(1)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "l-to-pa",
+            "mode": "L",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.1",
+            "name": "pa-to-one",
+            "mode": "PA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 255],
+            "values": {"mode": literal("1")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgba",
+            "name": "raw-p-without-palette-to-rgba",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "mode.l",
             "name": "from-cmyk-to-l",
             "mode": "CMYK",
@@ -8472,6 +8531,15 @@ def build_nuanced_cases(
             "name": "png-p-transparency-resized",
             "scenario_asset": "image/p-transparency.png",
             "chain": "p-transparency-resize-apply",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-resized-bilinear",
+            "scenario_asset": "image/p-transparency.png",
+            "chain": "p-transparency-resize-bilinear-apply",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
