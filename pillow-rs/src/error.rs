@@ -70,6 +70,10 @@ pub enum PilError {
     #[error("{0}")]
     TypeError(String),
 
+    /// Arithmetic error raised by Pillow's aspect-ratio paths.
+    #[error("{0}")]
+    ZeroDivisionError(String),
+
     /// Pillow-style internal system error surfaced by legacy C extension paths.
     #[error("{0}")]
     SystemError(String),

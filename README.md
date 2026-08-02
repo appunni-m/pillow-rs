@@ -230,7 +230,11 @@ Every image operation in pillow-rs is recorded as a `PipelineOp` enum variant â€
 ```rust
 // These do NOT process pixels â€” they only record operations:
 let img = Image::open("photo.jpg")?;
-let img = img.resize((800, 600), Some("LANCZOS"))?;     // records Resize op
+let img = img.resize(
+    (800, 600),
+    Some(pillow_rs::ResampleInput::Name("LANCZOS".into())),
+    None,
+)?;     // records Resize op
 let img = img.filter("BLUR")?;                           // records Filter3x3 op
 let img = img.convert("L")?;                             // records Convert op
 

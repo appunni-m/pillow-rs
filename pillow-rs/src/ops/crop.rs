@@ -5,6 +5,24 @@ use crate::ops::paste::PasteSource;
 use crate::pipeline::PipelineOp;
 
 impl Image {
+    /// Crops a box whose coordinates arrived from an unsigned host binding.
+    ///
+    /// Coordinate conversion and overflow reporting stay in the core so WASM
+    /// and other FFI layers only marshal their native integer types.
+    pub fn crop_unsigned(&self, box_coords: (u32, u32, u32, u32)) -> Result<Image, PilError> {
+        let coordinates = (
+            i32::try_from(box_coords.0)
+                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
+            i32::try_from(box_coords.1)
+                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
+            i32::try_from(box_coords.2)
+                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
+            i32::try_from(box_coords.3)
+                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
+        );
+        self.crop(Some(coordinates))
+    }
+
     /// Crops using Pillow's optional `(left, top, right, bottom)` box.
     ///
     /// Negative and out-of-bounds coordinates are padded with zero-valued
