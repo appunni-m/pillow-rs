@@ -1879,6 +1879,29 @@ fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<
     Ok(PyBytes::new(py, &bytes).into())
 }
 
+#[pyfunction]
+fn exif_compat_fields(
+    py: Python<'_>,
+    raw: Option<Vec<u8>>,
+    loaded_exif: bool,
+) -> PyResult<PyObject> {
+    let fields = pillow_rs::prepare_exif_compat(raw.as_deref(), loaded_exif);
+    let result = PyDict::new(py);
+    result.set_item("_loaded_exif", fields.loaded_exif)?;
+    result.set_item("_loaded", true)?;
+    if fields.has_source {
+        result.set_item("fp", py.None())?;
+        result.set_item("head", fields.head.unwrap_or_default())?;
+        if let Some(endian) = fields.endian {
+            result.set_item("endian", endian)?;
+        }
+        if fields.bigtiff {
+            result.set_item("bigtiff", false)?;
+        }
+    }
+    Ok(result.into())
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
@@ -1984,6 +2007,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(make_lut, m)?)?;
     m.add_function(wrap_pyfunction!(eval_validate_input, m)?)?;
     m.add_function(wrap_pyfunction!(imaging_core_to_bytes, m)?)?;
+    m.add_function(wrap_pyfunction!(exif_compat_fields, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
 
     Ok(())

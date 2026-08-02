@@ -38,6 +38,7 @@ use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+use crate::raster::{DynamicImage, GenericImageView};
 
 /// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
 #[derive(Debug, Clone)]
@@ -63,7 +64,46 @@ pub fn imaging_core_to_bytes(input: ImagingCoreBytesInput) -> Result<Vec<u8>, Pi
         })
         .collect()
 }
-use crate::raster::{DynamicImage, GenericImageView};
+
+/// Prepared fields for Pillow's lightweight public EXIF compatibility object.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ExifCompatFields {
+    /// Original EXIF bytes retained only for fully loaded metadata.
+    pub loaded_exif: Option<Vec<u8>>,
+    /// First eight bytes of the TIFF payload, when a record was supplied.
+    pub head: Option<Vec<u8>>,
+    /// TIFF byte order marker, if the payload has a valid TIFF magic.
+    pub endian: Option<String>,
+    /// Whether the compatibility object should expose Pillow's `bigtiff=False`.
+    pub bigtiff: bool,
+    /// Whether a non-empty EXIF record was supplied.
+    pub has_source: bool,
+}
+
+/// Prepares EXIF compatibility metadata without touching Python objects.
+pub fn prepare_exif_compat(raw: Option<&[u8]>, loaded_exif: bool) -> ExifCompatFields {
+    let Some(raw) = raw.filter(|raw| !raw.is_empty()) else {
+        return ExifCompatFields::default();
+    };
+    let payload = raw.strip_prefix(b"Exif\0\0").unwrap_or(raw);
+    let endian = (payload.len() >= 4)
+        .then(|| &payload[2..4])
+        .filter(|magic| *magic == b"*\0" || *magic == b"\0*")
+        .map(|_| {
+            if payload.starts_with(b"II") {
+                "<".to_owned()
+            } else {
+                ">".to_owned()
+            }
+        });
+    ExifCompatFields {
+        loaded_exif: loaded_exif.then(|| raw.to_vec()),
+        head: Some(payload[..payload.len().min(8)].to_vec()),
+        endian,
+        bigtiff: !loaded_exif,
+        has_source: true,
+    }
+}
 
 /// Default palette matching PIL's web/browser palette.
 /// Used for P-mode images without an explicit palette.
