@@ -905,8 +905,18 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn getchannel(&mut self, channel: i32) -> PyResult<PyImage> {
-        let rs = self.inner.getchannel(channel).map_err(map_error)?;
+    fn getchannel(&mut self, channel: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+        let selector = if let Ok(channel) = channel.extract::<i32>() {
+            pillow_rs::ChannelSelector::Index(channel)
+        } else if let Ok(channel) = channel.extract::<String>() {
+            pillow_rs::ChannelSelector::Name(channel)
+        } else {
+            pillow_rs::ChannelSelector::Invalid
+        };
+        let rs = self
+            .inner
+            .getchannel_selector(selector)
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -1379,61 +1389,18 @@ impl PyImage {
     }
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
     fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let mode = self.inner.mode().map_err(map_error)?;
-        if matches!(mode.as_str(), "I" | "F") {
-            if let Ok(v) = value.extract::<f64>() {
-                return self
-                    .inner
-                    .putpixel_mode_scalar(xy.0, xy.1, v, &mode)
-                    .map_err(map_error);
-            }
-        }
-        if let Ok(v) = value.extract::<u8>() {
-            return self
-                .inner
-                .putpixel_mode(xy.0, xy.1, v, &mode)
-                .map_err(map_error);
-        }
-        // Pillow treats a one-element tuple exactly like the scalar value
-        // (P: palette index; L/1: gray; RGB/RGBA/CMYK: first band).
-        if let Ok((v,)) = value.extract::<(u8,)>() {
-            return self
-                .inner
-                .putpixel_mode(xy.0, xy.1, v, &mode)
-                .map_err(map_error);
-        }
-        if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
-            return self
-                .inner
-                .putpixel(xy.0, xy.1, r, g, b, 255)
-                .map_err(map_error);
-        }
-        if let Ok((r, g, b, a)) = value.extract::<(u8, u8, u8, u8)>() {
-            return self
-                .inner
-                .putpixel(xy.0, xy.1, r, g, b, a)
-                .map_err(map_error);
-        }
-        if let Ok(list) = value.extract::<Vec<u8>>() {
-            let (r, g, b, a) = match list.len() {
-                1 => (list[0], 0, 0, 0),
-                2 => (list[0], 0, 0, list[1]),
-                3 => (list[0], list[1], list[2], 255),
-                4 => (list[0], list[1], list[2], list[3]),
-                _ => {
-                    return Err(pyo3::exceptions::PyValueError::new_err(
-                        "invalid color length",
-                    ));
-                }
-            };
-            return self
-                .inner
-                .putpixel(xy.0, xy.1, r, g, b, a)
-                .map_err(map_error);
-        }
-        Err(pyo3::exceptions::PyTypeError::new_err(
-            "value must be int, tuple, or list",
-        ))
+        let value = if let Ok(value) = value.extract::<i64>() {
+            pillow_rs::PutPixelValue::Integer(value)
+        } else if let Ok(value) = value.extract::<Vec<u8>>() {
+            pillow_rs::PutPixelValue::Components(value)
+        } else if let Ok(value) = value.extract::<f64>() {
+            pillow_rs::PutPixelValue::Float(value)
+        } else {
+            pillow_rs::PutPixelValue::Invalid
+        };
+        self.inner
+            .putpixel_value(xy.0, xy.1, value)
+            .map_err(map_error)
     }
 
     #[getter]
@@ -3755,10 +3722,18 @@ fn image_radial_gradient(mode: &str) -> PyResult<PyImage> {
 #[pyfunction]
 fn image_effect_mandelbrot(
     size: (u32, u32),
-    extent: (f64, f64, f64, f64),
+    extent: &Bound<'_, PyAny>,
     quality: i32,
 ) -> PyResult<PyImage> {
-    let rs = pillow_rs::image_effect_mandelbrot(size, extent, quality).map_err(map_error)?;
+    let extent_type = extent.get_type().name()?.to_string();
+    let extent = extent.extract::<Vec<f64>>().ok();
+    let rs = pillow_rs::image_effect_mandelbrot_with_extent(
+        size,
+        extent.as_deref(),
+        &extent_type,
+        quality,
+    )
+    .map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 

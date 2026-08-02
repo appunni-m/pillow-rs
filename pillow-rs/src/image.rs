@@ -130,6 +130,30 @@ pub enum PutDataValue {
     Components(Vec<i128>),
 }
 
+/// Host-neutral selector for `Image.getchannel`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ChannelSelector {
+    /// Numeric band index.
+    Index(i32),
+    /// Pillow band name such as `"R"` or `"A"`.
+    Name(String),
+    /// A host value that is neither an integer nor a string.
+    Invalid,
+}
+
+/// Host-neutral value extracted for a public `Image.putpixel` call.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PutPixelValue {
+    /// An integer scalar, retaining its range for core validation.
+    Integer(i64),
+    /// A non-integral numeric value, which Pillow rejects for this surface.
+    Float(f64),
+    /// A list or tuple of byte components.
+    Components(Vec<u8>),
+    /// A value that is not a supported scalar or component sequence.
+    Invalid,
+}
+
 #[derive(Clone, Copy)]
 enum FromBytesMode {
     L,
@@ -1483,6 +1507,36 @@ impl Image {
         self.putdata_value_at(pixel_index, &PutDataValue::Number(value), 1.0, 0.0)
     }
 
+    /// Applies Pillow's public `putpixel` scalar/tuple normalization.
+    pub fn putpixel_value(&mut self, x: u32, y: u32, value: PutPixelValue) -> Result<(), PilError> {
+        let mode = self.mode()?;
+        match value {
+            PutPixelValue::Integer(value) => {
+                if !(0..=255).contains(&value) {
+                    return Err(PilError::TypeError(
+                        "value must be int, tuple, or list".into(),
+                    ));
+                }
+                if matches!(mode.as_str(), "I" | "F") {
+                    return self.putpixel_mode_scalar(x, y, value as f64, &mode);
+                }
+                self.putpixel_mode(x, y, value as u8, &mode)
+            }
+            PutPixelValue::Float(_) | PutPixelValue::Invalid => Err(if mode.len() == 1 {
+                PilError::TypeError("color must be int or single-element tuple".into())
+            } else {
+                PilError::TypeError("color must be int or tuple".into())
+            }),
+            PutPixelValue::Components(values) => match values.as_slice() {
+                [value] => self.putpixel_mode(x, y, *value, &mode),
+                [value, alpha] => self.putpixel(x, y, *value, 0, 0, *alpha),
+                [r, g, b] => self.putpixel(x, y, *r, *g, *b, 255),
+                [r, g, b, a] => self.putpixel(x, y, *r, *g, *b, *a),
+                _ => Err(PilError::ValueError("invalid color length".into())),
+            },
+        }
+    }
+
     /// Returns Pillow-compatible image statistics in structured form.
     ///
     /// Results use list variants in band order, including single-band images,
@@ -1883,10 +1937,21 @@ impl Image {
         encoder_name: &str,
         args: &[String],
     ) -> Result<Vec<u8>, PilError> {
-        let mut data = self.tobytes_formatted(mode)?;
         if encoder_name != "raw" {
-            return Ok(data);
+            return Err(PilError::IOError(format!(
+                "encoder {encoder_name} not available"
+            )));
         }
+        let raw_mode = args.first().map(String::as_str).unwrap_or(mode);
+        let mode_supports_raw = raw_mode == mode
+            || (mode == "RGB" && raw_mode == "BGR")
+            || (mode == "RGBA" && raw_mode == "BGRA");
+        if !mode_supports_raw {
+            return Err(PilError::IOError(format!(
+                "encoder {raw_mode} not available"
+            )));
+        }
+        let mut data = self.tobytes_formatted(mode)?;
         match args.first().map(String::as_str) {
             Some("BGRA") => {
                 for pixel in data.chunks_exact_mut(4) {
@@ -3022,6 +3087,28 @@ impl Image {
             self,
             PipelineOp::ExtractBand { index: ch as u8 },
         ))
+    }
+
+    /// Resolves a numeric or named public channel selector before extraction.
+    pub fn getchannel_selector(&self, selector: ChannelSelector) -> Result<Image, PilError> {
+        let channel = match selector {
+            ChannelSelector::Index(channel) => channel,
+            ChannelSelector::Name(name) => {
+                let bands = self.getbands()?;
+                bands.iter().position(|band| band == &name).map_or_else(
+                    || {
+                        Err(PilError::ValueError(format!(
+                            "The image has no channel \"{name}\""
+                        )))
+                    },
+                    |index| Ok(index as i32),
+                )?
+            }
+            ChannelSelector::Invalid => {
+                return Err(PilError::ValueError("band index out of range".into()));
+            }
+        };
+        self.getchannel(channel)
     }
 
     /// Queues replacement of the alpha channel.
