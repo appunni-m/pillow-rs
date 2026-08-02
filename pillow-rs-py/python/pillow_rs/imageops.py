@@ -93,28 +93,9 @@ def pad(image: Image, size, method=None, color=None, centering=(0.5, 0.5)):
 
 
 def colorize(image: Image, black, white, mid=None, blackpoint=0, whitepoint=255, midpoint=127):
-    # Keep the public mode check ahead of color conversion (Pillow raises this
-    # AssertionError even when a color argument is otherwise malformed). Point
-    # ordering remains in the Rust core so its compatibility checks are shared.
-    if image.mode != "L":
-        raise AssertionError()
-    if isinstance(black, str):
-        black = _core.getrgb(black)
-    if isinstance(white, str):
-        white = _core.getrgb(white)
-    if mid is not None and isinstance(mid, str):
-        mid = _core.getrgb(mid)
-    return Image(
-        _core.ops_colorize(
-            image._rust_image,
-            black[:3],
-            white[:3],
-            mid[:3] if mid is not None else None,
-            blackpoint,
-            midpoint,
-            whitepoint,
-        )
-    )
+    return Image(_core.ops_colorize(
+        image._rust_image, black, white, mid, blackpoint, midpoint, whitepoint
+    ))
 
 
 def exif_transpose(image: Image, *, in_place=False):

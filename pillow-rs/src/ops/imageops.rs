@@ -142,6 +142,21 @@ pub fn grayscale(image: &Image) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::Grayscale))
 }
 
+/// Validates that an image can be colorized.
+///
+/// # Errors
+///
+/// Returns [`PilError::AssertionError`] when the source mode is not `"L"`, or
+/// another [`PilError`] when mode detection fails.
+pub fn validate_colorize_mode(image: &Image) -> Result<(), PilError> {
+    let mode = image.mode()?;
+    if mode != "L" {
+        // PIL raises AssertionError for non-L modes before resolving colors.
+        return Err(PilError::AssertionError(String::new()));
+    }
+    Ok(())
+}
+
 /// Colorizes an `L` image by mapping black and white endpoints.
 ///
 /// # Errors
@@ -157,11 +172,7 @@ pub fn colorize(
     midpoint: u8,
     whitepoint: u8,
 ) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-    if mode != "L" {
-        // PIL raises AssertionError for non-L modes
-        return Err(PilError::AssertionError(String::new()));
-    }
+    validate_colorize_mode(image)?;
     if let Some(_) = mid {
         // PIL: assert 0 <= blackpoint <= midpoint <= whitepoint <= 255
         if !(blackpoint <= midpoint && midpoint <= whitepoint) {
