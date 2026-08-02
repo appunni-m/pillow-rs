@@ -405,16 +405,6 @@ class Image:
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:
-        if encoder_name != "raw":
-            raise OSError(f"encoder {encoder_name} not available")
-        raw_mode = args[0] if args else self.mode
-        supported_raw_modes = {self.mode}
-        if self.mode == "RGB":
-            supported_raw_modes.add("BGR")
-        elif self.mode == "RGBA":
-            supported_raw_modes.add("BGRA")
-        if raw_mode not in supported_raw_modes:
-            raise OSError(f"encoder {args[0]} not available")
         return self._rust_image.tobytes_encoded(self.mode, encoder_name, args)
 
     def getpixel(self, xy: Tuple[int, int]):
@@ -428,14 +418,7 @@ class Image:
         first band = value, remaining bands = 0.
         Mode-aware expansion handled in Rust.
         """
-        if isinstance(value, str):
-            if len(self.mode) == 1:
-                raise TypeError("color must be int or single-element tuple")
-            raise TypeError("color must be int or tuple")
-        if isinstance(value, (int, list, tuple)):
-            self._rust_image.putpixel_mode(xy, value)
-        else:
-            raise TypeError("color must be int or single-element tuple")
+        self._rust_image.putpixel_mode(xy, value)
 
     def quantize(self, colors: int = 256, method=None, kmeans: int = 0,
                  palette=None, dither: int = 1):
@@ -475,16 +458,7 @@ class Image:
 
     def getchannel(self, channel):
         """Extract a single channel as an L-mode image."""
-        if isinstance(channel, str):
-            names = self.getbands()
-            if channel not in names:
-                raise ValueError(f'The image has no channel "{channel}"')
-            ch = names.index(channel)
-        else:
-            ch = channel
-            if not isinstance(ch, int):
-                raise ValueError("band index out of range")
-        return Image(self._rust_image.getchannel(ch))
+        return Image(self._rust_image.getchannel(channel))
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""

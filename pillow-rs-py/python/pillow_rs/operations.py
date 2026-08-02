@@ -107,9 +107,6 @@ def effect_mandelbrot(
 ) -> Image:
     """Generate a Mandelbrot set covering the given extent."""
     from . import _core
-    if not isinstance(extent, (tuple, list)) or len(extent) != 4:
-        typename = type(extent).__name__
-        raise TypeError(f"argument 2 must be 4-item sequence, not {typename}")
     return Image(_core.image_effect_mandelbrot(size, extent, quality))
 
 

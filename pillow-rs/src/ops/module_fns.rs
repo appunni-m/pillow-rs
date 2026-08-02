@@ -464,3 +464,25 @@ pub fn effect_mandelbrot(
 
     Image::frombytes("L", (w, h), &data)
 }
+
+/// Validates a host-provided Mandelbrot extent and delegates to the typed
+/// Rust implementation. The host type name is metadata used only to preserve
+/// Pillow's diagnostic for non-four-item sequences.
+pub fn effect_mandelbrot_with_extent(
+    size: (u32, u32),
+    extent: Option<&[f64]>,
+    extent_type: &str,
+    quality: i32,
+) -> Result<Image, PilError> {
+    let Some(extent) = extent else {
+        return Err(PilError::TypeError(format!(
+            "argument 2 must be 4-item sequence, not {extent_type}"
+        )));
+    };
+    if extent.len() != 4 {
+        return Err(PilError::TypeError(format!(
+            "argument 2 must be 4-item sequence, not {extent_type}"
+        )));
+    }
+    effect_mandelbrot(size, (extent[0], extent[1], extent[2], extent[3]), quality)
+}
