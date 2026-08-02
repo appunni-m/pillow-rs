@@ -1454,7 +1454,11 @@ fn map_error(e: PilError) -> PyErr {
         PilError::SyntaxError(msg) => pyo3::exceptions::PySyntaxError::new_err(msg),
         PilError::SystemError(msg) => pyo3::exceptions::PySystemError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
-        PilError::ImageError(err) => pyo3::exceptions::PyException::new_err(err.to_string()),
+        // Pillow reports deferred decoder failures (for example, a valid PNG
+        // header whose image payload is missing) as OSError from Image.load.
+        // Keep the Rust codec error message while preserving that public
+        // exception category at the binding boundary.
+        PilError::ImageError(err) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
         PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
         PilError::UnknownFormat(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::Io(err) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
