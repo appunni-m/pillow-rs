@@ -1852,6 +1852,16 @@ fn make_lut(func: &Bound<'_, PyAny>, n_bands: u32) -> PyResult<Vec<u8>> {
     Ok(table)
 }
 
+#[pyfunction]
+fn eval_validate_input(value: &Bound<'_, PyAny>) -> PyResult<()> {
+    let kind = if value.extract::<String>().is_ok() {
+        pillow_rs::EvalInputKind::String
+    } else {
+        pillow_rs::EvalInputKind::Other
+    };
+    pillow_rs::validate_eval_input(kind).map_err(map_error)
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
@@ -1955,6 +1965,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(fromarray_pixel_list, m)?)?;
     m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
     m.add_function(wrap_pyfunction!(make_lut, m)?)?;
+    m.add_function(wrap_pyfunction!(eval_validate_input, m)?)?;
 
     Ok(())
 }
@@ -1964,6 +1975,22 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
 #[pyclass(name = "ImageFont", unsendable)]
 pub struct PyFont {
     inner: pillow_rs::FreeTypeFont,
+}
+
+fn variation_axes_to_python(
+    py: Python<'_>,
+    axes: Vec<pillow_rs::ImageFontVariationAxis>,
+) -> PyResult<Vec<PyObject>> {
+    axes.into_iter()
+        .map(|axis| {
+            let dict = PyDict::new(py);
+            dict.set_item("minimum", axis.minimum)?;
+            dict.set_item("default", axis.default)?;
+            dict.set_item("maximum", axis.maximum)?;
+            dict.set_item("name", PyBytes::new(py, &axis.name))?;
+            Ok(dict.into())
+        })
+        .collect()
 }
 
 #[pymethods]
@@ -2389,14 +2416,12 @@ impl PyFont {
         pillow_rs::imagefont_has_variations(&self.inner)
     }
 
-    fn get_variation_axes(&self) -> PyResult<Vec<(i32, i32, i32, Vec<u8>)>> {
-        pillow_rs::imagefont_get_variation_axes(&self.inner)
-            .map(|axes| {
-                axes.into_iter()
-                    .map(|axis| (axis.minimum, axis.default, axis.maximum, axis.name))
-                    .collect()
-            })
-            .map_err(map_error)
+    fn get_variation_axes(&self) -> PyResult<Vec<PyObject>> {
+        Python::with_gil(|py| {
+            pillow_rs::imagefont_get_variation_axes(&self.inner)
+                .map_err(map_error)
+                .and_then(|axes| variation_axes_to_python(py, axes))
+        })
     }
 
     fn get_variation_names(&self) -> PyResult<Vec<Vec<u8>>> {
@@ -2410,20 +2435,8 @@ impl PyFont {
     fn getvaraxes(&self) -> PyResult<Vec<PyObject>> {
         Python::with_gil(|py| {
             pillow_rs::imagefont_native_getvaraxes(&self.inner)
-                .map(|axes| {
-                    axes.into_iter()
-                        .map(|axis| {
-                            let dict = PyDict::new(py);
-                            dict.set_item("minimum", axis.minimum).expect("dict set");
-                            dict.set_item("default", axis.default).expect("dict set");
-                            dict.set_item("maximum", axis.maximum).expect("dict set");
-                            dict.set_item("name", PyBytes::new(py, &axis.name))
-                                .expect("dict set");
-                            dict.into()
-                        })
-                        .collect()
-                })
                 .map_err(map_error)
+                .and_then(|axes| variation_axes_to_python(py, axes))
         })
     }
 

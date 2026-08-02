@@ -11,6 +11,25 @@ use crate::image::Image;
 use crate::ops::convert::parse_mode;
 use crate::pipeline::PipelineOp;
 
+/// Host-neutral input classification for the callable form of `Image.eval`.
+#[derive(Debug, Clone, Copy)]
+pub enum EvalInputKind {
+    /// A Python string, which Pillow rejects with its legacy callable error.
+    String,
+    /// Any non-string value; callable validation remains host-owned.
+    Other,
+}
+
+/// Validates the host-independent part of `Image.eval` input handling.
+pub fn validate_eval_input(kind: EvalInputKind) -> Result<(), PilError> {
+    if matches!(kind, EvalInputKind::String) {
+        return Err(PilError::TypeError(
+            "type str doesn't define __round__ method".into(),
+        ));
+    }
+    Ok(())
+}
+
 /// Creates an image from raw bytes using Pillow's supported raw decoder.
 ///
 /// Decoder selection is part of the public operation contract, not a binding
