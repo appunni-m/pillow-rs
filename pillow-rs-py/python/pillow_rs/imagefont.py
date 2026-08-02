@@ -231,11 +231,11 @@ class FreeTypeFont:
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
-        w, h, alpha = self._rust_font.getmask_alpha_with_options(
+        image = self._rust_font.getmask_alpha_with_options(
             text, mode, direction, features, language,
             stroke_width, anchor, ink, start
         )
-        return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
+        return ImagingCore(PILImage(image))
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
@@ -257,8 +257,9 @@ class FreeTypeFont:
         :param ink: Foreground ink for rendering.
         :param start: Tuple of horizontal and vertical offset.
 
-        :return: A tuple of the mask (L-mode Image) and the text offset
-                 ``(offset_x, offset_y)``.
+        :return: A tuple of the mask image and the text offset
+                 ``(offset_x, offset_y)``. ``mode="RGBA"`` returns an
+                 RGBA mask.
         """
         from .image import Image as PILImage
         image, offset = self._rust_font.getmask2_image_with_options(

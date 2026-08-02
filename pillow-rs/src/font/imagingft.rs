@@ -821,21 +821,26 @@ pub(crate) fn getmask2_with_options(
     if options_are_default_mask_options(options) {
         return getmask2(font, text);
     }
-    // Pillow's BASIC `getmask2` accepts mode="RGBA" as a renderer hint and
-    // still returns the ordinary grayscale mask. The mode is used by some
-    // drivers, but it is not an error condition for this public endpoint.
     let load_flags = text_load_flags(options);
     let _pillow_ignored_public_args = (options.ink, options.has_args, options.has_kwargs);
+    let foreground = rgba_foreground_from_ink(options.ink);
     let start = options.start.unwrap_or((0.0, 0.0));
     let (width, height, pixels) = if options.stroke_width != 0.0 {
-        stroked_mask_from_run_with_start(
+        let (width, height, mask) = stroked_mask_from_run_with_start(
             font,
             text,
             load_flags,
             start,
             options.stroke_width,
             options.stroke_filled,
-        )?
+        )?;
+        if options.uses_color_mask() {
+            (width, height, grayscale_mask_to_rgba(mask, foreground))
+        } else {
+            (width, height, mask)
+        }
+    } else if options.uses_color_mask() {
+        color_mask_from_run_with_start(font, text, load_flags, start, foreground)?
     } else {
         mask_from_run_with_start(font, text, load_flags, start)?
     };
@@ -867,6 +872,7 @@ pub(crate) fn getmask2_with_options(
 
 fn options_are_default_mask_options(options: &ImageFontTextOptions) -> bool {
     matches!(options.mode.as_deref(), None | Some(""))
+        && !options.embedded_color
         && options.stroke_width == 0.0
         && options.anchor.is_none()
         && options.start.is_none()
@@ -874,10 +880,15 @@ fn options_are_default_mask_options(options: &ImageFontTextOptions) -> bool {
 }
 
 fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
-    if options.mode.as_deref() == Some("1") {
+    let target = if options.mode.as_deref() == Some("1") {
         TGT_MONO
     } else {
         TGT_NORM
+    };
+    if options.uses_color_mask() {
+        target | ffi::FT_LOAD_COLOR
+    } else {
+        target
     }
 }
 
@@ -1256,6 +1267,88 @@ fn mask_from_run_with_start(
     Ok((w, h, canvas))
 }
 
+/// Render a mask while preserving embedded BGRA glyph pixels as RGBA.
+///
+/// `fontdone` follows FreeType's `FT_LOAD_COLOR` contract: color bitmap
+/// channels are stored as premultiplied sRGB BGRA and must be unpremultiplied
+/// before Pillow receives the RGBA mask. Outline and monochrome bitmap glyphs
+/// use the low three bytes of Pillow's `ink` value for RGB, with their
+/// rendered coverage in alpha.
+fn color_mask_from_run_with_start(
+    ttf: &FreeTypeFont,
+    text: &str,
+    load_flags: i32,
+    start: (f64, f64),
+    foreground: (u8, u8, u8),
+) -> Result<(u32, u32, Vec<u8>), PilError> {
+    let run = glyph_run(ttf, text, load_flags)?;
+    if run.glyphs.is_empty() {
+        return Ok((0, 0, vec![]));
+    }
+    let bbox = bbox_from_glyph_run(ttf, &run)?;
+    let start_width = start.0.ceil() as i32;
+    let start_height = start.1.ceil() as i32;
+    let base_w = bbox.2 - bbox.0;
+    let base_h = bbox.3 - bbox.1;
+    let adjusted_w = base_w.saturating_add(start_width);
+    let adjusted_h = base_h.saturating_add(start_height);
+    if positive_dimension_collapsed(base_w, adjusted_w)
+        || positive_dimension_collapsed(base_h, adjusted_h)
+    {
+        return Err(PilError::ValueError("bad image size".into()));
+    }
+    let w = adjusted_w.max(0) as u32;
+    let h = adjusted_h.max(0) as u32;
+    let wu = w as usize;
+    let hu = h as usize;
+    let pixels = wu
+        .checked_mul(hu)
+        .and_then(|count| count.checked_mul(4))
+        .ok_or_else(|| PilError::DimensionError("text mask dimensions overflow".into()))?;
+    let mut canvas = vec![0u8; pixels];
+    if pixels == 0 {
+        return Ok((w, h, canvas));
+    }
+
+    let face = &ttf.engine.face;
+    let mut rendered = Vec::new();
+    let mut x_min = 0;
+    let mut y_max = 0;
+    for glyph in &run.glyphs {
+        let slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, RDR | load_flags)
+            .map_err(ft_error_to_pil)?;
+        let px = round26(glyph.pen_before);
+        x_min = x_min.min(px + slot.bitmap_left as i32);
+        y_max = y_max.max(slot.bitmap_top as i32);
+        if let Some(bitmap) = slot.bitmap {
+            rendered.push(RenderedBitmap {
+                pen_before: glyph.pen_before,
+                bitmap_left: slot.bitmap_left as i32,
+                bitmap_top: slot.bitmap_top as i32,
+                bitmap,
+            });
+        }
+    }
+
+    let x_origin = ((f64::from(-x_min) + start.0) * 64.0).round() as i32;
+    let y_origin = ((f64::from(-y_max) - start.1) * 64.0).round() as i32;
+    paste_rendered_bitmaps_rgba(&rendered, &mut canvas, w, h, x_origin, y_origin, foreground);
+    Ok((w, h, canvas))
+}
+
+fn grayscale_mask_to_rgba(mask: Vec<u8>, foreground: (u8, u8, u8)) -> Vec<u8> {
+    let mut pixels = vec![0u8; mask.len() * 4];
+    for (index, coverage) in mask.into_iter().enumerate() {
+        if coverage > 0 {
+            pixels[index * 4] = foreground.0;
+            pixels[index * 4 + 1] = foreground.1;
+            pixels[index * 4 + 2] = foreground.2;
+        }
+        pixels[index * 4 + 3] = coverage;
+    }
+    pixels
+}
+
 fn stroked_mask_from_run_with_start(
     ttf: &FreeTypeFont,
     text: &str,
@@ -1434,6 +1527,77 @@ fn paste_rendered_bitmaps(
     }
 }
 
+fn paste_rendered_bitmaps_rgba(
+    rendered: &[RenderedBitmap],
+    canvas: &mut [u8],
+    w: u32,
+    h: u32,
+    x_origin: i32,
+    y_origin: i32,
+    foreground: (u8, u8, u8),
+) {
+    let wu = w as usize;
+    let hu = h as usize;
+    for rendered_bitmap in rendered {
+        let bitmap = &rendered_bitmap.bitmap;
+        let sx = bitmap.width as usize;
+        let sy = bitmap.rows as usize;
+        let px = pixel(i64::from(
+            x_origin.saturating_add(rendered_bitmap.pen_before),
+        ));
+        let py = pixel(i64::from(y_origin));
+        let dx = px + rendered_bitmap.bitmap_left;
+        let dy = -(py + rendered_bitmap.bitmap_top);
+        let source_x = if dx < 0 { (-dx) as usize } else { 0 };
+        let target_x = (dx.max(0) as usize).min(wu);
+        if source_x >= sx {
+            continue;
+        }
+        let cw = (sx - source_x).min(wu.saturating_sub(target_x));
+        let source_y = if dy < 0 { (-dy) as usize } else { 0 };
+        if source_y >= sy {
+            continue;
+        }
+        let end_y = if dy >= 0 {
+            sy.min(hu.saturating_sub(dy as usize))
+        } else {
+            sy
+        };
+        for row in source_y..end_y {
+            let target_y = dy + row as i32;
+            let dst = (target_y as usize * wu + target_x) * 4;
+            for column in 0..cw {
+                let source = bitmap_rgba_pixel(bitmap, row, source_x + column, foreground);
+                if source[3] == 0 {
+                    continue;
+                }
+                let offset = dst + column * 4;
+                blend_color_mask_pixel(&mut canvas[offset..offset + 4], source);
+            }
+        }
+    }
+}
+
+fn blend_color_mask_pixel(destination: &mut [u8], source: [u8; 4]) {
+    let source_alpha = u32::from(source[3]);
+    let destination_alpha = u32::from(destination[3]);
+    let inverse_source_alpha = 255 - source_alpha;
+    let output_alpha = source_alpha + ((destination_alpha * inverse_source_alpha + 127) / 255);
+    if output_alpha == 0 {
+        destination.fill(0);
+        return;
+    }
+    for channel in 0..3 {
+        let source_premultiplied = u32::from(source[channel]) * source_alpha;
+        let destination_premultiplied = u32::from(destination[channel]) * destination_alpha;
+        let output_premultiplied =
+            source_premultiplied + ((destination_premultiplied * inverse_source_alpha + 127) / 255);
+        destination[channel] =
+            ((output_premultiplied + output_alpha / 2) / output_alpha).min(255) as u8;
+    }
+    destination[3] = output_alpha as u8;
+}
+
 fn stroked_bitmap_glyph(
     slot: &ffi::FT_GlyphSlot,
     stroke_filled: bool,
@@ -1563,6 +1727,53 @@ fn bitmap_coverage(bitmap: &ffi::FT_Bitmap, row: usize, column: usize) -> u8 {
     }
 }
 
+fn bitmap_rgba_pixel(
+    bitmap: &ffi::FT_Bitmap,
+    row: usize,
+    column: usize,
+    foreground: (u8, u8, u8),
+) -> [u8; 4] {
+    if bitmap.pixel_mode == ffi::FT_PIXEL_MODE_BGRA {
+        let pitch = bitmap.pitch.unsigned_abs() as usize;
+        let physical_row = if bitmap.pitch < 0 {
+            bitmap.rows.saturating_sub(1).saturating_sub(row as u32) as usize
+        } else {
+            row
+        };
+        let offset = physical_row
+            .saturating_mul(pitch)
+            .saturating_add(column.saturating_mul(4));
+        debug_assert!(offset + 4 <= bitmap.buffer.len());
+        if let Some(bgra) = bitmap.buffer.get(offset..offset.saturating_add(4)) {
+            return rgba_for_premultiplied_srgb_bgra(bgra);
+        }
+    }
+    let coverage = bitmap_coverage(bitmap, row, column);
+    if coverage == 0 {
+        [0, 0, 0, 0]
+    } else {
+        [foreground.0, foreground.1, foreground.2, coverage]
+    }
+}
+
+fn rgba_foreground_from_ink(ink: Option<i64>) -> (u8, u8, u8) {
+    let bytes = ink.unwrap_or(0).to_le_bytes();
+    (bytes[0], bytes[1], bytes[2])
+}
+
+fn rgba_for_premultiplied_srgb_bgra(bgra: &[u8]) -> [u8; 4] {
+    let alpha = u32::from(bgra[3]);
+    if alpha == 0 {
+        return [0, 0, 0, 0];
+    }
+    [
+        (u32::from(bgra[2]) * 255 / alpha).min(255) as u8,
+        (u32::from(bgra[1]) * 255 / alpha).min(255) as u8,
+        (u32::from(bgra[0]) * 255 / alpha).min(255) as u8,
+        bgra[3],
+    ]
+}
+
 fn gray_for_premultiplied_srgb_bgra(bgra: &[u8]) -> u8 {
     let alpha = u32::from(bgra[3]);
     if alpha == 0 {
@@ -1678,8 +1889,8 @@ fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{bitmap_coverage, ffi, freetype_encoding};
-    use crate::{FreeTypeFont, ImageFontLoadOptions};
+    use super::{bitmap_coverage, ffi, freetype_encoding, rgba_for_premultiplied_srgb_bgra};
+    use crate::{FreeTypeFont, ImageFontLoadOptions, ImageFontTextOptions};
 
     #[test]
     fn freetype_encoding_tags_match_fontdone_values() {
@@ -1725,6 +1936,60 @@ mod tests {
         assert_eq!(bitmap_coverage(&bitmap, 0, 1), 40);
         assert_eq!(bitmap_coverage(&bitmap, 1, 0), 10);
         assert_eq!(bitmap_coverage(&bitmap, 1, 1), 20);
+    }
+
+    #[test]
+    fn color_mask_preserves_fontdone_bgra_pixels() {
+        let font = FreeTypeFont::from_bytes(
+            include_bytes!("../../tests/fixtures/assets/font/fonts/sbit-bgra-format1.ttf").to_vec(),
+            20.0,
+        )
+        .unwrap_or_else(|error| panic!("BGRA fixture must load: {error}"));
+        let options = ImageFontTextOptions {
+            mode: Some("RGBA".to_owned()),
+            ..ImageFontTextOptions::default()
+        };
+        let (width, height, pixels, offset) = font
+            .getmask2_with_options("\u{e000}", &options)
+            .unwrap_or_else(|error| panic!("color mask must render: {error}"));
+
+        assert_eq!((width, height, offset), (4, 1, (0, 15)));
+        assert_eq!(
+            pixels,
+            [0, 0, 0, 0, 48, 32, 16, 255, 191, 159, 127, 128, 0, 0, 0, 0,]
+        );
+        assert_eq!(
+            rgba_for_premultiplied_srgb_bgra(&[0x40, 0x50, 0x60, 0x80]),
+            [191, 159, 127, 128]
+        );
+    }
+
+    #[test]
+    fn rgba_mask_uses_ink_for_outline_pixels() {
+        let font = FreeTypeFont::from_bytes(
+            include_bytes!("../../tests/fixtures/assets/font/fonts/DejaVuSans.ttf").to_vec(),
+            20.0,
+        )
+        .unwrap_or_else(|error| panic!("outline fixture must load: {error}"));
+        let options = ImageFontTextOptions {
+            mode: Some("RGBA".to_owned()),
+            ink: Some(0x0014_0ac8),
+            ..ImageFontTextOptions::default()
+        };
+        let (_, _, pixels, _) = font
+            .getmask2_with_options("A", &options)
+            .unwrap_or_else(|error| panic!("colored outline mask must render: {error}"));
+
+        let mut active_pixels = 0;
+        for pixel in pixels.chunks_exact(4) {
+            if pixel[3] != 0 {
+                active_pixels += 1;
+                assert_eq!(&pixel[..3], &[200, 10, 20]);
+            } else {
+                assert_eq!(&pixel[..3], &[0, 0, 0]);
+            }
+        }
+        assert!(active_pixels > 0);
     }
 
     fn make_ttc(fonts: &[&[u8]]) -> Vec<u8> {

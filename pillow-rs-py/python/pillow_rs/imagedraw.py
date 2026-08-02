@@ -72,7 +72,7 @@ class Draw:
         if hasattr(font, "_rust_font"):
             self._draw.multiline_text(
                 xy, str(text), fill, font._rust_font, spacing, direction,
-                features, language, float(stroke_width), anchor,
+                features, language, float(stroke_width), anchor, embedded_color,
                 kwargs.get("font_size"),
             )
         elif hasattr(font, "getmask"):
@@ -85,7 +85,8 @@ class Draw:
         else:
             self._draw.multiline_text(
                 xy, str(text), fill, font, spacing, direction, features,
-                language, float(stroke_width), anchor, kwargs.get("font_size"),
+                language, float(stroke_width), anchor, embedded_color,
+                kwargs.get("font_size"),
             )
         self._sync()
         self._font = font
@@ -100,6 +101,7 @@ class Draw:
             kwargs.get("language"),
             float(kwargs.get("stroke_width", 0)),
             kwargs.get("anchor"),
+            kwargs.get("embedded_color", False),
             kwargs.get("font_size"),
         )
 
@@ -110,6 +112,7 @@ class Draw:
             kwargs.get("direction"),
             kwargs.get("features"),
             kwargs.get("language"),
+            kwargs.get("embedded_color", False),
             kwargs.get("font_size"),
         )
 
@@ -136,6 +139,7 @@ class Draw:
             language,
             float(stroke_width),
             anchor,
+            embedded_color,
             font_size,
         )
 
@@ -163,6 +167,7 @@ class Draw:
                 language,
                 float(stroke_width),
                 anchor,
+                embedded_color,
             )
         elif hasattr(font, 'getmask'):
             mask = font.getmask(text, mode="1" if self._orig_mode == "1" else "L")
@@ -171,6 +176,7 @@ class Draw:
             self._draw.text(
                 (float(xy[0]), float(xy[1])), str(text), fill, font,
                 direction, features, language, float(stroke_width), anchor,
+                embedded_color,
             )
         self._sync()
         self._font = font
