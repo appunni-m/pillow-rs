@@ -548,12 +548,21 @@ impl Image {
                 height,
                 crate::raster::Rgba([color.0, color.1, color.2, color.3]),
             )),
-            _ => return Err(PilError::ValueError(format!("Unsupported mode: {}", mode))),
+            _ => return Err(PilError::ValueError("unrecognized image mode".into())),
         };
         let explicit = if matches!(
             mode,
-            "CMYK" | "YCbCr" | "HSV" | "I" | "F" | "PA" | "1"
-                | "I;16" | "I;16L" | "I;16B" | "I;16N"
+            "CMYK"
+                | "YCbCr"
+                | "HSV"
+                | "I"
+                | "F"
+                | "PA"
+                | "1"
+                | "I;16"
+                | "I;16L"
+                | "I;16B"
+                | "I;16N"
         ) {
             Some(mode.to_string())
         } else {

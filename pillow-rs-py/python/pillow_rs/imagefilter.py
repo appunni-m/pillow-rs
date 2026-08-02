@@ -117,21 +117,17 @@ class RankFilter:
 
 class Kernel:
     def __init__(self, size=(3, 3), kernel=None, scale=None, offset=0):
-        self.size = tuple(size) if not isinstance(size, tuple) else size
-        self.kernel = kernel
-        self.offset = offset
-        # PIL validates the coefficient count at construction and defaults
-        # the scale to the kernel sum; the size shape is validated at apply.
-        if scale is None:
-            scale = sum(kernel)
-        if self.size[0] * self.size[1] != len(self.kernel):
-            raise ValueError("not enough coefficients in kernel")
+        self.size = tuple(size)
+        self.kernel = None if kernel is None else list(kernel)
+        _core.kernel_validate_coefficients(self.kernel, self.size)
         self.scale = scale
+        self.offset = offset
+
     def _apply(self, rust_image):
-        k, scale, offset, size_x = _core.kernel_prepare(
+        kernel, scale, offset, size_x = _core.kernel_prepare(
             self.kernel, self.scale, self.offset, self.size
         )
-        return Image(rust_image.kernel_filter(k, scale, offset, size_x))
+        return Image(rust_image.kernel_filter(kernel, scale, offset, size_x))
 
 
 class Color3DLUT:
@@ -162,8 +158,6 @@ class Color3DLUT:
     name = "Color 3D LUT"
 
     def __init__(self, size, table=None, channels=3, target_mode=None, **_kwargs):
-        if channels not in (3, 4):
-            raise ValueError("Only 3 or 4 output channels are supported")
         self.size = _core.color3dlut_check_size(size)
         self.channels = channels
         self.mode = target_mode
@@ -183,8 +177,6 @@ class Color3DLUT:
                             lookup table.
         """
         validated_size = _core.color3dlut_check_size(size)
-        if channels not in (3, 4):
-            raise ValueError("Only 3 or 4 output channels are supported")
         table = _core.color3dlut_generate(validated_size, channels, callback)
         return cls(
             validated_size,
@@ -212,38 +204,21 @@ class Color3DLUT:
         :param target_mode: Passed to the constructor of the resulting
                             lookup table.
         """
-        if channels not in (None, 3, 4):
-            raise ValueError("Only 3 or 4 output channels are supported")
-        ch_out = channels or self.channels
-        table = _core.color3dlut_transform(
-            self.table, self.size, self.channels, ch_out, with_normals, callback
+        table, ch_out = _core.color3dlut_transform(
+            self.table, self.size, self.channels, channels, with_normals, callback
         )
         return type(self)(
             self.size,
             table,
             channels=ch_out,
-            target_mode=target_mode or self.mode,
+            target_mode=self.mode if target_mode is None else target_mode,
         )
 
     def _apply(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
-        try:
-            result = rust_image.color3dlut(
-                self.size, self.table, self.channels, self.mode
-            )
-        except ValueError as exc:
-            # Pillow distinguishes an unknown requested target mode from a
-            # valid target/source combination that cannot be applied. Keep
-            # the source error for the latter and normalize only the former.
-            if str(exc) == "image has wrong mode" and self.mode not in {
-                None,
-                "RGB",
-                "RGBA",
-                "CMYK",
-            }:
-                raise ValueError("unrecognized image mode") from exc
-            raise
-        return Image(result)
+        return Image(
+            rust_image.color3dlut(self.size, self.table, self.channels, self.mode)
+        )
 
     def __repr__(self):
         return _core.color3dlut_repr(
