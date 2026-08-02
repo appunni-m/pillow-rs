@@ -1632,9 +1632,9 @@ fn transposed_font_orientation(orientation: &Bound<'_, PyAny>) -> PyResult<Optio
     if orientation.is_none() {
         return Ok(None);
     }
-    pillow_rs::normalize_transpose_input(transpose_input_from_python(orientation)?)
-        .map(Some)
-        .map_err(map_error)
+    Ok(pillow_rs::normalize_transposed_font_input(
+        transpose_input_from_python(orientation)?,
+    ))
 }
 
 #[pyfunction]
@@ -2201,6 +2201,7 @@ impl PyFont {
             mode,
             direction,
             features,
+            features_invalid: false,
             language,
             stroke_width,
             anchor,
@@ -2224,6 +2225,7 @@ impl PyFont {
             mode,
             direction,
             features,
+            features_invalid: false,
             language,
             stroke_width,
             anchor,
@@ -2258,6 +2260,7 @@ impl PyFont {
             mode,
             direction,
             features,
+            features_invalid: false,
             language,
             stroke_width,
             anchor,
@@ -2360,6 +2363,7 @@ impl PyFont {
             mode,
             direction,
             features,
+            features_invalid: false,
             language,
             stroke_width,
             stroke_filled,
@@ -2396,6 +2400,7 @@ impl PyFont {
             mode,
             direction,
             features,
+            features_invalid: false,
             language,
             stroke_width,
             stroke_filled,
@@ -2447,6 +2452,7 @@ impl PyFont {
             mode,
             direction,
             features,
+            features_invalid: false,
             language,
             stroke_width,
             stroke_filled,
@@ -2816,6 +2822,12 @@ fn draw_box_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawBoxInput 
     pillow_rs::DrawBoxInput::Invalid
 }
 
+fn draw_circle_center_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawCircleCenterInput {
+    xy.extract::<Vec<f64>>()
+        .map(pillow_rs::DrawCircleCenterInput::Values)
+        .unwrap_or(pillow_rs::DrawCircleCenterInput::Invalid)
+}
+
 fn draw_color_input_from_python(
     val: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::DrawColorInput> {
@@ -2835,6 +2847,16 @@ fn draw_color_input_from_python(
         return Ok(pillow_rs::DrawColorInput::Components(value));
     }
     Ok(pillow_rs::DrawColorInput::Invalid)
+}
+
+fn draw_features_from_python(features: Option<&Bound<'_, PyAny>>) -> (Option<Vec<String>>, bool) {
+    let Some(features) = features else {
+        return (None, false);
+    };
+    match features.extract::<Vec<String>>() {
+        Ok(values) => (Some(values), false),
+        Err(_) => (None, true),
+    }
 }
 
 fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
@@ -3135,7 +3157,7 @@ impl PyDraw {
     #[pyo3(signature = (xy, radius, fill=None, outline=None, width=1))]
     fn circle(
         &mut self,
-        xy: (f64, f64),
+        xy: &Bound<'_, PyAny>,
         radius: f64,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
@@ -3144,7 +3166,13 @@ impl PyDraw {
         let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
         let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
         self.draw
-            .circle(xy.0 as i32, xy.1 as i32, radius, fc, oc, width.unwrap_or(1))
+            .circle_with_input(
+                draw_circle_center_input_from_python(xy),
+                radius,
+                fc,
+                oc,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
@@ -3178,7 +3206,7 @@ impl PyDraw {
         fill: Option<&Bound<'_, PyAny>>,
         font: Option<&Bound<'_, PyFont>>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
@@ -3186,9 +3214,11 @@ impl PyDraw {
         let color = self.color(fill)?;
         if let Some(pyfont) = font {
             let borrowed = pyfont.borrow();
+            let (features, features_invalid) = draw_features_from_python(features);
             let options = pillow_rs::ImageFontTextOptions {
                 direction,
                 features,
+                features_invalid,
                 language,
                 stroke_width,
                 anchor,
@@ -3220,15 +3250,17 @@ impl PyDraw {
         font: Option<&Bound<'_, PyFont>>,
         spacing: Option<i32>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
+        let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
             features,
+            features_invalid,
             language,
             stroke_width,
             anchor,
@@ -3262,14 +3294,16 @@ impl PyDraw {
         text: &str,
         font: Option<&Bound<'_, PyFont>>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
     ) -> PyResult<(i32, i32, i32, i32)> {
+        let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
             features,
+            features_invalid,
             language,
             stroke_width,
             anchor,
@@ -3299,12 +3333,14 @@ impl PyDraw {
         text: &str,
         font: Option<&Bound<'_, PyFont>>,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
     ) -> PyResult<f64> {
+        let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
             features,
+            features_invalid,
             language,
             ..pillow_rs::ImageFontTextOptions::default()
         };
@@ -3332,11 +3368,12 @@ impl PyDraw {
         spacing: i32,
         align: &str,
         direction: Option<String>,
-        features: Option<Vec<String>>,
+        features: Option<&Bound<'_, PyAny>>,
         language: Option<String>,
         stroke_width: f32,
         anchor: Option<String>,
     ) -> PyResult<(i32, i32, i32, i32)> {
+        let (features, features_invalid) = draw_features_from_python(features);
         let default_font;
         let f: &pillow_rs::FreeTypeFont = if let Some(f) = font {
             &f.borrow().inner
@@ -3347,6 +3384,7 @@ impl PyDraw {
         let options = pillow_rs::ImageFontTextOptions {
             direction,
             features,
+            features_invalid,
             language,
             stroke_width,
             anchor,

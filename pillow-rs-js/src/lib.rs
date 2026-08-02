@@ -846,17 +846,22 @@ impl ImageDraw {
         oa: Option<u8>,
         width: Option<u32>,
     ) -> Result<(), JsValue> {
-        let pts: Vec<(i32, i32)> = points.chunks(2).map(|c| (c[0], c[1])).collect();
         let fill = fr.map(|r| (r, fg.unwrap_or(0), fb.unwrap_or(0), fa.unwrap_or(255)));
         let out = or.map(|r| (r, og.unwrap_or(0), ob.unwrap_or(0), oa.unwrap_or(255)));
         self.draw
-            .polygon(&pts, fill, out, width.unwrap_or(1))
+            .polygon_with_input(
+                pillow_rs::DrawPointsInput::Flat(points),
+                fill,
+                out,
+                width.unwrap_or(1),
+            )
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "point")]
     pub fn point(&mut self, pts: Vec<i32>, r: u8, g: u8, b: u8, a: u8) -> Result<(), JsValue> {
-        let pp: Vec<(i32, i32)> = pts.chunks(2).map(|c| (c[0], c[1])).collect();
-        self.draw.point(&pp, (r, g, b, a)).map_err(err)
+        self.draw
+            .point_with_input(pillow_rs::DrawPointsInput::Flat(pts), (r, g, b, a))
+            .map_err(err)
     }
     #[wasm_bindgen(js_name = "arc")]
     pub fn arc(
