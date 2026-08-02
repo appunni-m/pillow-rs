@@ -191,6 +191,32 @@ CORRECTIONS: tuple[Endpoint, ...] = (
             "target wrapper and is required to measure its Rust formatter."
         ),
     ),
+    Endpoint(
+        surface="PIL.ImageFilter.Color3DLUT",
+        operation="generate",
+        kind="function",
+        source_path="PIL.ImageFilter.Color3DLUT.generate",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "The public classmethod is required to exercise Rust-owned LUT "
+            "callback and table-length validation."
+        ),
+    ),
+    Endpoint(
+        surface="PIL.ImageFilter.Color3DLUT",
+        operation="transform",
+        kind="method",
+        source_path="PIL.ImageFilter.Color3DLUT.transform",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "The public transform method is required to exercise Rust-owned "
+            "callback and output-channel validation."
+        ),
+    ),
     *tuple(
         Endpoint(
             surface=f"PIL.ImageEnhance.{class_name}",

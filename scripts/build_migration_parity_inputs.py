@@ -1328,6 +1328,42 @@ class WorkflowBuilder:
         value_types = set(parameter["value_types"])
         name = parameter_id.lower()
 
+        if (
+            parameter_id == "callback"
+            and self.primary_surface == "PIL.ImageFilter.Color3DLUT"
+        ):
+            callback_descriptor = self.scenario_values.get("callback")
+            callback_name = (
+                callback_descriptor.get("value")
+                if callback_descriptor is not None
+                and callback_descriptor.get("kind") == "literal"
+                else None
+            )
+            if callback_name is None:
+                callback_name = (
+                    "color3dlut-generate-identity"
+                    if self.primary_operation == "generate"
+                    else "color3dlut-transform-identity"
+                )
+            if callback_name not in {
+                "color3dlut-generate-identity",
+                "color3dlut-transform-identity",
+                "color3dlut-transform-rgba",
+                "color3dlut-short-result",
+            }:
+                raise ValueError(f"unsupported Color3DLUT callback: {callback_name}")
+            return self.builtin(
+                f"{slug(parameter_id)}-{slug(callback_name)}",
+                callback_name,
+            )
+
+        if (
+            parameter_id == "size"
+            and self.primary_surface == "PIL.ImageFilter.Color3DLUT"
+            and self.primary_operation in {"generate", "transform"}
+        ):
+            return literal(2)
+
         for scenario_key, descriptor in self.scenario_values.items():
             if scenario_key == parameter_id:
                 if (
@@ -2481,6 +2517,13 @@ class WorkflowBuilder:
             return self.assets, self.steps, observations
 
         receiver = self.receiver_for(self.primary_surface)
+        if (
+            self.primary_surface == "PIL.ImageFilter.Color3DLUT"
+            and self.primary_operation == "generate"
+        ):
+            # ``generate`` is a public classmethod; call it on the class
+            # rather than constructing an unnecessary receiver instance.
+            receiver = None
         arguments = self.primary_arguments(operation)
 
         if (
@@ -8559,6 +8602,101 @@ def build_nuanced_cases(
                 ),
                 "channels": literal(4),
                 "target_mode": literal("RGB"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.size",
+            "name": "tuple-size",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 3, 4]),
+                "table": literal([0.0] * (2 * 3 * 4 * 3)),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.size",
+            "name": "invalid-size-shape",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 2]),
+                "table": literal([0.0] * 24),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.size",
+            "name": "invalid-size-range",
+            "mode": "RGB",
+            "values": {
+                "size": literal([1, 2, 2]),
+                "table": literal([0.0] * 24),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.table",
+            "name": "nested-table",
+            "mode": "RGB",
+            "values": {
+                "size": literal(2),
+                "table": literal([[0.0, 0.0, 0.0]] * 8),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.table",
+            "name": "nested-table-wrong-channel-count",
+            "mode": "RGB",
+            "values": {
+                "size": literal(2),
+                "table": literal([[0.0, 0.0]] * 8),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.table",
+            "name": "short-table",
+            "mode": "RGB",
+            "values": {
+                "size": literal(2),
+                "table": literal([0.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "generate",
+            "requirement_suffix": "parameter.callback",
+            "name": "short-callback-result",
+            "values": {
+                "size": literal(2),
+                "callback": literal("color3dlut-short-result"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "transform",
+            "requirement_suffix": "parameter.callback",
+            "name": "short-callback-result",
+            "values": {
+                "callback": literal("color3dlut-short-result"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter.Color3DLUT",
+            "operation": "transform",
+            "requirement_suffix": "parameter.channels",
+            "name": "rgba-result",
+            "values": {
+                "callback": literal("color3dlut-transform-rgba"),
+                "channels": literal(4),
             },
         },
         {

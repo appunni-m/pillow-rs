@@ -15,15 +15,14 @@ class Layout(IntEnum):
 
 
 def _normalize_layout_engine(layout_engine):
-    if layout_engine not in (Layout.BASIC, Layout.RAQM):
-        return Layout.BASIC
-    if layout_engine == Layout.RAQM:
+    layout_engine_name, requested_raqm = _core.imagefont_normalize_layout_engine(layout_engine)
+    if requested_raqm:
         warnings.warn(
             "Raqm layout was requested, but Raqm is not available. "
             "Falling back to basic layout.",
             stacklevel=3,
         )
-    return Layout.BASIC
+    return layout_engine_name
 
 
 class ImagingCore:
@@ -207,8 +206,7 @@ class FreeTypeFont:
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
-        layout_engine = _normalize_layout_engine(layout_engine)
-        layout_engine_name = layout_engine.name if layout_engine is not None else None
+        layout_engine_name = _normalize_layout_engine(layout_engine)
         self.path = font
         if isinstance(font, (str, bytes, os.PathLike)):
             font_path = os.fspath(font)
@@ -226,7 +224,7 @@ class FreeTypeFont:
         self.size = float(size)
         self.index = index
         self.encoding = encoding
-        self.layout_engine = layout_engine
+        self.layout_engine = Layout.BASIC
         self.font = _NativeFont(self._rust_font)
         # Note: PIL fallback for pixel-identical font rendering was removed.
         # Font rendering uses pillow-rs-freetype. Font rendering may differ
@@ -235,8 +233,7 @@ class FreeTypeFont:
 
     @classmethod
     def _from_font_data(cls, data, size=10, index=0, encoding="", layout_engine=None):
-        layout_engine = _normalize_layout_engine(layout_engine)
-        layout_engine_name = layout_engine.name if layout_engine is not None else None
+        layout_engine_name = _normalize_layout_engine(layout_engine)
         font = object.__new__(cls)
         font.path = None
         font._font_data = bytes(data)
@@ -246,7 +243,7 @@ class FreeTypeFont:
         font.size = float(size)
         font.index = index
         font.encoding = encoding
-        font.layout_engine = layout_engine
+        font.layout_engine = Layout.BASIC
         font.font = _NativeFont(font._rust_font)
         font._pil_font = None
         return font

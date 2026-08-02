@@ -22519,6 +22519,279 @@ surfaces:
       metrics:
       - latency
       - throughput
+  - id: generate
+    kind: function
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageFilter.Color3DLUT.generate
+      signature: 'generate(size: ''int | tuple[int, int, int]'', callback: ''Callable[[float, float, float],
+        tuple[float, ...]]'', channels: ''int'' = 3, target_mode: ''str | None'' = None) -> ''Color3DLUT'''
+      parameters:
+      - id: size
+        style: positional_or_keyword
+        value_types:
+        - integer
+        - sequence
+        omission:
+          kind: required
+      - id: callback
+        style: positional_or_keyword
+        value_types:
+        - number
+        - sequence
+        - handle
+        - any_json
+        omission:
+          kind: required
+      - id: channels
+        style: positional_or_keyword
+        value_types:
+        - integer
+        omission:
+          kind: literal
+          value: 3
+      - id: target_mode
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - string
+        omission:
+          kind: literal
+          value: null
+      result:
+        shape: record
+        observations:
+        - path: value
+          value_types:
+          - record
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.imagefilter.Color3DLUT.generate
+      signature: generate(size, callback, channels=3, target_mode=None)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageFilter.Color3DLUT.generate.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageFilter.Color3DLUT.generate.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.generate.parameter.size
+      dimension: parameter
+      description: Public parameter size with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.generate.parameter.callback
+      dimension: parameter
+      description: Public parameter callback with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.generate.parameter.channels
+      dimension: parameter
+      description: Public parameter channels with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.generate.parameter.target-mode
+      dimension: parameter
+      description: Public parameter target_mode with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.generate.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageFilter.Color3DLUT.generate.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-filter
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
+  - id: transform
+    kind: method
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.ImageFilter.Color3DLUT.transform
+      signature: 'transform(self, callback: ''Callable[..., tuple[float, ...]]'', with_normals: ''bool''
+        = False, channels: ''int | None'' = None, target_mode: ''str | None'' = None) -> ''Color3DLUT'''
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      - id: callback
+        style: positional_or_keyword
+        value_types:
+        - number
+        - sequence
+        - handle
+        - any_json
+        omission:
+          kind: required
+      - id: with_normals
+        style: positional_or_keyword
+        value_types:
+        - boolean
+        omission:
+          kind: literal
+          value: false
+      - id: channels
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - integer
+        omission:
+          kind: literal
+          value: null
+      - id: target_mode
+        style: positional_or_keyword
+        value_types:
+        - 'null'
+        - string
+        omission:
+          kind: literal
+          value: null
+      result:
+        shape: record
+        observations:
+        - path: value
+          value_types:
+          - record
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.imagefilter.Color3DLUT.transform
+      signature: transform(self, callback, with_normals=False, channels=None, target_mode=None)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.ImageFilter.Color3DLUT.transform.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.ImageFilter.Color3DLUT.transform.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.transform.parameter.callback
+      dimension: parameter
+      description: Public parameter callback with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.transform.parameter.with-normals
+      dimension: parameter
+      description: Public parameter with_normals with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.transform.parameter.channels
+      dimension: parameter
+      description: Public parameter channels with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.transform.parameter.target-mode
+      dimension: parameter
+      description: Public parameter target_mode with its declared type union and omission semantics.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageFilter.Color3DLUT.transform.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.ImageFilter.Color3DLUT.transform.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-filter
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
 - id: PIL.ImageFont
   kind: namespace
   source_path: PIL.ImageFont
