@@ -299,6 +299,33 @@ pub fn crop(image: &Image, border: u32) -> Result<Image, PilError> {
     Ok(Image::push_op(image, PipelineOp::CropBorder { border }))
 }
 
+/// Applies the EXIF orientation transform used by `ImageOps.exif_transpose`.
+///
+/// The returned image is `Some` for a transformed image, or for a copy when
+/// `in_place` is false and no valid orientation is present. In-place
+/// replacement is performed by the binding after this function returns.
+pub fn exif_transpose(image: &Image, in_place: bool) -> Result<Option<Image>, PilError> {
+    let raw_exif = image.getexif();
+    // Pillow maps EXIF's eight orientation values onto these named transpose
+    // operations; the rotation directions are intentionally asymmetric.
+    let method = match exif_get_orientation(&raw_exif).unwrap_or(1) {
+        2 => Some("FLIP_LEFT_RIGHT"),
+        3 => Some("ROTATE_180"),
+        4 => Some("FLIP_TOP_BOTTOM"),
+        5 => Some("TRANSPOSE"),
+        6 => Some("ROTATE_270"),
+        7 => Some("TRANSVERSE"),
+        8 => Some("ROTATE_90"),
+        _ => None,
+    };
+
+    match method {
+        Some(method) => image.transpose(method).map(Some),
+        None if in_place => Ok(None),
+        None => Ok(Some(image.copy())),
+    }
+}
+
 /// Extract Orientation tag (0x0112) from raw EXIF bytes. Returns None if not found.
 ///
 /// Scans TIFF IFD0 entries looking for tag 0x0112. Handles both TIFF and
@@ -310,7 +337,7 @@ pub fn exif_get_orientation(raw: &[u8]) -> Option<u32> {
     }
 
     // Skip EXIF header if present (Exif-JPEG format)
-    let data = if raw.starts_with(b"Exif\x00\x00") && raw.len() > 6 {
+    let data = if raw.starts_with(b"Exif\x00\x00") {
         &raw[6..]
     } else {
         raw
@@ -383,87 +410,9 @@ pub fn exif_get_orientation(raw: &[u8]) -> Option<u32> {
     None
 }
 
-/// Remove Orientation tag from EXIF bytes by zeroing its tag field.
-///
-/// Returns the modified EXIF bytes. If no orientation tag is found,
-/// or the data is invalid, returns a copy of the original bytes.
-pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
-    if raw.len() < 14 {
-        return raw.to_vec();
-    }
-
-    let header_len = if raw.starts_with(b"Exif\x00\x00") {
-        6
-    } else {
-        0
-    };
-
-    if raw.len() - header_len < 8 {
-        return raw.to_vec();
-    }
-
-    let data = &raw[header_len..];
-
-    let le = match &data[..2] {
-        b"II" => true,
-        b"MM" => false,
-        _ => return raw.to_vec(),
-    };
-
-    let magic = if le {
-        u16::from_le_bytes([data[2], data[3]])
-    } else {
-        u16::from_be_bytes([data[2], data[3]])
-    };
-    if magic != 42 {
-        return raw.to_vec();
-    }
-
-    let ifd_offset = if le {
-        u32::from_le_bytes([data[4], data[5], data[6], data[7]])
-    } else {
-        u32::from_be_bytes([data[4], data[5], data[6], data[7]])
-    } as usize;
-
-    let abs_ifd = header_len + ifd_offset;
-    if abs_ifd + 2 > raw.len() {
-        return raw.to_vec();
-    }
-
-    let num_entries = if le {
-        u16::from_le_bytes([raw[abs_ifd], raw[abs_ifd + 1]])
-    } else {
-        u16::from_be_bytes([raw[abs_ifd], raw[abs_ifd + 1]])
-    } as usize;
-
-    let mut result = raw.to_vec();
-
-    for i in 0..num_entries {
-        let entry_start = abs_ifd + 2 + i * 12;
-        if entry_start + 12 > result.len() {
-            break;
-        }
-        let tag = if le {
-            u16::from_le_bytes([result[entry_start], result[entry_start + 1]])
-        } else {
-            u16::from_be_bytes([result[entry_start], result[entry_start + 1]])
-        };
-        if tag == 0x0112 {
-            // Orientation
-            // Zero out the tag to indicate "no tag"
-            result[entry_start] = 0;
-            result[entry_start + 1] = 0;
-            break;
-        }
-    }
-
-    result
-}
-
 #[cfg(test)]
 mod tests {
     use super::exif_get_orientation;
-    use super::exif_remove_orientation;
 
     #[test]
     fn test_exif_get_orientation_empty() {
@@ -531,45 +480,5 @@ mod tests {
         raw.extend_from_slice(&tiff);
 
         assert_eq!(exif_get_orientation(&raw), Some(8));
-    }
-
-    #[test]
-    fn test_exif_remove_orientation() {
-        // Create TIFF with orientation=6
-        let mut raw = Vec::new();
-        raw.extend_from_slice(b"II\x2a\x00");
-        raw.extend_from_slice(&8u32.to_le_bytes());
-        raw.extend_from_slice(&1u16.to_le_bytes());
-        // orientation tag entry (12 bytes)
-        let orientation_start = raw.len();
-        raw.extend_from_slice(&0x0112u16.to_le_bytes());
-        raw.extend_from_slice(&3u16.to_le_bytes());
-        raw.extend_from_slice(&1u32.to_le_bytes());
-        raw.extend_from_slice(&6u16.to_le_bytes());
-        raw.extend_from_slice(&[0u8; 2]);
-
-        assert_eq!(exif_get_orientation(&raw), Some(6));
-
-        let cleaned = exif_remove_orientation(&raw);
-        // After removal, orientation tag should be zeroed
-        assert_eq!(cleaned[orientation_start], 0);
-        assert_eq!(cleaned[orientation_start + 1], 0);
-        // exif_get_orientation should now return None
-        assert_eq!(exif_get_orientation(&cleaned), None);
-    }
-
-    #[test]
-    fn test_exif_remove_orientation_no_orientation() {
-        // TIFF with 0 entries — no orientation to remove
-        let raw = b"II\x2a\x00\x08\x00\x00\x00\x00\x00\x00\x00";
-        let result = exif_remove_orientation(raw);
-        assert_eq!(result, raw);
-    }
-
-    #[test]
-    fn test_exif_remove_orientation_too_short() {
-        let raw = b"Exif\x00\x00";
-        let result = exif_remove_orientation(raw);
-        assert_eq!(result, raw);
     }
 }
