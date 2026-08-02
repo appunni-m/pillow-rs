@@ -2904,6 +2904,20 @@ def build_nuanced_cases(
             "values": {"text": literal("")},
         },
         {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "font_variant",
+            "requirement_suffix": "parameter.encoding",
+            "name": "encoding-unicode-charmap",
+            "values": {"encoding": literal("unic")},
+        },
+        {
+            "surface": "PIL.ImageFont",
+            "operation": "truetype",
+            "requirement_suffix": "parameter.encoding",
+            "name": "encoding-unicode-charmap",
+            "values": {"encoding": literal("unic")},
+        },
+        {
             "surface": "PIL.Image",
             "operation": "open",
             "requirement_suffix": "parameter.formats",
@@ -3135,6 +3149,23 @@ def build_nuanced_cases(
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask2",
             "requirement_suffix": "parameter.text",
+            "name": "space-default-route",
+            "values": {"text": literal(" ")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
+            "name": "space-stroked-route",
+            "values": {
+                "text": literal(" "),
+                "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
             "name": "bytes-latin1",
             "values": {"text": bytes_literal([65, 233])},
         },
@@ -3250,6 +3281,37 @@ def build_nuanced_cases(
             "values": {
                 "text": literal("AV"),
                 "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "negative-start-clipped",
+            "values": {
+                "text": literal("A"),
+                "start": literal([-1.0, -1.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "negative-start-collapse",
+            "values": {
+                "text": literal("A"),
+                "start": literal([-100.0, -100.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "negative-start-stroked-collapse",
+            "values": {
+                "text": literal("A"),
+                "stroke_width": literal(1),
+                "start": literal([-100.0, -100.0]),
             },
         },
         {
