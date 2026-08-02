@@ -188,6 +188,7 @@ pub use crate::ops::chops::screen as chops_screen;
 pub use crate::ops::chops::soft_light as chops_soft_light;
 pub use crate::ops::chops::subtract as chops_subtract;
 pub use crate::ops::chops::subtract_modulo as chops_subtract_modulo;
+pub use crate::ops::convert::validate_python_convert_dither;
 pub use crate::ops::imageops::autocontrast as imageops_autocontrast;
 pub use crate::ops::imageops::colorize as imageops_colorize;
 pub use crate::ops::imageops::contain as imageops_contain;

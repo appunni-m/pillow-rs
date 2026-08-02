@@ -392,8 +392,6 @@ class Image:
             # L or RGB; anything else fails before the C converter runs.
             if mode not in ("L", "RGB"):
                 raise ValueError("illegal conversion")
-        if isinstance(dither, str) and matrix is None:
-            raise TypeError("'str' object cannot be interpreted as an integer")
         matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
             mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors

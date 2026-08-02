@@ -8935,6 +8935,16 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "parameter.dither",
+            "name": "string-dither-error",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {"mode": literal("1"), "dither": literal("BOGUS")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "behavior.default",
             "name": "l-to-pa",
             "mode": "L",
