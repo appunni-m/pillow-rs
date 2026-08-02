@@ -418,8 +418,6 @@ class FreeTypeFont:
         :param axes: A list of values for each axis.
         :raises OSError: If the font is not a variation font.
         """
-        if not isinstance(axes, list):
-            raise TypeError("argument must be a list")
         return self._rust_font.set_variation_by_axes(axes)
 
 

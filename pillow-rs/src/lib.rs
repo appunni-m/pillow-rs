@@ -166,6 +166,7 @@ pub use crate::font::ImageFontBBoxValue;
 pub use crate::font::ImageFontLoadOptions;
 pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
+pub use crate::font::ImageFontVariationAxesInput;
 pub use crate::font::ImageFontVariationAxis;
 pub use crate::font::normalize_font_bbox;
 pub use crate::font::pilfont::PilFont;
@@ -487,6 +488,19 @@ pub fn imagefont_set_variation_by_axes(
     axes: &[f32],
 ) -> Result<(), PilError> {
     font.set_variation_by_axes(axes)
+}
+
+/// Validate and set variation axes using Pillow's list-only public contract.
+pub fn imagefont_set_variation_by_axes_input(
+    font: &mut FreeTypeFont,
+    input: ImageFontVariationAxesInput,
+) -> Result<(), PilError> {
+    match input {
+        ImageFontVariationAxesInput::Values(axes) => imagefont_set_variation_by_axes(font, &axes),
+        ImageFontVariationAxesInput::Invalid => {
+            Err(PilError::TypeError("argument must be a list".into()))
+        }
+    }
 }
 
 /// Return Pillow native `_imagingft.Font.getvaraxes()` records.
