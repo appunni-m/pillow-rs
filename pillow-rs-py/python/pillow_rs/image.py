@@ -288,39 +288,19 @@ class Image:
         palette: str = Palette.WEB,
         colors: int = 256,
     ) -> "Image":
-        if isinstance(palette, Image):
-            palette = None
-        if mode is None:
-            if self.mode == "P":
-                image_palette = self.palette
-                mode = image_palette.mode if image_palette is not None else "RGB"
-                if mode == "RGB" and self.has_transparency_data:
-                    mode = "RGBA"
-            else:
-                return self.copy()
-        elif mode == self.mode and matrix is None:
-            return self.copy()
-        if matrix is not None:
-            # Pillow 12.2.0 `Image.convert` only allows matrix conversions to
-            # L or RGB; anything else fails before the C converter runs.
-            if mode not in ("L", "RGB"):
-                raise ValueError("illegal conversion")
-        matrix_list = list(matrix) if matrix is not None else None
         rust_image = self._rust_image.convert(
-            mode, matrix=matrix_list, dither=dither, palette=palette, colors=colors
+            mode, matrix=matrix, dither=dither, palette=palette, colors=colors
         )
         img = Image(rust_image)
-        if mode in ("CMYK", "YCbCr", "HSV", "I", "F", "P", "PA", "1"):
-            img._explicit_mode = mode
         # Pillow carries a single palette transparency index through convert
         # to RGB/L as the palette-converted color and drops it for alpha
         # modes; the Rust core computes the transformed value.
-        transparency = self._rust_image.converted_palette_transparency(mode)
+        transparency = self._rust_image.converted_palette_transparency(img.mode)
         if transparency is not None:
             img._info["transparency"] = (
                 transparency[0] if len(transparency) == 1 else tuple(transparency)
             )
-        elif self.mode == "PA" and mode in ("LA", "RGBA"):
+        elif self.mode == "PA" and img.mode in ("LA", "RGBA"):
             # Pillow preserves pending palette transparency when a PA image
             # is converted to an alpha-bearing mode.  The Rust core keeps the
             # marker on the source image; carry the public metadata across
