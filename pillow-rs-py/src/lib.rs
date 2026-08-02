@@ -705,13 +705,12 @@ impl PyImage {
                 }
             }
         };
-        let dither = pillow_rs::normalize_python_convert_dither(dither).map_err(map_error)?;
         let rs = self
             .inner
             .convert_with_input(
                 convert_mode_input_from_python(mode)?,
                 matrix,
-                dither.as_deref(),
+                dither,
                 convert_palette_input_from_python(palette)?,
                 colors,
             )

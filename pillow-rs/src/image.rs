@@ -1817,13 +1817,13 @@ impl Image {
         let mode = self.mode()?;
         match value {
             PutPixelValue::Integer(value) => {
+                if matches!(mode.as_str(), "I" | "F") {
+                    return self.putpixel_mode_scalar(x, y, value as f64, &mode);
+                }
                 if !(0..=255).contains(&value) {
                     return Err(PilError::TypeError(
                         "value must be int, tuple, or list".into(),
                     ));
-                }
-                if matches!(mode.as_str(), "I" | "F") {
-                    return self.putpixel_mode_scalar(x, y, value as f64, &mode);
                 }
                 self.putpixel_mode(x, y, value as u8, &mode)
             }

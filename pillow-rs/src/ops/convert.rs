@@ -155,7 +155,7 @@ impl Image {
         &self,
         mode: PythonConvertModeInput,
         matrix: Option<Vec<f64>>,
-        dither: Option<&str>,
+        dither: PythonDitherInput,
         palette: PythonConvertPaletteInput,
         colors: Option<u32>,
     ) -> Result<Image, PilError> {
@@ -189,13 +189,26 @@ impl Image {
         let palette = match palette {
             PythonConvertPaletteInput::None | PythonConvertPaletteInput::Image => None,
             PythonConvertPaletteInput::Name(name) => Some(name),
-            PythonConvertPaletteInput::Invalid(type_name) => {
-                return Err(PilError::TypeError(format!(
-                    "'{type_name}' object cannot be interpreted as a string"
-                )));
-            }
+            // Pillow accepts and ignores palette values for the public
+            // conversion paths exercised here; only the target mode and
+            // dither/matrix inputs affect conversion dispatch.
+            PythonConvertPaletteInput::Invalid(_) => None,
         };
-        self.convert(&target_mode, matrix, dither, palette.as_deref(), colors)
+        // Keep Python's dither coercion in the Rust core. Pillow ignores the
+        // argument on a same-mode no-op and on matrix conversions, and reports
+        // matrix/mode errors before it attempts to interpret the dither enum.
+        let dither = if matrix.is_some() {
+            None
+        } else {
+            normalize_python_convert_dither(dither)?
+        };
+        self.convert(
+            &target_mode,
+            matrix,
+            dither.as_deref(),
+            palette.as_deref(),
+            colors,
+        )
     }
 
     /// Converts this image to another Pillow mode.
