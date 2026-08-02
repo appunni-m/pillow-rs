@@ -2884,7 +2884,7 @@ impl PyDraw {
     #[pyo3(signature = (xy, radius=0.0, fill=None, outline=None, width=1))]
     fn rounded_rectangle(
         &mut self,
-        xy: (i32, i32, i32, i32),
+        xy: &Bound<'_, PyAny>,
         radius: f64,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
@@ -2893,7 +2893,13 @@ impl PyDraw {
         let fc = fill.map(|_| self.color(fill).unwrap_or((0, 0, 0, 255)));
         let oc = outline.map(|_| self.color(outline).unwrap_or((0, 0, 0, 255)));
         self.draw
-            .rounded_rectangle(xy.0, xy.1, xy.2, xy.3, radius, fc, oc, width.unwrap_or(1))
+            .rounded_rectangle_with_input(
+                draw_box_input_from_python(xy),
+                radius,
+                fc,
+                oc,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
