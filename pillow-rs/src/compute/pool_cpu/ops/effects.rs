@@ -4,7 +4,7 @@ use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
 use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
 use crate::raster::{
-    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
+    DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage,
 };
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -940,6 +940,43 @@ fn transform_affine_generic(
     })
 }
 
+/// Apply the nearest-neighbor affine path to native unsigned 16-bit samples.
+///
+/// The byte-oriented transform helper cannot process `I;16` as one-byte
+/// luma: its source stride is two bytes per sample and its output must remain
+/// `ImageLuma16`. Keep this path native so scalar fill values retain both
+/// bytes instead of being duplicated into an 8-bit result.
+fn transform_affine_luma16(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    fill: Option<(u8, u8, u8, u8)>,
+) -> Result<DynamicImage, PilError> {
+    let source = img.to_luma16();
+    let (src_w, src_h) = source.dimensions();
+    let (a, b, c, d, e, f) = (data[0], data[1], data[2], data[3], data[4], data[5]);
+    let fill = fill.map_or(0, |color| u16::from_le_bytes([color.0, color.1]));
+    let mut output = vec![fill; (dst_w as usize).saturating_mul(dst_h as usize)];
+
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            let sx = a * f64::from(dx) + b * f64::from(dy) + c;
+            let sy = d * f64::from(dx) + e * f64::from(dy) + f;
+            let ix = (sx + 0.5).floor() as i64;
+            let iy = (sy + 0.5).floor() as i64;
+            if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
+                output[(dy as usize) * dst_w as usize + dx as usize] =
+                    source.get_pixel(ix as u32, iy as u32)[0];
+            }
+        }
+    }
+
+    ImageBuffer::from_raw(dst_w, dst_h, output)
+        .map(DynamicImage::ImageLuma16)
+        .ok_or_else(|| PilError::InternalError("transform I;16 buffer shape mismatch".into()))
+}
+
 pub fn op_transform(
     img: &DynamicImage,
     w: u32,
@@ -956,6 +993,9 @@ pub fn op_transform(
                 return Err(PilError::ValueError(
                     "Affine transform needs 6 coefficients".into(),
                 ));
+            }
+            if img.color() == crate::raster::ColorType::L16 {
+                return transform_affine_luma16(img, w, h, data, fill);
             }
             let (aff_a, aff_b, aff_c, aff_d, aff_e, aff_f) =
                 (data[0], data[1], data[2], data[3], data[4], data[5]);

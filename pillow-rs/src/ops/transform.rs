@@ -55,18 +55,82 @@ fn transform_component(value: i64) -> Result<u8, PilError> {
     u8::try_from(value).map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
 }
 
+fn clamp_transform_component(value: i64) -> u8 {
+    value.clamp(0, i64::from(u8::MAX)) as u8
+}
+
+fn packed_transform_scalar(value: i64) -> (u8, u8, u8, u8) {
+    let bytes = value.to_le_bytes();
+    (bytes[0], bytes[1], bytes[2], bytes[3])
+}
+
+fn packed_transform_float(value: i64) -> (u8, u8, u8, u8) {
+    let bytes = (value as f32).to_le_bytes();
+    (bytes[0], bytes[1], bytes[2], bytes[3])
+}
+
+fn transform_fill_arity_error(mode: &str) -> PilError {
+    let message = match mode {
+        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+            "color must be int or single-element tuple"
+        }
+        "F" => "must be real number, not tuple",
+        "LA" | "PA" => "color must be int, or tuple of one or two elements",
+        _ => "color must be int, or tuple of one, three or four elements",
+    };
+    PilError::TypeError(message.into())
+}
+
+fn transform_color_value_fill(
+    mode: &str,
+    color: crate::color::ColorValue,
+) -> Result<(u8, u8, u8, u8), PilError> {
+    let clamp = |value: i32| value.clamp(0, i32::from(u8::MAX)) as u8;
+    match color {
+        crate::color::ColorValue::Gray(value) => match mode {
+            "F" => Ok(packed_transform_float(i64::from(value))),
+            "I" => Ok(packed_transform_scalar(i64::from(value))),
+            "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+                let bytes = (value as u16).to_le_bytes();
+                Ok((bytes[0], bytes[1], 0, 0))
+            }
+            _ => Ok((clamp(value), 0, 0, 0)),
+        },
+        crate::color::ColorValue::GrayAlpha(gray, alpha) => Ok((clamp(gray), clamp(alpha), 0, 0)),
+        crate::color::ColorValue::Rgb(red, green, blue) => Ok((
+            clamp(red),
+            clamp(green),
+            clamp(blue),
+            if matches!(mode, "RGBA" | "CMYK") {
+                255
+            } else {
+                0
+            },
+        )),
+        crate::color::ColorValue::Rgba(red, green, blue, alpha) => Ok((
+            clamp(red),
+            clamp(green),
+            clamp(blue),
+            if mode == "RGB" || mode == "YCbCr" || mode == "HSV" {
+                0
+            } else {
+                clamp(alpha)
+            },
+        )),
+        crate::color::ColorValue::Hsv(hue, saturation, value) => {
+            Ok((clamp(hue), clamp(saturation), clamp(value), 0))
+        }
+    }
+}
+
 fn flatten_mesh_data(items: &[(Vec<f64>, Vec<f64>)]) -> Result<Vec<f64>, PilError> {
     let mut flat = Vec::with_capacity(items.len().saturating_mul(12));
     for (bbox, quad) in items {
         if bbox.len() != 4 {
-            return Err(PilError::ValueError(
-                "mesh_flatten: each bbox must have exactly 4 values [x0, y0, x1, y1]".into(),
-            ));
+            return Err(PilError::IndexError("tuple index out of range".into()));
         }
         if quad.len() != 8 {
-            return Err(PilError::ValueError(
-                "mesh_flatten: each quad must have exactly 8 values [x0, y0, …, x3, y3]".into(),
-            ));
+            return Err(PilError::IndexError("tuple index out of range".into()));
         }
         flat.extend_from_slice(bbox);
         flat.extend_from_slice(quad);
@@ -91,14 +155,10 @@ fn flatten_raw_mesh_data(items: &[Vec<Vec<f64>>]) -> Result<Vec<f64>, PilError> 
         let bbox = &item[0];
         let quad = &item[1];
         if bbox.len() != 4 {
-            return Err(PilError::ValueError(
-                "mesh_flatten: each bbox must have exactly 4 values [x0, y0, x1, y1]".into(),
-            ));
+            return Err(PilError::IndexError("tuple index out of range".into()));
         }
         if quad.len() != 8 {
-            return Err(PilError::ValueError(
-                "mesh_flatten: each quad must have exactly 8 values [x0, y0, …, x3, y3]".into(),
-            ));
+            return Err(PilError::IndexError("tuple index out of range".into()));
         }
         flat.extend_from_slice(bbox);
         flat.extend_from_slice(quad);
@@ -173,50 +233,130 @@ impl Image {
         fillcolor: Option<TransformFill>,
     ) -> Result<((u8, u8, u8, u8), Option<u8>), PilError> {
         let mode = self.mode()?;
-        let default_fill = if mode == "CMYK" {
-            (0, 0, 0, 0)
-        } else {
-            (0, 0, 0, 255)
-        };
         let palette_mode = self.has_palette_mode();
         let default_palette_fill = palette_mode.then_some(0);
         match fillcolor {
-            None => Ok((default_fill, default_palette_fill)),
+            // Image.transform creates an uninitialized image when no fill
+            // color is supplied. The native transform then leaves exposed
+            // pixels zeroed, including alpha, rather than using opaque black.
+            None => Ok(((0, 0, 0, 0), default_palette_fill)),
             Some(TransformFill::Scalar(value)) if palette_mode => {
                 let index = value.clamp(0, i64::from(u8::MAX)) as u8;
                 Ok(((index, 0, 0, 255), Some(index)))
             }
             Some(TransformFill::Scalar(value)) => {
-                let value = transform_component(value)?;
-                Ok(((value, value, value, 255), None))
+                let fill = match mode.as_str() {
+                    "1" | "L" => (clamp_transform_component(value), 0, 0, 0),
+                    "F" => packed_transform_float(value),
+                    "I" => packed_transform_scalar(value),
+                    "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+                        let bytes = (value as u16).to_le_bytes();
+                        (bytes[0], bytes[1], 0, 0)
+                    }
+                    _ => packed_transform_scalar(value),
+                };
+                Ok((fill, None))
             }
             Some(TransformFill::Components(values)) => {
-                if !matches!(values.len(), 3 | 4) {
-                    return Err(PilError::ValueError(
-                        "color must be int, or tuple of one, three or four elements".into(),
-                    ));
-                }
-                let r = transform_component(values[0])?;
-                let g = transform_component(values[1])?;
-                let b = transform_component(values[2])?;
-                let a = if values.len() == 4 {
-                    transform_component(values[3])?
-                } else {
-                    255
+                let fill = match mode.as_str() {
+                    "P" => match values.as_slice() {
+                        [value] => {
+                            let index = (*value).clamp(0, i64::from(u8::MAX)) as u8;
+                            return Ok(((index, 0, 0, 255), Some(index)));
+                        }
+                        [red, green, blue] => {
+                            let r = transform_component(*red)?;
+                            let g = transform_component(*green)?;
+                            let b = transform_component(*blue)?;
+                            let _ = (r, g, b);
+                            return Ok(((0, 0, 0, 255), default_palette_fill));
+                        }
+                        [red, green, blue, alpha] => {
+                            let r = transform_component(*red)?;
+                            let g = transform_component(*green)?;
+                            let b = transform_component(*blue)?;
+                            let a = transform_component(*alpha)?;
+                            let _ = (r, g, b);
+                            if a != 255 {
+                                return Err(PilError::ValueError(
+                                    "cannot add non-opaque RGBA color to RGB palette".into(),
+                                ));
+                            }
+                            return Ok(((0, 0, 0, 255), default_palette_fill));
+                        }
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
+                    "1" | "L" => match values.as_slice() {
+                        [value] => (clamp_transform_component(*value), 0, 0, 0),
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
+                    "I" => match values.as_slice() {
+                        [value] => packed_transform_scalar(*value),
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
+                    "F" => match values.as_slice() {
+                        [value] => packed_transform_float(*value),
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
+                    "I;16" | "I;16L" | "I;16B" | "I;16N" => match values.as_slice() {
+                        [value] => {
+                            let bytes = (*value as u16).to_le_bytes();
+                            (bytes[0], bytes[1], 0, 0)
+                        }
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
+                    "LA" | "PA" => match values.as_slice() {
+                        [value] => (clamp_transform_component(*value), 0, 0, 0),
+                        [gray, alpha] => (
+                            clamp_transform_component(*gray),
+                            clamp_transform_component(*alpha),
+                            0,
+                            0,
+                        ),
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
+                    _ if matches!(mode.as_str(), "RGB" | "YCbCr" | "HSV") => {
+                        match values.as_slice() {
+                            [value] => packed_transform_scalar(*value),
+                            [red, green, blue] | [red, green, blue, _] => (
+                                clamp_transform_component(*red),
+                                clamp_transform_component(*green),
+                                clamp_transform_component(*blue),
+                                0,
+                            ),
+                            _ => return Err(transform_fill_arity_error(&mode)),
+                        }
+                    }
+                    _ => match values.as_slice() {
+                        [value] => packed_transform_scalar(*value),
+                        [red, green, blue] => (
+                            clamp_transform_component(*red),
+                            clamp_transform_component(*green),
+                            clamp_transform_component(*blue),
+                            255,
+                        ),
+                        [red, green, blue, alpha] => (
+                            clamp_transform_component(*red),
+                            clamp_transform_component(*green),
+                            clamp_transform_component(*blue),
+                            clamp_transform_component(*alpha),
+                        ),
+                        _ => return Err(transform_fill_arity_error(&mode)),
+                    },
                 };
-                if palette_mode && a != 255 {
-                    return Err(PilError::ValueError(
-                        "cannot add non-opaque RGBA color to RGB palette".into(),
-                    ));
-                }
-                Ok(((r, g, b, a), default_palette_fill))
+                Ok((fill, default_palette_fill))
             }
             Some(TransformFill::Name(name)) => {
-                // Color parsing is deliberately performed in core even though
-                // Pillow's transform path later resolves named fills through a
-                // temporary palette and uses index zero for the raster fill.
-                crate::color::parse_color_str(&name)?;
-                Ok((default_fill, default_palette_fill))
+                // Color parsing and mode conversion belong to core. Pillow's
+                // palette transform resolves named colors through a temporary
+                // palette and rasterizes them as index zero.
+                let (r, g, b, a) = crate::color::parse_color_str_unclamped(&name)?;
+                if palette_mode {
+                    crate::color::getcolor(r, g, b, a, &mode)?;
+                    return Ok(((0, 0, 0, 255), default_palette_fill));
+                }
+                let color = crate::color::getcolor(r, g, b, a, &mode)?;
+                Ok((transform_color_value_fill(&mode, color)?, None))
             }
             Some(TransformFill::Invalid) => {
                 Err(PilError::TypeError("color must be int or tuple".into()))
@@ -252,12 +392,24 @@ impl Image {
                 let data = match data {
                     Some(TransformData::Mesh(items)) => flatten_mesh_data(&items)?,
                     Some(TransformData::RawMesh(items)) => flatten_raw_mesh_data(&items)?,
+                    Some(TransformData::Affine(items)) if items.is_empty() => {
+                        let mode = self.mode()?;
+                        if let Some(index) = palette_fill {
+                            return Ok(Image::new_palette_index(size.0, size.1, index));
+                        }
+                        return Image::new(size.0, size.1, &mode, fill);
+                    }
+                    Some(TransformData::Affine(_)) => {
+                        return Err(PilError::TypeError(
+                            "cannot unpack non-iterable int object".into(),
+                        ));
+                    }
                     Some(TransformData::Invalid) => {
                         return Err(PilError::TypeError(
                             "transform data must be a sequence".into(),
                         ));
                     }
-                    _ => return Err(PilError::ValueError("MESH requires data".into())),
+                    None => return Err(PilError::ValueError("missing method data".into())),
                 };
                 self.transform_mesh(size, data, fill)
             }
