@@ -3315,7 +3315,7 @@ impl PyDraw {
     fn text(
         &mut self,
         xy: (f64, f64),
-        text: String,
+        text: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         font: Option<&Bound<'_, PyFont>>,
         direction: Option<String>,
@@ -3325,7 +3325,7 @@ impl PyDraw {
         anchor: Option<String>,
         embedded_color: bool,
     ) -> PyResult<()> {
-        let color = self.color(fill)?;
+        let color = self.text_color(fill)?;
         let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
@@ -3340,10 +3340,10 @@ impl PyDraw {
         };
         let borrowed = font.map(|font| font.borrow());
         self.draw
-            .text_with_optional_font(
+            .text_with_optional_font_input(
                 xy.0 as i32,
                 xy.1 as i32,
-                &text,
+                imagefont_text_input_from_python(text)?,
                 borrowed.as_ref().map(|font| &font.inner),
                 color,
                 None,
@@ -3356,7 +3356,7 @@ impl PyDraw {
     fn multiline_text(
         &mut self,
         xy: (f64, f64),
-        text: &str,
+        text: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         font: Option<&Bound<'_, PyFont>>,
         spacing: Option<i32>,
@@ -3368,7 +3368,7 @@ impl PyDraw {
         embedded_color: bool,
         font_size: Option<f32>,
     ) -> PyResult<()> {
-        let color = self.color(fill)?;
+        let color = self.text_color(fill)?;
         let (features, features_invalid) = draw_features_from_python(features);
         let options = pillow_rs::ImageFontTextOptions {
             direction,
@@ -3383,10 +3383,10 @@ impl PyDraw {
         };
         let borrowed = font.map(|font| font.borrow());
         self.draw
-            .multiline_text_with_optional_font(
+            .multiline_text_with_optional_font_input(
                 xy.0,
                 xy.1,
-                text,
+                imagefont_text_input_from_python(text)?,
                 borrowed.as_ref().map(|font| &font.inner),
                 color,
                 f64::from(spacing.unwrap_or(4)),
@@ -3402,7 +3402,7 @@ impl PyDraw {
     fn textbbox(
         &mut self,
         xy: (i32, i32),
-        text: &str,
+        text: &Bound<'_, PyAny>,
         font: Option<&Bound<'_, PyFont>>,
         direction: Option<String>,
         features: Option<&Bound<'_, PyAny>>,
@@ -3428,11 +3428,11 @@ impl PyDraw {
             .validate_text_options(&options)
             .map_err(map_error)?;
         let borrowed = font.map(|font| font.borrow());
-        pillow_rs::imagefont_textbbox_at_with_optional_font(
+        pillow_rs::imagefont_textbbox_at_with_optional_font_input(
             borrowed.as_ref().map(|font| &font.inner),
             font_size,
             xy,
-            text,
+            imagefont_text_input_from_python(text)?,
             &options,
         )
         .map_err(map_error)
@@ -3442,7 +3442,7 @@ impl PyDraw {
     #[pyo3(signature = (text, font=None, direction=None, features=None, language=None, embedded_color=false, font_size=None))]
     fn textlength(
         &mut self,
-        text: &str,
+        text: &Bound<'_, PyAny>,
         font: Option<&Bound<'_, PyFont>>,
         direction: Option<String>,
         features: Option<&Bound<'_, PyAny>>,
@@ -3463,10 +3463,10 @@ impl PyDraw {
             .validate_text_options(&options)
             .map_err(map_error)?;
         let borrowed = font.map(|font| font.borrow());
-        pillow_rs::imagefont_getlength_with_optional_font(
+        pillow_rs::imagefont_getlength_with_optional_font_input(
             borrowed.as_ref().map(|font| &font.inner),
             font_size,
-            text,
+            imagefont_text_input_from_python(text)?,
             &options,
         )
         .map(|width| width as f64)
@@ -3478,7 +3478,7 @@ impl PyDraw {
     fn multiline_textbbox(
         &mut self,
         xy: (i32, i32),
-        text: &str,
+        text: &Bound<'_, PyAny>,
         font: Option<&Bound<'_, PyFont>>,
         spacing: i32,
         align: &str,
@@ -3506,11 +3506,11 @@ impl PyDraw {
             .validate_text_options(&options)
             .map_err(map_error)?;
         let borrowed = font.map(|font| font.borrow());
-        pillow_rs::imagefont_multiline_textbbox_with_optional_font(
+        pillow_rs::imagefont_multiline_textbbox_with_optional_font_input(
             borrowed.as_ref().map(|font| &font.inner),
             font_size,
             xy,
-            text,
+            imagefont_text_input_from_python(text)?,
             spacing,
             align,
             &options,
@@ -3536,6 +3536,13 @@ impl PyDraw {
     fn color(&self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
         self.draw
             .color_with_input(draw_color_input_from_python(val)?)
+            .map_err(map_error)
+    }
+
+    /// Parse an ImageDraw text ink, including Pillow's mode-specific default.
+    fn text_color(&self, val: Option<&Bound<'_, PyAny>>) -> PyResult<(u8, u8, u8, u8)> {
+        self.draw
+            .text_color_with_input(draw_color_input_from_python(val)?)
             .map_err(map_error)
     }
 }

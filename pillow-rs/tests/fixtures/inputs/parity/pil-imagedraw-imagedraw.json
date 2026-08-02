@@ -16995,6 +16995,127 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.bytes-latin1",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "text",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.text.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "text-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "Qek=",
+          "sha256": "269a0a448e34cb45b379e3f1d4590c743a0d518844b1e6fa15b82ebe22d7e545",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-font-3",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "text",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "asset",
+              "asset_id": "text-inline"
+            },
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-3"
+            }
+          }
+        },
+        {
+          "step_id": "observe-image",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-image"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.explicit-truetype-font",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "text",
@@ -17571,6 +17692,120 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.bytes-latin1",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "multiline_text",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.multiline_text.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "text-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "QekKQg==",
+          "sha256": "5ae251c9d8d970db71e1b01a08cacc20bb0a87d4d47243d15858e385ef287c57",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-font-3",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "multiline_text",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "asset",
+              "asset_id": "text-inline"
+            },
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-3"
+            },
+            "spacing": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.multiline_text.nuanced.empty-line-spacing",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "multiline_text",
@@ -17833,6 +18068,120 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.bytes-latin1",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "multiline_textbbox",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.multiline_textbbox.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "text-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "QekKQg==",
+          "sha256": "5ae251c9d8d970db71e1b01a08cacc20bb0a87d4d47243d15858e385ef287c57",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-font-3",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "multiline_textbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "asset",
+              "asset_id": "text-inline"
+            },
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-3"
+            },
+            "spacing": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.centered-lines",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "multiline_textbbox",
@@ -18066,6 +18415,219 @@
             "anchor": {
               "kind": "literal",
               "value": "mm"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.textbbox.nuanced.bytes-latin1",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "textbbox",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.textbbox.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "text-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "Qek=",
+          "sha256": "269a0a448e34cb45b379e3f1d4590c743a0d518844b1e6fa15b82ebe22d7e545",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-font-3",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "textbbox",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "asset",
+              "asset_id": "text-inline"
+            },
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-3"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.textlength.nuanced.bytes-latin1",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "textlength",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.textlength.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "text-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "Qek=",
+          "sha256": "269a0a448e34cb45b379e3f1d4590c743a0d518844b1e6fa15b82ebe22d7e545",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-font-3",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "textlength",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "text": {
+              "kind": "asset",
+              "asset_id": "text-inline"
+            },
+            "font": {
+              "kind": "binding",
+              "step_id": "setup-font-3"
             }
           }
         }
