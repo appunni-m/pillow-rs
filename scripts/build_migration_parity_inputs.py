@@ -5728,6 +5728,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-scalar",
+            "observe_receiver": True,
+            "mode": "PA",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(7),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "p-indices",
