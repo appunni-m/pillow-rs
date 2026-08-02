@@ -29,17 +29,18 @@ pub fn normalize_python_rotate(
     resample: RotateResampleInput,
     expand: RotateExpandInput,
 ) -> Result<bool, PilError> {
+    let expand = match expand {
+        RotateExpandInput::Boolean(value) => Ok(value),
+        RotateExpandInput::Invalid => Err(PilError::TypeError(
+            "'int' object is not subscriptable".to_owned(),
+        )),
+    }?;
     if let RotateResampleInput::Name(value) = resample {
         return Err(PilError::ValueError(format!(
             "Unknown resampling filter ({value}). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
         )));
     }
-    match expand {
-        RotateExpandInput::Boolean(value) => Ok(value),
-        RotateExpandInput::Invalid => Err(PilError::TypeError(
-            "'int' object is not subscriptable".to_owned(),
-        )),
-    }
+    Ok(expand)
 }
 
 impl Image {
