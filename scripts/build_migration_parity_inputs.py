@@ -5090,6 +5090,18 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
+            "name": "opened-i16-two-tuple-error",
+            "mode": "I;16",
+            "scenario_inline_image": "l16-tiff",
+            "values": {
+                "im": literal([7, 9]),
+                "box": literal([0, 0, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
             "name": "color-rgb",
             "observe_receiver": True,
             "mode": "RGB",

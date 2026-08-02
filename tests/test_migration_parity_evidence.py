@@ -132,7 +132,7 @@ class MigrationParityEvidenceTests(unittest.TestCase):
                 if item["dimension"] == "parity_outcome"
             )
             self.assertEqual(parity["numerator"], 0)
-            self.assertEqual(parity["denominator"], 1938)
+            self.assertEqual(parity["denominator"], 1939)
             self.assertTrue(all(item["parity"]["outcome"] == "not_proven" for item in result["operations"]))
 
     def test_unknown_status_field_is_rejected(self) -> None:
