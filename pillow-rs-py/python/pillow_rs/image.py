@@ -102,16 +102,6 @@ class Image:
         # so ``Image.info`` can preserve format-specific fields exposed by
         # Pillow (DPI, compression, animation defaults, and similar values).
         self._info = {}
-        # Inherit explicit mode from Rust pipeline (e.g. "1", "P", "CMYK")
-        self._explicit_mode = getattr(rust_image, 'explicit_mode', lambda: None)()
-        # Extract palette for Paletted images (P-mode)
-        if self._explicit_mode == "P":
-            try:
-                p = self._rust_image.getpalette_trimmed()
-                if p:
-                    self._palette = list(p)
-            except Exception:
-                pass
 
     def _ensure_materialized(self):
         """Ensure the underlying Rust image is materialized (not Paletted/Path)."""
@@ -134,36 +124,7 @@ class Image:
             raise
         except Exception as exc:
             raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
-        image = cls(rust_image)
-        # The Rust decoder intentionally owns pixels and format identity, while
-        # these stable decoder metadata fields remain part of Pillow's Python
-        # surface. Keep the values in the wrapper until the core exposes a
-        # structured metadata record.
-        format_name = image.format
-        if format_name == "BMP":
-            image._info.update({
-                "dpi": [96.01194815354799, 96.01194815354799],
-                "compression": 0,
-            })
-        elif format_name == "GIF":
-            image._info.update({
-                "version": {"kind": "bytes", "encoding": "base64", "data": "R0lGODdh"},
-                "background": 0,
-            })
-        elif format_name == "TIFF":
-            image._info.update({
-                "compression": "raw",
-                "dpi": [1, 1],
-                "resolution": [1, 1],
-            })
-        elif format_name == "WEBP":
-            image._info.update({
-                "loop": 1,
-                "background": [255, 255, 255, 255],
-                "timestamp": 0,
-                "duration": 0,
-            })
-        return image
+        return cls(rust_image)
 
     @classmethod
     def new(
@@ -266,22 +227,9 @@ class Image:
             mode, matrix=matrix, dither=dither, palette=palette, colors=colors
         )
         img = Image(rust_image)
-        # Pillow carries a single palette transparency index through convert
-        # to RGB/L as the palette-converted color and drops it for alpha
-        # modes; the Rust core computes the transformed value.
-        transparency = self._rust_image.converted_palette_transparency(img.mode)
-        if transparency is not None:
-            img._info["transparency"] = (
-                transparency[0] if len(transparency) == 1 else tuple(transparency)
-            )
-        elif self.mode == "PA" and img.mode in ("LA", "RGBA"):
-            # Pillow preserves pending palette transparency when a PA image
-            # is converted to an alpha-bearing mode.  The Rust core keeps the
-            # marker on the source image; carry the public metadata across
-            # this binding-level image construction as well.
-            pending = self.info.get("transparency")
-            if pending is not None:
-                img._info["transparency"] = pending
+        img._info.update(
+            self._rust_image.converted_compatibility_info(img.mode)
+        )
         return img
 
     def paste(
@@ -301,10 +249,7 @@ class Image:
         return self._rust_image.getbands()
 
     def copy(self) -> "Image":
-        new = Image(self._rust_image.copy())
-        if hasattr(self, '_explicit_mode'):
-            new._explicit_mode = self._explicit_mode
-        return new
+        return Image(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
         # PIL instantiates callable filter classes and rejects anything that
@@ -350,10 +295,6 @@ class Image:
         result = Image(
             self._rust_image.quantize(colors, method, kmeans, dither != 0, palette)
         )
-        # PIL: quantize returns a P-mode image with palette attached
-        p = result._rust_image.palette()
-        if p:
-            result._palette = list(p)
         return result
 
     def getbbox(self, *, alpha_only: bool = True):
@@ -375,8 +316,6 @@ class Image:
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
         self._rust_image.putalpha_input(alpha)
-        self._explicit_mode = self._rust_image.explicit_mode()
-        self.__dict__.pop("_palette", None)
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor through the Rust core."""
@@ -446,7 +385,6 @@ class Image:
     def apply_transparency(self):
         """Commit P-mode transparency to its palette without changing pixels."""
         result = self._rust_image.apply_transparency()
-        self.__dict__.pop("_palette", None)
         self.__dict__.pop("_palette_object", None)
         return result
 
@@ -485,8 +423,6 @@ class Image:
     def putpalette(self, data, rawmode="RGB"):
         """Attach a palette to the image."""
         result = self._rust_image.putpalette(data, rawmode)
-        self._explicit_mode = self._rust_image.explicit_mode()
-        self.__dict__.pop("_palette", None)
         self.__dict__.pop("_palette_object", None)
         return result
 
@@ -621,15 +557,6 @@ class Image:
         pixel_data = decoder_name if isinstance(self, str) else args[0] if args else None
         decoder = args[0] if isinstance(self, str) and args else "raw"
         result = Image(RustImage.frombytes(mode, size, bytes(pixel_data), decoder))
-        if mode in ("1", "P", "CMYK", "HSV", "YCbCr", "I", "F"):
-            result._explicit_mode = mode
-        if mode == "P":
-            try:
-                p = result._rust_image.palette()
-                if p:
-                    result._palette = list(p)
-            except Exception:
-                pass
         return result
 
     @classmethod
@@ -727,8 +654,6 @@ class Image:
 
     @property
     def mode(self) -> str:
-        if self._explicit_mode:
-            return self._explicit_mode
         return self._rust_image.mode
 
     @property
@@ -738,13 +663,7 @@ class Image:
     @property
     def info(self) -> dict:
         result = dict(self._info)
-        index = self._rust_image.pending_transparency_index()
-        if index is not None:
-            result["transparency"] = index
-        else:
-            table = self._rust_image.pending_transparency_table()
-            if table is not None:
-                result["transparency"] = bytes(table)
+        result.update(self._rust_image.compatibility_info())
         return result
 
     def __repr__(self) -> str:
