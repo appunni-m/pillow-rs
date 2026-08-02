@@ -173,6 +173,18 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
     if len(base) < 2 or base[:2] != b"\xff\xd8":
         raise ValueError("EXIF variant base must be a JPEG")
 
+    if variant == "no-eoi":
+        # Keep the JPEG frame header intact, then stop immediately after the
+        # SOS header. Image.open() accepts this header-only stream for
+        # getexif(), exercising the scanner's natural end-of-input path.
+        sos = base.find(b"\xff\xda")
+        if sos < 0 or sos + 4 > len(base):
+            raise ValueError("EXIF variant base must contain a JPEG SOS")
+        scan_start = sos + 2 + struct.unpack(">H", base[sos + 2 : sos + 4])[0]
+        if scan_start > len(base):
+            raise ValueError("JPEG SOS extends beyond EXIF variant base")
+        return base[:scan_start]
+
     if variant == "empty-app1":
         segment = b"\xff\xe1\x00\x02"
         return base[:2] + segment + base[2:]
@@ -9434,6 +9446,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "jpeg-short-app1-length",
             "exif_variant": "short-app1-length",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-no-eoi",
+            "exif_variant": "no-eoi",
         },
         {
             "surface": "PIL.Image.Image",
