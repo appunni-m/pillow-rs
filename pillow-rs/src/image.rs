@@ -272,7 +272,7 @@ pub enum ChannelSelector {
 pub enum PutPixelValue {
     /// An integer scalar, retaining its range for core validation.
     Integer(i64),
-    /// A non-integral numeric value, which Pillow rejects for this surface.
+    /// A non-integral numeric value, accepted by Pillow's `F` mode.
     Float(f64),
     /// A list or tuple of byte components.
     Components(Vec<u8>),
@@ -1797,7 +1797,18 @@ impl Image {
                 }
                 self.putpixel_mode(x, y, value as u8, &mode)
             }
-            PutPixelValue::Float(_) | PutPixelValue::Invalid => Err(if mode.len() == 1 {
+            PutPixelValue::Float(value) => {
+                if mode == "F" {
+                    self.putpixel_mode_scalar(x, y, value, &mode)
+                } else {
+                    Err(if mode.len() == 1 {
+                        PilError::TypeError("color must be int or single-element tuple".into())
+                    } else {
+                        PilError::TypeError("color must be int or tuple".into())
+                    })
+                }
+            }
+            PutPixelValue::Invalid => Err(if mode.len() == 1 {
                 PilError::TypeError("color must be int or single-element tuple".into())
             } else {
                 PilError::TypeError("color must be int or tuple".into())
