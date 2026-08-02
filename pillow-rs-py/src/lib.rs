@@ -1114,8 +1114,14 @@ impl PyImage {
     }
 
     #[staticmethod]
-    fn frombytes(mode: &str, size: (u32, u32), data: Vec<u8>) -> PyResult<PyImage> {
-        pillow_rs::Image::frombytes(mode, size, &data)
+    #[pyo3(signature = (mode, size, data, decoder_name="raw"))]
+    fn frombytes(
+        mode: &str,
+        size: (u32, u32),
+        data: Vec<u8>,
+        decoder_name: &str,
+    ) -> PyResult<PyImage> {
+        pillow_rs::image_frombytes(mode, size, &data, decoder_name)
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }

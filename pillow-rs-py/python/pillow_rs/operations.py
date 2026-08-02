@@ -85,9 +85,7 @@ def fromarray(obj, mode=None):
 
 def frombytes(mode, size, data, decoder_name="raw", *args):
     """Create an image from raw bytes using Pillow's decoder contract."""
-    if decoder_name != "raw":
-        raise OSError(f"decoder {decoder_name} not available")
-    return Image.frombytes(mode, size, data)
+    return Image.frombytes(mode, size, data, decoder_name, *args)
 
 
 def linear_gradient(mode: str) -> Image:
@@ -122,8 +120,6 @@ def effect_noise(size: tuple[int, int], sigma: float) -> Image:
 
 def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw", *args):
     """Create an image from pixel data in a byte buffer. Delegates to frombytes."""
-    if decoder_name != "raw":
-        raise OSError(f"decoder {decoder_name} not available")
     return Image.frombytes(mode, size, data, decoder_name, *args)
 
 
