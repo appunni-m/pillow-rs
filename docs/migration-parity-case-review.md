@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2156
-- Unique active workflow signatures: 2156
+- Active parity workflows: 2167
+- Unique active workflow signatures: 2167
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 980
+- Deliberate nuanced workflows: 991
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 179 |
-| `PIL.Image.Image` | 969 |
+| `PIL.Image.Image` | 980 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -458,6 +458,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.quantize.nuanced.mediancut-kmeans-1`
 - `PIL.Image.Image.quantize.nuanced.mediancut-kmeans-2`
 - `PIL.Image.Image.quantize.nuanced.rgba-mediancut-invalid`
+- `PIL.Image.Image.reduce.nuanced.invalid-box-type`
 - `PIL.Image.Image.reduce.nuanced.non-square-factors`
 - `PIL.Image.Image.reduce.nuanced.odd-size-factor-three`
 - `PIL.Image.Image.reduce.nuanced.wrong-box-arity`
@@ -536,7 +537,12 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.tobytes.nuanced.rgb-bgr-raw`
 - `PIL.Image.Image.tobytes.nuanced.rgba-bgra-raw`
 - `PIL.Image.Image.tobytes.nuanced.unknown-encoder-error`
+- `PIL.Image.Image.transform.nuanced.cmyk-affine-invalid-tuple-fill`
+- `PIL.Image.Image.transform.nuanced.cmyk-affine-name-fill`
+- `PIL.Image.Image.transform.nuanced.cmyk-affine-three-tuple-fill`
+- `PIL.Image.Image.transform.nuanced.cmyk-affine-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.empty-mesh-data`
+- `PIL.Image.Image.transform.nuanced.empty-mesh-data-p-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.f-affine-invalid-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.f-affine-name-fill`
 - `PIL.Image.Image.transform.nuanced.f-affine-scalar-fill`
@@ -544,10 +550,12 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.flat-mesh-data`
 - `PIL.Image.Image.transform.nuanced.hsv-affine-name-fill`
 - `PIL.Image.Image.transform.nuanced.hsv-affine-tuple-fill`
+- `PIL.Image.Image.transform.nuanced.i-affine-invalid-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.i-affine-name-fill`
 - `PIL.Image.Image.transform.nuanced.i-affine-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.i-affine-single-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.i16-affine-inbounds-fill`
+- `PIL.Image.Image.transform.nuanced.i16-affine-invalid-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.i16-affine-name-fill`
 - `PIL.Image.Image.transform.nuanced.i16-affine-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.i16-affine-single-tuple-fill`
@@ -563,10 +571,12 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.malformed-mesh-entry`
 - `PIL.Image.Image.transform.nuanced.malformed-mesh-short-bbox`
 - `PIL.Image.Image.transform.nuanced.malformed-mesh-short-quad`
+- `PIL.Image.Image.transform.nuanced.malformed-mesh-too-many-items`
 - `PIL.Image.Image.transform.nuanced.missing-mesh-data`
 - `PIL.Image.Image.transform.nuanced.p-affine-invalid-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-name-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-nonopaque-tuple-fill`
+- `PIL.Image.Image.transform.nuanced.p-affine-opaque-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-single-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-tuple-fill`
@@ -582,6 +592,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.rgba-affine-rgb-name-fill`
 - `PIL.Image.Image.transform.nuanced.rgba-affine-single-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.rgba-affine-tuple-fill`
+- `PIL.Image.Image.transform.nuanced.short-affine-matrix`
 - `PIL.Image.Image.transform.nuanced.ycbcr-affine-tuple-fill`
 - `PIL.Image.Image.transpose.nuanced.opened-rgb`
 - `PIL.Image.Image.verify.nuanced.bmp-rgb-opened`

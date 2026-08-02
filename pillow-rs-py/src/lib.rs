@@ -197,14 +197,15 @@ fn reduce_factor_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::ReduceFacto
     pillow_rs::ReduceFactor::Invalid
 }
 
-fn reduce_box_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ReduceBox {
+fn reduce_box_from_python(value: Option<&Bound<'_, PyAny>>) -> PyResult<pillow_rs::ReduceBox> {
     let Some(value) = value else {
-        return pillow_rs::ReduceBox::Invalid;
+        return Ok(pillow_rs::ReduceBox::Invalid);
     };
-    value
-        .extract::<Vec<i64>>()
-        .map(pillow_rs::ReduceBox::Sequence)
-        .unwrap_or(pillow_rs::ReduceBox::Invalid)
+    let value = match value.extract::<Vec<i64>>() {
+        Ok(value) => pillow_rs::ReduceBox::Sequence(value),
+        Err(_) => pillow_rs::ReduceBox::InvalidType(value.get_type().name()?.to_string()),
+    };
+    Ok(value)
 }
 
 fn centering_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::CenteringInput {
@@ -1063,7 +1064,9 @@ impl PyImage {
         box_coords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
         let factor = reduce_factor_from_python(factor);
-        let box_coords = box_coords.map(|value| reduce_box_from_python(Some(value)));
+        let box_coords = box_coords
+            .map(|value| reduce_box_from_python(Some(value)))
+            .transpose()?;
         let rs = self
             .inner
             .reduce_public(factor, box_coords)
