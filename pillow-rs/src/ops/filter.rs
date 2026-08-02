@@ -123,6 +123,14 @@ const SMOOTH: FilterKernel =
     FilterKernel::new([1.0, 1.0, 1.0, 1.0, 5.0, 1.0, 1.0, 1.0, 1.0], 13.0, 0);
 
 impl Image {
+    /// Validates whether a Python-facing filter may run for this image mode.
+    pub fn validate_filter(&self, filter_name: &str) -> Result<(), PilError> {
+        if self.mode()? == "P" && filter_name != "Mode" {
+            return Err(PilError::ValueError("cannot filter palette images".into()));
+        }
+        Ok(())
+    }
+
     /// Applies a named built-in Pillow filter.
     ///
     /// Supported names are the built-in `ImageFilter` kernels such as `"BLUR"`,
@@ -135,6 +143,7 @@ impl Image {
     /// Returns [`PilError::ValueError`] for an unknown filter name, or another
     /// [`PilError`] when mode conversion or materialization fails.
     pub fn filter(&self, filter_type: &str) -> Result<Image, PilError> {
+        self.validate_filter(filter_type)?;
         // I-mode: push the filter op directly — execute_op handles I-mode dispatch
         // by operating on int32 pixel values with no [0,255] clipping.
         if self.explicit_mode() == Some("I") {

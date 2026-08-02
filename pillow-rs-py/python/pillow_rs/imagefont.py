@@ -211,8 +211,6 @@ class FreeTypeFont:
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):
-        if index != 0:
-            raise OSError("invalid argument")
         layout_engine = _normalize_layout_engine(layout_engine)
         layout_engine_name = layout_engine.name if layout_engine is not None else None
         self.path = font
@@ -396,8 +394,6 @@ class FreeTypeFont:
         :return: A FreeTypeFont object.
         :raises OSError: If the font could not be read.
         """
-        if index not in (None, 0):
-            raise OSError("invalid argument")
         if font is None and size is None and index is None and encoding is None and layout_engine is None:
             return self
         # Default font (loaded via load_default) has no source path/bytes.
