@@ -1241,6 +1241,7 @@
           "PIL.Image.Image.convert.nuanced.string-dither-error",
           "PIL.Image.Image.convert.nuanced.l-to-pa",
           "PIL.Image.Image.convert.nuanced.pa-to-one",
+          "PIL.Image.Image.convert.nuanced.pa-palette-to-one",
           "PIL.Image.Image.convert.nuanced.raw-p-without-palette-to-rgba",
           "PIL.Image.Image.convert.nuanced.from-cmyk-to-l",
           "PIL.Image.Image.convert.nuanced.from-ycbcr",
