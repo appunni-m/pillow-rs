@@ -1397,16 +1397,14 @@ impl PyImage {
             .len()
             .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
 
-        let (width, height, mode) = {
+        let mode = {
             let image = slf.try_borrow()?;
-            let (width, height) = image.inner.size().map_err(map_error)?;
-            let mode = image.inner.mode().map_err(map_error)?;
-            (width, height, mode)
+            image
+                .inner
+                .validate_putdata_length(entry_count)
+                .map_err(map_error)?;
+            image.inner.mode().map_err(map_error)?
         };
-        let pixel_count = u64::from(width) * u64::from(height);
-        if entry_count as u128 > u128::from(pixel_count) {
-            return Err(PyTypeError::new_err("too many data entries"));
-        }
 
         // Pillow's I;16 bytes fast path copies the supplied bytes into the
         // raw two-byte sample buffer. It does not coerce each byte into a

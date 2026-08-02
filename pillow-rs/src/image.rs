@@ -3348,13 +3348,7 @@ impl Image {
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
-        let (width, height) = self.size()?;
-        let pixel_count = (width as usize)
-            .checked_mul(height as usize)
-            .ok_or_else(|| PilError::DimensionError("pixel count overflow".into()))?;
-        if values.len() > pixel_count {
-            return Err(PilError::TypeError("too many data entries".into()));
-        }
+        self.validate_putdata_length(values.len())?;
 
         let mode_name = self.mode()?;
         if is_l16_mode(&mode_name) {
@@ -3372,14 +3366,32 @@ impl Image {
         self.putdata(&data)
     }
 
+    /// Validates the sequence length before host-language value coercion.
+    ///
+    /// Pillow rejects an oversized `putdata` sequence before converting any
+    /// element, so bindings must delegate this check before they iterate a
+    /// Python sequence. Keeping it here also gives every binding the same
+    /// dimension and error behavior.
+    pub fn validate_putdata_length(&self, entry_count: usize) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        let pixel_count = (width as usize)
+            .checked_mul(height as usize)
+            .ok_or_else(|| PilError::DimensionError("pixel count overflow".into()))?;
+        if entry_count > pixel_count {
+            return Err(PilError::TypeError("too many data entries".into()));
+        }
+        Ok(())
+    }
+
     /// Replaces raw I;16 samples from Pillow's bytes fast path.
     ///
     /// Pillow treats a `bytes` argument to `putdata` as packed storage for
     /// I;16 modes, rather than as one numeric sample per byte. The payload is
     /// copied into the image's raw two-byte sample buffer; an incomplete final
-    /// sample remains zero-filled, and excess bytes are ignored by the binding
-    /// before this method is called.
+    /// sample remains zero-filled, and bytes beyond the allocated raw storage
+    /// are ignored.
     pub fn putdata_l16_bytes(&mut self, data: &[u8]) -> Result<(), PilError> {
+        self.validate_putdata_length(data.len())?;
         let (width, height) = self.size()?;
         let dimensions = CheckedDims::new(width, height, 2)?;
         let mode = self.mode()?;
@@ -3389,9 +3401,9 @@ impl Image {
         self.load()?;
         if let Image::Loaded(image_data) = self {
             let image = Arc::make_mut(&mut image_data.image);
-            let destination = image.as_mut_luma16().ok_or_else(|| {
-                PilError::InternalError("putdata I;16 storage mismatch".into())
-            })?;
+            let destination = image
+                .as_mut_luma16()
+                .ok_or_else(|| PilError::InternalError("putdata I;16 storage mismatch".into()))?;
             for (pixel, sample) in destination.as_mut().iter_mut().zip(raw.chunks_exact(2)) {
                 *pixel = if l16_uses_big_endian(&mode) {
                     u16::from_be_bytes([sample[0], sample[1]])
