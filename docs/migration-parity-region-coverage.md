@@ -8,8 +8,8 @@ not parity proof and does not change the manifest or lane inputs.
 generator: scripts/report_migration_parity_region_coverage.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: a76dead8510189e6c09013d2bd0a35105e4f2c3d431653f6ca039352eca9176b
-coverage_run_id: migration-coverage-b9a9ca015db9475c9837fcb0f2a1ba9c
+manifest_sha256: e9793ed33f529f1a1eec6f858df78d545f461fd585a1548ad85e016e90cf3234
+coverage_run_id: migration-coverage-89f9599b360a40af97e908cb76248e60
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 90%

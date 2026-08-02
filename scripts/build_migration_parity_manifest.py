@@ -832,6 +832,14 @@ def operation_contract(
     parameters = parameters_from_signature(
         source_signature, kind=endpoint.kind
     )
+    if endpoint.source_path == "PIL.ImageSequence.Iterator":
+        # Pillow's runtime contract deliberately validates the seek protocol
+        # instead of relying on the Image.Image annotation. Keep null in the
+        # fixed input vocabulary so the public AttributeError path can be
+        # exercised without inventing a target-only test object.
+        for parameter in parameters:
+            if parameter["id"] == "im":
+                add_unique(parameter["value_types"], "null")
     benchmark_applicable = endpoint.kind != "constant"
     requirements = operation_requirements(
         endpoint,

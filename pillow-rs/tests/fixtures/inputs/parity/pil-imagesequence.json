@@ -185,6 +185,35 @@
         "call",
         "observe-frame-zero"
       ]
+    },
+    {
+      "case_id": "PIL.ImageSequence.Iterator.nuanced.invalid-im-no-seek",
+      "surface": "PIL.ImageSequence",
+      "operation": "Iterator",
+      "covers": [
+        "PIL.ImageSequence.Iterator.parameter.im"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageSequence",
+          "operation": "Iterator",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": null
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

@@ -13,7 +13,8 @@
       "selectors": {
         "parity_case_ids": [
           "PIL.ImageSequence.Iterator.behavior.default",
-          "PIL.ImageSequence.Iterator.mode.l"
+          "PIL.ImageSequence.Iterator.mode.l",
+          "PIL.ImageSequence.Iterator.nuanced.invalid-im-no-seek"
         ],
         "command_ids": []
       },

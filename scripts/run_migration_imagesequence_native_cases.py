@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise the ImageSequence iterator surface the parity corpus cannot reach.
+"""Exercise ImageSequence paths that are useful for merged coverage.
 
-The parity corpus only constructs ``PIL.ImageSequence.Iterator``; the public
-manifest has no ``__iter__``/``__next__`` endpoints, so the wrapper's
-iteration state machine is never measured.  This coverage-only command drives
-the target facade's iterator protocol and the single-frame seek/child-image
-core paths directly.
+The input-only parity corpus covers the declared constructor and iterator
+methods. This maintained coverage-only command additionally drives the
+protocol through Python's ``for`` machinery and the child-image core path.
 
 This is a coverage-only command: it never compares oracle values and cannot
 satisfy parity requirements.
@@ -33,10 +31,9 @@ def run_native_cases() -> tuple[int, int, int]:
         nonlocal passed, failed
         try:
             call()
-            passed += 1
         except Exception:
-            # Completed executions (including StopIteration and public errors)
-            # exercise the instrumented path; unexpected failures are counted.
+            failed += 1
+        else:
             passed += 1
 
     probes: list[tuple[str, callable]] = [
@@ -51,14 +48,20 @@ def run_native_cases() -> tuple[int, int, int]:
             "iterator-iter-is-self",
             lambda: _iter_self(ImageSequence.Iterator(Image.new("RGB", (4, 4)))),
         ),
-        # Construction through the positional and keyword spellings.
+        # Construction through the declared keyword spelling.
         (
             "iterator-keyword-image",
-            lambda: _drain(ImageSequence.Iterator(image=Image.new("1", (4, 4)))),
+            lambda: _drain(ImageSequence.Iterator(im=Image.new("1", (4, 4)))),
         ),
-        # Single-frame seek is a no-op success for any frame index.
+        # Single-frame seek succeeds at frame zero and rejects frame one.
         ("seek-frame-zero", lambda: Image.new("L", (4, 4)).seek(0)),
-        ("seek-frame-one", lambda: Image.new("P", (4, 4)).seek(1)),
+        (
+            "seek-frame-one",
+            lambda: _expect_error(
+                lambda: Image.new("P", (4, 4)).seek(1),
+                EOFError,
+            ),
+        ),
         # Multi-frame decoding is not implemented in core; the child image
         # list is empty for every input.
         ("child-images-empty", lambda: Image.new("RGBA", (4, 4)).get_child_images()),
@@ -78,6 +81,14 @@ def _drain(iterator: ImageSequence.Iterator) -> None:
 
 def _iter_self(iterator: ImageSequence.Iterator) -> None:
     assert iter(iterator) is iterator
+
+
+def _expect_error(call, error_type: type[Exception]) -> None:
+    try:
+        call()
+    except error_type:
+        return
+    raise AssertionError(f"expected {error_type.__name__}")
 
 
 def main() -> int:
