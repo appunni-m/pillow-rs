@@ -5265,6 +5265,16 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-i16-nested-sequence",
+            "scenario_inline_image": "l16-tiff",
+            "values": {
+                "data": literal([[1], [2], [3], [4]]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
             "requirement_suffix": "parameter.data",
             "name": "l-too-many-entries",
             "mode": "L",

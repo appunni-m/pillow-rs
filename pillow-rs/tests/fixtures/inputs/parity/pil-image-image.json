@@ -31316,6 +31316,72 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.putdata.nuanced.opened-i16-nested-sequence",
+      "surface": "PIL.Image.Image",
+      "operation": "putdata",
+      "covers": [
+        "PIL.Image.Image.putdata.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-l16-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAgAAAAIBAwABAAAAEAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABUBAwABAAAAAQAAABYBBAABAAAAAgAAABcBBAABAAAACAAAAFMBAwABAAAAAQAAAAAAAAAAAACA//8AQA==",
+          "sha256": "17252164d15b4174d61d044d9abde5dddcd17c1c6afb917a1d09523ecd09e002",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-l16-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  1
+                ],
+                [
+                  2
+                ],
+                [
+                  3
+                ],
+                [
+                  4
+                ]
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.putdata.nuanced.l-too-many-entries",
       "surface": "PIL.Image.Image",
       "operation": "putdata",

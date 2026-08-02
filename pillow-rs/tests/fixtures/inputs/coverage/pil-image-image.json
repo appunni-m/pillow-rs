@@ -1014,6 +1014,7 @@
           "PIL.Image.Image.alpha_composite.nuanced.offset-source",
           "PIL.Image.Image.putdata.nuanced.l-bytes",
           "PIL.Image.Image.putdata.nuanced.opened-i16-values",
+          "PIL.Image.Image.putdata.nuanced.opened-i16-nested-sequence",
           "PIL.Image.Image.putdata.nuanced.l-too-many-entries",
           "PIL.Image.Image.putdata.nuanced.i-mode",
           "PIL.Image.Image.putdata.nuanced.f-mode",

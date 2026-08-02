@@ -168,9 +168,10 @@ fn putdata_l16_sample(value: &PutDataValue, scale: f64, offset: f64) -> Result<u
         // destination. Rust's float-to-integer cast provides the same
         // bounded conversion for the public numeric path.
         PutDataValue::Number(number) => Ok((number * scale + offset) as u16),
-        _ => Err(PilError::TypeError(
-            "argument must be a sequence".to_owned(),
-        )),
+        // Pillow's I;16 decoder reaches the flattened-sequence guard before
+        // numeric coercion for nested/non-numeric values. Keep that public
+        // error text exact instead of exposing the generic scalar path.
+        _ => Err(PilError::TypeError("sequence must be flattened".to_owned())),
     }
 }
 
