@@ -71,7 +71,7 @@ class Draw:
         """Draw multiple lines of text through the Rust drawing path."""
         if hasattr(font, "_rust_font"):
             self._draw.multiline_text(
-                xy, str(text), fill, font._rust_font, spacing, direction,
+                xy, text, fill, font._rust_font, spacing, direction,
                 features, language, float(stroke_width), anchor, embedded_color,
                 kwargs.get("font_size"),
             )
@@ -84,7 +84,7 @@ class Draw:
             )
         else:
             self._draw.multiline_text(
-                xy, str(text), fill, font, spacing, direction, features,
+                xy, text, fill, font, spacing, direction, features,
                 language, float(stroke_width), anchor, embedded_color,
                 kwargs.get("font_size"),
             )
@@ -94,7 +94,7 @@ class Draw:
     def textbbox(self, xy, text, font=None, **kwargs):
         return self._draw.textbbox(
             xy,
-            str(text),
+            text,
             font._rust_font if hasattr(font, "_rust_font") else font,
             kwargs.get("direction"),
             kwargs.get("features"),
@@ -107,7 +107,7 @@ class Draw:
 
     def textlength(self, text, font=None, **kwargs):
         return self._draw.textlength(
-            str(text),
+            text,
             font._rust_font if hasattr(font, "_rust_font") else font,
             kwargs.get("direction"),
             kwargs.get("features"),
@@ -130,7 +130,7 @@ class Draw:
         """Get the bounding box of multiline text."""
         return self._draw.multiline_textbbox(
             xy,
-            str(text),
+            text,
             font._rust_font if hasattr(font, "_rust_font") else font,
             spacing,
             align,
@@ -159,7 +159,7 @@ class Draw:
         if hasattr(font, '_rust_font'):
             self._draw.text(
                 (float(xy[0]), float(xy[1])),
-                str(text),
+                text,
                 fill,
                 font._rust_font,
                 direction,
@@ -174,7 +174,7 @@ class Draw:
             self.bitmap(xy, mask, fill=fill)
         else:
             self._draw.text(
-                (float(xy[0]), float(xy[1])), str(text), fill, font,
+                (float(xy[0]), float(xy[1])), text, fill, font,
                 direction, features, language, float(stroke_width), anchor,
                 embedded_color,
             )

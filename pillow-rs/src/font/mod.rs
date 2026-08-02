@@ -59,7 +59,7 @@ pub enum ImageFontTextInput {
 }
 
 impl ImageFontTextInput {
-    fn into_text(self) -> String {
+    pub(crate) fn into_text(self) -> String {
         match self {
             Self::Text(text) => text,
             Self::Bytes(bytes) => pillow_bytes_to_text(&bytes),
@@ -273,6 +273,20 @@ impl FreeTypeFont {
             bottom = bottom.max(line_y + bbox.3 as f64);
         }
         Ok((left as i32, top as i32, right as i32, bottom as i32))
+    }
+
+    /// Computes a multiline text bounding box after applying Pillow's text
+    /// input rules, including Latin-1 interpretation for byte text.
+    pub fn multiline_textbbox_input(
+        &self,
+        xy: (i32, i32),
+        text: ImageFontTextInput,
+        spacing: i32,
+        align: &str,
+        options: &ImageFontTextOptions,
+    ) -> Result<(i32, i32, i32, i32), PilError> {
+        let text = text.into_text();
+        self.multiline_textbbox(xy, &text, spacing, align, options)
     }
 
     /// Load a TrueType/OpenType face from bytes at the requested Pillow point size.

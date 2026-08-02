@@ -3607,6 +3607,14 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "text",
+            "requirement_suffix": "parameter.text",
+            "name": "bytes-latin1",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {"text": bytes_literal([65, 233])},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
             "requirement_suffix": "behavior.default",
             "name": "explicit-truetype-font",
             "font": "font/fonts/DejaVuSans.ttf",
@@ -3668,6 +3676,17 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "multiline_text",
             "requirement_suffix": "parameter.text",
+            "name": "bytes-latin1",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": bytes_literal([65, 233, 10, 66]),
+                "spacing": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_text",
+            "requirement_suffix": "parameter.text",
             "name": "empty-line-spacing",
             "values": {
                 "text": literal("A\n\nB"),
@@ -3692,6 +3711,17 @@ def build_nuanced_cases(
             "name": "three-line-spacing",
             "values": {
                 "text": literal("A\nBB\nC"),
+                "spacing": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_textbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "bytes-latin1",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {
+                "text": bytes_literal([65, 233, 10, 66]),
                 "spacing": literal(3),
             },
         },
@@ -3726,6 +3756,22 @@ def build_nuanced_cases(
                 "text": literal("A\u0301🙂"),
                 "anchor": literal("mm"),
             },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textbbox",
+            "requirement_suffix": "parameter.text",
+            "name": "bytes-latin1",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {"text": bytes_literal([65, 233])},
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "textlength",
+            "requirement_suffix": "parameter.text",
+            "name": "bytes-latin1",
+            "font": "font/fonts/DejaVuSans.ttf",
+            "values": {"text": bytes_literal([65, 233])},
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",

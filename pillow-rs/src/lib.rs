@@ -626,6 +626,25 @@ pub fn imagefont_textbbox_at_with_optional_font(
     ))
 }
 
+/// Return an offset text bounding box using host-classified text input.
+pub fn imagefont_textbbox_at_with_optional_font_input(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    xy: (i32, i32),
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    let bbox = crate::font::with_text_font(font, size, |font| {
+        font.getbbox_input_with_options(text, options)
+    })?;
+    Ok((
+        xy.0 + bbox.0 as i32,
+        xy.1 + bbox.1 as i32,
+        xy.0 + bbox.2 as i32,
+        xy.1 + bbox.3 as i32,
+    ))
+}
+
 /// Return text length using Pillow's optional draw-font rules.
 pub fn imagefont_getlength_with_optional_font(
     font: Option<&FreeTypeFont>,
@@ -635,6 +654,18 @@ pub fn imagefont_getlength_with_optional_font(
 ) -> Result<f32, PilError> {
     crate::font::with_text_font(font, size, |font| {
         font.getlength_with_options(text, options)
+    })
+}
+
+/// Return text length using optional-font rules and host-classified text input.
+pub fn imagefont_getlength_with_optional_font_input(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    text: ImageFontTextInput,
+    options: &ImageFontTextOptions,
+) -> Result<f32, PilError> {
+    crate::font::with_text_font(font, size, |font| {
+        font.getlength_input_with_options(text, options)
     })
 }
 
@@ -662,6 +693,21 @@ pub fn imagefont_multiline_textbbox_with_optional_font(
 ) -> Result<(i32, i32, i32, i32), PilError> {
     crate::font::with_text_font(font, size, |font| {
         font.multiline_textbbox(xy, text, spacing, align, options)
+    })
+}
+
+/// Return a multiline text bounding box using host-classified text input.
+pub fn imagefont_multiline_textbbox_with_optional_font_input(
+    font: Option<&FreeTypeFont>,
+    size: Option<f32>,
+    xy: (i32, i32),
+    text: ImageFontTextInput,
+    spacing: i32,
+    align: &str,
+    options: &ImageFontTextOptions,
+) -> Result<(i32, i32, i32, i32), PilError> {
+    crate::font::with_text_font(font, size, |font| {
+        font.multiline_textbbox_input(xy, text, spacing, align, options)
     })
 }
 

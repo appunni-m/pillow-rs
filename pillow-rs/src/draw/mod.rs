@@ -338,6 +338,28 @@ impl Draw {
         }
     }
 
+    /// Resolve an ImageDraw text ink according to Pillow's mode-specific
+    /// default. ImageDraw initializes text's implicit ink from
+    /// `draw_ink(-1)` (or `draw_ink(1)` for `I`/`F`), which is not the same
+    /// as the geometric primitive default represented by `None` here.
+    pub fn text_color_with_input(
+        &self,
+        input: DrawColorInput,
+    ) -> Result<(u8, u8, u8, u8), PilError> {
+        if !matches!(input, DrawColorInput::None) {
+            return self.color_with_input(input);
+        }
+
+        match self.effective_mode().as_str() {
+            "RGB" | "RGBA" | "RGBa" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => {
+                Ok((255, 255, 255, 255))
+            }
+            "I" => Ok((1, 0, 0, 0)),
+            "F" => Ok((0, 0, 128, 63)),
+            _ => Ok((0, 0, 0, 255)),
+        }
+    }
+
     /// Validates a bitmap fill and delegates the complete operation to core.
     pub fn bitmap_with_input(
         &mut self,
@@ -1532,6 +1554,20 @@ impl Draw {
         self.text_with_options_inner(x, y, text, font, fill, options, true)
     }
 
+    /// Draw text after applying Pillow's host-neutral text input rules.
+    pub fn text_with_options_input(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: crate::font::ImageFontTextInput,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        let text = text.into_text();
+        self.text_with_options(x, y, &text, font, fill, options)
+    }
+
     /// Draw text using Pillow's optional-font and `font_size` rules.
     pub fn text_with_optional_font(
         &mut self,
@@ -1545,6 +1581,22 @@ impl Draw {
     ) -> Result<(), PilError> {
         crate::font::with_text_font(font, size, |font| {
             self.text_with_options(x, y, text, font, fill, options)
+        })
+    }
+
+    /// Draw text with optional-font rules and host-neutral text input.
+    pub fn text_with_optional_font_input(
+        &mut self,
+        x: i32,
+        y: i32,
+        text: crate::font::ImageFontTextInput,
+        font: Option<&crate::font::FreeTypeFont>,
+        fill: (u8, u8, u8, u8),
+        size: Option<f32>,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        crate::font::with_text_font(font, size, |font| {
+            self.text_with_options_input(x, y, text, font, fill, options)
         })
     }
 
@@ -1587,6 +1639,26 @@ impl Draw {
     ) -> Result<(), PilError> {
         crate::font::with_text_font(font, size, |font| {
             self.multiline_text_with_options(x, y, text, font, fill, spacing, options)
+        })
+    }
+
+    /// Draw multiline text with optional-font rules and host-neutral text
+    /// input. Byte text is interpreted as one Latin-1 code point per byte,
+    /// preserving Pillow's public font contract before line splitting.
+    pub fn multiline_text_with_optional_font_input(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: crate::font::ImageFontTextInput,
+        font: Option<&crate::font::FreeTypeFont>,
+        fill: (u8, u8, u8, u8),
+        spacing: f64,
+        size: Option<f32>,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        crate::font::with_text_font(font, size, |font| {
+            let text = text.into_text();
+            self.multiline_text_with_options(x, y, &text, font, fill, spacing, options)
         })
     }
 
