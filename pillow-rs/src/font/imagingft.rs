@@ -1678,7 +1678,7 @@ fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{ffi, freetype_encoding};
+    use super::{bitmap_coverage, ffi, freetype_encoding};
     use crate::{FreeTypeFont, ImageFontLoadOptions};
 
     #[test]
@@ -1706,6 +1706,25 @@ mod tests {
             );
         }
         assert_eq!(freetype_encoding("unknown"), None);
+    }
+
+    #[test]
+    fn bitmap_coverage_reads_fontdone_negative_pitch_rows() {
+        let bitmap = ffi::FT_Bitmap {
+            rows: 2,
+            width: 2,
+            pitch: -2,
+            buffer: vec![10, 20, 30, 40],
+            num_grays: 256,
+            pixel_mode: ffi::FT_PIXEL_MODE_GRAY,
+        };
+
+        // fontdone follows FreeType's bottom-up bitmap contract: a negative
+        // pitch places the first visual row in the last physical row.
+        assert_eq!(bitmap_coverage(&bitmap, 0, 0), 30);
+        assert_eq!(bitmap_coverage(&bitmap, 0, 1), 40);
+        assert_eq!(bitmap_coverage(&bitmap, 1, 0), 10);
+        assert_eq!(bitmap_coverage(&bitmap, 1, 1), 20);
     }
 
     fn make_ttc(fonts: &[&[u8]]) -> Vec<u8> {
