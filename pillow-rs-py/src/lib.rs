@@ -543,27 +543,31 @@ impl PyImage {
     }
 
     fn save(&mut self, fp: &Bound<'_, PyAny>, format: Option<String>) -> PyResult<()> {
-        let inferred;
-        let format = if let Some(format) = format.as_deref() {
-            format
-        } else if let Some(path) = host_path_from_python(fp)? {
-            inferred = path
-                .extension()
-                .and_then(|extension| extension.to_str())
-                .ok_or_else(|| {
-                    map_error(PilError::UnknownFormat(
-                        "Cannot determine format from path".into(),
-                    ))
-                })?
-                .to_owned();
-            &inferred
-        } else {
-            return Err(map_error(PilError::UnknownFormat(
-                "Cannot determine format from file object".into(),
-            )));
-        };
-        let encoded = self.inner.encode(format).map_err(map_error)?;
-        if let Some(path) = host_path_from_python(fp)? {
+        let path = host_path_from_python(fp)?;
+        if let Some(path) = path.as_deref() {
+            if path.is_dir() {
+                return Err(pyo3::exceptions::PyIsADirectoryError::new_err((
+                    21,
+                    "Is a directory",
+                    path.to_string_lossy().to_string(),
+                )));
+            }
+            if path.parent().is_some_and(|parent| !parent.exists()) {
+                return Err(pyo3::exceptions::PyFileNotFoundError::new_err((
+                    2,
+                    "No such file or directory",
+                    path.to_string_lossy().to_string(),
+                )));
+            }
+        }
+        let extension = path
+            .as_deref()
+            .and_then(|path| path.extension())
+            .and_then(|extension| extension.to_str());
+        let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
+            .map_err(map_error)?;
+        let encoded = self.inner.encode(&format).map_err(map_error)?;
+        if let Some(path) = path {
             std::fs::write(path, encoded).map_err(|error| map_error(error.into()))
         } else {
             fp.call_method1("write", (PyBytes::new(fp.py(), &encoded),))?;
@@ -864,13 +868,16 @@ impl PyImage {
     }
     /// Return extrema formatted as PIL expects.
     fn getextrema_formatted(&self) -> PyResult<PyObject> {
-        let raw = self.inner.getextrema().map_err(map_error)?;
-        Python::with_gil(|py| {
-            if raw.len() == 1 {
-                Ok((raw[0].0, raw[0].1).to_object(py))
-            } else {
-                let tuples: Vec<PyObject> =
-                    raw.iter().map(|&(a, b)| (a, b).to_object(py)).collect();
+        let formatted = self.inner.getextrema_formatted().map_err(map_error)?;
+        Python::with_gil(|py| match formatted {
+            pillow_rs::FormattedExtrema::Single((minimum, maximum)) => {
+                Ok((minimum, maximum).to_object(py))
+            }
+            pillow_rs::FormattedExtrema::Multiple(values) => {
+                let tuples: Vec<PyObject> = values
+                    .into_iter()
+                    .map(|(minimum, maximum)| (minimum, maximum).to_object(py))
+                    .collect();
                 Ok(PyTuple::new(py, tuples)?.to_object(py))
             }
         })
@@ -1094,26 +1101,20 @@ impl PyImage {
     }
     /// Return getcolors formatted as PIL expects.
     fn getcolors_formatted(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
-        let raw = self
+        let formatted = self
             .inner
-            .getcolors(maxcolors.unwrap_or(256))
+            .getcolors_formatted(maxcolors.unwrap_or(256))
             .map_err(map_error)?;
-        let mode = self.inner.mode().map_err(map_error)?;
-        Python::with_gil(|py| match raw {
+        Python::with_gil(|py| match formatted {
             None => Ok(None),
             Some(results) => {
-                let n_bands = match mode.as_str() {
-                    "L" | "1" | "P" | "I" | "F" => 1,
-                    "LA" | "PA" => 2,
-                    "RGB" | "YCbCr" | "HSV" => 3,
-                    _ => 4,
-                };
                 let out = pyo3::types::PyList::empty(py);
                 for (count, color) in results {
-                    let color_value = if n_bands == 1 {
-                        color[0].to_object(py)
-                    } else {
-                        PyTuple::new(py, color.iter().take(n_bands).copied())?.to_object(py)
+                    let color_value = match color {
+                        pillow_rs::FormattedPixelValue::Scalar(value) => value.to_object(py),
+                        pillow_rs::FormattedPixelValue::Components(values) => {
+                            PyTuple::new(py, values)?.to_object(py)
+                        }
                     };
                     let entry = PyTuple::new(py, [count.to_object(py), color_value])?;
                     out.append(entry)?;
@@ -1128,28 +1129,20 @@ impl PyImage {
     }
     /// Return getdata formatted as PIL expects.
     fn getdata_formatted(&mut self, band: Option<i32>) -> PyResult<PyObject> {
-        let raw = self.inner.getdata(band).map_err(map_error)?;
-        let mode = self.inner.mode().map_err(map_error)?;
-        Python::with_gil(|py| {
-            if band.is_some() {
+        let formatted = self.inner.getdata_formatted(band).map_err(map_error)?;
+        Python::with_gil(|py| match formatted {
+            pillow_rs::FormattedImageData::Scalars(values) if band.is_some() => {
                 let out = pyo3::types::PyList::empty(py);
-                for value in raw {
+                for value in values {
                     out.append(value)?;
                 }
-                return Ok(out.to_object(py));
+                Ok(out.to_object(py))
             }
-            let n_bands = match mode.as_str() {
-                "L" | "1" | "P" | "I" | "F" => 1,
-                "LA" | "PA" => 2,
-                "RGB" | "YCbCr" | "HSV" => 3,
-                _ => 4,
-            };
-            if n_bands == 1 {
-                Ok(raw.to_object(py))
-            } else {
+            pillow_rs::FormattedImageData::Scalars(values) => Ok(values.to_object(py)),
+            pillow_rs::FormattedImageData::Components(values) => {
                 let out = pyo3::types::PyList::empty(py);
-                for chunk in raw.chunks_exact(n_bands) {
-                    out.append(PyTuple::new(py, chunk.iter().copied())?)?;
+                for value in values {
+                    out.append(PyTuple::new(py, value)?)?;
                 }
                 Ok(out.to_object(py))
             }
