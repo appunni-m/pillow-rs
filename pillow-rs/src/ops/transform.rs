@@ -49,6 +49,8 @@ pub enum ReduceBox {
     Sequence(Vec<i64>),
     /// A value that could not be represented as a coordinate sequence.
     Invalid,
+    /// A value with a known host type that is not a coordinate sequence.
+    InvalidType(String),
 }
 
 fn transform_component(value: i64) -> Result<u8, PilError> {
@@ -223,6 +225,11 @@ impl Image {
             }
             ReduceBox::Invalid => {
                 return Err(PilError::TypeError("box must be a 4-item sequence".into()));
+            }
+            ReduceBox::InvalidType(type_name) => {
+                return Err(PilError::TypeError(format!(
+                    "argument 2 must be 4-item sequence, not {type_name}"
+                )));
             }
         };
         source.reduce(x_factor, y_factor)
