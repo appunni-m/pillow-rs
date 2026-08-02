@@ -166,6 +166,45 @@ pub enum PutAlphaInput {
     Invalid(String),
 }
 
+/// Host-neutral values extracted for a public `Image.new` color argument.
+#[derive(Debug, Clone)]
+pub struct PythonNewColorInput {
+    string: Option<String>,
+    single: Option<u8>,
+    rgb: Option<(u8, u8, u8)>,
+    rgba: Option<(u8, u8, u8, u8)>,
+    luma_alpha: Option<(u8, u8)>,
+    integer: Option<i32>,
+    float: Option<f64>,
+    provided: bool,
+}
+
+impl PythonNewColorInput {
+    /// Builds a constructor input from binding-level type extraction only.
+    #[allow(clippy::too_many_arguments)]
+    pub fn from_parts(
+        string: Option<String>,
+        single: Option<u8>,
+        rgb: Option<(u8, u8, u8)>,
+        rgba: Option<(u8, u8, u8, u8)>,
+        luma_alpha: Option<(u8, u8)>,
+        integer: Option<i32>,
+        float: Option<f64>,
+        provided: bool,
+    ) -> Self {
+        Self {
+            string,
+            single,
+            rgb,
+            rgba,
+            luma_alpha,
+            integer,
+            float,
+            provided,
+        }
+    }
+}
+
 #[derive(Clone, Copy)]
 enum FromBytesMode {
     L,
@@ -605,6 +644,51 @@ impl Image {
             None
         };
         Ok(Image::from_dynamic(img, explicit))
+    }
+
+    /// Creates an image using Pillow's host-facing `Image.new` color rules.
+    ///
+    /// Bindings extract host values into [`PythonNewColorInput`]; this method
+    /// owns mode-specific color resolution and the distinction between scalar
+    /// and tuple-created palette images.
+    pub fn new_with_input(
+        width: u32,
+        height: u32,
+        mode: &str,
+        input: PythonNewColorInput,
+    ) -> Result<Self, PilError> {
+        let color = crate::color::resolve_new_color(
+            mode,
+            input.string.as_deref(),
+            input.single,
+            input.rgb,
+            input.rgba,
+            input.luma_alpha,
+            input.integer,
+            input.float,
+        )?;
+        if mode == "P" {
+            if let Some(index) = input.single {
+                return Ok(Self::new_palette_index(width, height, index));
+            }
+            if !input.provided {
+                return Ok(Self::new_palette_index(width, height, 0));
+            }
+            let tuple_color = if let Some((r, g, b, a)) = input.rgba {
+                if a != 255 {
+                    return Err(PilError::ValueError(
+                        "cannot add non-opaque RGBA color to RGB palette".to_owned(),
+                    ));
+                }
+                (r, g, b, a)
+            } else if let Some((r, g, b)) = input.rgb {
+                (r, g, b, 255)
+            } else {
+                color
+            };
+            return Self::new(width, height, mode, tuple_color);
+        }
+        Self::new(width, height, mode, color)
     }
 
     /// Creates a `P` image filled with one raw palette index and no palette.
