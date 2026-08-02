@@ -535,6 +535,7 @@ class WorkflowBuilder:
     scenario_mask_mode: str | None = None
     scenario_asset: str | None = None
     scenario_inline_image: str | None = None
+    scenario_inline_mask_image: str | None = None
     scenario_exif_variant: str | None = None
     scenario_noise_seed: int | None = None
     scenario_chain: str | None = None
@@ -672,6 +673,27 @@ class WorkflowBuilder:
                 arguments={"fp": data_descriptor},
                 step_id=self.next_step_id(f"setup-{label}"),
             )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if label == "mask" and self.scenario_inline_mask_image is not None:
+            if self.scenario_inline_mask_image == "png-no-idat":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-png-no-idat",
+                    png_header_without_image_data(),
+                    "image/png",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            else:
+                raise ValueError(
+                    "unknown inline mask image stimulus: "
+                    f"{self.scenario_inline_mask_image}"
+                )
             self._image_steps[cache_key] = step_id
             return step_id
         if self.scenario_inline_image is not None:
@@ -2648,6 +2670,7 @@ def build_parity_case(
     scenario_mask_mode: str | None = None,
     scenario_asset: str | None = None,
     scenario_inline_image: str | None = None,
+    scenario_inline_mask_image: str | None = None,
     scenario_exif_variant: str | None = None,
     scenario_noise_seed: int | None = None,
     scenario_chain: str | None = None,
@@ -2694,6 +2717,7 @@ def build_parity_case(
         scenario_mask_mode=scenario_mask_mode,
         scenario_asset=scenario_asset,
         scenario_inline_image=scenario_inline_image,
+        scenario_inline_mask_image=scenario_inline_mask_image,
         scenario_exif_variant=scenario_exif_variant,
         scenario_noise_seed=scenario_noise_seed,
         scenario_chain=scenario_chain,
@@ -9025,6 +9049,13 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getextrema",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-png-without-idat",
+            "scenario_inline_image": "png-no-idat",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "save",
             "requirement_suffix": "format.png",
             "name": "opened-rgb",
@@ -9043,6 +9074,13 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "histogram",
+            "requirement_suffix": "mode.rgb",
+            "name": "opened-png-without-idat",
+            "scenario_inline_image": "png-no-idat",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
             "requirement_suffix": "parameter.mask",
             "name": "mask-size-mismatch",
             "mode": "RGB",
@@ -9056,6 +9094,14 @@ def build_nuanced_cases(
             "name": "bad-mask-mode",
             "mode": "RGB",
             "mask_mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "parameter.mask",
+            "name": "opened-png-without-idat-mask",
+            "mode": "RGB",
+            "scenario_inline_mask_image": "png-no-idat",
         },
         {
             "surface": "PIL.Image.Image",
@@ -11289,6 +11335,7 @@ def build_nuanced_cases(
                 scenario_noise_seed=spec.get("seed"),
                 scenario_asset=spec.get("scenario_asset"),
                 scenario_inline_image=spec.get("scenario_inline_image"),
+                scenario_inline_mask_image=spec.get("scenario_inline_mask_image"),
                 scenario_exif_variant=spec.get("exif_variant"),
                 scenario_chain=spec.get("chain"),
                 scenario_observe_result=spec.get("observe_result"),
