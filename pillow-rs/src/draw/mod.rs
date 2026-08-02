@@ -23,6 +23,84 @@ pub struct Draw {
     orig_mode: Option<String>,
 }
 
+/// Host-neutral coordinate input for ImageDraw point-based primitives.
+#[derive(Debug, Clone)]
+pub enum DrawPointsInput {
+    /// Flat `x0, y0, x1, y1, ...` values.
+    Flat(Vec<i32>),
+    /// Nested `(x, y)` point values.
+    Nested(Vec<Vec<i32>>),
+    /// A value that could not be represented as either supported sequence.
+    Invalid,
+}
+
+fn normalize_draw_points(
+    input: DrawPointsInput,
+    allow_short: bool,
+) -> Result<Vec<(i32, i32)>, PilError> {
+    let error =
+        || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    match input {
+        DrawPointsInput::Flat(values) => {
+            if allow_short && values.len() < 4 {
+                if values.len() < 3 {
+                    return Ok(Vec::new());
+                }
+                return Err(error());
+            }
+            if values.len() < 4 || values.len() % 2 != 0 {
+                return Err(error());
+            }
+            Ok(values
+                .chunks_exact(2)
+                .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::Nested(values) => {
+            if values.len() < 2 {
+                if allow_short {
+                    return Ok(Vec::new());
+                }
+                return Err(error());
+            }
+            if values.iter().any(|point| point.len() != 2) {
+                return Err(error());
+            }
+            Ok(values
+                .into_iter()
+                .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::Invalid => Err(error()),
+    }
+}
+
+fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>, PilError> {
+    let error =
+        || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    match input {
+        DrawPointsInput::Flat(values) => {
+            if values.len() < 2 || values.len() % 2 != 0 {
+                return Err(error());
+            }
+            Ok(values
+                .chunks_exact(2)
+                .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::Nested(values) => {
+            if values.iter().any(|point| point.len() != 2) {
+                return Err(error());
+            }
+            Ok(values
+                .into_iter()
+                .map(|point| (point[0], point[1]))
+                .collect())
+        }
+        DrawPointsInput::Invalid => Err(error()),
+    }
+}
+
 /// Host-neutral `ImageDraw.regular_polygon` bounding-circle input.
 #[derive(Debug, Clone, Copy)]
 pub enum RegularPolygonCircle {
@@ -177,6 +255,20 @@ impl Draw {
         Ok(())
     }
 
+    /// Normalizes and draws a Python-facing line coordinate sequence.
+    pub fn polyline_with_input(
+        &mut self,
+        input: DrawPointsInput,
+        fill: (u8, u8, u8, u8),
+        width: u32,
+    ) -> Result<(), PilError> {
+        let points = normalize_draw_points(input, true)?;
+        if points.len() < 2 {
+            return Ok(());
+        }
+        self.polyline(&points, fill, width)
+    }
+
     /// Draws a rectangle bounded by `(x0, y0, x1, y1)`.
     ///
     /// `fill` paints the interior when present. `outline` paints the border
@@ -279,6 +371,18 @@ impl Draw {
         Ok(())
     }
 
+    /// Normalizes and draws a Python-facing polygon coordinate sequence.
+    pub fn polygon_with_input(
+        &mut self,
+        input: DrawPointsInput,
+        fill: Option<(u8, u8, u8, u8)>,
+        outline: Option<(u8, u8, u8, u8)>,
+        width: u32,
+    ) -> Result<(), PilError> {
+        let points = normalize_draw_points(input, false)?;
+        self.polygon(&points, fill, outline, width)
+    }
+
     /// Draws a regular polygon from Pillow's bounding-circle representation.
     ///
     /// Vertex generation, Pillow's two-decimal rounding, and side-count
@@ -363,6 +467,16 @@ impl Draw {
             },
         );
         Ok(())
+    }
+
+    /// Normalizes and draws a Python-facing point coordinate sequence.
+    pub fn point_with_input(
+        &mut self,
+        input: DrawPointsInput,
+        fill: (u8, u8, u8, u8),
+    ) -> Result<(), PilError> {
+        let points = normalize_draw_point_input(input)?;
+        self.point(&points, fill)
     }
 
     /// Draws a bitmap mask at `(x, y)` using `fill`.

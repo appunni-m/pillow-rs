@@ -2549,6 +2549,16 @@ pub struct PyDraw {
     draw: pillow_rs::Draw,
 }
 
+fn draw_points_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawPointsInput {
+    if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
+        return pillow_rs::DrawPointsInput::Nested(points);
+    }
+    if let Ok(values) = xy.extract::<Vec<i32>>() {
+        return pillow_rs::DrawPointsInput::Flat(values);
+    }
+    pillow_rs::DrawPointsInput::Invalid
+}
+
 fn extract_draw_points(xy: &Bound<'_, PyAny>) -> PyResult<Vec<(i32, i32)>> {
     if let Ok(points) = xy.extract::<Vec<(i32, i32)>>() {
         return Ok(points);
@@ -2582,9 +2592,11 @@ impl PyDraw {
         width: Option<u32>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts = extract_draw_points(xy)?;
+        let points = draw_points_input_from_python(xy);
         let w = width.map_or(1, |w| if w > 0 { w } else { 1 });
-        self.draw.polyline(&pts, color, w).map_err(map_error)
+        self.draw
+            .polyline_with_input(points, color, w)
+            .map_err(map_error)
     }
 
     fn rectangle(
@@ -2705,7 +2717,7 @@ impl PyDraw {
 
     fn polygon(
         &mut self,
-        xy: Vec<Vec<i32>>,
+        xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         outline: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
@@ -2720,25 +2732,21 @@ impl PyDraw {
         } else {
             None
         };
-        let pts: Vec<(i32, i32)> = xy
-            .into_iter()
-            .map(|v| {
-                if v.len() >= 2 {
-                    (v[0], v[1])
-                } else {
-                    (v[0], v[0])
-                }
-            })
-            .collect();
         self.draw
-            .polygon(&pts, fill_color, out_color, width.unwrap_or(1))
+            .polygon_with_input(
+                draw_points_input_from_python(xy),
+                fill_color,
+                out_color,
+                width.unwrap_or(1),
+            )
             .map_err(map_error)
     }
 
     fn point(&mut self, xy: &Bound<'_, PyAny>, fill: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
         let color = self.color(fill)?;
-        let pts = extract_draw_points(xy)?;
-        self.draw.point(&pts, color).map_err(map_error)
+        self.draw
+            .point_with_input(draw_points_input_from_python(xy), color)
+            .map_err(map_error)
     }
 
     fn shape(
