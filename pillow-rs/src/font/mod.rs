@@ -49,6 +49,26 @@ pub struct ImageFontVariationAxis {
     pub name: Vec<u8>,
 }
 
+/// A Pillow-compatible scalar from a font bounding box.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageFontBBoxValue {
+    /// An integral coordinate is exposed as an integer.
+    Integer(i64),
+    /// A non-integral coordinate remains a floating-point value.
+    Float(f64),
+}
+
+/// Normalizes font bounding-box coordinates to Pillow's scalar types.
+pub fn normalize_font_bbox(bbox: (f64, f64, f64, f64)) -> [ImageFontBBoxValue; 4] {
+    [bbox.0, bbox.1, bbox.2, bbox.3].map(|value| {
+        if value.fract() == 0.0 {
+            ImageFontBBoxValue::Integer(value as i64)
+        } else {
+            ImageFontBBoxValue::Float(value)
+        }
+    })
+}
+
 /// Optional Pillow `FreeTypeFont` text-layout/render arguments.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ImageFontTextOptions {

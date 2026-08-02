@@ -491,14 +491,7 @@ class Image:
         has 226 colors (678 bytes), while an encoded or explicitly attached
         palette may retain trailing black entries.
         """
-        if rawmode is None:
-            rawmode = self._rust_image.palette_mode()
-        # Pillow's C getpalette accepts RGB/RGBA/RGBX and R/G/B selectors and
-        # raises "unrecognized raw mode" for everything else.
-        p = self._rust_image.getpalette_rawmode(rawmode)
-        if p is None and self.mode in ("P", "PA"):
-            return []
-        return list(p) if p is not None else None
+        return self._rust_image.getpalette_with_input(rawmode)
 
     def getxmp(self):
         """Return XMP metadata. Returns empty dict."""
