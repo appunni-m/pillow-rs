@@ -11972,6 +11972,17 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
+            "name": "l-float-error",
+            "mode": "L",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(1.25),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
             "name": "invalid-component-count",
             "mode": "RGB",
             "values": {
