@@ -53,6 +53,14 @@ def bytes_literal(value: list[int]) -> dict[str, Any]:
     return {"kind": "bytes", "value": value}
 
 
+def text_repeat_literal(text: str, repeat: int) -> dict[str, Any]:
+    """Keep large text boundary inputs compact and source-neutral."""
+
+    if repeat < 1:
+        raise ValueError("text repeat must be positive")
+    return literal({"protocol": "text-repeat", "text": text, "repeat": repeat})
+
+
 def outline_literal(*, curve: bool = False, empty: bool = False) -> dict[str, Any]:
     """Build a real public ``ImageDraw.Outline`` input for shape parity."""
 
@@ -3144,6 +3152,13 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.text",
             "name": "empty-default-route",
             "values": {"text": literal("")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.text",
+            "name": "oversized-text-error",
+            "values": {"text": text_repeat_literal("A", 1_000_001)},
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",

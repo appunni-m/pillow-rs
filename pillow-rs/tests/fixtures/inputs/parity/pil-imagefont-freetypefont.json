@@ -4096,6 +4096,66 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.oversized-text-error",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmask2",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmask2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": {
+                "protocol": "text-repeat",
+                "text": "A",
+                "repeat": 1000001
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.sbit-cbdt-stroked",
       "surface": "PIL.ImageFont.FreeTypeFont",
       "operation": "getmask2",
