@@ -8930,6 +8930,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-rgb-270-expand",
+            "scenario_asset": "image/rgb-small.png",
+            "values": {"angle": literal(270), "expand": literal(True)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "transpose",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",

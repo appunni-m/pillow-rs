@@ -52320,6 +52320,62 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.rotate.nuanced.opened-rgb-270-expand",
+      "surface": "PIL.Image.Image",
+      "operation": "rotate",
+      "covers": [
+        "PIL.Image.Image.rotate.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "rotate",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "angle": {
+              "kind": "literal",
+              "value": 270
+            },
+            "expand": {
+              "kind": "literal",
+              "value": true
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.transpose.nuanced.opened-rgb",
       "surface": "PIL.Image.Image",
       "operation": "transpose",
