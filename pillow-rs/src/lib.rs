@@ -175,6 +175,7 @@ pub use crate::font::validate_transposed_length;
 pub use crate::image::ChannelSelector;
 pub use crate::image::ExifCompatFields;
 pub use crate::image::Image;
+pub use crate::image::ImageInfoValue;
 pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;

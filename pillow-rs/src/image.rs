@@ -159,6 +159,28 @@ pub enum PaletteTransparency {
     Table(Vec<u8>),
 }
 
+/// Host-neutral values exposed through Pillow's compatibility `Image.info`
+/// mapping.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImageInfoValue {
+    /// A scalar integer value.
+    Integer(i64),
+    /// A scalar floating-point value.
+    Float(f64),
+    /// A text value.
+    String(String),
+    /// An opaque byte value.
+    Bytes(Vec<u8>),
+    /// A list of integer values.
+    IntegerList(Vec<i64>),
+    /// A list of floating-point values.
+    FloatList(Vec<f64>),
+    /// A tuple of integer values.
+    IntegerTuple(Vec<i64>),
+    /// A nested mapping.
+    Object(Vec<(String, ImageInfoValue)>),
+}
+
 /// Materialized image storage with retained codec and palette metadata.
 #[derive(Debug, Clone)]
 pub struct LoadedData {
@@ -2510,6 +2532,101 @@ impl Image {
         transparent_index
             .map(PaletteTransparency::Index)
             .or_else(|| Some(PaletteTransparency::Table(alpha)))
+    }
+
+    /// Returns the pending transparency value in the shape exposed by
+    /// Pillow's `Image.info` mapping.
+    pub fn pending_transparency_info(&self) -> Option<ImageInfoValue> {
+        match self.pending_palette_transparency()? {
+            PaletteTransparency::Index(index) => Some(ImageInfoValue::Integer(i64::from(index))),
+            PaletteTransparency::Table(alpha) => Some(ImageInfoValue::Bytes(alpha)),
+        }
+    }
+
+    /// Returns compatibility metadata that belongs in Pillow's `Image.info`.
+    ///
+    /// The format defaults mirror the Python compatibility surface used by
+    /// this crate. Keeping their selection beside the source format and the
+    /// pending palette metadata makes copies and every binding observe the
+    /// same rules without duplicating format branches in host code.
+    pub fn compatibility_info(&self) -> Vec<(String, ImageInfoValue)> {
+        let mut fields = match self.source_format() {
+            Some(ImageFormat::Bmp) => vec![
+                (
+                    "dpi".to_owned(),
+                    ImageInfoValue::FloatList(vec![96.01194815354799, 96.01194815354799]),
+                ),
+                ("compression".to_owned(), ImageInfoValue::Integer(0)),
+            ],
+            Some(ImageFormat::Gif) => vec![
+                (
+                    "version".to_owned(),
+                    ImageInfoValue::Object(vec![
+                        (
+                            "kind".to_owned(),
+                            ImageInfoValue::String("bytes".to_owned()),
+                        ),
+                        (
+                            "encoding".to_owned(),
+                            ImageInfoValue::String("base64".to_owned()),
+                        ),
+                        (
+                            "data".to_owned(),
+                            ImageInfoValue::String("R0lGODdh".to_owned()),
+                        ),
+                    ]),
+                ),
+                ("background".to_owned(), ImageInfoValue::Integer(0)),
+            ],
+            Some(ImageFormat::Tiff) => vec![
+                (
+                    "compression".to_owned(),
+                    ImageInfoValue::String("raw".to_owned()),
+                ),
+                ("dpi".to_owned(), ImageInfoValue::IntegerList(vec![1, 1])),
+                (
+                    "resolution".to_owned(),
+                    ImageInfoValue::IntegerList(vec![1, 1]),
+                ),
+            ],
+            Some(ImageFormat::WebP) => vec![
+                ("loop".to_owned(), ImageInfoValue::Integer(1)),
+                (
+                    "background".to_owned(),
+                    ImageInfoValue::IntegerList(vec![255, 255, 255, 255]),
+                ),
+                ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+                ("duration".to_owned(), ImageInfoValue::Integer(0)),
+            ],
+            _ => Vec::new(),
+        };
+        if let Some(transparency) = self.pending_transparency_info() {
+            fields.push(("transparency".to_owned(), transparency));
+        }
+        fields
+    }
+
+    /// Returns conversion-time transparency metadata in Pillow's public
+    /// scalar, byte-string, or tuple representation.
+    pub fn converted_transparency_info(&self, target_mode: &str) -> Option<ImageInfoValue> {
+        if matches!(target_mode, "LA" | "RGBA") && self.explicit_mode() == Some("PA") {
+            return self.pending_transparency_info();
+        }
+        let transparency = self.converted_palette_transparency(target_mode)?;
+        match transparency.as_slice() {
+            [value] => Some(ImageInfoValue::Integer(i64::from(*value))),
+            values => Some(ImageInfoValue::IntegerTuple(
+                values.iter().map(|&value| i64::from(value)).collect(),
+            )),
+        }
+    }
+
+    /// Returns conversion-time fields that should be merged into the target
+    /// image's Pillow compatibility metadata.
+    pub fn converted_compatibility_info(&self, target_mode: &str) -> Vec<(String, ImageInfoValue)> {
+        self.converted_transparency_info(target_mode)
+            .map(|value| vec![("transparency".to_owned(), value)])
+            .unwrap_or_default()
     }
 
     /// Returns the `info["transparency"]` value a Pillow `convert` to

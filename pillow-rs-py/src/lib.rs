@@ -1546,6 +1546,18 @@ impl PyImage {
         self.inner.format_name()
     }
 
+    fn compatibility_info(&self, py: Python<'_>) -> PyResult<PyObject> {
+        image_info_to_python(py, self.inner.compatibility_info())
+    }
+
+    fn converted_compatibility_info(
+        &self,
+        py: Python<'_>,
+        target_mode: &str,
+    ) -> PyResult<PyObject> {
+        image_info_to_python(py, self.inner.converted_compatibility_info(target_mode))
+    }
+
     fn __repr__(&mut self) -> String {
         match self.inner.size() {
             Ok((w, h)) => {
@@ -1877,6 +1889,39 @@ fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<
         .unwrap_or(pillow_rs::ImagingCoreBytesInput::Multiband);
     let bytes = pillow_rs::imaging_core_to_bytes(input).map_err(map_error)?;
     Ok(PyBytes::new(py, &bytes).into())
+}
+
+fn image_info_value_to_python(
+    py: Python<'_>,
+    value: pillow_rs::ImageInfoValue,
+) -> PyResult<PyObject> {
+    match value {
+        pillow_rs::ImageInfoValue::Integer(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::Float(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::String(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::Bytes(value) => Ok(PyBytes::new(py, &value).into()),
+        pillow_rs::ImageInfoValue::IntegerList(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::FloatList(value) => Ok(value.to_object(py)),
+        pillow_rs::ImageInfoValue::IntegerTuple(value) => Ok(PyTuple::new(py, value)?.into()),
+        pillow_rs::ImageInfoValue::Object(fields) => {
+            let result = PyDict::new(py);
+            for (key, value) in fields {
+                result.set_item(key, image_info_value_to_python(py, value)?)?;
+            }
+            Ok(result.into())
+        }
+    }
+}
+
+fn image_info_to_python(
+    py: Python<'_>,
+    fields: Vec<(String, pillow_rs::ImageInfoValue)>,
+) -> PyResult<PyObject> {
+    let result = PyDict::new(py);
+    for (key, value) in fields {
+        result.set_item(key, image_info_value_to_python(py, value)?)?;
+    }
+    Ok(result.into())
 }
 
 #[pyfunction]
