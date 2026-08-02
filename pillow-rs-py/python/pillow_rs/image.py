@@ -490,7 +490,12 @@ class Image:
 
         mode = self.mode
         w, h = self.size
-        colortable = None
+        colortable = list(
+            map(
+                lambda color: qRgb(*color),
+                self._rust_image.indexed_color_table(mode),
+            )
+        )
 
         if mode == "1":
             raw_data = self.tobytes("raw", "1")
@@ -500,14 +505,10 @@ class Image:
             raw_data = self.tobytes("raw", "L")
             raw_data = self._align8to32(raw_data, w, "L")
             fmt = QImage.Format_Indexed8
-            colortable = list(map(lambda i: qRgb(i, i, i), range(256)))
         elif mode == "P":
             raw_data = self.tobytes("raw", "P")
             raw_data = self._align8to32(raw_data, w, "P")
             fmt = QImage.Format_Indexed8
-            palette = self.getpalette()
-            if palette:
-                colortable = list(map(lambda i: qRgb(palette[i], palette[i+1], palette[i+2]), range(0, len(palette), 3)))
         elif mode == "RGB":
             # Match PIL: convert to RGBA, use BGRA byte order, Format_RGB32
             rgba = self.convert("RGBA")
@@ -521,7 +522,7 @@ class Image:
             return self.convert("RGBA").toqimage()
 
         qimg = QImage(raw_data, w, h, fmt)
-        if colortable:
+        if mode in ("L", "P"):
             qimg.setColorTable(colortable)
         return qimg
 
