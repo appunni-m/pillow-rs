@@ -1466,12 +1466,39 @@ class WorkflowBuilder:
                 value = enum_values[value]
             if (
                 isinstance(value, str)
+                and value == "NEAREST"
+                and self.primary_operation == "transpose"
+                and parameter_id == "method"
+            ):
+                # Pillow's Image.transpose accepts the integer Transpose enum;
+                # a resampling name is only the generic generator fallback.
+                value = 0
+            if (
+                isinstance(value, str)
                 and value in enum_values
                 and "integer" in value_types
                 and "string" not in value_types
                 and "enum" not in value_types
             ):
                 value = enum_values[value]
+            transpose_values = {
+                "FLIP_LEFT_RIGHT": 0,
+                "FLIP_TOP_BOTTOM": 1,
+                "ROTATE_90": 2,
+                "ROTATE_180": 3,
+                "ROTATE_270": 4,
+                "TRANSPOSE": 5,
+                "TRANSVERSE": 6,
+            }
+            if (
+                isinstance(value, str)
+                and value in transpose_values
+                and self.primary_operation == "transpose"
+                and parameter_id == "method"
+            ):
+                # Deprecated parameter combinations preserve symbolic enum
+                # names in the manifest; execute the public IntEnum value.
+                value = transpose_values[value]
             if value is not None:
                 return literal(value)
 
@@ -1705,6 +1732,10 @@ class WorkflowBuilder:
                 # EXTENT=1, PERSPECTIVE=2, QUAD=3, MESH=4); the generic
                 # "NEAREST" default above is a resample name and would make
                 # every canonical transform case an error-only workflow.
+                return literal(0)
+            if name == "method" and self.primary_operation == "transpose":
+                # Pillow's transpose method is an integer enum. Keep the
+                # canonical input public and valid for both oracle and target.
                 return literal(0)
             return literal("NEAREST")
         if name in {"args"}:
@@ -5730,6 +5761,18 @@ def build_nuanced_cases(
                 "method": literal(0),
                 "data": literal([1, 0, 0, 0, 1, 0]),
                 "fillcolor": literal([10, 20, 30]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "malformed-mesh-entry",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([[[0, 0, 6, 6]]]),
             },
         },
         {
@@ -10171,7 +10214,7 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
             "scenario_asset": "image/rgb-small.png",
-            "values": {"method": literal("NEAREST")},
+            "values": {"method": literal(0)},
         },
         {
             "surface": "PIL.Image.Image",

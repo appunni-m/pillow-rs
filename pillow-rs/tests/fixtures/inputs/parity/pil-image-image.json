@@ -27932,6 +27932,7 @@
         "PIL.Image.Image.transpose.behavior.default",
         "PIL.Image.Image.transpose.parameter.method",
         "PIL.Image.Image.transpose.mode.rgb",
+        "PIL.Image.Image.transpose.parameter-combination.legacy-001",
         "PIL.Image.Image.transpose.performance.standard"
       ],
       "target_profiles": [
@@ -27973,7 +27974,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -28028,7 +28029,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -28083,7 +28084,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -28138,7 +28139,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -28193,7 +28194,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }
@@ -28248,62 +28249,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
-            }
-          }
-        }
-      ],
-      "observations": [
-        "call"
-      ]
-    },
-    {
-      "case_id": "PIL.Image.Image.transpose.parameter-combination.legacy-001",
-      "surface": "PIL.Image.Image",
-      "operation": "transpose",
-      "covers": [
-        "PIL.Image.Image.transpose.parameter-combination.legacy-001"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image-1",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "RGB"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                16,
-                16
-              ]
-            },
-            "color": {
-              "kind": "literal",
               "value": 0
-            }
-          }
-        },
-        {
-          "step_id": "call",
-          "surface": "PIL.Image.Image",
-          "operation": "transpose",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-image-1"
-          },
-          "arguments": {
-            "method": {
-              "kind": "literal",
-              "value": "FLIP_LEFT_RIGHT"
             }
           }
         }
@@ -28358,7 +28304,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "FLIP_TOP_BOTTOM"
+              "value": 1
             }
           }
         }
@@ -28413,7 +28359,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "ROTATE_90"
+              "value": 2
             }
           }
         }
@@ -28468,7 +28414,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "ROTATE_180"
+              "value": 3
             }
           }
         }
@@ -28523,7 +28469,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "ROTATE_270"
+              "value": 4
             }
           }
         }
@@ -28578,7 +28524,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "TRANSPOSE"
+              "value": 5
             }
           }
         }
@@ -28633,7 +28579,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "TRANSVERSE"
+              "value": 6
             }
           }
         }
@@ -32019,6 +31965,81 @@
       "observations": [
         "call",
         "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.malformed-mesh-entry",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 4
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  [
+                    0,
+                    0,
+                    6,
+                    6
+                  ]
+                ]
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
       ]
     },
     {
@@ -56643,7 +56664,7 @@
           "arguments": {
             "method": {
               "kind": "literal",
-              "value": "NEAREST"
+              "value": 0
             }
           }
         }

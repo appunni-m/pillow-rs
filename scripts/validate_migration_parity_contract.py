@@ -656,6 +656,10 @@ def _literal_matches(value: Any, declared: list[str]) -> bool:
         return True
     if actual == "integer" and "number" in declared:
         return True
+    # Python IntEnum values serialize as integers in the input language even
+    # though the reflected signature exposes the enum type.
+    if actual == "integer" and "enum" in declared:
+        return True
     if actual == "string" and "enum" in declared:
         return True
     if actual == "mapping" and ("record" in declared or "any_json" in declared):

@@ -153,32 +153,20 @@ fn convert_palette_input_from_python(
 
 fn transform_data_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> PyResult<Option<pillow_rs::TransformData>> {
+) -> Option<pillow_rs::TransformData> {
     let Some(value) = value else {
-        return Ok(None);
+        return None;
     };
     if let Ok(matrix) = value.extract::<Vec<f64>>() {
-        return Ok(Some(pillow_rs::TransformData::Affine(matrix)));
+        return Some(pillow_rs::TransformData::Affine(matrix));
     }
     if let Ok(mesh) = value.extract::<Vec<(Vec<f64>, Vec<f64>)>>() {
-        return Ok(Some(pillow_rs::TransformData::Mesh(mesh)));
+        return Some(pillow_rs::TransformData::Mesh(mesh));
     }
     if let Ok(mesh) = value.extract::<Vec<Vec<Vec<f64>>>>() {
-        let mesh = mesh
-            .into_iter()
-            .map(|item| {
-                if item.len() == 2 {
-                    Ok((item[0].clone(), item[1].clone()))
-                } else {
-                    Err(PyTypeError::new_err(
-                        "mesh entries must contain a bbox and quad",
-                    ))
-                }
-            })
-            .collect::<PyResult<Vec<_>>>()?;
-        return Ok(Some(pillow_rs::TransformData::Mesh(mesh)));
+        return Some(pillow_rs::TransformData::RawMesh(mesh));
     }
-    Err(PyTypeError::new_err("transform data must be a sequence"))
+    Some(pillow_rs::TransformData::Invalid)
 }
 
 fn transform_fill_from_python(
@@ -1039,8 +1027,8 @@ impl PyImage {
     }
 
     fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>) -> PyResult<()> {
-        let input = if let Ok(mask) = alpha.downcast::<PyImage>() {
-            pillow_rs::PutAlphaInput::Image(mask.borrow().inner.clone())
+        let input = if let Some(mask) = image_from_python(alpha) {
+            pillow_rs::PutAlphaInput::Image(mask)
         } else if let Ok(value) = alpha.extract::<i64>() {
             pillow_rs::PutAlphaInput::Integer(value)
         } else {
@@ -1222,7 +1210,7 @@ impl PyImage {
         fill: Option<i32>,
         fillcolor: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let data = transform_data_from_python(data)?;
+        let data = transform_data_from_python(data);
         let fillcolor = transform_fill_from_python(fillcolor)?;
         self.inner
             .transform_public(
