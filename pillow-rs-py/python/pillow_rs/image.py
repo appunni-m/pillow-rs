@@ -257,48 +257,7 @@ class Image:
         reducing_gap=None,
     ) -> "Image":
         del reducing_gap
-        # Pillow accepts only integer resample values 0..5. Our public API
-        # exposes the name strings as the default, so accept the six known
-        # names and reject every other string/int with Pillow's error.
-        if resample is None:
-            resample = Resampling.BICUBIC_INT
-        if isinstance(resample, str):
-            names = {
-                "NEAREST": 0,
-                "LANCZOS": 1,
-                "BILINEAR": 2,
-                "BICUBIC": 3,
-                "BOX": 4,
-                "HAMMING": 5,
-            }
-            if resample not in names:
-                raise ValueError(
-                    f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
-                    "Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), "
-                    "Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or "
-                    "Image.Resampling.HAMMING (5)"
-                )
-            resample = names[resample]
-        if not isinstance(resample, int):
-            raise ValueError(
-                f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
-                "Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), "
-                "Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or "
-                "Image.Resampling.HAMMING (5)"
-            )
-        if resample not in (0, 1, 2, 3, 4, 5):
-            raise ValueError(
-                f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
-                "Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), "
-                "Image.Resampling.BICUBIC (3), Image.Resampling.BOX (4) or "
-                "Image.Resampling.HAMMING (5)"
-            )
-        resample = Resampling.from_int(resample)
-        # Ensure size is a tuple (JSON deserialization may produce a list)
-        size = tuple(size)
-        source = self if box is None else self.crop(tuple(box))
-        rust_image = source._rust_image.resize(size, resample)
-        return Image(rust_image)
+        return Image(self._rust_image.resize(size, resample, box))
 
     def crop(self, box: Optional[Tuple[int, int, int, int]] = None) -> "Image":
         return Image(self._rust_image.crop(box))
@@ -443,14 +402,6 @@ class Image:
     ) -> None:
         """Scale image to fit within size. Aspect ratio handled in Rust."""
         del reducing_gap
-        # Pillow returns immediately for an all-zero target, but its
-        # single-zero aspect-ratio path raises the native division error.
-        if size[0] == 0 and size[1] == 0:
-            return None
-        if size[0] <= 0 or size[1] <= 0:
-            raise ZeroDivisionError("division by zero")
-        if isinstance(resample, int):
-            resample = Resampling.from_int(resample)
         self._rust_image.thumbnail(size, resample)
 
     def tobytes(self, encoder_name: str = "raw", *args) -> bytes:

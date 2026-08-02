@@ -23,6 +23,7 @@ fn err(e: pillow_rs::PilError) -> JsValue {
         pillow_rs::PilError::IndexError(_) => "IndexError",
         pillow_rs::PilError::KeyError(_) | pillow_rs::PilError::UnsupportedLibraqm => "KeyError",
         pillow_rs::PilError::ValueError(_) => "ValueError",
+        pillow_rs::PilError::ZeroDivisionError(_) => "ZeroDivisionError",
         pillow_rs::PilError::TypeError(_) => "TypeError",
         pillow_rs::PilError::SystemError(_) => "SystemError",
         pillow_rs::PilError::SyntaxError(_) => "SyntaxError",
@@ -141,15 +142,16 @@ impl Image {
     // Transforms
     #[wasm_bindgen(js_name = "resize")]
     pub fn resize(&self, w: u32, h: u32, f: Option<String>) -> Result<Image, JsValue> {
+        let filter = f.map(pillow_rs::ResampleInput::Name);
         self.inner
-            .resize((w, h), f.as_deref())
+            .resize((i64::from(w), i64::from(h)), filter, None)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
     #[wasm_bindgen(js_name = "crop")]
     pub fn crop(&self, l: u32, t: u32, r: u32, b: u32) -> Result<Image, JsValue> {
         self.inner
-            .crop_box(l, t, r, b)
+            .crop_unsigned((l, t, r, b))
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -598,7 +600,9 @@ impl Image {
     }
     #[wasm_bindgen(js_name = "thumbnail")]
     pub fn thumb(&mut self, w: u32, h: u32) -> Result<(), JsValue> {
-        self.inner.thumbnail((w, h), None).map_err(err)
+        self.inner
+            .thumbnail((i64::from(w), i64::from(h)), None)
+            .map_err(err)
     }
 
     // Bookkeeping

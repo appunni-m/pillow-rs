@@ -69,6 +69,22 @@ fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> 
     }
 }
 
+fn resample_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<Option<pillow_rs::ResampleInput>> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    if let Ok(code) = value.extract::<i64>() {
+        return Ok(Some(pillow_rs::ResampleInput::Code(code)));
+    }
+    if let Ok(name) = value.extract::<String>() {
+        return Ok(Some(pillow_rs::ResampleInput::Name(name)));
+    }
+    let display = value.str()?.to_string();
+    Ok(Some(pillow_rs::ResampleInput::Name(display)))
+}
+
 fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
     use pillow_rs::StatValue;
 
@@ -292,10 +308,17 @@ impl PyImage {
         }
     }
 
-    fn resize(&self, size: (u32, u32), resample: Option<String>) -> PyResult<PyImage> {
+    #[pyo3(signature = (size, resample=None, box_coords=None))]
+    fn resize(
+        &self,
+        size: (i64, i64),
+        resample: Option<&Bound<'_, PyAny>>,
+        box_coords: Option<(i32, i32, i32, i32)>,
+    ) -> PyResult<PyImage> {
+        let resample = resample_input_from_python(resample)?;
         let rs = self
             .inner
-            .resize(size, resample.as_deref())
+            .resize(size, resample, box_coords)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -599,11 +622,10 @@ impl PyImage {
         ))
     }
 
-    fn thumbnail(&mut self, size: (u32, u32), resample: Option<String>) -> PyResult<()> {
-        let filter = resample
-            .as_deref()
-            .and_then(|s| pillow_rs::parse_resample(Some(s)).ok());
-        self.inner.thumbnail(size, filter).map_err(map_error)
+    #[pyo3(signature = (size, resample=None))]
+    fn thumbnail(&mut self, size: (i64, i64), resample: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+        let resample = resample_input_from_python(resample)?;
+        self.inner.thumbnail(size, resample).map_err(map_error)
     }
 
     fn quantize(
@@ -1445,6 +1467,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::SyntaxError(msg) => pyo3::exceptions::PySyntaxError::new_err(msg),
         PilError::SystemError(msg) => pyo3::exceptions::PySystemError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),
+        PilError::ZeroDivisionError(msg) => pyo3::exceptions::PyZeroDivisionError::new_err(msg),
         // Pillow reports deferred decoder failures (for example, a valid PNG
         // header whose image payload is missing) as OSError from Image.load.
         // Keep the Rust codec error message while preserving that public

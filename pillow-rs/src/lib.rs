@@ -220,7 +220,9 @@ pub use crate::ops::module_fns::merge as image_merge;
 pub use crate::ops::module_fns::radial_gradient as image_radial_gradient;
 pub use crate::ops::param_filters::color3dlut_repr;
 pub use crate::ops::paste::PasteSource;
+pub use crate::ops::resize::ResampleInput;
 pub use crate::ops::resize::parse_resample;
+pub use crate::ops::resize::parse_resample_input;
 pub use crate::ops::utils::align_row_to_32;
 pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]
