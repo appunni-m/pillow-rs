@@ -70,6 +70,71 @@ def load_coverage_plans(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]],
     return plans, paths
 
 
+def scope_coverage_plans(
+    plans: list[dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+    *,
+    case_ids: set[str] | None = None,
+    operation: str | None = None,
+) -> tuple[list[dict[str, Any]], set[str]]:
+    """Restrict plans to an input-only operation or explicit case selection.
+
+    Coverage plans are intentionally broad so the canonical lane can measure
+    every declared component.  A scoped lane must retain the same manifest
+    cases and workflow runner while avoiding unrelated plans; this helper
+    copies only the selected case and requirement IDs into each retained plan.
+    Scoped runs also omit plan-level native commands because those commands
+    are component exercises, not attributable to one public operation.
+    """
+
+    available_ids = {
+        case_id
+        for plan in plans
+        for case_id in plan["selectors"]["parity_case_ids"]
+    }
+    if case_ids is not None:
+        missing = case_ids - cases_by_id.keys()
+        if missing:
+            raise ValueError(f"coverage selects missing parity cases: {sorted(missing)[:5]}")
+
+    selected_ids = available_ids
+    scoped = operation is not None or case_ids is not None
+    if operation is not None:
+        prefix = f"{operation}."
+        selected_ids = {case_id for case_id in selected_ids if case_id.startswith(prefix)}
+    if case_ids is not None:
+        selected_ids &= case_ids
+    if scoped and not selected_ids:
+        selector = operation or ", ".join(sorted(case_ids or set()))
+        raise ValueError(f"coverage scope selected no active parity cases: {selector}")
+
+    if not scoped:
+        return plans, selected_ids
+
+    scoped_plans: list[dict[str, Any]] = []
+    for plan in plans:
+        plan_case_ids = [
+            case_id
+            for case_id in plan["selectors"]["parity_case_ids"]
+            if case_id in selected_ids
+        ]
+        if not plan_case_ids:
+            continue
+        scoped_plan = dict(plan)
+        selectors = dict(plan["selectors"])
+        selectors["parity_case_ids"] = plan_case_ids
+        selectors["command_ids"] = []
+        scoped_plan["selectors"] = selectors
+        scoped_plan["covers"] = [
+            requirement
+            for requirement in plan["covers"]
+            if requirement in selected_ids
+            or (operation is not None and requirement.startswith(f"{operation}."))
+        ]
+        scoped_plans.append(scoped_plan)
+    return scoped_plans, selected_ids
+
+
 def coverage_identity(
     manifest_path: Path,
     input_paths: list[str],
@@ -353,14 +418,20 @@ def run(args: argparse.Namespace) -> int:
     plans, plan_paths = load_coverage_plans(manifest)
     cases, case_inputs = load_cases(manifest, case_ids=None, surface=None)
     cases_by_id = {case["case_id"]: case for case in cases}
-    selected_ids = {
-        case_id
-        for plan in plans
-        for case_id in plan["selectors"]["parity_case_ids"]
+    operation_paths = {
+        operation["source"]["path"]
+        for surface in manifest["surfaces"]
+        for operation in surface["operations"]
     }
-    missing = selected_ids - cases_by_id.keys()
-    if missing:
-        raise ValueError(f"coverage selects missing parity cases: {sorted(missing)[:5]}")
+    if args.operation is not None and args.operation not in operation_paths:
+        raise ValueError(f"unknown public operation: {args.operation}")
+    plans, selected_ids = scope_coverage_plans(
+        plans,
+        cases_by_id,
+        case_ids=set(args.case_id) if args.case_id else None,
+        operation=args.operation,
+    )
+    plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
     operation_index = build_operation_index(manifest)
     args.coverage_report.resolve().parent.mkdir(parents=True, exist_ok=True)
     cov = coverage.Coverage(
@@ -433,7 +504,8 @@ def run(args: argparse.Namespace) -> int:
     )
     command = {
         "command_id": "coverage",
-        "argv": ["make", "migration-parity-coverage"],
+        "argv": ["make", "migration-parity-coverage"]
+        + ([f"MIGRATION_COVERAGE_OPERATION={args.operation}"] if args.operation else []),
         "cwd": ".",
         "timeout_seconds": 3600,
     }
@@ -490,6 +562,8 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--operation")
+    parser.add_argument("--case-id", action="append")
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--coverage-report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument(
