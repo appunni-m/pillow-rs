@@ -1869,6 +1869,16 @@ fn eval_validate_input(value: &Bound<'_, PyAny>) -> PyResult<()> {
     pillow_rs::validate_eval_input(kind).map_err(map_error)
 }
 
+#[pyfunction]
+fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<PyObject> {
+    let input = values
+        .extract::<Vec<i64>>()
+        .map(pillow_rs::ImagingCoreBytesInput::Scalars)
+        .unwrap_or(pillow_rs::ImagingCoreBytesInput::Multiband);
+    let bytes = pillow_rs::imaging_core_to_bytes(input).map_err(map_error)?;
+    Ok(PyBytes::new(py, &bytes).into())
+}
+
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
@@ -1973,6 +1983,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
     m.add_function(wrap_pyfunction!(make_lut, m)?)?;
     m.add_function(wrap_pyfunction!(eval_validate_input, m)?)?;
+    m.add_function(wrap_pyfunction!(imaging_core_to_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
 
     Ok(())
@@ -1985,10 +1996,7 @@ pub struct PyFont {
     inner: pillow_rs::FreeTypeFont,
 }
 
-fn font_bbox_value_to_python(
-    py: Python<'_>,
-    value: pillow_rs::ImageFontBBoxValue,
-) -> PyObject {
+fn font_bbox_value_to_python(py: Python<'_>, value: pillow_rs::ImageFontBBoxValue) -> PyObject {
     match value {
         pillow_rs::ImageFontBBoxValue::Integer(value) => value.to_object(py),
         pillow_rs::ImageFontBBoxValue::Float(value) => value.to_object(py),

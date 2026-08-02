@@ -32,9 +32,7 @@ class ImagingCore:
         ``bytes(ImagingCore)`` is only meaningful for a one-band sequence;
         Pillow does not flatten multiband tuples implicitly.
         """
-        if all(isinstance(value, int) for value in self._values):
-            return bytes(self._values)
-        raise TypeError("cannot convert multiband ImagingCore to bytes")
+        return _core.imaging_core_to_bytes(self._values)
 
     def tobytes(self):
         return bytes(self)

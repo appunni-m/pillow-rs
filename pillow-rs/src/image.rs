@@ -38,6 +38,31 @@ use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+
+/// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
+#[derive(Debug, Clone)]
+pub enum ImagingCoreBytesInput {
+    /// A one-band sequence of integer samples.
+    Scalars(Vec<i64>),
+    /// A multiband or otherwise non-scalar sequence.
+    Multiband,
+}
+
+/// Converts scalar `ImagingCore` samples to bytes with Pillow's errors.
+pub fn imaging_core_to_bytes(input: ImagingCoreBytesInput) -> Result<Vec<u8>, PilError> {
+    let ImagingCoreBytesInput::Scalars(values) = input else {
+        return Err(PilError::TypeError(
+            "cannot convert multiband ImagingCore to bytes".into(),
+        ));
+    };
+    values
+        .into_iter()
+        .map(|value| {
+            u8::try_from(value)
+                .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
+        })
+        .collect()
+}
 use crate::raster::{DynamicImage, GenericImageView};
 
 /// Default palette matching PIL's web/browser palette.
@@ -2357,9 +2382,7 @@ impl Image {
         &self,
         rawmode: Option<&str>,
     ) -> Result<Option<Vec<u8>>, PilError> {
-        let rawmode = rawmode
-            .or_else(|| self.palette_mode())
-            .unwrap_or("RGB");
+        let rawmode = rawmode.or_else(|| self.palette_mode()).unwrap_or("RGB");
         let palette = self.getpalette_rawmode(rawmode)?;
         if palette.is_none() && matches!(self.mode()?.as_str(), "P" | "PA") {
             return Ok(Some(Vec::new()));
