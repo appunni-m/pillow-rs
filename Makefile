@@ -22,6 +22,8 @@ REPORT       := /tmp/report.json
 TIMEOUT      := 300
 MIGRATION_PARITY_OUTPUT ?= build/migration-parity/parity-result.json
 MIGRATION_PARITY_ARGS ?=
+MIGRATION_PARITY_CASE ?= $(CASE_ID)
+MIGRATION_PARITY_CASE_OUTPUT ?= build/migration-parity/parity-case-result.json
 MIGRATION_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result.json
 MIGRATION_RUST_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result-rust.json
 MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
@@ -64,6 +66,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
+	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
@@ -225,7 +228,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
+.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -251,6 +254,22 @@ migration-parity-test: ## Run canonical input-only parity against live Pillow
 	$(PYTHON) scripts/run_migration_parity.py --output $(MIGRATION_PARITY_OUTPUT) $(MIGRATION_PARITY_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py parity $(MIGRATION_PARITY_OUTPUT); \
+	validator=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	exit $$validator
+
+migration-parity-case: ## Run one public parity case without replacing the full-suite artifact
+	@test -n "$(MIGRATION_PARITY_CASE)" || { \
+		printf "Set MIGRATION_PARITY_CASE to an active case_id.\n" >&2; \
+		exit 2; \
+	}
+	set +e; \
+	$(PYTHON) scripts/run_migration_parity.py \
+		--output $(MIGRATION_PARITY_CASE_OUTPUT) \
+		--case-id "$(MIGRATION_PARITY_CASE)" \
+		$(MIGRATION_PARITY_ARGS); \
+	status=$$?; \
+	$(PYTHON) scripts/validate_migration_parity_result.py parity $(MIGRATION_PARITY_CASE_OUTPUT); \
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
