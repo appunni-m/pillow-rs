@@ -4216,6 +4216,46 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-points-no-op",
+            "values": {
+                "xy": literal([]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "single-nested-point-no-op",
+            "values": {
+                "xy": literal([[0, 0]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "odd-flat-points-error",
+            "values": {
+                "xy": literal([0, 0, 1]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "malformed-nested-point-error",
+            "values": {
+                "xy": literal([[0]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "polygon",
             "requirement_suffix": "behavior.default",
             "name": "paired-points",
@@ -4232,6 +4272,26 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([[2, 2], [12, 8]]),
                 "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-points-error",
+            "values": {
+                "xy": literal([]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "malformed-nested-point-error",
+            "values": {
+                "xy": literal([[0], [1, 1]]),
+                "fill": literal(255),
             },
         },
         {
@@ -4475,6 +4535,36 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2, 8, 8]),
                 "fill": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-points-no-op",
+            "values": {
+                "xy": literal([]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "odd-flat-points-error",
+            "values": {
+                "xy": literal([0, 0, 1]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "malformed-nested-point-error",
+            "values": {
+                "xy": literal([[0]]),
+                "fill": literal(255),
             },
         },
         {

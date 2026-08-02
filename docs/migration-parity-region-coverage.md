@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 5f6d393d5c454d810f0a506192f85ef762ed055fda2017f306bfcb24ca597e2b
-coverage_run_id: migration-coverage-3a4deb5770174db6a090fe85c2e1e14b
+coverage_run_id: migration-coverage-0be9f6314ca44c2db6df814f79c7d399
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -61,27 +61,27 @@ Component aggregate for backlog ordering: `9822/10973` (89.5%).
 | `PIL.ImageSequence.Iterator` | `image-sequence` | 4077/4668 | 87.3% |
 | `PIL.ImageSequence.Iterator.__iter__` | `image-sequence` | 4077/4668 | 87.3% |
 | `PIL.ImageSequence.Iterator.__next__` | `image-sequence` | 4077/4668 | 87.3% |
-| `PIL.ImageDraw.Draw` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2407/2707 | 88.9% |
-| `PIL.ImageDraw.Outline` | `image-draw` | 2407/2707 | 88.9% |
+| `PIL.ImageDraw.Draw` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2431/2721 | 89.3% |
+| `PIL.ImageDraw.Outline` | `image-draw` | 2431/2721 | 89.3% |
 | `PIL.Image.Image.alpha_composite` | `image-core` | 9822/10973 | 89.5% |
 | `PIL.Image.Image.apply_transparency` | `image-core` | 9822/10973 | 89.5% |
 | `PIL.Image.Image.close` | `image-core` | 9822/10973 | 89.5% |
@@ -205,7 +205,7 @@ Component aggregate for backlog ordering: `9822/10973` (89.5%).
 | `image-core` | `pillow-rs/src/ops/analysis.rs` | 309/317 | 97.5% |
 | `image-core` | `pillow-rs-py/python/pillow_rs/image.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs-py/python/pillow_rs/operations.py` | 0/0 | n/a |
-| `image-draw` | `pillow-rs/src/draw/mod.rs` | 2407/2707 | 88.9% |
+| `image-draw` | `pillow-rs/src/draw/mod.rs` | 2431/2721 | 89.3% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
 | `image-filter` | `pillow-rs/src/ops/filter.rs` | 125/134 | 93.3% |
 | `image-filter` | `pillow-rs/src/ops/param_filters.rs` | 505/533 | 94.7% |
