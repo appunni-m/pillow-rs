@@ -141,16 +141,8 @@ class Image:
         formats: Optional[list] = None,
     ) -> "Image":
         """Open an image file. Format detection and mode handling done in Rust."""
-        if isinstance(fp, Path):
-            fp = str(fp)
-        if mode is not None and mode != "r":
-            raise ValueError(f"bad mode '{mode}'")
-        if formats is not None and not isinstance(formats, (list, tuple)):
-            raise TypeError("formats must be a list or tuple")
-        if isinstance(fp, bytes) and b"\x00" in fp:
-            raise ValueError("embedded null byte")
-        if isinstance(fp, str) and not Path(fp).exists():
-            raise FileNotFoundError(2, "No such file or directory", fp)
+        RustImage.validate_open_inputs(mode, formats)
+        RustImage.validate_open_source(fp)
         try:
             rust_image = RustImage.open(fp, formats)
         except FileNotFoundError:

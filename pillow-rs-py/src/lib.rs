@@ -68,6 +68,17 @@ fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> 
     }
 }
 
+fn map_open_path_error(path: &std::path::Path, error: std::io::Error) -> PyErr {
+    if error.kind() == std::io::ErrorKind::NotFound {
+        return pyo3::exceptions::PyFileNotFoundError::new_err((
+            error.raw_os_error().unwrap_or(2),
+            "No such file or directory",
+            path.to_string_lossy().to_string(),
+        ));
+    }
+    map_error(error.into())
+}
+
 fn resample_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<Option<pillow_rs::ResampleInput>> {
@@ -279,6 +290,39 @@ fn paste_mask_from_python(
     ))
 }
 
+fn open_mode_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::PythonOpenModeInput> {
+    let Some(value) = value else {
+        return Ok(pillow_rs::PythonOpenModeInput::None);
+    };
+    if let Ok(name) = value.extract::<String>() {
+        return Ok(pillow_rs::PythonOpenModeInput::Name(name));
+    }
+    Ok(pillow_rs::PythonOpenModeInput::Invalid(
+        value.str()?.to_string(),
+    ))
+}
+
+fn open_formats_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::PythonOpenFormatsInput> {
+    let Some(value) = value else {
+        return Ok(pillow_rs::PythonOpenFormatsInput::None);
+    };
+    if value.downcast::<PyList>().is_err() && value.downcast::<PyTuple>().is_err() {
+        return Ok(pillow_rs::PythonOpenFormatsInput::Invalid(
+            value.get_type().name()?.to_string(),
+        ));
+    }
+    match value.extract::<Vec<String>>() {
+        Ok(names) => Ok(pillow_rs::PythonOpenFormatsInput::Names(names)),
+        Err(_) => Ok(pillow_rs::PythonOpenFormatsInput::Invalid(
+            value.get_type().name()?.to_string(),
+        )),
+    }
+}
+
 fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ImageOpsMask {
     let Some(value) = value else {
         return pillow_rs::ImageOpsMask::None;
@@ -464,7 +508,7 @@ impl PyImage {
             .as_deref()
             .map(|formats| formats.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
-            let bytes = std::fs::read(path).map_err(|error| map_error(error.into()))?;
+            let bytes = std::fs::read(&path).map_err(|error| map_open_path_error(&path, error))?;
             let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })
@@ -474,6 +518,28 @@ impl PyImage {
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })
         }
+    }
+
+    #[classmethod]
+    #[pyo3(signature = (mode=None, formats=None))]
+    fn validate_open_inputs(
+        _cls: &Bound<'_, PyType>,
+        mode: Option<&Bound<'_, PyAny>>,
+        formats: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<()> {
+        pillow_rs::validate_python_open_inputs(
+            open_mode_input_from_python(mode)?,
+            open_formats_input_from_python(formats)?,
+        )
+        .map_err(map_error)
+    }
+
+    #[classmethod]
+    fn validate_open_source(_cls: &Bound<'_, PyType>, fp: &Bound<'_, PyAny>) -> PyResult<()> {
+        if let Ok(bytes) = fp.downcast::<PyBytes>() {
+            pillow_rs::validate_python_open_source_bytes(bytes.as_bytes()).map_err(map_error)?;
+        }
+        Ok(())
     }
 
     fn save(&mut self, fp: &Bound<'_, PyAny>, format: Option<String>) -> PyResult<()> {
@@ -1513,6 +1579,9 @@ fn map_error(e: PilError) -> PyErr {
         PilError::ImageError(err) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
         PilError::NotImplementedError(msg) => pyo3::exceptions::PyNotImplementedError::new_err(msg),
         PilError::UnknownFormat(msg) => pyo3::exceptions::PyValueError::new_err(msg),
+        PilError::Io(err) if err.kind() == std::io::ErrorKind::NotFound => {
+            pyo3::exceptions::PyFileNotFoundError::new_err(err.to_string())
+        }
         PilError::Io(err) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
         // AS PER DESIGN — DO NOT REMOVE: New error variants from Fix 9
         PilError::PaletteError(msg) => pyo3::exceptions::PyValueError::new_err(msg),

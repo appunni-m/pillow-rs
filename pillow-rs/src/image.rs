@@ -205,6 +205,59 @@ impl PythonNewColorInput {
     }
 }
 
+/// Host-neutral mode input for the Python `Image.open` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonOpenModeInput {
+    /// No mode override was supplied.
+    None,
+    /// A mode value extracted from the host.
+    Name(String),
+    /// A non-string host value.
+    Invalid(String),
+}
+
+/// Host-neutral format allow-list input for the Python `Image.open` wrapper.
+#[derive(Debug, Clone)]
+pub enum PythonOpenFormatsInput {
+    /// No format allow-list was supplied.
+    None,
+    /// A list or tuple of format names.
+    Names(Vec<String>),
+    /// A value that is not a list or tuple.
+    Invalid(String),
+}
+
+/// Validates the Python `Image.open` mode and format arguments.
+pub fn validate_python_open_inputs(
+    mode: PythonOpenModeInput,
+    formats: PythonOpenFormatsInput,
+) -> Result<(), PilError> {
+    match mode {
+        PythonOpenModeInput::None => {}
+        PythonOpenModeInput::Name(name) if name == "r" => {}
+        PythonOpenModeInput::Name(name) => {
+            return Err(PilError::ValueError(format!("bad mode '{name}'")));
+        }
+        PythonOpenModeInput::Invalid(value) => {
+            return Err(PilError::ValueError(format!("bad mode '{value}'")));
+        }
+    }
+    if matches!(formats, PythonOpenFormatsInput::Invalid(_)) {
+        return Err(PilError::TypeError(
+            "formats must be a list or tuple".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// Validates bytes supplied directly as a Python `Image.open` path.
+pub fn validate_python_open_source_bytes(data: &[u8]) -> Result<(), PilError> {
+    if data.contains(&0) {
+        return Err(PilError::ValueError("embedded null byte".to_owned()));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy)]
 enum FromBytesMode {
     L,
