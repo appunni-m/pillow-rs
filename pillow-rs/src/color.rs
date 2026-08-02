@@ -1163,3 +1163,25 @@ pub fn palette_getcolor_validate(
     palette.extend_from_slice(&stored);
     Ok(idx)
 }
+
+/// Host-neutral input for `ImagePalette.getcolor`.
+#[derive(Debug, Clone)]
+pub enum PaletteColorInput {
+    /// A tuple/list whose components were extracted by a binding.
+    Components(Vec<u8>),
+    /// A value that is not a tuple/list color specification. The string is
+    /// only a host-provided representation used in Pillow's error message.
+    Invalid(String),
+}
+
+/// Validates and stores a palette color from a host-neutral input.
+pub fn palette_getcolor_validate_input(
+    palette: &mut Vec<u8>,
+    color: PaletteColorInput,
+    mode: &str,
+) -> Result<usize, String> {
+    match color {
+        PaletteColorInput::Components(color) => palette_getcolor_validate(palette, &color, mode),
+        PaletteColorInput::Invalid(repr) => Err(format!("unknown color specifier: {repr}")),
+    }
+}

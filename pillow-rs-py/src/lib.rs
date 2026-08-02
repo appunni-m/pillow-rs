@@ -189,6 +189,18 @@ fn imageops_mask_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::Ima
     pillow_rs::ImageOpsMask::Invalid
 }
 
+fn image_analysis_mask_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> pillow_rs::ImageAnalysisMask {
+    let Some(value) = value else {
+        return pillow_rs::ImageAnalysisMask::None;
+    };
+    if let Some(mask) = image_from_python(value) {
+        return pillow_rs::ImageAnalysisMask::Image(mask);
+    }
+    pillow_rs::ImageAnalysisMask::Invalid
+}
+
 #[pyfunction]
 fn ops_validate_deform_resample(value: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
     let value = resample_input_from_python(value)?;
@@ -738,26 +750,24 @@ impl PyImage {
         self.inner.thumbnail(size, resample).map_err(map_error)
     }
 
+    #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None))]
     fn quantize(
         &self,
         colors: Option<i32>,
         method: Option<i32>,
         kmeans: Option<i32>,
         dither: Option<bool>,
+        palette: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let colors = colors.unwrap_or(256);
-        if !(1..=256).contains(&colors) {
-            return Err(PyValueError::new_err("bad number of colors"));
-        }
+        let palette = match palette {
+            None => pillow_rs::QuantizePalette::None,
+            Some(value) => image_from_python(value)
+                .map(pillow_rs::QuantizePalette::Image)
+                .unwrap_or(pillow_rs::QuantizePalette::Other),
+        };
         let rs = self
             .inner
-            .quantize(
-                colors as u32,
-                kmeans.unwrap_or(0).max(0) as u32,
-                None,
-                dither.unwrap_or(true),
-                method.unwrap_or(0) as u32,
-            )
+            .quantize_with_input(colors, method, kmeans, palette, dither)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -809,6 +819,13 @@ impl PyImage {
 
     fn histogram(&self) -> PyResult<Vec<u32>> {
         self.inner.histogram().map_err(map_error)
+    }
+
+    #[pyo3(signature = (mask=None))]
+    fn histogram_with_input(&self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<u32>> {
+        self.inner
+            .histogram_with_input(image_analysis_mask_from_python(mask))
+            .map_err(map_error)
     }
 
     fn histogram_with_mask(&self, mask: Option<&Bound<'_, PyImage>>) -> PyResult<Vec<u32>> {
@@ -1053,6 +1070,13 @@ impl PyImage {
 
     fn entropy(&mut self) -> PyResult<f64> {
         self.inner.entropy().map_err(map_error)
+    }
+
+    #[pyo3(signature = (mask=None))]
+    fn entropy_with_input(&mut self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<f64> {
+        self.inner
+            .entropy_with_input(image_analysis_mask_from_python(mask))
+            .map_err(map_error)
     }
 
     fn entropy_with_mask(&mut self, mask: Option<&Bound<'_, PyImage>>) -> PyResult<f64> {
@@ -3796,11 +3820,20 @@ fn getcolor(color: &str, mode: &str) -> PyResult<PyObject> {
 #[pyfunction]
 fn palette_getcolor_validate(
     palette: Vec<u8>,
-    color: Vec<u8>,
+    color: &Bound<'_, PyAny>,
     mode: &str,
 ) -> PyResult<(Vec<u8>, usize)> {
     let mut pal = palette;
-    let idx = pillow_rs::palette_getcolor_validate(&mut pal, &color, mode)
+    let repr = color.repr()?.to_string();
+    let input = if color.downcast::<PyTuple>().is_ok() || color.downcast::<PyList>().is_ok() {
+        color
+            .extract::<Vec<u8>>()
+            .map(pillow_rs::PaletteColorInput::Components)
+            .unwrap_or(pillow_rs::PaletteColorInput::Invalid(repr))
+    } else {
+        pillow_rs::PaletteColorInput::Invalid(repr)
+    };
+    let idx = pillow_rs::palette_getcolor_validate_input(&mut pal, input, mode)
         .map_err(PyValueError::new_err)?;
     Ok((pal, idx))
 }
