@@ -22,6 +22,7 @@ use pyo3::pyfunction;
 use pyo3::pymethods;
 use pyo3::pymodule;
 use pyo3::types::PyAnyMethods;
+use pyo3::types::PyBool;
 use pyo3::types::PyBytes;
 use pyo3::types::PyBytesMethods;
 use pyo3::types::PyDict;
@@ -81,6 +82,31 @@ fn resample_input_from_python(
     }
     let display = value.str()?.to_string();
     Ok(Some(pillow_rs::ResampleInput::Name(display)))
+}
+
+fn rotate_resample_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> pillow_rs::RotateResampleInput {
+    match value {
+        None => pillow_rs::RotateResampleInput::None,
+        Some(value) => value
+            .extract::<String>()
+            .map(pillow_rs::RotateResampleInput::Name)
+            .unwrap_or(pillow_rs::RotateResampleInput::Other),
+    }
+}
+
+fn rotate_expand_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> pillow_rs::RotateExpandInput {
+    match value {
+        Some(value) if value.is_instance_of::<PyBool>() => value
+            .extract::<bool>()
+            .map(pillow_rs::RotateExpandInput::Boolean)
+            .unwrap_or(pillow_rs::RotateExpandInput::Invalid),
+        None => pillow_rs::RotateExpandInput::Boolean(false),
+        Some(_) => pillow_rs::RotateExpandInput::Invalid,
+    }
 }
 
 fn transform_data_from_python(
@@ -450,23 +476,38 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    #[pyo3(signature = (angle, expand=false, fillcolor=None))]
+    #[pyo3(signature = (angle, resample=None, expand=None, center=None, translate=None, fillcolor=None))]
     fn rotate(
         &self,
         angle: f64,
-        expand: Option<bool>,
+        resample: Option<&Bound<'_, PyAny>>,
+        expand: Option<&Bound<'_, PyAny>>,
+        center: Option<&Bound<'_, PyAny>>,
+        translate: Option<&Bound<'_, PyAny>>,
         fillcolor: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let _ = fillcolor;
+        let _ = (center, translate, fillcolor);
         let rs = self
             .inner
-            .rotate(angle, expand.unwrap_or(false), None)
+            .rotate_with_input(
+                angle,
+                rotate_resample_input_from_python(resample),
+                rotate_expand_input_from_python(expand),
+                None,
+            )
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn transpose(&self, method: &str) -> PyResult<PyImage> {
-        let rs = self.inner.transpose(method).map_err(map_error)?;
+    fn transpose(&self, method: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+        let input = if let Ok(value) = method.extract::<i64>() {
+            pillow_rs::TransposeInput::Index(value)
+        } else if let Ok(value) = method.extract::<String>() {
+            pillow_rs::TransposeInput::Name(value)
+        } else {
+            pillow_rs::TransposeInput::Invalid(method.get_type().name()?.to_string())
+        };
+        let rs = self.inner.transpose_with_input(input).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -929,6 +970,17 @@ impl PyImage {
 
     fn putalpha(&mut self, alpha: u8) -> PyResult<()> {
         self.inner.putalpha(alpha).map_err(map_error)
+    }
+
+    fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>) -> PyResult<()> {
+        let input = if let Ok(mask) = alpha.downcast::<PyImage>() {
+            pillow_rs::PutAlphaInput::Image(mask.borrow().inner.clone())
+        } else if let Ok(value) = alpha.extract::<i64>() {
+            pillow_rs::PutAlphaInput::Integer(value)
+        } else {
+            pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
+        };
+        self.inner.putalpha_with_input(input).map_err(map_error)
     }
 
     fn putalpha_data(&mut self, mask: &Bound<'_, PyImage>) -> PyResult<()> {
@@ -1463,6 +1515,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::AssertionError(msg) => pyo3::exceptions::PyAssertionError::new_err(msg),
         PilError::IndexError(msg) => pyo3::exceptions::PyIndexError::new_err(msg),
         PilError::KeyError(msg) => pyo3::exceptions::PyKeyError::new_err(msg),
+        PilError::EOFError(msg) => pyo3::exceptions::PyEOFError::new_err(msg),
         PilError::UnsupportedLibraqm => {
             let message = PilError::UnsupportedLibraqm.to_string();
             pyo3::exceptions::PyKeyError::new_err(
@@ -2959,8 +3012,6 @@ impl PyDraw {
         anchor: Option<String>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
-        let sp = spacing.unwrap_or(4) as f64;
-        let mut y = xy.1;
         let options = pillow_rs::ImageFontTextOptions {
             direction,
             features,
@@ -2969,33 +3020,23 @@ impl PyDraw {
             anchor,
             ..pillow_rs::ImageFontTextOptions::default()
         };
-        for line in text.split('\n') {
-            if line.is_empty() {
-                y += sp + 10.0;
-                continue;
-            }
-            if let Some(pyfont) = font {
-                let borrowed = pyfont.borrow();
-                self.draw
-                    .text_with_options(
-                        xy.0 as i32,
-                        y as i32,
-                        line,
-                        &borrowed.inner,
-                        color,
-                        &options,
-                    )
-                    .map_err(map_error)?;
-                let (_, h) =
-                    pillow_rs::imagefont_text_bbox(&borrowed.inner, line).map_err(map_error)?;
-                y += h as f64 + sp;
-            } else {
-                return Err(pyo3::exceptions::PyNotImplementedError::new_err(
-                    "text() requires a font",
-                ));
-            }
-        }
-        Ok(())
+        let Some(pyfont) = font else {
+            return Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "text() requires a font",
+            ));
+        };
+        let borrowed = pyfont.borrow();
+        self.draw
+            .multiline_text_with_options(
+                xy.0,
+                xy.1,
+                text,
+                &borrowed.inner,
+                color,
+                f64::from(spacing.unwrap_or(4)),
+                &options,
+            )
+            .map_err(map_error)
     }
 
     /// Compute text bounding box. Loads default FreeType font if font is None.

@@ -20,13 +20,6 @@ class Draw:
         """Install the native-mode image restored by Rust core."""
         self._image._rust_image = self._draw.image
 
-    @staticmethod
-    def _text_options(anchor, direction, features, language):
-        if anchor is not None and (not isinstance(anchor, str) or len(anchor) != 2):
-            raise ValueError("anchor must be a 2 character string")
-        if direction is not None or features is not None or language is not None:
-            raise KeyError("setting text direction, language or font features is not supported without libraqm")
-
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
         self._draw.line(xy, fill, width)
         self._sync()
@@ -112,12 +105,6 @@ class Draw:
                   stroke_fill=stroke_fill, embedded_color=embedded_color)
 
     def textbbox(self, xy, text, font=None, **kwargs):
-        self._text_options(
-            kwargs.get("anchor"),
-            kwargs.get("direction"),
-            kwargs.get("features"),
-            kwargs.get("language"),
-        )
         font = self._get_font(font, kwargs.get("font_size"))
         return self._draw.textbbox(
             xy,
@@ -131,12 +118,6 @@ class Draw:
         )
 
     def textlength(self, text, font=None, **kwargs):
-        self._text_options(
-            kwargs.get("anchor"),
-            kwargs.get("direction"),
-            kwargs.get("features"),
-            kwargs.get("language"),
-        )
         font = self._get_font(font, kwargs.get("font_size"))
         return self._draw.textlength(
             str(text),
@@ -154,7 +135,6 @@ class Draw:
                            direction=None, features=None, language=None, stroke_width=0,
                            embedded_color=False, *, font_size=None):
         """Get the bounding box of multiline text."""
-        self._text_options(anchor, direction, features, language)
         font = self._get_font(font, font_size)
         return self._draw.multiline_textbbox(
             xy,
@@ -184,7 +164,6 @@ class Draw:
     def text(self, xy, text, fill=None, font=None, anchor=None, spacing=4,
              align="left", direction=None, features=None, language=None,
              stroke_width=0, stroke_fill=None, embedded_color=False):
-        self._text_options(anchor, direction, features, language)
         font = self._get_font(font)
         if hasattr(font, '_rust_font'):
             self._draw.text(

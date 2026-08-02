@@ -46,6 +46,10 @@ pub enum PilError {
     #[error("{0}")]
     KeyError(String),
 
+    /// End-of-sequence error raised when seeking beyond the available frames.
+    #[error("{0}")]
+    EOFError(String),
+
     /// Libraqm-dependent text layout options are unsupported in this build.
     ///
     /// Bindings expose this as Pillow's no-libraqm `KeyError` category for

@@ -1327,6 +1327,31 @@ impl Draw {
         self.text_with_options_inner(x, y, text, font, fill, options, true)
     }
 
+    /// Draws multiline text using the same line stepping as Pillow's public
+    /// `ImageDraw.multiline_text` path.
+    pub fn multiline_text_with_options(
+        &mut self,
+        x: f64,
+        y: f64,
+        text: &str,
+        font: &crate::font::FreeTypeFont,
+        fill: (u8, u8, u8, u8),
+        spacing: f64,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        let mut line_y = y;
+        for line in text.split('\n') {
+            if line.is_empty() {
+                line_y += spacing + 10.0;
+                continue;
+            }
+            self.text_with_options(x as i32, line_y as i32, line, font, fill, options)?;
+            let (_, height) = font.text_bbox(line)?;
+            line_y += height as f64 + spacing;
+        }
+        Ok(())
+    }
+
     fn text_with_options_inner(
         &mut self,
         x: i32,
