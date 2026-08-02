@@ -69362,6 +69362,132 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.tobytes.nuanced.rgb-rgba-raw",
+      "surface": "PIL.Image.Image",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.Image.Image.tobytes.parameter.args"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "encoder_name": {
+              "kind": "literal",
+              "value": "raw"
+            },
+            "args": {
+              "kind": "literal",
+              "value": [
+                "RGBA"
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.tobytes.nuanced.rgb-invalid-raw-mode",
+      "surface": "PIL.Image.Image",
+      "operation": "tobytes",
+      "covers": [
+        "PIL.Image.Image.tobytes.parameter.args"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "encoder_name": {
+              "kind": "literal",
+              "value": "raw"
+            },
+            "args": {
+              "kind": "literal",
+              "value": [
+                "LA"
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.tobytes.nuanced.unknown-encoder-error",
       "surface": "PIL.Image.Image",
       "operation": "tobytes",

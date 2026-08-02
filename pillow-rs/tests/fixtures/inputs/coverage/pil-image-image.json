@@ -1510,6 +1510,8 @@
           "PIL.Image.Image.remap_palette.nuanced.oversized-dest-map",
           "PIL.Image.Image.tobytes.nuanced.rgb-bgr-raw",
           "PIL.Image.Image.tobytes.nuanced.rgba-bgra-raw",
+          "PIL.Image.Image.tobytes.nuanced.rgb-rgba-raw",
+          "PIL.Image.Image.tobytes.nuanced.rgb-invalid-raw-mode",
           "PIL.Image.Image.tobytes.nuanced.unknown-encoder-error",
           "PIL.Image.Image.tobytes.nuanced.i-mode",
           "PIL.Image.Image.tobytes.nuanced.f-mode",

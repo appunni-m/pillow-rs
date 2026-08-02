@@ -2265,7 +2265,8 @@ impl Image {
 
     /// Returns public image bytes using Pillow's raw encoder arguments.
     ///
-    /// `BGR` and `BGRA` preserve channel width while exchanging red and blue.
+    /// `BGR` and `BGRA` preserve channel width while exchanging red and blue;
+    /// raw `RGBA` from an RGB image appends Pillow's opaque filler alpha.
     /// Other encoder names or raw modes retain the ordinary mode byte layout.
     ///
     /// # Errors
@@ -2285,14 +2286,22 @@ impl Image {
         }
         let raw_mode = args.first().map(String::as_str).unwrap_or(mode);
         let mode_supports_raw = raw_mode == mode
-            || (mode == "RGB" && raw_mode == "BGR")
+            || (mode == "RGB" && matches!(raw_mode, "BGR" | "RGBA"))
             || (mode == "RGBA" && raw_mode == "BGRA");
         if !mode_supports_raw {
-            return Err(PilError::IOError(format!(
-                "encoder {raw_mode} not available"
+            return Err(PilError::ValueError(format!(
+                "No packer found from {mode} to {raw_mode}"
             )));
         }
         let mut data = self.tobytes_formatted(mode)?;
+        if mode == "RGB" && raw_mode == "RGBA" {
+            let mut expanded = Vec::with_capacity(data.len() / 3 * 4);
+            for pixel in data.chunks_exact(3) {
+                expanded.extend_from_slice(pixel);
+                expanded.push(255);
+            }
+            data = expanded;
+        }
         match args.first().map(String::as_str) {
             Some("BGRA") => {
                 for pixel in data.chunks_exact_mut(4) {
