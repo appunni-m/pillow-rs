@@ -11,8 +11,8 @@
 //! ImageFont rows pass; fix the real lower implementation instead.
 
 use super::{
-    FreeTypeFont, ImageFontLoadOptions, ImageFontTextOptions, ImageFontVariantOptions,
-    ImageFontVariationAxis,
+    FreeTypeFont, ImageFontFaceInfo, ImageFontLoadOptions, ImageFontTextOptions,
+    ImageFontVariantOptions, ImageFontVariationAxis,
 };
 use crate::error::PilError;
 use crate::image::Image;
@@ -20,7 +20,7 @@ use fontdone::{ffi, tt};
 
 const MAX_STRING_LENGTH: usize = 1_000_000;
 
-pub(super) struct TrueTypeEngine {
+pub(super) struct FontEngine {
     library: ffi::FT_Library,
     face: ffi::FT_Face,
     font_bytes: Vec<u8>,
@@ -97,7 +97,7 @@ fn load_truetype_with_index(
     let style_name = face.style_name.clone();
     let metrics = face.size_metrics;
 
-    let engine = TrueTypeEngine {
+    let engine = FontEngine {
         library,
         face,
         font_bytes: data,
@@ -710,18 +710,33 @@ pub(crate) fn native_render(
 pub(crate) fn native_face_attrs(
     font: &FreeTypeFont,
 ) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
-    let (family, style) = getname_optional(font);
-    let metrics = font.engine.metrics;
+    let info = native_face_info(font);
     (
-        family,
-        style,
-        pixel(metrics.ascender) as u32,
-        (-pixel(metrics.descender)) as u32,
-        pixel(metrics.height) as u32,
-        u32::from(metrics.x_ppem),
-        u32::from(metrics.y_ppem),
-        font.engine.face.num_glyphs,
+        info.family,
+        info.style,
+        info.ascent,
+        info.descent,
+        info.height,
+        info.x_ppem,
+        info.y_ppem,
+        info.glyphs,
     )
+}
+
+pub(crate) fn native_face_info(font: &FreeTypeFont) -> ImageFontFaceInfo<'_> {
+    let metrics = font.engine.metrics;
+    ImageFontFaceInfo {
+        family: font.engine.family_name.as_deref(),
+        style: font.engine.style_name.as_deref(),
+        ascent: pixel(metrics.ascender) as u32,
+        descent: (-pixel(metrics.descender)) as u32,
+        height: pixel(metrics.height) as u32,
+        x_ppem: u32::from(metrics.x_ppem),
+        y_ppem: u32::from(metrics.y_ppem),
+        glyphs: font.engine.face.num_glyphs,
+        format: ffi::FT_Get_Font_Format(Some(&font.engine.face)).unwrap_or("Unknown"),
+        is_scalable: font.engine.face.face_flags & ffi::FT_FACE_FLAG_SCALABLE != 0,
+    }
 }
 
 pub(crate) fn getlength_with_options(

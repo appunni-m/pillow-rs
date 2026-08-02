@@ -99,6 +99,14 @@ class _NativeFont:
     def glyphs(self):
         return self._rust_font.glyphs
 
+    @property
+    def font_format(self):
+        return self._rust_font.font_format
+
+    @property
+    def is_scalable(self):
+        return self._rust_font.is_scalable
+
     def getlength(self, text):
         return self._rust_font.getlength(text)
 
@@ -181,9 +189,12 @@ def _wrap_pilfont(font):
 
 
 class FreeTypeFont:
-    """TrueType/OpenType font loaded via pillow-rs-freetype.
+    """Font face loaded via pillow-rs-freetype.
 
-    Pure Rust font rendering — no PIL dependency required.
+    Pure Rust font rendering — no PIL dependency required. Pillow's
+    ``truetype`` entry point can expose any format supported by the underlying
+    fontdone memory-face loader; use ``font.font_format`` and
+    ``font.is_scalable`` for the active face capabilities.
     """
 
     def __init__(self, font, size=10, index=0, encoding="", layout_engine=None):

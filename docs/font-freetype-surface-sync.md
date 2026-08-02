@@ -8,7 +8,10 @@ Font adapter.
 
 `pillow-rs` exposes Pillow-style Font APIs only. Raw FreeType-shaped access is
 isolated to `pillow-rs/src/font/imagingft.rs`; Python and JavaScript bindings
-must call `pillow_rs::...` root APIs only.
+must call `pillow_rs::...` root APIs only. The Pillow `truetype` entry point
+uses fontdone's generic memory-face loader, so the Rust core also preserves the
+active driver format and scalable-face capability rather than inferring them
+from a filename or wrapper class.
 
 `pillow-rs-freetype` is not changed as part of this cleanup. Broader FreeType
 compatibility exports remain there until a separate usage audit proves they are
@@ -25,6 +28,7 @@ Observed through the repo-local Pillow `11.3.0` oracle
 | `FT_Library_Version` | exposes FreeType version | not used by Font behavior |
 | `FT_New_Face` | path-based font open | binding reads bytes, core uses memory face |
 | `FT_New_Memory_Face` | bytes-based font open | used |
+| `FT_Get_Font_Format` | identify the active font driver | used for the core face-capability record |
 | `FT_Request_Size` | nominal Pillow point size | used |
 | `FT_Select_Charmap` | explicit encoding charmap selection | recognized encoding tags are mapped and selected in the Rust core; alternate-charmap parity remains a separate fixture lane |
 | `FT_Get_Char_Index` | BASIC layout glyph mapping | used |
@@ -59,6 +63,7 @@ Function endpoints used:
 
 - `FT_Init_FreeType`
 - `FT_New_Memory_Face`
+- `FT_Get_Font_Format`
 - `FT_Request_Size`
 - `FT_Select_Charmap`
 - `FT_Get_Char_Index`
@@ -68,8 +73,14 @@ Function endpoints used:
 - `FT_Set_Var_Design_Coordinates`
 - `FT_Palette_Set_Foreground_Color`
 
-Constants, flags, error codes, and data structs are used only to drive those
-paths or classify their results. They are not public `pillow-rs` API.
+The core `ImageFontFaceInfo` record exposes the existing native face metrics
+alongside `format` and `is_scalable`. This keeps CFF, Type 1, bitmap, and
+TrueType faces on the same Rust-owned capability path while leaving host path
+and stream I/O in the bindings.
+
+The FreeType-shaped constants, flags, error codes, and records remain internal
+to `imagingft`; only the Rust-owned `ImageFontFaceInfo` capability record is
+part of the public `pillow-rs` API.
 
 ## Known Font parity gaps
 
