@@ -2816,6 +2816,62 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFont.FreeTypeFont.font_variant.nuanced.encoding-unicode-charmap",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "font_variant",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.font_variant.parameter.encoding"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "font_variant",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "encoding": {
+              "kind": "literal",
+              "value": "unic"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFont.FreeTypeFont.getlength.nuanced.kerning-pair",
       "surface": "PIL.ImageFont.FreeTypeFont",
       "operation": "getlength",
@@ -4040,6 +4096,122 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-default-route",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmask2",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmask2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": " "
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-stroked-route",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmask2",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.text"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmask2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": " "
+            },
+            "stroke_width": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.bytes-latin1",
       "surface": "PIL.ImageFont.FreeTypeFont",
       "operation": "getmask2",
@@ -4802,6 +4974,199 @@
               "value": [
                 0.5,
                 0.75
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmask2",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.start"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmask2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": "A"
+            },
+            "start": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                -1.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-collapse",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmask2",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.start"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmask2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": "A"
+            },
+            "start": {
+              "kind": "literal",
+              "value": [
+                -100.0,
+                -100.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-stroked-collapse",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "getmask2",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.getmask2.parameter.start"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "getmask2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "text": {
+              "kind": "literal",
+              "value": "A"
+            },
+            "stroke_width": {
+              "kind": "literal",
+              "value": 1
+            },
+            "start": {
+              "kind": "literal",
+              "value": [
+                -100.0,
+                -100.0
               ]
             }
           }

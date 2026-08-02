@@ -729,6 +729,9 @@ pub(crate) fn getlength_with_options(
 ) -> Result<f32, PilError> {
     validate_text_length(text)?;
     validate_basic_layout_options(options)?;
+    if options.mode.as_deref() != Some("1") {
+        return getlength(font, text);
+    }
     Ok(length_from_basic_layout_with_flags(font, text, text_load_flags(options))? as f32 / 64.0)
 }
 
@@ -813,6 +816,9 @@ pub(crate) fn getmask2_with_options(
             "render() argument 11 must be 2-item sequence, not float".into(),
         ));
     }
+    if options_are_default_mask_options(options) {
+        return getmask2(font, text);
+    }
     // Pillow's BASIC `getmask2` accepts mode="RGBA" as a renderer hint and
     // still returns the ordinary grayscale mask. The mode is used by some
     // drivers, but it is not an error condition for this public endpoint.
@@ -855,6 +861,14 @@ pub(crate) fn getmask2_with_options(
         (left as i32, top as i32)
     };
     Ok((width, height, pixels, offset))
+}
+
+fn options_are_default_mask_options(options: &ImageFontTextOptions) -> bool {
+    matches!(options.mode.as_deref(), None | Some(""))
+        && options.stroke_width == 0.0
+        && options.anchor.is_none()
+        && options.start.is_none()
+        && options.ink.map_or(true, |ink| ink == 0)
 }
 
 fn text_load_flags(options: &ImageFontTextOptions) -> i32 {

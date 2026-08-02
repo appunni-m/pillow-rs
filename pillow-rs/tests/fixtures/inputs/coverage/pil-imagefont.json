@@ -53,6 +53,7 @@
           "PIL.ImageFont.truetype.parameter.index",
           "PIL.ImageFont.truetype.parameter.encoding",
           "PIL.ImageFont.truetype.parameter.layout-engine",
+          "PIL.ImageFont.truetype.nuanced.encoding-unicode-charmap",
           "PIL.ImageFont.truetype.nuanced.zero-size",
           "PIL.ImageFont.truetype.nuanced.malformed-cff-table",
           "PIL.ImageFont.truetype.nuanced.malformed-cff-name-index",
