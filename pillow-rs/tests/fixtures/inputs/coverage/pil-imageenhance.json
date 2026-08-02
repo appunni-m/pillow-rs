@@ -47,7 +47,15 @@
           "PIL.ImageEnhance.Sharpness.behavior.default",
           "PIL.ImageEnhance.Sharpness.mode.l",
           "PIL.ImageEnhance.Sharpness.mode.la",
-          "PIL.ImageEnhance.Sharpness.mode.rgba"
+          "PIL.ImageEnhance.Sharpness.mode.rgba",
+          "PIL.ImageEnhance.Brightness.nuanced.mode-1-reject",
+          "PIL.ImageEnhance.Brightness.nuanced.mode-p-reject",
+          "PIL.ImageEnhance.Color.nuanced.mode-1-reject",
+          "PIL.ImageEnhance.Color.nuanced.mode-p-reject",
+          "PIL.ImageEnhance.Contrast.nuanced.mode-1-reject",
+          "PIL.ImageEnhance.Contrast.nuanced.mode-p-reject",
+          "PIL.ImageEnhance.Sharpness.nuanced.mode-1-reject",
+          "PIL.ImageEnhance.Sharpness.nuanced.mode-p-reject"
         ],
         "command_ids": []
       },

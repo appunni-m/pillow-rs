@@ -2840,6 +2840,22 @@ def build_nuanced_cases(
             "name": "formats-rejected",
             "values": {"formats": literal(["JPEG"])},
         },
+        # Exercise the public ImageEnhance constructor plus enhance() call on
+        # the modes rejected by the Rust core. These are behavioral parity
+        # workflows, not direct probes: the mode is created through
+        # PIL.Image.new and the rejection is observed at the constructor or
+        # enhance() boundary, matching Pillow's class-specific timing.
+        *(
+            {
+                "surface": "PIL.ImageEnhance",
+                "operation": class_name,
+                "requirement_suffix": "behavior.default",
+                "name": f"mode-{mode.lower()}-reject",
+                "mode": mode,
+            }
+            for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
+            for mode in ("1", "P")
+        ),
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getlength",
