@@ -138,6 +138,17 @@ def indexed_png_with_full_palette_index_alpha() -> bytes:
     )
 
 
+def png_header_without_image_data() -> bytes:
+    """Return a decodable PNG header whose deferred pixel load fails."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    header = struct.pack(">IIBBBBB", 2, 1, 8, 2, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IEND", b"")
+
+
 def little_endian_l16_tiff() -> bytes:
     """Return a minimal valid unsigned-16-bit grayscale TIFF stimulus."""
 
@@ -692,6 +703,19 @@ class WorkflowBuilder:
                         "size": literal([2, 2]),
                         "data": data_descriptor,
                     },
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "png-no-idat":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-png-no-idat",
+                    png_header_without_image_data(),
+                    "image/png",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
                     step_id=self.next_step_id(f"setup-{label}"),
                 )
             else:
@@ -8977,6 +9001,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "png-rgba-opened",
             "scenario_asset": "image/rgba-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbbox",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-png-without-idat",
+            "scenario_inline_image": "png-no-idat",
         },
         {
             "surface": "PIL.Image.Image",

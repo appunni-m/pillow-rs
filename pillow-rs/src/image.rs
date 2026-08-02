@@ -976,12 +976,8 @@ impl Image {
                 ..
             } => materialized
                 .get_or_init(|| {
-                    decoded_to_dynamic(
-                        source
-                            .decode()
-                            .map_err(|error| map_codec_error(error, "memory"))?,
-                    )
-                    .map(Arc::new)
+                    decoded_to_dynamic(source.decode().map_err(map_deferred_decode_error)?)
+                        .map(Arc::new)
                 })
                 .clone(),
             Image::Pipeline {
@@ -1120,8 +1116,7 @@ impl Image {
             Image::Loaded(data) => Ok(data.image.as_ref().clone()),
             Image::Paletted(data) => Ok(DynamicImage::ImageLuma8(data.indices.clone())),
             Image::Bytes { source, .. } => decoded_to_dynamic(
-                &image_slash_star::decode(source.bytes())
-                    .map_err(|error| map_codec_error(error, "memory"))?,
+                &image_slash_star::decode(source.bytes()).map_err(map_deferred_decode_error)?,
             ),
             Image::Pipeline {
                 source,
@@ -3535,6 +3530,19 @@ fn map_codec_error(error: image_slash_star::ImageError, source: &str) -> PilErro
         PilError::UnidentifiedImageError(source.to_owned())
     } else {
         PilError::ImageError(error)
+    }
+}
+
+fn map_deferred_decode_error(error: image_slash_star::ImageError) -> PilError {
+    match error {
+        // Pillow's lazy Image.load path collapses malformed encoded payloads
+        // to this stable OSError message, even though open() accepted the
+        // format header. Keep codec-specific diagnostics out of the public
+        // error contract for deferred loads.
+        image_slash_star::ImageError::Malformed { .. } => {
+            PilError::IOError("cannot load this image".to_owned())
+        }
+        other => map_codec_error(other, "memory"),
     }
 }
 

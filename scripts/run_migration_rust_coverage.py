@@ -14,6 +14,7 @@ afterwards, so the workspace is not left in an instrumented state.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -39,12 +40,85 @@ EXTENSION = (
     ROOT / "pillow-rs-py" / "python" / "pillow_rs" / "_core.abi3.so"
 )
 LLVM_COV_TARGET = ROOT / "target" / "llvm-cov-target"
+COVERAGE_BUILD_STAMP = LLVM_COV_TARGET / ".pillow-rs-coverage-build"
 COMMAND = {
     "command_id": "coverage-rust",
     "argv": ["make", "migration-parity-coverage-rust"],
     "cwd": ".",
     "timeout_seconds": 7200,
 }
+
+
+def coverage_build_inputs() -> list[Path]:
+    """Return source/config files that can change the instrumented extension."""
+
+    roots = (
+        ROOT / "Cargo.toml",
+        ROOT / "Cargo.lock",
+        ROOT / "rust-toolchain.toml",
+        ROOT / "rust-toolchain",
+        ROOT / ".cargo",
+        ROOT / "pillow-rs" / "Cargo.toml",
+        ROOT / "pillow-rs" / "src",
+        ROOT / "pillow-rs-py" / "Cargo.toml",
+        ROOT / "pillow-rs-py" / "pyproject.toml",
+        ROOT / "pillow-rs-py" / "src",
+        ROOT.parent / "fontdone" / "Cargo.toml",
+        ROOT.parent / "fontdone" / "Cargo.lock",
+        ROOT.parent / "fontdone" / "src",
+    )
+    files: list[Path] = []
+    for root in roots:
+        if root.is_file():
+            files.append(root)
+        elif root.is_dir():
+            files.extend(
+                path
+                for path in root.rglob("*")
+                if path.is_file()
+                and ".git" not in path.parts
+                and "target" not in path.parts
+            )
+    return sorted(set(files))
+
+
+def coverage_build_fingerprint() -> str:
+    """Hash the instrumented Rust inputs, including coverage build settings."""
+
+    digest = hashlib.sha256()
+    digest.update(b"toolchain=nightly\n")
+    digest.update(b"rustflags=-Cinstrument-coverage -Zcoverage-options=branch\n")
+    digest.update(f"python={sys.executable}\n".encode("utf-8"))
+    digest.update(f"python-version={sys.version}\n".encode("utf-8"))
+    for path in coverage_build_inputs():
+        digest.update(str(path).encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(path.read_bytes())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def prepare_llvm_target() -> tuple[str, bool]:
+    """Reuse an unchanged instrumented target while clearing only old profiles."""
+
+    fingerprint = coverage_build_fingerprint()
+    cached = False
+    if LLVM_COV_TARGET.is_dir() and COVERAGE_BUILD_STAMP.is_file():
+        cached = COVERAGE_BUILD_STAMP.read_text(encoding="utf-8").strip() == fingerprint
+    if not cached:
+        if LLVM_COV_TARGET.exists():
+            shutil.rmtree(LLVM_COV_TARGET)
+        LLVM_COV_TARGET.mkdir(parents=True, exist_ok=True)
+    else:
+        LLVM_COV_TARGET.mkdir(parents=True, exist_ok=True)
+
+    # Profiles are run-specific evidence. Never let a cached build make a
+    # later run accumulate execution counts from an older input corpus.
+    for pattern in ("*.profraw", "*.profdata", "*-profraw-list"):
+        for stale in LLVM_COV_TARGET.rglob(pattern):
+            stale.unlink()
+    return fingerprint, cached
+
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from run_migration_coverage import (  # noqa: E402
@@ -161,13 +235,11 @@ def run(args: argparse.Namespace) -> int:
     args.profile.resolve().parent.mkdir(parents=True, exist_ok=True)
 
     # cargo-llvm-cov can discover stale instrumented libraries left in its
-    # target directory, even when their old profile data was removed. That
-    # merges duplicate source revisions into one report and makes the measured
-    # line/region denominator larger than the current checkout. This directory
-    # is a generated coverage cache, so rebuild it for every authoritative run.
-    if LLVM_COV_TARGET.exists():
-        shutil.rmtree(LLVM_COV_TARGET)
-    LLVM_COV_TARGET.mkdir(parents=True, exist_ok=True)
+    # target directory, even when their old profile data was removed. The
+    # fingerprinted cache removes the directory when Rust inputs change, while
+    # allowing repeated coverage runs for unchanged code to reuse Cargo's
+    # instrumented build.
+    build_fingerprint, build_cache_hit = prepare_llvm_target()
     if args.profile.exists():
         args.profile.unlink()
 
@@ -217,6 +289,8 @@ def run(args: argparse.Namespace) -> int:
             cwd=ROOT,
             check=True,
         )
+        COVERAGE_BUILD_STAMP.write_text(build_fingerprint + "\n", encoding="utf-8")
+        print(f"coverage build cache: {'hit' if build_cache_hit else 'miss'}")
         remove_build_profiles()
 
         for stale in LLVM_COV_TARGET.glob("*.profraw"):
