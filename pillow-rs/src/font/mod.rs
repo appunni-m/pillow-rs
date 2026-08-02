@@ -125,6 +125,15 @@ pub struct ImageFontVariantOptions {
     pub layout_engine: Option<String>,
 }
 
+/// Host-neutral input for Pillow's variation-axis list requirement.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ImageFontVariationAxesInput {
+    /// A Python list converted to Rust axis values.
+    Values(Vec<f32>),
+    /// A value that was not a Python list of numeric axis values.
+    Invalid,
+}
+
 impl FreeTypeFont {
     /// Computes Pillow's multiline text bounding box.
     ///

@@ -2588,8 +2588,15 @@ impl PyFont {
         pillow_rs::imagefont_native_setvarname(&mut self.inner, instance_index).map_err(map_error)
     }
 
-    fn set_variation_by_axes(&mut self, axes: Vec<f32>) -> PyResult<()> {
-        pillow_rs::imagefont_set_variation_by_axes(&mut self.inner, &axes).map_err(map_error)
+    fn set_variation_by_axes(&mut self, axes: &Bound<'_, PyAny>) -> PyResult<()> {
+        let input = if axes.downcast::<PyList>().is_ok() {
+            axes.extract::<Vec<f32>>()
+                .map(pillow_rs::ImageFontVariationAxesInput::Values)
+                .unwrap_or(pillow_rs::ImageFontVariationAxesInput::Invalid)
+        } else {
+            pillow_rs::ImageFontVariationAxesInput::Invalid
+        };
+        pillow_rs::imagefont_set_variation_by_axes_input(&mut self.inner, input).map_err(map_error)
     }
 
     fn setvaraxes(&mut self, axes: Vec<f32>) -> PyResult<()> {
