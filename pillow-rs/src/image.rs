@@ -1357,7 +1357,9 @@ impl Image {
         }
         let (r, g, b, a) = match mode {
             "L" | "1" => (v, v, v, 255),
-            "LA" => (v, 0, 0, 0),
+            // A scalar PA write supplies the palette index and leaves the
+            // alpha sample transparent, matching Pillow's getink expansion.
+            "LA" | "PA" => (v, 0, 0, 0),
             "RGB" => (v, 0, 0, 255),
             // Pillow treats a scalar as the first sample for every
             // three-band mode, including YCbCr and HSV; the remaining
