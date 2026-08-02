@@ -33,6 +33,7 @@ use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyListMethods;
 use pyo3::types::PyModuleMethods;
+use pyo3::types::PyString;
 use pyo3::types::PyTuple;
 use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
@@ -116,12 +117,25 @@ fn host_path_from_python(value: &Bound<'_, PyAny>) -> PyResult<Option<PathBuf>> 
     }
 }
 
-fn map_open_path_error(path: &std::path::Path, error: std::io::Error) -> PyErr {
+fn map_open_path_error(
+    py: Python<'_>,
+    original: &Bound<'_, PyAny>,
+    path: &std::path::Path,
+    error: std::io::Error,
+) -> PyErr {
     if error.kind() == std::io::ErrorKind::NotFound {
+        // Pillow keeps a bytes path as a bytes object in the public OSError
+        // tuple. Preserve that host representation while Rust owns the actual
+        // filesystem lookup.
+        let filename: PyObject = if let Ok(bytes) = original.downcast::<PyBytes>() {
+            PyBytes::new(py, bytes.as_bytes()).into()
+        } else {
+            PyString::new(py, &path.to_string_lossy()).into()
+        };
         return pyo3::exceptions::PyFileNotFoundError::new_err((
             error.raw_os_error().unwrap_or(2),
             "No such file or directory",
-            path.to_string_lossy().to_string(),
+            filename,
         ));
     }
     map_error(error.into())
@@ -554,6 +568,7 @@ impl PyImage {
     #[pyo3(signature = (fp, mode=None, formats=None))]
     fn open(
         _cls: &Bound<'_, PyType>,
+        py: Python<'_>,
         fp: &Bound<'_, PyAny>,
         mode: Option<&Bound<'_, PyAny>>,
         formats: Option<&Bound<'_, PyAny>>,
@@ -572,7 +587,8 @@ impl PyImage {
             .as_deref()
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
-            let bytes = std::fs::read(&path).map_err(|error| map_open_path_error(&path, error))?;
+            let bytes =
+                std::fs::read(&path).map_err(|error| map_open_path_error(py, fp, &path, error))?;
             let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })

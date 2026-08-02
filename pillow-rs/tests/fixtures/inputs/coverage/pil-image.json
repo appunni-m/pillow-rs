@@ -264,6 +264,7 @@
           "PIL.Image.open.nuanced.read-mode",
           "PIL.Image.open.nuanced.invalid-mode",
           "PIL.Image.open.nuanced.embedded-null-bytes",
+          "PIL.Image.open.nuanced.non-null-bytes",
           "PIL.Image.linear_gradient.nuanced.i-mode",
           "PIL.Image.linear_gradient.nuanced.f-mode",
           "PIL.Image.linear_gradient.nuanced.invalid-single-character-mode",

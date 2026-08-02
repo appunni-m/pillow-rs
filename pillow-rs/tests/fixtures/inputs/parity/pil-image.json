@@ -5595,6 +5595,44 @@
       ]
     },
     {
+      "case_id": "PIL.Image.open.nuanced.non-null-bytes",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.fp"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "non-null-bytes-input",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "bWlzc2luZy1pbWFnZS1wYXRo",
+          "sha256": "144f940f772e4fd93260c413bb058d5dd14382d9cc3de3c61cf888fbe17710f5",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "non-null-bytes-input"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.linear_gradient.nuanced.i-mode",
       "surface": "PIL.Image",
       "operation": "linear_gradient",

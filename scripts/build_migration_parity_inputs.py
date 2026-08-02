@@ -1567,6 +1567,7 @@ class WorkflowBuilder:
                 "invalid-bytes",
                 "empty-bytes",
                 "embedded-null-bytes",
+                "non-null-bytes",
                 "webp-corrupt-vp8-bitstream",
                 "webp-truncated-riff",
                 "webp-invalid-riff-header",
@@ -1575,6 +1576,7 @@ class WorkflowBuilder:
                     "invalid-bytes": b"\x00invalid",
                     "empty-bytes": b"",
                     "embedded-null-bytes": b"/tmp\x00image.png",
+                    "non-null-bytes": b"missing-image-path",
                     "webp-corrupt-vp8-bitstream": b"RIFF\x10\x00\x00\x00WEBPVP8 \x00\x00\x00\x00",
                     "webp-truncated-riff": b"RIFF\x08\x00\x00\x00WEBP",
                     "webp-invalid-riff-header": b"NOTRIFF",
@@ -3005,6 +3007,13 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.fp",
             "name": "embedded-null-bytes",
             "edge": "embedded-null-bytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.fp",
+            "name": "non-null-bytes",
+            "edge": "non-null-bytes",
         },
         # Exercise the public ImageEnhance constructor plus enhance() call on
         # the modes rejected by the Rust core. These are behavioral parity
