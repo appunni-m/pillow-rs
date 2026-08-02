@@ -8842,6 +8842,17 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "parameter.matrix",
+            "name": "rgb-matrix-wrong-length",
+            "mode": "RGB",
+            "values": {
+                "mode": literal("L"),
+                "matrix": literal([1, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "behavior.default",
             "name": "unknown-mode",
             "mode": "RGB",

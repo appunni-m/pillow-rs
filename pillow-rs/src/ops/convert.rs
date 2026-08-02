@@ -182,6 +182,14 @@ impl Image {
         if target_mode == source_mode && matrix.is_none() {
             return Ok(self.copy());
         }
+        if let Some(matrix) = matrix.as_ref() {
+            if !matches!(matrix.len(), 4 | 12) {
+                return Err(PilError::TypeError(format!(
+                    "argument 2 must be sequence of length 12, not {}",
+                    matrix.len()
+                )));
+            }
+        }
         if matrix.is_some() && !matches!(target_mode.as_str(), "L" | "RGB") {
             return Err(PilError::ValueError("illegal conversion".to_owned()));
         }
