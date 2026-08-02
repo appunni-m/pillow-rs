@@ -426,7 +426,6 @@ impl PyImage {
         size: (u32, u32),
         color: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<Self> {
-        // Thin binding: extract Python types, delegate logic to core
         let (hex, single, rgb, rgba, la, int32_val, float_val) = if let Some(val) = color {
             (
                 val.extract::<String>().ok(),
@@ -440,41 +439,17 @@ impl PyImage {
         } else {
             (None, None, None, None, None, None, None)
         };
-        let c = pillow_rs::resolve_new_color(
-            mode,
-            hex.as_deref(),
+        let input = pillow_rs::PythonNewColorInput::from_parts(
+            hex,
             single,
             rgb,
             rgba,
             la,
             int32_val,
             float_val,
-        )
-        .map_err(map_error)?;
-        let img = if mode == "P" {
-            if let Some(index) = single {
-                RsImage::new_palette_index(size.0, size.1, index)
-            } else if color.is_none() {
-                RsImage::new_palette_index(size.0, size.1, 0)
-            } else {
-                // Preserve tuple provenance: Image::new owns tuple-color
-                // palette allocation, while the resolver normalizes modes
-                // that do not distinguish tuples from scalar samples.
-                let tuple_color = if let Some((r, g, b, a)) = rgba {
-                    if a != 255 {
-                        return Err(PyValueError::new_err(
-                            "cannot add non-opaque RGBA color to RGB palette",
-                        ));
-                    }
-                    (r, g, b, a)
-                } else {
-                    rgb.map(|(r, g, b)| (r, g, b, 255)).unwrap_or(c)
-                };
-                RsImage::new(size.0, size.1, mode, tuple_color).map_err(map_error)?
-            }
-        } else {
-            RsImage::new(size.0, size.1, mode, c).map_err(map_error)?
-        };
+            color.is_some(),
+        );
+        let img = RsImage::new_with_input(size.0, size.1, mode, input).map_err(map_error)?;
         Ok(PyImage { inner: img })
     }
 

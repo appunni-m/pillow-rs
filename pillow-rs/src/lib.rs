@@ -175,6 +175,7 @@ pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;
 pub use crate::image::PutDataValue;
 pub use crate::image::PutPixelValue;
+pub use crate::image::PythonNewColorInput;
 pub use crate::image::StatResult;
 pub use crate::image::StatValue;
 pub use crate::image::stat_from_histogram;

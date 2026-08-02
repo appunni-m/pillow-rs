@@ -195,9 +195,6 @@ class Image:
         size: Tuple[int, int],
         color: Union[int, Tuple[int, ...], str, None] = 0,
     ) -> "Image":
-        # Convert list colors to tuples (JSON fixtures pass lists, PIL accepts both)
-        if isinstance(color, list):
-            color = tuple(color)
         return cls(RustImage.new(mode, size, color))
 
     @classmethod
