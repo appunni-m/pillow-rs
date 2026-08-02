@@ -8,7 +8,7 @@ report maps an operation to the region coverage of that component's files.
 The metric is region coverage: covered regions / total regions.
 
 Output is a generated markdown report listing every operation with region
-coverage below 90% in ascending order, plus per-file detail for the involved
+coverage below 95% in ascending order, plus per-file detail for the involved
 components so follow-up case work can target the exact files.
 """
 
@@ -25,7 +25,7 @@ FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_COVERAGE = ROOT / "build" / "migration-parity" / "coverage-result-rust.json"
 DEFAULT_OUTPUT = ROOT / "docs" / "migration-parity-region-coverage.md"
-THRESHOLD_PERCENT = 90
+THRESHOLD_PERCENT = 95
 
 sys.path.insert(0, str(ROOT / "scripts"))
 from run_migration_parity import (  # noqa: E402
@@ -111,7 +111,7 @@ def render(
         "not parity proof and does not change the manifest or lane inputs.",
         "",
         "```yaml",
-        f"generator: scripts/report_migration_parity_region_coverage.py@1",
+        f"generator: scripts/report_migration_parity_region_coverage.py@2",
         f"manifest_path: {manifest_path.relative_to(ROOT)}",
         f"manifest_schema: {manifest['schema']}",
         f"manifest_sha256: {manifest_digest}",
