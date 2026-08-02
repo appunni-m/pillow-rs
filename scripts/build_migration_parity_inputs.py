@@ -7548,6 +7548,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "parameter.extent",
+            "name": "wrong-length",
+            "values": {
+                "size": literal([4, 4]),
+                "extent": literal([0.0, 0.0, 1.0]),
+                "quality": literal(10),
+            },
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "merge",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-mode",
