@@ -26,7 +26,7 @@ Observed through the repo-local Pillow `11.3.0` oracle
 | `FT_New_Face` | path-based font open | binding reads bytes, core uses memory face |
 | `FT_New_Memory_Face` | bytes-based font open | used |
 | `FT_Request_Size` | nominal Pillow point size | used |
-| `FT_Select_Charmap` | explicit encoding charmap selection | accepted at the public `font_variant`/constructor surface; current Basic Unicode rows do not prove alternate charmap behavior |
+| `FT_Select_Charmap` | explicit encoding charmap selection | recognized encoding tags are mapped and selected in the Rust core; alternate-charmap parity remains a separate fixture lane |
 | `FT_Get_Char_Index` | BASIC layout glyph mapping | used |
 | `FT_Load_Glyph` | layout, bbox, render | used |
 | `FT_Get_Kerning` | BASIC layout kerning | used |
@@ -60,6 +60,7 @@ Function endpoints used:
 - `FT_Init_FreeType`
 - `FT_New_Memory_Face`
 - `FT_Request_Size`
+- `FT_Select_Charmap`
 - `FT_Get_Char_Index`
 - `FT_Get_Kerning`
 - `FT_Load_Glyph`
@@ -80,8 +81,10 @@ Known gaps to add fixtures or implementation for:
   reaches `FT_Glyph_Stroke`/`FT_Glyph_StrokeBorder`; Rust currently blocks the
   public Font mask path until the lower-level pure-Rust stroker can export real
   glyph outlines and bitmaps.
-- Constructor and `font_variant` alternate encoding/charmap behavior beyond the
-  currently passing Basic Unicode-compatible rows.
+- Alternate encoding/charmap parity fixtures for the constructor and
+  `font_variant` remain separate from the core plumbing; recognized tags now
+  reach `fontdone::ffi::FT_Select_Charmap`, while unknown tags retain Pillow's
+  default fallback.
 - Color glyph foreground/palette behavior beyond the current grayscale/BGRA
   fixture rows.
 - `getbbox` still computes from the loaded slot CBox instead of exactly routing

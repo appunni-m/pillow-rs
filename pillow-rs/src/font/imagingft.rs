@@ -74,6 +74,12 @@ fn load_truetype_with_index(
     let mut face =
         ffi::FT_New_Memory_Face(&library, &data, face_index_ffi, size).map_err(ft_error_to_pil)?;
 
+    // Pillow's `getfont` selects a requested FreeType charmap immediately
+    // after opening the face.  Keep the tag translation in the Rust core so
+    // bindings only preserve the caller's string; unknown tags retain
+    // FreeType's default Unicode selection, matching Pillow's fallback.
+    select_charmap(&mut face, encoding.as_deref())?;
+
     // Pillow _imagingft.c:getfont requests nominal size with width/height
     // set to size * 64 after FT_New_Memory_Face.
     let width = (size * 64.0) as ffi::FT_Long;
@@ -102,6 +108,36 @@ fn load_truetype_with_index(
         metrics,
     };
     Ok(FreeTypeFont { engine })
+}
+
+fn select_charmap(face: &mut ffi::FT_Face, encoding: Option<&str>) -> Result<(), PilError> {
+    let Some(encoding) = encoding else {
+        return Ok(());
+    };
+    let Some(encoding) = freetype_encoding(encoding) else {
+        return Ok(());
+    };
+    check_ft_error(ffi::FT_Select_Charmap(Some(face), encoding))
+}
+
+fn freetype_encoding(encoding: &str) -> Option<ffi::FT_Encoding> {
+    let encoding = match encoding {
+        "unic" => ffi::FT_ENCODING_UNICODE,
+        "symb" => ffi::FT_ENCODING_MS_SYMBOL,
+        "ADOB" => ffi::FT_ENCODING_ADOBE_STANDARD,
+        "ADBE" => ffi::FT_ENCODING_ADOBE_EXPERT,
+        "ADBC" => ffi::FT_ENCODING_ADOBE_CUSTOM,
+        "armn" => ffi::FT_ENCODING_APPLE_ROMAN,
+        "sjis" => ffi::FT_ENCODING_SJIS,
+        "gb  " => ffi::FT_ENCODING_PRC,
+        "big5" => ffi::FT_ENCODING_BIG5,
+        "wans" => ffi::FT_ENCODING_WANSUNG,
+        "joha" => ffi::FT_ENCODING_JOHAB,
+        "lat1" => ffi::FT_ENCODING_ADOBE_LATIN_1,
+        "lat2" => ffi::FT_ENCODING_OLD_LATIN_2,
+        _ => return None,
+    };
+    Some(encoding as ffi::FT_Encoding)
 }
 
 // Pillow 12.2.0 `_imagingft.c::geterror` includes FreeType's `fterrdef.h`
@@ -1598,7 +1634,35 @@ fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::{ffi, freetype_encoding};
     use crate::{FreeTypeFont, ImageFontLoadOptions};
+
+    #[test]
+    fn freetype_encoding_tags_match_fontdone_values() {
+        let tags = [
+            ("unic", ffi::FT_ENCODING_UNICODE),
+            ("symb", ffi::FT_ENCODING_MS_SYMBOL),
+            ("ADOB", ffi::FT_ENCODING_ADOBE_STANDARD),
+            ("ADBE", ffi::FT_ENCODING_ADOBE_EXPERT),
+            ("ADBC", ffi::FT_ENCODING_ADOBE_CUSTOM),
+            ("armn", ffi::FT_ENCODING_APPLE_ROMAN),
+            ("sjis", ffi::FT_ENCODING_SJIS),
+            ("gb  ", ffi::FT_ENCODING_PRC),
+            ("big5", ffi::FT_ENCODING_BIG5),
+            ("wans", ffi::FT_ENCODING_WANSUNG),
+            ("joha", ffi::FT_ENCODING_JOHAB),
+            ("lat1", ffi::FT_ENCODING_ADOBE_LATIN_1),
+            ("lat2", ffi::FT_ENCODING_OLD_LATIN_2),
+        ];
+        for (tag, expected) in tags {
+            assert_eq!(
+                freetype_encoding(tag),
+                Some(expected as ffi::FT_Encoding),
+                "encoding tag {tag}"
+            );
+        }
+        assert_eq!(freetype_encoding("unknown"), None);
+    }
 
     fn make_ttc(fonts: &[&[u8]]) -> Vec<u8> {
         assert!(!fonts.is_empty());
