@@ -480,32 +480,18 @@ impl PyImage {
         colors: Option<u32>,
     ) -> PyResult<PyImage> {
         let dither = match dither {
-            None => None,
+            None => pillow_rs::PythonDitherInput::None,
             Some(value) => {
                 if let Ok(int_value) = value.extract::<u32>() {
-                    // Pillow's `convert(dither=...)` treats any non-zero
-                    // integer as Floyd-Steinberg and zero as no dithering.
-                    Some(
-                        if int_value == 0 {
-                            "NONE"
-                        } else {
-                            "FLOYDSTEINBERG"
-                        }
-                        .to_string(),
-                    )
+                    pillow_rs::PythonDitherInput::Integer(int_value)
                 } else if let Ok(string_value) = value.extract::<String>() {
-                    if matrix.is_none() {
-                        pillow_rs::validate_python_convert_dither(&string_value)
-                            .map_err(map_error)?;
-                    }
-                    Some(string_value)
+                    pillow_rs::PythonDitherInput::Name(string_value)
                 } else {
-                    return Err(pyo3::exceptions::PyTypeError::new_err(
-                        "'int' object cannot be converted to 'PyString'",
-                    ));
+                    pillow_rs::PythonDitherInput::Invalid(value.get_type().name()?.to_string())
                 }
             }
         };
+        let dither = pillow_rs::normalize_python_convert_dither(dither).map_err(map_error)?;
         let rs = self
             .inner
             .convert(mode, matrix, dither.as_deref(), palette.as_deref(), colors)
