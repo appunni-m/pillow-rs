@@ -109,18 +109,23 @@ fn normalize_draw_points(
     input: DrawPointsInput,
     allow_short: bool,
 ) -> Result<Vec<(i32, i32)>, PilError> {
-    let error =
+    // Pillow's _imaging.c coordinate parser distinguishes an odd flat list
+    // ("wrong number of coordinates") from a malformed nested point
+    // ("incorrect coordinate type"); preserve that public split here.
+    let too_few =
         || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    let wrong_number = || PilError::ValueError("wrong number of coordinates".into());
+    let wrong_point = || PilError::ValueError("incorrect coordinate type".into());
     match input {
         DrawPointsInput::Flat(values) => {
-            if allow_short && values.len() < 4 {
-                if values.len() < 3 {
-                    return Ok(Vec::new());
-                }
-                return Err(error());
+            if values.len() % 2 != 0 {
+                return Err(wrong_number());
             }
-            if values.len() < 4 || values.len() % 2 != 0 {
-                return Err(error());
+            if allow_short && values.len() < 4 {
+                return Ok(Vec::new());
+            }
+            if values.len() < 4 {
+                return Err(too_few());
             }
             Ok(values
                 .chunks_exact(2)
@@ -128,31 +133,36 @@ fn normalize_draw_points(
                 .collect())
         }
         DrawPointsInput::Nested(values) => {
+            if values.iter().any(|point| point.len() != 2) {
+                return Err(wrong_point());
+            }
             if values.len() < 2 {
                 if allow_short {
                     return Ok(Vec::new());
                 }
-                return Err(error());
-            }
-            if values.iter().any(|point| point.len() != 2) {
-                return Err(error());
+                return Err(too_few());
             }
             Ok(values
                 .into_iter()
                 .map(|point| (point[0], point[1]))
                 .collect())
         }
-        DrawPointsInput::Invalid => Err(error()),
+        DrawPointsInput::Invalid => Err(too_few()),
     }
 }
 
 fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>, PilError> {
-    let error =
+    let too_few =
         || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    let wrong_number = || PilError::ValueError("wrong number of coordinates".into());
+    let wrong_point = || PilError::ValueError("incorrect coordinate type".into());
     match input {
         DrawPointsInput::Flat(values) => {
-            if values.len() < 2 || values.len() % 2 != 0 {
-                return Err(error());
+            if values.is_empty() {
+                return Ok(Vec::new());
+            }
+            if values.len() % 2 != 0 {
+                return Err(wrong_number());
             }
             Ok(values
                 .chunks_exact(2)
@@ -161,14 +171,14 @@ fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>,
         }
         DrawPointsInput::Nested(values) => {
             if values.iter().any(|point| point.len() != 2) {
-                return Err(error());
+                return Err(wrong_point());
             }
             Ok(values
                 .into_iter()
                 .map(|point| (point[0], point[1]))
                 .collect())
         }
-        DrawPointsInput::Invalid => Err(error()),
+        DrawPointsInput::Invalid => Err(too_few()),
     }
 }
 

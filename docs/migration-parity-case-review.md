@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2200
-- Unique active workflow signatures: 2200
+- Active parity workflows: 2222
+- Unique active workflow signatures: 2222
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1024
+- Deliberate nuanced workflows: 1046
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -27,7 +27,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 353 |
+| `PIL.ImageDraw.ImageDraw` | 362 |
 | `PIL.ImageEnhance` | 24 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
@@ -35,8 +35,8 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageEnhance.Sharpness` | 1 |
 | `PIL.ImageFilter` | 121 |
 | `PIL.ImageFilter.Color3DLUT` | 14 |
-| `PIL.ImageFont` | 25 |
-| `PIL.ImageFont.FreeTypeFont` | 87 |
+| `PIL.ImageFont` | 26 |
+| `PIL.ImageFont.FreeTypeFont` | 99 |
 | `PIL.ImageFont.ImageFont` | 13 |
 | `PIL.ImageFont.TransposedFont` | 13 |
 | `PIL.ImageOps` | 164 |
@@ -802,12 +802,16 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.canvas-la`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.fill-outline-width`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.canvas-ycbcr-int-fill`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.empty-points-no-op`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.flat-points`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.horizontal`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.malformed-nested-point-error`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.odd-flat-points-error`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.reverse-axes`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.shallow-low-slope`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.shallow-negative-y`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.single-nested-point-no-op`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.steep-high-slope`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.steep-negative-direction`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.vertical`
@@ -820,16 +824,21 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.right-aligned-lines`
 - `PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.three-line-spacing`
 - `PIL.ImageDraw.ImageDraw.pieslice.nuanced.fill-outline-width`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.empty-points-no-op`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.flat-points`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.la-canvas`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.malformed-nested-point-error`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.odd-flat-points-error`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.rejected-rgb-empty-component`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.above-canvas`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.canvas-cmyk`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.coalesced-horizontal-decreasing`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.coalesced-horizontal-increasing`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.empty-points-error`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.horizontal-only`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.horizontal-runs`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.malformed-nested-point-error`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.outline-width`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.paired-points`
@@ -923,6 +932,7 @@ are not copied into the active lane by name.
 - `PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-in-range-clip`
 - `PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-threshold`
 - `PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-rgba-threshold`
+- `PIL.ImageFont.FreeTypeFont.font_variant.nuanced.encoding-unicode-charmap`
 - `PIL.ImageFont.FreeTypeFont.font_variant.nuanced.variable-font-size`
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.named-instances`
 - `PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.variable-font`
@@ -964,7 +974,18 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-rgba-error`
 - `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.multiline-stroked`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-clipped`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-collapse`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-height-collapse`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-stroked-collapse`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-stroked-height-collapse`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-vertical-clipped`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.sbit-cbdt-stroked`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-default-route`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.space-stroked-route`
+- `PIL.ImageFont.FreeTypeFont.getmask2.nuanced.valid-anchor-route`
 - `PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font`
+- `PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font-extra-axis`
 - `PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font`
 - `PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-luma-empty-mask`
 - `PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-luma-mask`
@@ -972,6 +993,7 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.TransposedFont.getbbox.nuanced.rotate-270`
 - `PIL.ImageFont.TransposedFont.getlength.nuanced.rotate-90-length-error`
 - `PIL.ImageFont.TransposedFont.getmask.nuanced.rotate-90`
+- `PIL.ImageFont.truetype.nuanced.encoding-unicode-charmap`
 - `PIL.ImageFont.truetype.nuanced.fractional-size`
 - `PIL.ImageFont.truetype.nuanced.malformed-cff-name-index`
 - `PIL.ImageFont.truetype.nuanced.malformed-cff-table`
