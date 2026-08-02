@@ -154,6 +154,18 @@ pub enum PutPixelValue {
     Invalid,
 }
 
+/// Host-neutral input for Pillow's `Image.putalpha` wrapper.
+#[derive(Debug, Clone)]
+pub enum PutAlphaInput {
+    /// An integer value. Pillow clamps this to one byte for values outside
+    /// 0..255.
+    Integer(i64),
+    /// An image mask supplied by the caller.
+    Image(Image),
+    /// A value that cannot be interpreted as an integer or image mask.
+    Invalid(String),
+}
+
 #[derive(Clone, Copy)]
 enum FromBytesMode {
     L,
@@ -3154,6 +3166,17 @@ impl Image {
         Ok(())
     }
 
+    /// Applies the Python-facing scalar-or-mask `putalpha` contract.
+    pub fn putalpha_with_input(&mut self, input: PutAlphaInput) -> Result<(), PilError> {
+        match input {
+            PutAlphaInput::Integer(value) => self.putalpha(value.clamp(0, 255) as u8),
+            PutAlphaInput::Image(mask) => self.putalpha_data(&mask),
+            PutAlphaInput::Invalid(type_name) => Err(PilError::TypeError(format!(
+                "'{type_name}' object cannot be interpreted as an integer"
+            ))),
+        }
+    }
+
     /// Replaces the alpha channel from an `L` mask image, matching Pillow's
     /// image-backed ``Image.putalpha``.
     pub fn putalpha_data(&mut self, mask: &Image) -> Result<(), PilError> {
@@ -3417,14 +3440,17 @@ impl Image {
 
     /// Converts the image to X11 bitmap (`XBM`) source bytes.
     ///
-    /// Mode `"1"` treats any non-zero pixel as white. Other modes are converted
-    /// through luma and thresholded at `128`.
+    /// Mode `"1"` treats any non-zero pixel as white. Other modes are rejected,
+    /// matching Pillow's `not a bitmap` contract.
     ///
     /// # Errors
     ///
     /// Returns [`PilError`] when mode detection or materialization fails.
     pub fn tobitmap(&self) -> Result<Vec<u8>, PilError> {
         let mode = self.mode()?;
+        if mode != "1" {
+            return Err(PilError::ValueError("not a bitmap".to_owned()));
+        }
         let is_mode1 = mode == "1";
         let img = self.materialized_shared()?;
         let gray = img.to_luma8();
@@ -3472,9 +3498,12 @@ impl Image {
 
     /// Seeks to a frame in a multi-frame image.
     ///
-    /// Multi-frame decoding is not implemented in core yet, so this accepts the
-    /// request and leaves the image unchanged.
-    pub fn seek(&self, _frame: u32) -> Result<(), PilError> {
+    /// Multi-frame decoding is not implemented in core yet, so only frame `0`
+    /// is accepted and other frame numbers raise [`PilError::EOFError`].
+    pub fn seek(&self, frame: u32) -> Result<(), PilError> {
+        if frame != self.tell() {
+            return Err(PilError::EOFError("no more images in file".to_owned()));
+        }
         Ok(())
     }
 

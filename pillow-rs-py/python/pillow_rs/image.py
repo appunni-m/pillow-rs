@@ -271,21 +271,12 @@ class Image:
         translate: Optional[Tuple[float, float]] = None,
         fillcolor: Optional[Any] = None,
     ) -> "Image":
-        if not isinstance(expand, bool):
-            raise TypeError("'int' object is not subscriptable")
-        if isinstance(resample, str):
-            raise ValueError(
-                f"Unknown resampling filter ({resample}). Use Image.Resampling.NEAREST (0), "
-                "Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
-            )
-        rust_image = self._rust_image.rotate(float(angle), expand, fillcolor)
+        rust_image = self._rust_image.rotate(
+            float(angle), resample, expand, center, translate, fillcolor
+        )
         return Image(rust_image)
 
     def transpose(self, method: Union[int, str]) -> "Image":
-        if isinstance(method, str):
-            raise TypeError("'str' object cannot be interpreted as an integer")
-        if isinstance(method, int):
-            method = Transpose.from_int(method)
         rust_image = self._rust_image.transpose(method)
         return Image(rust_image)
 
@@ -450,19 +441,9 @@ class Image:
 
     def putalpha(self, alpha):
         """Set/replace the alpha channel."""
-        if isinstance(alpha, Image):
-            mask = alpha.convert("L") if alpha.mode == "1" else alpha
-            # The core promotes to the matching alpha mode (LA/PA/RGBA) and
-            # installs the mask as the alpha band, mirroring Pillow.
-            self._rust_image.putalpha_data(mask._rust_image)
-            self._explicit_mode = self._rust_image.explicit_mode()
-            self.__dict__.pop("_palette", None)
-            return None
-        if isinstance(alpha, int):
-            self._rust_image.putalpha(alpha)
-        else:
-            self._rust_image.putalpha(int(alpha))
+        self._rust_image.putalpha_input(alpha)
         self._explicit_mode = self._rust_image.explicit_mode()
+        self.__dict__.pop("_palette", None)
 
     def reduce(self, factor, box=None):
         """Reduce image by integer factor through the Rust core."""
@@ -504,8 +485,6 @@ class Image:
 
     def seek(self, frame):
         """Seek to frame in multi-frame image."""
-        if frame != self.tell():
-            raise EOFError("no more images in file")
         self._rust_image.seek(frame)
 
     def tell(self):
@@ -769,8 +748,6 @@ class Image:
 
     def tobitmap(self, name="image"):
         """Convert to X11 bitmap format."""
-        if self.mode != "1":
-            raise ValueError("not a bitmap")
         return self._rust_image.tobitmap()
 
     def remap_palette(self, dest_map, source_palette=None):

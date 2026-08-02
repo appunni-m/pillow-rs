@@ -145,7 +145,7 @@ class _NativeFont:
 
         width, height, pixels, offset = self._rust_font.render_with_options(
             str(text),
-            _none_if_empty(mode),
+            mode,
             direction,
             features,
             language,
@@ -187,30 +187,12 @@ def _pilfont_text(text):
     return text
 
 
-def _none_if_empty(value):
-    return None if value == "" else value
-
-
 def _pillow_bbox_value(value):
     return int(value) if isinstance(value, float) and value.is_integer() else value
 
 
 def _pillow_bbox_tuple(bbox):
     return tuple(_pillow_bbox_value(value) for value in bbox)
-
-
-def _validate_layout_options(features=None, direction=None, language=None):
-    if features is not None or direction is not None or language is not None:
-        # This build intentionally has no libraqm, matching Pillow's public
-        # failure for layout options that require it.
-        raise KeyError("setting text direction, language or font features is not supported without libraqm")
-
-
-def _validate_start(start):
-    if start is not None and not (
-        isinstance(start, (tuple, list)) and len(start) == 2
-    ):
-        raise TypeError("render() argument 11 must be 2-item sequence, not float")
 
 
 def _wrap_pilfont(font):
@@ -277,49 +259,45 @@ class FreeTypeFont:
 
     def getbbox(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None):
-        _validate_layout_options(features, direction, language)
         if isinstance(text, bytes):
             if mode == "" and stroke_width == 0 and anchor is None:
                 return self._rust_font.getbbox_bytes(text)
             return _pillow_bbox_tuple(self._rust_font.getbbox_bytes_with_options(
-                text, _none_if_empty(mode), direction, features, language,
+                text, mode, direction, features, language,
                 float(stroke_width), anchor
             ))
         text = str(text)
         if mode == "" and stroke_width == 0 and anchor is None:
             return self._rust_font.getbbox(text)
         return _pillow_bbox_tuple(self._rust_font.getbbox_with_options(
-            text, _none_if_empty(mode), direction, features, language,
+            text, mode, direction, features, language,
             float(stroke_width), anchor
         ))
 
     def getlength(self, text, mode="", direction=None, features=None, language=None):
-        _validate_layout_options(features, direction, language)
         if isinstance(text, bytes):
             if mode == "":
                 return self._rust_font.getlength_bytes(text)
             return self._rust_font.getlength_bytes_with_options(
-                text, _none_if_empty(mode), direction, features, language
+                text, mode, direction, features, language
             )
         text = str(text)
         if mode == "":
             return self._rust_font.getlength_alpha(text)
         return self._rust_font.getlength_with_options(
-            text, _none_if_empty(mode), direction, features, language
+            text, mode, direction, features, language
         )
 
     def getmask(self, text, mode="", direction=None, features=None, language=None,
                 stroke_width=0, anchor=None, ink=0, start=None):
         """Return glyph mask through Pillow's ImagingCore-compatible contract."""
         from .image import Image as PILImage
-        _validate_layout_options(features, direction, language)
-        _validate_start(start)
         if isinstance(text, bytes):
             if mode == "" and stroke_width == 0 and anchor is None and ink == 0 and start is None:
                 w, h, alpha = self._rust_font.getmask_alpha_bytes(text)
             else:
                 w, h, alpha = self._rust_font.getmask_alpha_bytes_with_options(
-                    text, _none_if_empty(mode), direction, features, language,
+                    text, mode, direction, features, language,
                     float(stroke_width), anchor, ink, start
                 )
             return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
@@ -328,7 +306,7 @@ class FreeTypeFont:
             w, h, alpha = self._rust_font.getmask_alpha(text)
             return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
         w, h, alpha = self._rust_font.getmask_alpha_with_options(
-            text, _none_if_empty(mode), direction, features, language,
+            text, mode, direction, features, language,
             float(stroke_width), anchor, ink, start
         )
         return ImagingCore(PILImage.frombytes("L", (w, h), bytes(alpha)))
@@ -357,8 +335,6 @@ class FreeTypeFont:
                  ``(offset_x, offset_y)``.
         """
         from .image import Image as PILImage
-        _validate_layout_options(features, direction, language)
-        _validate_start(start)
         if isinstance(text, bytes):
             if (
                 mode == ""
@@ -371,7 +347,7 @@ class FreeTypeFont:
                 image, offset = self._rust_font.getmask2_image_bytes(text, start)
                 return ImagingCore(PILImage(image)), offset
             image, offset = self._rust_font.getmask2_image_bytes_with_options(
-                text, _none_if_empty(mode), direction, features, language,
+                text, mode, direction, features, language,
                 float(stroke_width), anchor, ink, start,
                 bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
             )
@@ -388,7 +364,7 @@ class FreeTypeFont:
             image, offset = self._rust_font.getmask2_image(text, start)
             return ImagingCore(PILImage(image)), offset
         image, offset = self._rust_font.getmask2_image_with_options(
-            text, _none_if_empty(mode), direction, features, language,
+            text, mode, direction, features, language,
             float(stroke_width), anchor, ink, start,
             bool(kwargs.get("stroke_filled", False)), bool(args), bool(kwargs)
         )
