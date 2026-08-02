@@ -998,6 +998,7 @@
           "PIL.Image.Image.transform.nuanced.rgb-affine-tuple-fill",
           "PIL.Image.Image.paste.nuanced.color-l",
           "PIL.Image.Image.paste.nuanced.opened-i16-scalar",
+          "PIL.Image.Image.paste.nuanced.opened-i16-two-tuple-error",
           "PIL.Image.Image.paste.nuanced.color-rgb",
           "PIL.Image.Image.paste.nuanced.color-rgba",
           "PIL.Image.Image.paste.nuanced.color-la",

@@ -30114,6 +30114,71 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.paste.nuanced.opened-i16-two-tuple-error",
+      "surface": "PIL.Image.Image",
+      "operation": "paste",
+      "covers": [
+        "PIL.Image.Image.paste.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-l16-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAgAAAAIBAwABAAAAEAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABUBAwABAAAAAQAAABYBBAABAAAAAgAAABcBBAABAAAACAAAAFMBAwABAAAAAQAAAAAAAAAAAACA//8AQA==",
+          "sha256": "17252164d15b4174d61d044d9abde5dddcd17c1c6afb917a1d09523ecd09e002",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-l16-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "paste",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": [
+                7,
+                9
+              ]
+            },
+            "box": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                2,
+                2
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.paste.nuanced.color-rgb",
       "surface": "PIL.Image.Image",
       "operation": "paste",
