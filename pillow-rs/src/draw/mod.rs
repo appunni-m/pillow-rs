@@ -302,6 +302,19 @@ impl Draw {
             .unwrap_or_else(|| "RGBA".to_string())
     }
 
+    /// Validate text options against the destination's Pillow mode.
+    pub fn validate_text_options(
+        &self,
+        options: &crate::font::ImageFontTextOptions,
+    ) -> Result<(), PilError> {
+        if options.embedded_color && !matches!(self.effective_mode().as_str(), "RGB" | "RGBA") {
+            return Err(PilError::ValueError(
+                "Embedded color supported only in RGB and RGBA modes".into(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Resolves a host-neutral color according to Pillow's drawing-mode rules.
     pub fn color_with_input(&self, input: DrawColorInput) -> Result<(u8, u8, u8, u8), PilError> {
         let mode = self.effective_mode();
@@ -1588,10 +1601,18 @@ impl Draw {
         rgba_blend_rgb: bool,
     ) -> Result<(), PilError> {
         let mode = self.effective_mode();
+        self.validate_text_options(options)?;
         let binary = matches!(mode.as_str(), "1" | "P" | "I" | "F");
         let mut options = options.clone();
         if binary && options.mode.is_none() {
             options.mode = Some("1".to_string());
+        }
+        let color_mask = options.uses_color_mask();
+        if color_mask && options.ink.is_none() {
+            // Pillow's RGBA font mask stores the draw fill in the mask's RGB
+            // channels and reserves alpha for glyph coverage. Keep this
+            // packing in the Rust core so Python only forwards the fill.
+            options.ink = Some(Self::pack_text_ink(fill));
         }
 
         // ImageFont rendering always uses alpha=255 so glyph coverage is preserved.
@@ -1599,7 +1620,11 @@ impl Draw {
         // in text_compose_direct / text_compose_rgba.
         let render_fill = (fill.0, fill.1, fill.2, 255u8);
         let (w, h, mask, offset) = font.getmask2_with_options(text, &options)?;
-        let pixels = text_mask_to_rgba(mask, render_fill);
+        let pixels = if color_mask {
+            mask
+        } else {
+            text_mask_to_rgba(mask, render_fill)
+        };
         if w == 0 || h == 0 {
             return Ok(());
         }
@@ -1607,11 +1632,22 @@ impl Draw {
         let draw_y = y.saturating_add(offset.1);
 
         match mode.as_str() {
-            "RGB" | "RGBA" => {
-                self.text_compose_rgba(draw_x, draw_y, w, h, &pixels, fill, rgba_blend_rgb)
-            }
+            "RGB" | "RGBA" => self.text_compose_rgba(
+                draw_x,
+                draw_y,
+                w,
+                h,
+                &pixels,
+                fill,
+                rgba_blend_rgb,
+                color_mask,
+            ),
             _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
         }
+    }
+
+    fn pack_text_ink(fill: (u8, u8, u8, u8)) -> i64 {
+        i64::from(fill.0) | (i64::from(fill.1) << 8) | (i64::from(fill.2) << 16)
     }
 
     /// RGBA compositing for text (used for RGB and RGBA modes).
@@ -1631,6 +1667,7 @@ impl Draw {
         // Pillow writes the fill RGB directly on RGBA canvases regardless of
         // the entry-point flag; the flag is retained for call-site parity.
         _rgba_blend_rgb: bool,
+        color_mask: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
         let mut canvas = img.to_rgba8();
@@ -1669,15 +1706,20 @@ impl Draw {
                     } else {
                         255
                     };
-                    let (r, g, b) = if mode == "RGBA" {
+                    let source_rgb = if color_mask {
+                        (pixels[off], pixels[off + 1], pixels[off + 2])
+                    } else {
+                        (fill.0, fill.1, fill.2)
+                    };
+                    let (r, g, b) = if mode == "RGBA" && !color_mask {
                         // Pillow's RGBA text writes the fill RGB directly and
                         // blends only the alpha channel with glyph coverage.
                         (fill.0, fill.1, fill.2)
                     } else {
                         (
-                            blend_u8(fill.0, dp[0], sa, inv),
-                            blend_u8(fill.1, dp[1], sa, inv),
-                            blend_u8(fill.2, dp[2], sa, inv),
+                            blend_u8(source_rgb.0, dp[0], sa, inv),
+                            blend_u8(source_rgb.1, dp[1], sa, inv),
+                            blend_u8(source_rgb.2, dp[2], sa, inv),
                         )
                     };
                     canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
@@ -1958,7 +2000,7 @@ impl Draw {
             }
             _ => {
                 // Fallback: RGBA pipeline
-                self.text_compose_rgba(x, y, w, h, pixels, fill, false)
+                self.text_compose_rgba(x, y, w, h, pixels, fill, false, false)
             }
         }
     }

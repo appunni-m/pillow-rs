@@ -113,8 +113,15 @@ pub fn normalize_layout_engine(value: Option<i64>) -> (&'static str, bool) {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ImageFontTextOptions {
     /// Pillow `mode` argument. BASIC layout ignores most values, but `RGBA`
-    /// changes `getmask/getmask2` allocation behavior.
+    /// requests an RGBA mask from `getmask/getmask2`.
     pub mode: Option<String>,
+    /// Pillow `ImageDraw`'s embedded-color request.
+    ///
+    /// The flag is kept in the core option record so the binding does not
+    /// decide how a color glyph is loaded or represented.  A color mask is
+    /// used for an un-stroked render; Pillow intentionally falls back to a
+    /// monochrome mask while rendering a stroke.
+    pub embedded_color: bool,
     /// Pillow `direction` argument. Requires libraqm in Pillow.
     pub direction: Option<String>,
     /// Pillow OpenType feature list. Requires libraqm in Pillow.
@@ -142,8 +149,9 @@ pub struct ImageFontTextOptions {
     /// Whether the host supplied a value that is not a two-item start
     /// sequence. The public error is produced by the core renderer.
     pub start_invalid: bool,
-    /// Pillow foreground ink for mask rendering. Grayscale BASIC masks accept
-    /// the integer but render coverage bytes independent of its value.
+    /// Pillow foreground ink for mask rendering. RGBA masks use the low three
+    /// bytes as RGB; grayscale BASIC masks render coverage bytes independent
+    /// of the value.
     pub ink: Option<i64>,
     /// Whether Pillow-compatible variadic `getmask2` arguments were supplied.
     /// The BASIC C path ignores them; this field preserves public signature
@@ -152,6 +160,14 @@ pub struct ImageFontTextOptions {
     /// Whether Pillow-compatible extra `getmask2` keyword arguments were
     /// supplied. Unknown keywords are ignored by Pillow's public wrapper.
     pub has_kwargs: bool,
+}
+
+impl ImageFontTextOptions {
+    /// Return whether this render should use an RGBA font mask.
+    #[must_use]
+    pub fn uses_color_mask(&self) -> bool {
+        self.mode.as_deref() == Some("RGBA") || (self.embedded_color && self.stroke_width == 0.0)
+    }
 }
 
 /// Optional Pillow `FreeTypeFont.font_variant()` override arguments.
