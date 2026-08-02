@@ -9579,6 +9579,39 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-la",
+            "values": {
+                "mode": literal("LA"),
+                "size": literal([2, 1]),
+                "color": literal([17, 203]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-rgba",
+            "values": {
+                "mode": literal("RGBA"),
+                "size": literal([2, 1]),
+                "color": literal([1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "none-color-rgb",
+            "values": {
+                "mode": literal("RGB"),
+                "size": literal([2, 1]),
+                "color": literal(None),
+            },
+        },
+        {
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",

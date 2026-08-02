@@ -9981,6 +9981,134 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.tuple-la",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                17,
+                203
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.tuple-rgba",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.new.nuanced.none-color-rgb",
+      "surface": "PIL.Image",
+      "operation": "new",
+      "covers": [
+        "PIL.Image.new.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": null
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
     }
   ]
 }

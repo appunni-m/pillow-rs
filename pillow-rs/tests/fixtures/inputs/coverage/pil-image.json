@@ -327,7 +327,10 @@
           "PIL.Image.new.nuanced.integer-scalar-i16l",
           "PIL.Image.new.nuanced.integer-scalar-i16b",
           "PIL.Image.new.nuanced.integer-scalar-i16n",
-          "PIL.Image.new.nuanced.float-scalar-f"
+          "PIL.Image.new.nuanced.float-scalar-f",
+          "PIL.Image.new.nuanced.tuple-la",
+          "PIL.Image.new.nuanced.tuple-rgba",
+          "PIL.Image.new.nuanced.none-color-rgb"
         ],
         "command_ids": []
       },
