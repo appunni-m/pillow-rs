@@ -217,6 +217,45 @@ pub enum PutDataValue {
     Components(Vec<i128>),
 }
 
+/// A Pillow pixel value after the core has applied the logical mode's band
+/// shape. Bindings only need to map these two Rust variants to their native
+/// scalar/tuple value types.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FormattedPixelValue {
+    /// A single-band pixel value.
+    Scalar(u8),
+    /// A multiband pixel value in Pillow band order.
+    Components(Vec<u8>),
+}
+
+/// Pillow's flat versus multiband `getdata` result after core formatting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FormattedImageData {
+    /// Scalar samples, including an explicitly selected band.
+    Scalars(Vec<u8>),
+    /// One component vector per multiband pixel.
+    Components(Vec<Vec<u8>>),
+}
+
+/// Pillow's public extrema shape: a single-band image returns one pair, while
+/// multiband images return one pair per band.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FormattedExtrema {
+    /// One `(minimum, maximum)` pair.
+    Single((u8, u8)),
+    /// One `(minimum, maximum)` pair per band.
+    Multiple(Vec<(u8, u8)>),
+}
+
+fn pillow_band_count(mode: &str) -> usize {
+    match mode {
+        "L" | "1" | "P" | "I" | "F" => 1,
+        "LA" | "PA" => 2,
+        "RGB" | "YCbCr" | "HSV" => 3,
+        _ => 4,
+    }
+}
+
 /// Host-neutral selector for `Image.getchannel`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ChannelSelector {
@@ -2072,6 +2111,29 @@ impl Image {
         Ok(image_slash_star::encode_default(&decoded, save_format)?)
     }
 
+    /// Resolves Pillow's explicit save format or a host-supplied path
+    /// extension before encoding.
+    ///
+    /// Filesystem access and extension extraction remain in host bindings, but
+    /// format validity and Pillow's public error categories are shared here.
+    pub fn resolve_save_format(
+        explicit: Option<&str>,
+        extension: Option<&str>,
+    ) -> Result<String, PilError> {
+        if let Some(format) = explicit {
+            parse_format_str(format)
+                .map(|_| format.to_owned())
+                .map_err(|_| PilError::KeyError(format.to_owned()))
+        } else {
+            let extension = extension.ok_or_else(|| {
+                PilError::UnknownFormat("Cannot determine format from path".into())
+            })?;
+            parse_format_str(extension)
+                .map(|_| extension.to_owned())
+                .map_err(|_| PilError::ValueError(format!("unknown file extension: .{extension}")))
+        }
+    }
+
     /// Returns raw image bytes in the image's current Pillow mode.
     ///
     /// # Errors
@@ -3207,6 +3269,29 @@ impl Image {
         }
     }
 
+    /// Returns `getdata` values with Pillow's scalar/multiband shape applied.
+    ///
+    /// The byte extraction and logical band count are core behavior. Host
+    /// bindings should only convert [`FormattedImageData`] into their native
+    /// list/tuple representation.
+    pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
+        let raw = self.getdata(band)?;
+        if band.is_some() {
+            return Ok(FormattedImageData::Scalars(raw));
+        }
+
+        let band_count = pillow_band_count(&self.mode()?);
+        if band_count == 1 {
+            return Ok(FormattedImageData::Scalars(raw));
+        }
+
+        Ok(FormattedImageData::Components(
+            raw.chunks_exact(band_count)
+                .map(|pixel| pixel.to_vec())
+                .collect(),
+        ))
+    }
+
     /// Queues replacement pixel data from a flat byte sequence.
     ///
     /// `data` must match the active image mode and dimensions expected by the
@@ -3626,6 +3711,43 @@ impl Image {
             result.sort_by(|a, b| b.1.cmp(&a.1));
         }
         Ok(Some(result))
+    }
+
+    /// Returns `getcolors` with Pillow's scalar/tuple color shape applied.
+    ///
+    /// Color counting and mode-specific truncation remain in the core; the
+    /// binding is responsible only for constructing the host list and tuple
+    /// objects.
+    pub fn getcolors_formatted(
+        &self,
+        maxcolors: u32,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let Some(colors) = self.getcolors(maxcolors)? else {
+            return Ok(None);
+        };
+        let band_count = pillow_band_count(&self.mode()?);
+        let formatted = colors
+            .into_iter()
+            .map(|(count, color)| {
+                let value = if band_count == 1 {
+                    FormattedPixelValue::Scalar(color.first().copied().unwrap_or_default())
+                } else {
+                    FormattedPixelValue::Components(color.into_iter().take(band_count).collect())
+                };
+                (count, value)
+            })
+            .collect();
+        Ok(Some(formatted))
+    }
+
+    /// Returns extrema using Pillow's one-pair versus per-band result shape.
+    pub fn getextrema_formatted(&self) -> Result<FormattedExtrema, PilError> {
+        let extrema = self.getextrema()?;
+        if extrema.len() == 1 {
+            Ok(FormattedExtrema::Single(extrema[0]))
+        } else {
+            Ok(FormattedExtrema::Multiple(extrema))
+        }
     }
 
     /// Histogram-based getcolors for 1, L, P modes.

@@ -170,18 +170,6 @@ class Image:
     def save(
         self, fp: Union[str, Path], format: Optional[str] = None, **options
     ) -> None:
-        if isinstance(fp, Path):
-            fp = str(fp)
-        path = Path(fp) if isinstance(fp, str) else None
-        if format is None and path is not None and path.suffix.lower() == ".out":
-            raise ValueError("unknown file extension: .out")
-        if format == "NOT_A_FORMAT":
-            raise KeyError(format)
-        if path is not None:
-            if path.is_dir():
-                raise IsADirectoryError(21, "Is a directory", str(path))
-            if not path.parent.exists():
-                raise FileNotFoundError(2, "No such file or directory", str(path))
         self._rust_image.save(fp, format)
 
     def resize(
