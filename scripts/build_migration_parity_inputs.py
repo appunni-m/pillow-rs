@@ -3279,6 +3279,42 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "mode-rgba-embedded-bgra-start",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "mode": literal("RGBA"),
+                "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "mode-rgba-embedded-bgra-collapse",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "mode": literal("RGBA"),
+                "start": literal([-100.0, -100.0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.stroke-width",
+            "name": "mode-rgba-embedded-bgra-stroked",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "mode": literal("RGBA"),
+                "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "get_variation_axes",
             "requirement_suffix": "behavior.default",
             "name": "variable-font",
@@ -3606,11 +3642,35 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.stroke-width",
+            "name": "embedded-bgra-rgba-stroked",
+            "mode": "RGBA",
+            "font": "font/fonts/sbit-bgra-format1.ttf",
+            "values": {
+                "text": literal("\ue000"),
+                "fill": literal([200, 10, 20, 200]),
+                "embedded_color": literal(True),
+                "stroke_width": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "multiline_text",
             "requirement_suffix": "parameter.text",
             "name": "three-line-spacing",
             "values": {
                 "text": literal("A\nB\nC"),
+                "spacing": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "multiline_text",
+            "requirement_suffix": "parameter.text",
+            "name": "empty-line-spacing",
+            "values": {
+                "text": literal("A\n\nB"),
                 "spacing": literal(3),
             },
         },
