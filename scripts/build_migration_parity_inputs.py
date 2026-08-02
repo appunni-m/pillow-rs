@@ -2230,9 +2230,16 @@ class WorkflowBuilder:
         )
         observations = [call_id]
 
+        iterator_im = self.scenario_values.get("im")
+        invalid_iterator_image = (
+            iterator_im is not None
+            and iterator_im.get("kind") == "literal"
+            and iterator_im.get("value") is None
+        )
         if (
             self.primary_surface == "PIL.ImageSequence"
             and self.primary_operation == "Iterator"
+            and not invalid_iterator_image
         ):
             # The constructor itself is only a handle allocation. Seek the
             # public image receiver once so this workflow exercises the
@@ -2486,6 +2493,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "seek-frame-zero",
             "mode": "L",
+        },
+        {
+            "surface": "PIL.ImageSequence",
+            "operation": "Iterator",
+            "requirement_suffix": "parameter.im",
+            "name": "invalid-im-no-seek",
+            "values": {"im": literal(None)},
         },
         {
             "surface": "PIL.ImageFont.ImageFont",

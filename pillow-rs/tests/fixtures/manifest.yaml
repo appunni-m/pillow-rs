@@ -28831,6 +28831,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - image
+        - 'null'
         omission:
           kind: required
       result:
@@ -28855,7 +28856,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageSequence.Iterator
-      signature: Iterator(im=None, image=None)
+      signature: Iterator(im)
       support:
         status: supported
     requirements:
