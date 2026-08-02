@@ -156,7 +156,12 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
         segment = b"\xff\xe1\x00\x01"
         return base[:2] + segment + base[2:]
 
-    if variant in {"le-orientation2", "standalone-soi", "standalone-rst0"}:
+    if variant in {
+        "le-orientation2",
+        "standalone-soi",
+        "standalone-rst0",
+        "eoi-before-app1",
+    }:
         tiff = (
             b"II\x2a\x00"
             + struct.pack("<I", 8)
@@ -197,6 +202,18 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
         return base[:2] + b"\xff\xd8" + segment + base[2:]
     if variant == "standalone-rst0":
         return base[:2] + b"\xff\xd0" + segment + base[2:]
+    if variant == "eoi-before-app1":
+        # Keep the JPEG frame header intact, then make EOI the first byte after
+        # SOS. Image.open() only inspects the header for getexif(), so this
+        # exercises the scanner's post-SOS EOI stop without materializing the
+        # entropy payload or allowing a later APP1 to be considered.
+        sos = base.find(b"\xff\xda")
+        if sos < 0 or sos + 4 > len(base):
+            raise ValueError("EXIF variant base must contain a JPEG SOS")
+        scan_start = sos + 2 + struct.unpack(">H", base[sos + 2 : sos + 4])[0]
+        if scan_start > len(base):
+            raise ValueError("JPEG SOS extends beyond EXIF variant base")
+        return base[:scan_start] + b"\xff\xd9" + segment
     return base[:2] + segment + base[2:]
 
 
@@ -9293,6 +9310,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "jpeg-standalone-rst0",
             "exif_variant": "standalone-rst0",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-eoi-before-app1",
+            "exif_variant": "eoi-before-app1",
         },
         {
             "surface": "PIL.Image.Image",
