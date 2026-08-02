@@ -6,6 +6,16 @@
 use crate::error::PilError;
 use crate::image::Image;
 
+/// Validate a Pillow transparency/statistics mask without touching host types.
+pub fn validate_transparency_mask(image: &Image, mask: &Image) -> Result<(), PilError> {
+    let mode = mask.mode()?;
+    let size = mask.size()?;
+    if !matches!(mode.as_str(), "1" | "L") || size != image.size()? {
+        return Err(PilError::ValueError("bad transparency mask".into()));
+    }
+    Ok(())
+}
+
 impl Image {
     /// Returns the bounding box of non-zero image content.
     ///

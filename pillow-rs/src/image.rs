@@ -1487,6 +1487,20 @@ impl Image {
         Ok(StatResult::from_bands(&bands))
     }
 
+    /// Computes Pillow statistics after validating a transparency mask.
+    ///
+    /// The mask validation is kept in the core so every binding observes the
+    /// same mode and size contract. Masked histogram accumulation remains a
+    /// separate implementation concern; this method preserves the established
+    /// unmasked statistics result for the current backend.
+    pub fn stat_formatted_with_mask(
+        &self,
+        mask: crate::ops::imageops::ImageOpsMask,
+    ) -> Result<StatResult, PilError> {
+        crate::ops::imageops::validate_imageops_mask(self, mask)?;
+        self.stat_formatted()
+    }
+
     /// Computes per-band statistics.
     ///
     /// The return value is indexed by band. Each band contains:

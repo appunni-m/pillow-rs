@@ -26,6 +26,13 @@ fn clear_palette_for_index_result(image: &Image, result: &mut Image) -> Result<(
     Ok(())
 }
 
+fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
+    if image1.mode()? != "1" || image2.mode()? != "1" {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    Ok(())
+}
+
 /// Adds two images with scale and offset.
 ///
 /// # Errors
@@ -196,6 +203,7 @@ pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_logical_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::LogicalAnd {
@@ -211,6 +219,7 @@ pub fn logical_and(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_logical_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::LogicalOr {
@@ -226,6 +235,7 @@ pub fn logical_or(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn logical_xor(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_logical_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::LogicalXor {
@@ -279,6 +289,15 @@ pub fn offset(image: &Image, xoffset: i32, yoffset: i32) -> Result<Image, PilErr
             y: yoffset,
         },
     ))
+}
+
+/// Offsets image contents, using `xoffset` for the omitted y offset.
+pub fn offset_with_default(
+    image: &Image,
+    xoffset: i32,
+    yoffset: Option<i32>,
+) -> Result<Image, PilError> {
+    offset(image, xoffset, yoffset.unwrap_or(xoffset))
 }
 
 /// Adds two images modulo 256.
