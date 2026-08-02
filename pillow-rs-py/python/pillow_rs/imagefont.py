@@ -449,15 +449,7 @@ class FreeTypeFont:
         :return: A list of axis dictionaries.
         :raises OSError: If the font is not a variation font.
         """
-        return [
-            {
-                "minimum": minimum,
-                "default": default,
-                "maximum": maximum,
-                "name": name,
-            }
-            for minimum, default, maximum, name in self._rust_font.get_variation_axes()
-        ]
+        return self._rust_font.get_variation_axes()
 
     def set_variation_by_axes(self, axes):
         """Set variation by axes values.
