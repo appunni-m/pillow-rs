@@ -270,6 +270,27 @@ pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     eval(image, lut)
 }
 
+/// Builds a Pillow point/eval lookup table from a host callback.
+///
+/// The callback is only responsible for producing one integer result for each
+/// input sample. Clamping the result to Pillow's byte range and replicating the
+/// table for multiband images remain core behavior so bindings do not duplicate
+/// the algorithm.
+pub fn make_lut<F>(n_bands: u32, mut callback: F) -> Result<Vec<u8>, PilError>
+where
+    F: FnMut(u32) -> Result<i32, PilError>,
+{
+    let mut table = Vec::with_capacity(256);
+    for sample in 0..256u32 {
+        let value = callback(sample)?;
+        table.push(value.clamp(0, 255) as u8);
+    }
+    if n_bands > 1 {
+        table = table.repeat(n_bands as usize);
+    }
+    Ok(table)
+}
+
 /// Generates Gaussian noise using the source image dimensions.
 ///
 /// # Errors
