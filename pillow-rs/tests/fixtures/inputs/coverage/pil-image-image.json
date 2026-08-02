@@ -1219,6 +1219,7 @@
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-loaded",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-putpalette",
+          "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-putpalette-short",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-single-index-transparency",
           "PIL.Image.Image.apply_transparency.nuanced.p-transparency-pa-boundary-putalpha",
           "PIL.Image.Image.convert.nuanced.opened-p-transparency",

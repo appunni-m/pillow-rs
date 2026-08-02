@@ -2198,6 +2198,14 @@ impl Image {
             PaletteTransparency::Index(index) => {
                 if let Some(alpha) = palette_alpha.get_mut(usize::from(index)) {
                     *alpha = 0;
+                } else {
+                    // Pillow's Image.apply_transparency writes the pending
+                    // index directly into the palette alpha list. A retained
+                    // transparency index beyond a shortened putpalette raises
+                    // the list-assignment IndexError instead of being ignored.
+                    return Err(PilError::IndexError(
+                        "list assignment index out of range".into(),
+                    ));
                 }
             }
             PaletteTransparency::Table(table) => {
