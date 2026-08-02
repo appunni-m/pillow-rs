@@ -428,10 +428,78 @@ pub fn op_pad(
         let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
         (new_w, h)
     };
-    let resized = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
+    // Pillow's ImagingCore resize keeps P/PA as indexed samples and ignores
+    // the requested resampling kernel; using nearest here avoids interpolated
+    // palette indices while preserving the raw mode through the pad path.
+    let resize_filter = if matches!(explicit_mode, Some("P" | "PA")) {
+        ResampleFilter::Nearest
+    } else {
+        filter
+    };
+    let resized = pil_resize(img, nw.max(1), nh.max(1), resize_filter, explicit_mode);
     if nw == w && nh == h {
         return Ok(preserve_mode(img, resized));
     }
+
+    if explicit_mode == Some("P") {
+        let source = resized.to_luma8();
+        let fill_index = color.map_or(0, |value| value.0);
+        let mut padded =
+            crate::raster::GrayImage::from_pixel(w, h, crate::raster::Luma([fill_index]));
+        let (offset_x, offset_y) = if nw != w {
+            (
+                bankers_round((w as f64 - nw as f64) * centering.0.clamp(0.0, 1.0)) as u32,
+                0,
+            )
+        } else {
+            (
+                0,
+                bankers_round((h as f64 - nh as f64) * centering.1.clamp(0.0, 1.0)) as u32,
+            )
+        };
+        for py in 0..nh.min(h) {
+            for px in 0..nw.min(w) {
+                let dx = offset_x + px;
+                let dy = offset_y + py;
+                if dx < w && dy < h {
+                    padded.put_pixel(dx, dy, *source.get_pixel(px, py));
+                }
+            }
+        }
+        return Ok(DynamicImage::ImageLuma8(padded));
+    }
+
+    if explicit_mode == Some("PA") {
+        let source = resized.to_luma_alpha8();
+        let (fill_index, fill_alpha) = color.map_or((0, 0), |value| (value.0, value.3));
+        let mut padded = crate::raster::GrayAlphaImage::from_pixel(
+            w,
+            h,
+            crate::raster::LumaA([fill_index, fill_alpha]),
+        );
+        let (offset_x, offset_y) = if nw != w {
+            (
+                bankers_round((w as f64 - nw as f64) * centering.0.clamp(0.0, 1.0)) as u32,
+                0,
+            )
+        } else {
+            (
+                0,
+                bankers_round((h as f64 - nh as f64) * centering.1.clamp(0.0, 1.0)) as u32,
+            )
+        };
+        for py in 0..nh.min(h) {
+            for px in 0..nw.min(w) {
+                let dx = offset_x + px;
+                let dy = offset_y + py;
+                if dx < w && dy < h {
+                    padded.put_pixel(dx, dy, *source.get_pixel(px, py));
+                }
+            }
+        }
+        return Ok(DynamicImage::ImageLumaA8(padded));
+    }
+
     // Step 2: pad to target size
     let mut padded = DynamicImage::new_rgba8(w, h);
     for py in 0..h {

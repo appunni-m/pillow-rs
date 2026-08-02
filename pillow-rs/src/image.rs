@@ -1215,6 +1215,10 @@ impl Image {
                 mode: crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA,
                 ..
             } => true,
+            // Pillow keeps P/PA images indexed through ImageOps.pad. The
+            // resize step uses nearest-neighbour samples for these modes,
+            // and the pad fill is another raw index/alpha pair.
+            PipelineOp::Pad { .. } => true,
             // Pillow's PA bands are the raw index and alpha bytes. Extracting
             // either band must happen before palette expansion, just like the
             // corresponding ImagingCore band operation.

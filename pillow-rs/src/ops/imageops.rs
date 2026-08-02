@@ -28,8 +28,9 @@ pub enum ImageOpsMask {
     None,
     /// A mask image extracted by a binding.
     Image(Image),
-    /// A non-image value was supplied.
-    Invalid,
+    /// A non-image value was supplied, preserving its host type name for the
+    /// same attribute error Pillow raises when it calls ``mask.load()``.
+    Invalid(String),
 }
 
 /// Host-neutral color input for `ImageOps.pad`.
@@ -51,7 +52,9 @@ pub fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), P
     let ImageOpsMask::Image(mask) = mask else {
         return match mask {
             ImageOpsMask::None => Ok(()),
-            ImageOpsMask::Invalid => Err(PilError::ValueError("bad transparency mask".into())),
+            ImageOpsMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
+                "'{type_name}' object has no attribute 'load'"
+            ))),
             ImageOpsMask::Image(_) => unreachable!(),
         };
     };
@@ -159,6 +162,13 @@ fn resolve_pad_color(
         ImageOpsColor::Invalid => Err(PilError::TypeError("color must be int or tuple".into())),
         ImageOpsColor::Name(name) => {
             let (r, g, b, a) = crate::color::parse_color_str(&name)?;
+            if mode == "P" {
+                // Pillow's Image.new("P", ..., tuple_or_name) creates a
+                // temporary palette entry, then ImageOps.pad pastes into the
+                // source palette without copying that entry. The fill stays
+                // at palette index zero; only scalar colors are raw indices.
+                return Ok(Some((0, 0, 0, u8::MAX)));
+            }
             let value = crate::color::getcolor(
                 i32::from(r),
                 i32::from(g),
@@ -171,7 +181,8 @@ fn resolve_pad_color(
         ImageOpsColor::Scalar(value) => Ok(Some(scalar(value, mode))),
         ImageOpsColor::Components(values) => match values.as_slice() {
             [value] => Ok(Some(scalar(*value, mode))),
-            [value, alpha] if mode == "LA" => Ok(Some((
+            [_, _, _] | [_, _, _, _] if mode == "P" => Ok(Some((0, 0, 0, u8::MAX))),
+            [value, alpha] if matches!(mode, "LA" | "PA") => Ok(Some((
                 clamp(*value),
                 clamp(*value),
                 clamp(*value),
