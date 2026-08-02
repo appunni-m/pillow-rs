@@ -1096,6 +1096,8 @@
           "PIL.Image.Image.convert.nuanced.cmyk-to-l",
           "PIL.Image.Image.convert.nuanced.rgb-to-hsv",
           "PIL.Image.Image.convert.nuanced.rgb-to-hsv-nonzero",
+          "PIL.Image.Image.convert.nuanced.rgb-to-hsv-g-max",
+          "PIL.Image.Image.convert.nuanced.rgb-to-hsv-b-max",
           "PIL.Image.Image.convert.nuanced.hsv-to-rgb",
           "PIL.Image.Image.convert.nuanced.hsv-sector-zero",
           "PIL.Image.Image.convert.nuanced.hsv-sector-one",

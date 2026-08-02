@@ -22,6 +22,7 @@
           "PIL.ImageColor.getrgb.nuanced.rgba-syntax",
           "PIL.ImageColor.getrgb.nuanced.hsl-syntax",
           "PIL.ImageColor.getrgb.nuanced.hex-with-alpha",
+          "PIL.ImageColor.getrgb.nuanced.hex-short-alpha",
           "PIL.ImageColor.getcolor.nuanced.named-l",
           "PIL.ImageColor.getcolor.nuanced.named-hsv",
           "PIL.ImageColor.getcolor.nuanced.green-hsv",

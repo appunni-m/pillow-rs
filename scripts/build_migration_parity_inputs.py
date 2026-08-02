@@ -4679,6 +4679,13 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageColor",
+            "operation": "getrgb",
+            "requirement_suffix": "parameter.color",
+            "name": "hex-short-alpha",
+            "values": {"color": literal("#f00f")},
+        },
+        {
+            "surface": "PIL.ImageColor",
             "operation": "getcolor",
             "requirement_suffix": "mode.l",
             "name": "named-l",
@@ -5020,6 +5027,60 @@ def build_nuanced_cases(
                         component
                         for index in range(256)
                         for component in (index, index, index)
+                    ]
+                ),
+            },
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-mode-three-tuple",
+            "values": {
+                "mode": literal("RGBA"),
+                "color": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-mode-four-tuple",
+            "values": {
+                "mode": literal("RGBA"),
+                "color": literal([1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "full-rgba-palette-existing-color",
+            "values": {
+                "mode": literal("RGBA"),
+                "color": literal([42, 42, 42, 200]),
+                "palette": literal(
+                    [
+                        component
+                        for index in range(256)
+                        for component in (index, index, index, 200)
+                    ]
+                ),
+            },
+        },
+        {
+            "surface": "PIL.ImagePalette.ImagePalette",
+            "operation": "getcolor",
+            "requirement_suffix": "behavior.default",
+            "name": "full-rgba-palette-exhausted",
+            "values": {
+                "mode": literal("RGBA"),
+                "color": literal([9, 8, 7, 255]),
+                "palette": literal(
+                    [
+                        component
+                        for index in range(256)
+                        for component in (index, index, index, 255)
                     ]
                 ),
             },
@@ -6842,6 +6903,26 @@ def build_nuanced_cases(
             "mode": "RGB",
             "edge": "nonzero-pixel",
             "pixel": [200, 100, 50],
+            "values": {"mode": literal("HSV")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.hsv",
+            "name": "rgb-to-hsv-g-max",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [50, 200, 100],
+            "values": {"mode": literal("HSV")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.hsv",
+            "name": "rgb-to-hsv-b-max",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [50, 100, 200],
             "values": {"mode": literal("HSV")},
         },
         {
@@ -10154,6 +10235,61 @@ def build_nuanced_cases(
                 "mode": literal("I"),
                 "size": literal([2, 2]),
                 "color": literal(-123456),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-rgb-i",
+            "values": {
+                "mode": literal("I"),
+                "size": literal([2, 2]),
+                "color": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-rgb-f",
+            "values": {
+                "mode": literal("F"),
+                "size": literal([2, 2]),
+                "color": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-rgb-i16",
+            "values": {
+                "mode": literal("I;16"),
+                "size": literal([2, 1]),
+                "color": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-rgb-l",
+            "values": {
+                "mode": literal("L"),
+                "size": literal([2, 2]),
+                "color": literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "tuple-rgb-one",
+            "values": {
+                "mode": literal("1"),
+                "size": literal([2, 2]),
+                "color": literal([1, 2, 3]),
             },
         },
         {

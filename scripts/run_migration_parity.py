@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from concurrent.futures import ThreadPoolExecutor
 import datetime as _dt
 import hashlib
 import importlib
@@ -1001,8 +1002,20 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     )
     started = now_rfc3339()
     try:
-        source_handshake, source_results = run_side_subprocess("source", manifest_path, cases, args.timeout)
-        target_handshake, target_results = run_side_subprocess("target", manifest_path, cases, args.timeout)
+        # The adapters are already isolated processes with independent
+        # temporary directories. Run them together so the canonical parity
+        # lane spends one adapter duration in wall time instead of the sum of
+        # source and target durations; comparison remains strictly ordered
+        # below and therefore produces the same artifact.
+        with ThreadPoolExecutor(max_workers=2, thread_name_prefix="parity-side") as executor:
+            source_future = executor.submit(
+                run_side_subprocess, "source", manifest_path, cases, args.timeout
+            )
+            target_future = executor.submit(
+                run_side_subprocess, "target", manifest_path, cases, args.timeout
+            )
+            source_handshake, source_results = source_future.result()
+            target_handshake, target_results = target_future.result()
     except RuntimeError as exc:
         result = {
             "schema": "migration-parity/parity-result@1",

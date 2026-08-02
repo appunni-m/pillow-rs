@@ -219,6 +219,35 @@
       ]
     },
     {
+      "case_id": "PIL.ImageColor.getrgb.nuanced.hex-short-alpha",
+      "surface": "PIL.ImageColor",
+      "operation": "getrgb",
+      "covers": [
+        "PIL.ImageColor.getrgb.parameter.color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageColor",
+          "operation": "getrgb",
+          "receiver": null,
+          "arguments": {
+            "color": {
+              "kind": "literal",
+              "value": "#f00f"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageColor.getcolor.nuanced.named-l",
       "surface": "PIL.ImageColor",
       "operation": "getcolor",
