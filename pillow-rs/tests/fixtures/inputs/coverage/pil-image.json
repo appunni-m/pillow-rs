@@ -316,6 +316,7 @@
           "PIL.Image.frombytes.nuanced.zero-width",
           "PIL.Image.frombytes.nuanced.zero-height",
           "PIL.Image.new.nuanced.tuple-p",
+          "PIL.Image.new.nuanced.omitted-p-color",
           "PIL.Image.new.nuanced.rgb-string",
           "PIL.Image.new.nuanced.rgb-percent-string",
           "PIL.Image.new.nuanced.rgba-string",
@@ -343,6 +344,7 @@
           "PIL.Image.new.nuanced.p-opaque-rgba-tuple",
           "PIL.Image.new.nuanced.p-transparent-rgba-error",
           "PIL.Image.new.nuanced.p-la-tuple",
+          "PIL.Image.new.nuanced.p-string-color",
           "PIL.Image.new.nuanced.none-color-rgb"
         ],
         "command_ids": []
