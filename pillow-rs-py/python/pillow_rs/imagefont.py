@@ -426,16 +426,6 @@ class FreeTypeFont:
 class TransposedFont:
     """Wrapper for writing rotated or mirrored text."""
 
-    _TRANSPOSE_NAMES = {
-        0: "FLIP_LEFT_RIGHT",
-        1: "FLIP_TOP_BOTTOM",
-        2: "ROTATE_90",
-        3: "ROTATE_180",
-        4: "ROTATE_270",
-        5: "TRANSPOSE",
-        6: "TRANSVERSE",
-    }
-
     def __init__(self, font, orientation=None):
         """Wrap a font for transposed rendering.
 
@@ -449,10 +439,7 @@ class TransposedFont:
         """
         self.font = font
         self.orientation = orientation
-        if isinstance(orientation, int):
-            self._orientation_name = self._TRANSPOSE_NAMES.get(orientation)
-        else:
-            self._orientation_name = orientation
+        self._orientation_name = _core.transposed_font_orientation(orientation)
 
     def getmask(self, text, mode="", *args, **kwargs):
         """Create a bitmap for the text, optionally transposed."""

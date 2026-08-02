@@ -56,44 +56,44 @@ class SMOOTH_MORE(_BuiltinFilter):
 
 class GaussianBlur:
     def __init__(self, radius=2):
-        self.radius = float(radius)
+        self.radius = radius
     def _apply(self, rust_image):
         return Image(rust_image.gaussian_blur(self.radius))
 
 
 class BoxBlur:
     def __init__(self, radius=2):
-        self.radius = float(radius)
+        self.radius = radius
     def _apply(self, rust_image):
         return Image(rust_image.box_blur(self.radius))
 
 
 class UnsharpMask:
     def __init__(self, radius=2, percent=150, threshold=3):
-        self.radius = float(radius)
-        self.percent = int(percent)
-        self.threshold = int(threshold)
+        self.radius = radius
+        self.percent = percent
+        self.threshold = threshold
     def _apply(self, rust_image):
         return Image(rust_image.unsharp_mask(self.radius, self.percent, self.threshold))
 
 
 class MaxFilter:
     def __init__(self, size=3):
-        self.size = int(size)
+        self.size = size
     def _apply(self, rust_image):
         return Image(rust_image.max_filter(self.size))
 
 
 class MinFilter:
     def __init__(self, size=3):
-        self.size = int(size)
+        self.size = size
     def _apply(self, rust_image):
         return Image(rust_image.min_filter(self.size))
 
 
 class MedianFilter:
     def __init__(self, size=3):
-        self.size = int(size)
+        self.size = size
     def _apply(self, rust_image):
         return Image(rust_image.median_filter(self.size))
 
@@ -102,23 +102,23 @@ class ModeFilter:
     name = "Mode"
 
     def __init__(self, size=3):
-        self.size = int(size)
+        self.size = size
     def _apply(self, rust_image):
         return Image(rust_image.mode_filter(self.size))
 
 
 class RankFilter:
     def __init__(self, size=3, rank=0):
-        self.size = int(size)
-        self.rank = int(rank)
+        self.size = size
+        self.rank = rank
     def _apply(self, rust_image):
         return Image(rust_image.rank_filter(self.size, self.rank))
 
 
 class Kernel:
     def __init__(self, size=(3, 3), kernel=None, scale=None, offset=0):
-        self.size = tuple(size)
-        self.kernel = None if kernel is None else list(kernel)
+        self.size = size
+        self.kernel = kernel
         _core.kernel_validate_coefficients(self.kernel, self.size)
         self.scale = scale
         self.offset = offset
