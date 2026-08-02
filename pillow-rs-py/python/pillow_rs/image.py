@@ -116,10 +116,13 @@ class Image:
         formats: Optional[list] = None,
     ) -> "Image":
         """Open an image file. Format detection and mode handling done in Rust."""
+        # Keep validation outside the decode-error translation below; the
+        # Rust core owns the rule, while Pillow exposes bad arguments directly
+        # instead of relabeling them as an unidentified image.
         RustImage.validate_open_inputs(mode, formats)
         RustImage.validate_open_source(fp)
         try:
-            rust_image = RustImage.open(fp, formats)
+            rust_image = RustImage.open(fp, mode, formats)
         except FileNotFoundError:
             raise
         except Exception as exc:
