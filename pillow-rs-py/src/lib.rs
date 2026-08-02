@@ -1914,33 +1914,18 @@ fn mesh_flatten(items: Vec<(Vec<f64>, Vec<f64>)>) -> PyResult<Vec<f64>> {
     Ok(flat)
 }
 
-/// Apply a Python callable to the range 0..255 to produce a LUT, then
-/// replicate for `n_bands` channels.  Used by `Image.eval` and `Image.point`.
+/// Adapt a Python callback into the core-owned LUT builder.
 #[pyfunction]
 fn make_lut(func: &Bound<'_, PyAny>, n_bands: u32) -> PyResult<Vec<u8>> {
-    let mut table = Vec::with_capacity(256);
-    for i in 0..256u32 {
-        let result = func.call1((i,)).map_err(|e| {
-            pyo3::exceptions::PyValueError::new_err(format!("LUT function failed: {}", e))
+    pillow_rs::make_lut(n_bands, |sample| {
+        let result = func.call1((sample,)).map_err(|error| {
+            pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
         })?;
-        let v = result.extract::<i32>().map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err("LUT function must return an integer")
-        })?;
-        // Pillow 12.2.0 `_imaging.c::_point` maps each function output through
-        // CLIP8 (ImagingUtils.h), saturating to [0, 255]; wrapping with a mask
-        // would diverge for out-of-range function values.
-        table.push(if v <= 0 {
-            0
-        } else if v < 256 {
-            v as u8
-        } else {
-            255
-        });
-    }
-    if n_bands > 1 {
-        table = table.repeat(n_bands as usize);
-    }
-    Ok(table)
+        result.extract::<i32>().map_err(|_| {
+            pillow_rs::PilError::ValueError("LUT function must return an integer".to_owned())
+        })
+    })
+    .map_err(map_error)
 }
 
 #[pyfunction]
