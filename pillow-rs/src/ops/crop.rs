@@ -20,7 +20,7 @@ impl Image {
             i32::try_from(box_coords.3)
                 .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
         );
-        self.crop_signed(Some(coordinates))
+        self.crop_signed(coordinates)
     }
 
     /// Crops using Pillow's optional `(left, top, right, bottom)` box.
@@ -52,14 +52,13 @@ impl Image {
             ));
         }
 
-        self.crop_signed(Some(coordinates))
+        self.crop_signed(coordinates)
     }
 
-    fn crop_signed(&self, box_coords: Option<(i32, i32, i32, i32)>) -> Result<Image, PilError> {
-        let Some((left, top, right, bottom)) = box_coords else {
-            return Ok(self.copy());
-        };
-
+    fn crop_signed(
+        &self,
+        (left, top, right, bottom): (i32, i32, i32, i32),
+    ) -> Result<Image, PilError> {
         if right < left {
             return Err(PilError::ValueError(
                 "Coordinate 'right' is less than 'left'".into(),
