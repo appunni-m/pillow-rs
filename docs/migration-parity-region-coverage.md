@@ -5,23 +5,26 @@ This is a generated coverage view. The metric is **region coverage**
 not parity proof and does not change the manifest or lane inputs.
 
 ```yaml
-generator: scripts/report_migration_parity_region_coverage.py@2
+generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 5f6d393d5c454d810f0a506192f85ef762ed055fda2017f306bfcb24ca597e2b
-coverage_run_id: migration-coverage-f9700bba52f7438887d37ca0a1127067
+coverage_run_id: migration-coverage-8019a418b9b243a2ab8112ad5891a095
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
 ```
 
-Each operation's coverage is the region coverage of the files declared
-by its coverage component(s); operations inside one component share the
-component's measured coverage by design.
+The operation table is a component aggregate used only to order the
+backlog. Several public operations share a component, so these rows are
+not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-`PIL.Image.Image.getbbox -> region coverage 9813/10964 (89.5%)`
+Scoped input-only evidence covers `34` getbbox cases (run `migration-coverage-79234eda6fcb4f89838dd150e218cebf`).
+Rust implementation regions: `61/61` (100.0%).
+Python facade statements: `1/1` (100.0%).
+Component aggregate for backlog ordering: `9813/10964` (89.5%).
 
 ## Operations below 95% region coverage
 

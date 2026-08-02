@@ -126,6 +126,7 @@ from run_migration_coverage import (  # noqa: E402
     coverage_identity,
     load_coverage_plans,
     now,
+    scope_coverage_plans,
 )
 from run_migration_parity import (  # noqa: E402
     load_cases,
@@ -220,14 +221,20 @@ def run(args: argparse.Namespace) -> int:
     plans, plan_paths = load_coverage_plans(manifest)
     cases, case_inputs = load_cases(manifest, case_ids=None, surface=None)
     cases_by_id = {case["case_id"]: case for case in cases}
-    selected_ids = {
-        case_id
-        for plan in plans
-        for case_id in plan["selectors"]["parity_case_ids"]
+    operation_paths = {
+        operation["source"]["path"]
+        for surface in manifest["surfaces"]
+        for operation in surface["operations"]
     }
-    missing = selected_ids - cases_by_id.keys()
-    if missing:
-        raise ValueError(f"coverage selects missing parity cases: {sorted(missing)[:5]}")
+    if args.operation is not None and args.operation not in operation_paths:
+        raise ValueError(f"unknown public operation: {args.operation}")
+    plans, selected_ids = scope_coverage_plans(
+        plans,
+        cases_by_id,
+        case_ids=set(args.case_id) if args.case_id else None,
+        operation=args.operation,
+    )
+    plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
 
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.python_report.resolve().parent.mkdir(parents=True, exist_ok=True)
@@ -308,7 +315,9 @@ def run(args: argparse.Namespace) -> int:
                 str(args.python_report),
                 "--coverage-data",
                 str(args.coverage_data),
-            ],
+            ]
+            + (["--operation", args.operation] if args.operation else [])
+            + sum((["--case-id", case_id] for case_id in (args.case_id or [])), []),
             env=run_env,
             cwd=ROOT,
             check=True,
@@ -322,19 +331,33 @@ def run(args: argparse.Namespace) -> int:
         # native_setvarname, ...) through the maintained input-only corpus.
         # Keep this in the public Python surface: cargo tests must not inflate
         # migration coverage.
-        subprocess.run(
-            [
-                sys.executable,
-                str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
-            ],
-            env={
-                **os.environ,
-                "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
-                "LLVM_PROFILE_FILE": str(args.profile),
-            },
-            cwd=ROOT,
-            check=True,
+        selected_command_ids = {
+            command_id
+            for plan in plans
+            for command_id in plan["selectors"]["command_ids"]
+        }
+        # The canonical lane historically includes the maintained font-native
+        # corpus even though the generated input plans intentionally keep
+        # command_ids empty. Scoped operation lanes must not inherit that
+        # component exercise, or their operation evidence would be inflated.
+        run_font_native = (
+            (args.operation is None and not args.case_id)
+            or "coverage-font-native" in selected_command_ids
         )
+        if run_font_native:
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
+                ],
+                env={
+                    **os.environ,
+                    "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
+                    "LLVM_PROFILE_FILE": str(args.profile),
+                },
+                cwd=ROOT,
+                check=True,
+            )
 
         llvm_version = subprocess.run(
             ["cargo", "+nightly", "llvm-cov", "--version"],
@@ -390,10 +413,15 @@ def run(args: argparse.Namespace) -> int:
             set(plan_paths.values())
             | {case_inputs[case_id] for case_id in selected_ids}
         )
+        command = {
+            **COMMAND,
+            "argv": COMMAND["argv"]
+            + ([f"MIGRATION_COVERAGE_OPERATION={args.operation}"] if args.operation else []),
+        }
         identity = coverage_identity(
             manifest_path,
             input_paths,
-            COMMAND,
+            command,
             [cases_by_id[case_id] for case_id in sorted(selected_ids)],
             case_inputs,
         )
@@ -454,6 +482,8 @@ def run(args: argparse.Namespace) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
+    parser.add_argument("--operation")
+    parser.add_argument("--case-id", action="append")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--python-report", type=Path, default=DEFAULT_PYTHON_REPORT)
     parser.add_argument("--llvm-report", type=Path, default=DEFAULT_LLVM_REPORT)
