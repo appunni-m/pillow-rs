@@ -21,6 +21,7 @@ use fontdone::{ffi, tt};
 const MAX_STRING_LENGTH: usize = 1_000_000;
 
 pub(super) struct TrueTypeEngine {
+    library: ffi::FT_Library,
     face: ffi::FT_Face,
     font_bytes: Vec<u8>,
     face_index: usize,
@@ -97,6 +98,7 @@ fn load_truetype_with_index(
     let metrics = face.size_metrics;
 
     let engine = TrueTypeEngine {
+        library,
         face,
         font_bytes: data,
         face_index,
@@ -1273,6 +1275,15 @@ fn stroked_mask_from_run_with_start(
 
     let run = glyph_run(ttf, text, load_flags)?;
     let face = &ttf.engine.face;
+    let stroker = new_stroker(&ttf.engine.library)?;
+    let radius = (stroke_width * 64.0).round() as ffi::FT_Fixed;
+    ffi::FT_Stroker_Set(
+        stroker.handle,
+        radius,
+        ffi::FT_STROKER_LINECAP_ROUND as ffi::FT_Int,
+        ffi::FT_STROKER_LINEJOIN_ROUND as ffi::FT_Int,
+        0,
+    );
     let mut rendered = Vec::new();
     let mut render_x_min = 0;
     let mut first_y_max = 0;
@@ -1298,7 +1309,7 @@ fn stroked_mask_from_run_with_start(
 
         let layout_slot = ffi::FT_Load_Glyph(face, glyph.glyph_index, stroked_load_flags)
             .map_err(ft_error_to_pil)?;
-        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_width, stroke_filled)?;
+        let bitmap_glyph = stroked_bitmap_glyph(&layout_slot, stroke_filled, stroker.handle)?;
         rendered.push(RenderedBitmap {
             pen_before: glyph.pen_before,
             bitmap_left: bitmap_glyph.left as i32,
@@ -1425,8 +1436,8 @@ fn paste_rendered_bitmaps(
 
 fn stroked_bitmap_glyph(
     slot: &ffi::FT_GlyphSlot,
-    stroke_width: f32,
     stroke_filled: bool,
+    stroker: ffi::FT_Stroker,
 ) -> Result<ffi::FT_BitmapGlyphOwned, PilError> {
     if slot.bitmap.is_some() {
         // Pillow's `FT_Glyph_Stroke` fails with `Invalid_Argument` for bitmap
@@ -1437,22 +1448,11 @@ fn stroked_bitmap_glyph(
         return Err(PilError::OsError("invalid argument".into()));
     }
     let outline = ffi::FT_Get_Outline_Glyph(Some(slot)).map_err(ft_error_to_pil)?;
-    let library = ffi::FT_Init_FreeType();
-    let stroker = new_stroker(&library);
-    let radius = (stroke_width * 64.0).round() as ffi::FT_Fixed;
-    ffi::FT_Stroker_Set(
-        stroker,
-        radius,
-        ffi::FT_STROKER_LINECAP_ROUND as ffi::FT_Int,
-        ffi::FT_STROKER_LINEJOIN_ROUND as ffi::FT_Int,
-        0,
-    );
     let stroked = if stroke_filled {
         ffi::FT_Outline_Glyph_StrokeBorder(Some(&outline), stroker, 0).map_err(ft_error_to_pil)
     } else {
         ffi::FT_Outline_Glyph_Stroke(Some(&outline), stroker).map_err(ft_error_to_pil)
     };
-    ffi::FT_Stroker_Done(stroker);
     let stroked = stroked?;
     // Pillow 12.2.0 `_imagingft.c::font_render_impl` always renders stroked
     // outline glyphs with `FT_RENDER_MODE_NORMAL`, even when the public
@@ -1460,13 +1460,28 @@ fn stroked_bitmap_glyph(
     ffi::FT_Outline_Glyph_To_Bitmap(&stroked, ffi::FT_RENDER_MODE_NORMAL).map_err(ft_error_to_pil)
 }
 
-fn new_stroker(library: &ffi::FT_Library) -> ffi::FT_Stroker {
+struct StrokerGuard {
+    handle: ffi::FT_Stroker,
+}
+
+impl Drop for StrokerGuard {
+    fn drop(&mut self) {
+        ffi::FT_Stroker_Done(self.handle);
+    }
+}
+
+fn new_stroker(library: &ffi::FT_Library) -> Result<StrokerGuard, PilError> {
     let mut stroker = std::ptr::null_mut();
-    // `fontdone::ffi::FT_Stroker_New` only fails for null public C-style
-    // arguments.  The safe Font adapter always supplies both the library and
-    // output handle, so this is not a recoverable `PIL.ImageFont` error path.
-    let _ = ffi::FT_Stroker_New(Some(library), Some(&mut stroker));
-    stroker
+    // Keep the status visible at the Pillow boundary. `fontdone::ffi` models
+    // FreeType's output-handle contract, so a future allocator/library failure
+    // must become Pillow's normal OSError instead of flowing into a null
+    // stroker. The guard also mirrors the C render operation's cleanup when a
+    // later glyph load or stroke step returns an error.
+    check_ft_error(ffi::FT_Stroker_New(Some(library), Some(&mut stroker)))?;
+    if stroker.is_null() {
+        return Err(PilError::OsError("invalid argument".into()));
+    }
+    Ok(StrokerGuard { handle: stroker })
 }
 
 fn positive_dimension_collapsed(base: i32, adjusted: i32) -> bool {
