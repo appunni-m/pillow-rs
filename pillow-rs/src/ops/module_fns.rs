@@ -526,8 +526,11 @@ pub fn effect_mandelbrot_with_extent(
         )));
     };
     if extent.len() != 4 {
+        // Pillow's argument parser reports the observed sequence arity before
+        // it falls back to the host type name used for non-sequences.
         return Err(PilError::TypeError(format!(
-            "argument 2 must be 4-item sequence, not {extent_type}"
+            "argument 2 must be sequence of length 4, not {}",
+            extent.len()
         )));
     }
     effect_mandelbrot(size, (extent[0], extent[1], extent[2], extent[3]), quality)

@@ -5994,6 +5994,50 @@
       ]
     },
     {
+      "case_id": "PIL.Image.effect_mandelbrot.nuanced.wrong-length",
+      "surface": "PIL.Image",
+      "operation": "effect_mandelbrot",
+      "covers": [
+        "PIL.Image.effect_mandelbrot.parameter.extent"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_mandelbrot",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                4
+              ]
+            },
+            "extent": {
+              "kind": "literal",
+              "value": [
+                0.0,
+                0.0,
+                1.0
+              ]
+            },
+            "quality": {
+              "kind": "literal",
+              "value": 10
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.merge.nuanced.cmyk-mode",
       "surface": "PIL.Image",
       "operation": "merge",
