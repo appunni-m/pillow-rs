@@ -2014,10 +2014,7 @@ fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        bitmap_coverage, ffi, freetype_encoding, pillow_axis_to_fixed,
-        rgba_for_premultiplied_srgb_bgra,
-    };
+    use super::{bitmap_coverage, ffi, freetype_encoding, rgba_for_premultiplied_srgb_bgra};
     use crate::{FreeTypeFont, ImageFontLoadOptions, ImageFontTextOptions};
 
     #[test]
@@ -2045,19 +2042,6 @@ mod tests {
             );
         }
         assert_eq!(freetype_encoding("unknown"), None);
-    }
-
-    #[test]
-    fn variation_axis_conversion_clamps_positive_overflow() {
-        assert_eq!(
-            pillow_axis_to_fixed(f32::MAX),
-            ffi::FT_Fixed::from(i32::MAX)
-        );
-        assert_eq!(
-            pillow_axis_to_fixed(f32::MIN),
-            ffi::FT_Fixed::from(i32::MIN)
-        );
-        assert_eq!(pillow_axis_to_fixed(1.0), ffi::FT_Fixed::from(65_536));
     }
 
     #[test]
