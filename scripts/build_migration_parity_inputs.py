@@ -2476,6 +2476,15 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["im"] = binding(flipped_step)
                 receiver_step = destination_step
+            elif chain == "paste-box-image-mask-conflict":
+                destination_step = self.ensure_image(mode="RGB")
+                source_step = self.ensure_image(mode="RGB", label="im")
+                box_step = self.ensure_image(mode="L", label="box")
+                mask_step = self.ensure_image(mode="L", label="mask")
+                self.scenario_values["im"] = binding(source_step)
+                self.scenario_values["box"] = binding(box_step)
+                self.scenario_values["mask"] = binding(mask_step)
+                receiver_step = destination_step
             elif chain == "rgba-destination-paste":
                 receiver_step = self.ensure_image(mode="RGBa")
             elif chain == "p-invert-save":
@@ -14297,6 +14306,14 @@ def build_nuanced_cases(
             "im_mode": "RGB",
             "mask_mode": "LA",
             "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "box-image-and-mask-conflict",
+            "mode": "RGB",
+            "chain": "paste-box-image-mask-conflict",
         },
         {
             "surface": "PIL.Image.Image",
