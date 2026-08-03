@@ -112,6 +112,7 @@
           "PIL.ImageFont.FreeTypeFont.getlength.nuanced.bytes-latin1-mode",
           "PIL.ImageFont.FreeTypeFont.getlength.nuanced.empty-default-route",
           "PIL.ImageFont.FreeTypeFont.getmask.nuanced.empty-default-route",
+          "PIL.ImageFont.FreeTypeFont.getmask.nuanced.fractional-start",
           "PIL.ImageFont.FreeTypeFont.getmask.nuanced.bytes-latin1",
           "PIL.ImageFont.FreeTypeFont.getmask.nuanced.bytes-latin1-mode",
           "PIL.ImageFont.FreeTypeFont.getmask.nuanced.sbit-gray-private-base",
