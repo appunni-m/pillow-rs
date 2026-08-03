@@ -1496,6 +1496,7 @@
           "PIL.Image.Image.getprojection.nuanced.rgb-blue-only",
           "PIL.Image.Image.getprojection.nuanced.rgba-alpha-only",
           "PIL.Image.Image.getprojection.nuanced.la-alpha-only",
+          "PIL.Image.Image.getprojection.nuanced.la-luma-only",
           "PIL.Image.Image.getprojection.nuanced.i-negative-nonzero",
           "PIL.Image.Image.getprojection.nuanced.f-negative-nonzero",
           "PIL.Image.Image.getprojection.nuanced.hsv-blue-only",
