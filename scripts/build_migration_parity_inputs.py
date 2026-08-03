@@ -14033,6 +14033,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "expanded-rgb-lut",
+            "mode": "RGB",
+            "values": {"lut": literal([(i * 3) % 256 for i in range(256)] * 3)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "filter",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
