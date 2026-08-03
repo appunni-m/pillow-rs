@@ -66,6 +66,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core unit tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify the fixed manifest and indexed inputs\n"
+	@printf "  $(CYAN)make migration-parity-crash-quarantine-check$(NC) Verify isolated crash inputs without executing them\n"
 	@printf "  $(CYAN)make migration-parity-case-review$(NC) Verify duplicate selection and nuanced cases\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
 	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
@@ -518,7 +519,7 @@ image-slash-star-full-test: ## Run image-slash-star all-feature coverage matrix
 image-slash-star-ci: image-slash-star-check image-slash-star-feature-test image-slash-star-test image-slash-star-lint ## Run maintained image-slash-star integration gates
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
-.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check migration-parity-evidence-check image-backend-fixtures putdata-fixtures
+.PHONY: fixtures migration-parity-inventory migration-parity-inventory-check migration-parity-manifest migration-parity-inputs migration-parity-fixtures migration-parity-case-review migration-parity-fixtures-check migration-parity-inputs-check migration-parity-crash-quarantine-check migration-parity-evidence-check image-backend-fixtures putdata-fixtures
 .PHONY: imagefont-getmask2-fixtures
 .PHONY: compact-value-fixtures color3dlut-fixtures point-fixtures eval-fixtures
 .PHONY: palette-save-fixtures image-io-fixtures tobytes-fixtures test-color3dlut
@@ -556,6 +557,9 @@ migration-parity-fixtures-check: migration-parity-inventory-check ## Verify auth
 migration-parity-inputs-check: ## Verify deterministic input regeneration
 	$(PYTHON) scripts/check_migration_parity_inputs.py
 	$(PYTHON) -m unittest tests.test_migration_parity_cases tests.test_migration_parity_contract
+
+migration-parity-crash-quarantine-check: ## Verify isolated crash inputs without executing them
+	$(PYTHON) scripts/check_migration_parity_inputs.py --quarantine-only
 
 migration-parity-evidence-check: ## Verify strict aggregate/result interfaces
 	$(PYTHON) -m unittest tests.test_migration_parity_evidence
