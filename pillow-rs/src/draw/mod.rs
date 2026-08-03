@@ -47,6 +47,9 @@ pub enum DrawCircleCenterInput {
     /// An integer is accepted by the host boundary but has no subscriptable
     /// center, matching Pillow's direct `xy[0]` diagnostic.
     Integer,
+    /// Text reaches Pillow's arithmetic path after indexing the first
+    /// character, so preserve its type-specific subtraction diagnostic.
+    Text,
     /// A value that could not be represented as a numeric sequence.
     Invalid,
 }
@@ -218,6 +221,9 @@ pub fn normalize_draw_circle_center(input: DrawCircleCenterInput) -> Result<(f64
         }
         DrawCircleCenterInput::Integer => Err(PilError::TypeError(
             "'int' object is not subscriptable".into(),
+        )),
+        DrawCircleCenterInput::Text => Err(PilError::TypeError(
+            "unsupported operand type(s) for -: 'str' and 'int'".into(),
         )),
         DrawCircleCenterInput::Invalid => Err(PilError::TypeError(
             "coordinate list must contain at least 2 coordinates".into(),

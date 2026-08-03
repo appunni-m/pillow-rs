@@ -3076,6 +3076,9 @@ fn draw_circle_center_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::Dra
     if xy.is_instance_of::<PyInt>() && !xy.is_instance_of::<PyBool>() {
         return pillow_rs::DrawCircleCenterInput::Integer;
     }
+    if xy.extract::<String>().is_ok() {
+        return pillow_rs::DrawCircleCenterInput::Text;
+    }
     xy.extract::<Vec<f64>>()
         .map(pillow_rs::DrawCircleCenterInput::Values)
         .unwrap_or(pillow_rs::DrawCircleCenterInput::Invalid)
