@@ -45,24 +45,33 @@ use crate::raster::{DynamicImage, GenericImageView};
 pub enum ImagingCoreBytesInput {
     /// A one-band sequence of integer samples.
     Scalars(Vec<i64>),
+    /// A one-band sequence of floating-point samples.
+    Floats(Vec<f64>),
     /// A multiband or otherwise non-scalar sequence.
     Multiband,
 }
 
 /// Converts scalar `ImagingCore` samples to bytes with Pillow's errors.
 pub fn imaging_core_to_bytes(input: ImagingCoreBytesInput) -> Result<Vec<u8>, PilError> {
-    let ImagingCoreBytesInput::Scalars(values) = input else {
-        return Err(PilError::TypeError(
-            "cannot convert multiband ImagingCore to bytes".into(),
-        ));
-    };
-    values
-        .into_iter()
-        .map(|value| {
-            u8::try_from(value)
-                .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
-        })
-        .collect()
+    match input {
+        ImagingCoreBytesInput::Scalars(values) => values
+            .into_iter()
+            .map(|value| {
+                u8::try_from(value)
+                    .map_err(|_| PilError::ValueError("bytes must be in range(0, 256)".into()))
+            })
+            .collect(),
+        // Pillow's bytes(list[float]) path reports the element type rather than
+        // exposing the binding's internal sequence classification.
+        ImagingCoreBytesInput::Floats(_) => Err(PilError::TypeError(
+            "'float' object cannot be interpreted as an integer".into(),
+        )),
+        // ImagingCore returns tuples for multiband pixels, so Python's bytes()
+        // reports the tuple element type exactly as Pillow does.
+        ImagingCoreBytesInput::Multiband => Err(PilError::TypeError(
+            "'tuple' object cannot be interpreted as an integer".into(),
+        )),
+    }
 }
 
 /// Prepared fields for Pillow's lightweight public EXIF compatibility object.
