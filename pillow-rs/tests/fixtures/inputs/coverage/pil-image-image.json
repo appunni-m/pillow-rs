@@ -1467,6 +1467,8 @@
           "PIL.Image.Image.getcolors.nuanced.i16n-mode",
           "PIL.Image.Image.getcolors.nuanced.la-nonzero",
           "PIL.Image.Image.getcolors.nuanced.i-nonzero",
+          "PIL.Image.Image.getcolors.nuanced.i-large-nonzero",
+          "PIL.Image.Image.getcolors.nuanced.f-nonzero",
           "PIL.Image.Image.getcolors.nuanced.l-two-colors-limit",
           "PIL.Image.Image.getcolors.nuanced.la-odd-nonzero",
           "PIL.Image.Image.getdata.nuanced.opened-rgb",
