@@ -59914,6 +59914,56 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getbands.nuanced.rgba-premultiplied-mode",
+      "surface": "PIL.Image.Image",
+      "operation": "getbands",
+      "covers": [
+        "PIL.Image.Image.getbands.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getbands",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getbands.nuanced.i16-mode",
       "surface": "PIL.Image.Image",
       "operation": "getbands",

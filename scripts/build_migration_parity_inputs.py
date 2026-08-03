@@ -12914,6 +12914,13 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "getbands",
             "requirement_suffix": "behavior.default",
+            "name": "rgba-premultiplied-mode",
+            "mode": "RGBa",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
             "name": "i16-mode",
             "mode": "I;16",
         },
