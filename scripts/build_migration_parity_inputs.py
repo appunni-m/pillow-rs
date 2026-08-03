@@ -15962,6 +15962,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "ycbcr-nonzero",
+            "mode": "YCbCr",
+            "edge": "nonzero-pixel",
+            "pixel": [100, 150, 200],
+            "values": {"xy": literal([2, 3])},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "p-y-out-of-bounds",
