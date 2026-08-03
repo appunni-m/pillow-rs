@@ -5503,6 +5503,117 @@
       ]
     },
     {
+      "case_id": "PIL.Image.fromarray.nuanced.bytes-object-rejected",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.obj"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "obj-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAECAw==",
+          "sha256": "054edec1d0211f624fed0cbca9d4f9400b0e491c43742af2c5b0abebf0c990d8",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "asset",
+              "asset_id": "obj-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.nuanced.height-overflow",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.obj"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "buffered-array-interface",
+                "shape": [
+                  4294967296
+                ],
+                "typestr": "|u1",
+                "data_base64": "AA=="
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.nuanced.width-overflow",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.obj"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "buffered-array-interface",
+                "shape": [
+                  1,
+                  4294967296
+                ],
+                "typestr": "|u1",
+                "data_base64": "AA=="
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.open.nuanced.formats-accepted",
       "surface": "PIL.Image",
       "operation": "open",

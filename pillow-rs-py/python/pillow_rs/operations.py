@@ -78,7 +78,7 @@ def alpha_composite(im1: Image, im2: Image) -> Image:
 
 
 def fromarray(obj, mode=None):
-    """Create an image from an array-like object through the Rust core."""
+    """Create an image from an array-interface object through the Rust core."""
     from . import _core
 
     return Image(_core.fromarray(obj, mode))

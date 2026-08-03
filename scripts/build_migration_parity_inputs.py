@@ -3121,6 +3121,45 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": "bytes-object-rejected",
+            "values": {"obj": bytes_literal([0, 1, 2, 3])},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": "height-overflow",
+            "values": {
+                "obj": literal(
+                    {
+                        "protocol": "buffered-array-interface",
+                        "shape": [4_294_967_296],
+                        "typestr": "|u1",
+                        "data_base64": "AA==",
+                    }
+                )
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": "width-overflow",
+            "values": {
+                "obj": literal(
+                    {
+                        "protocol": "buffered-array-interface",
+                        "shape": [1, 4_294_967_296],
+                        "typestr": "|u1",
+                        "data_base64": "AA==",
+                    }
+                )
+            },
+        },
+        {
             "surface": "PIL.Image.Image",
             "operation": "point",
             "requirement_suffix": "mode.l",

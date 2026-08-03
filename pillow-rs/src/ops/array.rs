@@ -215,69 +215,18 @@ pub fn resolve_array_layout(
     })
 }
 
-/// Build an image from the flat integer representation used by Python list
-/// inputs to `Image.fromarray`.
+/// Build an image from a resolved array-interface layout and its packed bytes.
 ///
-/// The binding is responsible only for turning Python list/tuple objects into
-/// `i32` values. Mode arity, empty/partial rows, range checks, and image
-/// construction stay here so every host binding shares one contract.
-pub fn from_array_pixel_values(
-    values: &[i32],
-    explicit_mode: Option<&str>,
-) -> Result<Image, PilError> {
-    let mode = explicit_mode.unwrap_or("L");
-    let bands = match mode {
-        "1" | "L" | "I" | "F" | "P" => 1,
-        "LA" | "PA" => 2,
-        "RGB" | "YCbCr" | "HSV" => 3,
-        "RGBA" | "CMYK" => 4,
-        _ => return Err(PilError::ValueError("unrecognized image mode".into())),
-    };
-    if values.is_empty() || values.len() % bands != 0 {
-        return Err(PilError::ValueError(
-            "fromarray_pixel_list: not enough pixel values for the given mode".into(),
-        ));
-    }
-    let width = values
-        .len()
-        .checked_div(bands)
-        .and_then(|width| u32::try_from(width).ok())
-        .filter(|&width| width > 0)
-        .ok_or_else(|| {
-            PilError::ValueError(
-                "fromarray_pixel_list: not enough pixel values for the given mode".into(),
-            )
-        })?;
-    let bytes = crate::ops::utils::flatten_pixel_list(values)?;
-    Image::frombytes(mode, (width, 1), &bytes)
-}
-
-/// Build an image from a packed byte object supplied to `Image.fromarray`.
-///
-/// The Python binding only obtains the bytes from the host object. Mode
-/// selection, width conversion, and raw-image construction remain in core.
-pub fn from_array_bytes(data: &[u8], explicit_mode: Option<&str>) -> Result<Image, PilError> {
-    let mode = explicit_mode.unwrap_or("L");
-    let width =
-        u32::try_from(data.len()).map_err(|_| PilError::ValueError("array is too large".into()))?;
-    Image::frombytes(mode, (width, 1), data)
-}
-
-/// Build an image from an array-interface descriptor and its packed bytes.
-///
-/// Shape/type inference and dimensional validation are core behavior; host
-/// bindings only obtain the descriptor fields and the buffer bytes.
-pub fn from_array_interface(
-    shape: &[usize],
-    typestr: &str,
-    explicit_mode: Option<&str>,
-    data: &[u8],
-) -> Result<Image, PilError> {
-    let layout = resolve_array_layout(shape, typestr, explicit_mode)?;
+/// The caller resolves the descriptor before obtaining host buffer bytes so
+/// Pillow's validation-before-buffer ordering is preserved. Conversion and
+/// raw-image construction remain in the Rust core.
+pub fn from_resolved_array_interface(layout: &ArrayLayout, data: &[u8]) -> Result<Image, PilError> {
     let width = u32::try_from(layout.width)
-        .map_err(|_| PilError::ValueError("image width is too large".into()))?;
+        // Pillow's frombuffer dimension conversion raises this exact
+        // OverflowError before attempting allocation.
+        .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
     let height = u32::try_from(layout.height)
-        .map_err(|_| PilError::ValueError("image height is too large".into()))?;
+        .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
     Image::frombytes(&layout.raw_mode, (width, height), data)
 }
 

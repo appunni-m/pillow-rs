@@ -1903,27 +1903,6 @@ fn align_row_to_32(data: Vec<u8>, width: u32, bits_per_pixel: u8) -> PyResult<Ve
     pillow_rs::align_row_to_32(&data, width, bits_per_pixel).map_err(map_error)
 }
 
-/// Create an Image from a flat or nested list of integer pixel values.
-///
-/// Python extraction is kept here at the ABI boundary; mode arity, range,
-/// width, and raw-image construction are owned by the Rust core.
-#[pyfunction]
-fn fromarray_pixel_list(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
-    let flat: Vec<i32> = if let Ok(v) = data.extract::<Vec<i32>>() {
-        v
-    } else if let Ok(nested) = data.extract::<Vec<Vec<i32>>>() {
-        nested.into_iter().flatten().collect()
-    } else {
-        return Err(pyo3::exceptions::PyValueError::new_err(
-            "fromarray_pixel_list: expected list of ints or nested list of ints",
-        ));
-    };
-
-    pillow_rs::from_array_pixel_values(&flat, mode)
-        .map(|img| PyImage { inner: img })
-        .map_err(map_error)
-}
-
 fn array_interface_bytes(value: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<Vec<u8>> {
     let memoryview = value
         .py()
@@ -1958,59 +1937,22 @@ fn array_interface_descriptor(value: &Bound<'_, PyAny>) -> PyResult<(Vec<usize>,
     Ok((shape, typestr))
 }
 
-/// Create an image from a Python array-interface or list object.
+/// Create an image from a Python object implementing Pillow's array interface.
 ///
 /// The ABI layer only marshals Python protocols into plain Rust values. Dtype,
 /// shape, mode, and byte-layout policy are implemented by `pillow-rs` so the
 /// Python and JavaScript bindings cannot grow divergent `fromarray` logic.
 #[pyfunction]
 fn fromarray(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
-    if let Ok(bytes) = data.downcast::<PyBytes>() {
-        return pillow_rs::from_array_bytes(bytes.as_bytes(), mode)
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error);
-    }
-
-    if data.hasattr("__array_interface__")? {
-        let (shape, typestr) = array_interface_descriptor(data)?;
-        // Resolve dimensions before touching the Python buffer. Pillow reports
-        // malformed shape/mode combinations before it asks the object for a
-        // byte buffer.
-        pillow_rs::resolve_array_layout(&shape, &typestr, mode).map_err(map_error)?;
-        let bytes = array_interface_bytes(data, mode)?;
-        return pillow_rs::from_array_interface(&shape, &typestr, mode, &bytes)
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error);
-    }
-
-    if data.hasattr("tobytes")? {
-        let shape = data
-            .getattr("shape")
-            .and_then(|shape| shape.extract::<Vec<usize>>())?;
-        let bytes = data.call_method0("tobytes")?.extract::<Vec<u8>>()?;
-        let inferred_typestr = "|u1";
-        pillow_rs::resolve_array_layout(&shape, inferred_typestr, mode).map_err(map_error)?;
-        return pillow_rs::from_array_interface(&shape, inferred_typestr, mode, &bytes)
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error);
-    }
-
-    if let Ok(flat) = data.extract::<Vec<i32>>() {
-        return pillow_rs::from_array_pixel_values(&flat, mode)
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error);
-    }
-    if let Ok(nested) = data.extract::<Vec<Vec<i32>>>() {
-        let flat = nested.into_iter().flatten().collect::<Vec<_>>();
-        return pillow_rs::from_array_pixel_values(&flat, mode)
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error);
-    }
-
-    Err(pyo3::exceptions::PyNotImplementedError::new_err(format!(
-        "fromarray: unsupported object type ({})",
-        data.get_type().name()?
-    )))
+    let (shape, typestr) = array_interface_descriptor(data)?;
+    // Resolve dimensions before touching the Python buffer. Pillow reports
+    // malformed shape/mode combinations before it asks the object for a
+    // byte buffer.
+    let layout = pillow_rs::resolve_array_layout(&shape, &typestr, mode).map_err(map_error)?;
+    let bytes = array_interface_bytes(data, mode)?;
+    pillow_rs::from_resolved_array_interface(&layout, &bytes)
+        .map(|img| PyImage { inner: img })
+        .map_err(map_error)
 }
 
 /// Flatten mesh transform data (list of (bbox, quad) tuples) into a flat f64 Vec.
@@ -2238,7 +2180,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Utility functions (moved from Python)
     m.add_function(wrap_pyfunction!(align_row_to_32, m)?)?;
     m.add_function(wrap_pyfunction!(fromarray, m)?)?;
-    m.add_function(wrap_pyfunction!(fromarray_pixel_list, m)?)?;
     m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
     m.add_function(wrap_pyfunction!(make_lut, m)?)?;
     m.add_function(wrap_pyfunction!(eval_validate_input, m)?)?;
