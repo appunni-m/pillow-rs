@@ -49,14 +49,20 @@ fn ycbcr_luma8(img: &crate::raster::DynamicImage) -> crate::raster::GrayImage {
 /// alpha band: a single transparent index becomes 0 with everything else 255,
 /// a PNG `tRNS` table is used verbatim.
 fn palette_alpha_for_convert(img: &Image) -> Option<Vec<u8>> {
-    match img.pending_palette_transparency()? {
-        crate::image::PaletteTransparency::Index(index) => {
-            let mut table = vec![255u8; 256];
-            table[usize::from(index)] = 0;
-            Some(table)
-        }
-        crate::image::PaletteTransparency::Table(alpha) => Some(alpha),
+    if let Some(transparency) = img.pending_palette_transparency() {
+        return match transparency {
+            crate::image::PaletteTransparency::Index(index) => {
+                let mut table = vec![255u8; 256];
+                table[usize::from(index)] = 0;
+                Some(table)
+            }
+            crate::image::PaletteTransparency::Table(alpha) => Some(alpha),
+        };
     }
+    // `putpalette(..., rawmode="RGBA")` stores attached alpha on the
+    // committed palette rather than in pending `info["transparency"]`.
+    // Pillow's P->LA conversion consumes both representations.
+    img.palette_alpha().filter(|alpha| !alpha.is_empty())
 }
 
 fn parse_dither(s: Option<&str>) -> Result<Option<DitherMethod>, PilError> {
