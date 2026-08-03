@@ -11,7 +11,10 @@ from typing import Any
 
 import yaml
 
-from scripts.build_migration_parity_inputs import case_signature
+from scripts.build_migration_parity_inputs import (
+    CRASH_QUARANTINE_RELATIVE,
+    case_signature,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -72,28 +75,30 @@ class MigrationParityCaseReviewTests(unittest.TestCase):
         )
 
     def test_crash_quarantine_is_not_an_active_input(self) -> None:
-        quarantine_path = (
-            FIXTURE_ROOT
-            / "inputs"
-            / "quarantine"
-            / "pil-imagefont-freetypefont.json"
-        )
-        quarantine = json.loads(quarantine_path.read_text(encoding="utf-8"))
-        quarantined_ids = {case["case_id"] for case in quarantine["cases"]}
+        quarantine_root = FIXTURE_ROOT / "inputs" / "quarantine"
+        quarantine_paths = sorted(quarantine_root.glob("*.json"))
+        self.assertTrue(quarantine_paths)
         active_ids = {case["case_id"] for case in self.cases}
-        self.assertTrue(quarantined_ids)
-        self.assertTrue(quarantine["active"] is False)
-        self.assertEqual(quarantine["execution"], "manual")
-        self.assertTrue(quarantined_ids.isdisjoint(active_ids))
         indexed = {
             relative
             for paths in self.manifest["input_index"].values()
             for relative in paths
         }
-        self.assertNotIn(
-            "inputs/quarantine/pil-imagefont-freetypefont.json",
-            indexed,
+        self.assertFalse(
+            any(relative.startswith("inputs/quarantine/") for relative in indexed)
         )
+        for quarantine_path in quarantine_paths:
+            quarantine = json.loads(quarantine_path.read_text(encoding="utf-8"))
+            quarantined_ids = {case["case_id"] for case in quarantine["cases"]}
+            self.assertTrue(quarantined_ids)
+            self.assertTrue(quarantine["active"] is False)
+            self.assertEqual(quarantine["execution"], "manual")
+            self.assertTrue(quarantined_ids.isdisjoint(active_ids))
+            relative = quarantine_path.relative_to(FIXTURE_ROOT).as_posix()
+            self.assertNotIn(relative, indexed)
+        self.assertIn(CRASH_QUARANTINE_RELATIVE, {
+            path.relative_to(FIXTURE_ROOT).as_posix() for path in quarantine_paths
+        })
 
     def test_edge_cases_are_not_default_labels(self) -> None:
         signatures = {case["case_id"]: case_signature(case) for case in self.cases}

@@ -15234,7 +15234,6 @@ def build_inputs(
             "cases": crash_quarantine_cases,
         },
     )
-    counts["quarantined_cases"] = len(crash_quarantine_cases)
 
     for surface in manifest["surfaces"]:
         surface_id = surface["id"]
