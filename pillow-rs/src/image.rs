@@ -4171,7 +4171,7 @@ impl Image {
     /// Returns horizontal and vertical non-zero pixel projections.
     ///
     /// The first vector has one entry per column and the second has one entry
-    /// per row. Entries are `1` when any converted-luma pixel on that axis is
+    /// per row. Entries are `1` when any source sample on that axis is
     /// non-zero, otherwise `0`.
     ///
     /// # Errors
@@ -4182,11 +4182,64 @@ impl Image {
         let (w, h) = (img.width() as usize, img.height() as usize);
         let mut h_proj = vec![0u32; w];
         let mut v_proj = vec![0u32; h];
-        let luma = img.to_luma8();
-        for (x, y, px) in luma.enumerate_pixels() {
-            if px[0] != 0 {
-                h_proj[x as usize] = 1;
-                v_proj[y as usize] = 1;
+        let mode = self.mode()?;
+        let mut mark = |index: usize| {
+            let x = index % w;
+            let y = index / w;
+            h_proj[x] = 1;
+            v_proj[y] = 1;
+        };
+
+        // Pillow's ImagingGetProjection checks source bands for non-zero
+        // samples. Converting RGB/RGBA to luma first loses low red/blue and
+        // alpha-only pixels, even though Pillow projects those pixels.
+        if matches!(mode.as_str(), "I" | "F") {
+            match self.scalar_samples(&mode)? {
+                ScalarImageSamples::Integer(values) => {
+                    for (index, value) in values.into_iter().enumerate() {
+                        if value != 0 {
+                            mark(index);
+                        }
+                    }
+                }
+                ScalarImageSamples::Float(values) => {
+                    for (index, value) in values.into_iter().enumerate() {
+                        if value != 0.0 {
+                            mark(index);
+                        }
+                    }
+                }
+            }
+        } else {
+            match mode.as_str() {
+                "L" | "1" | "P" => {
+                    for (index, pixel) in img.to_luma8().pixels().enumerate() {
+                        if pixel[0] != 0 {
+                            mark(index);
+                        }
+                    }
+                }
+                "LA" | "PA" => {
+                    for (index, pixel) in img.to_luma_alpha8().pixels().enumerate() {
+                        if pixel[0] != 0 || pixel[1] != 0 {
+                            mark(index);
+                        }
+                    }
+                }
+                "RGB" | "HSV" | "YCbCr" => {
+                    for (index, pixel) in img.to_rgb8().pixels().enumerate() {
+                        if pixel.0.iter().any(|value| *value != 0) {
+                            mark(index);
+                        }
+                    }
+                }
+                _ => {
+                    for (index, pixel) in img.to_rgba8().pixels().enumerate() {
+                        if pixel.0.iter().any(|value| *value != 0) {
+                            mark(index);
+                        }
+                    }
+                }
             }
         }
         Ok((h_proj, v_proj))
