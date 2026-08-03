@@ -2227,6 +2227,18 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "resize-crop":
+                image_step = self.ensure_image(mode="RGB")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
             elif chain == "p-putalpha-convert":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -14223,6 +14235,17 @@ def build_nuanced_cases(
             "name": "opened-rgb",
             "scenario_asset": "image/rgb-small.png",
             "values": {"box": literal([1, 1, 7, 7])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "requirement_suffix": "behavior.default",
+            "name": "resize-pipeline",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "chain": "resize-crop",
+            "values": {"box": literal([1, 1, 6, 6])},
         },
         {
             "surface": "PIL.Image.Image",

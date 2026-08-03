@@ -69458,6 +69458,114 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.crop.nuanced.resize-pipeline",
+      "surface": "PIL.Image.Image",
+      "operation": "crop",
+      "covers": [
+        "PIL.Image.Image.crop.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                12,
+                34,
+                56
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-resize",
+          "surface": "PIL.Image.Image",
+          "operation": "resize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "resample": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "crop",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-resize"
+          },
+          "arguments": {
+            "box": {
+              "kind": "literal",
+              "value": [
+                1,
+                1,
+                6,
+                6
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.crop.nuanced.box-omitted",
       "surface": "PIL.Image.Image",
       "operation": "crop",

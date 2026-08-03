@@ -1507,6 +1507,7 @@
           "PIL.Image.Image.tobitmap.nuanced.nonzero-1",
           "PIL.Image.Image.getextrema.nuanced.opened-rgb",
           "PIL.Image.Image.crop.nuanced.opened-rgb",
+          "PIL.Image.Image.crop.nuanced.resize-pipeline",
           "PIL.Image.Image.crop.nuanced.box-omitted",
           "PIL.Image.Image.crop.nuanced.reversed-box",
           "PIL.Image.Image.crop.nuanced.reversed-vertical-box",
