@@ -36975,6 +36975,212 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.transform.nuanced.perspective-missing-data",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 2
+            },
+            "data": {
+              "kind": "literal",
+              "value": null
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.perspective-short-data",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 2
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.quad-short-data",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 3
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.transform.nuanced.quad-method",
       "surface": "PIL.Image.Image",
       "operation": "transform",
@@ -37197,6 +37403,79 @@
               "value": {
                 "invalid": "color"
               }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.transform.nuanced.unknown-method",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.parameter.method"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 5
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0,
+                0,
+                1,
+                0
+              ]
             }
           }
         }
