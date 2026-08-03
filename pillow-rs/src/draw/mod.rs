@@ -649,6 +649,19 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         _width: u32,
     ) -> Result<(), PilError> {
+        // Pillow's _imaging ellipse dispatch rejects a reversed bounding box
+        // before reaching ImagingDrawEllipse; keep that public validation in
+        // core so every binding reports the same error.
+        if x1 < x0 {
+            return Err(PilError::ValueError(
+                "x1 must be greater than or equal to x0".into(),
+            ));
+        }
+        if y1 < y0 {
+            return Err(PilError::ValueError(
+                "y1 must be greater than or equal to y0".into(),
+            ));
+        }
         let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
