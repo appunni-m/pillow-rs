@@ -1583,6 +1583,8 @@
           "PIL.Image.Image.tobytes.nuanced.unknown-encoder-error",
           "PIL.Image.Image.tobytes.nuanced.i-mode",
           "PIL.Image.Image.tobytes.nuanced.f-mode",
+          "PIL.Image.Image.tobytes.nuanced.i16-mode",
+          "PIL.Image.Image.tobytes.nuanced.i16b-mode",
           "PIL.Image.Image.tobytes.nuanced.one-packed-nonzero",
           "PIL.Image.Image.putpixel.nuanced.i-scalar",
           "PIL.Image.Image.putpixel.nuanced.f-scalar",
