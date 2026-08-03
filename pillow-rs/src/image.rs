@@ -3732,6 +3732,11 @@ impl Image {
     #[allow(clippy::type_complexity)]
     pub fn getcolors(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
         let mode = self.mode()?;
+        if is_l16_mode(&mode) {
+            // Pillow's ImagingCore rejects unsigned 16-bit luma modes here;
+            // this is the public mode contract, independent of TIFF decoding.
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
         // For 1, L, P modes, PIL uses histogram (pixel value ascending)
         if mode == "1" || mode == "L" || mode == "P" {
             return self.getcolors_histogram(maxcolors);
@@ -3739,7 +3744,6 @@ impl Image {
         // For multi-channel modes, use pixel-level counting
         let img = self.materialized_shared()?;
         let n_bands = match img.color() {
-            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
             crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
             _ => 4,
