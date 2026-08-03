@@ -419,6 +419,14 @@ fn is_l16_mode(mode: &str) -> bool {
     matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N")
 }
 
+fn putalpha_conversion_target(mode: &str) -> Option<&'static str> {
+    match mode {
+        "1" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F" => Some("LA"),
+        "YCbCr" | "HSV" => Some("RGBA"),
+        _ => None,
+    }
+}
+
 fn l16_uses_big_endian(mode: &str) -> bool {
     match mode {
         "I;16B" => true,
@@ -3647,11 +3655,7 @@ impl Image {
     /// failures.
     pub fn putalpha(&mut self, alpha: u8) -> Result<(), PilError> {
         let mode_name = self.mode()?;
-        if let Some(target) = match mode_name.as_str() {
-            "1" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F" => Some("LA"),
-            "YCbCr" | "HSV" => Some("RGBA"),
-            _ => None,
-        } {
+        if let Some(target) = putalpha_conversion_target(&mode_name) {
             // Pillow Image.py derives the alpha mode from getmodebase(), then
             // surfaces the exact failed core conversion when neither in-place
             // setmode nor ImagingConvert supports this source/target pair.
@@ -3703,6 +3707,14 @@ impl Image {
         }
         let mask_luma = mask_img.to_luma8();
         let mode_name = self.mode()?;
+        if let Some(target) = putalpha_conversion_target(&mode_name) {
+            // Keep image-backed alpha on the same failed conversion path as
+            // scalar alpha. Pillow rejects these source/target pairs before
+            // queuing the alpha-data operation.
+            return Err(PilError::ValueError(format!(
+                "conversion from {mode_name} to {target} not supported"
+            )));
+        }
         let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
             PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
         })?;
