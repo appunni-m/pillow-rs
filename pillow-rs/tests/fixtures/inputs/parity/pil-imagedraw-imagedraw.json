@@ -17358,6 +17358,84 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-color-l-mode-error",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "text",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.text.parameter.embedded-color"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "text",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "literal",
+              "value": "Hello"
+            },
+            "embedded_color": {
+              "kind": "literal",
+              "value": true
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgba",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "text",
@@ -22425,6 +22503,121 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "text",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.text.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-putpalette",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                40,
+                50,
+                60
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "text",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "text": {
+              "kind": "literal",
+              "value": "A"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.text.nuanced.explicit-font-canvas-1",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "text",
@@ -24593,6 +24786,90 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.rectangle.nuanced.too-many-nested-box-points-error",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "rectangle",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.rectangle.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "rectangle",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  8,
+                  8
+                ],
+                [
+                  9,
+                  9
+                ]
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": 255
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.line.nuanced.flat-points",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "line",
@@ -25041,6 +25318,80 @@
                 [
                   0
                 ]
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": 255
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.line.nuanced.invalid-sequence-contents-error",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "line",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.line.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "line",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                "bad",
+                "bad"
               ]
             },
             "fill": {
@@ -26419,6 +26770,111 @@
             "fill": {
               "kind": "literal",
               "value": 255
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.bitmap.nuanced.invalid-rgb-mask",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "bitmap",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.bitmap.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-bitmap-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 255
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "bitmap",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "bitmap": {
+              "kind": "binding",
+              "step_id": "setup-bitmap-3"
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
             }
           }
         }
@@ -27895,6 +28351,80 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.point.nuanced.invalid-sequence-contents-error",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "point",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.point.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "point",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                "bad",
+                "bad"
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": 255
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.point.nuanced.rejected-rgb-empty-component",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "point",
@@ -27960,6 +28490,82 @@
             "fill": {
               "kind": "literal",
               "value": "rgb(, 1, 2)"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.point.nuanced.rejected-rgb-non-numeric-component",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "point",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.point.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "point",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                "bad"
+              ]
             }
           }
         }
@@ -28122,6 +28728,87 @@
               "kind": "literal",
               "value": [
                 7
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.point.nuanced.pa-default-ink",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "point",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.point.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "point",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
               ]
             }
           }

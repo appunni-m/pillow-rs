@@ -2427,7 +2427,11 @@ class WorkflowBuilder:
                     step_id="setup-putpalette",
                 )
                 receiver_step = image_step
-            elif chain in {"p-attached-palette-putpixel", "p-attached-palette-bitmap"}:
+            elif chain in {
+                "p-attached-palette-putpixel",
+                "p-attached-palette-bitmap",
+                "p-attached-palette-text",
+            }:
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
                     "PIL.Image.Image",
@@ -3802,6 +3806,17 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "text",
             "requirement_suffix": "parameter.embedded-color",
+            "name": "embedded-color-l-mode-error",
+            "mode": "L",
+            "values": {
+                "text": literal("Hello"),
+                "embedded_color": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "parameter.embedded-color",
             "name": "embedded-bgra-rgba",
             "mode": "RGBA",
             "font": "font/fonts/sbit-bgra-format1.ttf",
@@ -4414,6 +4429,19 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "text",
             "requirement_suffix": "behavior.default",
+            "name": "attached-palette",
+            "chain": "p-attached-palette-text",
+            "mode": "P",
+            "observe_receiver": True,
+            "values": {
+                "text": literal("A"),
+                "fill": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
             "name": "explicit-font-canvas-1",
             "font": "font/fonts/DejaVuSans.ttf",
             "mode": "1",
@@ -4676,6 +4704,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "too-many-nested-box-points-error",
+            "values": {
+                "xy": literal([[0, 0], [8, 8], [9, 9]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "line",
             "requirement_suffix": "behavior.default",
             "name": "flat-points",
@@ -4732,6 +4770,16 @@ def build_nuanced_cases(
             "name": "malformed-nested-point-error",
             "values": {
                 "xy": literal([[0]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-sequence-contents-error",
+            "values": {
+                "xy": literal(["bad", "bad"]),
                 "fill": literal(255),
             },
         },
@@ -4864,6 +4912,19 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-rgb-mask",
+            "mode": "RGB",
+            "bitmap_mode": "RGB",
+            "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0]),
             },
         },
         {
@@ -5062,11 +5123,32 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "point",
             "requirement_suffix": "behavior.default",
+            "name": "invalid-sequence-contents-error",
+            "values": {
+                "xy": literal(["bad", "bad"]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
             "name": "rejected-rgb-empty-component",
             "mode": "RGB",
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal("rgb(, 1, 2)"),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rejected-rgb-non-numeric-component",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(["bad"]),
             },
         },
         {
@@ -5091,6 +5173,17 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([7]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-default-ink",
+            "mode": "PA",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
             },
         },
         {

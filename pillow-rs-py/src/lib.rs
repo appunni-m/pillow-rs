@@ -2996,6 +2996,9 @@ fn draw_points_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawPoints
     if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
         return pillow_rs::DrawPointsInput::Nested(points);
     }
+    if xy.is_instance_of::<PyList>() || xy.is_instance_of::<PyTuple>() {
+        return pillow_rs::DrawPointsInput::InvalidSequence;
+    }
     pillow_rs::DrawPointsInput::Invalid
 }
 

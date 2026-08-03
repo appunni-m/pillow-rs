@@ -30,6 +30,8 @@ pub enum DrawPointsInput {
     Flat(Vec<i32>),
     /// Nested `(x, y)` point values.
     Nested(Vec<Vec<i32>>),
+    /// A list/tuple sequence whose elements are not supported coordinates.
+    InvalidSequence,
     /// A value that could not be represented as either supported sequence.
     Invalid,
 }
@@ -155,6 +157,7 @@ fn normalize_draw_points(
                 .map(|point| (point[0], point[1]))
                 .collect())
         }
+        DrawPointsInput::InvalidSequence => Err(wrong_point()),
         DrawPointsInput::Invalid => Err(too_few()),
     }
 }
@@ -186,6 +189,7 @@ fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>,
                 .map(|point| (point[0], point[1]))
                 .collect())
         }
+        DrawPointsInput::InvalidSequence => Err(wrong_point()),
         DrawPointsInput::Invalid => Err(too_few()),
     }
 }
@@ -2026,7 +2030,7 @@ impl Draw {
             }
             "P" => {
                 // Binary: write palette index where coverage > 0. fontmode="1".
-                if let Some(palette) = self.image.palette() {
+                if let Some(palette) = self.image.palette().filter(|palette| !palette.is_empty()) {
                     // Pillow's in-place text draw preserves format/info. The
                     // Rust path rebuilds PalettedData, so copy both explicitly.
                     let palette_alpha = self.image.palette_alpha().unwrap_or_default();
