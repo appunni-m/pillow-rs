@@ -17,6 +17,9 @@ pub enum TransformData {
     /// A mapping supplied where Pillow expects mesh data. Pillow iterates the
     /// mapping's keys and reports the resulting unpacking error from core.
     Mapping,
+    /// A string supplied where Pillow expects mesh data. Each character is a
+    /// one-item iterable, so the core reports the unpacking error.
+    Text(String),
     /// A value that could not be interpreted as affine or mesh data.
     Invalid,
 }
@@ -406,9 +409,15 @@ impl Image {
                     return Err(PilError::ValueError("missing method data".into()));
                 };
                 let [x0, y0, x1, y1] = extent.as_slice() else {
-                    return Err(PilError::ValueError(
-                        "extent transform needs 4 coordinates".into(),
-                    ));
+                    let message = if extent.len() < 4 {
+                        format!(
+                            "not enough values to unpack (expected 4, got {})",
+                            extent.len()
+                        )
+                    } else {
+                        "too many values to unpack (expected 4)".into()
+                    };
+                    return Err(PilError::ValueError(message));
                 };
                 // Pillow's EXTENT method maps each destination pixel back
                 // into the requested source rectangle. Express that mapping
@@ -443,6 +452,11 @@ impl Image {
                     Some(TransformData::Mapping) => {
                         return Err(PilError::ValueError(
                             "too many values to unpack (expected 2)".into(),
+                        ));
+                    }
+                    Some(TransformData::Text(_)) => {
+                        return Err(PilError::ValueError(
+                            "not enough values to unpack (expected 2, got 1)".into(),
                         ));
                     }
                     Some(TransformData::Invalid) => {

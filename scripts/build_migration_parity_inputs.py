@@ -7698,6 +7698,42 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "transform",
             "requirement_suffix": "parameter.data",
+            "name": "extent-missing-data",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(1),
+                "data": literal(None),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "extent-short-data",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(1),
+                "data": literal([1, 1, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "invalid-string-data",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal("mesh"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
             "name": "malformed-mesh-entry",
             "mode": "RGB",
             "values": {

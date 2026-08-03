@@ -231,6 +231,9 @@ fn transform_data_from_python(
     if value.is_instance_of::<PyDict>() {
         return Some(pillow_rs::TransformData::Mapping);
     }
+    if let Ok(value) = value.extract::<String>() {
+        return Some(pillow_rs::TransformData::Text(value));
+    }
     Some(pillow_rs::TransformData::Invalid)
 }
 
