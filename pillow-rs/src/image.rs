@@ -3393,6 +3393,26 @@ impl Image {
         self.putdata(&data)
     }
 
+    /// Replaces numeric samples through the shared `putdata` normalization path.
+    ///
+    /// Bindings use this callback-free entry point for exact built-in numeric
+    /// sequences. Keeping the conversion in core reaches the same bulk path
+    /// for every binding while custom Python values can still use
+    /// [`Image::putdata_value_at`] to preserve re-entrant coercion order.
+    pub fn putdata_numeric_values(
+        &mut self,
+        values: &[f64],
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
+        let values = values
+            .iter()
+            .copied()
+            .map(PutDataValue::Number)
+            .collect::<Vec<_>>();
+        self.putdata_values(&values, scale, offset)
+    }
+
     /// Validates the sequence length before host-language value coercion.
     ///
     /// Pillow rejects an oversized `putdata` sequence before converting any
