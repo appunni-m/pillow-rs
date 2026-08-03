@@ -4043,11 +4043,14 @@ surfaces:
         omission:
           kind: required
       result:
-        shape: none
+        shape: value
         observations:
         - path: value
           value_types:
           - 'null'
+          - sequence
+          - number
+          - integer
           comparison:
             kind: exact
         error:
@@ -5402,11 +5405,13 @@ surfaces:
           kind: literal
           value: true
       result:
-        shape: none
+        shape: value
         observations:
         - path: value
           value_types:
           - 'null'
+          - sequence
+          - integer
           comparison:
             kind: exact
         error:
@@ -5756,11 +5761,14 @@ surfaces:
           kind: literal
           value: 256
       result:
-        shape: none
+        shape: value
         observations:
         - path: value
           value_types:
           - 'null'
+          - sequence
+          - number
+          - integer
           comparison:
             kind: exact
         error:
@@ -6387,11 +6395,13 @@ surfaces:
           kind: literal
           value: RGB
       result:
-        shape: none
+        shape: value
         observations:
         - path: value
           value_types:
           - 'null'
+          - sequence
+          - integer
           comparison:
             kind: exact
         error:
@@ -6509,11 +6519,14 @@ surfaces:
         omission:
           kind: required
       result:
-        shape: none
+        shape: value
         observations:
         - path: value
           value_types:
           - 'null'
+          - sequence
+          - number
+          - integer
           comparison:
             kind: exact
         error:
@@ -7212,10 +7225,11 @@ surfaces:
         omission:
           kind: required
       result:
-        shape: none
+        shape: handle
         observations:
-        - path: value
+        - path: value.type
           value_types:
+          - string
           - 'null'
           comparison:
             kind: exact
@@ -24939,11 +24953,12 @@ surfaces:
         omission:
           kind: required
       result:
-        shape: none
+        shape: value
         observations:
         - path: value
           value_types:
           - 'null'
+          - sequence
           comparison:
             kind: exact
         error:
@@ -27058,13 +27073,18 @@ surfaces:
           kind: literal
           value: false
       result:
-        shape: none
+        shape: image
         observations:
         - path: value
           value_types:
+          - image
           - 'null'
           comparison:
-            kind: exact
+            kind: image
+            pixel_mode: exact
+            maximum_channel_delta: 0
+            metadata_mode: exact
+            reason: null
         error:
           fields:
           - class

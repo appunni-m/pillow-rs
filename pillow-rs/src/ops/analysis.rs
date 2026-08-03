@@ -74,6 +74,45 @@ impl Image {
         let img = self.materialize()?;
         let (img_w, img_h) = (img.width(), img.height());
 
+        if img_w == 0 || img_h == 0 {
+            return Ok(None);
+        }
+
+        let mode = self.mode()?;
+        if mode == "I" || mode == "F" {
+            let mut left = img_w;
+            let mut top = img_h;
+            let mut right = 0u32;
+            let mut bottom = 0u32;
+            let mut update = |index: usize, is_nonzero: bool| {
+                if is_nonzero {
+                    let x = (index % img_w as usize) as u32;
+                    let y = (index / img_w as usize) as u32;
+                    left = left.min(x);
+                    top = top.min(y);
+                    right = right.max(x);
+                    bottom = bottom.max(y);
+                }
+            };
+            match self.scalar_samples(&mode)? {
+                crate::image::ScalarImageSamples::Integer(values) => {
+                    for (index, value) in values.into_iter().enumerate() {
+                        update(index, value != 0);
+                    }
+                }
+                crate::image::ScalarImageSamples::Float(values) => {
+                    for (index, value) in values.into_iter().enumerate() {
+                        update(index, value != 0.0);
+                    }
+                }
+            }
+            return if left > right {
+                Ok(None)
+            } else {
+                Ok(Some((left, top, right + 1, bottom + 1)))
+            };
+        }
+
         let mut left = img_w;
         let mut top = img_h;
         let mut right = 0u32;

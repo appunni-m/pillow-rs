@@ -885,10 +885,15 @@ impl PyImage {
     }
 
     #[pyo3(signature = (rawmode=None))]
-    fn getpalette_with_input(&self, rawmode: Option<String>) -> PyResult<Option<Vec<u8>>> {
-        self.inner
+    fn getpalette_with_input(&self, rawmode: Option<String>, py: Python<'_>) -> PyResult<PyObject> {
+        let palette = self
+            .inner
             .getpalette_with_input(rawmode.as_deref())
-            .map_err(map_error)
+            .map_err(map_error)?;
+        match palette {
+            Some(values) => Ok(PyList::new(py, values)?.to_object(py)),
+            None => Ok(py.None()),
+        }
     }
 
     fn indexed_color_table(&self, mode: &str) -> PyResult<Vec<(u8, u8, u8)>> {
@@ -1490,17 +1495,18 @@ impl PyImage {
         self.inner.getpixel(xy.0, xy.1).map_err(map_error)
     }
 
-    fn getpixel_formatted(&mut self, xy: (u32, u32), mode: &str) -> PyResult<PyObject> {
-        let (r, g, b, a) = self.inner.getpixel(xy.0, xy.1).map_err(map_error)?;
-        Python::with_gil(|py| {
-            Ok(match mode {
-                "L" | "1" => r.to_object(py),
-                "LA" | "PA" => (r, a).to_object(py),
-                "RGB" => (r, g, b).to_object(py),
-                "RGBA" | "CMYK" => (r, g, b, a).to_object(py),
-                "P" => r.to_object(py), // P mode stored as RGB; r is the palette index proxy
-                _ => (r, g, b).to_object(py),
-            })
+    fn getpixel_formatted(&mut self, xy: (u32, u32)) -> PyResult<PyObject> {
+        let value = self
+            .inner
+            .getpixel_formatted(xy.0, xy.1)
+            .map_err(map_error)?;
+        Python::with_gil(|py| match value {
+            pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.to_object(py)),
+            pillow_rs::FormattedPixelValue::Integer(value) => Ok(value.to_object(py)),
+            pillow_rs::FormattedPixelValue::Float(value) => Ok(value.to_object(py)),
+            pillow_rs::FormattedPixelValue::Components(values) => {
+                Ok(PyTuple::new(py, values)?.to_object(py))
+            }
         })
     }
 

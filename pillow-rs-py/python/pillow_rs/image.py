@@ -260,7 +260,7 @@ class Image:
 
     def getpixel(self, xy: Tuple[int, int]):
         """Get pixel value at (x, y). Mode dispatch done in Rust."""
-        return self._rust_image.getpixel_formatted(xy, self.mode)
+        return self._rust_image.getpixel_formatted(xy)
 
     def putpixel(self, xy: Tuple[int, int], value):
         """Set pixel value at (x, y). Accepts int, tuple, or list.

@@ -1616,6 +1616,8 @@
           "PIL.Image.Image.putpixel.nuanced.hsv-scalar",
           "PIL.Image.Image.putpixel.nuanced.p-full-palette-replace",
           "PIL.Image.Image.getpixel.nuanced.y-out-of-bounds",
+          "PIL.Image.Image.getpixel.nuanced.i-large-nonzero",
+          "PIL.Image.Image.getpixel.nuanced.f-nonzero",
           "PIL.Image.Image.putpixel.nuanced.p-y-out-of-bounds",
           "PIL.Image.Image.putpixel.nuanced.p-x-out-of-bounds",
           "PIL.Image.Image.putpixel.nuanced.i-y-out-of-bounds",

@@ -520,18 +520,29 @@ def result_shape(
         return "handle", ["handle"]
 
     annotation = return_annotation_text(signature)
-    if re.search(r"\bnone\b", annotation):
-        return "none", ["null"]
     if "imagingcore" in annotation:
         return "mask", ["record"]
     if re.search(r"\bimage\b|imagefile", annotation):
-        return "image", ["image"]
+        return "image", ["image", "null"] if re.search(r"\bnone\b", annotation) else ["image"]
     if re.search(r"\bbytes\b|bytearray|memoryview", annotation):
-        return "bytes", ["bytes"]
+        return "bytes", ["bytes", "null"] if re.search(r"\bnone\b", annotation) else ["bytes"]
     if re.search(r"\biterator\b", annotation):
         return "iterator", ["sequence"]
     if re.search(r"\bdict\b|\bmapping\b", annotation):
         return "mapping", ["mapping"]
+    if re.search(r"\bnone\b", annotation):
+        nullable_types = ["null"]
+        if re.search(r"\btuple\b|\blist\b|\bsequence\b", annotation):
+            nullable_types.append("sequence")
+        if re.search(r"\bfloat\b", annotation):
+            nullable_types.append("number")
+        if re.search(r"\bint\b", annotation):
+            nullable_types.append("integer")
+        if "pixelaccess" in annotation:
+            return "handle", ["handle", "null"]
+        if len(nullable_types) > 1:
+            return "value", nullable_types
+        return "none", ["null"]
     if re.search(r"\btuple\b|\blist\b|\bsequence\b", annotation):
         return "sequence", ["sequence"]
     if re.search(r"\bfloat\b", annotation):
@@ -598,7 +609,9 @@ def result_contract(
 ) -> dict[str, Any]:
     shape, value_types = result_shape(endpoint, signature)
     path = "value.type" if shape == "handle" else "value"
-    observed_types = ["string"] if shape == "handle" else value_types
+    observed_types = (
+        ["string", "null"] if "null" in value_types else ["string"]
+    ) if shape == "handle" else value_types
     return {
         "shape": shape,
         "observations": [
