@@ -707,22 +707,6 @@ pub(crate) fn native_render(
     getmask2_with_options(font, text, options)
 }
 
-pub(crate) fn native_face_attrs(
-    font: &FreeTypeFont,
-) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
-    let info = native_face_info(font);
-    (
-        info.family,
-        info.style,
-        info.ascent,
-        info.descent,
-        info.height,
-        info.x_ppem,
-        info.y_ppem,
-        info.glyphs,
-    )
-}
-
 pub(crate) fn native_face_info(font: &FreeTypeFont) -> ImageFontFaceInfo<'_> {
     let metrics = font.engine.metrics;
     ImageFontFaceInfo {

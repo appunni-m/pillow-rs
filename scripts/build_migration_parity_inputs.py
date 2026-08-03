@@ -3115,6 +3115,17 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask",
+            "requirement_suffix": "parameter.start",
+            "name": "bytes-latin1-start-stroked",
+            "values": {
+                "text": bytes_literal([65, 233]),
+                "stroke_width": literal(1),
+                "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
             "requirement_suffix": "parameter.text",
             "name": "sbit-gray-private-base",
             "font": "font/fonts/sbit-gray-format1.ttf",
@@ -3296,6 +3307,17 @@ def build_nuanced_cases(
             "name": "bytes-latin1-start",
             "values": {
                 "text": bytes_literal([65, 233]),
+                "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "bytes-latin1-start-stroked",
+            "values": {
+                "text": bytes_literal([65, 233]),
+                "stroke_width": literal(1),
                 "start": literal([0.5, 0.75]),
             },
         },
