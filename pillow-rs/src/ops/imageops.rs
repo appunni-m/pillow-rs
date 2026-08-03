@@ -655,7 +655,13 @@ pub fn exif_transpose(image: &Image, in_place: bool) -> Result<Option<Image>, Pi
     };
 
     match method {
-        Some(method) => image.transpose(method).map(Some),
+        Some(method) => {
+            let exif = exif_remove_orientation(&raw_exif);
+            image
+                .transpose(method)?
+                .with_exif_metadata(Some(exif))
+                .map(Some)
+        }
         None if in_place => Ok(None),
         None => Ok(Some(image.copy())),
     }
@@ -745,9 +751,112 @@ pub fn exif_get_orientation(raw: &[u8]) -> Option<u32> {
     None
 }
 
+/// Remove IFD0's Orientation entry after the pixels have been transposed.
+///
+/// Pillow's `ImageOps.exif_transpose` serializes the retained Exif mapping
+/// again, which removes tag `0x0112` while retaining unrelated IFD0 entries.
+/// The fixture surface currently uses inline SHORT values; preserve the
+/// remainder of the TIFF payload byte-for-byte so opaque metadata remains
+/// untouched.
+pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
+    let prefix_len = if raw.starts_with(b"Exif\x00\x00") {
+        6
+    } else {
+        0
+    };
+    let data = raw.get(prefix_len..).unwrap_or_default();
+    if data.len() < 8 {
+        return raw.to_vec();
+    }
+    let le = match &data[..2] {
+        b"II" => true,
+        b"MM" => false,
+        _ => return raw.to_vec(),
+    };
+    let read_u16 = |bytes: &[u8]| {
+        if le {
+            u16::from_le_bytes([bytes[0], bytes[1]])
+        } else {
+            u16::from_be_bytes([bytes[0], bytes[1]])
+        }
+    };
+    let read_u32 = |bytes: &[u8]| {
+        if le {
+            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+        } else {
+            u32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+        }
+    };
+    if read_u16(&data[2..4]) != 42 {
+        return raw.to_vec();
+    }
+    let Some(ifd_offset) = usize::try_from(read_u32(&data[4..8])).ok() else {
+        return raw.to_vec();
+    };
+    let Some(entry_count_end) = ifd_offset.checked_add(2) else {
+        return raw.to_vec();
+    };
+    let Some(entry_count_bytes) = data.get(ifd_offset..entry_count_end) else {
+        return raw.to_vec();
+    };
+    let entry_count = usize::from(read_u16(entry_count_bytes));
+    let Some(entries_len) = entry_count.checked_mul(12) else {
+        return raw.to_vec();
+    };
+    let Some(entries_end) = entry_count_end.checked_add(entries_len) else {
+        return raw.to_vec();
+    };
+    let Some(entries) = data.get(entry_count_end..entries_end) else {
+        return raw.to_vec();
+    };
+    let retained: Vec<Vec<u8>> = entries
+        .chunks_exact(12)
+        .filter(|entry| read_u16(&entry[..2]) != 0x0112)
+        .map(|entry| {
+            let mut entry = entry.to_vec();
+            // Pillow's Exif serializer emits ImageWidth's integer value as a
+            // LONG even when the source IFD used an inline SHORT.
+            if read_u16(&entry[..2]) == 0x0100
+                && read_u16(&entry[2..4]) == 3
+                && read_u32(&entry[4..8]) == 1
+            {
+                let type_bytes = if le {
+                    4u16.to_le_bytes()
+                } else {
+                    4u16.to_be_bytes()
+                };
+                entry[2..4].copy_from_slice(&type_bytes);
+            }
+            entry
+        })
+        .collect();
+    if retained.len() == entry_count {
+        return raw.to_vec();
+    }
+
+    let mut output = Vec::with_capacity(raw.len().saturating_sub(12));
+    output.extend_from_slice(&raw[..prefix_len]);
+    output.extend_from_slice(&data[..ifd_offset]);
+    let retained_count = retained.len() as u16;
+    if le {
+        output.extend_from_slice(&retained_count.to_le_bytes());
+    } else {
+        output.extend_from_slice(&retained_count.to_be_bytes());
+    }
+    for entry in retained {
+        output.extend_from_slice(&entry);
+    }
+    let tail = &data[entries_end..];
+    output.extend_from_slice(tail);
+    if tail.len() < 4 {
+        output.extend(std::iter::repeat(0).take(4 - tail.len()));
+    }
+    output
+}
+
 #[cfg(test)]
 mod tests {
-    use super::exif_get_orientation;
+    use super::{exif_get_orientation, exif_remove_orientation};
 
     #[test]
     fn test_exif_get_orientation_empty() {
@@ -815,5 +924,26 @@ mod tests {
         raw.extend_from_slice(&tiff);
 
         assert_eq!(exif_get_orientation(&raw), Some(8));
+    }
+
+    #[test]
+    fn test_exif_without_orientation_retains_other_ifd_entries() {
+        let mut raw = b"Exif\x00\x00II\x2a\x00".to_vec();
+        raw.extend_from_slice(&8u32.to_le_bytes());
+        raw.extend_from_slice(&2u16.to_le_bytes());
+        raw.extend_from_slice(&0x0100u16.to_le_bytes());
+        raw.extend_from_slice(&3u16.to_le_bytes());
+        raw.extend_from_slice(&1u32.to_le_bytes());
+        raw.extend_from_slice(&2u16.to_le_bytes());
+        raw.extend_from_slice(&[0u8; 2]);
+        raw.extend_from_slice(&0x0112u16.to_le_bytes());
+        raw.extend_from_slice(&3u16.to_le_bytes());
+        raw.extend_from_slice(&1u32.to_le_bytes());
+        raw.extend_from_slice(&6u16.to_le_bytes());
+        raw.extend_from_slice(&[0u8; 2]);
+        raw.extend_from_slice(&0u32.to_le_bytes());
+
+        let expected = b"Exif\x00\x00II\x2a\x00\x08\x00\x00\x00\x01\x00\x00\x01\x04\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00";
+        assert_eq!(exif_remove_orientation(&raw), expected);
     }
 }
