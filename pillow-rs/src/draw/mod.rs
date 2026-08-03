@@ -194,9 +194,15 @@ fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>,
 pub fn normalize_draw_circle_center(input: DrawCircleCenterInput) -> Result<(f64, f64), PilError> {
     match input {
         DrawCircleCenterInput::Values(values) if values.len() >= 2 => Ok((values[0], values[1])),
-        DrawCircleCenterInput::Values(_) | DrawCircleCenterInput::Invalid => Err(
-            PilError::TypeError("coordinate list must contain at least 2 coordinates".into()),
-        ),
+        // Pillow's circle wrapper indexes the first two sequence elements
+        // directly; a short numeric sequence therefore raises IndexError
+        // rather than the TypeError used by its other coordinate parsers.
+        DrawCircleCenterInput::Values(_) => {
+            Err(PilError::IndexError("tuple index out of range".into()))
+        }
+        DrawCircleCenterInput::Invalid => Err(PilError::TypeError(
+            "coordinate list must contain at least 2 coordinates".into(),
+        )),
     }
 }
 
@@ -221,11 +227,17 @@ pub enum RegularPolygonSides {
 }
 
 fn draw_color_error() -> PilError {
-    PilError::TypeError("Expected color tuple, int, or string".to_owned())
+    PilError::TypeError(
+        // Pillow's ImageDraw._getink() reports this exact message for a
+        // component sequence with an unsupported arity.
+        "color must be int, or tuple of one, three or four elements".to_owned(),
+    )
 }
 
-fn draw_byte(value: i64) -> Option<u8> {
-    u8::try_from(value).ok()
+fn draw_byte(value: i64) -> u8 {
+    // Pillow clamps tuple components to the byte range before handing them to
+    // the ImagingDraw backend; integer inks use a separate packed path below.
+    value.clamp(0, 255) as u8
 }
 
 fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), PilError> {
@@ -238,50 +250,55 @@ fn resolve_integer_color(mode: &str, value: i64) -> Result<(u8, u8, u8, u8), Pil
         let bytes = value.to_le_bytes();
         return Ok((bytes[0], bytes[1], bytes[2], bytes[3]));
     }
-    let value = draw_byte(value).ok_or_else(draw_color_error)?;
+    let signed_value = value;
+    let packed = i32::try_from(value)
+        .map_err(|_| draw_color_error())?
+        .to_le_bytes();
+    let value = draw_byte(value);
     Ok(match mode {
-        "RGB" | "YCbCr" | "HSV" => (value, 0, 0, 255),
-        "RGBA" => (value, 0, 0, 0),
-        "LA" => (value, value, value, 0),
-        "CMYK" => (value, 0, 0, 0),
+        // Multi-band integer inks are packed little-endian by Pillow's
+        // ImagingDraw implementation, including values outside one byte.
+        "RGB" | "YCbCr" | "HSV" => (packed[0], packed[1], packed[2], 255),
+        "RGBA" => (packed[0], packed[1], packed[2], packed[3]),
+        "LA" => (
+            packed[0],
+            packed[0],
+            packed[0],
+            if signed_value < 0 { 255 } else { 0 },
+        ),
+        "CMYK" => (packed[0], packed[1], packed[2], packed[3]),
         _ => (value, value, value, 255),
     })
 }
 
 fn resolve_component_color(mode: &str, values: &[i64]) -> Result<(u8, u8, u8, u8), PilError> {
-    let components = || {
-        values
-            .iter()
-            .copied()
-            .map(draw_byte)
-            .collect::<Option<Vec<_>>>()
-    };
+    let components = || values.iter().copied().map(draw_byte).collect::<Vec<_>>();
     if mode == "PA" {
-        return match (values.len(), components()) {
-            (1, Some(values)) => Ok((values[0], values[0], values[0], 0)),
-            (2, Some(values)) => Ok((values[0], values[0], values[0], values[1])),
+        let components = components();
+        return match components.as_slice() {
+            [value] => Ok((*value, *value, *value, 0)),
+            [value, alpha] => Ok((*value, *value, *value, *alpha)),
             _ => Err(PilError::TypeError(
                 "color must be int, or tuple of one or two elements".to_owned(),
             )),
         };
     }
     if mode == "LA" {
-        return match (values.len(), components()) {
-            (2, Some(values)) => Ok((values[0], values[0], values[0], values[1])),
+        let components = components();
+        return match components.as_slice() {
+            [value, alpha] => Ok((*value, *value, *value, *alpha)),
             _ => Err(PilError::TypeError(
                 "color must be int, or tuple of one or two elements".to_owned(),
             )),
         };
     }
-    if let Some(values) = components() {
-        return match values.as_slice() {
-            [value] if matches!(mode, "L" | "1" | "P") => Ok((*value, *value, *value, 255)),
-            [r, g, b] => Ok((*r, *g, *b, 255)),
-            [r, g, b, a] => Ok((*r, *g, *b, *a)),
-            _ => Err(draw_color_error()),
-        };
+    let components = components();
+    match components.as_slice() {
+        [value] if matches!(mode, "L" | "1" | "P") => Ok((*value, *value, *value, 255)),
+        [r, g, b] => Ok((*r, *g, *b, 255)),
+        [r, g, b, a] => Ok((*r, *g, *b, *a)),
+        _ => Err(draw_color_error()),
     }
-    Err(draw_color_error())
 }
 
 impl Draw {
@@ -670,7 +687,7 @@ impl Draw {
             | RegularPolygonCircle::Nested(x, y, radius) => (x, y, radius),
             RegularPolygonCircle::Invalid => {
                 return Err(PilError::ValueError(
-                    "bounding_circle must be (x,y,r) or ((x,y),r)".into(),
+                    "bounding_circle should contain 2D coordinates and a radius (e.g. (x, y, r) or ((x, y), r) )".into(),
                 ));
             }
         };
