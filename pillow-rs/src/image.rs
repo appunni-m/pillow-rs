@@ -251,6 +251,8 @@ pub enum FormattedImageData {
 pub enum FormattedExtrema {
     /// An image with a zero width or height has no extrema.
     Empty,
+    /// An empty multiband image has one `None` value per band.
+    EmptyMultiple(usize),
     /// One `(minimum, maximum)` pair.
     Single((u8, u8)),
     /// One `(minimum, maximum)` pair per band.
@@ -263,7 +265,7 @@ pub enum FormattedExtrema {
 
 fn pillow_band_count(mode: &str) -> usize {
     match mode {
-        "L" | "1" | "P" | "I" | "F" => 1,
+        "L" | "1" | "P" | "I" | "F" | "I;16" | "I;16L" | "I;16B" | "I;16N" => 1,
         "LA" | "PA" => 2,
         "RGB" | "YCbCr" | "HSV" => 3,
         _ => 4,
@@ -418,6 +420,18 @@ enum FromBytesMode {
 pub(crate) enum ScalarImageSamples {
     Integer(Vec<i32>),
     Float(Vec<f64>),
+}
+
+fn decode_integer_samples(raw: &[u8]) -> Vec<i32> {
+    raw.chunks_exact(4)
+        .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+        .collect()
+}
+
+fn decode_float_samples(raw: &[u8]) -> Vec<f64> {
+    raw.chunks_exact(4)
+        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64)
+        .collect()
 }
 
 fn putdata_clip_u8(value: f64) -> u8 {
@@ -3908,16 +3922,17 @@ impl Image {
     pub fn getextrema_formatted(&self) -> Result<FormattedExtrema, PilError> {
         let (width, height) = self.size()?;
         if width == 0 || height == 0 {
-            return Ok(FormattedExtrema::Empty);
+            let bands = pillow_band_count(&self.mode()?);
+            return Ok(if bands == 1 {
+                FormattedExtrema::Empty
+            } else {
+                FormattedExtrema::EmptyMultiple(bands)
+            });
         }
 
         let mode = self.mode()?;
         if mode == "I" {
-            let ScalarImageSamples::Integer(values) = self.scalar_samples(&mode)? else {
-                return Err(PilError::InternalError(
-                    "I image produced non-integer scalar samples".into(),
-                ));
-            };
+            let values = self.scalar_integer_samples()?;
             let (minimum, maximum) = values
                 .into_iter()
                 .fold(None, |extrema: Option<(i32, i32)>, value| {
@@ -3930,11 +3945,7 @@ impl Image {
             return Ok(FormattedExtrema::Integer((minimum, maximum)));
         }
         if mode == "F" {
-            let ScalarImageSamples::Float(values) = self.scalar_samples(&mode)? else {
-                return Err(PilError::InternalError(
-                    "F image produced non-floating scalar samples".into(),
-                ));
-            };
+            let values = self.scalar_float_samples()?;
             let (minimum, maximum) = values
                 .into_iter()
                 .fold(None, |extrema: Option<(f64, f64)>, value| {
@@ -4042,6 +4053,28 @@ impl Image {
 
     /// Reads the retained four-byte scalar storage for `I` and `F` modes.
     pub(crate) fn scalar_samples(&self, mode: &str) -> Result<ScalarImageSamples, PilError> {
+        if mode == "I" {
+            return self
+                .read_scalar_storage(mode, decode_integer_samples)
+                .map(ScalarImageSamples::Integer);
+        }
+        self.read_scalar_storage(mode, decode_float_samples)
+            .map(ScalarImageSamples::Float)
+    }
+
+    fn scalar_integer_samples(&self) -> Result<Vec<i32>, PilError> {
+        self.read_scalar_storage("I", decode_integer_samples)
+    }
+
+    fn scalar_float_samples(&self) -> Result<Vec<f64>, PilError> {
+        self.read_scalar_storage("F", decode_float_samples)
+    }
+
+    fn read_scalar_storage<T>(
+        &self,
+        mode: &str,
+        decode: impl FnOnce(&[u8]) -> T,
+    ) -> Result<T, PilError> {
         let img = self.materialized_shared()?;
         let expected = CheckedDims::new(img.width(), img.height(), 4)?.total_bytes();
         let raw = img.as_bytes();
@@ -4050,20 +4083,7 @@ impl Image {
                 "{mode} image has invalid scalar storage"
             )));
         }
-        if mode == "I" {
-            return Ok(ScalarImageSamples::Integer(
-                raw.chunks_exact(4)
-                    .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
-                    .collect(),
-            ));
-        }
-        Ok(ScalarImageSamples::Float(
-            raw.chunks_exact(4)
-                .map(|sample| {
-                    f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64
-                })
-                .collect(),
-        ))
+        Ok(decode(raw))
     }
 
     /// Returns Shannon entropy using Pillow-compatible per-band histograms.

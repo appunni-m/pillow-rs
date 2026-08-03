@@ -1003,6 +1003,10 @@ impl PyImage {
         let formatted = self.inner.getextrema_formatted().map_err(map_error)?;
         Python::with_gil(|py| match formatted {
             pillow_rs::FormattedExtrema::Empty => Ok(py.None()),
+            pillow_rs::FormattedExtrema::EmptyMultiple(bands) => {
+                let values: Vec<PyObject> = (0..bands).map(|_| py.None()).collect();
+                Ok(PyTuple::new(py, values)?.to_object(py))
+            }
             pillow_rs::FormattedExtrema::Single((minimum, maximum)) => {
                 Ok((minimum, maximum).to_object(py))
             }
