@@ -1387,6 +1387,7 @@
           "PIL.Image.Image.verify.nuanced.jpeg-rgb-opened",
           "PIL.Image.Image.getbbox.nuanced.png-rgba-opened",
           "PIL.Image.Image.getbbox.nuanced.opened-png-without-idat",
+          "PIL.Image.Image.getcolors.nuanced.opened-png-without-idat",
           "PIL.Image.Image.getbbox.nuanced.png-p-transparency",
           "PIL.Image.Image.getextrema.nuanced.png-rgba-opened",
           "PIL.Image.Image.getextrema.nuanced.opened-png-without-idat",
