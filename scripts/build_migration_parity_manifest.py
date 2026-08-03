@@ -877,6 +877,23 @@ def operation_contract(
                 # Pillow accepts an explicit None at runtime even though the
                 # annotation documents Palette.WEB as the default sentinel.
                 add_unique(parameter["value_types"], "null")
+    if endpoint.source_path == "PIL.Image.Image.reduce":
+        # Pillow's factor conversion reports the concrete host type for
+        # invalid values. Keep a string in this endpoint's vocabulary so the
+        # Rust core owns that public diagnostic without broadening other
+        # integer parameters.
+        for parameter in parameters:
+            if parameter["id"] == "factor":
+                add_unique(parameter["value_types"], "string")
+    if endpoint.source_path == "PIL.Image.Image.transform":
+        # The transform implementation accepts a broad runtime sequence and
+        # reports invalid host values from its native conversion path. Keep
+        # the scalar and mapping edge values available only for this endpoint.
+        for parameter in parameters:
+            if parameter["id"] == "data":
+                add_unique(parameter["value_types"], "integer")
+            if parameter["id"] == "fillcolor":
+                add_unique(parameter["value_types"], "any_json")
     benchmark_applicable = endpoint.kind != "constant"
     requirements = operation_requirements(
         endpoint,

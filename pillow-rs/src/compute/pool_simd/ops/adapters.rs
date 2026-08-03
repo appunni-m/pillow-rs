@@ -8,7 +8,9 @@
 
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransposeMethod};
+use crate::pipeline::{
+    ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
+};
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, RgbImage, RgbaImage,
 };
@@ -1090,11 +1092,10 @@ pub fn simd_transform(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
-    let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Transform {
         w: dw,
         h: dh,
+        method,
         data,
         filter,
         fill,
@@ -1102,6 +1103,21 @@ pub fn simd_transform(
         ..
     } = op
     {
+        let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+        if !matches!(method, TransformMethod::Affine) {
+            return crate::compute::pool_cpu::ops::effects::op_transform(
+                img,
+                *dw,
+                *dh,
+                method,
+                data,
+                filter,
+                resolved_fill,
+                mode,
+            );
+        }
+        let mode_code = mode_to_u32(mode);
+        let pixels = pixels_from_dynimg(img);
         let matrix: [f64; 8] = {
             let mut arr = [0.0f64; 8];
             let len = data.len().min(8);
@@ -1109,7 +1125,6 @@ pub fn simd_transform(
             arr
         };
         let f = filter_to_u32(filter);
-        let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
         let fill_rgba = match resolved_fill {
             Some(c) => pack_rgba(c),
             None => 0u32,

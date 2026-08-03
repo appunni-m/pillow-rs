@@ -8729,6 +8729,7 @@ surfaces:
         value_types:
         - integer
         - sequence
+        - string
         omission:
           kind: required
       - id: box
@@ -11051,6 +11052,7 @@ surfaces:
         - 'null'
         - sequence
         - any_json
+        - integer
         omission:
           kind: literal
           value: null
@@ -11077,6 +11079,7 @@ surfaces:
         - number
         - string
         - sequence
+        - any_json
         omission:
           kind: literal
           value: null

@@ -215,26 +215,28 @@ fn convert_palette_input_from_python(
 
 fn transform_data_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> Option<pillow_rs::TransformData> {
+) -> PyResult<Option<pillow_rs::TransformData>> {
     let Some(value) = value else {
-        return None;
+        return Ok(None);
     };
     if let Ok(matrix) = value.extract::<Vec<f64>>() {
-        return Some(pillow_rs::TransformData::Affine(matrix));
+        return Ok(Some(pillow_rs::TransformData::Affine(matrix)));
     }
     if let Ok(mesh) = value.extract::<Vec<(Vec<f64>, Vec<f64>)>>() {
-        return Some(pillow_rs::TransformData::Mesh(mesh));
+        return Ok(Some(pillow_rs::TransformData::Mesh(mesh)));
     }
     if let Ok(mesh) = value.extract::<Vec<Vec<Vec<f64>>>>() {
-        return Some(pillow_rs::TransformData::RawMesh(mesh));
+        return Ok(Some(pillow_rs::TransformData::RawMesh(mesh)));
     }
     if value.is_instance_of::<PyDict>() {
-        return Some(pillow_rs::TransformData::Mapping);
+        return Ok(Some(pillow_rs::TransformData::Mapping));
     }
     if let Ok(value) = value.extract::<String>() {
-        return Some(pillow_rs::TransformData::Text(value));
+        return Ok(Some(pillow_rs::TransformData::Text(value)));
     }
-    Some(pillow_rs::TransformData::Invalid)
+    Ok(Some(pillow_rs::TransformData::Invalid(
+        value.get_type().name()?.to_string(),
+    )))
 }
 
 fn transform_fill_from_python(
@@ -258,17 +260,19 @@ fn transform_fill_from_python(
     Ok(Some(pillow_rs::TransformFill::Invalid))
 }
 
-fn reduce_factor_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::ReduceFactor {
+fn reduce_factor_from_python(value: &Bound<'_, PyAny>) -> PyResult<pillow_rs::ReduceFactor> {
     if let Ok(value) = value.extract::<i64>() {
-        return pillow_rs::ReduceFactor::Scalar(value);
+        return Ok(pillow_rs::ReduceFactor::Scalar(value));
     }
     if let Ok(values) = value.extract::<Vec<i64>>() {
-        return pillow_rs::ReduceFactor::Sequence(values);
+        return Ok(pillow_rs::ReduceFactor::Sequence(values));
     }
     if let Ok(values) = value.extract::<Vec<f64>>() {
-        return pillow_rs::ReduceFactor::FloatingSequence(values);
+        return Ok(pillow_rs::ReduceFactor::FloatingSequence(values));
     }
-    pillow_rs::ReduceFactor::Invalid
+    Ok(pillow_rs::ReduceFactor::Invalid(
+        value.get_type().name()?.to_string(),
+    ))
 }
 
 fn reduce_box_from_python(value: Option<&Bound<'_, PyAny>>) -> PyResult<pillow_rs::ReduceBox> {
@@ -1176,7 +1180,7 @@ impl PyImage {
         factor: &Bound<'_, PyAny>,
         box_coords: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let factor = reduce_factor_from_python(factor);
+        let factor = reduce_factor_from_python(factor)?;
         let box_coords = box_coords
             .map(|value| reduce_box_from_python(Some(value)))
             .transpose()?;
@@ -1335,7 +1339,7 @@ impl PyImage {
         fill: Option<i32>,
         fillcolor: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let data = transform_data_from_python(data);
+        let data = transform_data_from_python(data)?;
         let fillcolor = transform_fill_from_python(fillcolor)?;
         self.inner
             .transform_public(

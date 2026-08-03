@@ -940,6 +940,147 @@ fn transform_affine_generic(
     })
 }
 
+/// Apply a projective or quadrilateral transform to native 8-bit samples.
+///
+/// Pillow represents perspective transforms as an inverse homography and
+/// quadrilateral transforms as a bilinear map from output coordinates to the
+/// four source corners. Keeping both calculations here lets the public core
+/// route methods 2 and 3 through the same lazy pipeline as affine transforms.
+fn transform_projective_generic(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    data: &[f64],
+    filter: &ResampleFilter,
+    fill: Option<(u8, u8, u8, u8)>,
+    quad: bool,
+) -> Result<DynamicImage, PilError> {
+    let channels = img.color().channel_count() as usize;
+    let raw = img.as_bytes();
+    let (src_w, src_h) = img.dimensions();
+    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+    let pixel_count = usize::try_from(dst_w)
+        .ok()
+        .and_then(|width| {
+            usize::try_from(dst_h)
+                .ok()
+                .and_then(|height| width.checked_mul(height))
+        })
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let byte_count = pixel_count
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("image dimensions are too large".into()))?;
+    let mut out = vec![0u8; byte_count];
+    let nearest = matches!(filter, ResampleFilter::Nearest);
+
+    let source_at = |dx: f64, dy: f64| -> Option<(f64, f64)> {
+        if quad {
+            if dst_w == 0 || dst_h == 0 {
+                return None;
+            }
+            let x0 = data[0];
+            let y0 = data[1];
+            let sw = f64::from(dst_w);
+            let sh = f64::from(dst_h);
+            let x = x0
+                + (data[6] - x0) * dx / sw
+                + (data[2] - x0) * dy / sh
+                + (data[4] - data[2] - data[6] + x0) * dx * dy / (sw * sh);
+            let y = y0
+                + (data[7] - y0) * dx / sw
+                + (data[3] - y0) * dy / sh
+                + (data[5] - data[3] - data[7] + y0) * dx * dy / (sw * sh);
+            return Some((x, y));
+        }
+
+        let denominator = data[6] * dx + data[7] * dy + 1.0;
+        if denominator == 0.0 || !denominator.is_finite() {
+            return None;
+        }
+        let x = (data[0] * dx + data[1] * dy + data[2]) / denominator;
+        let y = (data[3] * dx + data[4] * dy + data[5]) / denominator;
+        (x.is_finite() && y.is_finite()).then_some((x, y))
+    };
+
+    let fill_sample = |destination: &mut [u8]| {
+        for (channel, value) in destination.iter_mut().enumerate() {
+            *value = match channel {
+                0 => fill_color.0,
+                1 => fill_color.1,
+                2 => fill_color.2,
+                _ => fill_color.3,
+            };
+        }
+    };
+
+    for dy in 0..dst_h {
+        for dx in 0..dst_w {
+            let out_idx = (dy as usize * dst_w as usize + dx as usize) * channels;
+            let destination = &mut out[out_idx..out_idx + channels];
+            let Some((sx, sy)) = source_at(f64::from(dx), f64::from(dy)) else {
+                fill_sample(destination);
+                continue;
+            };
+
+            if nearest {
+                let ix = (sx + 0.5).floor() as i64;
+                let iy = (sy + 0.5).floor() as i64;
+                if ix >= 0 && ix < i64::from(src_w) && iy >= 0 && iy < i64::from(src_h) {
+                    let in_idx = (iy as usize * src_w as usize + ix as usize) * channels;
+                    destination.copy_from_slice(&raw[in_idx..in_idx + channels]);
+                } else {
+                    fill_sample(destination);
+                }
+                continue;
+            }
+
+            if src_w == 0
+                || src_h == 0
+                || sx < 0.0
+                || sx >= f64::from(src_w)
+                || sy < 0.0
+                || sy >= f64::from(src_h)
+            {
+                fill_sample(destination);
+                continue;
+            }
+            let x0 = sx.floor() as usize;
+            let y0 = sy.floor() as usize;
+            let x1 = (x0 + 1).min(src_w as usize - 1);
+            let y1 = (y0 + 1).min(src_h as usize - 1);
+            let fx = sx - x0 as f64;
+            let fy = sy - y0 as f64;
+            for channel in 0..channels {
+                let p00 = raw[(y0 * src_w as usize + x0) * channels + channel] as f64;
+                let p10 = raw[(y0 * src_w as usize + x1) * channels + channel] as f64;
+                let p01 = raw[(y1 * src_w as usize + x0) * channels + channel] as f64;
+                let p11 = raw[(y1 * src_w as usize + x1) * channels + channel] as f64;
+                destination[channel] = ((1.0 - fx) * (1.0 - fy) * p00
+                    + fx * (1.0 - fy) * p10
+                    + (1.0 - fx) * fy * p01
+                    + fx * fy * p11)
+                    .round() as u8;
+            }
+        }
+    }
+
+    Ok(match channels {
+        1 => DynamicImage::ImageLuma8(GrayImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
+            PilError::InternalError("transform projective L buffer shape mismatch".into())
+        })?),
+        2 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(dst_w, dst_h, out).ok_or_else(
+            || PilError::InternalError("transform projective LA buffer shape mismatch".into()),
+        )?),
+        3 => DynamicImage::ImageRgb8(RgbImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
+            PilError::InternalError("transform projective RGB buffer shape mismatch".into())
+        })?),
+        4 => DynamicImage::ImageRgba8(RgbaImage::from_raw(dst_w, dst_h, out).ok_or_else(|| {
+            PilError::InternalError("transform projective RGBA buffer shape mismatch".into())
+        })?),
+        _ => unreachable!(),
+    })
+}
+
 /// Apply the nearest-neighbor affine path to native unsigned 16-bit samples.
 ///
 /// The byte-oriented transform helper cannot process `I;16` as one-byte
@@ -1027,9 +1168,24 @@ pub fn op_transform(
             let result = transform_mesh(img, w, h, data, fill);
             Ok(preserve_mode(img, result?))
         }
-        &TransformMethod::Perspective | &TransformMethod::Quad => Err(
-            PilError::NotImplementedError(format!("Transform {:?} not yet implemented", method)),
-        ),
+        &TransformMethod::Perspective => {
+            if data.len() < 8 {
+                return Err(PilError::ValueError(
+                    "Perspective transform needs 8 coefficients".into(),
+                ));
+            }
+            let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, false)?;
+            Ok(preserve_mode(img, result))
+        }
+        &TransformMethod::Quad => {
+            if data.len() < 8 {
+                return Err(PilError::ValueError(
+                    "Quad transform needs 8 coordinates".into(),
+                ));
+            }
+            let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, true)?;
+            Ok(preserve_mode(img, result))
+        }
     }
 }
 
