@@ -14690,6 +14690,22 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image",
             "operation": "frombytes",
+            "requirement_suffix": "mode.rgb",
+            "name": "valid-rgb",
+            "mode": "RGB",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-rgba-lowercase",
+            "mode": "RGBa",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
             "requirement_suffix": "mode.cmyk",
             "name": "valid-cmyk",
             "mode": "CMYK",
