@@ -1707,6 +1707,7 @@ fn map_error(e: PilError) -> PyErr {
         PilError::AssertionError(msg) => pyo3::exceptions::PyAssertionError::new_err(msg),
         PilError::IndexError(msg) => pyo3::exceptions::PyIndexError::new_err(msg),
         PilError::KeyError(msg) => pyo3::exceptions::PyKeyError::new_err(msg),
+        PilError::KeyErrorInt(key) => pyo3::exceptions::PyKeyError::new_err(key),
         PilError::AttributeError(msg) => pyo3::exceptions::PyAttributeError::new_err(msg),
         PilError::EOFError(msg) => pyo3::exceptions::PyEOFError::new_err(msg),
         PilError::UnsupportedLibraqm => {
@@ -3075,6 +3076,9 @@ fn draw_box_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawBoxInput 
 fn draw_circle_center_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawCircleCenterInput {
     if xy.is_instance_of::<PyInt>() && !xy.is_instance_of::<PyBool>() {
         return pillow_rs::DrawCircleCenterInput::Integer;
+    }
+    if xy.is_instance_of::<PyDict>() {
+        return pillow_rs::DrawCircleCenterInput::Mapping;
     }
     if xy.extract::<String>().is_ok() {
         return pillow_rs::DrawCircleCenterInput::Text;

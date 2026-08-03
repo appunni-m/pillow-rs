@@ -50,6 +50,9 @@ pub enum DrawCircleCenterInput {
     /// Text reaches Pillow's arithmetic path after indexing the first
     /// character, so preserve its type-specific subtraction diagnostic.
     Text,
+    /// A mapping is indexed by integer zero before Pillow performs arithmetic;
+    /// an empty mapping therefore raises `KeyError(0)`.
+    Mapping,
     /// A value that could not be represented as a numeric sequence.
     Invalid,
 }
@@ -225,6 +228,7 @@ pub fn normalize_draw_circle_center(input: DrawCircleCenterInput) -> Result<(f64
         DrawCircleCenterInput::Text => Err(PilError::TypeError(
             "unsupported operand type(s) for -: 'str' and 'int'".into(),
         )),
+        DrawCircleCenterInput::Mapping => Err(PilError::KeyErrorInt(0)),
         DrawCircleCenterInput::Invalid => Err(PilError::TypeError(
             "coordinate list must contain at least 2 coordinates".into(),
         )),
