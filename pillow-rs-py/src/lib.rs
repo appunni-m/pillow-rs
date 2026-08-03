@@ -1661,6 +1661,16 @@ fn map_error(e: PilError) -> PyErr {
         }
         PilError::UnidentifiedImageError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
+        PilError::UnicodeEncodeError {
+            encoding,
+            object,
+            start,
+            end,
+            reason,
+            ..
+        } => {
+            pyo3::exceptions::PyUnicodeEncodeError::new_err((encoding, object, start, end, reason))
+        }
         PilError::SyntaxError(msg) => pyo3::exceptions::PySyntaxError::new_err(msg),
         PilError::SystemError(msg) => pyo3::exceptions::PySystemError::new_err(msg),
         PilError::TypeError(msg) => pyo3::exceptions::PyTypeError::new_err(msg),

@@ -2922,6 +2922,14 @@ def build_nuanced_cases(
             "values": {"text": literal("")},
         },
         {
+            "surface": "PIL.ImageFont.ImageFont",
+            "operation": "getmask",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-pilfont-nonlatin-error",
+            "chain": "pilfont-load-getmask",
+            "values": {"text": literal("🙂")},
+        },
+        {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getbbox",
             "requirement_suffix": "parameter.text",
