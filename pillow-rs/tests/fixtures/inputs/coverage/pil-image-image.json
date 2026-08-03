@@ -1479,6 +1479,8 @@
           "PIL.Image.Image.putpixel.nuanced.rgb-float-error",
           "PIL.Image.Image.putpixel.nuanced.l-float-error",
           "PIL.Image.Image.putpixel.nuanced.invalid-component-count",
+          "PIL.Image.Image.putpixel.nuanced.l-negative-integer",
+          "PIL.Image.Image.putpixel.nuanced.rgba-premultiplied-scalar",
           "PIL.Image.Image.paste.nuanced.la-source-into-rgb",
           "PIL.Image.Image.paste.nuanced.rgba-source-into-rgb",
           "PIL.Image.Image.paste.nuanced.rgba-mask",

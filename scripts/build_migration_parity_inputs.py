@@ -678,6 +678,8 @@ class WorkflowBuilder:
                 requested_mode = "L"
             elif label == "mask":
                 requested_mode = "L"
+        if self.edge == "blend-second-palette" and label == "im2":
+            requested_mode = "P"
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
@@ -2653,7 +2655,11 @@ class WorkflowBuilder:
                         arguments={
                             "mode": literal("L"),
                             "size": literal(self.scenario_size or [16, 16]),
-                            "color": literal(0),
+                            "color": literal(
+                                17
+                                if self.edge == "merge-rgb-nonzero"
+                                else 0
+                            ),
                         },
                         step_id=f"setup-band-{index + 1}",
                     )
@@ -8704,6 +8710,14 @@ def build_nuanced_cases(
             "surface": "PIL.Image",
             "operation": "merge",
             "requirement_suffix": "behavior.default",
+            "name": "rgb-mode-nonzero",
+            "mode": "RGB",
+            "edge": "merge-rgb-nonzero",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
             "name": "cmyk-mode",
             "mode": "CMYK",
         },
@@ -8737,6 +8751,15 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "palette-mode-error",
             "mode": "P",
+            "values": {"alpha": literal(0.25)},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "second-palette-mode-error",
+            "mode": "RGB",
+            "edge": "blend-second-palette",
             "values": {"alpha": literal(0.25)},
         },
         {
@@ -13540,6 +13563,28 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([0, 0]),
                 "value": literal([1, 2, 3, 4, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "l-negative-integer",
+            "mode": "L",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(-1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-premultiplied-scalar",
+            "mode": "RGBa",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(200),
             },
         },
         {
