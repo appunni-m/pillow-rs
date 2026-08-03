@@ -2187,7 +2187,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(exif_compat_fields, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_layout_engine, m)?)?;
-    m.add_function(wrap_pyfunction!(resampling_from_int, m)?)?;
     m.add_function(wrap_pyfunction!(transpose_from_int, m)?)?;
 
     Ok(())
@@ -2243,11 +2242,6 @@ fn imagefont_normalize_layout_engine(
         )?;
     }
     Ok(name.to_owned())
-}
-
-#[pyfunction]
-fn resampling_from_int(value: i64) -> &'static str {
-    pillow_rs::resampling_name_from_int(value)
 }
 
 #[pyfunction]

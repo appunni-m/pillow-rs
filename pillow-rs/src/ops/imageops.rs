@@ -225,17 +225,10 @@ fn parse_imageops_filter(
 
 /// Validates the resampling argument accepted by `ImageOps.deform`.
 ///
-/// Pillow's compatibility wrapper rejects string names for this entry point;
-/// numeric values and omission are accepted and the current mesh backend uses
-/// its established nearest-neighbor sampling.
+/// Normalize the target facade's symbolic names and validate numeric values;
+/// the current mesh backend uses its established nearest-neighbor sampling.
 pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilError> {
-    if let Some(ResampleInput::Name(name)) = input {
-        return Err(PilError::ValueError(format!(
-            "Unknown resampling filter ({name}). Use Image.Resampling.NEAREST (0), \
-             Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
-        )));
-    }
-    Ok(())
+    parse_resample_input(input).map(|_| ())
 }
 
 /// Normalizes image contrast by clipping darkest and lightest values.

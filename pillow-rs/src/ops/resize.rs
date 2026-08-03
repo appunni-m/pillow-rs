@@ -1,6 +1,7 @@
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, ResampleFilter};
+use crate::raster::GenericImageView;
 
 /// Public resampling input accepted by Pillow resize-like methods.
 #[derive(Debug, Clone)]
@@ -16,19 +17,6 @@ const RESAMPLE_GUIDANCE: &str = concat!(
     "Image.Resampling.BILINEAR (2), Image.Resampling.BICUBIC (3), ",
     "Image.Resampling.BOX (4) or Image.Resampling.HAMMING (5)"
 );
-
-/// Returns Pillow's symbolic resampling name for an integer enum value.
-pub fn resampling_name_from_int(value: i64) -> &'static str {
-    match value {
-        0 => "NEAREST",
-        1 => "LANCZOS",
-        2 => "BILINEAR",
-        3 => "BICUBIC",
-        4 => "BOX",
-        5 => "HAMMING",
-        _ => "BILINEAR",
-    }
-}
 
 fn unknown_resample(value: impl std::fmt::Display) -> PilError {
     PilError::ValueError(format!(
@@ -132,7 +120,12 @@ impl Image {
         size: (i64, i64),
         filter: Option<ResampleInput>,
     ) -> Result<(), PilError> {
-        let dimensions = self.thumbnail_dimensions(size)?;
+        // Pillow's in-place thumbnail loads the source before returning from
+        // the public call. Materialize here so deferred codec failures are
+        // reported at thumbnail(), rather than being delayed until a later
+        // observation of the mutated image.
+        let source_size = self.materialize()?.dimensions();
+        let dimensions = Self::thumbnail_dimensions(size, source_size)?;
         if dimensions == (0, 0) {
             return Ok(());
         }
@@ -162,11 +155,13 @@ impl Image {
         Ok(())
     }
 
-    fn thumbnail_dimensions(&self, size: (i64, i64)) -> Result<(u32, u32), PilError> {
+    fn thumbnail_dimensions(
+        size: (i64, i64),
+        (source_width, source_height): (u32, u32),
+    ) -> Result<(u32, u32), PilError> {
         // Pillow evaluates x / y before it rejects a negative width. Preserve
         // its division error for requests containing a zero dimension.
         if size.0 == 0 || size.1 == 0 {
-            let (source_width, source_height) = self.size()?;
             if size.0 == 0 && size.1 == 0 && source_width == 0 && source_height == 0 {
                 return Ok((0, 0));
             }
@@ -176,18 +171,25 @@ impl Image {
             return Err(PilError::ValueError("scale must be > 0".into()));
         }
 
-        let width = u32::try_from(size.0)
-            .map_err(|_| PilError::ValueError("thumbnail size must be > 0".into()))?;
+        // Pillow accepts arbitrarily large positive bounds for thumbnail and
+        // clamps the eventual result to the source dimensions. Keep the
+        // public bound in i64 until after validation; converting the request
+        // directly to u32 incorrectly rejected values such as 2**32.
+        let width = thumbnail_bound(size.0);
         if size.1 < 0 {
-            return Ok((width, self.thumbnail_height_for_width(width)?));
+            return Ok((
+                width,
+                Self::thumbnail_height_for_width(width, (source_width, source_height))?,
+            ));
         }
-        let height = u32::try_from(size.1)
-            .map_err(|_| PilError::ValueError("thumbnail size must be > 0".into()))?;
+        let height = thumbnail_bound(size.1);
         Ok((width, height))
     }
 
-    fn thumbnail_height_for_width(&self, width: u32) -> Result<u32, PilError> {
-        let (source_width, source_height) = self.size()?;
+    fn thumbnail_height_for_width(
+        width: u32,
+        (source_width, source_height): (u32, u32),
+    ) -> Result<u32, PilError> {
         if source_width == 0 {
             let message = if source_height == 0 {
                 "division by zero"
@@ -215,9 +217,15 @@ fn positive_dimensions(size: (i64, i64), message: &str) -> Result<(u32, u32), Pi
     if size.0 <= 0 || size.1 <= 0 {
         return Err(PilError::ValueError(message.into()));
     }
-    let width = u32::try_from(size.0).map_err(|_| PilError::ValueError(message.into()))?;
-    let height = u32::try_from(size.1).map_err(|_| PilError::ValueError(message.into()))?;
+    let width = u32::try_from(size.0)
+        .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
+    let height = u32::try_from(size.1)
+        .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
     Ok((width, height))
+}
+
+fn thumbnail_bound(value: i64) -> u32 {
+    value.min(i64::from(u32::MAX)) as u32
 }
 
 fn round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {

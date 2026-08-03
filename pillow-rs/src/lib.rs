@@ -306,7 +306,6 @@ pub use crate::ops::quantize::QuantizePalette;
 pub use crate::ops::resize::ResampleInput;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
-pub use crate::ops::resize::resampling_name_from_int;
 pub use crate::ops::rotate::RotateExpandInput;
 pub use crate::ops::rotate::RotateResampleInput;
 pub use crate::ops::rotate::normalize_python_rotate;

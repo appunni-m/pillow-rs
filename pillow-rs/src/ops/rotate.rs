@@ -10,7 +10,7 @@ pub enum RotateResampleInput {
     /// A non-string value. Pillow's rotate wrapper currently ignores this
     /// value after checking that it is not a string.
     Other,
-    /// A string, which Pillow rejects for this entry point.
+    /// A symbolic resampling name or an invalid string to validate.
     Name(String),
 }
 
@@ -29,16 +29,28 @@ pub fn normalize_python_rotate(
     resample: RotateResampleInput,
     expand: RotateExpandInput,
 ) -> Result<bool, PilError> {
+    normalize_python_rotate_at_angle(1.0, resample, expand)
+}
+
+fn normalize_python_rotate_at_angle(
+    angle: f64,
+    resample: RotateResampleInput,
+    expand: RotateExpandInput,
+) -> Result<bool, PilError> {
     let expand = match expand {
         RotateExpandInput::Boolean(value) => Ok(value),
         RotateExpandInput::Invalid => Err(PilError::TypeError(
             "'int' object is not subscriptable".to_owned(),
         )),
     }?;
-    if let RotateResampleInput::Name(value) = resample {
-        return Err(PilError::ValueError(format!(
-            "Unknown resampling filter ({value}). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
-        )));
+    if angle % 360.0 != 0.0 {
+        if let RotateResampleInput::Name(value) = resample {
+            if !matches!(value.as_str(), "NEAREST" | "BILINEAR" | "BICUBIC") {
+                return Err(PilError::ValueError(format!(
+                    "Unknown resampling filter ({value}). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
+                )));
+            }
+        }
     }
     Ok(expand)
 }
@@ -52,8 +64,9 @@ impl Image {
         expand: RotateExpandInput,
         fillcolor: Option<(u8, u8, u8, u8)>,
     ) -> Result<Image, PilError> {
-        let expand = normalize_python_rotate(resample, expand)?;
-        self.rotate(angle, expand, fillcolor)
+        let normalized_angle = angle % 360.0;
+        let expand = normalize_python_rotate_at_angle(normalized_angle, resample, expand)?;
+        self.rotate(normalized_angle, expand, fillcolor)
     }
 
     /// Rotates the image by `angle` degrees.
