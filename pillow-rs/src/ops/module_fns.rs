@@ -355,15 +355,27 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
     };
-    let size: usize = 256 * 256 * bytes_per_pixel;
+    let row_bytes = if mode == "1" {
+        256usize.div_ceil(8)
+    } else {
+        256
+    };
+    let size: usize = row_bytes * 256 * bytes_per_pixel;
     let mut data = vec![0u8; size];
 
     for y in 0..256usize {
-        let row_start = y * 256 * bytes_per_pixel;
+        let row_start = y * row_bytes * bytes_per_pixel;
         match mode {
-            "L" | "P" | "1" => {
+            "L" | "P" => {
                 let val = y as u8;
                 data[row_start..row_start + 256].fill(val);
+            }
+            "1" => {
+                // Pillow's mode-1 gradient is a binary threshold, not an
+                // 8-bit luma gradient: only the first row remains black.
+                if y != 0 {
+                    data[row_start..row_start + row_bytes].fill(0xff);
+                }
             }
             "I" => {
                 // 4-byte i32 LE per pixel
@@ -411,7 +423,12 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
     };
-    let size: usize = 256 * 256 * bytes_per_pixel;
+    let row_bytes = if mode == "1" {
+        256usize.div_ceil(8)
+    } else {
+        256
+    };
+    let size: usize = row_bytes * 256 * bytes_per_pixel;
     let mut data = vec![0u8; size];
 
     for y in 0..256 {
@@ -423,8 +440,17 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
             let val = if d >= 255 { 255u8 } else { d as u8 };
 
             match mode {
-                "L" | "P" | "1" => {
+                "L" | "P" => {
                     data[y * 256 + x] = val;
+                }
+                "1" => {
+                    // Mode-1 output keeps every nonzero radial sample white;
+                    // the single zero-valued center sample remains black.
+                    if val != 0 {
+                        let byte_idx = y * row_bytes + x / 8;
+                        let bit_idx = 7 - (x % 8);
+                        data[byte_idx] |= 1 << bit_idx;
+                    }
                 }
                 "I" => {
                     let bytes = (val as i32).to_le_bytes();

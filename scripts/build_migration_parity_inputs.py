@@ -9350,6 +9350,13 @@ def build_nuanced_cases(
             "surface": "PIL.Image",
             "operation": "linear_gradient",
             "requirement_suffix": "behavior.default",
+            "name": "one-mode",
+            "values": {"mode": literal("1")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "linear_gradient",
+            "requirement_suffix": "behavior.default",
             "name": "p-mode",
             "values": {"mode": literal("P")},
         },
@@ -9359,6 +9366,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "l-mode",
             "values": {"mode": literal("L")},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "radial_gradient",
+            "requirement_suffix": "behavior.default",
+            "name": "one-mode",
+            "values": {"mode": literal("1")},
         },
         {
             "surface": "PIL.Image",
