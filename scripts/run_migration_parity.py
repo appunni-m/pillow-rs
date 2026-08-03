@@ -491,6 +491,17 @@ def call_workflow_step(
         return getattr(receiver, operation)
     if opdef["kind"] == "constant":
         return getattr(import_surface(side, step["surface"]), operation)
+    if (
+        step["surface"] == "PIL.Image.Image"
+        and operation == "tobytes"
+        and receiver is not None
+        and type(receiver).__name__ == "ImagingCore"
+    ):
+        # ``bytes(image.getdata())`` is a public observation of the returned
+        # ImagingCore, not Image.Image.tobytes(). Reuse the existing bytes
+        # result contract while invoking the receiver's actual public bytes
+        # protocol on both oracle and target.
+        return bytes(receiver)
     if receiver is not None:
         callable_value = getattr(receiver, operation)
     else:

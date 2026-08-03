@@ -2849,9 +2849,9 @@ class WorkflowBuilder:
                 )
 
         if self.scenario_observe_result is not None:
-            # Materialize a returned image through a public Image method.  This
-            # keeps nuanced ImageOps cases behavioral: the lazy operation and
-            # its resulting pixels must both agree with the oracle.
+            # Observe a returned public object through the declared public
+            # operation. ``getdata`` uses ``bytes(ImagingCore)`` here; other
+            # operations materialize returned images through an Image method.
             observations.append(
                 self.add_step(
                     "PIL.Image.Image",
@@ -14067,6 +14067,42 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
             "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "bytes-luma",
+            "mode": "L",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "bytes-rgb-multiband",
+            "mode": "RGB",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "bytes-i-out-of-range",
+            "mode": "I",
+            "edge": "nonzero-pixel",
+            "pixel": 100000,
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "bytes-f-float",
+            "mode": "F",
+            "edge": "nonzero-pixel",
+            "pixel": 1.5,
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",

@@ -2058,6 +2058,11 @@ fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<
     let input = values
         .extract::<Vec<i64>>()
         .map(pillow_rs::ImagingCoreBytesInput::Scalars)
+        .or_else(|_| {
+            values
+                .extract::<Vec<f64>>()
+                .map(pillow_rs::ImagingCoreBytesInput::Floats)
+        })
         .unwrap_or(pillow_rs::ImagingCoreBytesInput::Multiband);
     let bytes = pillow_rs::imaging_core_to_bytes(input).map_err(map_error)?;
     Ok(PyBytes::new(py, &bytes).into())
