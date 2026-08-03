@@ -122,7 +122,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
     ),
     "image-sequence": (
         "pillow-rs-py/python/pillow_rs/imagesequence.py",
-        "pillow-rs/src/image.rs",
+        "pillow-rs/src/image_sequence.rs",
     ),
 }
 

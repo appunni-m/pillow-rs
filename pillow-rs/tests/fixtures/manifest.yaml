@@ -455,7 +455,7 @@ coverage_components:
   target_profile: python-cpu
   paths:
   - pillow-rs-py/python/pillow_rs/imagesequence.py
-  - pillow-rs/src/image.rs
+  - pillow-rs/src/image_sequence.rs
   dimensions:
   - function
   - line
