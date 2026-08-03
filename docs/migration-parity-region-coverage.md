@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 50ec2d407d2c5bd4092b31e6dadaeac147f4c35ad8c3264feca5f9dc26958767
-coverage_run_id: migration-coverage-04731e6dec324b3791aa0fe60b6cf6a2
+coverage_run_id: migration-coverage-f90ff87cbed74d39a36a5d0bf21c7c96
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -128,27 +128,27 @@ Component aggregate for backlog ordering: `10169/11137` (91.3%).
 | `PIL.Image.new` | `image-core` | 10169/11137 | 91.3% |
 | `PIL.Image.open` | `image-core` | 10169/11137 | 91.3% |
 | `PIL.Image.radial_gradient` | `image-core` | 10169/11137 | 91.3% |
-| `PIL.ImageDraw.Draw` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2687/2922 | 92.0% |
-| `PIL.ImageDraw.Outline` | `image-draw` | 2687/2922 | 92.0% |
+| `PIL.ImageDraw.Draw` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2688/2922 | 92.0% |
+| `PIL.ImageDraw.Outline` | `image-draw` | 2688/2922 | 92.0% |
 
 ## Per-file region coverage for involved components
 
@@ -169,7 +169,7 @@ Component aggregate for backlog ordering: `10169/11137` (91.3%).
 | `image-core` | `pillow-rs-py/python/pillow_rs/image.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs-py/python/pillow_rs/operations.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs/src/ops/rotate.rs` | 33/33 | 100.0% |
-| `image-draw` | `pillow-rs/src/draw/mod.rs` | 2687/2922 | 92.0% |
+| `image-draw` | `pillow-rs/src/draw/mod.rs` | 2688/2922 | 92.0% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
 | `image-font` | `pillow-rs/src/lib.rs` | 172/382 | 45.0% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% |

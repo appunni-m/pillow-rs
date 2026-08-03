@@ -5780,6 +5780,18 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "regular_polygon",
             "requirement_suffix": "behavior.default",
+            "name": "rotation-wrap",
+            "values": {
+                "bounding_circle": literal([8, 8, 6]),
+                "n_sides": literal(5),
+                "rotation": literal(400),
+                "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "regular_polygon",
+            "requirement_suffix": "behavior.default",
             "name": "short-bounding-circle-error",
             "values": {
                 "bounding_circle": literal([8, 8]),
@@ -5989,6 +6001,16 @@ def build_nuanced_cases(
             "name": "mapping-center-error",
             "values": {
                 "xy": literal({}),
+                "radius": literal(4),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "circle",
+            "requirement_suffix": "behavior.default",
+            "name": "none-center-error",
+            "values": {
+                "xy": literal(None),
                 "radius": literal(4),
             },
         },

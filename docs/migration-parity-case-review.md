@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2375
-- Unique active workflow signatures: 2375
+- Active parity workflows: 2377
+- Unique active workflow signatures: 2377
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1199
+- Deliberate nuanced workflows: 1201
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -27,7 +27,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 415 |
+| `PIL.ImageDraw.ImageDraw` | 417 |
 | `PIL.ImageEnhance` | 24 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
@@ -857,6 +857,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.bbox`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.mapping-center-error`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.non-sequence-center-error`
+- `PIL.ImageDraw.ImageDraw.circle.nuanced.none-center-error`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.scalar-center-error`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.short-center-error`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.canvas-la`
@@ -947,6 +948,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.invalid-side-count-error`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.pentagon-rotated`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.rotated-hexagon`
+- `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.rotation-wrap`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.short-bounding-circle-error`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.triangle`
 - `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.degenerate-box-fallback`
