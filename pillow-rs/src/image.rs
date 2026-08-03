@@ -1798,12 +1798,16 @@ impl Image {
                 if matches!(mode.as_str(), "I" | "F") {
                     return self.putpixel_mode_scalar(x, y, value as f64, &mode);
                 }
-                if !(0..=255).contains(&value) {
-                    return Err(PilError::TypeError(
-                        "value must be int, tuple, or list".into(),
-                    ));
-                }
-                self.putpixel_mode(x, y, value as u8, &mode)
+                // Pillow's _imaging.c byte coercion clips scalar indices for
+                // 1/L/P, while its multiband scalar path casts the first
+                // sample to a byte. Keep that distinction in the Rust core so
+                // every binding shares the same public behavior.
+                let value = if matches!(mode.as_str(), "1" | "L" | "P") {
+                    value.clamp(0, 255) as u8
+                } else {
+                    value as u8
+                };
+                self.putpixel_mode(x, y, value, &mode)
             }
             PutPixelValue::Float(value) => {
                 if mode == "F" {
