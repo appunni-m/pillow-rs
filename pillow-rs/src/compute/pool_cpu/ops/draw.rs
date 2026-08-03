@@ -15,16 +15,16 @@ use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage
 enum NativeDrawCanvas {
     L(GrayImage),
     LA(GrayAlphaImage),
-    RGB(RgbImage),
+    RGB(RgbImage, bool),
     RGBA(RgbaImage),
 }
 
 impl NativeDrawCanvas {
-    fn from_image(image: &DynamicImage) -> Self {
+    fn from_image(image: &DynamicImage, alpha_blend_rgb: bool) -> Self {
         match image {
             DynamicImage::ImageLuma8(pixels) => Self::L(pixels.clone()),
             DynamicImage::ImageLumaA8(pixels) => Self::LA(pixels.clone()),
-            DynamicImage::ImageRgb8(pixels) => Self::RGB(pixels.clone()),
+            DynamicImage::ImageRgb8(pixels) => Self::RGB(pixels.clone(), alpha_blend_rgb),
             DynamicImage::ImageRgba8(pixels) => Self::RGBA(pixels.clone()),
             _ => Self::RGBA(image.to_rgba8()),
         }
@@ -34,7 +34,7 @@ impl NativeDrawCanvas {
         match self {
             Self::L(pixels) => DynamicImage::ImageLuma8(pixels),
             Self::LA(pixels) => DynamicImage::ImageLumaA8(pixels),
-            Self::RGB(pixels) => DynamicImage::ImageRgb8(pixels),
+            Self::RGB(pixels, _) => DynamicImage::ImageRgb8(pixels),
             Self::RGBA(pixels) => DynamicImage::ImageRgba8(pixels),
         }
     }
@@ -45,7 +45,7 @@ impl DrawCanvas for NativeDrawCanvas {
         match self {
             Self::L(pixels) => pixels.width(),
             Self::LA(pixels) => pixels.width(),
-            Self::RGB(pixels) => pixels.width(),
+            Self::RGB(pixels, _) => pixels.width(),
             Self::RGBA(pixels) => pixels.width(),
         }
     }
@@ -54,7 +54,7 @@ impl DrawCanvas for NativeDrawCanvas {
         match self {
             Self::L(pixels) => pixels.height(),
             Self::LA(pixels) => pixels.height(),
-            Self::RGB(pixels) => pixels.height(),
+            Self::RGB(pixels, _) => pixels.height(),
             Self::RGBA(pixels) => pixels.height(),
         }
     }
@@ -67,8 +67,27 @@ impl DrawCanvas for NativeDrawCanvas {
             Self::LA(pixels) => {
                 pixels.put_pixel(x, y, crate::raster::LumaA([color[0], color[3]]));
             }
-            Self::RGB(pixels) => {
-                pixels.put_pixel(x, y, crate::raster::Rgb([color[0], color[1], color[2]]));
+            Self::RGB(pixels, alpha_blend_rgb) => {
+                if *alpha_blend_rgb {
+                    let background = pixels.get_pixel(x, y);
+                    let alpha = u16::from(color[3]);
+                    let inverse_alpha = 255u16 - alpha;
+                    let blend = |source: u8, destination: u8| {
+                        ((u16::from(source) * alpha + u16::from(destination) * inverse_alpha + 127)
+                            / 255) as u8
+                    };
+                    pixels.put_pixel(
+                        x,
+                        y,
+                        crate::raster::Rgb([
+                            blend(color[0], background[0]),
+                            blend(color[1], background[1]),
+                            blend(color[2], background[2]),
+                        ]),
+                    );
+                } else {
+                    pixels.put_pixel(x, y, crate::raster::Rgb([color[0], color[1], color[2]]));
+                }
             }
             Self::RGBA(pixels) => {
                 pixels.put_pixel(x, y, crate::raster::Rgba(color));
@@ -78,11 +97,11 @@ impl DrawCanvas for NativeDrawCanvas {
 }
 
 /// Draw directly in the destination's native byte layout.
-fn draw_native<F>(img: &DynamicImage, draw_fn: F) -> DynamicImage
+fn draw_native<F>(img: &DynamicImage, alpha_blend_rgb: bool, draw_fn: F) -> DynamicImage
 where
     F: Fn(&mut NativeDrawCanvas),
 {
-    let mut canvas = NativeDrawCanvas::from_image(img);
+    let mut canvas = NativeDrawCanvas::from_image(img, alpha_blend_rgb);
     draw_fn(&mut canvas);
     canvas.into_image()
 }
@@ -1016,9 +1035,10 @@ pub fn op_draw_line(
     y1: i32,
     fill: (u8, u8, u8, u8),
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_line_on_canvas(canvas, x0, y0, x1, y1, fill, width);
     }))
 }
@@ -1032,9 +1052,10 @@ pub fn op_draw_rectangle(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
     }))
 }
@@ -1049,6 +1070,7 @@ pub fn op_draw_rounded_rect(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     if x1 < x0 {
@@ -1062,7 +1084,7 @@ pub fn op_draw_rounded_rect(
         ));
     }
 
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         let mut diameter = radius * 2.0;
         let full_x = diameter >= f64::from(x1 - x0 - 1);
         if full_x {
@@ -1236,9 +1258,10 @@ pub fn op_draw_ellipse(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
     }))
 }
@@ -1251,6 +1274,7 @@ pub fn op_draw_circle(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     op_draw_ellipse(
@@ -1262,6 +1286,7 @@ pub fn op_draw_circle(
         fill,
         outline,
         width,
+        alpha_blend_rgb,
         _mode,
     )
 }
@@ -1272,10 +1297,11 @@ pub fn op_draw_polygon(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_polygon_on_canvas(canvas, &pts, fill, outline, width);
     }))
 }
@@ -1290,12 +1316,13 @@ pub fn op_draw_arc(
     end: f64,
     fill: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let Some(fc) = fill else {
         return Ok(img.clone());
     };
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_arc_on_canvas(canvas, x0, y0, x1, y1, start, end, fc, width);
     }))
 }
@@ -1311,9 +1338,10 @@ pub fn op_draw_chord(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_chord_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline, width);
     }))
 }
@@ -1329,9 +1357,10 @@ pub fn op_draw_pieslice(
     fill: Option<(u8, u8, u8, u8)>,
     outline: Option<(u8, u8, u8, u8)>,
     width: u32,
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_pieslice_on_canvas(canvas, x0, y0, x1, y1, start, end, fill, outline, width);
     }))
 }
@@ -1340,10 +1369,11 @@ pub fn op_draw_point(
     img: &DynamicImage,
     points: &[(i32, i32)],
     fill: (u8, u8, u8, u8),
+    alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
-    Ok(draw_native(img, |canvas| {
+    Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         let (img_w, img_h) = (canvas.width(), canvas.height());
         for &(x, y) in &pts {
             plot(canvas, x, y, fill, img_w, img_h, false);

@@ -19,8 +19,11 @@ use crate::pipeline::PipelineOp;
 #[derive(Debug)]
 pub struct Draw {
     image: Image,
-    /// Original mode before draw canvas created. Used to convert back on image_clone().
+    /// Original image mode used to restore the public image on `image_clone()`.
     orig_mode: Option<String>,
+    /// Requested drawing mode, which may differ from `orig_mode` for Pillow's
+    /// RGBA-on-RGB alpha-compositing context.
+    draw_mode: Option<String>,
 }
 
 /// Host-neutral coordinate input for ImageDraw point-based primitives.
@@ -238,6 +241,14 @@ fn draw_color_error() -> PilError {
     )
 }
 
+fn draw_float_color_error(mode: &str) -> PilError {
+    if matches!(mode, "1" | "L" | "P" | "I") {
+        PilError::TypeError("color must be int or single-element tuple".to_owned())
+    } else {
+        PilError::TypeError("color must be int or tuple".to_owned())
+    }
+}
+
 fn draw_byte(value: i64) -> u8 {
     // Pillow clamps tuple components to the byte range before handing them to
     // the ImagingDraw backend; integer inks use a separate packed path below.
@@ -312,13 +323,12 @@ impl Draw {
     /// image's raw DynamicImage mode differs from the logical PIL mode
     /// (e.g. "P" stored as Luma8, "CMYK" stored as Rgba8).
     pub fn new(image: Image, explicit_mode: Option<String>) -> Self {
-        let mode = explicit_mode.or_else(|| {
-            let clone = image.clone();
-            clone.mode().ok()
-        });
+        let original_mode = image.mode().ok();
+        let draw_mode = explicit_mode.or_else(|| original_mode.clone());
         Draw {
             image,
-            orig_mode: mode,
+            orig_mode: original_mode,
+            draw_mode,
         }
     }
 
@@ -327,7 +337,7 @@ impl Draw {
     /// RGB images may be drawn through an RGBA context for alpha blending. All
     /// other explicit modes must match the destination image mode exactly.
     pub fn validate_mode(&self) -> Result<(), PilError> {
-        let Some(requested) = self.orig_mode.as_deref() else {
+        let Some(requested) = self.draw_mode.as_deref() else {
             return Ok(());
         };
         let actual = self.image.mode()?;
@@ -340,10 +350,15 @@ impl Draw {
     /// Return the effective PIL mode for drawing operations.
     /// Uses the explicit mode if set, otherwise falls back to the image's mode.
     fn effective_mode(&self) -> String {
-        self.orig_mode
+        self.draw_mode
             .clone()
             .or_else(|| self.image.mode().ok())
             .unwrap_or_else(|| "RGBA".to_string())
+    }
+
+    /// Whether Pillow requested an RGBA drawing context over an RGB image.
+    fn alpha_blend_rgb(&self) -> bool {
+        self.draw_mode.as_deref() == Some("RGBA") && self.orig_mode.as_deref() == Some("RGB")
     }
 
     /// Validate text options against the destination's Pillow mode.
@@ -376,7 +391,7 @@ impl Draw {
                 let bytes = (value as f32).to_le_bytes();
                 Ok((bytes[0], bytes[1], bytes[2], bytes[3]))
             }
-            DrawColorInput::Float(_) => Err(draw_color_error()),
+            DrawColorInput::Float(_) => Err(draw_float_color_error(&mode)),
             DrawColorInput::Components(values) => resolve_component_color(&mode, &values),
             DrawColorInput::Invalid => Err(draw_color_error()),
         }
@@ -507,6 +522,7 @@ impl Draw {
                 y1,
                 fill,
                 width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -586,6 +602,7 @@ impl Draw {
                 fill,
                 outline,
                 width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -621,6 +638,7 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -653,6 +671,7 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -762,6 +781,7 @@ impl Draw {
             PipelineOp::DrawPoint {
                 points: points.to_vec(),
                 fill,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -1366,6 +1386,7 @@ impl Draw {
                 end,
                 fill: Some(fill),
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -1402,6 +1423,7 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -1438,6 +1460,7 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -1470,6 +1493,7 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -1523,6 +1547,7 @@ impl Draw {
                     fill,
                     outline,
                     width: 1,
+                    alpha_blend_rgb: self.alpha_blend_rgb(),
                 },
             );
             return Ok(());
@@ -1539,6 +1564,7 @@ impl Draw {
                 fill,
                 outline,
                 width: _width,
+                alpha_blend_rgb: self.alpha_blend_rgb(),
             },
         );
         Ok(())
@@ -1572,7 +1598,6 @@ impl Draw {
             font,
             fill,
             &crate::font::ImageFontTextOptions::default(),
-            false,
         )
     }
 
@@ -1595,7 +1620,7 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
     ) -> Result<(), PilError> {
-        self.text_with_options_inner(x, y, text, font, fill, options, true)
+        self.text_with_options_inner(x, y, text, font, fill, options)
     }
 
     /// Draw text after applying Pillow's host-neutral text input rules.
@@ -1714,7 +1739,6 @@ impl Draw {
         font: &crate::font::FreeTypeFont,
         fill: (u8, u8, u8, u8),
         options: &crate::font::ImageFontTextOptions,
-        rgba_blend_rgb: bool,
     ) -> Result<(), PilError> {
         let mode = self.effective_mode();
         self.validate_text_options(options)?;
@@ -1762,7 +1786,7 @@ impl Draw {
                 h,
                 &pixels,
                 fill,
-                rgba_blend_rgb,
+                self.alpha_blend_rgb(),
                 color_mask,
             ),
             _ => self.text_compose_direct(draw_x, draw_y, w, h, &pixels, &mode, fill),
@@ -1787,9 +1811,9 @@ impl Draw {
         h: u32,
         pixels: &[u8],
         fill: (u8, u8, u8, u8),
-        // Pillow writes the fill RGB directly on RGBA canvases regardless of
-        // the entry-point flag; the flag is retained for call-site parity.
-        _rgba_blend_rgb: bool,
+        // Whether the requested RGBA context is compositing onto an RGB
+        // destination rather than preserving an RGBA destination.
+        rgba_blend_rgb: bool,
         color_mask: bool,
     ) -> Result<(), PilError> {
         let img = self.image.materialize()?;
@@ -1823,8 +1847,13 @@ impl Draw {
                     let dx = dx_signed as u32;
                     let dy = dy_signed as u32;
                     let dp = canvas.get_pixel(dx, dy);
-                    let inv = 255u16 - sa as u16;
-                    let alpha = if mode == "RGBA" {
+                    // Pillow's `src/libImaging/Paste.c` RGB mask path uses
+                    // glyph coverage as the RGB blend mask. The alpha byte
+                    // of an RGBA ink is intentionally ignored on an RGB
+                    // destination; RGBA destinations blend it separately.
+                    let channel_alpha = sa;
+                    let inv = 255u16 - u16::from(channel_alpha);
+                    let alpha = if mode == "RGBA" && !rgba_blend_rgb {
                         blend_u8(fill.3, dp[3], sa, inv)
                     } else {
                         255
@@ -1834,15 +1863,15 @@ impl Draw {
                     } else {
                         (fill.0, fill.1, fill.2)
                     };
-                    let (r, g, b) = if mode == "RGBA" && !color_mask {
+                    let (r, g, b) = if mode == "RGBA" && !rgba_blend_rgb && !color_mask {
                         // Pillow's RGBA text writes the fill RGB directly and
                         // blends only the alpha channel with glyph coverage.
                         (fill.0, fill.1, fill.2)
                     } else {
                         (
-                            blend_u8(source_rgb.0, dp[0], sa, inv),
-                            blend_u8(source_rgb.1, dp[1], sa, inv),
-                            blend_u8(source_rgb.2, dp[2], sa, inv),
+                            blend_u8(source_rgb.0, dp[0], channel_alpha, inv),
+                            blend_u8(source_rgb.1, dp[1], channel_alpha, inv),
+                            blend_u8(source_rgb.2, dp[2], channel_alpha, inv),
                         )
                     };
                     canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
@@ -2543,5 +2572,28 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
             }
             i += 2;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Draw, Image};
+
+    #[test]
+    fn rgb_text_uses_glyph_coverage_for_rgba_ink() {
+        let image = Image::new(3, 3, "RGB", (0, 0, 0, 255)).expect("RGB image");
+        let mut draw = Draw::new(image, Some("RGBA".to_owned()));
+        let mask_pixel = [255, 0, 0, 128];
+
+        draw.text_compose_rgba(1, 1, 1, 1, &mask_pixel, (255, 0, 0, 128), true, false)
+            .expect("text composition");
+
+        let image = draw.image_clone().expect("restored RGB image");
+        let materialized = image.materialize().expect("materialized RGB image");
+        let rgb = materialized.to_rgb8();
+        let pixel = rgb.get_pixel(1, 1);
+        assert_eq!(pixel[0], 128);
+        assert_eq!(pixel[1], 0);
+        assert_eq!(pixel[2], 0);
     }
 }
