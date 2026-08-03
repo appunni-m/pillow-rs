@@ -78,6 +78,14 @@ pub enum PilError {
     #[error("{0}")]
     ValueError(String),
 
+    /// Integer conversion or coordinate arithmetic overflow raised by Pillow.
+    #[error("{0}")]
+    OverflowError(String),
+
+    /// Image dimensions exceeded Pillow's decompression-bomb limit.
+    #[error("{0}")]
+    DecompressionBombError(String),
+
     /// Text could not be encoded using the requested Pillow character set.
     #[error("{message}")]
     UnicodeEncodeError {

@@ -14,6 +14,7 @@ from . import imagepalette as ImagePalette
 from . import imagestat as ImageStat
 from . import imagesequence as ImageSequence
 from .enums import Dither, ImageFormat, ImageMode, Palette, Resampling, Transpose
+from ._core import DecompressionBombError
 from .image import Image
 from .operations import (
     alpha_composite, blend, composite, convert, crop, effect_mandelbrot, effect_noise, eval, fromarray, frombuffer, frombytes,
