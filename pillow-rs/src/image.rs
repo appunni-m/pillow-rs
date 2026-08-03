@@ -728,7 +728,9 @@ impl Image {
                 height,
                 crate::raster::Rgb([color.0, color.1, color.2]),
             )),
-            "RGBA" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
+            // Pillow's RGBa keeps an explicit mode tag over the same four-byte
+            // storage layout as RGBA; preserve that tag at the Image boundary.
+            "RGBA" | "RGBa" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
                 width,
                 height,
                 crate::raster::Rgba([color.0, color.1, color.2, color.3]),
@@ -811,6 +813,7 @@ impl Image {
                 | "HSV"
                 | "I"
                 | "F"
+                | "RGBa"
                 | "PA"
                 | "1"
                 | "I;16"
@@ -914,7 +917,7 @@ impl Image {
             "LA" => FromBytesMode::LA,
             "I;16" | "I;16L" | "I;16B" | "I;16N" => FromBytesMode::L16,
             "RGB" => FromBytesMode::RGB,
-            "RGBA" => FromBytesMode::RGBA,
+            "RGBA" | "RGBa" => FromBytesMode::RGBA,
             "CMYK" => FromBytesMode::CMYK,
             "HSV" => FromBytesMode::HSV,
             "YCbCr" => FromBytesMode::YCbCr,
@@ -1049,6 +1052,7 @@ impl Image {
             | FromBytesMode::YCbCr
             | FromBytesMode::I
             | FromBytesMode::F => Some(mode.to_string()),
+            FromBytesMode::RGBA if mode == "RGBa" => Some(mode.to_string()),
             FromBytesMode::L16 => Some(mode.to_string()),
             FromBytesMode::L
             | FromBytesMode::LA
