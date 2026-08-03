@@ -408,14 +408,27 @@ impl Image {
         match self.inner.getcolors(m).map_err(err)? {
             Some(colors) => {
                 let arr = js_sys::Array::new();
-                for (count, color_bytes) in &colors {
+                for (count, color) in &colors {
                     let entry = js_sys::Array::new();
                     entry.push(&JsValue::from(*count));
-                    let color_arr = js_sys::Array::new();
-                    for b in color_bytes {
-                        color_arr.push(&JsValue::from(*b));
+                    match color {
+                        pillow_rs::FormattedPixelValue::Scalar(value) => {
+                            entry.push(&JsValue::from(*value));
+                        }
+                        pillow_rs::FormattedPixelValue::Integer(value) => {
+                            entry.push(&JsValue::from(*value));
+                        }
+                        pillow_rs::FormattedPixelValue::Float(value) => {
+                            entry.push(&JsValue::from(*value));
+                        }
+                        pillow_rs::FormattedPixelValue::Components(values) => {
+                            let color_arr = js_sys::Array::new();
+                            for value in values {
+                                color_arr.push(&JsValue::from(*value));
+                            }
+                            entry.push(&color_arr);
+                        }
                     }
-                    entry.push(&color_arr);
                     arr.push(&entry);
                 }
                 Ok(arr.into())

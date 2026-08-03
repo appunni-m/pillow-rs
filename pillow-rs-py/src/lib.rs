@@ -1225,10 +1225,8 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn getcolors(&mut self, maxcolors: Option<u32>) -> PyResult<Option<Vec<(u32, Vec<u8>)>>> {
-        self.inner
-            .getcolors(maxcolors.unwrap_or(256))
-            .map_err(map_error)
+    fn getcolors(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
+        self.getcolors_formatted(maxcolors)
     }
     /// Return getcolors formatted as PIL expects.
     fn getcolors_formatted(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
@@ -1243,6 +1241,8 @@ impl PyImage {
                 for (count, color) in results {
                     let color_value = match color {
                         pillow_rs::FormattedPixelValue::Scalar(value) => value.to_object(py),
+                        pillow_rs::FormattedPixelValue::Integer(value) => value.to_object(py),
+                        pillow_rs::FormattedPixelValue::Float(value) => value.to_object(py),
                         pillow_rs::FormattedPixelValue::Components(values) => {
                             PyTuple::new(py, values)?.to_object(py)
                         }

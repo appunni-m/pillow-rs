@@ -218,12 +218,16 @@ pub enum PutDataValue {
 }
 
 /// A Pillow pixel value after the core has applied the logical mode's band
-/// shape. Bindings only need to map these two Rust variants to their native
+/// shape. Bindings only need to map these variants to their native
 /// scalar/tuple value types.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FormattedPixelValue {
-    /// A single-band pixel value.
+    /// An unsigned byte scalar from `1`, `L`, or `P` mode.
     Scalar(u8),
+    /// A signed 32-bit scalar from `I` mode.
+    Integer(i32),
+    /// A 32-bit floating-point scalar from `F` mode, widened for bindings.
+    Float(f64),
     /// A multiband pixel value in Pillow band order.
     Components(Vec<u8>),
 }
@@ -3741,18 +3745,26 @@ impl Image {
     /// Returns unique colors and their counts.
     ///
     /// The result is `None` when the image contains more than `maxcolors`
-    /// distinct colors. Each color is returned as bytes matching the image mode.
+    /// distinct colors. Each color is returned in the scalar or tuple shape
+    /// matching the image mode. `I` values retain signed 32-bit precision and
+    /// `F` values retain their 32-bit floating-point value.
     ///
     /// # Errors
     ///
     /// Returns [`PilError`] when mode detection or materialization fails.
     #[allow(clippy::type_complexity)]
-    pub fn getcolors(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
+    pub fn getcolors(
+        &self,
+        maxcolors: u32,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
         let mode = self.mode()?;
         if is_l16_mode(&mode) {
             // Pillow's ImagingCore rejects unsigned 16-bit luma modes here;
             // this is the public mode contract, independent of TIFF decoding.
             return Err(PilError::ValueError("image has wrong mode".into()));
+        }
+        if mode == "I" || mode == "F" {
+            return self.getcolors_scalar(maxcolors, &mode);
         }
         // For 1, L, P modes, PIL uses histogram (pixel value ascending)
         if mode == "1" || mode == "L" || mode == "P" {
@@ -3803,7 +3815,12 @@ impl Image {
         } else {
             result.sort_by(|a, b| b.1.cmp(&a.1));
         }
-        Ok(Some(result))
+        Ok(Some(
+            result
+                .into_iter()
+                .map(|(count, color)| (count, FormattedPixelValue::Components(color)))
+                .collect(),
+        ))
     }
 
     /// Returns `getcolors` with Pillow's scalar/tuple color shape applied.
@@ -3815,22 +3832,7 @@ impl Image {
         &self,
         maxcolors: u32,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        let Some(colors) = self.getcolors(maxcolors)? else {
-            return Ok(None);
-        };
-        let band_count = pillow_band_count(&self.mode()?);
-        let formatted = colors
-            .into_iter()
-            .map(|(count, color)| {
-                let value = if band_count == 1 {
-                    FormattedPixelValue::Scalar(color.first().copied().unwrap_or_default())
-                } else {
-                    FormattedPixelValue::Components(color.into_iter().take(band_count).collect())
-                };
-                (count, value)
-            })
-            .collect();
-        Ok(Some(formatted))
+        self.getcolors(maxcolors)
     }
 
     /// Returns extrema using Pillow's one-pair versus per-band result shape.
@@ -3847,7 +3849,10 @@ impl Image {
     /// Matches PIL's Python-level implementation:
     ///   h = self.im.histogram()
     ///   out = [(h[i], i) for i in range(256) if h[i]]
-    fn getcolors_histogram(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
+    fn getcolors_histogram(
+        &self,
+        maxcolors: u32,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
         let img = self.materialized_shared()?;
         // Compute a 256-bin histogram.  All Rust-backed single-band modes,
         // including P and 1, expose their samples through the luma view after
@@ -3859,14 +3864,74 @@ impl Image {
             hist[p[0] as usize] += 1;
         }
         // Build result: [(count, pixel_value)] in pixel value ascending order
-        let result: Vec<(u32, Vec<u8>)> = (0..=255u8)
+        let result: Vec<(u32, FormattedPixelValue)> = (0..=255u8)
             .filter(|&i| hist[i as usize] > 0)
-            .map(|i| (hist[i as usize], vec![i]))
+            .map(|i| (hist[i as usize], FormattedPixelValue::Scalar(i)))
             .collect();
         if result.len() > maxcolors as usize {
             return Ok(None);
         }
         Ok(Some(result))
+    }
+
+    /// Counts Pillow's scalar `I` and `F` modes without converting their
+    /// four-byte samples through the byte-oriented RGBA view.
+    fn getcolors_scalar(
+        &self,
+        maxcolors: u32,
+        mode: &str,
+    ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        let img = self.materialized_shared()?;
+        let expected = CheckedDims::new(img.width(), img.height(), 4)?.total_bytes();
+        let raw = img.as_bytes();
+        if raw.len() != expected {
+            return Err(PilError::InternalError(format!(
+                "{mode} image has invalid scalar storage"
+            )));
+        }
+
+        if mode == "I" {
+            let mut counts = std::collections::HashMap::<i32, u32>::new();
+            for sample in raw.chunks_exact(4) {
+                let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                *counts.entry(value).or_insert(0) += 1;
+            }
+            if counts.len() > maxcolors as usize {
+                return Ok(None);
+            }
+            let mut result: Vec<_> = counts.into_iter().collect();
+            // Pillow's scalar ImagingCore colors are returned in descending
+            // sample order for the deterministic values used by this API.
+            result.sort_by(|a, b| b.0.cmp(&a.0));
+            return Ok(Some(
+                result
+                    .into_iter()
+                    .map(|(value, count)| (count, FormattedPixelValue::Integer(value)))
+                    .collect(),
+            ));
+        }
+
+        let mut counts = std::collections::HashMap::<u32, u32>::new();
+        for sample in raw.chunks_exact(4) {
+            let value = f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+            // C float equality treats positive and negative zero as equal.
+            let key = if value == 0.0 { 0 } else { value.to_bits() };
+            *counts.entry(key).or_insert(0) += 1;
+        }
+        if counts.len() > maxcolors as usize {
+            return Ok(None);
+        }
+        let mut result: Vec<_> = counts
+            .into_iter()
+            .map(|(bits, count)| (f32::from_bits(bits) as f64, count))
+            .collect();
+        result.sort_by(|a, b| b.0.total_cmp(&a.0));
+        Ok(Some(
+            result
+                .into_iter()
+                .map(|(value, count)| (count, FormattedPixelValue::Float(value)))
+                .collect(),
+        ))
     }
 
     /// Returns Shannon entropy using Pillow-compatible per-band histograms.
