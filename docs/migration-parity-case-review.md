@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2519
-- Unique active workflow signatures: 2519
+- Active parity workflows: 2529
+- Unique active workflow signatures: 2529
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1343
+- Deliberate nuanced workflows: 1353
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 205 |
-| `PIL.Image.Image` | 1139 |
+| `PIL.Image.Image` | 1149 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -614,7 +614,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.negative-height`
 - `PIL.Image.Image.resize.nuanced.negative-width`
 - `PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`
+- `PIL.Image.Image.resize.nuanced.opened-png-without-idat-box`
 - `PIL.Image.Image.resize.nuanced.opened-rgb`
+- `PIL.Image.Image.resize.nuanced.overflow-height`
+- `PIL.Image.Image.resize.nuanced.overflow-width`
 - `PIL.Image.Image.resize.nuanced.p-pipeline-resize-resize`
 - `PIL.Image.Image.resize.nuanced.p-putpalette-putalpha-bilinear`
 - `PIL.Image.Image.resize.nuanced.rgba-nearest-nonuniform`
@@ -646,7 +649,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.split.nuanced.opened-p`
 - `PIL.Image.Image.split.nuanced.opened-rgba`
 - `PIL.Image.Image.split.nuanced.p-mode`
+- `PIL.Image.Image.thumbnail.nuanced.bilinear-filter-name`
+- `PIL.Image.Image.thumbnail.nuanced.box-filter-name`
 - `PIL.Image.Image.thumbnail.nuanced.f-mode-specialized-path`
+- `PIL.Image.Image.thumbnail.nuanced.hamming-filter-name`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height-candidate-zero`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height-nonsquare`
@@ -654,6 +660,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.thumbnail.nuanced.negative-height-zero-size-source`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height-zero-width-source`
 - `PIL.Image.Image.thumbnail.nuanced.negative-width`
+- `PIL.Image.Image.thumbnail.nuanced.opened-png-without-idat-negative-height`
+- `PIL.Image.Image.thumbnail.nuanced.opened-png-without-idat-zero-width`
+- `PIL.Image.Image.thumbnail.nuanced.overflow-height-bound`
+- `PIL.Image.Image.thumbnail.nuanced.overflow-width-bound`
 - `PIL.Image.Image.thumbnail.nuanced.p-forces-nearest`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-reducing-downscale`
 - `PIL.Image.Image.thumbnail.nuanced.rgba-alpha-downscale`

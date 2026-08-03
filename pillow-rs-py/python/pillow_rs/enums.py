@@ -1,5 +1,4 @@
 """Enumerations and constants matching Pillow's API."""
-from . import _core
 
 
 class ImageMode:
@@ -38,11 +37,6 @@ class Resampling:
     BILINEAR_INT = 1
     BICUBIC_INT = 2
     LANCZOS_INT = 3
-
-    @classmethod
-    def from_int(cls, value: int) -> str:
-        return _core.resampling_from_int(value)
-
 
 class Transpose:
     FLIP_LEFT_RIGHT = "FLIP_LEFT_RIGHT"

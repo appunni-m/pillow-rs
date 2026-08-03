@@ -472,6 +472,21 @@ def _call_arguments(
             preserve_lists=preserve_lists,
         )
         param = params.get(name, {})
+        if (
+            side == "source"
+            and name == "resample"
+            and descriptor.get("kind") == "literal"
+            and isinstance(value, str)
+            and "enum" in param.get("value_types", [])
+            and value in {"NEAREST", "LANCZOS", "BILINEAR", "BICUBIC", "BOX", "HAMMING"}
+        ):
+            # The input language records enum members by their stable public
+            # name. Pillow materializes that name as an IntEnum, while the
+            # target facade intentionally exposes the same member as a string
+            # and lets Rust own the normalization. Keep this conversion in
+            # the parity adapter so both sides receive the same public enum
+            # member without teaching the Python wrapper test logic.
+            value = getattr(import_surface("source", "PIL.Image").Resampling, value)
         style = param.get("style", "positional_or_keyword")
         if style == "positional" or (
             force_eval_positional and style == "positional_or_keyword"
