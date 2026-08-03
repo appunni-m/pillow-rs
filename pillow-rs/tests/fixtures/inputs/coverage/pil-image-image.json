@@ -1409,6 +1409,8 @@
           "PIL.Image.Image.entropy.nuanced.opened-l",
           "PIL.Image.Image.save.nuanced.opened-rgb-bmp",
           "PIL.Image.Image.getpalette.nuanced.opened-p",
+          "PIL.Image.Image.getpalette.nuanced.raw-p-without-palette",
+          "PIL.Image.Image.getpalette.nuanced.raw-pa-without-palette",
           "PIL.Image.Image.getpalette.nuanced.opened-p-after-load",
           "PIL.Image.Image.getpalette.nuanced.opened-p-after-putpalette",
           "PIL.Image.Image.getpalette.nuanced.rgb-none-rgba",
