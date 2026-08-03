@@ -1500,9 +1500,12 @@ class WorkflowBuilder:
                     "HSV": b"\x10\x20\x30",
                     "YCbCr": b"\x10\x20\x30",
                     "RGBA": b"\x10\x20\x30\xc8",
+                    "RGBa": b"\x10\x20\x30\xc8",
                     "CMYK": b"\x10\x20\x30\xc8",
                     "I": b"\x10\x20\x30\xc8",
                     "F": b"\x10\x20\x30\xc8",
+                    "I;16": b"\x70\x11",
+                    "I;16B": b"\x11\x70",
                 }
                 data = data_by_mode.get(self.mode)
                 if data is None:
@@ -14505,6 +14508,14 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-rgb",
+            "mode": "RGB",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
             "requirement_suffix": "mode.la",
             "name": "valid-la",
             "mode": "LA",
@@ -14516,6 +14527,14 @@ def build_nuanced_cases(
             "requirement_suffix": "mode.rgba",
             "name": "valid-rgba",
             "mode": "RGBA",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-rgba-lowercase",
+            "mode": "RGBa",
             "edge": "valid-frombytes",
         },
         {
@@ -14556,6 +14575,22 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.data",
             "name": "valid-f",
             "mode": "F",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-i16",
+            "mode": "I;16",
+            "edge": "valid-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "valid-i16b",
+            "mode": "I;16B",
             "edge": "valid-frombytes",
         },
         {

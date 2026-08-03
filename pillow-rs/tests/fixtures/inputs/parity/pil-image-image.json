@@ -70329,6 +70329,70 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.frombytes.nuanced.valid-rgb",
+      "surface": "PIL.Image.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-rgb-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECAw",
+          "sha256": "8e1336ab78ebe687fd8056a37f2d3b0c32f4cf8fa8b691b653800fa693d570b9",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "frombytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-rgb-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.frombytes.nuanced.valid-la",
       "surface": "PIL.Image.Image",
       "operation": "frombytes",
@@ -70422,6 +70486,70 @@
             "mode": {
               "kind": "literal",
               "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "frombytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-rgba-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.frombytes.nuanced.valid-rgba-lowercase",
+      "surface": "PIL.Image.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-rgba-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECAwyA==",
+          "sha256": "d7866365e9b9a7537db421e8763801f7291f575d689638a1bb46324ad34e6120",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
             },
             "size": {
               "kind": "literal",
@@ -70768,6 +70896,134 @@
             "data": {
               "kind": "asset",
               "asset_id": "valid-f-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.frombytes.nuanced.valid-i16",
+      "surface": "PIL.Image.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-i-16-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "cBE=",
+          "sha256": "07130c0071b1e03ff2d95e7127f342f94fbdb67de8b46e77afa094bcb4395649",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "frombytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-i-16-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.frombytes.nuanced.valid-i16b",
+      "surface": "PIL.Image.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-i-16b-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "EXA=",
+          "sha256": "a519b4462ef694cc40ac88af6c6cc7b51887880b81b634f66ee958f829bdb858",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16B"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "frombytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-i-16b-data"
             }
           }
         }
