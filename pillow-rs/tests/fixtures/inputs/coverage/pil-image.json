@@ -322,6 +322,8 @@
           "PIL.Image.frombytes.nuanced.zero-width",
           "PIL.Image.frombytes.nuanced.zero-height",
           "PIL.Image.new.nuanced.tuple-p",
+          "PIL.Image.new.nuanced.scalar-p",
+          "PIL.Image.new.nuanced.scalar-pa",
           "PIL.Image.new.nuanced.omitted-p-color",
           "PIL.Image.new.nuanced.rgb-string",
           "PIL.Image.new.nuanced.rgb-percent-string",

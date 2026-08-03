@@ -14979,6 +14979,28 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image",
             "operation": "new",
+            "requirement_suffix": "parameter.color",
+            "name": "scalar-p",
+            "values": {
+                "mode": literal("P"),
+                "size": literal([2, 2]),
+                "color": literal(7),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
+            "requirement_suffix": "parameter.mode",
+            "name": "scalar-pa",
+            "values": {
+                "mode": literal("PA"),
+                "size": literal([2, 2]),
+                "color": literal(7),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "new",
             "requirement_suffix": "behavior.default",
             "name": "omitted-p-color",
             "values": {
