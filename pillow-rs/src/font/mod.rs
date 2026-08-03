@@ -499,7 +499,7 @@ impl FreeTypeFont {
 
     /// Return Pillow's raw public name tuple, preserving missing face names.
     pub fn getname_optional(&self) -> (Option<&str>, Option<&str>) {
-        imagingft::getname_optional(self)
+        self.getname()
     }
 
     /// Return Pillow's public ascent/descent metrics.
@@ -543,7 +543,17 @@ impl FreeTypeFont {
 
     /// Return Pillow native `_imagingft.Font` public face attributes.
     pub fn native_face_attrs(&self) -> (Option<&str>, Option<&str>, u32, u32, u32, u32, u32, i64) {
-        imagingft::native_face_attrs(self)
+        let info = self.native_face_info();
+        (
+            info.family,
+            info.style,
+            info.ascent,
+            info.descent,
+            info.height,
+            info.x_ppem,
+            info.y_ppem,
+            info.glyphs,
+        )
     }
 
     /// Return the active face capabilities reported by fontdone.
