@@ -1310,9 +1310,8 @@ impl PyImage {
     /// Applies a sequence or callable LUT through the Rust-owned public path.
     fn point(&self, input: &Bound<'_, PyAny>) -> PyResult<PyImage> {
         if input.is_callable() {
-            let n_bands = self.inner.getbands().map_err(map_error)?.len() as u32;
-            let lut = make_lut(input, n_bands)?;
-            return pillow_rs::image_eval(&self.inner, &lut)
+            let lut = make_lut(input)?;
+            return pillow_rs::image_eval_replicated_for_image(&self.inner, &lut)
                 .map(|i| PyImage { inner: i })
                 .map_err(map_error);
         }
@@ -1993,8 +1992,8 @@ fn mesh_flatten(items: Vec<(Vec<f64>, Vec<f64>)>) -> PyResult<Vec<f64>> {
 
 /// Adapt a Python callback into the core-owned LUT builder.
 #[pyfunction]
-fn make_lut(func: &Bound<'_, PyAny>, n_bands: u32) -> PyResult<Vec<u8>> {
-    pillow_rs::make_lut(n_bands, |sample| {
+fn make_lut(func: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
+    pillow_rs::make_lut(1, |sample| {
         let result = func.call1((sample,)).map_err(|error| {
             pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
         })?;
