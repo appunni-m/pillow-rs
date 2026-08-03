@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2514
-- Unique active workflow signatures: 2514
+- Active parity workflows: 2516
+- Unique active workflow signatures: 2516
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1338
+- Deliberate nuanced workflows: 1340
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,7 +22,7 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 200 |
+| `PIL.Image` | 202 |
 | `PIL.Image.Image` | 1139 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
@@ -818,6 +818,7 @@ are not copied into the active lane by name.
 - `PIL.Image.linear_gradient.nuanced.f-mode`
 - `PIL.Image.linear_gradient.nuanced.i-mode`
 - `PIL.Image.linear_gradient.nuanced.invalid-single-character-mode`
+- `PIL.Image.linear_gradient.nuanced.one-mode`
 - `PIL.Image.linear_gradient.nuanced.p-mode`
 - `PIL.Image.merge.nuanced.cmyk-mode`
 - `PIL.Image.merge.nuanced.invalid-mode`
@@ -866,6 +867,7 @@ are not copied into the active lane by name.
 - `PIL.Image.radial_gradient.nuanced.f-mode`
 - `PIL.Image.radial_gradient.nuanced.i-mode`
 - `PIL.Image.radial_gradient.nuanced.invalid-single-character-mode`
+- `PIL.Image.radial_gradient.nuanced.one-mode`
 - `PIL.Image.radial_gradient.nuanced.p-mode`
 - `PIL.ImageChops.add.nuanced.materialized-p`
 - `PIL.ImageChops.add.nuanced.scale-offset`
