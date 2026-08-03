@@ -41,6 +41,12 @@ EXTENSION = (
 )
 LLVM_COV_TARGET = ROOT / "target" / "llvm-cov-target"
 COVERAGE_BUILD_STAMP = LLVM_COV_TARGET / ".pillow-rs-coverage-build"
+INSTRUMENTED_EXTENSION_NAMES = (
+    "lib_core.dylib",
+    "lib_core.so",
+    "_core.dll",
+    "lib_core.dll",
+)
 COMMAND = {
     "command_id": "coverage-rust",
     "argv": ["make", "migration-parity-coverage-rust"],
@@ -118,6 +124,31 @@ def prepare_llvm_target() -> tuple[str, bool]:
         for stale in LLVM_COV_TARGET.rglob(pattern):
             stale.unlink()
     return fingerprint, cached
+
+
+def install_instrumented_extension() -> Path:
+    """Make the cached LLVM build the active Python extension.
+
+    ``maturin develop --skip-install`` can leave the normal extension in the
+    source tree when Cargo reuses a fully fresh cached build.  That makes the
+    parity cases pass while silently producing an all-zero Rust profile.  The
+    cdylib in the coverage target is the exact module Maturin would place in
+    ``pillow_rs``; copy it explicitly on every run so cache hits remain valid.
+    """
+
+    candidates = [
+        LLVM_COV_TARGET / "debug" / name
+        for name in INSTRUMENTED_EXTENSION_NAMES
+    ]
+    artifact = next((path for path in candidates if path.is_file()), None)
+    if artifact is None:
+        names = ", ".join(INSTRUMENTED_EXTENSION_NAMES)
+        raise RuntimeError(
+            f"instrumented extension artifact not found under {LLVM_COV_TARGET / 'debug'} "
+            f"(expected one of: {names})"
+        )
+    shutil.copy2(artifact, EXTENSION)
+    return artifact
 
 
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -296,8 +327,12 @@ def run(args: argparse.Namespace) -> int:
             cwd=ROOT,
             check=True,
         )
+        instrumented_artifact = install_instrumented_extension()
         COVERAGE_BUILD_STAMP.write_text(build_fingerprint + "\n", encoding="utf-8")
-        print(f"coverage build cache: {'hit' if build_cache_hit else 'miss'}")
+        print(
+            f"coverage build cache: {'hit' if build_cache_hit else 'miss'} "
+            f"({instrumented_artifact})"
+        )
         remove_build_profiles()
 
         for stale in LLVM_COV_TARGET.glob("*.profraw"):
