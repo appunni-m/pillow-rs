@@ -3828,23 +3828,14 @@ impl Image {
     ///   out = [(h[i], i) for i in range(256) if h[i]]
     fn getcolors_histogram(&self, maxcolors: u32) -> Result<Option<Vec<(u32, Vec<u8>)>>, PilError> {
         let img = self.materialized_shared()?;
-        // Compute 256-bin histogram
+        // Compute a 256-bin histogram.  All Rust-backed single-band modes,
+        // including P and 1, expose their samples through the luma view after
+        // materialization, so a second color-type arm only added an unreachable
+        // coverage region without changing the result.
         let mut hist = [0u32; 256];
-        match img.color() {
-            crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
-                let luma = img.to_luma8();
-                for p in luma.pixels() {
-                    hist[p[0] as usize] += 1;
-                }
-            }
-            _ => {
-                // For P mode and mode 1, image crate may store differently,
-                // convert to luma for indexing
-                let luma = img.to_luma8();
-                for p in luma.pixels() {
-                    hist[p[0] as usize] += 1;
-                }
-            }
+        let luma = img.to_luma8();
+        for p in luma.pixels() {
+            hist[p[0] as usize] += 1;
         }
         // Build result: [(count, pixel_value)] in pixel value ascending order
         let result: Vec<(u32, Vec<u8>)> = (0..=255u8)
