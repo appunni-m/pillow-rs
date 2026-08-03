@@ -1131,6 +1131,7 @@
           "PIL.Image.Image.putpixel.nuanced.p-rgba-tuple-error",
           "PIL.Image.Image.putpixel.nuanced.one-tuple-equals-scalar",
           "PIL.Image.Image.putpixel.nuanced.p-one-tuple-index",
+          "PIL.Image.Image.putpixel.nuanced.la-two-tuple",
           "PIL.Image.Image.putpixel.nuanced.pa-scalar",
           "PIL.Image.Image.putdata.nuanced.p-indices",
           "PIL.Image.Image.putdata.nuanced.rgba-flat",

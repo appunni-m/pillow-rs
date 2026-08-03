@@ -88,6 +88,14 @@ pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), P
         {
             Ok((values[0][0], values[0][1], values[1][0], values[1][1]))
         }
+        // Pillow's nested coordinate parser reports a malformed point as a
+        // value error, while a flat sequence with the wrong number of values
+        // keeps the generic coordinate-list type error.
+        DrawBoxInput::Nested(values)
+            if values.len() == 2 && values.iter().any(|point| point.len() != 2) =>
+        {
+            Err(PilError::ValueError("incorrect coordinate type".into()))
+        }
         DrawBoxInput::Flat(_) | DrawBoxInput::Nested(_) | DrawBoxInput::Invalid => Err(error()),
     }
 }

@@ -571,6 +571,7 @@
           "PIL.ImageDraw.ImageDraw.text.nuanced.canvas-hsv",
           "PIL.ImageDraw.ImageDraw.text.nuanced.negative-position",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.nested-box",
+          "PIL.ImageDraw.ImageDraw.rectangle.nuanced.malformed-nested-box-error",
           "PIL.ImageDraw.ImageDraw.line.nuanced.flat-points",
           "PIL.ImageDraw.ImageDraw.line.nuanced.empty-points-no-op",
           "PIL.ImageDraw.ImageDraw.line.nuanced.single-nested-point-no-op",

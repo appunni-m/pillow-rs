@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 5f6d393d5c454d810f0a506192f85ef762ed055fda2017f306bfcb24ca597e2b
-coverage_run_id: migration-coverage-2876bafc02f742759c49bfc228fc0ea8
+coverage_run_id: migration-coverage-c2f4012764f3467f9086f640d2155157
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -21,7 +21,7 @@ not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `34` getbbox cases (run `migration-coverage-91c612be7d484c9d90e8adcebae23654`).
+Scoped input-only evidence covers `34` getbbox cases (run `migration-coverage-2e80ac0d8ea94eb1a0d3f31d651192ca`).
 Rust implementation regions: `61/61` (100.0%).
 Python facade statements: `1/1` (100.0%).
 Component aggregate for backlog ordering: `9915/11032` (89.9%).
@@ -32,56 +32,56 @@ Component aggregate for backlog ordering: `9915/11032` (89.9%).
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
-| `PIL.ImageFont.FreeTypeFont` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.get_variation_names` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.getbbox` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.getlength` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.getmask` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.getmask2` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.getmetrics` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.getname` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.set_variation_by_axes` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.FreeTypeFont.set_variation_by_name` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.ImageFont` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.ImageFont.getbbox` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.ImageFont.getlength` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.ImageFont.getmask` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.MAX_STRING_LENGTH` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.TransposedFont` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.TransposedFont.getbbox` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.TransposedFont.getlength` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.TransposedFont.getmask` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.load` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.load_default` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.load_default_imagefont` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.load_path` | `image-font` | 2984/3431 | 87.0% |
-| `PIL.ImageFont.truetype` | `image-font` | 2984/3431 | 87.0% |
+| `PIL.ImageFont.FreeTypeFont` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.font_variant` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.get_variation_axes` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.get_variation_names` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.getbbox` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.getlength` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.getmask` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.getmask2` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.getmetrics` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.getname` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.set_variation_by_axes` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.FreeTypeFont.set_variation_by_name` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.ImageFont` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.ImageFont.getbbox` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.ImageFont.getlength` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.ImageFont.getmask` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.MAX_STRING_LENGTH` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.TransposedFont` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.TransposedFont.getbbox` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.TransposedFont.getlength` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.TransposedFont.getmask` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.load` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.load_default` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.load_default_imagefont` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.load_path` | `image-font` | 2999/3468 | 86.5% |
+| `PIL.ImageFont.truetype` | `image-font` | 2999/3468 | 86.5% |
 | `PIL.ImageSequence.Iterator` | `image-sequence` | 4112/4686 | 87.8% |
 | `PIL.ImageSequence.Iterator.__iter__` | `image-sequence` | 4112/4686 | 87.8% |
 | `PIL.ImageSequence.Iterator.__next__` | `image-sequence` | 4112/4686 | 87.8% |
-| `PIL.ImageDraw.Draw` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2509/2832 | 88.6% |
-| `PIL.ImageDraw.Outline` | `image-draw` | 2509/2832 | 88.6% |
+| `PIL.ImageDraw.Draw` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.arc` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.bitmap` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.chord` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.circle` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.ellipse` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.getfont` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.line` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.multiline_text` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.multiline_textbbox` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.pieslice` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.point` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.polygon` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.rectangle` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.regular_polygon` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.rounded_rectangle` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.shape` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.text` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2517/2840 | 88.6% |
+| `PIL.ImageDraw.Outline` | `image-draw` | 2517/2840 | 88.6% |
 | `PIL.Image.Image.alpha_composite` | `image-core` | 9915/11032 | 89.9% |
 | `PIL.Image.Image.apply_transparency` | `image-core` | 9915/11032 | 89.9% |
 | `PIL.Image.Image.close` | `image-core` | 9915/11032 | 89.9% |
@@ -195,15 +195,15 @@ Component aggregate for backlog ordering: `9915/11032` (89.9%).
 | `image-core` | `pillow-rs-py/python/pillow_rs/image.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs-py/python/pillow_rs/operations.py` | 0/0 | n/a |
 | `image-core` | `pillow-rs/src/ops/rotate.rs` | 33/33 | 100.0% |
-| `image-draw` | `pillow-rs/src/draw/mod.rs` | 2509/2832 | 88.6% |
+| `image-draw` | `pillow-rs/src/draw/mod.rs` | 2517/2840 | 88.6% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
 | `image-filter` | `pillow-rs/src/ops/filter.rs` | 125/134 | 93.3% |
 | `image-filter` | `pillow-rs/src/ops/param_filters.rs` | 502/530 | 94.7% |
 | `image-filter` | `pillow-rs-py/python/pillow_rs/imagefilter.py` | 0/0 | n/a |
-| `image-font` | `pillow-rs/src/lib.rs` | 172/365 | 47.1% |
-| `image-font` | `pillow-rs/src/font/mod.rs` | 425/511 | 83.2% |
+| `image-font` | `pillow-rs/src/lib.rs` | 172/377 | 45.6% |
+| `image-font` | `pillow-rs/src/font/mod.rs` | 425/521 | 81.6% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 558/614 | 90.9% |
-| `image-font` | `pillow-rs/src/font/imagingft.rs` | 1829/1941 | 94.2% |
+| `image-font` | `pillow-rs/src/font/imagingft.rs` | 1844/1956 | 94.3% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
 | `image-sequence` | `pillow-rs/src/image.rs` | 4112/4686 | 87.8% |
 | `image-sequence` | `pillow-rs-py/python/pillow_rs/imagesequence.py` | 0/0 | n/a |
