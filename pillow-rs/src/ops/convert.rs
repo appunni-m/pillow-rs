@@ -403,6 +403,7 @@ impl Image {
                         palette_alpha: self.palette_alpha(),
                         source_format: None,
                         info: None,
+                        exif: self.exif_metadata(),
                     });
                     return Ok(loaded);
                 } else if mode == "RGBA" {

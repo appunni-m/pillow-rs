@@ -1135,6 +1135,7 @@ impl Draw {
                         palette_alpha,
                         source_format,
                         info,
+                        exif: self.image.exif_metadata(),
                         materialized: crate::image::materialization_cache(),
                     });
                 } else {
@@ -1354,6 +1355,7 @@ impl Draw {
                                             .unwrap_or_default(),
                                         source_format,
                                         info,
+                                        exif: self.image.exif_metadata(),
                                         materialized: crate::image::materialization_cache(),
                                     }));
                                 }
@@ -2128,6 +2130,7 @@ impl Draw {
                         palette_alpha,
                         source_format,
                         info,
+                        exif: self.image.exif_metadata(),
                         materialized: crate::image::materialization_cache(),
                     });
                 } else {

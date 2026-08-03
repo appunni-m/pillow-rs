@@ -155,6 +155,8 @@ pub struct PalettedData {
     pub source_format: Option<ImageFormat>,
     /// Header metadata retained from the encoded source.
     pub info: Option<ImageInfo>,
+    /// Raw EXIF payload retained from the encoded source.
+    pub exif: Option<Vec<u8>>,
     /// Shared operation-ready index view initialized on first read.
     pub materialized: MaterializationCache,
 }
@@ -207,6 +209,8 @@ pub struct LoadedData {
     pub source_format: Option<ImageFormat>,
     /// Header metadata retained from the encoded source.
     pub info: Option<ImageInfo>,
+    /// Raw EXIF payload retained from the encoded source.
+    pub exif: Option<Vec<u8>>,
 }
 
 /// One public `Image.putdata` pixel after host-language type extraction.
@@ -735,6 +739,7 @@ impl Image {
             palette_alpha: None,
             source_format: None,
             info: None,
+            exif: None,
         })
     }
 
@@ -836,6 +841,7 @@ impl Image {
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
+                    exif: None,
                     materialized: materialization_cache(),
                 }));
             }
@@ -940,6 +946,7 @@ impl Image {
             palette_alpha: Vec::new(),
             source_format: None,
             info: None,
+            exif: None,
             materialized: materialization_cache(),
         })
     }
@@ -990,6 +997,7 @@ impl Image {
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
+                    exif: None,
                     materialized: materialization_cache(),
                 }));
             }
@@ -1063,6 +1071,7 @@ impl Image {
                     palette_alpha: Vec::new(),
                     source_format: None,
                     info: None,
+                    exif: None,
                     materialized: materialization_cache(),
                 }));
             }
@@ -1341,7 +1350,7 @@ impl Image {
                 // a deferred decode failure therefore belongs to crop(), not
                 // to a later property access on the returned image.
                 let image = self.materialized_shared()?;
-                image_from_materialized(image, *format, info.clone())
+                image_from_materialized(image, *format, info.clone(), self.exif_metadata())
             }
             Image::Pipeline { .. } => {
                 let image = self.materialized_shared()?;
@@ -1352,6 +1361,7 @@ impl Image {
                     palette_alpha: self.palette_alpha(),
                     source_format: None,
                     info: None,
+                    exif: self.exif_metadata(),
                     image,
                 }))
             }
@@ -2727,6 +2737,7 @@ impl Image {
         let (palette, palette_alpha) = split_palette_data(data, rawmode)?;
         let source_format = self.source_format();
         let info = self.image_info();
+        let exif = self.exif_metadata();
         let materialized = self.materialize()?;
 
         *self = match mode.as_str() {
@@ -2736,6 +2747,7 @@ impl Image {
                 palette_alpha,
                 source_format,
                 info,
+                exif,
                 materialized: materialization_cache(),
             }),
             "LA" | "PA" => {
@@ -2749,6 +2761,7 @@ impl Image {
                     palette_alpha: Some(palette_alpha),
                     source_format,
                     info,
+                    exif,
                 })
             }
             _ => unreachable!("putpalette mode was validated"),
@@ -2804,7 +2817,23 @@ impl Image {
     /// pending palette metadata makes copies and every binding observe the
     /// same rules without duplicating format branches in host code.
     pub fn compatibility_info(&self) -> Vec<(String, ImageInfoValue)> {
-        let mut fields = match self.source_format() {
+        let format = self
+            .source_format()
+            .or_else(|| self.image_info().map(|info| info.format));
+        let mut fields = match format {
+            Some(ImageFormat::Jpeg) => vec![
+                ("jfif".to_owned(), ImageInfoValue::Integer(257)),
+                (
+                    "jfif_version".to_owned(),
+                    ImageInfoValue::IntegerTuple(vec![1, 1]),
+                ),
+                ("jfif_unit".to_owned(), ImageInfoValue::Integer(0)),
+                (
+                    "jfif_density".to_owned(),
+                    ImageInfoValue::IntegerTuple(vec![1, 1]),
+                ),
+                ("dpi".to_owned(), ImageInfoValue::IntegerTuple(vec![72, 72])),
+            ],
             Some(ImageFormat::Bmp) => vec![
                 (
                     "dpi".to_owned(),
@@ -2854,6 +2883,11 @@ impl Image {
             ],
             _ => Vec::new(),
         };
+        if matches!(format, Some(ImageFormat::Jpeg))
+            && let Some(exif) = self.exif_metadata()
+        {
+            fields.push(("exif".to_owned(), ImageInfoValue::Bytes(exif)));
+        }
         if let Some(transparency) = self.pending_transparency_info() {
             fields.push(("transparency".to_owned(), transparency));
         }
@@ -3000,12 +3034,14 @@ impl Image {
             let indices = self.materialize()?.to_luma8();
             let source_format = self.source_format();
             let info = self.image_info();
+            let exif = self.exif_metadata();
             *self = Image::Paletted(PalettedData {
                 indices,
                 palette,
                 palette_alpha,
                 source_format,
                 info,
+                exif,
                 materialized: materialization_cache(),
             });
         }
@@ -3032,23 +3068,28 @@ impl Image {
     /// expose no EXIF bytes, matching Pillow's empty `Exif` object for images
     /// without embedded metadata.
     pub fn getexif(&self) -> Vec<u8> {
-        if let Image::Bytes { source, .. } = self {
-            match source.info().format {
-                ImageFormat::Jpeg => {
-                    if let Some(exif) = Self::extract_jpeg_exif(source.bytes()) {
-                        return exif;
-                    }
-                }
+        match self {
+            Image::Loaded(data) => data.exif.clone().unwrap_or_default(),
+            Image::Paletted(data) => data.exif.clone().unwrap_or_default(),
+            Image::Pipeline { source, .. } => source.getexif(),
+            Image::Bytes { source, .. } => match source.info().format {
+                ImageFormat::Jpeg => Self::extract_jpeg_exif(source.bytes()).unwrap_or_default(),
                 ImageFormat::Tiff => {
                     // Pillow builds its `Exif` object from the TIFF IFD0
                     // itself; the raw container bytes are the same IFD
                     // payload the orientation parser consumes.
-                    return source.bytes().to_vec();
+                    source.bytes().to_vec()
                 }
-                _ => {}
-            }
+                _ => Vec::new(),
+            },
         }
-        Vec::new()
+    }
+
+    /// Returns retained EXIF bytes in the optional form used by materialized
+    /// and derived image storage.
+    pub(crate) fn exif_metadata(&self) -> Option<Vec<u8>> {
+        let exif = self.getexif();
+        (!exif.is_empty()).then_some(exif)
     }
 
     /// Extracts the Exif APP1 payload from a JPEG byte stream.
@@ -3289,9 +3330,12 @@ impl Image {
     pub fn load(&mut self) -> Result<(), PilError> {
         let loaded = match &*self {
             Image::Loaded(_) | Image::Paletted(_) => return Ok(()),
-            Image::Bytes { format, info, .. } => {
-                image_from_materialized(self.materialized_shared()?, *format, info.clone())?
-            }
+            Image::Bytes { format, info, .. } => image_from_materialized(
+                self.materialized_shared()?,
+                *format,
+                info.clone(),
+                self.exif_metadata(),
+            )?,
             Image::Pipeline {
                 source,
                 explicit_mode,
@@ -3309,6 +3353,7 @@ impl Image {
                             palette_alpha: palette_alpha.clone().unwrap_or_default(),
                             source_format: *format,
                             info: source.image_info(),
+                            exif: source.exif_metadata(),
                             materialized: materialization_cache(),
                         })
                     } else {
@@ -3327,12 +3372,30 @@ impl Image {
                         palette_alpha: palette_alpha.clone(),
                         source_format: *format,
                         info: source.image_info(),
+                        exif: source.exif_metadata(),
                     })
                 }
             }
         };
         *self = loaded;
         Ok(())
+    }
+
+    /// Replaces retained EXIF bytes after a metadata-only image operation.
+    ///
+    /// The operation is intentionally applied after loading so the lazy image
+    /// representation remains the single source of truth for pixel and
+    /// metadata state.
+    pub(crate) fn with_exif_metadata(mut self, exif: Option<Vec<u8>>) -> Result<Self, PilError> {
+        self.load()?;
+        match &mut self {
+            Image::Loaded(data) => data.exif = exif,
+            Image::Paletted(data) => data.exif = exif,
+            Image::Bytes { .. } | Image::Pipeline { .. } => {
+                unreachable!("load must materialize EXIF metadata target")
+            }
+        }
+        Ok(self)
     }
 
     /// Returns whether this handle can reuse successfully materialized pixels.
@@ -4502,6 +4565,7 @@ fn image_from_materialized(
     image: Arc<DynamicImage>,
     source_format: Option<ImageFormat>,
     info: Option<ImageInfo>,
+    exif: Option<Vec<u8>>,
 ) -> Result<Image, PilError> {
     let mode = info
         .as_ref()
@@ -4519,6 +4583,7 @@ fn image_from_materialized(
             palette_alpha: palette.alpha,
             source_format,
             info,
+            exif: exif.clone(),
             materialized: materialization_cache(),
         }));
     }
@@ -4536,6 +4601,7 @@ fn image_from_materialized(
         palette_alpha: None,
         source_format,
         info,
+        exif,
     }))
 }
 

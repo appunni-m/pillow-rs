@@ -138,6 +138,7 @@ impl Image {
                 palette_alpha: self.palette_alpha().unwrap_or_default(),
                 source_format: None,
                 info: None,
+                exif: None,
                 materialized: crate::image::materialization_cache(),
             }));
         }
