@@ -31,6 +31,11 @@ pub(super) struct FontEngine {
     family_name: Option<String>,
     style_name: Option<String>,
     metrics: ffi::FT_Size_Metrics,
+    // Pillow remembers the last public named-variation index. FreeType can
+    // report an unknown error when the same named instance is selected twice,
+    // so keep this state in the Rust core instead of relying on Python-side
+    // wrapper bookkeeping.
+    last_variation_index: Option<usize>,
 }
 
 pub(super) fn load_truetype(data: Vec<u8>, size: f32) -> Result<FreeTypeFont, PilError> {
@@ -108,6 +113,7 @@ fn load_truetype_with_index(
         family_name,
         style_name,
         metrics,
+        last_variation_index: None,
     };
     Ok(FreeTypeFont { engine })
 }
@@ -558,17 +564,20 @@ pub(crate) fn get_variation_axes(
 
 pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
     let (fvar, name_table) = variation_tables(font)?;
-    Ok(fvar
-        .instances
-        .iter()
-        .map(|instance| {
-            name_bytes(&name_table, instance.subfamily_name_id)
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|byte| *byte != 0)
-                .collect()
-        })
-        .collect())
+    let mut names = Vec::with_capacity(fvar.instances.len());
+    for instance in &fvar.instances {
+        let name = name_bytes(&name_table, instance.subfamily_name_id)
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|byte| *byte != 0)
+            .collect::<Vec<_>>();
+        // Pillow's ImageFont.get_variation_names() preserves first-seen order
+        // while removing duplicate subfamily names before public lookup.
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    Ok(names)
 }
 
 pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Result<(), PilError> {
@@ -579,8 +588,16 @@ pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Res
             String::from_utf8_lossy(name)
         )));
     };
+    let instance_index = index + 1;
+    if font.engine.last_variation_index == Some(instance_index) {
+        return Ok(());
+    }
+    // Pillow updates this cache before calling the native setter. Preserve
+    // that ordering so a failed native call has the same subsequent no-op
+    // behavior as the reference wrapper.
+    font.engine.last_variation_index = Some(instance_index);
     let status =
-        ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), (index + 1) as ffi::FT_UInt);
+        ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index as ffi::FT_UInt);
     check_ft_error(status)?;
     refresh_engine_metadata(font);
     font.engine.style_name = Some(String::from_utf8_lossy(&names[index]).into_owned());
@@ -1969,6 +1986,21 @@ mod tests {
             rgba_for_premultiplied_srgb_bgra(&[0x40, 0x50, 0x60, 0x80]),
             [191, 159, 127, 128]
         );
+    }
+
+    #[test]
+    fn repeated_named_variation_selection_is_idempotent() {
+        let mut font = FreeTypeFont::from_bytes(
+            include_bytes!("../../tests/fixtures/assets/font/fonts/variable-named-instances.ttf")
+                .to_vec(),
+            20.0,
+        )
+        .unwrap_or_else(|error| panic!("variable font must load: {error}"));
+
+        font.set_variation_by_name(b"Regular")
+            .unwrap_or_else(|error| panic!("first named variation selection: {error}"));
+        font.set_variation_by_name(b"Regular")
+            .unwrap_or_else(|error| panic!("repeated named variation selection: {error}"));
     }
 
     #[test]

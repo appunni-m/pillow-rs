@@ -1,4 +1,4 @@
-"""ImageFont — font loading and text rendering via pillow-rs-freetype (pure Rust FreeType compatible)."""
+"""ImageFont — font loading and text rendering via the pure-Rust fontdone core."""
 from enum import IntEnum
 
 from . import _core
@@ -189,7 +189,7 @@ def _wrap_pilfont(font):
 
 
 class FreeTypeFont:
-    """Font face loaded via pillow-rs-freetype.
+    """Font face loaded via the pure-Rust fontdone core.
 
     Pure Rust font rendering — no PIL dependency required. Pillow's
     ``truetype`` entry point can expose any format supported by the underlying
@@ -209,7 +209,7 @@ class FreeTypeFont:
         self.layout_engine = Layout.BASIC
         self.font = _NativeFont(self._rust_font)
         # Note: PIL fallback for pixel-identical font rendering was removed.
-        # Font rendering uses pillow-rs-freetype. Font rendering may differ
+        # Font rendering uses the pure-Rust fontdone core. Font rendering may differ
         # slightly from PIL's FreeType output in edge cases.
         self._pil_font = None
 
@@ -250,7 +250,7 @@ class FreeTypeFont:
 
     def getmask2(self, text, mode="", direction=None, features=None, language=None,
                  stroke_width=0, anchor=None, ink=0, start=None, *args, **kwargs):
-        """Create a bitmap for the text and return the text offset using pillow-rs-freetype.
+        """Create a bitmap for the text and return the text offset using fontdone.
 
         :param text: Text to render.
         :param mode: Used by some graphics drivers to indicate what mode the
@@ -347,8 +347,6 @@ class FreeTypeFont:
         :param name: The name of the style.
         :raises OSError: If the font is not a variation font.
         """
-        if not isinstance(name, bytes):
-            name = name.encode()
         return self._rust_font.set_variation_by_name(name)
 
     def get_variation_axes(self):

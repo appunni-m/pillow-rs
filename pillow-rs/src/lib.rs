@@ -172,6 +172,7 @@ pub use crate::font::ImageFontTextOptions;
 pub use crate::font::ImageFontVariantOptions;
 pub use crate::font::ImageFontVariationAxesInput;
 pub use crate::font::ImageFontVariationAxis;
+pub use crate::font::ImageFontVariationNameInput;
 pub use crate::font::mask_image as imagefont_mask_image;
 pub use crate::font::normalize_font_bbox;
 pub use crate::font::normalize_layout_engine;
@@ -525,6 +526,14 @@ pub fn imagefont_set_variation_by_name(
     name: &[u8],
 ) -> Result<(), PilError> {
     font.set_variation_by_name(name)
+}
+
+/// Set a named variation instance after applying Pillow's host input rules.
+pub fn imagefont_set_variation_by_name_input(
+    font: &mut FreeTypeFont,
+    name: ImageFontVariationNameInput,
+) -> Result<(), PilError> {
+    font.set_variation_by_name_input(name)
 }
 
 /// Set variation design coordinates from Pillow-style user coordinates.
