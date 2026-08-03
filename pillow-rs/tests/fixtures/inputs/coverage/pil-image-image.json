@@ -1279,6 +1279,8 @@
           "PIL.Image.Image.getbbox.nuanced.alpha-only-false-rgb",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-16",
           "PIL.Image.Image.quantize.nuanced.fast-octree-rgba-diverse",
+          "PIL.Image.Image.quantize.nuanced.mediancut-zero-size",
+          "PIL.Image.Image.quantize.nuanced.fast-octree-rgba-zero-size",
           "PIL.Image.Image.quantize.nuanced.median-cut-adaptive-hash-rebuild",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-4",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-32-colors",

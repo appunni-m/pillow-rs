@@ -1677,6 +1677,11 @@ fn quantize_octree_rgba(
     h: u32,
     n_colors: usize,
 ) -> Result<(Vec<u8>, Vec<u8>), PilError> {
+    if w == 0 || h == 0 {
+        // Pillow returns an empty P image for an empty FASTOCTREE input; there
+        // are no palette entries to reduce or slice.
+        return Ok((Vec::new(), Vec::new()));
+    }
     let dimensions = CheckedDims::new(w, h, 1)?;
     let fine_bits = [
         CUBE_LEVELS_RGBA[0],

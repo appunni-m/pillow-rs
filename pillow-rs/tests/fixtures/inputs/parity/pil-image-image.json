@@ -51582,6 +51582,132 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.quantize.nuanced.mediancut-zero-size",
+      "surface": "PIL.Image.Image",
+      "operation": "quantize",
+      "covers": [
+        "PIL.Image.Image.quantize.parameter.method"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "quantize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "colors": {
+              "kind": "literal",
+              "value": 4
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            },
+            "kmeans": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.quantize.nuanced.fast-octree-rgba-zero-size",
+      "surface": "PIL.Image.Image",
+      "operation": "quantize",
+      "covers": [
+        "PIL.Image.Image.quantize.parameter.method"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "quantize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "colors": {
+              "kind": "literal",
+              "value": 4
+            },
+            "method": {
+              "kind": "literal",
+              "value": 2
+            },
+            "kmeans": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.quantize.nuanced.median-cut-adaptive-hash-rebuild",
       "surface": "PIL.Image.Image",
       "operation": "quantize",
