@@ -21,7 +21,11 @@ default = ["wasm-core"]
 # The JS package always ships the complete Rust codec surface. Keep the
 # feature name for package consumers, while delegating the codec set to the
 # core crate's single all-codecs feature.
-wasm-core = ["pillow-rs/image-codecs-all", "pillow-rs/wasm-wide-font-internals"]
+wasm-core = [
+    "pillow-rs/image-codecs-all",
+    "pillow-rs/wasm-wide-font-internals",
+    "pillow-rs/fontdone-default",
+]
 # Backwards-compatible name for consumers that selected the former extra
 # bundle. It intentionally resolves to the same complete codec surface.
 wasm-extra = ["wasm-core"]

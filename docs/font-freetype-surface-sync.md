@@ -82,6 +82,16 @@ The FreeType-shaped constants, flags, error codes, and records remain internal
 to `imagingft`; only the Rust-owned `ImageFontFaceInfo` capability record is
 part of the public `pillow-rs` API.
 
+## fontdone feature boundary
+
+`pillow-rs` disables fontdone's dependency defaults and forwards its optional
+font capabilities explicitly. The native default profile enables bzip2 stream
+support, color layers, and LZW; `fontdone-subpixel-rendering` is available for
+consumers that need the separate LCD-rendering feature. The JS/WASM default
+profile enables the same fontdone bundle together with
+`wasm-wide-font-internals`. This keeps feature selection in Cargo while the
+Python and WASM bindings remain thin host adapters.
+
 ## Known Font parity gaps
 
 The live Font parity harness currently passes for the maintained fixture corpus,
