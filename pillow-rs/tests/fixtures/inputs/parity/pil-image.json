@@ -9007,6 +9007,104 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-rgb",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.mode.rgb"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-rgb-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECAw",
+          "sha256": "8e1336ab78ebe687fd8056a37f2d3b0c32f4cf8fa8b691b653800fa693d570b9",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-rgb-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.frombytes.nuanced.valid-rgba-lowercase",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "valid-rgba-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECAwyA==",
+          "sha256": "d7866365e9b9a7537db421e8763801f7291f575d689638a1bb46324ad34e6120",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "valid-rgba-data"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.frombytes.nuanced.valid-cmyk",
       "surface": "PIL.Image",
       "operation": "frombytes",

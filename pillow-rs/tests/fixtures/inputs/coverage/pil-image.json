@@ -303,6 +303,8 @@
           "PIL.Image.frombytes.nuanced.valid-l",
           "PIL.Image.frombytes.nuanced.valid-la",
           "PIL.Image.frombytes.nuanced.valid-p",
+          "PIL.Image.frombytes.nuanced.valid-rgb",
+          "PIL.Image.frombytes.nuanced.valid-rgba-lowercase",
           "PIL.Image.frombytes.nuanced.valid-cmyk",
           "PIL.Image.frombytes.nuanced.valid-rgba",
           "PIL.Image.frombytes.nuanced.valid-hsv",
