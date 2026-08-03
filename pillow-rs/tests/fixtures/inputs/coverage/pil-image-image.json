@@ -1479,6 +1479,7 @@
           "PIL.Image.Image.getdata.nuanced.negative-band",
           "PIL.Image.Image.getdata.nuanced.i-large-nonzero",
           "PIL.Image.Image.getdata.nuanced.f-nonzero",
+          "PIL.Image.Image.getdata.nuanced.i-invalid-band",
           "PIL.Image.Image.getprojection.nuanced.opened-rgb",
           "PIL.Image.Image.getprojection.nuanced.rgb-red-only",
           "PIL.Image.Image.getprojection.nuanced.rgb-blue-only",

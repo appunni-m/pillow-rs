@@ -67656,6 +67656,61 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getdata.nuanced.i-invalid-band",
+      "surface": "PIL.Image.Image",
+      "operation": "getdata",
+      "covers": [
+        "PIL.Image.Image.getdata.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "band": {
+              "kind": "literal",
+              "value": 99
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getprojection.nuanced.opened-rgb",
       "surface": "PIL.Image.Image",
       "operation": "getprojection",
