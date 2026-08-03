@@ -1331,10 +1331,18 @@ impl PyImage {
     /// Applies a sequence or callable LUT through the Rust-owned public path.
     fn point(&self, input: &Bound<'_, PyAny>) -> PyResult<PyImage> {
         if input.is_callable() {
-            let lut = make_lut(input)?;
-            return pillow_rs::image_eval_replicated_for_image(&self.inner, &lut)
-                .map(|i| PyImage { inner: i })
-                .map_err(map_error);
+            return pillow_rs::image_eval_callable(&self.inner, |sample| {
+                let result = input.call1((sample,)).map_err(|error| {
+                    pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
+                })?;
+                result.extract::<i32>().map_err(|_| {
+                    pillow_rs::PilError::ValueError(
+                        "LUT function must return an integer".to_owned(),
+                    )
+                })
+            })
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error);
         }
 
         let lut = input.extract::<Vec<u8>>()?;
