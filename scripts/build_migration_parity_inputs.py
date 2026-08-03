@@ -556,7 +556,7 @@ class WorkflowBuilder:
     scenario_font_size: float | None = None
     scenario_transposed_orientation: Any | None = None
     scenario_bitmap_mode: str | None = None
-    scenario_bitmap_color: int | None = None
+    scenario_bitmap_color: Any | None = None
     scenario_size: list[int] | None = None
     scenario_im_mode: str | None = None
     scenario_mask_mode: str | None = None
@@ -2856,7 +2856,7 @@ def build_parity_case(
     scenario_font_size: float | None = None,
     scenario_transposed_orientation: Any | None = None,
     scenario_bitmap_mode: str | None = None,
-    scenario_bitmap_color: int | None = None,
+    scenario_bitmap_color: Any | None = None,
     scenario_size: list[int] | None = None,
     scenario_im_mode: str | None = None,
     scenario_mask_mode: str | None = None,
@@ -4504,6 +4504,19 @@ def build_nuanced_cases(
             "mode": "RGB",
             "bitmap_mode": "RGBA",
             "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-rgb-rgba-lowercase-mask",
+            "mode": "RGB",
+            "bitmap_mode": "RGBa",
+            "bitmap_color": [16, 32, 64, 128],
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
