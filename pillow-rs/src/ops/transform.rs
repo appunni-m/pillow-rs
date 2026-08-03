@@ -409,7 +409,15 @@ impl Image {
                 let Some(TransformData::Affine(matrix)) = data else {
                     return Err(PilError::ValueError("missing method data".into()));
                 };
-                self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill)
+                // Keep the public Pillow path on the same core entry points
+                // exposed for direct Rust callers. Palette scalar fills retain
+                // their index, while tuple/name fills resolve to palette index
+                // zero through the same helper.
+                if let Some(index) = palette_fill {
+                    self.transform_affine_palette_index(size, &matrix, index)
+                } else {
+                    self.transform_affine(size, &matrix, fill)
+                }
             }
             1 => {
                 let Some(TransformData::Affine(extent)) = data else {

@@ -1099,6 +1099,8 @@
           "PIL.Image.Image.transform.nuanced.malformed-mesh-short-bbox",
           "PIL.Image.Image.transform.nuanced.malformed-mesh-short-quad",
           "PIL.Image.Image.transform.nuanced.malformed-mesh-too-many-items",
+          "PIL.Image.Image.transform.nuanced.raw-mesh-short-bbox-after-valid-item",
+          "PIL.Image.Image.transform.nuanced.raw-mesh-short-quad-after-valid-item",
           "PIL.Image.Image.transform.nuanced.missing-mesh-data",
           "PIL.Image.Image.transform.nuanced.empty-mesh-data",
           "PIL.Image.Image.transform.nuanced.empty-mesh-data-p-scalar-fill",
