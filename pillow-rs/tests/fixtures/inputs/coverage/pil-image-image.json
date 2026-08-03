@@ -1435,6 +1435,7 @@
           "PIL.Image.Image.getpalette.nuanced.opened-p-rgba",
           "PIL.Image.Image.getpalette.nuanced.opened-p-transparency-rgba",
           "PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha",
+          "PIL.Image.Image.getchannel.nuanced.named-rgba-alpha",
           "PIL.Image.Image.getchannel.nuanced.negative-index",
           "PIL.Image.Image.getchannel.nuanced.numeric-out-of-range",
           "PIL.Image.Image.getchannel.nuanced.pa-direct-index-channel",

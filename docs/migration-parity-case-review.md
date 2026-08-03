@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2416
-- Unique active workflow signatures: 2416
+- Active parity workflows: 2417
+- Unique active workflow signatures: 2417
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1240
+- Deliberate nuanced workflows: 1241
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 192 |
-| `PIL.Image.Image` | 1053 |
+| `PIL.Image.Image` | 1054 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -256,6 +256,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getbbox.nuanced.rgba-nonzero-rgb-zero-alpha`
 - `PIL.Image.Image.getbbox.nuanced.rgba-zero-rgb-nonzero-alpha`
 - `PIL.Image.Image.getbbox.nuanced.transparent-alpha-rgba`
+- `PIL.Image.Image.getchannel.nuanced.named-rgba-alpha`
 - `PIL.Image.Image.getchannel.nuanced.negative-index`
 - `PIL.Image.Image.getchannel.nuanced.numeric-out-of-range`
 - `PIL.Image.Image.getchannel.nuanced.opened-rgba-alpha`
