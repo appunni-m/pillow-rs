@@ -2677,10 +2677,18 @@ class WorkflowBuilder:
             else:
                 raise ValueError(f"unknown scenario chain: {chain}")
 
+            # ImageOps operations are module-level functions.  Their chained
+            # setup still keeps the image in the ``image`` argument, but the
+            # final call must not turn that image into a method receiver.
+            call_receiver = (
+                None
+                if self.primary_surface == "PIL.ImageOps"
+                else binding(receiver_step)
+            )
             call_id = self.add_step(
                 self.primary_surface,
                 self.primary_operation,
-                receiver=binding(receiver_step),
+                receiver=call_receiver,
                 arguments=self.primary_arguments(operation),
                 step_id="call",
             )
@@ -11234,6 +11242,17 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageOps",
             "operation": "pad",
+            "requirement_suffix": "parameter.centering",
+            "name": "fractional-centering",
+            "values": {
+                "size": literal([20, 12]),
+                "centering": literal([0.25, 0.75]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
             "requirement_suffix": "parameter.color",
             "name": "rgb-color",
             "mode": "RGB",
@@ -11439,6 +11458,42 @@ def build_nuanced_cases(
             "values": {
                 "size": literal([20, 12]),
                 "color": literal([5, 6, 7]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "p-color-name",
+            "mode": "P",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal("red"),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "p-four-components",
+            "mode": "P",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([5, 6, 7, 8]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "p-four-components-opaque",
+            "mode": "P",
+            "values": {
+                "size": literal([20, 12]),
+                "color": literal([5, 6, 7, 255]),
             },
             "observe_result": "tobytes",
         },

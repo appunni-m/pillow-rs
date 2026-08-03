@@ -181,7 +181,13 @@ fn resolve_pad_color(
         ImageOpsColor::Scalar(value) => Ok(Some(scalar(value, mode))),
         ImageOpsColor::Components(values) => match values.as_slice() {
             [value] => Ok(Some(scalar(*value, mode))),
-            [_, _, _] | [_, _, _, _] if mode == "P" => Ok(Some((0, 0, 0, u8::MAX))),
+            [_, _, _] if mode == "P" => Ok(Some((0, 0, 0, u8::MAX))),
+            [_, _, _, alpha] if mode == "P" && *alpha == i64::from(u8::MAX) => {
+                Ok(Some((0, 0, 0, u8::MAX)))
+            }
+            [_, _, _, _] if mode == "P" => Err(PilError::ValueError(
+                "cannot add non-opaque RGBA color to RGB palette".into(),
+            )),
             [value, alpha] if matches!(mode, "LA" | "PA") => Ok(Some((
                 clamp(*value),
                 clamp(*value),
