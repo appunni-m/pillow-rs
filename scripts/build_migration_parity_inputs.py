@@ -13615,6 +13615,28 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
+            "name": "invalid-component-type-rgb",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([1.5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-component-type-l",
+            "mode": "L",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([1.5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
             "name": "l-negative-integer",
             "mode": "L",
             "values": {
