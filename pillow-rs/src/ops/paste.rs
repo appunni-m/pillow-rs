@@ -107,16 +107,16 @@ impl PasteSource {
             ("LA" | "PA", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 0)),
             ("LA" | "PA", PasteSource::LumaAlpha(luma, alpha)) => Ok((*luma, *luma, *luma, *alpha)),
             ("LA" | "PA", _) => Err(bad_la()),
-            ("RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV", PasteSource::Scalar(value)) => {
+            ("RGB" | "RGBA" | "RGBa" | "CMYK" | "YCbCr" | "HSV", PasteSource::Scalar(value)) => {
                 Ok((*value, 0, 0, 0))
             }
             ("RGB" | "YCbCr" | "HSV", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
             ("RGB" | "YCbCr" | "HSV", PasteSource::Rgba(r, g, b, _))
             | ("RGB" | "YCbCr" | "HSV", PasteSource::Color((r, g, b, _))) => Ok((*r, *g, *b, 255)),
-            ("RGBA" | "CMYK", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
-            ("RGBA" | "CMYK", PasteSource::Rgba(r, g, b, a))
-            | ("RGBA" | "CMYK", PasteSource::Color((r, g, b, a))) => Ok((*r, *g, *b, *a)),
-            ("RGB" | "RGBA" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgba(r, g, b, a))
+            | ("RGBA" | "RGBa" | "CMYK", PasteSource::Color((r, g, b, a))) => Ok((*r, *g, *b, *a)),
+            ("RGB" | "RGBA" | "RGBa" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
             ("I" | "F", PasteSource::Scalar(value)) => Ok((*value, 0, 0, 0)),
             ("I" | "F", _) => Err(bad_single()),
             ("I;16" | "I;16L" | "I;16B" | "I;16N", PasteSource::Scalar(value)) => {

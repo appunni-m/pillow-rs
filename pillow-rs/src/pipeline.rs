@@ -901,7 +901,7 @@ impl PixelMode {
             "P" => Some(Self::P),
             "PA" => Some(Self::PA),
             "RGB" => Some(Self::RGB),
-            "RGBA" => Some(Self::RGBA),
+            "RGBA" | "RGBa" => Some(Self::RGBA),
             "CMYK" => Some(Self::CMYK),
             "YCbCr" => Some(Self::YCbCr),
             "HSV" => Some(Self::HSV),

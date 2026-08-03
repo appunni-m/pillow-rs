@@ -56311,6 +56311,90 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.paste.nuanced.rgba-destination-scalar",
+      "surface": "PIL.Image.Image",
+      "operation": "paste",
+      "covers": [
+        "PIL.Image.Image.paste.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-rgba-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECBAgA==",
+          "sha256": "e80b549e486ab5a754fffde6b415bce417ecf2e3c62a989b3eeea3c9a80e8de6",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBa"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-rgba-data"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "paste",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": 7
+            },
+            "box": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                1,
+                1
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.load.nuanced.png-rgb-opened",
       "surface": "PIL.Image.Image",
       "operation": "load",

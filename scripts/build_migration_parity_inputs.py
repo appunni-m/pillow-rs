@@ -754,6 +754,23 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id(f"setup-{label}"),
                 )
+            elif self.scenario_inline_image == "rgba-frombytes":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-rgba-data",
+                    bytes([16, 32, 64, 128]),
+                    "application/octet-stream",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "frombytes",
+                    receiver=None,
+                    arguments={
+                        "mode": literal("RGBa"),
+                        "size": literal([1, 1]),
+                        "data": data_descriptor,
+                    },
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
             elif self.scenario_inline_image == "png-no-idat":
                 data_descriptor = self.inline_bytes(
                     f"{label}-png-no-idat",
@@ -2421,6 +2438,8 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["im"] = binding(flipped_step)
                 receiver_step = destination_step
+            elif chain == "rgba-destination-paste":
+                receiver_step = self.ensure_image(mode="RGBa")
             elif chain == "p-invert-save":
                 image_step = self.ensure_image(mode="P")
                 receiver_step = self.add_step(
@@ -11895,6 +11914,19 @@ def build_nuanced_cases(
             "observe_receiver": True,
             "values": {
                 "box": literal([0, 0, 16, 16]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-destination-scalar",
+            "scenario_inline_image": "rgba-frombytes",
+            "chain": "rgba-destination-paste",
+            "observe_receiver": True,
+            "values": {
+                "im": literal(7),
+                "box": literal([0, 0, 1, 1]),
             },
         },
         {
