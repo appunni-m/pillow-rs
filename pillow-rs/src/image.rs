@@ -2167,6 +2167,14 @@ impl Image {
                 "YCbCr" => vec!["Y".to_string(), "Cb".to_string(), "Cr".to_string()],
                 "HSV" => vec!["H".to_string(), "S".to_string(), "V".to_string()],
                 "PA" => vec!["P".to_string(), "A".to_string()],
+                // Pillow preserves the lowercase premultiplied-alpha band
+                // name for RGBa instead of normalizing it to RGBA's "A".
+                "RGBa" => vec![
+                    "R".to_string(),
+                    "G".to_string(),
+                    "B".to_string(),
+                    "a".to_string(),
+                ],
                 "I" | "F" | "P" | "1" => vec![m.to_owned()],
                 "I;16" | "I;16L" | "I;16B" | "I;16N" => vec!["I".to_owned()],
                 _ => vec![],
