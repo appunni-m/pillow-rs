@@ -997,6 +997,7 @@ impl PyImage {
     fn getextrema_formatted(&self) -> PyResult<PyObject> {
         let formatted = self.inner.getextrema_formatted().map_err(map_error)?;
         Python::with_gil(|py| match formatted {
+            pillow_rs::FormattedExtrema::Empty => Ok(py.None()),
             pillow_rs::FormattedExtrema::Single((minimum, maximum)) => {
                 Ok((minimum, maximum).to_object(py))
             }
@@ -1006,6 +1007,12 @@ impl PyImage {
                     .map(|(minimum, maximum)| (minimum, maximum).to_object(py))
                     .collect();
                 Ok(PyTuple::new(py, tuples)?.to_object(py))
+            }
+            pillow_rs::FormattedExtrema::Integer((minimum, maximum)) => {
+                Ok((minimum, maximum).to_object(py))
+            }
+            pillow_rs::FormattedExtrema::Float((minimum, maximum)) => {
+                Ok((minimum, maximum).to_object(py))
             }
         })
     }
