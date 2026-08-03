@@ -13988,6 +13988,15 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "i-invalid-band",
+            "mode": "I",
+            "edge": "invalid-band",
+            "values": {"band": literal(99)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getprojection",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
