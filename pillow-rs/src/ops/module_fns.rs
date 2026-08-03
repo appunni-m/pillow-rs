@@ -250,6 +250,22 @@ pub fn eval_replicated_for_image(image: &Image, lut: &[u8]) -> Result<Image, Pil
     eval_replicated(image, lut, n_bands)
 }
 
+/// Builds and applies a callable lookup table using the image's band count.
+///
+/// Keeping band discovery and LUT replication here means bindings only adapt
+/// their host callback to the core callback contract. The callable path uses
+/// the same expanded-table representation as Pillow's multiband point path.
+pub fn eval_callable<F>(image: &Image, callback: F) -> Result<Image, PilError>
+where
+    F: FnMut(u32) -> Result<i32, PilError>,
+{
+    // Keep the callback table single-band here. The shared image-aware path
+    // performs band discovery and replication, preserving the established
+    // point/eval validation and materialization order.
+    let lut = make_lut(1, callback)?;
+    eval_replicated_for_image(image, &lut)
+}
+
 /// Validates and applies a pre-expanded Pillow lookup table.
 ///
 /// Pillow requires exactly 256 entries per image band for a non-callable LUT.

@@ -281,6 +281,7 @@ pub use crate::ops::module_fns::effect_noise as image_effect_noise;
 pub use crate::ops::module_fns::effect_noise_from_size as image_effect_noise_from_size;
 pub use crate::ops::module_fns::effect_spread as image_effect_spread;
 pub use crate::ops::module_fns::eval as image_eval;
+pub use crate::ops::module_fns::eval_callable as image_eval_callable;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
 pub use crate::ops::module_fns::eval_validated as image_eval_validated;
 pub use crate::ops::module_fns::frombytes as image_frombytes;
