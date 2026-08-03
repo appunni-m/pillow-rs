@@ -14773,6 +14773,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: start
@@ -14998,6 +14999,7 @@ surfaces:
         value_types:
         - integer
         - sequence
+        - any_json
         omission:
           kind: required
       - id: bitmap
@@ -15185,6 +15187,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: start
@@ -15429,6 +15432,7 @@ surfaces:
         value_types:
         - number
         - sequence
+        - any_json
         omission:
           kind: required
       - id: radius
@@ -15658,6 +15662,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: fill
@@ -15956,6 +15961,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: fill
@@ -16181,6 +16187,7 @@ surfaces:
         value_types:
         - number
         - sequence
+        - any_json
         omission:
           kind: required
       - id: text
@@ -16553,6 +16560,7 @@ surfaces:
         value_types:
         - number
         - sequence
+        - any_json
         omission:
           kind: required
       - id: text
@@ -16850,6 +16858,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: start
@@ -17092,6 +17101,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: fill
@@ -17273,6 +17283,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: fill
@@ -17488,6 +17499,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: fill
@@ -17944,6 +17956,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - sequence
+        - any_json
         omission:
           kind: required
       - id: radius
@@ -18333,6 +18346,7 @@ surfaces:
         value_types:
         - number
         - sequence
+        - any_json
         omission:
           kind: required
       - id: text
@@ -18718,6 +18732,7 @@ surfaces:
         value_types:
         - number
         - sequence
+        - any_json
         omission:
           kind: required
       - id: text
