@@ -5974,6 +5974,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "circle",
+            "requirement_suffix": "behavior.default",
+            "name": "non-sequence-center-error",
+            "values": {
+                "xy": literal("bad"),
+                "radius": literal(4),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "polygon",
             "requirement_suffix": "behavior.default",
             "name": "fill-outline",
