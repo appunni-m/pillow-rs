@@ -7849,6 +7849,42 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "perspective-missing-data",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(2),
+                "data": literal(None),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "perspective-short-data",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(2),
+                "data": literal([1, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "quad-short-data",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(3),
+                "data": literal([1, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "parameter.method",
             "name": "quad-method",
             "observe_result": "tobytes",
@@ -7882,6 +7918,18 @@ def build_nuanced_cases(
                 "method": literal(0),
                 "data": literal([1, 0, 0, 0, 1, 0]),
                 "fillcolor": literal({"invalid": "color"}),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.method",
+            "name": "unknown-method",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(5),
+                "data": literal([1, 0, 0, 0, 1, 0]),
             },
         },
         {

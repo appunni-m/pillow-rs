@@ -445,7 +445,13 @@ impl Image {
                     return Err(PilError::ValueError("missing method data".into()));
                 };
                 if data.len() < 8 {
-                    return Err(PilError::ValueError("wrong number of data points".into()));
+                    return if method == 2 {
+                        Err(PilError::ValueError(
+                            "wrong number of matrix entries".into(),
+                        ))
+                    } else {
+                        Err(PilError::IndexError("tuple index out of range".into()))
+                    };
                 }
                 if method == 2 {
                     self.transform_perspective_with_palette_fill(
@@ -493,9 +499,7 @@ impl Image {
                 };
                 self.transform_mesh(size, data, fill)
             }
-            _ => Err(PilError::NotImplementedError(format!(
-                "Transform method '{method}' not yet implemented"
-            ))),
+            _ => Err(PilError::ValueError("unknown transformation method".into())),
         }
     }
 
