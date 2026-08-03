@@ -1530,6 +1530,20 @@ impl PyImage {
                     .putdata_l16_bytes(bytes.as_bytes())
                     .map_err(map_error);
             }
+
+            // Exact built-in numeric sequences have no user callbacks to
+            // observe between writes, so let Rust own their bulk coercion and
+            // 16-bit storage path. Subclasses, nested values, and arbitrary
+            // sequences continue through the re-entrant per-item path below.
+            if data.downcast_exact::<PyList>().is_ok() || data.downcast_exact::<PyTuple>().is_ok() {
+                if let Ok(values) = data.extract::<Vec<f64>>() {
+                    return slf
+                        .try_borrow_mut()?
+                        .inner
+                        .putdata_numeric_values(&values, scale, offset)
+                        .map_err(map_error);
+                }
+            }
         }
 
         // Pillow's image8 fast path reads the underlying bytes directly, even
