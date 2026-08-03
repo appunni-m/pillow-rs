@@ -2990,11 +2990,11 @@ pub struct PyDraw {
 }
 
 fn draw_points_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::DrawPointsInput {
-    if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
-        return pillow_rs::DrawPointsInput::Nested(points);
-    }
     if let Ok(values) = xy.extract::<Vec<i32>>() {
         return pillow_rs::DrawPointsInput::Flat(values);
+    }
+    if let Ok(points) = xy.extract::<Vec<Vec<i32>>>() {
+        return pillow_rs::DrawPointsInput::Nested(points);
     }
     pillow_rs::DrawPointsInput::Invalid
 }

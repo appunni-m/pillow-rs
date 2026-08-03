@@ -3947,6 +3947,19 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
+            "name": "canvas-la-invalid-component-count",
+            "mode": "LA",
+            "bitmap_mode": "L",
+            "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
             "name": "canvas-cmyk",
             "mode": "CMYK",
             "bitmap_mode": "L",
@@ -4614,6 +4627,17 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "line",
             "requirement_suffix": "behavior.default",
+            "name": "single-flat-point-no-op",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
             "name": "single-nested-point-no-op",
             "values": {
                 "xy": literal([[0, 0]]),
@@ -4966,6 +4990,88 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "l-one-component",
+            "mode": "L",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-one-component",
+            "mode": "PA",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([7]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-two-components",
+            "mode": "PA",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([7, 128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-invalid-component-count",
+            "mode": "PA",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([7, 128, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-two-component-error",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([7, 128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-negative-component-error",
+            "mode": "RGB",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([-1, 128, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "la-integer-fill",
+            "mode": "LA",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(128),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rounded_rectangle",
             "requirement_suffix": "behavior.default",
             "name": "radius-zero-fallback",
@@ -5259,6 +5365,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "regular_polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "short-bounding-circle-error",
+            "values": {
+                "bounding_circle": literal([8, 8]),
+                "n_sides": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rectangle",
             "requirement_suffix": "behavior.default",
             "name": "canvas-l",
@@ -5314,6 +5430,30 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-i-integer-fill",
+            "mode": "I",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(123),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-f-integer-fill",
+            "mode": "F",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(123),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "ellipse",
             "requirement_suffix": "behavior.default",
             "name": "canvas-la",
@@ -5353,6 +5493,16 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([0, 0, 12, 12]),
                 "outline": literal([255, 255, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "circle",
+            "requirement_suffix": "behavior.default",
+            "name": "short-center-error",
+            "values": {
+                "xy": literal([8]),
+                "radius": literal(4),
             },
         },
         {
