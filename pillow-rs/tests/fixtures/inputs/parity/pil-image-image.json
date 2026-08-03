@@ -51510,6 +51510,78 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.quantize.nuanced.fast-octree-rgba-diverse",
+      "surface": "PIL.Image.Image",
+      "operation": "quantize",
+      "covers": [
+        "PIL.Image.Image.quantize.parameter.method"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-noise",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "hJRfdktzX0IkbZYP3EAHjUsrhubfR4O2d/nbutygPLGG5UXh41qWZ1u2gb7rho/KQvt4eGO7QyXc7ccB2RZzSP7jgVHTgLNnv0Z5/mwVE7euXZdiVDlzVSPbE+GvLwFAnz7Qmokn8LsSAqOrT/7ycmqXEMBQSoTZboTZeLZ9k9tos9kTosvrLCMXApxh5vbHqh+U3kZLGjm8UG+dm8aUEbFBM7j74t4Ws5dCGaVVQAJ/TC31viSwh20YeXrhY8kbGjtGvcuZTJiFLL4aD1UHNoouqtlSlBQ4MJ3PxvHHiU1M5poBDoSNqXN+v9VQ99GFT+ztY8DzYQ4R9ltANAJEnSn+HG3bDQtJmE4b24Nz+QswfKEE5q5wGtp4BjO8S+60RLB0kS+DREBbNRxIDey2w//TIuOPrcI/aafAJ/TUmQ3lx9L2HyiAbgFKpplq3JYFaC05QSLFbKBRCFFeGRx231vRKflPORuyGlku2pzXmH2GkNWQj2wxK1IYPYJMcJwzNPziNRfXRvR39Km6PwH6LTOJ5QfXRwBHfLJN298JtrmosmI2S1FW2h3dP/vSak7ACsvJrtvMkyl8zVYZ7OE050kWYA173hb/i9kVs2HqzFHhadzJHcjOcWHYaBMSCOTJzUPoLPz65SkGHvpaejoO12ju9RLUFWeN/0xLTwhaIpZW82P8AH8i7zshIcZbYhwOw2nmqEnlWUd7J9tWzNN9npLnAzbi6nhehwrtb40AQdipe+EJzIozRhKo4g4kJji6K1r47wDuCa2wKNDRKmuuTzxPJsaV/ZLVZf5jNMSaFyec52XxBBjaJPKcaz6lBZrxClSoE5XcANhE2Bm9TlW6xH+Z9WkLMaBWHH5wkLbMkgUHYYQhe0Y11cnilqGCIdiRdN4+9n01Imk7qm9WLrHMfmGjPyin0u/Xxswmu9NbhZfA9SJKIbQGqrbV1MZQN23LNWk/ytH6ac4kiuXgA7thkf6MXL+TrIZdFqEsS3aElrsP9C1awu3Ys9QyCoVaeiMECDbUeVho6F+pNt0oPdjMG+SWIJ+CaDn1Je8SluJWu/5lhO/UoonATqUQKvpq2ZWw2mjGGfXQBamOnCfZKRuce2sl4QpB7PlrAQY3XRNAl5gT5OMyl8d3Egb4jPReSV41D64NFYpTjqPEtnRrkHOnpifDWhRDZ+/wghcrHSSI8jLxsIDyDUGnlFmUxIGy1u3PVm8gVu972kxKF6ZIrTTmrboAagTWmMdOgBIa03OmUDgdOvNZQNNQ24VtAhfScO974o6WaPse04s5tqTm53iiQal0hmOgxFqvru8T7ci/yD36Fj0w/zF3Fi7pLOrajT4Pbq7/FJ2rPopbQM1tQVpbgQ==",
+          "sha256": "1ba5660f4dc50e253bbfaefd574e5a83fcce70bbada01a93d5a102592bdac8a1",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-noise"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "quantize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "colors": {
+              "kind": "literal",
+              "value": 16
+            },
+            "method": {
+              "kind": "literal",
+              "value": 2
+            },
+            "kmeans": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.quantize.nuanced.median-cut-adaptive-hash-rebuild",
       "surface": "PIL.Image.Image",
       "operation": "quantize",
