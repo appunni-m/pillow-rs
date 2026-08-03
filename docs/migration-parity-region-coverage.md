@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 85ea8bd47d3d7e2eb3a867eb0d0323636865919847b8d68fc25dd6f3eaf0a425
-coverage_run_id: migration-coverage-d43d0d0e711b4ddebee3fbf58141d4ab
+coverage_run_id: migration-coverage-3f99ee19ef0a4320bd9aaafcf4bee459
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -149,29 +149,29 @@ Component aggregate for backlog ordering: `9906/11023` (89.9%).
 | `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2668/2911 | 91.7% |
 | `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2668/2911 | 91.7% |
 | `PIL.ImageDraw.Outline` | `image-draw` | 2668/2911 | 91.7% |
-| `PIL.ImageFilter.BLUR` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.BoxBlur` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.CONTOUR` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.Color3DLUT` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.Color3DLUT.__repr__` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.Color3DLUT.generate` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.Color3DLUT.transform` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.DETAIL` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.EDGE_ENHANCE` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.EDGE_ENHANCE_MORE` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.EMBOSS` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.FIND_EDGES` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.GaussianBlur` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.Kernel` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.MaxFilter` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.MedianFilter` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.MinFilter` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.ModeFilter` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.RankFilter` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.SHARPEN` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.SMOOTH` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.SMOOTH_MORE` | `image-filter` | 627/664 | 94.4% |
-| `PIL.ImageFilter.UnsharpMask` | `image-filter` | 627/664 | 94.4% |
+| `PIL.ImageFilter.BLUR` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.BoxBlur` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.CONTOUR` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.Color3DLUT` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.Color3DLUT.__repr__` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.Color3DLUT.generate` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.Color3DLUT.transform` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.DETAIL` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.EDGE_ENHANCE` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.EDGE_ENHANCE_MORE` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.EMBOSS` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.FIND_EDGES` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.GaussianBlur` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.Kernel` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.MaxFilter` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.MedianFilter` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.MinFilter` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.ModeFilter` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.RankFilter` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.SHARPEN` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.SMOOTH` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.SMOOTH_MORE` | `image-filter` | 633/672 | 94.2% |
+| `PIL.ImageFilter.UnsharpMask` | `image-filter` | 633/672 | 94.2% |
 
 ## Per-file region coverage for involved components
 
@@ -195,7 +195,7 @@ Component aggregate for backlog ordering: `9906/11023` (89.9%).
 | `image-draw` | `pillow-rs/src/draw/mod.rs` | 2668/2911 | 91.7% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
 | `image-filter` | `pillow-rs/src/ops/filter.rs` | 125/134 | 93.3% |
-| `image-filter` | `pillow-rs/src/ops/param_filters.rs` | 502/530 | 94.7% |
+| `image-filter` | `pillow-rs/src/ops/param_filters.rs` | 508/538 | 94.4% |
 | `image-filter` | `pillow-rs-py/python/pillow_rs/imagefilter.py` | 0/0 | n/a |
 | `image-font` | `pillow-rs/src/lib.rs` | 172/382 | 45.0% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% |

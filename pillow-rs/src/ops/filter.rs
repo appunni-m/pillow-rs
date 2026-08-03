@@ -25,18 +25,15 @@ pub fn prepare_kernel(
     }
     let numel = (size_x * size_y) as usize;
     let kernel = kernel.unwrap_or_else(|| vec![1.0; numel]);
-    if kernel.len() != numel {
-        return Err(PilError::ValueError(
-            "not enough coefficients in kernel".into(),
-        ));
-    }
+    validate_kernel_coefficients(Some(&kernel), size)?;
     let scale = scale.unwrap_or_else(|| kernel.iter().sum());
     Ok((kernel, scale, offset as i32, size_x))
 }
 
-/// Validates the coefficient count at `ImageFilter.Kernel` construction time.
-/// Size-shape validation intentionally remains in [`prepare_kernel`], because
-/// Pillow defers that particular error until the filter is applied.
+/// Validates the coefficient count shared by `Kernel` construction and
+/// application. Size-shape validation intentionally remains in
+/// [`prepare_kernel`], because Pillow defers that particular error until the
+/// filter is applied.
 pub fn validate_kernel_coefficients(
     kernel: Option<&[f64]>,
     size: (u32, u32),

@@ -110,16 +110,13 @@ pub fn color3dlut_check_size(values: &[f64]) -> Result<(u32, u32, u32), PilError
             ));
         }
     };
-    if dimensions.iter().any(|&value| !(2..=65).contains(&value)) {
-        return Err(PilError::ValueError(
-            "Size should be in [2, 65] range.".into(),
-        ));
-    }
-    Ok((
+    let size = (
         dimensions[0] as u32,
         dimensions[1] as u32,
         dimensions[2] as u32,
-    ))
+    );
+    validate_color3dlut_size_tuple(size)?;
+    Ok(size)
 }
 
 /// Validates and flattens a Color3DLUT table.
@@ -165,12 +162,8 @@ where
     F: FnMut(&[f64]) -> Result<Vec<f64>, E>,
     M: Fn(PilError) -> E,
 {
-    if let Err(error) = validate_color3dlut_size_tuple(size) {
-        return Err(map_error(error));
-    }
-    if let Err(error) = validate_color3dlut_channels(channels) {
-        return Err(map_error(error));
-    }
+    validate_color3dlut_size_tuple(size).map_err(|error| map_error(error))?;
+    validate_color3dlut_channels(channels).map_err(|error| map_error(error))?;
 
     let (s1, s2, s3) = size;
     let channel_count = channels as usize;
@@ -208,16 +201,10 @@ where
     F: FnMut(&[f64]) -> Result<Vec<f64>, E>,
     M: Fn(PilError) -> E,
 {
-    if let Err(error) = validate_color3dlut_size_tuple(size) {
-        return Err(map_error(error));
-    }
-    if let Err(error) = validate_color3dlut_channels(channels_in) {
-        return Err(map_error(error));
-    }
+    validate_color3dlut_size_tuple(size).map_err(|error| map_error(error))?;
+    validate_color3dlut_channels(channels_in).map_err(|error| map_error(error))?;
     let channels_out = channels_out.unwrap_or(channels_in);
-    if let Err(error) = validate_color3dlut_channels(channels_out) {
-        return Err(map_error(error));
-    }
+    validate_color3dlut_channels(channels_out).map_err(|error| map_error(error))?;
     let expected_input_len = color3dlut_expected_len(size, channels_in);
     if table.len() != expected_input_len {
         return Err(map_error(color3dlut_table_length_error(
