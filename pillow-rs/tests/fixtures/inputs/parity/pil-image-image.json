@@ -61618,6 +61618,64 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.crop.nuanced.opened-png-without-idat",
+      "surface": "PIL.Image.Image",
+      "operation": "crop",
+      "covers": [
+        "PIL.Image.Image.crop.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-png-no-idat",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABCAIAAAB7QOjdAAAAAElFTkSuQmCC",
+          "sha256": "69de330f908d0addc5271d821663c487beafc31fd7d2210f9a8dbca2db1f608f",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-png-no-idat"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "crop",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "box": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                1,
+                1
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getcolors.nuanced.opened-png-without-idat",
       "surface": "PIL.Image.Image",
       "operation": "getcolors",

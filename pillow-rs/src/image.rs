@@ -1319,6 +1319,37 @@ impl Image {
             .map(|image| image.as_ref().clone())
     }
 
+    /// Materialize a lazy image once before creating independent branches.
+    ///
+    /// Pillow's eager image objects can be cropped repeatedly without
+    /// replaying an earlier resize.  Keeping the shared materialized pixels in
+    /// a concrete image preserves that behavior for callers that branch a
+    /// lazy pipeline, while each derived branch can still remain lazy.
+    pub(crate) fn materialized_branch(&self) -> Result<Image, PilError> {
+        match self {
+            Image::Bytes { format, info, .. } => {
+                // Pillow loads an encoded image before constructing a crop;
+                // a deferred decode failure therefore belongs to crop(), not
+                // to a later property access on the returned image.
+                let image = self.materialized_shared()?;
+                image_from_materialized(image, *format, info.clone())
+            }
+            Image::Pipeline { .. } => {
+                let image = self.materialized_shared()?;
+                Ok(Image::Loaded(LoadedData {
+                    decoded_mode: image.color().into(),
+                    explicit_mode: self.explicit_mode().map(str::to_owned),
+                    palette: self.palette(),
+                    palette_alpha: self.palette_alpha(),
+                    source_format: None,
+                    info: None,
+                    image,
+                }))
+            }
+            _ => Ok(self.clone()),
+        }
+    }
+
     /// Returns shared operation-ready pixels, persistently initializing lazy
     /// source or pipeline state when necessary.
     fn materialized_shared(&self) -> Result<Arc<DynamicImage>, PilError> {

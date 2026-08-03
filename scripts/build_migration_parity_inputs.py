@@ -13146,6 +13146,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-png-without-idat",
+            "scenario_inline_image": "png-no-idat",
+            "values": {"box": literal([0, 0, 1, 1])},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getcolors",
             "requirement_suffix": "behavior.default",
             "name": "opened-png-without-idat",
