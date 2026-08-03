@@ -3053,6 +3053,7 @@ impl PyDraw {
     fn new(image: &Bound<'_, PyImage>, mode: Option<String>) -> PyResult<Self> {
         let borrowed = image.borrow();
         let draw = pillow_rs::Draw::new(borrowed.inner.clone(), mode);
+        draw.validate_mode().map_err(map_error)?;
         Ok(PyDraw { draw })
     }
 

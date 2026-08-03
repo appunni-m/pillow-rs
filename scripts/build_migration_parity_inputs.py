@@ -531,6 +531,7 @@ class WorkflowBuilder:
     _font_step: str | None = None
     scenario_values: dict[str, dict[str, Any]] = field(default_factory=dict)
     scenario_mode: str | None = None
+    scenario_draw_mode: str | None = None
     scenario_edge: str | None = None
     scenario_pixel: Any | None = None
     scenario_font: str | None = None
@@ -1082,11 +1083,14 @@ class WorkflowBuilder:
             return binding(self.ensure_image())
         if surface == "PIL.ImageDraw.ImageDraw":
             image_step = self.ensure_image()
+            draw_arguments: dict[str, dict[str, Any]] = {"im": binding(image_step)}
+            if self.scenario_draw_mode is not None:
+                draw_arguments["mode"] = literal(self.scenario_draw_mode)
             draw_step = self.add_step(
                 "PIL.ImageDraw",
                 "Draw",
                 receiver=None,
-                arguments={"im": binding(image_step)},
+                arguments=draw_arguments,
                 step_id=self.next_step_id("setup-draw"),
             )
             return binding(draw_step)
@@ -2804,6 +2808,7 @@ def build_parity_case(
     case_id: str | None = None,
     scenario_values: dict[str, dict[str, Any]] | None = None,
     scenario_mode: str | None = None,
+    scenario_draw_mode: str | None = None,
     scenario_edge: str | None = None,
     scenario_pixel: Any | None = None,
     scenario_font: str | None = None,
@@ -2851,6 +2856,7 @@ def build_parity_case(
         assets_root=assets_root,
         scenario_values=scenario_values or {},
         scenario_mode=scenario_mode,
+        scenario_draw_mode=scenario_draw_mode,
         scenario_edge=scenario_edge,
         scenario_pixel=scenario_pixel,
         scenario_font=scenario_font,
@@ -3945,6 +3951,19 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-draw-mode-l-on-rgb",
+            "mode": "RGB",
+            "draw_mode": "L",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2, 8, 8]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
             "name": "canvas-la-invalid-component-count",
@@ -4304,10 +4323,36 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
+            "name": "canvas-rgb-half-mask",
+            "mode": "RGB",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
             "name": "canvas-rgb-one-mask",
             "mode": "RGB",
             "bitmap_mode": "1",
             "bitmap_color": 1,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-rgba-half-mask",
+            "mode": "RGBA",
+            "bitmap_mode": "L",
+            "bitmap_color": 128,
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
@@ -4337,6 +4382,32 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal([255, 0, 0, 255]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "bitmap",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-tuple-fill-error",
+            "mode": "L",
+            "bitmap_mode": "L",
+            "bitmap_color": 255,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([255, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "text",
+            "requirement_suffix": "behavior.default",
+            "name": "raw-p-no-palette-fallback",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "observe_receiver": True,
+            "values": {
+                "text": literal("A"),
+                "fill": literal(7),
             },
         },
         {
@@ -4708,6 +4779,16 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "polygon",
             "requirement_suffix": "behavior.default",
+            "name": "single-nested-point-error",
+            "values": {
+                "xy": literal([[0, 0]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "polygon",
+            "requirement_suffix": "behavior.default",
             "name": "two-points-outline",
             "values": {
                 "xy": literal([[2, 2], [12, 8]]),
@@ -5068,6 +5149,29 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([2, 2]),
                 "fill": literal(128),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "la-negative-integer-fill",
+            "mode": "LA",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal(-1),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
+            "name": "la-invalid-component-count",
+            "mode": "LA",
+            "values": {
+                "xy": literal([2, 2]),
+                "fill": literal([7, 128, 255]),
             },
         },
         {
@@ -14216,6 +14320,7 @@ def build_nuanced_cases(
                 case_id=f"{prefix}.nuanced.{slug(spec['name'])}",
                 scenario_values=spec.get("values"),
                 scenario_mode=spec.get("mode"),
+                scenario_draw_mode=spec.get("draw_mode"),
                 scenario_edge=spec.get("edge"),
                 scenario_pixel=spec.get("pixel"),
                 scenario_font=spec.get("font"),
