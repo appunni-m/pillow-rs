@@ -2668,7 +2668,10 @@ class WorkflowBuilder:
         if self.scenario_observe_receiver:
             if (
                 self.primary_surface == "PIL.ImageFont.FreeTypeFont"
-                and self.primary_operation == "set_variation_by_axes"
+                and self.primary_operation in {
+                    "set_variation_by_axes",
+                    "set_variation_by_name",
+                }
             ):
                 # Variation setters return None. Observe the same public font
                 # through getlength so the case verifies the applied
@@ -3127,6 +3130,16 @@ def build_nuanced_cases(
             "values": {
                 "text": bytes_literal([65, 233]),
                 "mode": literal("L"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
+            "requirement_suffix": "parameter.start",
+            "name": "bytes-latin1-start",
+            "values": {
+                "text": bytes_literal([65, 233]),
+                "start": literal([0.5, 0.75]),
             },
         },
         {
@@ -3648,6 +3661,7 @@ def build_nuanced_cases(
             "name": "variable-font",
             "font": "font/fonts/variable-name-platform1-fallback.ttf",
             "values": {"name": literal("Bold")},
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
