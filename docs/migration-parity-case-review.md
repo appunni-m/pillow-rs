@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2377
-- Unique active workflow signatures: 2377
+- Active parity workflows: 2396
+- Unique active workflow signatures: 2396
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1201
+- Deliberate nuanced workflows: 1220
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -27,7 +27,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 417 |
+| `PIL.ImageDraw.ImageDraw` | 436 |
 | `PIL.ImageEnhance` | 24 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
@@ -805,7 +805,12 @@ are not copied into the active lane by name.
 - `PIL.ImageColor.getrgb.nuanced.rgb-percent-over-range`
 - `PIL.ImageColor.getrgb.nuanced.rgba-over-range`
 - `PIL.ImageColor.getrgb.nuanced.rgba-syntax`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.axis-boundary-sweep`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.empty-sweep`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.fill-width`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.full-sweep`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.tall-ellipse-axis-transpose`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.wrapped-negative-angles`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.attached-palette`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-1-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk`
@@ -853,7 +858,10 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.partial-ycbcr-mask-out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.raw-p-no-palette-fallback`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.zero-i-mask`
+- `PIL.ImageDraw.ImageDraw.chord.nuanced.empty-sweep`
 - `PIL.ImageDraw.ImageDraw.chord.nuanced.fill-outline`
+- `PIL.ImageDraw.ImageDraw.chord.nuanced.full-sweep`
+- `PIL.ImageDraw.ImageDraw.chord.nuanced.wrapped-angles`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.bbox`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.mapping-center-error`
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.non-sequence-center-error`
@@ -862,6 +870,8 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.circle.nuanced.short-center-error`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.canvas-la`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.fill-outline-width`
+- `PIL.ImageDraw.ImageDraw.ellipse.nuanced.reversed-box`
+- `PIL.ImageDraw.ImageDraw.ellipse.nuanced.zero-size`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.canvas-ycbcr-int-fill`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.empty-points-no-op`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.flat-points`
@@ -891,7 +901,11 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.centered-lines`
 - `PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.right-aligned-lines`
 - `PIL.ImageDraw.ImageDraw.multiline_textbbox.nuanced.three-line-spacing`
+- `PIL.ImageDraw.ImageDraw.pieslice.nuanced.empty-sweep`
 - `PIL.ImageDraw.ImageDraw.pieslice.nuanced.fill-outline-width`
+- `PIL.ImageDraw.ImageDraw.pieslice.nuanced.full-sweep`
+- `PIL.ImageDraw.ImageDraw.pieslice.nuanced.narrow-sweep`
+- `PIL.ImageDraw.ImageDraw.pieslice.nuanced.wide-sweep`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.empty-points-no-op`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.flat-points`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.invalid-sequence-contents-error`
@@ -941,7 +955,9 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.explicit-draw-mode-rgba-on-rgb`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.fill-outline-width`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.flat-box-arity-error`
+- `PIL.ImageDraw.ImageDraw.rectangle.nuanced.fully-off-canvas`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.malformed-nested-box-error`
+- `PIL.ImageDraw.ImageDraw.rectangle.nuanced.negative-clipped`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.nested-box`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.too-many-nested-box-points-error`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.heptagon-rotated`
@@ -952,7 +968,10 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.short-bounding-circle-error`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.triangle`
 - `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.degenerate-box-fallback`
+- `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.large-outline`
 - `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius`
+- `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius-covers-entire-box`
+- `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius-covers-width-only`
 - `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius-zero-fallback`
 - `PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.short-box-error`
 - `PIL.ImageDraw.ImageDraw.shape.nuanced.canvas-f-default-ink`
