@@ -605,6 +605,8 @@ pub enum PipelineOp {
         fill: (u8, u8, u8, u8),
         /// Stroke width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw a rectangle.
     DrawRectangle {
@@ -622,6 +624,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw a rounded rectangle.
     DrawRoundedRect {
@@ -641,6 +645,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw an ellipse.
     DrawEllipse {
@@ -658,6 +664,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw a circle.
     DrawCircle {
@@ -673,6 +681,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw a polygon.
     DrawPolygon {
@@ -684,6 +694,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw an arc.
     DrawArc {
@@ -703,6 +715,8 @@ pub enum PipelineOp {
         fill: Option<(u8, u8, u8, u8)>,
         /// Stroke width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw a chord.
     DrawChord {
@@ -724,6 +738,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw a pie slice.
     DrawPieslice {
@@ -745,6 +761,8 @@ pub enum PipelineOp {
         outline: Option<(u8, u8, u8, u8)>,
         /// Outline width.
         width: u32,
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
     /// Draw one or more points.
     DrawPoint {
@@ -752,6 +770,8 @@ pub enum PipelineOp {
         points: Vec<(i32, i32)>,
         /// Fill color.
         fill: (u8, u8, u8, u8),
+        /// Blend RGBA ink into an RGB destination instead of replacing pixels.
+        alpha_blend_rgb: bool,
     },
 }
 

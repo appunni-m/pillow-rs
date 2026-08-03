@@ -2172,8 +2172,8 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.new
-      signature: 'new(mode: str, size: Tuple[int, int], color: Union[int, Tuple[int, ...], str] = 0) ->
-        pillow_rs.image.Image'
+      signature: 'new(mode: str, size: Tuple[int, int], color: Union[int, Tuple[int, ...], str, NoneType]
+        = None) -> pillow_rs.image.Image'
       support:
         status: supported
     requirements:
@@ -14791,6 +14791,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15009,6 +15010,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15201,6 +15203,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15211,6 +15214,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15437,6 +15441,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15447,6 +15452,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15658,6 +15664,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15668,6 +15675,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -15954,6 +15962,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -16184,6 +16193,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -16259,6 +16269,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -16857,6 +16868,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -16867,6 +16879,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17085,6 +17098,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17265,6 +17279,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17275,6 +17290,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17478,6 +17494,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17488,6 +17505,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17715,6 +17733,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17725,6 +17744,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17938,6 +17958,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -17948,6 +17969,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -18176,6 +18198,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -18186,6 +18209,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -18321,6 +18345,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -18396,6 +18421,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - 'null'
+        - number
         - integer
         - string
         - sequence
@@ -29319,7 +29345,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageSequence.Iterator.__iter__
-      signature: __iter__(self)
+      signature: __iter__(self, /)
       support:
         status: supported
     requirements:
@@ -29398,7 +29424,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.ImageSequence.Iterator.__next__
-      signature: __next__(self)
+      signature: __next__(self, /)
       support:
         status: supported
     requirements:

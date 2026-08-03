@@ -227,6 +227,11 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
         # manifest vocabulary as well as the public handle type.
         include("any_json")
     if "_ink" in lower:
+        # Pillow's public ``_Ink`` annotation omits numeric colors, but the
+        # ImageDraw runtime accepts real numbers for F-mode canvases and
+        # rejects them mode-specifically elsewhere. Keep that input family in
+        # the manifest so the input-only parity lane can exercise both paths.
+        include("number")
         include("integer")
         include("string")
         include("sequence")

@@ -3979,6 +3979,19 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "explicit-draw-mode-rgba-on-rgb",
+            "mode": "RGB",
+            "draw_mode": "RGBA",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([2, 2, 8, 8]),
+                "fill": literal([255, 0, 0, 128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "bitmap",
             "requirement_suffix": "behavior.default",
             "name": "canvas-la-invalid-component-count",
@@ -5647,6 +5660,29 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([0, 0, 8, 8]),
                 "fill": literal(123),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-f-float-fill",
+            "mode": "F",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(1.5),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-rgb-float-fill-error",
+            "mode": "RGB",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(1.5),
             },
         },
         {
