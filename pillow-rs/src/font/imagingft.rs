@@ -545,6 +545,9 @@ pub(crate) fn font_variant_with_options(
 pub(crate) fn get_variation_axes(
     font: &FreeTypeFont,
 ) -> Result<Vec<ImageFontVariationAxis>, PilError> {
+    if let Some(axes) = type1_mm_axes(font)? {
+        return Ok(axes);
+    }
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
         .axes
@@ -563,6 +566,9 @@ pub(crate) fn get_variation_axes(
 }
 
 pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    if type1_mm_axes(font)?.is_some() {
+        return Ok(Vec::new());
+    }
     let instance_names = variation_instance_names(font)?;
     let mut names = Vec::with_capacity(instance_names.len());
     for name in instance_names {
@@ -576,6 +582,9 @@ pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, P
 }
 
 fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    if type1_mm_axes(font)?.is_some() {
+        return Ok(Vec::new());
+    }
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
         .instances
@@ -634,6 +643,9 @@ pub(crate) fn set_variation_by_axes(font: &mut FreeTypeFont, axes: &[f32]) -> Re
 pub(crate) fn native_getvaraxes(
     font: &FreeTypeFont,
 ) -> Result<Vec<ImageFontVariationAxis>, PilError> {
+    if let Some(axes) = type1_mm_axes(font)? {
+        return Ok(axes);
+    }
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
         .axes
@@ -648,6 +660,9 @@ pub(crate) fn native_getvaraxes(
 }
 
 pub(crate) fn native_getvarnames(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    if type1_mm_axes(font)?.is_some() {
+        return Ok(Vec::new());
+    }
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
         .instances
@@ -662,6 +677,13 @@ pub(crate) fn native_setvarname(
 ) -> Result<(), PilError> {
     let instance_index =
         u32::try_from(instance_index).map_err(|_| PilError::OsError("invalid argument".into()))?;
+    if type1_mm_axis_count(font)?.is_some() {
+        let status =
+            ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index as ffi::FT_UInt);
+        check_ft_error(status)?;
+        refresh_engine_metadata(font);
+        return Ok(());
+    }
     let names = if instance_index == 0 {
         Vec::new()
     } else {
@@ -695,6 +717,66 @@ pub(crate) fn native_setvarname(
 
 pub(crate) fn native_setvaraxes(font: &mut FreeTypeFont, axes: &[f32]) -> Result<(), PilError> {
     set_variation_by_axes(font, axes)
+}
+
+/// Return the Type 1 Multiple Master axis count when the active face exposes
+/// the Adobe MM service.
+///
+/// `fontdone` keeps the public axis names behind the safe facade's owned face
+/// state.  Pillow only needs the numeric MM descriptor here; keeping the
+/// adapter on the numeric `FT_*` records also avoids introducing raw-pointer
+/// reads into this safe Rust crate.
+fn type1_mm_axis_count(font: &FreeTypeFont) -> Result<Option<usize>, PilError> {
+    if ffi::FT_Get_Font_Format(Some(&font.engine.face)) != Some("Type 1") {
+        return Ok(None);
+    }
+    let mut multi_master = ffi::FT_Multi_Master::default();
+    let status = ffi::FT_Get_Multi_Master(Some(&font.engine.face), Some(&mut multi_master));
+    if status != ffi::FT_Err_Ok {
+        return Ok(None);
+    }
+    let count = usize::try_from(multi_master.num_axis)
+        .map_err(|_| PilError::OsError("invalid argument".into()))?;
+    if count > multi_master.axis.len() {
+        return Err(PilError::OsError("invalid argument".into()));
+    }
+    Ok(Some(count))
+}
+
+/// Read numeric Type 1 Multiple Master axes through fontdone's safe facade.
+fn type1_mm_axes(font: &FreeTypeFont) -> Result<Option<Vec<ImageFontVariationAxis>>, PilError> {
+    let Some(axis_count) = type1_mm_axis_count(font)? else {
+        return Ok(None);
+    };
+    let mut descriptor = ffi::FT_MM_Var::default();
+    let mut storage = vec![ffi::FT_Var_Axis::default(); axis_count];
+    check_ft_error(ffi::FT_Get_MM_Var(
+        Some(&font.engine.face),
+        Some(&mut descriptor),
+        Some(&mut storage),
+        None,
+        None,
+    ))?;
+    let axes = storage
+        .into_iter()
+        .map(|axis| {
+            Ok(ImageFontVariationAxis {
+                minimum: type1_fixed_16_16_to_pillow_int(axis.minimum)?,
+                default: type1_fixed_16_16_to_pillow_int(axis.def)?,
+                maximum: type1_fixed_16_16_to_pillow_int(axis.maximum)?,
+                // Type 1 MM axes do not have SFNT name IDs.  The native
+                // FreeType record consequently omits the name field; the
+                // core record represents that absence as an empty byte name.
+                name: Vec::new(),
+            })
+        })
+        .collect::<Result<Vec<_>, PilError>>()?;
+    Ok(Some(axes))
+}
+
+fn type1_fixed_16_16_to_pillow_int(value: ffi::FT_Fixed) -> Result<i32, PilError> {
+    let value = i32::try_from(value).map_err(|_| PilError::OsError("invalid argument".into()))?;
+    Ok(fixed_16_16_to_pillow_int(value))
 }
 
 fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
@@ -2016,6 +2098,45 @@ mod tests {
             .unwrap_or_else(|error| panic!("first named variation selection: {error}"));
         font.set_variation_by_name(b"Regular")
             .unwrap_or_else(|error| panic!("repeated named variation selection: {error}"));
+    }
+
+    #[test]
+    fn type1_multiple_master_variations_use_fontdone_mm_service() {
+        let mut font = FreeTypeFont::from_bytes(
+            include_bytes!("../../tests/fixtures/assets/font/fonts/type1-mm-two-axis.pfb").to_vec(),
+            20.0,
+        )
+        .unwrap_or_else(|error| panic!("Type 1 MM fixture must load: {error}"));
+
+        let axes = font
+            .get_variation_axes()
+            .unwrap_or_else(|error| panic!("Type 1 MM axes: {error}"));
+        assert_eq!(
+            axes.iter()
+                .map(|axis| (axis.minimum, axis.default, axis.maximum))
+                .collect::<Vec<_>>(),
+            [(400, 650, 900), (100, 150, 200)]
+        );
+        assert_eq!(
+            font.native_getvaraxes()
+                .unwrap_or_else(|error| panic!("Type 1 MM native axes: {error}")),
+            axes
+        );
+        assert!(
+            font.get_variation_names()
+                .unwrap_or_else(|error| panic!("Type 1 MM names: {error}"))
+                .is_empty()
+        );
+        assert!(
+            font.native_getvarnames()
+                .unwrap_or_else(|error| panic!("Type 1 MM native names: {error}"))
+                .is_empty()
+        );
+
+        font.native_setvarname(1)
+            .unwrap_or_else(|error| panic!("Type 1 MM native instance reset: {error}"));
+        font.native_setvaraxes(&[100.0, 400.0])
+            .unwrap_or_else(|error| panic!("Type 1 MM axis selection: {error}"));
     }
 
     #[test]
