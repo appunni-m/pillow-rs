@@ -217,9 +217,14 @@ impl ImageFontTextOptions {
     /// Return whether the optional mask arguments are all at their defaults.
     #[must_use]
     pub(crate) fn uses_default_mask(&self) -> bool {
+        self.uses_default_mask_except_start() && self.start.is_none()
+    }
+
+    /// Return whether mask options are default apart from an explicit start.
+    #[must_use]
+    pub(crate) fn uses_default_mask_except_start(&self) -> bool {
         self.uses_default_layout()
             && !self.embedded_color
-            && self.start.is_none()
             && !self.start_invalid
             && self.ink.map_or(true, |ink| ink == 0)
     }
@@ -454,6 +459,13 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        if let Some(start) = options.start {
+            if options.uses_default_mask_except_start() {
+                return self
+                    .getmask2_with_start(text, start)
+                    .map(|(width, height, pixels, _)| (width, height, pixels));
+            }
+        }
         if options.uses_default_mask() {
             return self.getmask(text);
         }
@@ -725,6 +737,11 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        if let Some(start) = options.start {
+            if options.uses_default_mask_except_start() {
+                return self.getmask2_with_start(text, start);
+            }
+        }
         if options.uses_default_mask() {
             return self.getmask2(text);
         }
