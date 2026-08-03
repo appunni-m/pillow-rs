@@ -41,11 +41,23 @@ impl PilFontTextInput {
             Self::Bytes(bytes) => Ok(bytes),
             Self::Text(text) => text
                 .chars()
-                .map(|character| {
+                .enumerate()
+                .map(|(position, character)| {
                     u8::try_from(character as u32).map_err(|_| {
-                        PilError::ValueError(
-                            "character cannot be encoded in the PILfont Latin-1 table".into(),
-                        )
+                        let codepoint = character as u32;
+                        let escaped = if codepoint <= 0xffff {
+                            format!("\\u{codepoint:04x}")
+                        } else {
+                            format!("\\U{codepoint:08x}")
+                        };
+                        PilError::UnicodeEncodeError {
+                            message: format!("'latin-1' codec can't encode character '{escaped}' in position {position}: ordinal not in range(256)"),
+                            encoding: "latin-1".into(),
+                            object: text.clone(),
+                            start: position,
+                            end: position + 1,
+                            reason: "ordinal not in range(256)".into(),
+                        }
                     })
                 })
                 .collect(),

@@ -70,6 +70,23 @@ pub enum PilError {
     #[error("{0}")]
     ValueError(String),
 
+    /// Text could not be encoded using the requested Pillow character set.
+    #[error("{message}")]
+    UnicodeEncodeError {
+        /// Human-readable Python-compatible error text.
+        message: String,
+        /// Character-set name used for encoding.
+        encoding: String,
+        /// Original text object supplied by the caller.
+        object: String,
+        /// Index of the first unencodable character.
+        start: usize,
+        /// Exclusive index after the unencodable character.
+        end: usize,
+        /// Encoding failure reason.
+        reason: String,
+    },
+
     /// Input bytes do not follow the syntax required by a legacy Pillow format.
     #[error("{0}")]
     SyntaxError(String),
