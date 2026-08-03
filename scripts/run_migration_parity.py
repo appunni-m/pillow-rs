@@ -560,6 +560,8 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
             "bytes": base64.b64encode(raw).decode("ascii"),
         }
     if shape == "bytes":
+        if value is None:
+            return None
         try:
             raw = bytes(value)
         except Exception:
@@ -570,11 +572,15 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
             "data": base64.b64encode(raw).decode("ascii"),
         }
     if shape == "handle":
+        if value is None:
+            return None
         type_name = type(value).__name__
         # The target's Draw class is the public ImageDraw.ImageDraw endpoint.
         if side == "target" and surface == "PIL.ImageDraw" and operation == "Draw":
             type_name = "ImageDraw"
         return {"type": type_name}
+    if shape == "value":
+        return json_safe(value)
     if shape in {"sequence", "ordered", "metrics"}:
         if isinstance(value, (str, bytes, bytearray)):
             return json_safe(value)

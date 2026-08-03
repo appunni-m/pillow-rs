@@ -141,11 +141,18 @@ def operation_surface_coverage(
                 and "getbbox" in function.get("name", "").lower()
             ):
                 rust_functions.append(function)
-    if len(rust_functions) != 1:
+    if not rust_functions:
         raise ValueError(
-            f"expected one Rust getbbox function, found {len(rust_functions)}"
+            "expected a Rust getbbox function, found none"
         )
-    rust_regions = rust_functions[0].get("regions", [])
+    # LLVM emits the local bbox-update closure as a second symbol whose
+    # mangled name contains the parent getbbox path. The direct implementation
+    # owns the larger region set; ignore that compiler-generated helper.
+    rust_function = max(
+        rust_functions,
+        key=lambda function: len(function.get("regions", [])),
+    )
+    rust_regions = rust_function.get("regions", [])
     rust_total = len(rust_regions)
     rust_covered = sum(1 for region in rust_regions if len(region) > 4 and int(region[4]) > 0)
     return {

@@ -77,6 +77,7 @@ PARAMETER_STYLES = {
 }
 RESULT_SHAPES = {
     "none",
+    "value",
     "scalar",
     "sequence",
     "mapping",

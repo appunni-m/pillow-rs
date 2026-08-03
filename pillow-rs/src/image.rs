@@ -415,7 +415,7 @@ enum FromBytesMode {
     Mode1,
 }
 
-enum ScalarImageSamples {
+pub(crate) enum ScalarImageSamples {
     Integer(Vec<i32>),
     Float(Vec<f64>),
 }
@@ -1655,6 +1655,42 @@ impl Image {
         ))
     }
 
+    /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
+    pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
+        let mode = self.mode()?;
+        if mode == "I" || mode == "F" {
+            let (width, height) = self.size()?;
+            if x >= width || y >= height {
+                return Err(PilError::IndexError("image index out of range".into()));
+            }
+            let index = (y as usize)
+                .checked_mul(width as usize)
+                .and_then(|row| row.checked_add(x as usize))
+                .ok_or_else(|| PilError::InternalError("pixel index overflow".into()))?;
+            return match self.scalar_samples(&mode)? {
+                ScalarImageSamples::Integer(values) => values
+                    .get(index)
+                    .copied()
+                    .map(FormattedPixelValue::Integer)
+                    .ok_or_else(|| PilError::InternalError("I pixel index out of bounds".into())),
+                ScalarImageSamples::Float(values) => values
+                    .get(index)
+                    .copied()
+                    .map(FormattedPixelValue::Float)
+                    .ok_or_else(|| PilError::InternalError("F pixel index out of bounds".into())),
+            };
+        }
+
+        let (r, g, b, a) = self.getpixel(x, y)?;
+        Ok(match mode.as_str() {
+            "L" | "1" | "P" => FormattedPixelValue::Scalar(r),
+            "LA" | "PA" => FormattedPixelValue::Components(vec![r, a]),
+            "RGB" => FormattedPixelValue::Components(vec![r, g, b]),
+            "RGBA" | "CMYK" => FormattedPixelValue::Components(vec![r, g, b, a]),
+            _ => FormattedPixelValue::Components(vec![r, g, b]),
+        })
+    }
+
     /// Queues an in-place single-pixel write.
     ///
     /// The color is normalized as `(r, g, b, a)` before entering the pipeline.
@@ -2525,7 +2561,15 @@ impl Image {
         let Some(palette) = self.getpalette_trimmed() else {
             return Ok(None);
         };
-        let palette_alpha = self.palette_alpha().unwrap_or_default();
+        // Pillow's Image.getpalette reads alpha from the committed palette
+        // object, not from pending info["transparency"] decoded alongside a
+        // P image. Keep the pending marker available to Image.info and
+        // apply_transparency, but do not expose it as RGBA palette bytes yet.
+        let palette_alpha = if self.pending_palette_transparency().is_none() {
+            self.palette_alpha().unwrap_or_default()
+        } else {
+            Vec::new()
+        };
         let has_alpha = !palette_alpha.is_empty();
         match rawmode {
             "RGB" => Ok(Some(palette)),
@@ -3997,7 +4041,7 @@ impl Image {
     }
 
     /// Reads the retained four-byte scalar storage for `I` and `F` modes.
-    fn scalar_samples(&self, mode: &str) -> Result<ScalarImageSamples, PilError> {
+    pub(crate) fn scalar_samples(&self, mode: &str) -> Result<ScalarImageSamples, PilError> {
         let img = self.materialized_shared()?;
         let expected = CheckedDims::new(img.width(), img.height(), 4)?.total_bytes();
         let raw = img.as_bytes();
