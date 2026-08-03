@@ -1473,6 +1473,8 @@
           "PIL.Image.Image.getcolors.nuanced.la-odd-nonzero",
           "PIL.Image.Image.getdata.nuanced.opened-rgb",
           "PIL.Image.Image.getdata.nuanced.negative-band",
+          "PIL.Image.Image.getdata.nuanced.i-large-nonzero",
+          "PIL.Image.Image.getdata.nuanced.f-nonzero",
           "PIL.Image.Image.getprojection.nuanced.opened-rgb",
           "PIL.Image.Image.tobitmap.nuanced.nonzero-l",
           "PIL.Image.Image.tobitmap.nuanced.nonzero-1",
