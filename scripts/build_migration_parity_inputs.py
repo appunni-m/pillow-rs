@@ -2098,6 +2098,18 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "p-resize-no-palette-load":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
             elif chain == "p-putpalette-resize":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -13269,6 +13281,15 @@ def build_nuanced_cases(
             "name": "p-resize-pipeline",
             "mode": "P",
             "chain": "p-resize-verify",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-without-palette",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "chain": "p-resize-no-palette-load",
         },
         {
             "surface": "PIL.Image.Image",
