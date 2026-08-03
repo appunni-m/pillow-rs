@@ -11244,6 +11244,28 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageFilter",
             "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.size",
+            "name": "invalid-size-middle-dimension",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 1, 2]),
+                "table": literal([0.0] * 24),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "requirement_suffix": "parameter.size",
+            "name": "invalid-size-last-dimension",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 2, 1]),
+                "table": literal([0.0] * 24),
+            },
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
             "requirement_suffix": "parameter.table",
             "name": "nested-table",
             "mode": "RGB",

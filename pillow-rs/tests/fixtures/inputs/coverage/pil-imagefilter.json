@@ -253,6 +253,8 @@
           "PIL.ImageFilter.Color3DLUT.nuanced.tuple-size",
           "PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-shape",
           "PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-range",
+          "PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-middle-dimension",
+          "PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-last-dimension",
           "PIL.ImageFilter.Color3DLUT.nuanced.nested-table",
           "PIL.ImageFilter.Color3DLUT.nuanced.nested-table-wrong-channel-count",
           "PIL.ImageFilter.Color3DLUT.nuanced.short-table",

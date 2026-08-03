@@ -214,47 +214,43 @@ impl Image {
     /// does not contain enough coefficients.
     pub fn kernel_filter(
         &self,
-        kernel: &[f32],
-        scale: f32,
-        offset: i32,
-        size: u32,
+        kernel: Option<Vec<f64>>,
+        scale: Option<f64>,
+        offset: f64,
+        size: (u32, u32),
     ) -> Result<Image, PilError> {
-        match size {
-            3 => {
-                let mut k = [0.0f32; 9];
-                if kernel.len() < 9 {
-                    return Err(PilError::ValueError(
-                        "not enough coefficients in kernel".into(),
-                    ));
-                }
-                k.copy_from_slice(&kernel[..9]);
-                Ok(Image::push_op(
-                    self,
-                    PipelineOp::Filter3x3 {
-                        kernel: k,
-                        scale: scale.max(0.0001),
-                        offset,
-                    },
-                ))
+        self.validate_filter("Kernel")?;
+        let (kernel, scale, offset, size) = prepare_kernel(kernel, scale, offset, size)?;
+        let scale = (scale as f32).max(0.0001);
+
+        if size == 3 {
+            let mut prepared = [0.0f32; 9];
+            for (destination, source) in prepared.iter_mut().zip(kernel.iter()) {
+                *destination = *source as f32;
             }
-            5 => {
-                let mut k = [0.0f32; 25];
-                if kernel.len() < 25 {
-                    return Err(PilError::ValueError(
-                        "not enough coefficients in kernel".into(),
-                    ));
-                }
-                k.copy_from_slice(&kernel[..25]);
-                Ok(Image::push_op(
-                    self,
-                    PipelineOp::Filter5x5 {
-                        kernel: k,
-                        scale: scale.max(0.0001),
-                        offset,
-                    },
-                ))
+            Ok(Image::push_op(
+                self,
+                PipelineOp::Filter3x3 {
+                    kernel: prepared,
+                    scale,
+                    offset,
+                },
+            ))
+        } else {
+            // `prepare_kernel` accepts only square 3x3 and 5x5 kernels, so
+            // this branch is the validated 5x5 path.
+            let mut prepared = [0.0f32; 25];
+            for (destination, source) in prepared.iter_mut().zip(kernel.iter()) {
+                *destination = *source as f32;
             }
-            _ => Err(PilError::ValueError("bad kernel size".into())),
+            Ok(Image::push_op(
+                self,
+                PipelineOp::Filter5x5 {
+                    kernel: prepared,
+                    scale,
+                    offset,
+                },
+            ))
         }
     }
 }

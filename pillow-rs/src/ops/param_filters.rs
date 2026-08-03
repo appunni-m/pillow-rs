@@ -48,6 +48,18 @@ pub enum Color3DLutTable {
     Nested(Vec<Vec<f64>>),
 }
 
+/// A table whose dimensions and channel count have passed the public
+/// `Color3DLUT` constructor checks.
+#[derive(Debug, Clone)]
+pub struct PreparedColor3DLut {
+    /// The three-dimensional table dimensions.
+    pub size: (u32, u32, u32),
+    /// Flattened table values in Pillow traversal order.
+    pub table: Vec<f64>,
+    /// Number of output channels stored at each table entry.
+    pub channels: u32,
+}
+
 fn validate_color3dlut_size_tuple(size: (u32, u32, u32)) -> Result<(), PilError> {
     if !(2..=65).contains(&size.0) || !(2..=65).contains(&size.1) || !(2..=65).contains(&size.2) {
         return Err(PilError::ValueError(
@@ -150,6 +162,20 @@ pub fn color3dlut_prepare_table(
     Ok(table)
 }
 
+/// Validates a flat table once at the Rust public boundary.
+pub fn prepare_color3dlut(
+    table: Vec<f64>,
+    size: (u32, u32, u32),
+    channels: u32,
+) -> Result<PreparedColor3DLut, PilError> {
+    let table = color3dlut_prepare_table(Color3DLutTable::Flat(table), size, channels)?;
+    Ok(PreparedColor3DLut {
+        size,
+        table,
+        channels,
+    })
+}
+
 /// Generates a Color3DLUT table while keeping traversal and callback result
 /// policy in the runtime-independent core.
 pub fn color3dlut_generate_table<E, F, M>(
@@ -189,9 +215,7 @@ where
 /// Transforms a Color3DLUT table while keeping traversal and callback result
 /// validation in the runtime-independent core.
 pub fn color3dlut_transform_table<E, F, M>(
-    table: &[f64],
-    size: (u32, u32, u32),
-    channels_in: u32,
+    input: &PreparedColor3DLut,
     channels_out: Option<u32>,
     with_normals: bool,
     mut callback: F,
@@ -201,18 +225,11 @@ where
     F: FnMut(&[f64]) -> Result<Vec<f64>, E>,
     M: Fn(PilError) -> E,
 {
-    validate_color3dlut_size_tuple(size).map_err(|error| map_error(error))?;
-    validate_color3dlut_channels(channels_in).map_err(|error| map_error(error))?;
+    let size = input.size;
+    let channels_in = input.channels;
+    let table = &input.table;
     let channels_out = channels_out.unwrap_or(channels_in);
     validate_color3dlut_channels(channels_out).map_err(|error| map_error(error))?;
-    let expected_input_len = color3dlut_expected_len(size, channels_in);
-    if table.len() != expected_input_len {
-        return Err(map_error(color3dlut_table_length_error(
-            size,
-            channels_in,
-            table.len(),
-        )));
-    }
 
     let (s1, s2, s3) = size;
     let input_channels = channels_in as usize;
@@ -258,6 +275,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn gaussian_blur(&self, radius: f32) -> Result<Image, PilError> {
+        self.validate_filter("GaussianBlur")?;
         Ok(Image::push_op(
             self,
             PipelineOp::GaussianBlur { sigma: radius },
@@ -271,6 +289,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn box_blur(&self, radius: f32) -> Result<Image, PilError> {
+        self.validate_filter("BoxBlur")?;
         Ok(Image::push_op(
             self,
             PipelineOp::BoxBlur {
@@ -309,6 +328,7 @@ impl Image {
         percent: i32,
         threshold: u8,
     ) -> Result<Image, PilError> {
+        self.validate_filter("UnsharpMask")?;
         let img = self.materialize()?;
         // Use PIL-style GaussianBlur via the pipeline (sigma→box radius conversion)
         let blurred = Image::push_op(self, PipelineOp::GaussianBlur { sigma: radius });
@@ -351,6 +371,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn max_filter(&self, size: u32) -> Result<Image, PilError> {
+        self.validate_filter("MaxFilter")?;
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::MaxFilter { size }))
     }
@@ -364,6 +385,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn min_filter(&self, size: u32) -> Result<Image, PilError> {
+        self.validate_filter("MinFilter")?;
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::MinFilter { size }))
     }
@@ -399,6 +421,7 @@ impl Image {
     /// Returns [`PilError`] when materialization, allocation checks, or raw image
     /// reconstruction fails.
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
+        self.validate_filter("Mode")?;
         let size = size.max(3) | 1; // ensure odd, at least 3
 
         // For palette images: extract palette before materialize
@@ -482,6 +505,7 @@ impl Image {
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
+        self.validate_filter("RankFilter")?;
         let size = size.max(3) | 1; // ensure odd, at least 3
         Ok(Image::push_op(self, PipelineOp::RankFilter { size, rank }))
     }
@@ -497,29 +521,15 @@ impl Image {
     /// execution.
     pub fn color3dlut(
         &self,
-        size: (u32, u32, u32),
-        table: Vec<f64>,
-        channels: u32,
+        input: PreparedColor3DLut,
         target_mode: Option<&str>,
     ) -> Result<Image, PilError> {
-        if channels != 3 && channels != 4 {
-            return Err(PilError::ValueError(
-                "Only 3 or 4 output channels are supported".into(),
-            ));
-        }
-        if !(2..=65).contains(&size.0) || !(2..=65).contains(&size.1) || !(2..=65).contains(&size.2)
-        {
-            return Err(PilError::ValueError(
-                "Table size in any dimension should be from 2 to 65".into(),
-            ));
-        }
-        let expected_len = size.0 as usize * size.1 as usize * size.2 as usize * channels as usize;
-        if table.len() != expected_len {
-            return Err(PilError::ValueError(
-                "The table should have table_channels * size1D * size2D * size3D float items."
-                    .into(),
-            ));
-        }
+        self.validate_filter("Color3DLUT")?;
+        let PreparedColor3DLut {
+            size,
+            table,
+            channels,
+        } = input;
         let source_name = self.mode()?;
         let source_mode = match source_name.as_str() {
             "RGB" => PixelMode::RGB,

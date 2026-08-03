@@ -774,9 +774,44 @@ impl PyImage {
             .collect())
     }
 
-    fn filter(&self, filter_type: &str) -> PyResult<PyImage> {
-        let rs = self.inner.filter(filter_type).map_err(map_error)?;
-        Ok(PyImage { inner: rs })
+    fn filter(&self, filter_type: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+        let filter = if filter_type.is_callable() {
+            filter_type.call0()?
+        } else {
+            filter_type.clone()
+        };
+        let type_name = filter.get_type().name()?.to_string();
+        let validation_name = filter
+            .getattr("name")
+            .ok()
+            .and_then(|value| value.extract::<String>().ok())
+            .unwrap_or_else(|| type_name.clone());
+        self.inner
+            .validate_filter(&validation_name)
+            .map_err(map_error)?;
+        if !filter.hasattr("_apply")? {
+            return Err(PyTypeError::new_err(
+                "filter argument should be ImageFilter.Filter instance or class",
+            ));
+        }
+        let image = Py::new(
+            py,
+            PyImage {
+                inner: self.inner.clone(),
+            },
+        )?;
+        let result = filter.call_method1("_apply", (image,))?;
+        let result = result.extract::<PyRef<'_, PyImage>>()?;
+        Ok(PyImage {
+            inner: result.inner.clone(),
+        })
+    }
+
+    fn filter_name(&self, filter_type: &str) -> PyResult<PyImage> {
+        self.inner
+            .filter(filter_type)
+            .map(|inner| PyImage { inner })
+            .map_err(map_error)
     }
 
     fn validate_filter(&self, filter_name: &str) -> PyResult<()> {
@@ -785,14 +820,14 @@ impl PyImage {
 
     fn kernel_filter(
         &self,
-        kernel: Vec<f32>,
-        scale: f32,
-        offset: i32,
-        size: u32,
+        kernel: Option<Vec<f64>>,
+        scale: Option<f64>,
+        offset: f64,
+        size: (u32, u32),
     ) -> PyResult<PyImage> {
         let rs = self
             .inner
-            .kernel_filter(&kernel, scale, offset, size)
+            .kernel_filter(kernel, scale, offset, size)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1088,9 +1123,11 @@ impl PyImage {
         channels: Option<u32>,
         target_mode: Option<&str>,
     ) -> PyResult<PyImage> {
+        let input =
+            pillow_rs::prepare_color3dlut(table, size, channels.unwrap_or(3)).map_err(map_error)?;
         let rs = self
             .inner
-            .color3dlut(size, table, channels.unwrap_or(3), target_mode)
+            .color3dlut(input, target_mode)
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -4381,10 +4418,9 @@ fn color3dlut_transform(
     callback: PyObject,
     py: Python,
 ) -> PyResult<(Vec<f64>, u32)> {
+    let input = pillow_rs::prepare_color3dlut(table, size, channels_in).map_err(map_error)?;
     pillow_rs::color3dlut_transform_table(
-        &table,
-        size,
-        channels_in,
+        &input,
         channels_out,
         with_normals,
         |args| {
