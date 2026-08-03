@@ -145,6 +145,13 @@ class ArrayInterfaceValue:
         return self._data
 
 
+class BufferedArrayInterfaceValue(ArrayInterfaceValue):
+    """Array-interface stimulus that also exports a bounded Python buffer."""
+
+    def __buffer__(self, flags: int) -> memoryview:
+        return memoryview(self._data)
+
+
 def decode_numpy_array(value: dict[str, Any]) -> Any:
     """Build a real buffer-backed array for valid ``fromarray`` parity."""
 
@@ -202,6 +209,8 @@ def decode_literal(
             return decode_numpy_array(value)
         if protocol == "array-interface":
             return ArrayInterfaceValue(value)
+        if protocol == "buffered-array-interface":
+            return BufferedArrayInterfaceValue(value)
         if protocol == "getmesh":
             return DeformerValue(value)
         if protocol == "text-repeat":

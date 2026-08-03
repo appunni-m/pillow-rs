@@ -540,7 +540,7 @@ class Image:
 
     @classmethod
     def fromarray(cls, obj, mode=None):
-        """Create image from array-like object (bytes, numpy array, list, etc.)."""
+        """Create an image from an object implementing ``__array_interface__``."""
         from .operations import fromarray as _fromarray
         return _fromarray(obj, mode)
 
