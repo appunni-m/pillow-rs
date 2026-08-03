@@ -41,6 +41,9 @@ use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
 use std::path::PathBuf;
 
+// Pillow's custom exception for images exceeding its decompression-bomb limit.
+pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
+
 #[pyclass(name = "Image")]
 pub struct PyImage {
     inner: RsImage,
@@ -1722,6 +1725,8 @@ fn map_error(e: PilError) -> PyErr {
         }
         PilError::UnidentifiedImageError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
         PilError::ValueError(msg) => pyo3::exceptions::PyValueError::new_err(msg),
+        PilError::OverflowError(msg) => pyo3::exceptions::PyOverflowError::new_err(msg),
+        PilError::DecompressionBombError(msg) => DecompressionBombError::new_err(msg),
         PilError::UnicodeEncodeError {
             encoding,
             object,
@@ -2099,6 +2104,10 @@ fn exif_compat_fields(
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
+    m.add(
+        "DecompressionBombError",
+        m.py().get_type::<DecompressionBombError>(),
+    )?;
     m.add_class::<PyImage>()?;
     m.add_class::<PyImageSequenceIterator>()?;
     m.add_class::<PyDraw>()?;

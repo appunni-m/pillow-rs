@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2398
-- Unique active workflow signatures: 2398
+- Active parity workflows: 2416
+- Unique active workflow signatures: 2416
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1222
+- Deliberate nuanced workflows: 1240
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 192 |
-| `PIL.Image.Image` | 1035 |
+| `PIL.Image.Image` | 1053 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -60,18 +60,36 @@ are not copied into the active lane by name.
 
 ## Nuanced workflows
 
+- `PIL.Image.Image.alpha_composite.nuanced.dest-bottom-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.dest-right-overflow`
 - `PIL.Image.Image.alpha_composite.nuanced.dest-scalar-error`
 - `PIL.Image.Image.alpha_composite.nuanced.dest-wrong-arity`
+- `PIL.Image.Image.alpha_composite.nuanced.dest-x-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.dest-y-overflow`
 - `PIL.Image.Image.alpha_composite.nuanced.offset-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.offset-source`
 - `PIL.Image.Image.alpha_composite.nuanced.rgba-dest-rgb-source-mode-error`
+- `PIL.Image.Image.alpha_composite.nuanced.source-bottom-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.source-coordinate-bottom-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.source-coordinate-left-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.source-coordinate-right-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.source-coordinate-top-overflow`
 - `PIL.Image.Image.alpha_composite.nuanced.source-four-tuple`
+- `PIL.Image.Image.alpha_composite.nuanced.source-inverted-box`
 - `PIL.Image.Image.alpha_composite.nuanced.source-larger-than-dest`
+- `PIL.Image.Image.alpha_composite.nuanced.source-left-overflow`
 - `PIL.Image.Image.alpha_composite.nuanced.source-negative-coordinate`
+- `PIL.Image.Image.alpha_composite.nuanced.source-right-overflow`
 - `PIL.Image.Image.alpha_composite.nuanced.source-scalar-error`
 - `PIL.Image.Image.alpha_composite.nuanced.source-smaller-offset-dest`
 - `PIL.Image.Image.alpha_composite.nuanced.source-smaller-than-dest`
+- `PIL.Image.Image.alpha_composite.nuanced.source-top-overflow`
 - `PIL.Image.Image.alpha_composite.nuanced.source-wrong-arity`
+- `PIL.Image.Image.alpha_composite.nuanced.source-x-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.source-y-overflow`
+- `PIL.Image.Image.alpha_composite.nuanced.source-zero-height`
+- `PIL.Image.Image.alpha_composite.nuanced.source-zero-size`
+- `PIL.Image.Image.alpha_composite.nuanced.source-zero-width`
 - `PIL.Image.Image.apply_transparency.nuanced.p-transparency-pa-boundary-putalpha`
 - `PIL.Image.Image.apply_transparency.nuanced.png-p-single-index-transparency`
 - `PIL.Image.Image.apply_transparency.nuanced.png-p-transparency`

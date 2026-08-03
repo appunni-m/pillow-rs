@@ -27,6 +27,8 @@ fn err(e: pillow_rs::PilError) -> JsValue {
         | pillow_rs::PilError::KeyErrorInt(_)
         | pillow_rs::PilError::UnsupportedLibraqm => "KeyError",
         pillow_rs::PilError::ValueError(_) => "ValueError",
+        pillow_rs::PilError::OverflowError(_) => "OverflowError",
+        pillow_rs::PilError::DecompressionBombError(_) => "DecompressionBombError",
         pillow_rs::PilError::UnicodeEncodeError { .. } => "UnicodeEncodeError",
         pillow_rs::PilError::ZeroDivisionError(_) => "ZeroDivisionError",
         pillow_rs::PilError::TypeError(_) => "TypeError",

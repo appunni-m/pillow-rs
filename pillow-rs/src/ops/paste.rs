@@ -7,6 +7,24 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
+const PIL_MAX_IMAGE_PIXELS: u64 = 1024 * 1024 * 1024 / 4 / 3;
+const PIL_DECOMPRESSION_BOMB_LIMIT: u128 = (PIL_MAX_IMAGE_PIXELS as u128) * 2;
+
+fn coordinate_overflow() -> PilError {
+    PilError::OverflowError("signed integer is greater than maximum".into())
+}
+
+fn check_crop_extent(width: i64, height: i64) -> Result<(), PilError> {
+    let pixels = u128::from(width.max(1) as u64) * u128::from(height.max(1) as u64);
+    if pixels > PIL_DECOMPRESSION_BOMB_LIMIT {
+        return Err(PilError::DecompressionBombError(format!(
+            "Image size ({pixels} pixels) exceeds limit of {PIL_DECOMPRESSION_BOMB_LIMIT} pixels, \
+             could be decompression bomb DOS attack."
+        )));
+    }
+    Ok(())
+}
+
 /// Source pixels for [`Image::paste`].
 #[derive(Debug, Clone)]
 pub enum PasteSource {
@@ -276,62 +294,60 @@ impl Image {
         }
 
         let (source_width, source_height) = source.size()?;
+        let source_width = i64::try_from(source_width).map_err(|_| coordinate_overflow())?;
+        let source_height = i64::try_from(source_height).map_err(|_| coordinate_overflow())?;
         let source_box = if source_box.len() == 2 {
-            (
-                i32::try_from(source_box[0])
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-                i32::try_from(source_box[1])
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-                i32::try_from(source_width)
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-                i32::try_from(source_height)
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-            )
+            [source_box[0], source_box[1], source_width, source_height]
         } else {
-            (
-                i32::try_from(source_box[0])
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-                i32::try_from(source_box[1])
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-                i32::try_from(source_box[2])
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-                i32::try_from(source_box[3])
-                    .map_err(|_| PilError::ValueError("Source coordinate overflow".into()))?,
-            )
+            [source_box[0], source_box[1], source_box[2], source_box[3]]
         };
+        if source_box[2] < source_box[0] {
+            return Err(PilError::ValueError(
+                "Coordinate 'right' is less than 'left'".into(),
+            ));
+        }
+        if source_box[3] < source_box[1] {
+            return Err(PilError::ValueError(
+                "Coordinate 'lower' is less than 'upper'".into(),
+            ));
+        }
+        check_crop_extent(source_box[2] - source_box[0], source_box[3] - source_box[1])?;
+        let source_box = (
+            i32::try_from(source_box[0]).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box[1]).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box[2]).map_err(|_| coordinate_overflow())?,
+            i32::try_from(source_box[3]).map_err(|_| coordinate_overflow())?,
+        );
         let overlay = if source_box == (0, 0, source_width as i32, source_height as i32) {
             source.clone()
         } else {
             source.crop(Some(source_box))?
         };
 
-        let dest_x = i32::try_from(dest[0])
-            .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?;
-        let dest_y = i32::try_from(dest[1])
-            .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?;
+        let dest_x = i32::try_from(dest[0]).map_err(|_| coordinate_overflow())?;
+        let dest_y = i32::try_from(dest[1]).map_err(|_| coordinate_overflow())?;
         let (overlay_width, overlay_height) = overlay.size()?;
         let right = dest_x
-            .checked_add(
-                i32::try_from(overlay_width)
-                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
-            )
-            .ok_or_else(|| PilError::ValueError("Destination coordinate overflow".into()))?;
+            .checked_add(i32::try_from(overlay_width).map_err(|_| coordinate_overflow())?)
+            .ok_or_else(coordinate_overflow)?;
         let bottom = dest_y
-            .checked_add(
-                i32::try_from(overlay_height)
-                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
-            )
-            .ok_or_else(|| PilError::ValueError("Destination coordinate overflow".into()))?;
+            .checked_add(i32::try_from(overlay_height).map_err(|_| coordinate_overflow())?)
+            .ok_or_else(coordinate_overflow)?;
         let box_coords = (dest_x, dest_y, right, bottom);
+        // Pillow's high-level method treats an empty cropped overlay as a
+        // no-op.  The low-level alpha compositor rejects zero-sized buffers
+        // as a mode/size mismatch, so avoid entering that primitive after the
+        // public geometry has already been validated.
+        if overlay_width == 0 || overlay_height == 0 {
+            return Ok(());
+        }
         let destination_size = self.size()?;
         let background = if box_coords
             == (
                 0,
                 0,
-                i32::try_from(destination_size.0)
-                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
-                i32::try_from(destination_size.1)
-                    .map_err(|_| PilError::ValueError("Destination coordinate overflow".into()))?,
+                i32::try_from(destination_size.0).map_err(|_| coordinate_overflow())?,
+                i32::try_from(destination_size.1).map_err(|_| coordinate_overflow())?,
             ) {
             self.clone()
         } else {

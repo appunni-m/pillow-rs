@@ -9783,11 +9783,194 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-x-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([2147483648, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-y-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 2147483648]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-left-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([2147483648, 0, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-top-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 2147483648, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-right-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 0, 2147483648, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-bottom-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 0, 1, 2147483648]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-coordinate-left-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([2147483648, 0, 2147483649, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-coordinate-top-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 2147483648, 1, 2147483649]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-coordinate-right-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([2147483647, 0, 2147483648, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-coordinate-bottom-overflow",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 2147483647, 1, 2147483648]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.source",
+            "name": "source-inverted-box",
+            "mode": "RGBA",
+            "values": {
+                "source": literal([8, 8, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-zero-width",
+            "observe_receiver": True,
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 0, 0, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-zero-height",
+            "observe_receiver": True,
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 0, 1, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "source-zero-size",
+            "observe_receiver": True,
+            "mode": "RGBA",
+            "values": {
+                "source": literal([0, 0, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
             "requirement_suffix": "parameter.dest",
             "name": "dest-wrong-arity",
             "mode": "RGBA",
             "values": {
                 "dest": literal([0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.dest",
+            "name": "dest-x-overflow",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal([2147483648, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.dest",
+            "name": "dest-y-overflow",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal([0, 2147483648]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.dest",
+            "name": "dest-right-overflow",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal([2147483647, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "parameter.dest",
+            "name": "dest-bottom-overflow",
+            "mode": "RGBA",
+            "values": {
+                "dest": literal([0, 2147483647]),
             },
         },
         {
