@@ -1167,6 +1167,8 @@
           "PIL.Image.Image.save.nuanced.cmyk-bmp-error",
           "PIL.Image.Image.putdata.nuanced.rgba-tuples",
           "PIL.Image.Image.putdata.nuanced.cmyk-tuples",
+          "PIL.Image.Image.putdata.nuanced.ycbcr-tuples",
+          "PIL.Image.Image.putdata.nuanced.hsv-tuples",
           "PIL.Image.Image.putdata.nuanced.la-tuples",
           "PIL.Image.Image.putdata.nuanced.la-invalid-component-count",
           "PIL.Image.Image.putdata.nuanced.la-scalar-float",
