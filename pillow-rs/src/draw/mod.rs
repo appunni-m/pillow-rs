@@ -230,7 +230,7 @@ pub fn normalize_draw_circle_center(input: DrawCircleCenterInput) -> Result<(f64
         )),
         DrawCircleCenterInput::Mapping => Err(PilError::KeyErrorInt(0)),
         DrawCircleCenterInput::Invalid => Err(PilError::TypeError(
-            "coordinate list must contain at least 2 coordinates".into(),
+            "'NoneType' object is not subscriptable".into(),
         )),
     }
 }

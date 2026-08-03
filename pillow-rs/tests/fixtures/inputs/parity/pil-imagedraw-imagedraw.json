@@ -32266,6 +32266,93 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.rotation-wrap",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "regular_polygon",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.regular_polygon.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "regular_polygon",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "bounding_circle": {
+              "kind": "literal",
+              "value": [
+                8,
+                8,
+                6
+              ]
+            },
+            "n_sides": {
+              "kind": "literal",
+              "value": 5
+            },
+            "rotation": {
+              "kind": "literal",
+              "value": 400
+            },
+            "outline": {
+              "kind": "literal",
+              "value": [
+                255,
+                255,
+                255
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.short-bounding-circle-error",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "regular_polygon",
@@ -33819,6 +33906,77 @@
             "xy": {
               "kind": "literal",
               "value": {}
+            },
+            "radius": {
+              "kind": "literal",
+              "value": 4
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.circle.nuanced.none-center-error",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "circle",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.circle.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "circle",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": null
             },
             "radius": {
               "kind": "literal",
