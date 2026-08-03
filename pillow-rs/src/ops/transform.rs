@@ -46,6 +46,8 @@ pub enum ReduceFactor {
     Scalar(i64),
     /// A factor sequence supplied by the caller.
     Sequence(Vec<i64>),
+    /// A factor sequence whose items are not integers.
+    FloatingSequence(Vec<f64>),
     /// A value that could not be represented as an integer or sequence.
     Invalid,
 }
@@ -188,6 +190,11 @@ impl Image {
         let factors = match factor {
             ReduceFactor::Scalar(value) => [value, value].to_vec(),
             ReduceFactor::Sequence(values) => values,
+            ReduceFactor::FloatingSequence(_) => {
+                return Err(PilError::TypeError(
+                    "'float' object cannot be interpreted as an integer".into(),
+                ));
+            }
             ReduceFactor::Invalid => {
                 return Err(PilError::TypeError(
                     "factor must be an integer or a sequence of two integers".into(),

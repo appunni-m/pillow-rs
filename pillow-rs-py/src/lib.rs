@@ -265,6 +265,9 @@ fn reduce_factor_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::ReduceFacto
     if let Ok(values) = value.extract::<Vec<i64>>() {
         return pillow_rs::ReduceFactor::Sequence(values);
     }
+    if let Ok(values) = value.extract::<Vec<f64>>() {
+        return pillow_rs::ReduceFactor::FloatingSequence(values);
+    }
     pillow_rs::ReduceFactor::Invalid
 }
 

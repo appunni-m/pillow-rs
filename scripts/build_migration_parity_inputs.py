@@ -6895,6 +6895,15 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "reduce",
             "requirement_suffix": "parameter.factor",
+            "name": "float-factor-sequence",
+            "values": {
+                "factor": literal([2.5, 2.5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.factor",
             "name": "wrong-factor-arity",
             "values": {
                 "factor": literal([2, 2, 2]),
