@@ -8503,6 +8503,38 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "transform",
             "requirement_suffix": "parameter.data",
+            "name": "raw-mesh-short-bbox-after-valid-item",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6]],
+                    [[0, 0, 6], [0, 0, 6, 0, 6, 6, 0, 6]],
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6], []],
+                ]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "raw-mesh-short-quad-after-valid-item",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6]],
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0]],
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6], []],
+                ]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
             "name": "missing-mesh-data",
             "mode": "RGB",
             "values": {
