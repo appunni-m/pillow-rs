@@ -228,6 +228,9 @@ fn transform_data_from_python(
     if let Ok(mesh) = value.extract::<Vec<Vec<Vec<f64>>>>() {
         return Some(pillow_rs::TransformData::RawMesh(mesh));
     }
+    if value.is_instance_of::<PyDict>() {
+        return Some(pillow_rs::TransformData::Mapping);
+    }
     Some(pillow_rs::TransformData::Invalid)
 }
 
@@ -245,6 +248,9 @@ fn transform_fill_from_python(
     }
     if let Ok(value) = value.extract::<Vec<i64>>() {
         return Ok(Some(pillow_rs::TransformFill::Components(value)));
+    }
+    if let Ok(value) = value.extract::<Vec<f64>>() {
+        return Ok(Some(pillow_rs::TransformFill::FloatingComponents(value)));
     }
     Ok(Some(pillow_rs::TransformFill::Invalid))
 }
