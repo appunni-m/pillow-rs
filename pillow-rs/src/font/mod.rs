@@ -478,6 +478,16 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        if let Some(start) = options.start {
+            if options.uses_default_mask_except_start() {
+                return self
+                    .getmask2_bytes_with_start(text, start)
+                    .map(|(width, height, pixels, _)| (width, height, pixels));
+            }
+        }
+        if options.uses_default_mask() {
+            return self.getmask_bytes(text);
+        }
         let text = pillow_bytes_to_text(text);
         self.getmask_with_options(&text, options)
     }
@@ -575,6 +585,9 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
+        if options.uses_default_layout() {
+            return self.getlength_bytes(text);
+        }
         let text = pillow_bytes_to_text(text);
         self.getlength_with_options(&text, options)
     }
@@ -655,6 +668,11 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
+        if options.uses_default_layout() {
+            return self.getbbox_bytes(text).map(|(left, top, right, bottom)| {
+                (left as f32, top as f32, right as f32, bottom as f32)
+            });
+        }
         let text = pillow_bytes_to_text(text);
         self.getbbox_with_options(&text, options)
     }
@@ -754,6 +772,14 @@ impl FreeTypeFont {
         text: &[u8],
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        if let Some(start) = options.start {
+            if options.uses_default_mask_except_start() {
+                return self.getmask2_bytes_with_start(text, start);
+            }
+        }
+        if options.uses_default_mask() {
+            return self.getmask2_bytes(text);
+        }
         let text = pillow_bytes_to_text(text);
         self.getmask2_with_options(&text, options)
     }
