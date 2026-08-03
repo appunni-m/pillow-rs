@@ -2911,6 +2911,13 @@ def build_nuanced_cases(
             "mode": "L",
         },
         {
+            "surface": "PIL.ImageSequence.Iterator",
+            "operation": "__next__",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-single-frame-gif",
+            "scenario_asset": "image/p-small.gif",
+        },
+        {
             "surface": "PIL.ImageSequence",
             "operation": "Iterator",
             "requirement_suffix": "parameter.im",
