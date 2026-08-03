@@ -39,6 +39,24 @@ FIXTURE_ROOT = WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT_ROOT = FIXTURE_ROOT
 TARGET_PROFILE = "python-cpu"
+CRASH_QUARANTINE_RELATIVE = (
+    "inputs/quarantine/pil-imagefont-freetypefont.json"
+)
+CRASH_QUARANTINE_REASON = (
+    "Pillow 12.2.0 source execution exits with SIGSEGV (-11) while "
+    "collecting this malformed variable-font name result; retain the "
+    "input for isolated crash analysis, but do not execute it in active "
+    "parity or coverage lanes."
+)
+CRASH_QUARANTINE_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "surface": "PIL.ImageFont.FreeTypeFont",
+        "operation": "get_variation_names",
+        "requirement_suffix": "behavior.default",
+        "name": "missing-subfamily-name",
+        "font": "font/fonts/variable-name-missing-subfamily.ttf",
+    },
+)
 
 
 def slug(value: str) -> str:
@@ -3506,6 +3524,27 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_names",
+            "requirement_suffix": "behavior.default",
+            "name": "windows-name-fallback",
+            "font": "font/fonts/variable-name-windows-fallback.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "malformed-axis-size",
+            "font": "font/fonts/fvar-axis-size-short.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_names",
+            "requirement_suffix": "behavior.default",
+            "name": "malformed-instance-array",
+            "font": "font/fonts/fvar-instance-array-short.ttf",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "get_variation_axes",
             "requirement_suffix": "behavior.default",
             "name": "type1-mm",
@@ -3722,6 +3761,15 @@ def build_nuanced_cases(
             "name": "variable-font-unknown-instance",
             "font": "font/fonts/variable-name-platform1-fallback.ttf",
             "values": {"name": literal("DefinitelyMissing")},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "set_variation_by_name",
+            "requirement_suffix": "behavior.default",
+            "name": "named-instance-thin",
+            "font": "font/fonts/variable-named-instances.ttf",
+            "values": {"name": literal("Thin")},
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
@@ -14521,6 +14569,56 @@ def build_nuanced_cases(
     return cases
 
 
+def build_crash_quarantine_cases(
+    manifest: dict[str, Any],
+    operations: dict[tuple[str, str], dict[str, Any]],
+    assets_root: Path,
+) -> list[dict[str, Any]]:
+    """Build input-only cases that are retained outside active execution.
+
+    These workflows are deliberately not part of ``manifest.input_index``.
+    They are preserved as reproducible stimuli for later crash analysis after
+    the source adapter can report an isolated crash status safely.
+    """
+
+    requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
+    for surface in manifest["surfaces"]:
+        for operation in surface["operations"]:
+            key = (surface["id"], operation["id"])
+            prefix = operation_prefix(*key)
+            requirements[key] = {
+                item["id"].removeprefix(prefix + "."): item
+                for item in operation["requirements"]
+            }
+
+    cases: list[dict[str, Any]] = []
+    for spec in CRASH_QUARANTINE_SPECS:
+        key = (spec["surface"], spec["operation"])
+        operation = operations.get(key)
+        if operation is None:
+            raise ValueError(f"crash quarantine case references unknown operation: {key}")
+        requirement = requirements[key].get(spec["requirement_suffix"])
+        if requirement is None:
+            raise ValueError(
+                f"crash quarantine requirement missing: {key}"
+                f".{spec['requirement_suffix']}"
+            )
+        prefix = operation_prefix(*key)
+        cases.append(
+            build_parity_case(
+                spec["surface"],
+                operation,
+                requirement,
+                operations,
+                assets_root,
+                case_id=f"{prefix}.nuanced.{slug(spec['name'])}",
+                scenario_font=spec.get("font"),
+                scenario_observe_receiver=spec.get("observe_receiver", False),
+            )
+        )
+    return cases
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -14547,6 +14645,23 @@ def build_inputs(
         "benchmark_workloads": 0,
         "benchmark_suites": 0,
     }
+    crash_quarantine_cases = build_crash_quarantine_cases(
+        manifest,
+        operations,
+        active_assets_root,
+    )
+    write_json(
+        output_root / CRASH_QUARANTINE_RELATIVE,
+        {
+            "schema": "migration-parity/crash-quarantine-input@1",
+            "status": "quarantined",
+            "active": False,
+            "execution": "manual",
+            "reason": CRASH_QUARANTINE_REASON,
+            "cases": crash_quarantine_cases,
+        },
+    )
+    counts["quarantined_cases"] = len(crash_quarantine_cases)
 
     for surface in manifest["surfaces"]:
         surface_id = surface["id"]

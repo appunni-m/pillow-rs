@@ -1,0 +1,60 @@
+{
+  "schema": "migration-parity/crash-quarantine-input@1",
+  "status": "quarantined",
+  "active": false,
+  "execution": "manual",
+  "reason": "Pillow 12.2.0 source execution exits with SIGSEGV (-11) while collecting this malformed variable-font name result; retain the input for isolated crash analysis, but do not execute it in active parity or coverage lanes.",
+  "cases": [
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.missing-subfamily-name",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "get_variation_names",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.get_variation_names.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/variable-name-missing-subfamily.ttf",
+          "sha256": "3aedb3aabe0469c1b3f1ff065914ef29822c980043e5560bacd86840fa6c97d4",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "get_variation_names",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    }
+  ]
+}
