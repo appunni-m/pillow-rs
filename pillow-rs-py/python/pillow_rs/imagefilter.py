@@ -11,7 +11,7 @@ class _BuiltinFilter:
     kernel_name = ""
 
     def _apply(self, rust_image):
-        return Image(rust_image.filter(self.kernel_name))
+        return rust_image.filter_name(self.kernel_name)
 
 
 class BLUR(_BuiltinFilter):
@@ -58,14 +58,14 @@ class GaussianBlur:
     def __init__(self, radius=2):
         self.radius = radius
     def _apply(self, rust_image):
-        return Image(rust_image.gaussian_blur(self.radius))
+        return rust_image.gaussian_blur(self.radius)
 
 
 class BoxBlur:
     def __init__(self, radius=2):
         self.radius = radius
     def _apply(self, rust_image):
-        return Image(rust_image.box_blur(self.radius))
+        return rust_image.box_blur(self.radius)
 
 
 class UnsharpMask:
@@ -74,28 +74,28 @@ class UnsharpMask:
         self.percent = percent
         self.threshold = threshold
     def _apply(self, rust_image):
-        return Image(rust_image.unsharp_mask(self.radius, self.percent, self.threshold))
+        return rust_image.unsharp_mask(self.radius, self.percent, self.threshold)
 
 
 class MaxFilter:
     def __init__(self, size=3):
         self.size = size
     def _apply(self, rust_image):
-        return Image(rust_image.max_filter(self.size))
+        return rust_image.max_filter(self.size)
 
 
 class MinFilter:
     def __init__(self, size=3):
         self.size = size
     def _apply(self, rust_image):
-        return Image(rust_image.min_filter(self.size))
+        return rust_image.min_filter(self.size)
 
 
 class MedianFilter:
     def __init__(self, size=3):
         self.size = size
     def _apply(self, rust_image):
-        return Image(rust_image.median_filter(self.size))
+        return rust_image.median_filter(self.size)
 
 
 class ModeFilter:
@@ -104,7 +104,7 @@ class ModeFilter:
     def __init__(self, size=3):
         self.size = size
     def _apply(self, rust_image):
-        return Image(rust_image.mode_filter(self.size))
+        return rust_image.mode_filter(self.size)
 
 
 class RankFilter:
@@ -112,7 +112,7 @@ class RankFilter:
         self.size = size
         self.rank = rank
     def _apply(self, rust_image):
-        return Image(rust_image.rank_filter(self.size, self.rank))
+        return rust_image.rank_filter(self.size, self.rank)
 
 
 class Kernel:
@@ -124,10 +124,7 @@ class Kernel:
         self.offset = offset
 
     def _apply(self, rust_image):
-        kernel, scale, offset, size_x = _core.kernel_prepare(
-            self.kernel, self.scale, self.offset, self.size
-        )
-        return Image(rust_image.kernel_filter(kernel, scale, offset, size_x))
+        return rust_image.kernel_filter(self.kernel, self.scale, self.offset, self.size)
 
 
 class Color3DLUT:
@@ -216,9 +213,7 @@ class Color3DLUT:
 
     def _apply(self, rust_image):
         """Apply 3D LUT to image using Rust trilinear interpolation."""
-        return Image(
-            rust_image.color3dlut(self.size, self.table, self.channels, self.mode)
-        )
+        return rust_image.color3dlut(self.size, self.table, self.channels, self.mode)
 
     def __repr__(self):
         return _core.color3dlut_repr(
@@ -229,8 +224,4 @@ class Color3DLUT:
 # PIL-compatible apply filter function
 def apply_filter(image: Image, filter_obj) -> Image:
     """Apply a filter to an image."""
-    if isinstance(filter_obj, str):
-        return image.filter(filter_obj)
-    if hasattr(filter_obj, '_apply'):
-        return filter_obj._apply(image._rust_image)
-    return image.filter(str(filter_obj))
+    return image.filter(filter_obj)

@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 85ea8bd47d3d7e2eb3a867eb0d0323636865919847b8d68fc25dd6f3eaf0a425
-coverage_run_id: migration-coverage-508764c7a40d42d8b0b0da1ac9551740
+coverage_run_id: migration-coverage-982942aa55ac4f9bbf08f7ab97b83239
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -28,7 +28,7 @@ Component aggregate for backlog ordering: `9919/11065` (89.6%).
 
 ## Operations below 95% region coverage
 
-140 of 208 coverage-required operations are below 95%.
+117 of 208 coverage-required operations are below 95%.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -149,29 +149,6 @@ Component aggregate for backlog ordering: `9919/11065` (89.6%).
 | `PIL.ImageDraw.ImageDraw.textbbox` | `image-draw` | 2668/2911 | 91.7% |
 | `PIL.ImageDraw.ImageDraw.textlength` | `image-draw` | 2668/2911 | 91.7% |
 | `PIL.ImageDraw.Outline` | `image-draw` | 2668/2911 | 91.7% |
-| `PIL.ImageFilter.BLUR` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.BoxBlur` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.CONTOUR` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.Color3DLUT` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.Color3DLUT.__repr__` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.Color3DLUT.generate` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.Color3DLUT.transform` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.DETAIL` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.EDGE_ENHANCE` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.EDGE_ENHANCE_MORE` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.EMBOSS` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.FIND_EDGES` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.GaussianBlur` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.Kernel` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.MaxFilter` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.MedianFilter` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.MinFilter` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.ModeFilter` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.RankFilter` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.SHARPEN` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.SMOOTH` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.SMOOTH_MORE` | `image-filter` | 633/672 | 94.2% |
-| `PIL.ImageFilter.UnsharpMask` | `image-filter` | 633/672 | 94.2% |
 
 ## Per-file region coverage for involved components
 
@@ -194,9 +171,6 @@ Component aggregate for backlog ordering: `9919/11065` (89.6%).
 | `image-core` | `pillow-rs/src/ops/rotate.rs` | 33/33 | 100.0% |
 | `image-draw` | `pillow-rs/src/draw/mod.rs` | 2668/2911 | 91.7% |
 | `image-draw` | `pillow-rs-py/python/pillow_rs/imagedraw.py` | 0/0 | n/a |
-| `image-filter` | `pillow-rs/src/ops/filter.rs` | 125/134 | 93.3% |
-| `image-filter` | `pillow-rs/src/ops/param_filters.rs` | 508/538 | 94.4% |
-| `image-filter` | `pillow-rs-py/python/pillow_rs/imagefilter.py` | 0/0 | n/a |
 | `image-font` | `pillow-rs/src/lib.rs` | 172/382 | 45.0% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% |

@@ -243,16 +243,7 @@ class Image:
         return Image(self._rust_image.copy())
 
     def filter(self, filter_type) -> "Image":
-        # PIL instantiates callable filter classes and rejects anything that
-        # is not a Filter instance/class.
-        if callable(filter_type):
-            filter_type = filter_type()
-        filter_name = getattr(filter_type, "name", type(filter_type).__name__)
-        self._rust_image.validate_filter(filter_name)
-        if not hasattr(filter_type, "_apply"):
-            msg = "filter argument should be ImageFilter.Filter instance or class"
-            raise TypeError(msg)
-        return filter_type._apply(self._rust_image)
+        return Image(self._rust_image.filter(filter_type))
 
     def thumbnail(
         self,
