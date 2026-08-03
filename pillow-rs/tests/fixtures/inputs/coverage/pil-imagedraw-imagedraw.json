@@ -680,6 +680,7 @@
           "PIL.ImageDraw.ImageDraw.rounded_rectangle.nuanced.radius",
           "PIL.ImageDraw.ImageDraw.circle.nuanced.bbox",
           "PIL.ImageDraw.ImageDraw.circle.nuanced.short-center-error",
+          "PIL.ImageDraw.ImageDraw.circle.nuanced.scalar-center-error",
           "PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline",
           "PIL.ImageDraw.ImageDraw.line.nuanced.wide",
           "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve",
