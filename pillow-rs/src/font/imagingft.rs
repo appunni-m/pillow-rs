@@ -563,14 +563,9 @@ pub(crate) fn get_variation_axes(
 }
 
 pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
-    let (fvar, name_table) = variation_tables(font)?;
-    let mut names = Vec::with_capacity(fvar.instances.len());
-    for instance in &fvar.instances {
-        let name = name_bytes(&name_table, instance.subfamily_name_id)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|byte| *byte != 0)
-            .collect::<Vec<_>>();
+    let instance_names = variation_instance_names(font)?;
+    let mut names = Vec::with_capacity(instance_names.len());
+    for name in instance_names {
         // Pillow's ImageFont.get_variation_names() preserves first-seen order
         // while removing duplicate subfamily names before public lookup.
         if !names.contains(&name) {
@@ -578,6 +573,21 @@ pub(crate) fn get_variation_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, P
         }
     }
     Ok(names)
+}
+
+fn variation_instance_names(font: &FreeTypeFont) -> Result<Vec<Vec<u8>>, PilError> {
+    let (fvar, name_table) = variation_tables(font)?;
+    Ok(fvar
+        .instances
+        .iter()
+        .map(|instance| {
+            name_bytes(&name_table, instance.subfamily_name_id)
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|byte| *byte != 0)
+                .collect()
+        })
+        .collect())
 }
 
 pub(crate) fn set_variation_by_name(font: &mut FreeTypeFont, name: &[u8]) -> Result<(), PilError> {
@@ -655,16 +665,21 @@ pub(crate) fn native_setvarname(
     let names = if instance_index == 0 {
         Vec::new()
     } else {
-        get_variation_names(font)?
+        // FreeType indexes the raw fvar instance array. The public
+        // get_variation_names() path intentionally removes duplicate names,
+        // so using it here made a valid native index address the wrong entry
+        // and could panic when duplicate subfamily names were present.
+        variation_instance_names(font)?
     };
+    let name_index = instance_index.saturating_sub(1) as usize;
+    if instance_index != 0 && name_index >= names.len() {
+        return Err(PilError::OsError("invalid argument".into()));
+    }
     let status = ffi::FT_Set_Named_Instance(Some(&mut font.engine.face), instance_index);
     check_ft_error(status)?;
     refresh_engine_metadata(font);
     if instance_index != 0 {
-        // `FT_Set_Named_Instance` succeeds only for a 1-based index within the
-        // same fvar instance table used by `get_variation_names`, so this index
-        // is in-bounds whenever the FreeType status above is OK.
-        let name = &names[instance_index as usize - 1];
+        let name = &names[name_index];
         if name.is_empty() {
             // Pillow 12.2.0 `_imagingft.c::font_setvarname` accepts the
             // FreeType named instance first. If the selected instance has
