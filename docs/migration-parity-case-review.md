@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2510
-- Unique active workflow signatures: 2510
+- Active parity workflows: 2514
+- Unique active workflow signatures: 2514
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1334
+- Deliberate nuanced workflows: 1338
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 180 |
+| `PIL.ImageOps` | 184 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -1330,6 +1330,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.invert.nuanced.materialized-rgb`
 - `PIL.ImageOps.invert.nuanced.p-mode`
 - `PIL.ImageOps.mirror.nuanced.materialized-rgb`
+- `PIL.ImageOps.pad.nuanced.fractional-centering`
 - `PIL.ImageOps.pad.nuanced.hsv-color-name`
 - `PIL.ImageOps.pad.nuanced.invalid-color-length`
 - `PIL.ImageOps.pad.nuanced.invalid-color-name`
@@ -1346,6 +1347,9 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.pad.nuanced.la-color-two-components`
 - `PIL.ImageOps.pad.nuanced.la-scalar`
 - `PIL.ImageOps.pad.nuanced.materialized-padding`
+- `PIL.ImageOps.pad.nuanced.p-color-name`
+- `PIL.ImageOps.pad.nuanced.p-four-components`
+- `PIL.ImageOps.pad.nuanced.p-four-components-opaque`
 - `PIL.ImageOps.pad.nuanced.p-scalar-color`
 - `PIL.ImageOps.pad.nuanced.p-three-components`
 - `PIL.ImageOps.pad.nuanced.pa-scalar-color`
