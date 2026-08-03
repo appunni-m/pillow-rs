@@ -535,8 +535,14 @@ impl Image {
         offset: i32,
         size: u32,
     ) -> Result<Image, JsValue> {
+        let kernel = Some(kernel.into_iter().map(f64::from).collect());
         self.inner
-            .kernel_filter(&kernel, scale, offset, size)
+            .kernel_filter(
+                kernel,
+                Some(f64::from(scale)),
+                f64::from(offset),
+                (size, size),
+            )
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -550,13 +556,10 @@ impl Image {
         channels: u32,
         target_mode: Option<String>,
     ) -> Result<Image, JsValue> {
+        let input = pillow_rs::prepare_color3dlut(table, (size_x, size_y, size_z), channels)
+            .map_err(err)?;
         self.inner
-            .color3dlut(
-                (size_x, size_y, size_z),
-                table,
-                channels,
-                target_mode.as_deref(),
-            )
+            .color3dlut(input, target_mode.as_deref())
             .map(|i| Image { inner: i })
             .map_err(err)
     }

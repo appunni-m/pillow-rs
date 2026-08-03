@@ -7,7 +7,6 @@ use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::{PipelineOp, PixelMode};
-use crate::raster::DynamicImage;
 
 /// Find the mode (most common value) and its count from a histogram.
 /// Uses PIL's strict `>` tie-breaking (lower value wins on tie).
@@ -471,14 +470,11 @@ impl Image {
         let result = crate::image::raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         // Preserve palette for P-mode images
         if let Some(pal) = palette {
-            let indices = match &result {
-                DynamicImage::ImageLuma8(gray) => gray.clone(),
-                _ => {
-                    return Err(PilError::ValueError(
-                        "mode_filter: unexpected output for palette image".into(),
-                    ));
-                }
-            };
+            // A palette image materializes as one-band indices, so the raw
+            // reconstruction above is necessarily Luma8 here. Keeping the
+            // invariant typed avoids an unreachable error path while
+            // preserving the palette and index buffer exactly.
+            let indices = result.into_luma8();
             return Ok(Image::Paletted(crate::image::PalettedData {
                 indices,
                 palette: pal,
