@@ -3292,6 +3292,7 @@ surfaces:
         value_types:
         - 'null'
         - string
+        - integer
         omission:
           kind: literal
           value: null
@@ -3310,6 +3311,7 @@ surfaces:
         - 'null'
         - enum
         - integer
+        - sequence
         omission:
           kind: literal
           value: null
@@ -3317,6 +3319,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - enum
+        - 'null'
         omission:
           kind: sentinel
           name: WEB
@@ -8555,6 +8558,7 @@ surfaces:
         value_types:
         - enum
         - integer
+        - sequence
         omission:
           kind: sentinel
           name: FLOYDSTEINBERG

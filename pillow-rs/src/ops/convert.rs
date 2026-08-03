@@ -118,7 +118,7 @@ pub fn normalize_python_convert_dither(
         })),
         PythonDitherInput::Name(value) => validate_python_convert_dither(&value).map(|_| None),
         PythonDitherInput::Invalid(type_name) => Err(PilError::TypeError(format!(
-            "'{type_name}' object cannot be converted to 'PyString'"
+            "'{type_name}' object cannot be interpreted as an integer"
         ))),
     }
 }
@@ -174,7 +174,7 @@ impl Image {
             PythonConvertModeInput::Name(target) => target,
             PythonConvertModeInput::Invalid(type_name) => {
                 return Err(PilError::TypeError(format!(
-                    "'{type_name}' object cannot be interpreted as a string"
+                    "argument 1 must be str, not {type_name}"
                 )));
             }
         };

@@ -248,9 +248,11 @@ def annotation_value_types(annotation: Any, parameter_name: str) -> list[str]:
         # Pillow exposes Dither as an IntEnum.  The Python binding accepts the
         # enum's integer value, while a string spelling is rejected before the
         # core conversion path.  Keep both the source enum and its public
-        # integer representation in the input contract.
+        # integer representation in the input contract. A sequence remains in
+        # scope so invalid host types exercise the public TypeError path.
         include("integer")
         include("enum")
+        include("sequence")
     if re.search(r"\bany\b|\bobject\b", lower):
         include("any_json")
 
@@ -864,6 +866,17 @@ def operation_contract(
         for parameter in parameters:
             if parameter["id"] == "xy":
                 add_unique(parameter["value_types"], "any_json")
+    if endpoint.source_path == "PIL.Image.Image.convert":
+        # Pillow validates the public mode argument before conversion. Keep an
+        # integer in this endpoint's input vocabulary so that Rust owns the
+        # invalid host-type diagnostic without broadening other mode APIs.
+        for parameter in parameters:
+            if parameter["id"] == "mode":
+                add_unique(parameter["value_types"], "integer")
+            if parameter["id"] == "palette":
+                # Pillow accepts an explicit None at runtime even though the
+                # annotation documents Palette.WEB as the default sentinel.
+                add_unique(parameter["value_types"], "null")
     benchmark_applicable = endpoint.kind != "constant"
     requirements = operation_requirements(
         endpoint,
