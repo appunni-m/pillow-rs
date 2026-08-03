@@ -11,7 +11,8 @@
       "selectors": {
         "parity_case_ids": [
           "PIL.ImageSequence.Iterator.__iter__.behavior.default",
-          "PIL.ImageSequence.Iterator.__next__.behavior.default"
+          "PIL.ImageSequence.Iterator.__next__.behavior.default",
+          "PIL.ImageSequence.Iterator.__next__.nuanced.opened-single-frame-gif"
         ],
         "command_ids": []
       },

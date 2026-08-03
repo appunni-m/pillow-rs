@@ -137,6 +137,76 @@
         "call",
         "observe-stop-iteration"
       ]
+    },
+    {
+      "case_id": "PIL.ImageSequence.Iterator.__next__.nuanced.opened-single-frame-gif",
+      "surface": "PIL.ImageSequence.Iterator",
+      "operation": "__next__",
+      "covers": [
+        "PIL.ImageSequence.Iterator.__next__.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/p-small.gif",
+          "sha256": "dacb11c9a76f1a096f7aa5768c1395e548b95ba11d3495c6936156d955042b72",
+          "media_type": "image/gif"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "setup-iterator-2",
+          "surface": "PIL.ImageSequence",
+          "operation": "Iterator",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageSequence.Iterator",
+          "operation": "__next__",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-iterator-2"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-stop-iteration",
+          "surface": "PIL.ImageSequence.Iterator",
+          "operation": "__next__",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-iterator-2"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-stop-iteration"
+      ]
     }
   ]
 }
