@@ -16,7 +16,7 @@ use crate::raster::DynamicImage;
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, PalettedData};
 
 /// Host-neutral palette argument for the public quantize entry point.
 #[derive(Debug, Clone)]
@@ -2060,16 +2060,32 @@ impl Image {
         if !(1..=256).contains(&colors) {
             return Err(PilError::ValueError("bad number of colors".to_owned()));
         }
-        if matches!(palette, QuantizePalette::Image(_)) && self.mode()? != "P" {
-            return Err(PilError::ValueError(
-                "bad mode for palette image".to_owned(),
-            ));
-        }
+        let source_mode = self.mode()?;
         let method = match method {
             Some(method) => method,
-            None if self.mode()? == "RGBA" => 2,
+            None if source_mode == "RGBA" => 2,
             None => 0,
         };
+        if source_mode == "RGBA" && method != 2 && method != 3 {
+            return Err(PilError::ValueError(
+                "Fast Octree (method == 2) and libimagequant (method == 3) \
+                 are the only valid methods for quantizing RGBA images"
+                    .to_owned(),
+            ));
+        }
+        if let QuantizePalette::Image(palette_image) = &palette {
+            if palette_image.mode()? != "P" {
+                return Err(PilError::ValueError(
+                    "bad mode for palette image".to_owned(),
+                ));
+            }
+            if !matches!(source_mode.as_str(), "RGB" | "L") {
+                return Err(PilError::ValueError(
+                    "only RGB or L mode images can be quantized to a palette".to_owned(),
+                ));
+            }
+            return self.quantize_to_palette(palette_image, dither.unwrap_or(true));
+        }
         let kmeans = kmeans.unwrap_or(0);
         if kmeans < 0 {
             return Err(PilError::ValueError(
@@ -2083,6 +2099,37 @@ impl Image {
             dither.unwrap_or(true),
             method as u32,
         )
+    }
+
+    /// Maps an RGB or L image to the explicitly supplied P-mode palette.
+    ///
+    /// Pillow's `Image.quantize(palette=...)` preserves the reference palette
+    /// and uses its entries as the destination colors. The public wrapper only
+    /// classifies the host object; all mode checks, palette copying, and pixel
+    /// mapping stay here in the core implementation.
+    fn quantize_to_palette(&self, palette_image: &Image, dither: bool) -> Result<Image, PilError> {
+        let image = self.materialize()?;
+        let rgb = image.to_rgb8();
+        let (width, height) = rgb.dimensions();
+        let palette_bytes = palette_image.palette().unwrap_or_default();
+        let palette: Vec<[u8; 3]> = palette_bytes
+            .chunks_exact(3)
+            .take(256)
+            .map(|entry| [entry[0], entry[1], entry[2]])
+            .collect();
+        let pixels = rgb.into_raw();
+        let indices = map_pixels_to_fixed_palette(&pixels, width, height, &palette, dither)?;
+        let indices = crate::raster::GrayImage::from_raw(width, height, indices)
+            .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+
+        Ok(Image::Paletted(PalettedData {
+            indices,
+            palette: palette_bytes,
+            palette_alpha: palette_image.palette_alpha().unwrap_or_default(),
+            source_format: None,
+            info: None,
+            materialized: crate::image::materialization_cache(),
+        }))
     }
 
     /// Reduces the image to a `P` image with at most `colors` palette entries.
@@ -2194,4 +2241,96 @@ impl Image {
             materialized: crate::image::materialization_cache(),
         })
     }
+}
+
+/// Return the first palette entry with the smallest squared RGB distance.
+///
+/// Keeping the scan order for ties matches Pillow's palette-index preference
+/// and avoids making palette order an accidental implementation detail.
+fn nearest_palette_index(pixel: [u8; 3], palette: &[[u8; 3]]) -> u8 {
+    let mut best_index = 0usize;
+    let mut best_distance = u32::MAX;
+    for (index, entry) in palette.iter().enumerate() {
+        let dr = i32::from(pixel[0]) - i32::from(entry[0]);
+        let dg = i32::from(pixel[1]) - i32::from(entry[1]);
+        let db = i32::from(pixel[2]) - i32::from(entry[2]);
+        let distance = (dr * dr + dg * dg + db * db) as u32;
+        if distance < best_distance {
+            best_distance = distance;
+            best_index = index;
+        }
+    }
+    u8::try_from(best_index).unwrap_or(0)
+}
+
+/// Map source RGB samples to a fixed palette with Pillow's error diffusion.
+fn map_pixels_to_fixed_palette(
+    pixels: &[u8],
+    width: u32,
+    height: u32,
+    palette: &[[u8; 3]],
+    dither: bool,
+) -> Result<Vec<u8>, PilError> {
+    let dims = CheckedDims::new(width, height, 1)?;
+    let mut output = dims.alloc_buffer();
+    if palette.is_empty() {
+        return Ok(output);
+    }
+    let width = width as usize;
+
+    if !dither {
+        for (index, pixel) in pixels.chunks_exact(3).enumerate() {
+            output[index] = nearest_palette_index([pixel[0], pixel[1], pixel[2]], palette);
+        }
+        return Ok(output);
+    }
+
+    // Match Pillow's topalette accumulator layout: one extra column and a
+    // single division by 16 when the next pixel reads its propagated error.
+    let mut errors = vec![0i32; (width + 1) * 3];
+    for y in 0..height as usize {
+        let mut carry = [0i32; 3];
+        let mut delayed_five = [0i32; 3];
+        let mut delayed_one = [0i32; 3];
+        for x in 0..width {
+            let source = (y * width + x) * 3;
+            let error = x * 3;
+            let mut corrected = [0u8; 3];
+            for channel in 0..3 {
+                corrected[channel] = clip_palette_component(
+                    pixels[source + channel] as i32
+                        + (carry[channel] + errors[error + 3 + channel]) / 16,
+                );
+                carry[channel] = i32::from(corrected[channel]);
+            }
+
+            let palette_index = nearest_palette_index(corrected, palette);
+            output[y * width + x] = palette_index;
+            let selected = palette[usize::from(palette_index)];
+            for channel in 0..3 {
+                carry[channel] -= i32::from(selected[channel]);
+                let original_error = carry[channel];
+                let doubled = original_error + original_error;
+                carry[channel] = original_error + doubled;
+                errors[error + channel] = carry[channel] + delayed_five[channel];
+                carry[channel] += doubled;
+                delayed_five[channel] = carry[channel] + delayed_one[channel];
+                delayed_one[channel] = original_error;
+                carry[channel] += doubled;
+            }
+        }
+
+        // Pillow stores only the blue-channel edge accumulators at the extra
+        // column; preserve that observable edge behavior for fixed palettes.
+        let edge = width * 3;
+        errors[edge] = delayed_five[2];
+        errors[edge + 1] = delayed_one[2];
+        errors[edge + 2] = delayed_one[2];
+    }
+    Ok(output)
+}
+
+#[inline]
+fn clip_palette_component(value: i32) -> u8 {
+    value.clamp(0, 255) as u8
 }
