@@ -1270,6 +1270,8 @@ impl PyImage {
                 Ok(out.to_object(py))
             }
             pillow_rs::FormattedImageData::Scalars(values) => Ok(values.to_object(py)),
+            pillow_rs::FormattedImageData::IntegerScalars(values) => Ok(values.to_object(py)),
+            pillow_rs::FormattedImageData::FloatScalars(values) => Ok(values.to_object(py)),
             pillow_rs::FormattedImageData::Components(values) => {
                 let out = pyo3::types::PyList::empty(py);
                 for value in values {

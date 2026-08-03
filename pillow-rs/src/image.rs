@@ -233,10 +233,14 @@ pub enum FormattedPixelValue {
 }
 
 /// Pillow's flat versus multiband `getdata` result after core formatting.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FormattedImageData {
     /// Scalar samples, including an explicitly selected band.
     Scalars(Vec<u8>),
+    /// Signed 32-bit scalar samples from `I` mode.
+    IntegerScalars(Vec<i32>),
+    /// 32-bit floating-point scalar samples from `F` mode, widened for bindings.
+    FloatScalars(Vec<f64>),
     /// One component vector per multiband pixel.
     Components(Vec<Vec<u8>>),
 }
@@ -403,6 +407,11 @@ enum FromBytesMode {
     F,
     P,
     Mode1,
+}
+
+enum ScalarImageSamples {
+    Integer(Vec<i32>),
+    Float(Vec<f64>),
 }
 
 fn putdata_clip_u8(value: f64) -> u8 {
@@ -3328,12 +3337,22 @@ impl Image {
     /// bindings should only convert [`FormattedImageData`] into their native
     /// list/tuple representation.
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
+        let mode = self.mode()?;
+        if mode == "I" || mode == "F" {
+            if band.is_some() {
+                return Err(PilError::ValueError("image has wrong mode".into()));
+            }
+            return Ok(match self.scalar_samples(&mode)? {
+                ScalarImageSamples::Integer(values) => FormattedImageData::IntegerScalars(values),
+                ScalarImageSamples::Float(values) => FormattedImageData::FloatScalars(values),
+            });
+        }
         let raw = self.getdata(band)?;
         if band.is_some() {
             return Ok(FormattedImageData::Scalars(raw));
         }
 
-        let band_count = pillow_band_count(&self.mode()?);
+        let band_count = pillow_band_count(&mode);
         if band_count == 1 {
             return Ok(FormattedImageData::Scalars(raw));
         }
@@ -3881,6 +3900,57 @@ impl Image {
         maxcolors: u32,
         mode: &str,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
+        match self.scalar_samples(mode)? {
+            ScalarImageSamples::Integer(values) => {
+                let mut counts = std::collections::HashMap::<i32, u32>::new();
+                for value in values {
+                    *counts.entry(value).or_insert(0) += 1;
+                }
+                if counts.len() > maxcolors as usize {
+                    return Ok(None);
+                }
+                let mut result: Vec<_> = counts.into_iter().collect();
+                // Pillow's scalar ImagingCore colors are returned in descending
+                // sample order for the deterministic values used by this API.
+                result.sort_by(|a, b| b.0.cmp(&a.0));
+                Ok(Some(
+                    result
+                        .into_iter()
+                        .map(|(value, count)| (count, FormattedPixelValue::Integer(value)))
+                        .collect(),
+                ))
+            }
+            ScalarImageSamples::Float(values) => {
+                let mut counts = std::collections::HashMap::<u32, u32>::new();
+                for value in values {
+                    // C float equality treats positive and negative zero as equal.
+                    let key = if value == 0.0 {
+                        0
+                    } else {
+                        (value as f32).to_bits()
+                    };
+                    *counts.entry(key).or_insert(0) += 1;
+                }
+                if counts.len() > maxcolors as usize {
+                    return Ok(None);
+                }
+                let mut result: Vec<_> = counts
+                    .into_iter()
+                    .map(|(bits, count)| (f32::from_bits(bits) as f64, count))
+                    .collect();
+                result.sort_by(|a, b| b.0.total_cmp(&a.0));
+                Ok(Some(
+                    result
+                        .into_iter()
+                        .map(|(value, count)| (count, FormattedPixelValue::Float(value)))
+                        .collect(),
+                ))
+            }
+        }
+    }
+
+    /// Reads the retained four-byte scalar storage for `I` and `F` modes.
+    fn scalar_samples(&self, mode: &str) -> Result<ScalarImageSamples, PilError> {
         let img = self.materialized_shared()?;
         let expected = CheckedDims::new(img.width(), img.height(), 4)?.total_bytes();
         let raw = img.as_bytes();
@@ -3889,47 +3959,18 @@ impl Image {
                 "{mode} image has invalid scalar storage"
             )));
         }
-
         if mode == "I" {
-            let mut counts = std::collections::HashMap::<i32, u32>::new();
-            for sample in raw.chunks_exact(4) {
-                let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-                *counts.entry(value).or_insert(0) += 1;
-            }
-            if counts.len() > maxcolors as usize {
-                return Ok(None);
-            }
-            let mut result: Vec<_> = counts.into_iter().collect();
-            // Pillow's scalar ImagingCore colors are returned in descending
-            // sample order for the deterministic values used by this API.
-            result.sort_by(|a, b| b.0.cmp(&a.0));
-            return Ok(Some(
-                result
-                    .into_iter()
-                    .map(|(value, count)| (count, FormattedPixelValue::Integer(value)))
+            return Ok(ScalarImageSamples::Integer(
+                raw.chunks_exact(4)
+                    .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
                     .collect(),
             ));
         }
-
-        let mut counts = std::collections::HashMap::<u32, u32>::new();
-        for sample in raw.chunks_exact(4) {
-            let value = f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
-            // C float equality treats positive and negative zero as equal.
-            let key = if value == 0.0 { 0 } else { value.to_bits() };
-            *counts.entry(key).or_insert(0) += 1;
-        }
-        if counts.len() > maxcolors as usize {
-            return Ok(None);
-        }
-        let mut result: Vec<_> = counts
-            .into_iter()
-            .map(|(bits, count)| (f32::from_bits(bits) as f64, count))
-            .collect();
-        result.sort_by(|a, b| b.0.total_cmp(&a.0));
-        Ok(Some(
-            result
-                .into_iter()
-                .map(|(value, count)| (count, FormattedPixelValue::Float(value)))
+        Ok(ScalarImageSamples::Float(
+            raw.chunks_exact(4)
+                .map(|sample| {
+                    f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64
+                })
                 .collect(),
         ))
     }
