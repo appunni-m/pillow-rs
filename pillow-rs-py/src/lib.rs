@@ -2249,6 +2249,22 @@ fn imagefont_text_input_from_python(
     ))
 }
 
+fn imagefont_variation_name_input_from_python(
+    value: &Bound<'_, PyAny>,
+) -> PyResult<pillow_rs::ImageFontVariationNameInput> {
+    if let Ok(bytes) = value.downcast::<PyBytes>() {
+        return Ok(pillow_rs::ImageFontVariationNameInput::Bytes(
+            bytes.as_bytes().to_vec(),
+        ));
+    }
+    if let Ok(name) = value.extract::<String>() {
+        return Ok(pillow_rs::ImageFontVariationNameInput::Text(name));
+    }
+    Ok(pillow_rs::ImageFontVariationNameInput::InvalidType(
+        value.get_type().name()?.to_string(),
+    ))
+}
+
 fn imagefont_start_from_python(value: Option<&Bound<'_, PyAny>>) -> (Option<(f64, f64)>, bool) {
     let Some(value) = value else {
         return (None, false);
@@ -2705,8 +2721,12 @@ impl PyFont {
         })
     }
 
-    fn set_variation_by_name(&mut self, name: Vec<u8>) -> PyResult<()> {
-        pillow_rs::imagefont_set_variation_by_name(&mut self.inner, &name).map_err(map_error)
+    fn set_variation_by_name(&mut self, name: &Bound<'_, PyAny>) -> PyResult<()> {
+        pillow_rs::imagefont_set_variation_by_name_input(
+            &mut self.inner,
+            imagefont_variation_name_input_from_python(name)?,
+        )
+        .map_err(map_error)
     }
 
     fn setvarname(&mut self, instance_index: i64) -> PyResult<()> {

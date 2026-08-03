@@ -59,6 +59,21 @@ pub enum ImageFontTextInput {
     Bytes(Vec<u8>),
 }
 
+/// Host-neutral input for Pillow's named-variation setter.
+///
+/// The binding only classifies the host object. Conversion to the byte name
+/// and the invalid-type error remain in the core with the rest of the
+/// variation behavior.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ImageFontVariationNameInput {
+    /// A Unicode style name supplied by the host.
+    Text(String),
+    /// A byte-preserving style name supplied by the host.
+    Bytes(Vec<u8>),
+    /// A value without Pillow's string/bytes name contract.
+    InvalidType(String),
+}
+
 /// Native face attributes shared by Pillow's font facade and fontdone.
 ///
 /// The loader uses fontdone's generic memory-face entry point, so a
@@ -95,6 +110,18 @@ impl ImageFontTextInput {
         match self {
             Self::Text(text) => text,
             Self::Bytes(bytes) => pillow_bytes_to_text(&bytes),
+        }
+    }
+}
+
+impl ImageFontVariationNameInput {
+    fn into_bytes(self) -> Result<Vec<u8>, PilError> {
+        match self {
+            Self::Text(name) => Ok(name.into_bytes()),
+            Self::Bytes(name) => Ok(name),
+            Self::InvalidType(type_name) => Err(PilError::AttributeError(format!(
+                "'{type_name}' object has no attribute 'encode'"
+            ))),
         }
     }
 }
@@ -620,6 +647,15 @@ impl FreeTypeFont {
     /// Set a named variation instance by Pillow-style name bytes.
     pub fn set_variation_by_name(&mut self, name: &[u8]) -> Result<(), PilError> {
         imagingft::set_variation_by_name(self, name)
+    }
+
+    /// Set a named variation instance after applying Pillow's host input rules.
+    pub fn set_variation_by_name_input(
+        &mut self,
+        name: ImageFontVariationNameInput,
+    ) -> Result<(), PilError> {
+        let name = name.into_bytes()?;
+        self.set_variation_by_name(&name)
     }
 
     /// Set variation design coordinates from Pillow-style user coordinates.
