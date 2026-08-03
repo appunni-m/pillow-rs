@@ -6625,6 +6625,64 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.non-variable-font",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "set_variation_by_axes",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/DejaVuSans.ttf",
+          "sha256": "4c44206cbb0238b4a07bac4c557a9254a2dc87941f6ebebfa1147c32dd73b29a",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "set_variation_by_axes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "axes": {
+              "kind": "literal",
+              "value": [
+                100.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font-positive-axis-overflow",
       "surface": "PIL.ImageFont.FreeTypeFont",
       "operation": "set_variation_by_axes",
@@ -6829,6 +6887,62 @@
       "observations": [
         "call",
         "observe-receiver"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font-unknown-instance",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "set_variation_by_name",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.set_variation_by_name.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/variable-name-platform1-fallback.ttf",
+          "sha256": "14c5a41426a033b110d5bd84b2d95972d45980a9010b81536c9952cd9f896b43",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "set_variation_by_name",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "name": {
+              "kind": "literal",
+              "value": "DefinitelyMissing"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
       ]
     },
     {

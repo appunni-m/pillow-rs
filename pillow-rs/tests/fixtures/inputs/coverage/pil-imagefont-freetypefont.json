@@ -169,9 +169,11 @@
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.negative-start-stroked-height-collapse",
           "PIL.ImageFont.FreeTypeFont.getmask2.nuanced.mode-one",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font",
+          "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.non-variable-font",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font-positive-axis-overflow",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font-extra-axis",
           "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font",
+          "PIL.ImageFont.FreeTypeFont.set_variation_by_name.nuanced.variable-font-unknown-instance",
           "PIL.ImageFont.FreeTypeFont.font_variant.nuanced.variable-font-size",
           "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.invalid-anchor"
         ],
