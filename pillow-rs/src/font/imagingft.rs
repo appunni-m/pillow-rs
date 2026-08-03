@@ -886,12 +886,7 @@ pub(crate) fn getmask2_with_options(
 }
 
 fn options_are_default_mask_options(options: &ImageFontTextOptions) -> bool {
-    matches!(options.mode.as_deref(), None | Some(""))
-        && !options.embedded_color
-        && options.stroke_width == 0.0
-        && options.anchor.is_none()
-        && options.start.is_none()
-        && options.ink.map_or(true, |ink| ink == 0)
+    options.uses_default_mask()
 }
 
 fn text_load_flags(options: &ImageFontTextOptions) -> i32 {
