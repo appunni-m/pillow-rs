@@ -469,7 +469,14 @@ def _call_arguments(
         ):
             positional.append(value)
         elif style == "variadic_positional":
-            positional.extend(value)
+            # ``Image.eval`` declares ``args`` as variadic for inventory
+            # compatibility, but its callable form receives one function,
+            # not an iterable of arguments. Preserve that public callable
+            # input while still expanding the tuple/list LUT representation.
+            if force_eval_positional and callable(value):
+                positional.append(value)
+            else:
+                positional.extend(value)
         elif style == "variadic_keyword":
             if not isinstance(value, dict):
                 raise TypeError(f"variadic keyword argument {name} must be a mapping")
