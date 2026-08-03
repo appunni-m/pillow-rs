@@ -2666,18 +2666,35 @@ class WorkflowBuilder:
             )
 
         if self.scenario_observe_receiver:
-            # Mutating Image.Image methods return None.  Observe the original
-            # receiver through a public image endpoint so their deferred
-            # writes are exercised by behavioral parity cases.
-            observations.append(
-                self.add_step(
-                    "PIL.Image.Image",
-                    "tobytes",
-                    receiver=binding(self.ensure_image()),
-                    arguments={},
-                    step_id="observe-receiver",
+            if (
+                self.primary_surface == "PIL.ImageFont.FreeTypeFont"
+                and self.primary_operation == "set_variation_by_axes"
+            ):
+                # Variation setters return None. Observe the same public font
+                # through getlength so the case verifies the applied
+                # coordinates rather than only the setter's signature.
+                observations.append(
+                    self.add_step(
+                        "PIL.ImageFont.FreeTypeFont",
+                        "getlength",
+                        receiver=receiver,
+                        arguments={"text": literal("AV")},
+                        step_id="observe-receiver",
+                    )
                 )
-            )
+            else:
+                # Mutating Image.Image methods return None. Observe the
+                # original receiver through a public image endpoint so their
+                # deferred writes are exercised by behavioral parity cases.
+                observations.append(
+                    self.add_step(
+                        "PIL.Image.Image",
+                        "tobytes",
+                        receiver=binding(self.ensure_image()),
+                        arguments={},
+                        step_id="observe-receiver",
+                    )
+                )
 
         if self.scenario_observe_stat_properties:
             # A list passed to ImageStat.Stat is a public precomputed
@@ -3606,6 +3623,15 @@ def build_nuanced_cases(
             "name": "variable-font",
             "font": "font/fonts/variable-name-platform1-fallback.ttf",
             "values": {"axes": literal([100.0, 600.0])},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "set_variation_by_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "variable-font-positive-axis-overflow",
+            "font": "font/fonts/variable-name-platform1-fallback.ttf",
+            "values": {"axes": literal([3.4028235e38, 3.4028235e38])},
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
