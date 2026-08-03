@@ -14,6 +14,9 @@ pub enum TransformData {
     Mesh(Vec<(Vec<f64>, Vec<f64>)>),
     /// Nested mesh records whose item arity still belongs to core validation.
     RawMesh(Vec<Vec<Vec<f64>>>),
+    /// A mapping supplied where Pillow expects mesh data. Pillow iterates the
+    /// mapping's keys and reports the resulting unpacking error from core.
+    Mapping,
     /// A value that could not be interpreted as affine or mesh data.
     Invalid,
 }
@@ -27,6 +30,8 @@ pub enum TransformFill {
     Components(Vec<i64>),
     /// A named/hex color that must be parsed by core.
     Name(String),
+    /// A sequence whose components are not integers.
+    FloatingComponents(Vec<f64>),
     /// An object that is not a supported fill representation.
     Invalid,
 }
@@ -365,6 +370,9 @@ impl Image {
                 let color = crate::color::getcolor(r, g, b, a, &mode)?;
                 Ok((transform_color_value_fill(&mode, color)?, None))
             }
+            Some(TransformFill::FloatingComponents(_)) => Err(PilError::TypeError(
+                "'float' object cannot be interpreted as an integer".into(),
+            )),
             Some(TransformFill::Invalid) => {
                 Err(PilError::TypeError("color must be int or tuple".into()))
             }
@@ -395,6 +403,29 @@ impl Image {
                 };
                 self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill)
             }
+            1 => {
+                let Some(TransformData::Affine(extent)) = data else {
+                    return Err(PilError::ValueError("missing method data".into()));
+                };
+                let [x0, y0, x1, y1] = extent.as_slice() else {
+                    return Err(PilError::ValueError(
+                        "extent transform needs 4 coordinates".into(),
+                    ));
+                };
+                // Pillow's EXTENT method maps each destination pixel back
+                // into the requested source rectangle. Express that mapping
+                // through the same affine pipeline used by method 0 so mode,
+                // fill, and lazy execution remain shared.
+                let matrix = vec![
+                    (x1 - x0) / f64::from(size.0),
+                    0.0,
+                    *x0,
+                    0.0,
+                    (y1 - y0) / f64::from(size.1),
+                    *y0,
+                ];
+                self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill)
+            }
             4 => {
                 let data = match data {
                     Some(TransformData::Mesh(items)) => flatten_mesh_data(&items)?,
@@ -409,6 +440,11 @@ impl Image {
                     Some(TransformData::Affine(_)) => {
                         return Err(PilError::TypeError(
                             "cannot unpack non-iterable int object".into(),
+                        ));
+                    }
+                    Some(TransformData::Mapping) => {
+                        return Err(PilError::ValueError(
+                            "too many values to unpack (expected 2)".into(),
                         ));
                     }
                     Some(TransformData::Invalid) => {
