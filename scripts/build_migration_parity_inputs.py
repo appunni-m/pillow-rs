@@ -13146,6 +13146,13 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-png-without-idat",
+            "scenario_inline_image": "png-no-idat",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getbbox",
             "requirement_suffix": "behavior.default",
             "name": "png-p-transparency",
