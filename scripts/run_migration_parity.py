@@ -145,6 +145,16 @@ class ArrayInterfaceValue:
         return self._data
 
 
+def decode_numpy_array(value: dict[str, Any]) -> Any:
+    """Build a real buffer-backed array for valid ``fromarray`` parity."""
+
+    import numpy as np
+
+    data = base64.b64decode(value["data_base64"])
+    array = np.frombuffer(data, dtype=np.dtype(value["typestr"]))
+    return array.reshape(tuple(value["shape"]))
+
+
 class DeformerValue:
     """Fixed object implementing Pillow's public getmesh protocol."""
 
@@ -188,6 +198,8 @@ def decode_literal(
         protocol = value.get("protocol")
         if protocol == "outline":
             return decode_outline(value, side=side)
+        if protocol == "numpy-array":
+            return decode_numpy_array(value)
         if protocol == "array-interface":
             return ArrayInterfaceValue(value)
         if protocol == "getmesh":
