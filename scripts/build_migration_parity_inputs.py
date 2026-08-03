@@ -3088,6 +3088,16 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask",
+            "requirement_suffix": "parameter.start",
+            "name": "fractional-start",
+            "values": {
+                "text": literal("AV"),
+                "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask",
             "requirement_suffix": "parameter.text",
             "name": "bytes-latin1",
             "values": {"text": bytes_literal([65, 233])},
