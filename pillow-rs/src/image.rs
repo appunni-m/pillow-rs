@@ -1823,7 +1823,11 @@ impl Image {
             PutPixelValue::Invalid => Err(if mode.len() == 1 {
                 PilError::TypeError("color must be int or single-element tuple".into())
             } else {
-                PilError::TypeError("color must be int or tuple".into())
+                // Pillow routes non-integral component sequences through its
+                // tuple-arity validator, rather than the scalar tuple error.
+                PilError::TypeError(
+                    "color must be int, or tuple of one, three or four elements".into(),
+                )
             }),
             PutPixelValue::Components(values) => match values.as_slice() {
                 [value] => self.putpixel_mode(x, y, *value, &mode),
