@@ -318,6 +318,21 @@ impl Draw {
         }
     }
 
+    /// Validate Pillow's optional draw-mode override against the destination.
+    ///
+    /// RGB images may be drawn through an RGBA context for alpha blending. All
+    /// other explicit modes must match the destination image mode exactly.
+    pub fn validate_mode(&self) -> Result<(), PilError> {
+        let Some(requested) = self.orig_mode.as_deref() else {
+            return Ok(());
+        };
+        let actual = self.image.mode()?;
+        if requested != actual && !(requested == "RGBA" && actual == "RGB") {
+            return Err(PilError::ValueError("mode mismatch".to_owned()));
+        }
+        Ok(())
+    }
+
     /// Return the effective PIL mode for drawing operations.
     /// Uses the explicit mode if set, otherwise falls back to the image's mode.
     fn effective_mode(&self) -> String {
