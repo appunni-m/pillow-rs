@@ -4442,6 +4442,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "malformed-nested-box-error",
+            "values": {
+                "xy": literal([[0], [8, 8]]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "line",
             "requirement_suffix": "behavior.default",
             "name": "flat-points",
@@ -8140,6 +8150,18 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([1, 1]),
                 "value": literal([5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "la-two-tuple",
+            "observe_receiver": True,
+            "mode": "LA",
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([200, 128]),
             },
         },
         {
