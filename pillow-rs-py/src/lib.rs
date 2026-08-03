@@ -1266,23 +1266,17 @@ impl PyImage {
         self.inner.tell()
     }
 
-    /// Pre-built LUT: must have exactly 256 * n_bands entries (PIL requirement).
-    fn point(&self, lut: Vec<u8>) -> PyResult<PyImage> {
-        pillow_rs::image_eval(&self.inner, &lut)
-            .map(|i| PyImage { inner: i })
-            .map_err(map_error)
-    }
+    /// Applies a sequence or callable LUT through the Rust-owned public path.
+    fn point(&self, input: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+        if input.is_callable() {
+            let n_bands = self.inner.getbands().map_err(map_error)?.len() as u32;
+            let lut = make_lut(input, n_bands)?;
+            return pillow_rs::image_eval(&self.inner, &lut)
+                .map(|i| PyImage { inner: i })
+                .map_err(map_error);
+        }
 
-    /// point() with band replication derived from the Rust image mode.
-    fn point_replicated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
-        pillow_rs::image_eval_replicated_for_image(&self.inner, &lut)
-            .map(|i| PyImage { inner: i })
-            .map_err(map_error)
-    }
-
-    /// Validate pre-built LUT length before calling point.
-    /// PIL: LUT must have exactly 256 * n_bands entries.
-    fn point_validated(&self, lut: Vec<u8>) -> PyResult<PyImage> {
+        let lut = input.extract::<Vec<u8>>()?;
         pillow_rs::image_eval_validated(&self.inner, &lut)
             .map(|i| PyImage { inner: i })
             .map_err(map_error)

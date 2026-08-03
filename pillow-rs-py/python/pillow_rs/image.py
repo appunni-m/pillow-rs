@@ -363,11 +363,7 @@ class Image:
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
-        if callable(lut):
-            lut = _core.make_lut(lut, 1)
-            return Image(self._rust_image.point_replicated(lut))
-        # LUT validation (PIL requires 256 * n_bands entries) handled in Rust
-        return Image(self._rust_image.point_validated(list(lut)))
+        return Image(self._rust_image.point(lut))
 
     def effect_spread(self, distance):
         """Simple spread/blur effect."""
