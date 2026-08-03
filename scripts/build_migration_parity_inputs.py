@@ -2151,6 +2151,21 @@ class WorkflowBuilder:
                     step_id="setup-putalpha",
                 )
                 receiver_step = resized_step
+            elif chain == "quantize-palette":
+                image_step = self.ensure_image(mode="RGB")
+                palette_step = self.ensure_image(mode="P", label="palette")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(palette_step),
+                    arguments={
+                        "data": literal([0, 0, 0, 255, 0, 0]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-quantize-palette",
+                )
+                self.scenario_values["palette"] = binding(palette_step)
+                receiver_step = image_step
             elif chain in {
                 "quantize-load",
                 "quantize-save",
@@ -13365,6 +13380,51 @@ def build_nuanced_cases(
             "mode": "RGB",
             "edge": "noise-fill",
             "seed": 12,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.colors",
+            "name": "invalid-color-count",
+            "mode": "RGB",
+            "values": {"colors": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.palette",
+            "name": "palette-image",
+            "mode": "RGB",
+            "chain": "quantize-palette",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.palette",
+            "name": "palette-image-red",
+            "mode": "RGB",
+            "edge": "uniform-fill",
+            "pixel": [255, 0, 0],
+            "chain": "quantize-palette",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.dither",
+            "name": "palette-image-red-no-dither",
+            "mode": "RGB",
+            "edge": "uniform-fill",
+            "pixel": [255, 0, 0],
+            "chain": "quantize-palette",
+            "values": {"dither": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.kmeans",
+            "name": "negative-kmeans",
+            "mode": "RGB",
+            "values": {"kmeans": literal(-1)},
         },
         {
             "surface": "PIL.Image.Image",
