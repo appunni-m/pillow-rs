@@ -962,6 +962,39 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "quantize-hash-rebuild":
+            # Use one distinct RGB triplet per pixel so the public quantizer
+            # crosses QuantHash's 65,536-entry rebuild threshold without
+            # relying on probabilistic random input.
+            size = self.scenario_size or [257, 257]
+            n_pixels = size[0] * size[1]
+            data = bytes(
+                channel
+                for pixel in range(n_pixels)
+                for channel in (
+                    pixel & 0xFF,
+                    (pixel >> 8) & 0xFF,
+                    (pixel >> 16) & 0xFF,
+                )
+            )
+            data_desc = self.inline_bytes(
+                f"{label}-quantize-hash-rebuild",
+                data,
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge == "noise-fill":
             # Deterministic diverse images (used by quantize MAXCOVERAGE and
             # median-cut cases) are built through the public frombytes
@@ -11751,6 +11784,19 @@ def build_nuanced_cases(
             "values": {
                 "colors": literal(16),
                 "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "median-cut-adaptive-hash-rebuild",
+            "mode": "RGB",
+            "edge": "quantize-hash-rebuild",
+            "values": {
+                "colors": literal(4),
+                "method": literal(0),
                 "kmeans": literal(0),
             },
         },

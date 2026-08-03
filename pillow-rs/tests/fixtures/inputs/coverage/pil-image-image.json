@@ -1278,6 +1278,7 @@
           "PIL.Image.Image.getbbox.nuanced.rgba-blue-only-zero-alpha",
           "PIL.Image.Image.getbbox.nuanced.alpha-only-false-rgb",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-16",
+          "PIL.Image.Image.quantize.nuanced.median-cut-adaptive-hash-rebuild",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-4",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-32-colors",
           "PIL.Image.Image.quantize.nuanced.maxcoverage-kmeans-1",
