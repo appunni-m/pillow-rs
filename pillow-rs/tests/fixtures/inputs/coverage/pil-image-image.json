@@ -1341,6 +1341,7 @@
           "PIL.Image.Image.putalpha.nuanced.one-mask",
           "PIL.Image.Image.putalpha.nuanced.invalid-mask-mode",
           "PIL.Image.Image.putalpha.nuanced.mask-size-mismatch",
+          "PIL.Image.Image.putalpha.nuanced.invalid-alpha-type",
           "PIL.Image.Image.putdata.nuanced.rgb-tuples-scale-offset",
           "PIL.Image.Image.putdata.nuanced.rgba-clipped-tuples",
           "PIL.Image.Image.save.nuanced.rgb-nonzero",

@@ -58617,6 +58617,61 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.putalpha.nuanced.invalid-alpha-type",
+      "surface": "PIL.Image.Image",
+      "operation": "putalpha",
+      "covers": [
+        "PIL.Image.Image.putalpha.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "putalpha",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "alpha": {
+              "kind": "literal",
+              "value": "not-an-alpha"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.putdata.nuanced.rgb-tuples-scale-offset",
       "surface": "PIL.Image.Image",
       "operation": "putdata",

@@ -906,6 +906,15 @@ def operation_contract(
         for parameter in parameters:
             if parameter["id"] == "channel":
                 add_unique(parameter["value_types"], "any_json")
+    if endpoint.source_path == "PIL.Image.Image.putalpha":
+        # The documented alpha value is Image | int, but the public binding
+        # still receives arbitrary Python objects and reports a stable
+        # TypeError for invalid host values. Keep a scalar string available
+        # only for this negative parity lane so Rust owns that diagnostic
+        # without broadening unrelated alpha parameters.
+        for parameter in parameters:
+            if parameter["id"] == "alpha":
+                add_unique(parameter["value_types"], "string")
     if endpoint.source_path == "PIL.Image.Image.transform":
         # The transform implementation accepts a broad runtime sequence and
         # reports invalid host values from its native conversion path. Keep

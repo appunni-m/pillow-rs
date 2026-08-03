@@ -7873,6 +7873,7 @@ surfaces:
         value_types:
         - integer
         - image
+        - string
         omission:
           kind: required
       result:
