@@ -247,12 +247,18 @@ pub enum FormattedImageData {
 
 /// Pillow's public extrema shape: a single-band image returns one pair, while
 /// multiband images return one pair per band.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum FormattedExtrema {
+    /// An image with a zero width or height has no extrema.
+    Empty,
     /// One `(minimum, maximum)` pair.
     Single((u8, u8)),
     /// One `(minimum, maximum)` pair per band.
     Multiple(Vec<(u8, u8)>),
+    /// A signed 32-bit scalar image's `(minimum, maximum)` pair.
+    Integer((i32, i32)),
+    /// A 32-bit floating-point scalar image's `(minimum, maximum)` pair.
+    Float((f64, f64)),
 }
 
 fn pillow_band_count(mode: &str) -> usize {
@@ -3856,6 +3862,47 @@ impl Image {
 
     /// Returns extrema using Pillow's one-pair versus per-band result shape.
     pub fn getextrema_formatted(&self) -> Result<FormattedExtrema, PilError> {
+        let (width, height) = self.size()?;
+        if width == 0 || height == 0 {
+            return Ok(FormattedExtrema::Empty);
+        }
+
+        let mode = self.mode()?;
+        if mode == "I" {
+            let ScalarImageSamples::Integer(values) = self.scalar_samples(&mode)? else {
+                return Err(PilError::InternalError(
+                    "I image produced non-integer scalar samples".into(),
+                ));
+            };
+            let (minimum, maximum) = values
+                .into_iter()
+                .fold(None, |extrema: Option<(i32, i32)>, value| {
+                    Some(match extrema {
+                        Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
+                        None => (value, value),
+                    })
+                })
+                .ok_or_else(|| PilError::InternalError("I image has no scalar samples".into()))?;
+            return Ok(FormattedExtrema::Integer((minimum, maximum)));
+        }
+        if mode == "F" {
+            let ScalarImageSamples::Float(values) = self.scalar_samples(&mode)? else {
+                return Err(PilError::InternalError(
+                    "F image produced non-floating scalar samples".into(),
+                ));
+            };
+            let (minimum, maximum) = values
+                .into_iter()
+                .fold(None, |extrema: Option<(f64, f64)>, value| {
+                    Some(match extrema {
+                        Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
+                        None => (value, value),
+                    })
+                })
+                .ok_or_else(|| PilError::InternalError("F image has no scalar samples".into()))?;
+            return Ok(FormattedExtrema::Float((minimum, maximum)));
+        }
+
         let extrema = self.getextrema()?;
         if extrema.len() == 1 {
             Ok(FormattedExtrema::Single(extrema[0]))
