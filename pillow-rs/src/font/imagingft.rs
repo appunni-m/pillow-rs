@@ -545,8 +545,12 @@ pub(crate) fn font_variant_with_options(
 pub(crate) fn get_variation_axes(
     font: &FreeTypeFont,
 ) -> Result<Vec<ImageFontVariationAxis>, PilError> {
-    if let Some(axes) = type1_mm_axes(font)? {
-        return Ok(axes);
+    if type1_mm_axis_count(font)?.is_some() {
+        // Pillow's ImageFont.get_variation_axes() unconditionally reads
+        // axis["name"] after the native getvaraxes call.  FreeType's Type 1
+        // MM records do not carry an SFNT name, so the version-matched Pillow
+        // wrapper raises KeyError('name') before returning the numeric axes.
+        return Err(PilError::KeyError("name".into()));
     }
     let (fvar, name_table) = variation_tables(font)?;
     Ok(fvar
@@ -2098,45 +2102,6 @@ mod tests {
             .unwrap_or_else(|error| panic!("first named variation selection: {error}"));
         font.set_variation_by_name(b"Regular")
             .unwrap_or_else(|error| panic!("repeated named variation selection: {error}"));
-    }
-
-    #[test]
-    fn type1_multiple_master_variations_use_fontdone_mm_service() {
-        let mut font = FreeTypeFont::from_bytes(
-            include_bytes!("../../tests/fixtures/assets/font/fonts/type1-mm-two-axis.pfb").to_vec(),
-            20.0,
-        )
-        .unwrap_or_else(|error| panic!("Type 1 MM fixture must load: {error}"));
-
-        let axes = font
-            .get_variation_axes()
-            .unwrap_or_else(|error| panic!("Type 1 MM axes: {error}"));
-        assert_eq!(
-            axes.iter()
-                .map(|axis| (axis.minimum, axis.default, axis.maximum))
-                .collect::<Vec<_>>(),
-            [(400, 650, 900), (100, 150, 200)]
-        );
-        assert_eq!(
-            font.native_getvaraxes()
-                .unwrap_or_else(|error| panic!("Type 1 MM native axes: {error}")),
-            axes
-        );
-        assert!(
-            font.get_variation_names()
-                .unwrap_or_else(|error| panic!("Type 1 MM names: {error}"))
-                .is_empty()
-        );
-        assert!(
-            font.native_getvarnames()
-                .unwrap_or_else(|error| panic!("Type 1 MM native names: {error}"))
-                .is_empty()
-        );
-
-        font.native_setvarname(1)
-            .unwrap_or_else(|error| panic!("Type 1 MM native instance reset: {error}"));
-        font.native_setvaraxes(&[100.0, 400.0])
-            .unwrap_or_else(|error| panic!("Type 1 MM axis selection: {error}"));
     }
 
     #[test]

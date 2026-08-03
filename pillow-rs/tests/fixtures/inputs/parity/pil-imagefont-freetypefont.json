@@ -5457,6 +5457,167 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.nuanced.type1-mm",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "get_variation_axes",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.get_variation_axes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/type1-mm-two-axis.pfb",
+          "sha256": "e12821cbf92803ea3014e1233cdef763bf65cb50d48c5cabaac7096522691e93",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "get_variation_axes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.nuanced.type1-mm",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "get_variation_names",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.get_variation_names.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/type1-mm-two-axis.pfb",
+          "sha256": "e12821cbf92803ea3014e1233cdef763bf65cb50d48c5cabaac7096522691e93",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "get_variation_names",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.type1-mm",
+      "surface": "PIL.ImageFont.FreeTypeFont",
+      "operation": "set_variation_by_axes",
+      "covers": [
+        "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "font",
+          "kind": "ref",
+          "path": "font/fonts/type1-mm-two-axis.pfb",
+          "sha256": "e12821cbf92803ea3014e1233cdef763bf65cb50d48c5cabaac7096522691e93",
+          "media_type": "font/ttf"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-font-1",
+          "surface": "PIL.ImageFont",
+          "operation": "truetype",
+          "receiver": null,
+          "arguments": {
+            "font": {
+              "kind": "asset",
+              "asset_id": "font"
+            },
+            "size": {
+              "kind": "literal",
+              "value": 20
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFont.FreeTypeFont",
+          "operation": "set_variation_by_axes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-font-1"
+          },
+          "arguments": {
+            "axes": {
+              "kind": "literal",
+              "value": [
+                100.0,
+                400.0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.nuanced.unsupported-direction",
       "surface": "PIL.ImageFont.FreeTypeFont",
       "operation": "getbbox",

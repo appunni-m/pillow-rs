@@ -3433,6 +3433,28 @@ def build_nuanced_cases(
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "get_variation_axes",
             "requirement_suffix": "behavior.default",
+            "name": "type1-mm",
+            "font": "font/fonts/type1-mm-two-axis.pfb",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_names",
+            "requirement_suffix": "behavior.default",
+            "name": "type1-mm",
+            "font": "font/fonts/type1-mm-two-axis.pfb",
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "set_variation_by_axes",
+            "requirement_suffix": "behavior.default",
+            "name": "type1-mm",
+            "font": "font/fonts/type1-mm-two-axis.pfb",
+            "values": {"axes": literal([100.0, 400.0])},
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "get_variation_axes",
+            "requirement_suffix": "behavior.default",
             "name": "non-variable-error",
         },
         {
