@@ -12746,6 +12746,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-alpha-type",
+            "mode": "RGBA",
+            "values": {"alpha": literal("not-an-alpha")},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "parameter.scale",
             "name": "rgb-tuples-scale-offset",
