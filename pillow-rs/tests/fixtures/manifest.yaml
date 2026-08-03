@@ -5569,6 +5569,7 @@ surfaces:
         value_types:
         - integer
         - string
+        - any_json
         omission:
           kind: required
       result:

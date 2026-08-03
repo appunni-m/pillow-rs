@@ -1145,7 +1145,7 @@ impl PyImage {
         } else if let Ok(channel) = channel.extract::<String>() {
             pillow_rs::ChannelSelector::Name(channel)
         } else {
-            pillow_rs::ChannelSelector::Invalid
+            pillow_rs::ChannelSelector::Invalid(channel.get_type().name()?.to_string())
         };
         let rs = self
             .inner
