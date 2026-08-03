@@ -594,36 +594,6 @@ pub enum Image {
     },
 }
 
-/// Rust-owned state for Pillow's public multi-frame image iterator.
-///
-/// The host binding supplies the image object's `seek` protocol and keeps the
-/// original host handle for the return value. Core owns the frame position and
-/// advances it only after a seek succeeds, matching Pillow's iterator
-/// behavior when the end-of-sequence error is raised.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ImageSequenceIterator {
-    position: u32,
-}
-
-impl ImageSequenceIterator {
-    /// Creates an iterator starting at the image's minimum frame.
-    pub fn new(min_frame: u32) -> Self {
-        Self {
-            position: min_frame,
-        }
-    }
-
-    /// Returns the frame that the binding should seek next.
-    pub fn position(&self) -> u32 {
-        self.position
-    }
-
-    /// Advances after the selected frame was successfully sought.
-    pub fn advance(&mut self) {
-        self.position = self.position.saturating_add(1);
-    }
-}
-
 /// Shared once-initialized operation-ready pixel result for lazy image nodes.
 pub type MaterializationCache = Arc<OnceLock<Result<Arc<DynamicImage>, PilError>>>;
 

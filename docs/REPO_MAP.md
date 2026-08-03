@@ -289,6 +289,7 @@ generated reports, build outputs, and package installs.
 |   |   |   `-- pilfont.rs
 |   |   |-- format.rs
 |   |   |-- image.rs
+|   |   |-- image_sequence.rs
 |   |   |-- image_utils.rs
 |   |   |-- lib.rs
 |   |   |-- ops/

@@ -116,6 +116,8 @@ mod font;
 mod format;
 /// High-level image object and Pillow-style image methods.
 mod image;
+/// Rust-owned state for Pillow's host-neutral image-sequence iterator.
+mod image_sequence;
 /// Shared helpers for converting between image buffers and modes.
 mod image_utils;
 /// Reusable image operation implementations.
@@ -190,7 +192,6 @@ pub use crate::image::FormattedImageData;
 pub use crate::image::FormattedPixelValue;
 pub use crate::image::Image;
 pub use crate::image::ImageInfoValue;
-pub use crate::image::ImageSequenceIterator;
 pub use crate::image::ImagingCoreBytesInput;
 pub use crate::image::PaletteTransparency;
 pub use crate::image::PutAlphaInput;
@@ -207,6 +208,7 @@ pub use crate::image::stat_from_histogram;
 pub use crate::image::stat_from_list;
 pub use crate::image::validate_python_open_inputs;
 pub use crate::image::validate_python_open_source_bytes;
+pub use crate::image_sequence::ImageSequenceIterator;
 pub use crate::ops::analysis::ImageAnalysisMask;
 pub use crate::ops::analysis::validate_transparency_mask;
 pub use crate::ops::array::ArrayLayout;

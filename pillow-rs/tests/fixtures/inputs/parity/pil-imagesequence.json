@@ -187,6 +187,97 @@
       ]
     },
     {
+      "case_id": "PIL.ImageSequence.Iterator.nuanced.mode1-frame-zero",
+      "surface": "PIL.ImageSequence",
+      "operation": "Iterator",
+      "covers": [
+        "PIL.ImageSequence.Iterator.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-im-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageSequence",
+          "operation": "Iterator",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-im-1"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-frame-zero",
+          "surface": "PIL.Image.Image",
+          "operation": "seek",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-2"
+          },
+          "arguments": {
+            "frame": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-frame-zero"
+      ]
+    },
+    {
       "case_id": "PIL.ImageSequence.Iterator.nuanced.invalid-im-no-seek",
       "surface": "PIL.ImageSequence",
       "operation": "Iterator",
