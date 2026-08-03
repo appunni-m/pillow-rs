@@ -263,8 +263,9 @@ pub enum ChannelSelector {
     Index(i32),
     /// Pillow band name such as `"R"` or `"A"`.
     Name(String),
-    /// A host value that is neither an integer nor a string.
-    Invalid,
+    /// A host value that is neither an integer nor a string, retaining its
+    /// type name for Pillow's public conversion error.
+    Invalid(String),
 }
 
 /// Host-neutral value extracted for a public `Image.putpixel` call.
@@ -3598,8 +3599,10 @@ impl Image {
         // Pillow treats a single-band P image's only band as the palette-index
         // image itself, preserving its mode and retained palette. Extracting
         // it through the generic raster path would expand the indices to L and
-        // silently lose that observable palette contract.
-        if self.has_palette_mode() && self.explicit_mode() != Some("PA") && ch == 0 {
+        // silently lose that observable palette contract. `has_palette_mode`
+        // intentionally excludes PA, and a P image exposes exactly one
+        // channel, so a valid selector is always 0.
+        if self.has_palette_mode() {
             return Ok(self.copy());
         }
         // Defer extraction via pipeline
@@ -3624,8 +3627,10 @@ impl Image {
                     |index| Ok(index as i32),
                 )?
             }
-            ChannelSelector::Invalid => {
-                return Err(PilError::ValueError("band index out of range".into()));
+            ChannelSelector::Invalid(type_name) => {
+                return Err(PilError::TypeError(format!(
+                    "'{type_name}' object cannot be interpreted as an integer"
+                )));
             }
         };
         self.getchannel(channel)

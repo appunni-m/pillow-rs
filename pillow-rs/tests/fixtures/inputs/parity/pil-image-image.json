@@ -65058,6 +65058,63 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getchannel.nuanced.invalid-selector-type",
+      "surface": "PIL.Image.Image",
+      "operation": "getchannel",
+      "covers": [
+        "PIL.Image.Image.getchannel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getchannel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "channel": {
+              "kind": "literal",
+              "value": [
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getchannel.nuanced.pa-direct-index-channel",
       "surface": "PIL.Image.Image",
       "operation": "getchannel",

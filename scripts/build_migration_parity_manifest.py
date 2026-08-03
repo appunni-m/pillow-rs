@@ -885,6 +885,14 @@ def operation_contract(
         for parameter in parameters:
             if parameter["id"] == "factor":
                 add_unique(parameter["value_types"], "string")
+    if endpoint.source_path == "PIL.Image.Image.getchannel":
+        # The documented selector is int | str, but Pillow also exposes a
+        # stable TypeError for other host values. Keep JSON values available
+        # only for this negative parity lane so the Rust core owns that
+        # conversion diagnostic without changing the public signature.
+        for parameter in parameters:
+            if parameter["id"] == "channel":
+                add_unique(parameter["value_types"], "any_json")
     if endpoint.source_path == "PIL.Image.Image.transform":
         # The transform implementation accepts a broad runtime sequence and
         # reports invalid host values from its native conversion path. Keep
