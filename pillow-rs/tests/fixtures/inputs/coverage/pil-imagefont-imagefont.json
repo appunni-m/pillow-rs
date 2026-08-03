@@ -34,7 +34,8 @@
           "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-mode1-mask",
           "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-luma-mask",
           "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-luma-empty-mask",
-          "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-nonlatin-error"
+          "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-nonlatin-error",
+          "PIL.ImageFont.ImageFont.getmask.nuanced.loaded-pilfont-bmp-nonlatin-error"
         ],
         "command_ids": []
       },
