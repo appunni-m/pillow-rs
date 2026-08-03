@@ -786,7 +786,7 @@ fn type1_fixed_16_16_to_pillow_int(value: ffi::FT_Fixed) -> Result<i32, PilError
 fn pillow_axis_to_fixed(axis: f32) -> ffi::FT_Fixed {
     let scaled = f64::from(axis) * 65536.0;
     let fixed = if scaled > ffi::FT_Long::MAX as f64 {
-        i32::MIN
+        i32::MAX
     } else if scaled < ffi::FT_Long::MIN as f64 {
         i32::MIN
     } else if scaled > f64::from(i32::MAX) {
@@ -2014,7 +2014,10 @@ fn decode_utf16be_to_utf8(bytes: &[u8]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{bitmap_coverage, ffi, freetype_encoding, rgba_for_premultiplied_srgb_bgra};
+    use super::{
+        bitmap_coverage, ffi, freetype_encoding, pillow_axis_to_fixed,
+        rgba_for_premultiplied_srgb_bgra,
+    };
     use crate::{FreeTypeFont, ImageFontLoadOptions, ImageFontTextOptions};
 
     #[test]
@@ -2042,6 +2045,19 @@ mod tests {
             );
         }
         assert_eq!(freetype_encoding("unknown"), None);
+    }
+
+    #[test]
+    fn variation_axis_conversion_clamps_positive_overflow() {
+        assert_eq!(
+            pillow_axis_to_fixed(f32::MAX),
+            ffi::FT_Fixed::from(i32::MAX)
+        );
+        assert_eq!(
+            pillow_axis_to_fixed(f32::MIN),
+            ffi::FT_Fixed::from(i32::MIN)
+        );
+        assert_eq!(pillow_axis_to_fixed(1.0), ffi::FT_Fixed::from(65_536));
     }
 
     #[test]
