@@ -200,6 +200,29 @@ impl ImageFontTextOptions {
     pub fn uses_color_mask(&self) -> bool {
         self.mode.as_deref() == Some("RGBA") || (self.embedded_color && self.stroke_width == 0.0)
     }
+
+    /// Return whether the optional layout arguments select Pillow's BASIC
+    /// default behavior.
+    #[must_use]
+    pub(crate) fn uses_default_layout(&self) -> bool {
+        matches!(self.mode.as_deref(), None | Some(""))
+            && self.direction.is_none()
+            && self.features.is_none()
+            && !self.features_invalid
+            && self.language.is_none()
+            && self.stroke_width == 0.0
+            && self.anchor.is_none()
+    }
+
+    /// Return whether the optional mask arguments are all at their defaults.
+    #[must_use]
+    pub(crate) fn uses_default_mask(&self) -> bool {
+        self.uses_default_layout()
+            && !self.embedded_color
+            && self.start.is_none()
+            && !self.start_invalid
+            && self.ink.map_or(true, |ink| ink == 0)
+    }
 }
 
 /// Wrap font-rendered mask bytes in the Pillow image representation.
@@ -431,6 +454,9 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>), PilError> {
+        if options.uses_default_mask() {
+            return self.getmask(text);
+        }
         imagingft::getmask_with_options(self, text, options)
     }
 
@@ -525,6 +551,9 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<f32, PilError> {
+        if options.uses_default_layout() {
+            return self.getlength(text);
+        }
         imagingft::getlength_with_options(self, text, options)
     }
 
@@ -600,6 +629,11 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(f32, f32, f32, f32), PilError> {
+        if options.uses_default_layout() {
+            return self.getbbox(text).map(|(left, top, right, bottom)| {
+                (left as f32, top as f32, right as f32, bottom as f32)
+            });
+        }
         imagingft::getbbox_with_options(self, text, options)
     }
 
@@ -691,6 +725,9 @@ impl FreeTypeFont {
         text: &str,
         options: &ImageFontTextOptions,
     ) -> Result<(u32, u32, Vec<u8>, (i32, i32)), PilError> {
+        if options.uses_default_mask() {
+            return self.getmask2(text);
+        }
         imagingft::getmask2_with_options(self, text, options)
     }
 

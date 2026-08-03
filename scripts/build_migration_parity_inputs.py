@@ -3313,6 +3313,17 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getmask2",
+            "requirement_suffix": "parameter.mode",
+            "name": "mode-rgba-embedded-strike",
+            "font": "font/fonts/embedded-strike-color-or-sbit.ttf",
+            "values": {
+                "text": literal("A"),
+                "mode": literal("RGBA"),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
             "requirement_suffix": "parameter.start",
             "name": "mode-rgba-embedded-bgra-start",
             "font": "font/fonts/sbit-bgra-format1.ttf",
@@ -3320,6 +3331,18 @@ def build_nuanced_cases(
                 "text": literal("\ue000"),
                 "mode": literal("RGBA"),
                 "start": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageFont.FreeTypeFont",
+            "operation": "getmask2",
+            "requirement_suffix": "parameter.start",
+            "name": "mode-rgba-embedded-strike-clipped",
+            "font": "font/fonts/embedded-strike-color-or-sbit.ttf",
+            "values": {
+                "text": literal("A"),
+                "mode": literal("RGBA"),
+                "start": literal([-1.0, -1.0]),
             },
         },
         {
