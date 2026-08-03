@@ -1479,6 +1479,14 @@ class WorkflowBuilder:
                     # Exercise Pillow's CLIP8 saturation with a callable whose
                     # outputs leave the [0, 255] LUT range.
                     return self.builtin("args-callable", "clamp-shift-callable")
+                if (
+                    self.primary_surface == "PIL.Image.Image"
+                    and self.primary_operation == "point"
+                    and parameter_id == "lut"
+                    and descriptor.get("kind") == "literal"
+                    and descriptor.get("value") == ["clamp-shift-callable"]
+                ):
+                    return self.builtin("lut-callable", "clamp-shift-callable")
                 return descriptor
 
         if (
@@ -3091,6 +3099,71 @@ def build_nuanced_cases(
                     }
                 )
             },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "mode.l",
+            "name": "l-replicated-lut",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "observe_result": "tobytes",
+            "values": {"lut": literal(list(range(256)))},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "mode.rgb",
+            "name": "rgb-replicated-lut",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "observe_result": "tobytes",
+            "values": {"lut": literal(list(range(256)))},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "rgb-expanded-lut",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "observe_result": "tobytes",
+            "values": {
+                "lut": literal([index % 256 for index in range(768)]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "mode.la",
+            "name": "la-replicated-lut",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 128],
+            "observe_result": "tobytes",
+            "values": {"lut": literal(list(range(256)))},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "rgb-callable-lut",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "observe_result": "tobytes",
+            "values": {"lut": literal(["clamp-shift-callable"])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "rgb-invalid-lut-length",
+            "mode": "RGB",
+            "values": {"lut": literal([0])},
         },
         {
             "surface": "PIL.ImageSequence",
