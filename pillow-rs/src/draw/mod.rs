@@ -44,6 +44,9 @@ pub enum DrawPointsInput {
 pub enum DrawCircleCenterInput {
     /// A sequence whose first two values are the center coordinates.
     Values(Vec<f64>),
+    /// An integer is accepted by the host boundary but has no subscriptable
+    /// center, matching Pillow's direct `xy[0]` diagnostic.
+    Integer,
     /// A value that could not be represented as a numeric sequence.
     Invalid,
 }
@@ -213,6 +216,9 @@ pub fn normalize_draw_circle_center(input: DrawCircleCenterInput) -> Result<(f64
         DrawCircleCenterInput::Values(_) => {
             Err(PilError::IndexError("tuple index out of range".into()))
         }
+        DrawCircleCenterInput::Integer => Err(PilError::TypeError(
+            "'int' object is not subscriptable".into(),
+        )),
         DrawCircleCenterInput::Invalid => Err(PilError::TypeError(
             "coordinate list must contain at least 2 coordinates".into(),
         )),
