@@ -118,11 +118,9 @@ fn transform_color_value_fill(
             clamp(red),
             clamp(green),
             clamp(blue),
-            if mode == "RGB" || mode == "YCbCr" || mode == "HSV" {
-                0
-            } else {
-                clamp(alpha)
-            },
+            // `getcolor` constructs `Rgba` only for alpha-suffixed modes, so
+            // the alpha component is part of the destination representation.
+            clamp(alpha),
         )),
         crate::color::ColorValue::Hsv(hue, saturation, value) => {
             Ok((clamp(hue), clamp(saturation), clamp(value), 0))
