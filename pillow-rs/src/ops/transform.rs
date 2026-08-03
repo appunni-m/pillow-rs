@@ -21,7 +21,7 @@ pub enum TransformData {
     /// one-item iterable, so the core reports the unpacking error.
     Text(String),
     /// A value that could not be interpreted as affine or mesh data.
-    Invalid,
+    Invalid(String),
 }
 
 /// Host-neutral fill-color input for public `Image.transform` calls.
@@ -49,7 +49,7 @@ pub enum ReduceFactor {
     /// A factor sequence whose items are not integers.
     FloatingSequence(Vec<f64>),
     /// A value that could not be represented as an integer or sequence.
-    Invalid,
+    Invalid(String),
 }
 
 /// Host-neutral optional crop input for the public `Image.reduce` method.
@@ -195,10 +195,10 @@ impl Image {
                     "'float' object cannot be interpreted as an integer".into(),
                 ));
             }
-            ReduceFactor::Invalid => {
-                return Err(PilError::TypeError(
-                    "factor must be an integer or a sequence of two integers".into(),
-                ));
+            ReduceFactor::Invalid(type_name) => {
+                return Err(PilError::TypeError(format!(
+                    "'{type_name}' object cannot be interpreted as an integer"
+                )));
             }
         };
         if factors.len() != 2 {
@@ -390,10 +390,10 @@ impl Image {
     /// Applies a Pillow public transform method after host values have been
     /// converted to neutral Rust inputs.
     ///
-    /// Method `0` is affine and method `4` is mesh. Resampling and fill are
-    /// retained in the public signature for compatibility; the current core
-    /// transform backend samples with nearest-neighbor, matching the existing
-    /// implementation.
+    /// Methods `0` through `4` cover affine, extent, perspective, quad, and
+    /// mesh transforms. Resampling and fill are retained in the public
+    /// signature for compatibility; the current core transform backend
+    /// samples with nearest-neighbor, matching the existing implementation.
     pub fn transform_public(
         &self,
         size: (u32, u32),
@@ -440,6 +440,24 @@ impl Image {
                 ];
                 self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill)
             }
+            2 | 3 => {
+                let Some(TransformData::Affine(data)) = data else {
+                    return Err(PilError::ValueError("missing method data".into()));
+                };
+                if data.len() < 8 {
+                    return Err(PilError::ValueError("wrong number of data points".into()));
+                }
+                if method == 2 {
+                    self.transform_perspective_with_palette_fill(
+                        size,
+                        &data[..8],
+                        fill,
+                        palette_fill,
+                    )
+                } else {
+                    self.transform_quad_with_palette_fill(size, &data[..8], fill, palette_fill)
+                }
+            }
             4 => {
                 let data = match data {
                     Some(TransformData::Mesh(items)) => flatten_mesh_data(&items)?,
@@ -466,10 +484,10 @@ impl Image {
                             "not enough values to unpack (expected 2, got 1)".into(),
                         ));
                     }
-                    Some(TransformData::Invalid) => {
-                        return Err(PilError::TypeError(
-                            "transform data must be a sequence".into(),
-                        ));
+                    Some(TransformData::Invalid(type_name)) => {
+                        return Err(PilError::TypeError(format!(
+                            "'{type_name}' object is not iterable"
+                        )));
                     }
                     None => return Err(PilError::ValueError("missing method data".into())),
                 };
@@ -554,6 +572,54 @@ impl Image {
                 data,
                 filter: ResampleFilter::Nearest,
                 fill,
+                palette_fill,
+            },
+        ))
+    }
+
+    fn transform_perspective_with_palette_fill(
+        &self,
+        size: (u32, u32),
+        data: &[f64],
+        fillcolor: (u8, u8, u8, u8),
+        palette_fill: Option<u8>,
+    ) -> Result<Image, PilError> {
+        if data.len() != 8 {
+            return Err(PilError::ValueError("wrong number of data points".into()));
+        }
+        Ok(Image::push_op(
+            self,
+            PipelineOp::Transform {
+                w: size.0,
+                h: size.1,
+                method: TransformMethod::Perspective,
+                data: data.to_vec(),
+                filter: ResampleFilter::Nearest,
+                fill: Some(fillcolor),
+                palette_fill,
+            },
+        ))
+    }
+
+    fn transform_quad_with_palette_fill(
+        &self,
+        size: (u32, u32),
+        data: &[f64],
+        fillcolor: (u8, u8, u8, u8),
+        palette_fill: Option<u8>,
+    ) -> Result<Image, PilError> {
+        if data.len() != 8 {
+            return Err(PilError::ValueError("wrong number of data points".into()));
+        }
+        Ok(Image::push_op(
+            self,
+            PipelineOp::Transform {
+                w: size.0,
+                h: size.1,
+                method: TransformMethod::Quad,
+                data: data.to_vec(),
+                filter: ResampleFilter::Nearest,
+                fill: Some(fillcolor),
                 palette_fill,
             },
         ))
