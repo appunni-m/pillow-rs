@@ -101,6 +101,12 @@ pub fn normalize_draw_box(input: DrawBoxInput) -> Result<(i32, i32, i32, i32), P
         {
             Err(PilError::ValueError("incorrect coordinate type".into()))
         }
+        // Pillow's three-value flat parser reports an arity mismatch as a
+        // value error; other flat forms and nested sequences retain the
+        // generic type diagnostic used by its coordinate unpacker.
+        DrawBoxInput::Flat(values) if values.len() == 3 => {
+            Err(PilError::ValueError("wrong number of coordinates".into()))
+        }
         DrawBoxInput::Flat(_) | DrawBoxInput::Nested(_) | DrawBoxInput::Invalid => Err(error()),
     }
 }
@@ -127,6 +133,7 @@ fn normalize_draw_points(
     // ("incorrect coordinate type"); preserve that public split here.
     let too_few =
         || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    let invalid_input = || PilError::TypeError("argument must be sequence".into());
     let wrong_number = || PilError::ValueError("wrong number of coordinates".into());
     let wrong_point = || PilError::ValueError("incorrect coordinate type".into());
     match input {
@@ -161,13 +168,12 @@ fn normalize_draw_points(
                 .collect())
         }
         DrawPointsInput::InvalidSequence => Err(wrong_point()),
-        DrawPointsInput::Invalid => Err(too_few()),
+        DrawPointsInput::Invalid => Err(invalid_input()),
     }
 }
 
 fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>, PilError> {
-    let too_few =
-        || PilError::TypeError("coordinate list must contain at least 2 coordinates".into());
+    let invalid_input = || PilError::TypeError("argument must be sequence".into());
     let wrong_number = || PilError::ValueError("wrong number of coordinates".into());
     let wrong_point = || PilError::ValueError("incorrect coordinate type".into());
     match input {
@@ -193,7 +199,7 @@ fn normalize_draw_point_input(input: DrawPointsInput) -> Result<Vec<(i32, i32)>,
                 .collect())
         }
         DrawPointsInput::InvalidSequence => Err(wrong_point()),
-        DrawPointsInput::Invalid => Err(too_few()),
+        DrawPointsInput::Invalid => Err(invalid_input()),
     }
 }
 

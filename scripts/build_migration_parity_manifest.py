@@ -856,6 +856,14 @@ def operation_contract(
         for parameter in parameters:
             if parameter["id"] == "im":
                 add_unique(parameter["value_types"], "null")
+    if endpoint.surface == "PIL.ImageDraw.ImageDraw":
+        # ImageDraw receives arbitrary Python objects at these boundaries and
+        # reports public TypeError/ValueError diagnostics for malformed
+        # coordinates. Keep the broad input vocabulary so the Rust-owned
+        # normalizers' Invalid variants can be exercised by input-only parity.
+        for parameter in parameters:
+            if parameter["id"] == "xy":
+                add_unique(parameter["value_types"], "any_json")
     benchmark_applicable = endpoint.kind != "constant"
     requirements = operation_requirements(
         endpoint,

@@ -4837,6 +4837,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "flat-box-arity-error",
+            "values": {
+                "xy": literal([0, 0, 8]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "line",
             "requirement_suffix": "behavior.default",
             "name": "flat-points",
@@ -4903,6 +4913,16 @@ def build_nuanced_cases(
             "name": "invalid-sequence-contents-error",
             "values": {
                 "xy": literal(["bad", "bad"]),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "scalar-points-error",
+            "values": {
+                "xy": literal(1),
                 "fill": literal(255),
             },
         },
@@ -5256,6 +5276,16 @@ def build_nuanced_cases(
             "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "point",
             "requirement_suffix": "behavior.default",
+            "name": "scalar-points-error",
+            "values": {
+                "xy": literal(1),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "point",
+            "requirement_suffix": "behavior.default",
             "name": "rejected-rgb-empty-component",
             "mode": "RGB",
             "values": {
@@ -5409,6 +5439,17 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([0, 0, 1, 8]),
                 "radius": literal(1),
+                "fill": literal(255),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rounded_rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "short-box-error",
+            "values": {
+                "xy": literal([0, 0]),
+                "radius": literal(2),
                 "fill": literal(255),
             },
         },
@@ -5695,6 +5736,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "regular_polygon",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-side-count-error",
+            "values": {
+                "bounding_circle": literal([8, 8, 4]),
+                "n_sides": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rectangle",
             "requirement_suffix": "behavior.default",
             "name": "canvas-l",
@@ -5790,6 +5841,17 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "canvas-rgb-float-fill-error",
             "mode": "RGB",
+            "values": {
+                "xy": literal([0, 0, 8, 8]),
+                "fill": literal(1.5),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "canvas-l-float-fill-error",
+            "mode": "L",
             "values": {
                 "xy": literal([0, 0, 8, 8]),
                 "fill": literal(1.5),
