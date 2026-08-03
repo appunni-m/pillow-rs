@@ -5358,6 +5358,151 @@
       ]
     },
     {
+      "case_id": "PIL.Image.fromarray.nuanced.buffer-backed-rgb-values",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "numpy-array",
+                "shape": [
+                  2,
+                  2,
+                  3
+                ],
+                "typestr": "|u1",
+                "data_base64": "AQIDBAUGBwgJCgsM"
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.nuanced.buffer-backed-luma-1d",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.obj"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "numpy-array",
+                "shape": [
+                  4
+                ],
+                "typestr": "|u1",
+                "data_base64": "AQIDBA=="
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.nuanced.unsupported-dtype",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.obj"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "numpy-array",
+                "shape": [
+                  2,
+                  2
+                ],
+                "typestr": "|u8",
+                "data_base64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.fromarray.nuanced.scalar-array-empty-shape",
+      "surface": "PIL.Image",
+      "operation": "fromarray",
+      "covers": [
+        "PIL.Image.fromarray.parameter.obj"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "fromarray",
+          "receiver": null,
+          "arguments": {
+            "obj": {
+              "kind": "literal",
+              "value": {
+                "protocol": "numpy-array",
+                "shape": [],
+                "typestr": "|u1",
+                "data_base64": "AQ=="
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.open.nuanced.formats-accepted",
       "surface": "PIL.Image",
       "operation": "open",

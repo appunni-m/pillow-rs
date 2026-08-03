@@ -3029,6 +3029,70 @@ def build_nuanced_cases(
 
     specs: tuple[dict[str, Any], ...] = (
         {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "behavior.default",
+            "name": "buffer-backed-rgb-values",
+            "values": {
+                "obj": literal(
+                    {
+                        "protocol": "numpy-array",
+                        "shape": [2, 2, 3],
+                        "typestr": "|u1",
+                        "data_base64": "AQIDBAUGBwgJCgsM",
+                    }
+                )
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": "buffer-backed-luma-1d",
+            "values": {
+                "obj": literal(
+                    {
+                        "protocol": "numpy-array",
+                        "shape": [4],
+                        "typestr": "|u1",
+                        "data_base64": "AQIDBA==",
+                    }
+                )
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": "unsupported-dtype",
+            "values": {
+                "obj": literal(
+                    {
+                        "protocol": "numpy-array",
+                        "shape": [2, 2],
+                        "typestr": "|u8",
+                        "data_base64": base64.b64encode(bytes(32)).decode("ascii"),
+                    }
+                )
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": "scalar-array-empty-shape",
+            "values": {
+                "obj": literal(
+                    {
+                        "protocol": "numpy-array",
+                        "shape": [],
+                        "typestr": "|u1",
+                        "data_base64": "AQ==",
+                    }
+                )
+            },
+        },
+        {
             "surface": "PIL.ImageSequence",
             "operation": "Iterator",
             "requirement_suffix": "behavior.default",

@@ -70,6 +70,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/pipeline.rs",
         "pillow-rs/src/ops/module_fns.rs",
         "pillow-rs/src/ops/analysis.rs",
+        "pillow-rs/src/ops/array.rs",
         "pillow-rs/src/ops/convert.rs",
         "pillow-rs/src/ops/crop.rs",
         "pillow-rs/src/ops/paste.rs",
