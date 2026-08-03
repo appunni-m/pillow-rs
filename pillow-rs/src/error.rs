@@ -46,6 +46,14 @@ pub enum PilError {
     #[error("{0}")]
     KeyError(String),
 
+    /// Integer mapping/key lookup failed, preserving the original Python key.
+    ///
+    /// This is distinct from [`Self::KeyError`] because Python's exception
+    /// representation preserves the key's type: `KeyError(0)` serializes as
+    /// `0`, while `KeyError("0")` serializes as `'0'`.
+    #[error("{0}")]
+    KeyErrorInt(i64),
+
     /// Attribute lookup failed on a host object supplied to a public API.
     #[error("{0}")]
     AttributeError(String),
