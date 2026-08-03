@@ -9648,6 +9648,28 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "ycbcr-tuples",
+            "observe_receiver": True,
+            "mode": "YCbCr",
+            "values": {
+                "data": literal([[16, 128, 128]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-tuples",
+            "observe_receiver": True,
+            "mode": "HSV",
+            "values": {
+                "data": literal([[16, 128, 128]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "la-tuples",
             "observe_receiver": True,
             "mode": "LA",
