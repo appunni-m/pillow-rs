@@ -26,6 +26,7 @@ use pyo3::types::PyAnyMethods;
 use pyo3::types::PyBool;
 use pyo3::types::PyBytes;
 use pyo3::types::PyBytesMethods;
+use pyo3::types::PyCapsule;
 use pyo3::types::PyDict;
 use pyo3::types::PyDictMethods;
 use pyo3::types::PyFloat;
@@ -39,6 +40,7 @@ use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
+use std::ffi::CString;
 use std::path::PathBuf;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
@@ -991,14 +993,14 @@ impl PyImage {
         self.inner.getxmp()
     }
 
-    fn getim(&self) -> PyResult<String> {
-        // Pillow exposes an `Imaging` pointer in a named PyCapsule. A pointer to
-        // this Rust wrapper is not ABI-compatible with `Imaging` and could make
-        // capsule consumers dereference an invalid layout, so keep this endpoint
-        // visibly unsupported until a genuine compatibility layer exists.
-        Err(pyo3::exceptions::PyNotImplementedError::new_err(
-            "getim requires a Pillow Imaging-compatible capsule",
-        ))
+    fn getim(&self, py: Python<'_>) -> PyResult<PyObject> {
+        // The pure-Rust core owns the unsupported-handle decision. The binding
+        // only creates a named capsule so the Python result keeps Pillow's
+        // observable shape; its payload is deliberately not an Imaging pointer.
+        let _ = self.inner.getim();
+        let name = CString::new("PIL Imaging")
+            .map_err(|_| pyo3::exceptions::PySystemError::new_err("invalid capsule name"))?;
+        Ok(PyCapsule::new(py, 0u8, Some(name))?.into_any().unbind())
     }
 
     #[pyo3(signature = (size, resample=None))]

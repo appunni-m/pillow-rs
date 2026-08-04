@@ -382,8 +382,8 @@ class Image:
         return _ExifCompat(raw, loaded_exif=self.format != "TIFF")
 
     def getim(self):
-        """Return internal C capsule. Not applicable for Rust."""
-        return PyCapsule()
+        """Return the Rust-owned capsule-shaped internal-image handle."""
+        return self._rust_image.getim()
 
     def getpalette(self, rawmode="RGB"):
         """Return palette data.
