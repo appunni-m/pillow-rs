@@ -303,6 +303,7 @@
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-le-orientation7-materialized",
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-le-orientation8-materialized",
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-be-orientation3-materialized",
+          "PIL.ImageOps.exif_transpose.nuanced.jpeg-be-width-before-orientation-materialized",
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-no-orientation",
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-magic",
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-byte-order",

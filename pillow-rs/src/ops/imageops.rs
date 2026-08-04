@@ -819,12 +819,19 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
                 && read_u16(&entry[2..4]) == 3
                 && read_u32(&entry[4..8]) == 1
             {
+                let value = u32::from(read_u16(&entry[8..10]));
                 let type_bytes = if le {
                     4u16.to_le_bytes()
                 } else {
                     4u16.to_be_bytes()
                 };
                 entry[2..4].copy_from_slice(&type_bytes);
+                let value_bytes = if le {
+                    value.to_le_bytes()
+                } else {
+                    value.to_be_bytes()
+                };
+                entry[8..12].copy_from_slice(&value_bytes);
             }
             entry
         })
@@ -944,5 +951,12 @@ mod tests {
 
         let expected = b"Exif\x00\x00II\x2a\x00\x08\x00\x00\x00\x01\x00\x00\x01\x04\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00";
         assert_eq!(exif_remove_orientation(&raw), expected);
+    }
+
+    #[test]
+    fn test_exif_without_orientation_retains_big_endian_width_value() {
+        let raw = b"Exif\x00\x00MM\x00\x2a\x00\x00\x00\x08\x00\x02\x01\x00\x00\x03\x00\x00\x00\x01\x00\x02\x00\x00\x01\x12\x00\x03\x00\x00\x00\x01\x00\x03\x00\x00\x00\x00\x00\x00";
+        let expected = b"Exif\x00\x00MM\x00\x2a\x00\x00\x00\x08\x00\x01\x01\x00\x00\x04\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00";
+        assert_eq!(exif_remove_orientation(raw), expected);
     }
 }

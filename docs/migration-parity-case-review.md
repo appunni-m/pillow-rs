@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2553
-- Unique active workflow signatures: 2553
+- Active parity workflows: 2554
+- Unique active workflow signatures: 2554
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1377
+- Deliberate nuanced workflows: 1378
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 184 |
+| `PIL.ImageOps` | 185 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -1341,6 +1341,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.equalize.nuanced.unsupported-mode-one`
 - `PIL.ImageOps.equalize.nuanced.valid-l-mask`
 - `PIL.ImageOps.exif_transpose.nuanced.jpeg-be-orientation3-materialized`
+- `PIL.ImageOps.exif_transpose.nuanced.jpeg-be-width-before-orientation-materialized`
 - `PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-byte-order`
 - `PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-magic`
 - `PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-offset`
