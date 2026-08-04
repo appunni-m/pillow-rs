@@ -30,6 +30,27 @@ pub fn validate_eval_input(kind: EvalInputKind) -> Result<(), PilError> {
     Ok(())
 }
 
+#[derive(Debug, Clone, Copy)]
+enum GradientMode {
+    Byte,
+    One,
+    Integer,
+    Float,
+}
+
+fn parse_gradient_mode(mode: &str) -> Result<GradientMode, PilError> {
+    if mode.len() != 1 {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    match mode {
+        "L" | "P" => Ok(GradientMode::Byte),
+        "1" => Ok(GradientMode::One),
+        "I" => Ok(GradientMode::Integer),
+        "F" => Ok(GradientMode::Float),
+        _ => Err(PilError::ValueError("image has wrong mode".into())),
+    }
+}
+
 /// Creates an image from raw bytes using Pillow's supported raw decoder.
 ///
 /// Decoder selection is part of the public operation contract, not a binding
@@ -343,41 +364,30 @@ pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
 /// [`PilError`] when raw image construction fails.
 pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
-    if mode.len() != 1 {
-        return Err(PilError::ValueError("image has wrong mode".into()));
-    }
-    let bytes_per_pixel = match mode {
-        "L" | "P" => 1,
-        "1" => 1,
-        "I" => 4,
-        "F" => 4,
-        _ => {
-            return Err(PilError::ValueError("image has wrong mode".into()));
-        }
-    };
-    let row_bytes = if mode == "1" {
-        256usize.div_ceil(8)
-    } else {
-        256
+    let gradient_mode = parse_gradient_mode(mode)?;
+    let (bytes_per_pixel, row_bytes) = match gradient_mode {
+        GradientMode::Byte => (1, 256),
+        GradientMode::One => (1, 256usize.div_ceil(8)),
+        GradientMode::Integer | GradientMode::Float => (4, 256),
     };
     let size: usize = row_bytes * 256 * bytes_per_pixel;
     let mut data = vec![0u8; size];
 
     for y in 0..256usize {
         let row_start = y * row_bytes * bytes_per_pixel;
-        match mode {
-            "L" | "P" => {
+        match gradient_mode {
+            GradientMode::Byte => {
                 let val = y as u8;
                 data[row_start..row_start + 256].fill(val);
             }
-            "1" => {
+            GradientMode::One => {
                 // Pillow's mode-1 gradient is a binary threshold, not an
                 // 8-bit luma gradient: only the first row remains black.
                 if y != 0 {
                     data[row_start..row_start + row_bytes].fill(0xff);
                 }
             }
-            "I" => {
+            GradientMode::Integer => {
                 // 4-byte i32 LE per pixel
                 let val = y as i32;
                 let bytes = val.to_le_bytes();
@@ -386,7 +396,7 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
                     data[off..off + 4].copy_from_slice(&bytes);
                 }
             }
-            "F" => {
+            GradientMode::Float => {
                 // 4-byte f32 LE per pixel
                 let val = y as f32;
                 let bytes = val.to_le_bytes();
@@ -395,7 +405,6 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
                     data[off..off + 4].copy_from_slice(&bytes);
                 }
             }
-            _ => unreachable!(),
         }
     }
     Image::frombytes(mode, (256, 256), &data)
@@ -411,22 +420,11 @@ pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
 /// Returns [`PilError::ValueError`] when `mode` is unsupported, or another
 /// [`PilError`] when raw image construction fails.
 pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
-    if mode.len() != 1 {
-        return Err(PilError::ValueError("image has wrong mode".into()));
-    }
-    let bytes_per_pixel = match mode {
-        "L" | "P" => 1,
-        "1" => 1,
-        "I" => 4,
-        "F" => 4,
-        _ => {
-            return Err(PilError::ValueError("image has wrong mode".into()));
-        }
-    };
-    let row_bytes = if mode == "1" {
-        256usize.div_ceil(8)
-    } else {
-        256
+    let gradient_mode = parse_gradient_mode(mode)?;
+    let (bytes_per_pixel, row_bytes) = match gradient_mode {
+        GradientMode::Byte => (1, 256),
+        GradientMode::One => (1, 256usize.div_ceil(8)),
+        GradientMode::Integer | GradientMode::Float => (4, 256),
     };
     let size: usize = row_bytes * 256 * bytes_per_pixel;
     let mut data = vec![0u8; size];
@@ -439,11 +437,11 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
             let d = ((dx * dx + dy * dy) * 2.0).sqrt() as i32;
             let val = if d >= 255 { 255u8 } else { d as u8 };
 
-            match mode {
-                "L" | "P" => {
+            match gradient_mode {
+                GradientMode::Byte => {
                     data[y * 256 + x] = val;
                 }
-                "1" => {
+                GradientMode::One => {
                     // Mode-1 output keeps every nonzero radial sample white;
                     // the single zero-valued center sample remains black.
                     if val != 0 {
@@ -452,17 +450,16 @@ pub fn radial_gradient(mode: &str) -> Result<Image, PilError> {
                         data[byte_idx] |= 1 << bit_idx;
                     }
                 }
-                "I" => {
+                GradientMode::Integer => {
                     let bytes = (val as i32).to_le_bytes();
                     let off = (y * 256 + x) * 4;
                     data[off..off + 4].copy_from_slice(&bytes);
                 }
-                "F" => {
+                GradientMode::Float => {
                     let bytes = (val as f32).to_le_bytes();
                     let off = (y * 256 + x) * 4;
                     data[off..off + 4].copy_from_slice(&bytes);
                 }
-                _ => unreachable!(),
             }
         }
     }
