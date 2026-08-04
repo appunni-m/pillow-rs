@@ -263,6 +263,17 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
             + struct.pack(">H", 3)
             + b"\x00\x00"
         )
+    elif variant == "be-non-orientation-before-orientation":
+        entries = [
+            (0x0100, 3, 1, struct.pack(">H", 2) + b"\x00\x00"),
+            (0x0112, 3, 1, struct.pack(">H", 3) + b"\x00\x00"),
+        ]
+        tiff = bytearray(b"MM\x00\x2a" + struct.pack(">I", 8))
+        tiff += struct.pack(">H", len(entries))
+        for tag, kind, count, value in entries:
+            tiff += struct.pack(">HHI", tag, kind, count) + value
+        tiff += struct.pack(">I", 0)
+        tiff = bytes(tiff)
     elif variant == "no-orientation":
         tiff = b"II\x2a\x00" + struct.pack("<I", 8) + struct.pack("<H", 0)
     elif variant == "invalid-magic":
@@ -12374,6 +12385,14 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "jpeg-be-orientation3-materialized",
             "exif_variant": "be-orientation3",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-be-width-before-orientation-materialized",
+            "exif_variant": "be-non-orientation-before-orientation",
             "observe_result": "tobytes",
         },
         {
