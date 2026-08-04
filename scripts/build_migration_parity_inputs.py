@@ -1149,6 +1149,23 @@ class WorkflowBuilder:
             step_id=self.next_step_id(f"setup-{label}"),
         )
         self._image_steps[cache_key] = step_id
+        if self.edge == "effect-spread-p-rgba" and label == "image":
+            # EffectSpread returns a new indexed image while retaining the
+            # source palette. Attach that palette through the public API so
+            # the active parity case observes the same metadata-bearing P
+            # pipeline as Pillow.
+            self.add_step(
+                "PIL.Image.Image",
+                "putpalette",
+                receiver=binding(step_id),
+                arguments={
+                    "data": literal(
+                        [10, 20, 30, 5, 40, 50, 60, 128, 70, 80, 90, 255]
+                    ),
+                    "rawmode": literal("RGBA"),
+                },
+                step_id=self.next_step_id("setup-effect-spread-palette"),
+            )
         if self.edge == "too-many-colors" and label == "image":
             pixel_value: Any
             if requested_mode in {"L", "P", "1"}:
@@ -13923,6 +13940,27 @@ def build_nuanced_cases(
                 "method": literal(1),
                 "kmeans": literal(5),
             },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "effect_spread",
+            "requirement_suffix": "mode.p",
+            "name": "p-rgba-palette-zero-distance",
+            "mode": "P",
+            "edge": "effect-spread-p-rgba",
+            "observe_result": "tobytes",
+            "values": {"distance": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "effect_spread",
+            "requirement_suffix": "parameter.distance",
+            "name": "p-rgba-palette-single-pixel",
+            "mode": "P",
+            "edge": "effect-spread-p-rgba",
+            "size": [1, 1],
+            "observe_result": "tobytes",
+            "values": {"distance": literal(17)},
         },
         {
             "surface": "PIL.Image.Image",
