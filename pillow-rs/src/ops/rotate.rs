@@ -1,5 +1,6 @@
 use crate::error::PilError;
 use crate::image::Image;
+use crate::ops::imageops::ImageOpsColor;
 use crate::pipeline::PipelineOp;
 
 /// Host-neutral resampling input for Pillow's rotate wrapper.
@@ -104,10 +105,11 @@ impl Image {
         expand: RotateExpandInput,
         center: RotatePointInput,
         translate: RotatePointInput,
-        fillcolor: Option<(u8, u8, u8, u8)>,
+        fillcolor: ImageOpsColor,
     ) -> Result<Image, PilError> {
         let normalized_angle = angle % 360.0;
         let expand = normalize_python_rotate_at_angle(normalized_angle, resample, expand)?;
+        let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &self.mode()?)?;
         if center.is_truthy() || translate.is_truthy() {
             center.validate()?;
             translate.validate()?;

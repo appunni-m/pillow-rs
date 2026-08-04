@@ -425,6 +425,9 @@ fn rotate_arbitrary_generic(
     // Pillow builds the reverse affine transform (destination -> source),
     // rounding the trigonometric coefficients to 15 decimal places before
     // calculating the expanded canvas.
+    // Pillow's affine coefficients map destination pixels back into the
+    // source image. The inverse mapping uses the negative angle; using the
+    // forward sign mirrors the exposed fill region for arbitrary angles.
     let rad = -angle.to_radians();
     let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
     let aff_a = round_15(rad.cos());
@@ -482,8 +485,13 @@ fn rotate_arbitrary_generic(
     } else {
         for dy in 0..dh {
             for dx in 0..dw {
-                // Map destination pixel to source coordinate (inverse rotation)
+                // Pillow's ImagingTransformAffine bilinear path starts the
+                // source y accumulator at f + 0.5 while the source x
+                // accumulator starts at c. Keeping that asymmetric sample
+                // origin matters at expanded boundaries: the unshifted
+                // source-y form moves the 45-degree fill edge by one pixel.
                 let (sx_rel, sy_rel) = transform(dx as f64, dy as f64, aff_c, aff_f);
+                let sy_rel = sy_rel + 0.5;
 
                 let out_idx = (dy * dw + dx) as usize * channels;
 

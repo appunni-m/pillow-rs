@@ -2703,7 +2703,9 @@ pub fn rotate(
 
     let sw = w as f64;
     let sh = h as f64;
-    let rad = angle_deg.to_radians();
+    // Pillow's destination-to-source inverse mapping uses the negative angle.
+    // The forward sign puts an exposed fill region on the opposite diagonal.
+    let rad = -angle_deg.to_radians();
     let cos = rad.cos();
     let sin = rad.sin();
 

@@ -7954,6 +7954,41 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.center",
+            "name": "invalid-center-arity",
+            "mode": "RGB",
+            "values": {
+                "angle": literal(1),
+                "center": literal([0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.translate",
+            "name": "invalid-translate-arity",
+            "mode": "RGB",
+            "values": {
+                "angle": literal(1),
+                "translate": literal([0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": "expanded-red-fill",
+            "mode": "RGB",
+            "values": {
+                "angle": literal(45),
+                "expand": literal(True),
+                "fillcolor": literal("red"),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "p-affine-scalar-fill",
