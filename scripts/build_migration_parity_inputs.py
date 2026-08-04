@@ -7921,6 +7921,28 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.resample",
+            "name": "invalid-resample-name",
+            "mode": "RGB",
+            "values": {
+                "angle": literal(1),
+                "resample": literal("NOT_A_RESAMPLE"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.expand",
+            "name": "non-boolean-expand",
+            "mode": "RGB",
+            "values": {
+                "angle": literal(1),
+                "expand": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "p-affine-scalar-fill",
@@ -9033,6 +9055,30 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "behavior.default",
+            "name": "color-rgb-tuple-into-cmyk",
+            "observe_receiver": True,
+            "mode": "CMYK",
+            "values": {
+                "im": literal([1, 2, 3]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-rgba-tuple-into-rgb",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "im": literal([1, 2, 3, 4]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
             "name": "color-la",
             "observe_receiver": True,
             "mode": "LA",
@@ -9132,6 +9178,28 @@ def build_nuanced_cases(
             "mode": "LA",
             "values": {
                 "im": literal([255, 0, 0, 128]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "f-five-tuple-error",
+            "mode": "F",
+            "values": {
+                "im": literal([1, 2, 3, 4, 5]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "pa-five-tuple-error",
+            "mode": "PA",
+            "values": {
+                "im": literal([1, 2, 3, 4, 5]),
                 "box": literal([1, 1, 5, 5]),
             },
         },
@@ -9292,6 +9360,28 @@ def build_nuanced_cases(
             "values": {
                 "im": literal([255, 0, 0]),
                 "box": literal(["left", "top", "right"]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-inverted-height-box",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([0, 8, 8, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "two-coordinate-overflow",
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal([2147483648, 0]),
             },
         },
         {

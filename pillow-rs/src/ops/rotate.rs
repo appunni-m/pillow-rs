@@ -19,8 +19,47 @@ pub enum RotateResampleInput {
 pub enum RotateExpandInput {
     /// The explicit boolean value.
     Boolean(bool),
+    /// An integer accepted by Pillow's truth-value conversion.
+    Integer(i64),
     /// A non-boolean value.
     Invalid,
+}
+
+/// Host-neutral center or translation input for Pillow's rotate wrapper.
+#[derive(Debug, Clone)]
+pub enum RotatePointInput {
+    /// No point was supplied, or `None` was supplied.
+    Default,
+    /// A numeric sequence.
+    Values(Vec<f64>),
+    /// A non-subscriptable value classified at the binding boundary.
+    Invalid {
+        /// Python type name used in Pillow's diagnostic.
+        type_name: String,
+        /// Python truth value, used to preserve rotate's fast-path ordering.
+        truthy: bool,
+    },
+}
+
+impl RotatePointInput {
+    fn is_truthy(&self) -> bool {
+        match self {
+            Self::Default => false,
+            Self::Values(values) => !values.is_empty(),
+            Self::Invalid { truthy, .. } => *truthy,
+        }
+    }
+
+    fn validate(&self) -> Result<(), PilError> {
+        match self {
+            Self::Default => Ok(()),
+            Self::Values(values) if values.len() >= 2 => Ok(()),
+            Self::Values(_) => Err(PilError::IndexError("tuple index out of range".into())),
+            Self::Invalid { type_name, .. } => Err(PilError::TypeError(format!(
+                "'{type_name}' object is not subscriptable"
+            ))),
+        }
+    }
 }
 
 /// Validates the Python-facing rotate arguments and returns the effective
@@ -39,6 +78,7 @@ fn normalize_python_rotate_at_angle(
 ) -> Result<bool, PilError> {
     let expand = match expand {
         RotateExpandInput::Boolean(value) => Ok(value),
+        RotateExpandInput::Integer(value) => Ok(value != 0),
         RotateExpandInput::Invalid => Err(PilError::TypeError(
             "'int' object is not subscriptable".to_owned(),
         )),
@@ -62,10 +102,16 @@ impl Image {
         angle: f64,
         resample: RotateResampleInput,
         expand: RotateExpandInput,
+        center: RotatePointInput,
+        translate: RotatePointInput,
         fillcolor: Option<(u8, u8, u8, u8)>,
     ) -> Result<Image, PilError> {
         let normalized_angle = angle % 360.0;
         let expand = normalize_python_rotate_at_angle(normalized_angle, resample, expand)?;
+        if center.is_truthy() || translate.is_truthy() {
+            center.validate()?;
+            translate.validate()?;
+        }
         self.rotate(normalized_angle, expand, fillcolor)
     }
 
