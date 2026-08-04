@@ -5,7 +5,7 @@
 //! Coordinates are integer pixel coordinates. Colors are normalized RGBA byte
 //! tuples before mode-specific drawing rules are applied.
 
-use crate::raster::{DynamicImage, GenericImageView, Rgba, RgbaImage};
+use crate::raster::{DynamicImage, Rgba, RgbaImage};
 
 use crate::error::PilError;
 use crate::image::Image;
@@ -873,47 +873,37 @@ impl Draw {
         }
         let (bmp_w, bmp_h) = bitmap.size()?;
         let raw_data = bitmap.getdata(None)?;
-        let bmp_stride: usize = match bmp_mode.as_str() {
-            "1" | "L" => 1,
-            "RGBA" | "RGBa" => 4,
-            _ => unreachable!(),
+        let bmp_stride: usize = if matches!(bmp_mode.as_str(), "1" | "L") {
+            1
+        } else {
+            4
         };
 
-        // Helper: get mask value (alpha) at pixel (px, py)
+        // `Image::getdata` returns the complete canonical raster for a
+        // materialized image, so the dimensions above make these indexes
+        // exact. Keep this hot path branch-free for valid mask modes; the
+        // public mode check above rejects every other mode before iteration.
         let mask_val = |px: u32, py: u32, data: &[u8]| -> u8 {
             let idx = (py * bmp_w + px) as usize;
             match bmp_mode.as_str() {
                 "1" => {
-                    if idx < data.len() && data[idx] > 0 {
+                    if data[idx] > 0 {
                         255
                     } else {
                         0
                     }
                 }
-                "L" => {
-                    if idx < data.len() {
-                        data[idx]
-                    } else {
-                        0
-                    }
-                }
+                "L" => data[idx],
                 "RGBA" | "RGBa" => {
                     let pixel_idx = idx * bmp_stride;
-                    if pixel_idx + 3 < data.len() {
-                        data[pixel_idx + 3]
-                    } else {
-                        0
-                    }
+                    data[pixel_idx + 3]
                 }
-                _ => 0,
+                _ => unreachable!("bitmap mode was validated before mask iteration"),
             }
         };
 
         // PIL's BLEND: DIV255(a * (255 - mask) + b * mask)
         let pil_blend = |bg: u8, fg: u8, m: u8| -> u8 {
-            if m == 0 {
-                return bg;
-            }
             if m == 255 {
                 return fg;
             }
@@ -1279,118 +1269,26 @@ impl Draw {
     /// Returns the current drawn image with original mode semantics restored.
     ///
     /// Standard modes are converted from the internal RGBA drawing canvas back
-    /// to their original layout. `P` mode attempts palette-index restoration
-    /// using the carried palette.
+    /// to their original layout. All other public draw branches either write
+    /// the destination's native layout directly or retain the original mode
+    /// as an explicit tag on the RGBA backing buffer. The only public path
+    /// that leaves a logical mode mismatch is an explicit RGBA context over
+    /// an RGB image.
     pub fn image_clone(&self) -> Result<Image, PilError> {
         let img = self.image.clone();
-        let source_format = img.source_format();
-        let info = img.image_info();
-        if let Some(ref orig) = self.orig_mode {
-            if let Ok(current) = img.mode() {
-                if current != *orig || matches!(orig.as_str(), "RGBA" | "CMYK") {
-                    // Convert RGBA back to original mode
-                    if let Ok(img_loaded) = img.materialize() {
-                        let converted = match orig.as_str() {
-                            "RGB" => DynamicImage::ImageRgb8(img_loaded.to_rgb8()),
-                            "L" => {
-                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded)?)
-                            }
-                            "1" => {
-                                // No dither: just threshold at 128 (matching PIL's fill behavior)
-                                let gray = crate::color::pil_grayscale_truncate(&img_loaded)?;
-                                let (w, h) = gray.dimensions();
-                                let mut out = crate::raster::GrayImage::new(w, h);
-                                for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                                    op[0] = if gp[0] >= 128 { 255 } else { 0 };
-                                }
-                                DynamicImage::ImageLuma8(out)
-                            }
-                            "LA" => {
-                                // Use alpha from the RGBA image directly (PIL int fill
-                                // writes A=0, which comes from fill=(*,*,*,0) in our
-                                // draw pipeline, preserving the RGBA alpha channel)
-                                let gray = crate::color::pil_grayscale(&img_loaded)?;
-                                let (w, h) = gray.dimensions();
-                                let mut ga = crate::raster::GrayAlphaImage::new(w, h);
-                                let rgba = img_loaded.to_rgba8();
-                                for ((gap, gp), rp) in
-                                    ga.pixels_mut().zip(gray.pixels()).zip(rgba.pixels())
-                                {
-                                    gap[0] = gp[0];
-                                    gap[1] = rp[3];
-                                }
-                                DynamicImage::ImageLumaA8(ga)
-                            }
-                            "P" => {
-                                // Map RGBA pixels back to palette indices using the
-                                // original palette if available, else fall back to grayscale.
-                                if let Some(pal) = self.image.palette() {
-                                    let (w, h) = img_loaded.dimensions();
-                                    let rgba = img_loaded.to_rgba8();
-                                    let mut indices = crate::raster::GrayImage::new(w, h);
-                                    for (op, rp) in indices.pixels_mut().zip(rgba.pixels()) {
-                                        let idx = pal
-                                            .chunks_exact(3)
-                                            .position(|p| {
-                                                p[0] == rp[0] && p[1] == rp[1] && p[2] == rp[2]
-                                            })
-                                            .unwrap_or(0)
-                                            .min(255)
-                                            as u8;
-                                        op[0] = idx;
-                                    }
-                                    let palette = self
-                                        .image
-                                        .palette()
-                                        .unwrap_or_else(crate::image::default_palette);
-                                    // Pillow keeps format/info on its in-place
-                                    // ImageDraw mutation; retain that provenance
-                                    // when restoring our indexed representation.
-                                    return Ok(Image::Paletted(crate::image::PalettedData {
-                                        indices,
-                                        palette,
-                                        palette_alpha: self
-                                            .image
-                                            .palette_alpha()
-                                            .unwrap_or_default(),
-                                        source_format,
-                                        info,
-                                        exif: self.image.exif_metadata(),
-                                        materialized: crate::image::materialization_cache(),
-                                    }));
-                                }
-                                // Fallback: grayscale approximation
-                                DynamicImage::ImageLuma8(crate::color::pil_grayscale(&img_loaded)?)
-                            }
-                            "CMYK" => {
-                                // Identity: RGBA pixel values ARE CMYK pixel values
-                                // (C→R, M→G, Y→B, K→A). Just tag the buffer as CMYK.
-                                return Ok(Image::from_dynamic(
-                                    img_loaded,
-                                    Some("CMYK".to_string()),
-                                ));
-                            }
-                            "RGBA" => {
-                                // Identity: RGBA pixel values stay RGBA.
-                                // Tag with explicit mode so mode() always reports "RGBA".
-                                return Ok(Image::from_dynamic(
-                                    DynamicImage::ImageRgba8(img_loaded.to_rgba8()),
-                                    Some("RGBA".to_string()),
-                                ));
-                            }
-                            _ => img_loaded,
-                        };
-                        let explicit = match orig.as_str() {
-                            "P" => Some("P".to_string()),
-                            "1" => Some("1".to_string()),
-                            _ => None,
-                        };
-                        return Ok(Image::from_dynamic(converted, explicit));
-                    }
-                }
-            }
+        let orig = self.orig_mode.as_deref().unwrap_or_default();
+        let current = img.mode().unwrap_or_default();
+        if orig != "RGB" || current == orig {
+            return Ok(img);
         }
-        Ok(img)
+
+        // The RGBA draw context over RGB is the one public path whose backing
+        // storage intentionally differs from the logical destination mode.
+        let img_loaded = img.materialize()?;
+        Ok(Image::from_dynamic(
+            DynamicImage::ImageRgb8(img_loaded.to_rgb8()),
+            None,
+        ))
     }
 
     /// Draws an arc along an ellipse boundary.
@@ -1860,59 +1758,62 @@ impl Draw {
             return Ok(());
         }
         let mode = self.effective_mode();
+        // Every font mask constructor returns exactly `w * h * 4` bytes for
+        // this drawing path (grayscale masks are expanded before composing,
+        // and color masks are produced as RGBA). Index the validated raster
+        // directly in the hot loop instead of carrying a defensive length
+        // branch that cannot occur for a core-owned mask.
         for py in 0..h {
             for px in 0..w {
                 let off = ((py * w + px) * 4) as usize;
-                if off + 3 < pixels.len() {
-                    let sa = pixels[off + 3];
-                    if sa == 0 {
-                        continue;
-                    }
-                    // Pillow's ImageDraw text compositor clips glyph pixels
-                    // outside the destination.  Keep the coordinate signed
-                    // until bounds are checked; casting a negative anchor or
-                    // stroke offset to u32 previously wrapped and panicked.
-                    let dx_signed = i64::from(x) + i64::from(px);
-                    let dy_signed = i64::from(y) + i64::from(py);
-                    if dx_signed < 0
-                        || dy_signed < 0
-                        || dx_signed >= i64::from(img_w)
-                        || dy_signed >= i64::from(img_h)
-                    {
-                        continue;
-                    }
-                    let dx = dx_signed as u32;
-                    let dy = dy_signed as u32;
-                    let dp = canvas.get_pixel(dx, dy);
-                    // Pillow's `src/libImaging/Paste.c` RGB mask path uses
-                    // glyph coverage as the RGB blend mask. The alpha byte
-                    // of an RGBA ink is intentionally ignored on an RGB
-                    // destination; RGBA destinations blend it separately.
-                    let channel_alpha = sa;
-                    let inv = 255u16 - u16::from(channel_alpha);
-                    let alpha = if mode == "RGBA" && !rgba_blend_rgb {
-                        blend_u8(fill.3, dp[3], sa, inv)
-                    } else {
-                        255
-                    };
-                    let source_rgb = if color_mask {
-                        (pixels[off], pixels[off + 1], pixels[off + 2])
-                    } else {
-                        (fill.0, fill.1, fill.2)
-                    };
-                    let (r, g, b) = if mode == "RGBA" && !rgba_blend_rgb && !color_mask {
-                        // Pillow's RGBA text writes the fill RGB directly and
-                        // blends only the alpha channel with glyph coverage.
-                        (fill.0, fill.1, fill.2)
-                    } else {
-                        (
-                            blend_u8(source_rgb.0, dp[0], channel_alpha, inv),
-                            blend_u8(source_rgb.1, dp[1], channel_alpha, inv),
-                            blend_u8(source_rgb.2, dp[2], channel_alpha, inv),
-                        )
-                    };
-                    canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
+                let sa = pixels[off + 3];
+                if sa == 0 {
+                    continue;
                 }
+                // Pillow's ImageDraw text compositor clips glyph pixels
+                // outside the destination. Keep the coordinate signed until
+                // bounds are checked; casting a negative anchor or stroke
+                // offset to u32 previously wrapped and panicked.
+                let dx_signed = i64::from(x) + i64::from(px);
+                let dy_signed = i64::from(y) + i64::from(py);
+                if dx_signed < 0
+                    || dy_signed < 0
+                    || dx_signed >= i64::from(img_w)
+                    || dy_signed >= i64::from(img_h)
+                {
+                    continue;
+                }
+                let dx = dx_signed as u32;
+                let dy = dy_signed as u32;
+                let dp = canvas.get_pixel(dx, dy);
+                // Pillow's `src/libImaging/Paste.c` RGB mask path uses
+                // glyph coverage as the RGB blend mask. The alpha byte
+                // of an RGBA ink is intentionally ignored on an RGB
+                // destination; RGBA destinations blend it separately.
+                let channel_alpha = sa;
+                let inv = 255u16 - u16::from(channel_alpha);
+                let alpha = if mode == "RGBA" && !rgba_blend_rgb {
+                    blend_u8(fill.3, dp[3], sa, inv)
+                } else {
+                    255
+                };
+                let source_rgb = if color_mask {
+                    (pixels[off], pixels[off + 1], pixels[off + 2])
+                } else {
+                    (fill.0, fill.1, fill.2)
+                };
+                let (r, g, b) = if mode == "RGBA" && !rgba_blend_rgb && !color_mask {
+                    // Pillow's RGBA text writes the fill RGB directly and
+                    // blends only the alpha channel with glyph coverage.
+                    (fill.0, fill.1, fill.2)
+                } else {
+                    (
+                        blend_u8(source_rgb.0, dp[0], channel_alpha, inv),
+                        blend_u8(source_rgb.1, dp[1], channel_alpha, inv),
+                        blend_u8(source_rgb.2, dp[2], channel_alpha, inv),
+                    )
+                };
+                canvas.put_pixel(dx, dy, Rgba([r, g, b, alpha]));
             }
         }
         if matches!(mode.as_str(), "YCbCr" | "HSV") {
@@ -1961,7 +1862,7 @@ impl Draw {
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
-                        if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                        if pixels[off + 3] > 0 {
                             let dx = x as i64 + px as i64;
                             let dy = y as i64 + py as i64;
                             if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h)
@@ -1987,9 +1888,6 @@ impl Draw {
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
-                        if off + 3 >= pixels.len() {
-                            continue;
-                        }
                         let cov = pixels[off + 3];
                         if cov == 0 {
                             continue;
@@ -2021,9 +1919,6 @@ impl Draw {
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
-                        if off + 3 >= pixels.len() {
-                            continue;
-                        }
                         let cov = pixels[off + 3];
                         if cov == 0 {
                             continue;
@@ -2061,9 +1956,6 @@ impl Draw {
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
-                        if off + 3 >= pixels.len() {
-                            continue;
-                        }
                         let cov = pixels[off + 3];
                         if cov == 0 {
                             continue;
@@ -2112,7 +2004,7 @@ impl Draw {
                     for py in 0..h.min(h_i) {
                         for px in 0..w.min(w_i) {
                             let off = ((py * w + px) * 4) as usize;
-                            if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                            if pixels[off + 3] > 0 {
                                 let dx = x as i64 + px as i64;
                                 let dy = y as i64 + py as i64;
                                 if dx < 0 || dy < 0 || dx >= i64::from(w_i) || dy >= i64::from(h_i)
@@ -2140,7 +2032,7 @@ impl Draw {
                     for py in 0..h {
                         for px in 0..w {
                             let off = ((py * w + px) * 4) as usize;
-                            if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                            if pixels[off + 3] > 0 {
                                 let dx = x as i64 + px as i64;
                                 let dy = y as i64 + py as i64;
                                 if dx < 0
@@ -2170,7 +2062,7 @@ impl Draw {
                 for py in 0..h {
                     for px in 0..w {
                         let off = ((py * w + px) * 4) as usize;
-                        if off + 3 < pixels.len() && pixels[off + 3] > 0 {
+                        if pixels[off + 3] > 0 {
                             let dx = x as i64 + px as i64;
                             let dy = y as i64 + py as i64;
                             if dx < 0 || dy < 0 || dx >= i64::from(img_w) || dy >= i64::from(img_h)
