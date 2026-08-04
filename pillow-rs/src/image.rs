@@ -1720,11 +1720,11 @@ impl Image {
     ///
     /// Returns [`PilError::IndexError`] when coordinates are outside the image.
     pub fn getpixel(&self, x: u32, y: u32) -> Result<(u8, u8, u8, u8), PilError> {
-        let (w, h) = self.size()?;
+        let img = self.materialized_shared()?;
+        let (w, h) = (img.width(), img.height());
         if x >= w || y >= h {
             return Err(PilError::IndexError("image index out of range".into()));
         }
-        let img = self.materialized_shared()?;
         let rgba = img.get_pixel(x, y).0;
         Ok((
             rgba[0],
@@ -1736,9 +1736,10 @@ impl Image {
 
     /// Returns one pixel with Pillow's mode-specific scalar or tuple shape.
     pub fn getpixel_formatted(&self, x: u32, y: u32) -> Result<FormattedPixelValue, PilError> {
-        let mode = self.mode()?;
+        let img = self.materialized_shared()?;
+        let mode = self.mode_from_materialized(&img);
+        let (width, height) = (img.width(), img.height());
         if mode == "I" || mode == "F" {
-            let (width, height) = self.size()?;
             if x >= width || y >= height {
                 return Err(PilError::IndexError("image index out of range".into()));
             }
@@ -1746,7 +1747,7 @@ impl Image {
                 .checked_mul(width as usize)
                 .and_then(|row| row.checked_add(x as usize))
                 .ok_or_else(|| PilError::InternalError("pixel index overflow".into()))?;
-            return match self.scalar_samples(&mode)? {
+            return match Self::scalar_samples_from_materialized(&img, &mode) {
                 ScalarImageSamples::Integer(values) => values
                     .get(index)
                     .copied()
@@ -3536,7 +3537,8 @@ impl Image {
             // Pillow validates the requested logical band before extracting
             // it. Keep this check in the core so every binding observes the
             // same contract instead of silently clamping to RGBA channel 3.
-            let band_count = self.getbands()?.len();
+            let mode = self.mode_from_materialized(&img);
+            let band_count = pillow_band_count(&mode);
             if band < 0 || band as usize >= band_count {
                 return Err(PilError::ValueError("band index out of range".into()));
             }
@@ -4022,15 +4024,15 @@ impl Image {
             // this is the public mode contract, independent of TIFF decoding.
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
+        let img = self.materialized_shared()?;
         if mode == "I" || mode == "F" {
-            return self.getcolors_scalar(maxcolors, &mode);
+            return Self::getcolors_scalar(maxcolors, &mode, &img);
         }
         // For 1, L, P modes, PIL uses histogram (pixel value ascending)
         if mode == "1" || mode == "L" || mode == "P" {
-            return self.getcolors_histogram(maxcolors);
+            return Self::getcolors_histogram(maxcolors, &img);
         }
         // For multi-channel modes, use pixel-level counting
-        let img = self.materialized_shared()?;
         let n_bands = match img.color() {
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
             crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
@@ -4147,10 +4149,9 @@ impl Image {
     ///   h = self.im.histogram()
     ///   out = [(h[i], i) for i in range(256) if h[i]]
     fn getcolors_histogram(
-        &self,
         maxcolors: u32,
+        img: &DynamicImage,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        let img = self.materialized_shared()?;
         // Compute a 256-bin histogram.  All Rust-backed single-band modes,
         // including P and 1, expose their samples through the luma view after
         // materialization, so a second color-type arm only added an unreachable
@@ -4174,11 +4175,11 @@ impl Image {
     /// Counts Pillow's scalar `I` and `F` modes without converting their
     /// four-byte samples through the byte-oriented RGBA view.
     fn getcolors_scalar(
-        &self,
         maxcolors: u32,
         mode: &str,
+        img: &DynamicImage,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        match self.scalar_samples(mode)? {
+        match Self::scalar_samples_from_materialized(img, mode) {
             ScalarImageSamples::Integer(values) => {
                 let mut counts = std::collections::HashMap::<i32, u32>::new();
                 for value in values {
@@ -4391,7 +4392,7 @@ impl Image {
         let (w, h) = (img.width() as usize, img.height() as usize);
         let mut h_proj = vec![0u32; w];
         let mut v_proj = vec![0u32; h];
-        let mode = self.mode()?;
+        let mode = self.mode_from_materialized(&img);
         let mut mark = |index: usize| {
             let x = index % w;
             let y = index / w;
@@ -4403,7 +4404,7 @@ impl Image {
         // samples. Converting RGB/RGBA to luma first loses low red/blue and
         // alpha-only pixels, even though Pillow projects those pixels.
         if matches!(mode.as_str(), "I" | "F") {
-            match self.scalar_samples(&mode)? {
+            match Self::scalar_samples_from_materialized(&img, &mode) {
                 ScalarImageSamples::Integer(values) => {
                     for (index, value) in values.into_iter().enumerate() {
                         if value != 0 {
