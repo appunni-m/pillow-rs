@@ -542,11 +542,18 @@ pub fn fit_with_input(
 ) -> Result<Image, PilError> {
     let filter_was_none = filter.is_none();
     let filter = parse_imageops_filter(filter)?;
-    if matches!(&centering, CenteringInput::Values(values) if values.len() == 2
-        && values[0] == 0.5 && values[1] == 0.5)
-    {
-        return fit(image, w, h, None, bleed, (0.5, 0.5));
-    }
+    // Pillow treats an explicit `(0.5, 0.5)` pair exactly like the omitted
+    // default, but it still preserves an explicitly supplied resampling
+    // method. Normalize the centering in core so that the default path cannot
+    // discard that method before building the pipeline operation.
+    let centering = match centering {
+        CenteringInput::Values(values)
+            if values.len() == 2 && values[0] == 0.5 && values[1] == 0.5 =>
+        {
+            CenteringInput::Default
+        }
+        centering => centering,
+    };
     let centering = resolve_centering(centering, false)?;
     if filter_was_none && centering == (0.5, 0.5) {
         return fit(image, w, h, None, bleed, centering);
