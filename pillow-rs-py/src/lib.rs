@@ -181,8 +181,29 @@ fn rotate_expand_input_from_python(
             .map(pillow_rs::RotateExpandInput::Boolean)
             .unwrap_or(pillow_rs::RotateExpandInput::Invalid),
         None => pillow_rs::RotateExpandInput::Boolean(false),
-        Some(_) => pillow_rs::RotateExpandInput::Invalid,
+        Some(value) => value.extract::<i64>().map_or(
+            pillow_rs::RotateExpandInput::Invalid,
+            pillow_rs::RotateExpandInput::Integer,
+        ),
     }
+}
+
+fn rotate_point_input_from_python(
+    value: Option<&Bound<'_, PyAny>>,
+) -> PyResult<pillow_rs::RotatePointInput> {
+    let Some(value) = value else {
+        return Ok(pillow_rs::RotatePointInput::Default);
+    };
+    if value.is_none() {
+        return Ok(pillow_rs::RotatePointInput::Default);
+    }
+    if let Ok(values) = value.extract::<Vec<f64>>() {
+        return Ok(pillow_rs::RotatePointInput::Values(values));
+    }
+    Ok(pillow_rs::RotatePointInput::Invalid {
+        type_name: value.get_type().name()?.to_string(),
+        truthy: value.is_truthy()?,
+    })
 }
 
 fn convert_mode_input_from_python(
@@ -704,13 +725,17 @@ impl PyImage {
         translate: Option<&Bound<'_, PyAny>>,
         fillcolor: Option<&Bound<'_, PyAny>>,
     ) -> PyResult<PyImage> {
-        let _ = (center, translate, fillcolor);
+        let center = rotate_point_input_from_python(center)?;
+        let translate = rotate_point_input_from_python(translate)?;
+        let _ = fillcolor;
         let rs = self
             .inner
             .rotate_with_input(
                 angle,
                 rotate_resample_input_from_python(resample),
                 rotate_expand_input_from_python(expand),
+                center,
+                translate,
                 None,
             )
             .map_err(map_error)?;

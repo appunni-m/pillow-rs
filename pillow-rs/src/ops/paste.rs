@@ -219,11 +219,20 @@ impl Image {
                 self.paste_at(source, None, mask.as_ref())
             }
             PythonPasteBox::Values(values) => match values.as_slice() {
-                [x, y] => self.paste_at(
-                    source,
-                    Some((coordinate(*x)?, coordinate(*y)?)),
-                    mask.as_ref(),
-                ),
+                [x, y] => {
+                    // Pillow rejects a two-coordinate solid-color paste for
+                    // lack of a region size before it validates the unused
+                    // coordinates. Keep that error ordering in core so a
+                    // huge coordinate does not change the public error.
+                    if !matches!(&source, PasteSource::Image(_)) && mask.is_none() {
+                        return self.paste_at(source, None, None);
+                    }
+                    self.paste_at(
+                        source,
+                        Some((coordinate(*x)?, coordinate(*y)?)),
+                        mask.as_ref(),
+                    )
+                }
                 [left, top, right, bottom] => self.paste(
                     source,
                     Some((

@@ -307,6 +307,7 @@ pub use crate::ops::resize::ResampleInput;
 pub use crate::ops::resize::parse_resample;
 pub use crate::ops::resize::parse_resample_input;
 pub use crate::ops::rotate::RotateExpandInput;
+pub use crate::ops::rotate::RotatePointInput;
 pub use crate::ops::rotate::RotateResampleInput;
 pub use crate::ops::rotate::normalize_python_rotate;
 pub use crate::ops::transform::ReduceBox;

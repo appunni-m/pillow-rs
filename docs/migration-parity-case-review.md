@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 208
 - Manifest requirements: 1794
-- Active parity workflows: 2529
-- Unique active workflow signatures: 2529
+- Active parity workflows: 2552
+- Unique active workflow signatures: 2552
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1353
+- Deliberate nuanced workflows: 1376
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,11 +23,11 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 205 |
-| `PIL.Image.Image` | 1149 |
+| `PIL.Image.Image` | 1157 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 436 |
+| `PIL.ImageDraw.ImageDraw` | 451 |
 | `PIL.ImageEnhance` | 24 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
@@ -414,16 +414,20 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.color-pa-two-tuple`
 - `PIL.Image.Image.paste.nuanced.color-rgb`
 - `PIL.Image.Image.paste.nuanced.color-rgb-four-tuple`
+- `PIL.Image.Image.paste.nuanced.color-rgb-tuple-into-cmyk`
 - `PIL.Image.Image.paste.nuanced.color-rgba`
+- `PIL.Image.Image.paste.nuanced.color-rgba-tuple-into-rgb`
 - `PIL.Image.Image.paste.nuanced.color-two-tuple-box`
 - `PIL.Image.Image.paste.nuanced.color-ycbcr-four-tuple`
 - `PIL.Image.Image.paste.nuanced.color-zero-region`
 - `PIL.Image.Image.paste.nuanced.degenerate-color-box-height`
 - `PIL.Image.Image.paste.nuanced.degenerate-image-box`
 - `PIL.Image.Image.paste.nuanced.empty-tuple-error`
+- `PIL.Image.Image.paste.nuanced.f-five-tuple-error`
 - `PIL.Image.Image.paste.nuanced.f-int-fill`
 - `PIL.Image.Image.paste.nuanced.five-tuple-error`
 - `PIL.Image.Image.paste.nuanced.i-two-tuple-error`
+- `PIL.Image.Image.paste.nuanced.image-inverted-height-box`
 - `PIL.Image.Image.paste.nuanced.l-from-rgb`
 - `PIL.Image.Image.paste.nuanced.l-source-into-rgb`
 - `PIL.Image.Image.paste.nuanced.l-two-tuple-error`
@@ -438,6 +442,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.p-pipeline-source`
 - `PIL.Image.Image.paste.nuanced.p-pipeline-source-with-palette`
 - `PIL.Image.Image.paste.nuanced.p-source-into-pa`
+- `PIL.Image.Image.paste.nuanced.pa-five-tuple-error`
 - `PIL.Image.Image.paste.nuanced.pa-from-l`
 - `PIL.Image.Image.paste.nuanced.pa-from-p`
 - `PIL.Image.Image.paste.nuanced.region-mask-mismatch`
@@ -457,6 +462,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.string-color-rgb`
 - `PIL.Image.Image.paste.nuanced.string-color-rgba`
 - `PIL.Image.Image.paste.nuanced.truthy-non-image-mask`
+- `PIL.Image.Image.paste.nuanced.two-coordinate-overflow`
 - `PIL.Image.Image.point.nuanced.expanded-rgb-lut`
 - `PIL.Image.Image.point.nuanced.l-replicated-lut`
 - `PIL.Image.Image.point.nuanced.la-replicated-lut`
@@ -626,9 +632,11 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.zero-height`
 - `PIL.Image.Image.resize.nuanced.zero-width`
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
+- `PIL.Image.Image.rotate.nuanced.invalid-resample-name`
 - `PIL.Image.Image.rotate.nuanced.mode-l-90-non-expand`
 - `PIL.Image.Image.rotate.nuanced.mode-la-90-non-expand`
 - `PIL.Image.Image.rotate.nuanced.mode-rgba-90-non-expand`
+- `PIL.Image.Image.rotate.nuanced.non-boolean-expand`
 - `PIL.Image.Image.rotate.nuanced.opened-rgb`
 - `PIL.Image.Image.rotate.nuanced.opened-rgb-270-expand`
 - `PIL.Image.Image.save.nuanced.cmyk-bmp-error`
@@ -941,6 +949,8 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.tall-ellipse-axis-transpose`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.wrapped-negative-angles`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.attached-palette`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.attached-palette-opaque-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.attached-palette-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-1-one-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-cmyk-half-mask`
@@ -967,6 +977,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-one-half-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p-half-mask`
+- `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p-tuple-fill`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-p-zero-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-half-mask`
 - `PIL.ImageDraw.ImageDraw.bitmap.nuanced.canvas-rgb-l-mask`
@@ -1000,6 +1011,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.canvas-la`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.fill-outline-width`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.reversed-box`
+- `PIL.ImageDraw.ImageDraw.ellipse.nuanced.reversed-y-box`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.zero-size`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.canvas-ycbcr-int-fill`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.empty-points-no-op`
@@ -1009,7 +1021,9 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.line.nuanced.malformed-nested-point-error`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.odd-flat-points-error`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.out-of-bounds`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.partially-clipped-negative-line`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.reverse-axes`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.reversed-slope-directions`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.scalar-points-error`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.shallow-low-slope`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.shallow-negative-y`
@@ -1058,6 +1072,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.canvas-cmyk`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.coalesced-horizontal-decreasing`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.coalesced-horizontal-increasing`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.concave-collinear-clipped`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.empty-points-error`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.horizontal-only`
@@ -1091,6 +1106,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.too-many-nested-box-points-error`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.heptagon-rotated`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.invalid-side-count-error`
+- `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.nested-bounding-circle`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.pentagon-rotated`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.rotated-hexagon`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.rotation-wrap`
@@ -1111,18 +1127,25 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.shape.nuanced.empty-outline-no-op`
 - `PIL.ImageDraw.ImageDraw.shape.nuanced.filled-and-outlined`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.attached-palette-negative-position`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.bytes-latin1`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-1`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-cmyk`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-cmyk-negative-position`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-f`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-f-negative-position`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-hsv`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-i`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-i-negative-position`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-l`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-l-small`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-la`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-la-negative-position`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-la-opaque-destination`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-one-small`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-p`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-p-small`
+- `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-rgb-negative-position`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-rgba-tuple-fill`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.canvas-ycbcr`
 - `PIL.ImageDraw.ImageDraw.text.nuanced.embedded-bgra-rgb`
