@@ -1170,6 +1170,7 @@
           "PIL.Image.Image.paste.nuanced.image-two-coordinate-x-overflow",
           "PIL.Image.Image.paste.nuanced.image-two-coordinate-y-overflow",
           "PIL.Image.Image.paste.nuanced.image-box-left-overflow",
+          "PIL.Image.Image.paste.nuanced.image-box-left-underflow",
           "PIL.Image.Image.paste.nuanced.image-box-top-overflow",
           "PIL.Image.Image.paste.nuanced.image-box-right-overflow",
           "PIL.Image.Image.paste.nuanced.image-box-bottom-overflow",
