@@ -161,8 +161,7 @@ class Image:
     @classmethod
     def merge(cls, mode: str, bands: Tuple["Image", ...]) -> "Image":
         """Merge a set of single-band images into a new multi-band image."""
-        rust_bands = list(map(lambda b: b._rust_image, bands))
-        rust_image = RustImage.merge(mode, rust_bands)
+        rust_image = RustImage.merge(mode, bands)
         return cls(rust_image)
 
     @classmethod

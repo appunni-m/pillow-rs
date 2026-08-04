@@ -365,6 +365,21 @@ fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
     })
 }
 
+/// Converts a host iterable into optional Rust image handles.
+///
+/// Object extraction is the only binding responsibility here. The core owns
+/// invalid-item errors and merge mode/arity validation through
+/// `image_merge_inputs`.
+fn merge_inputs_from_python(values: &Bound<'_, PyAny>) -> PyResult<Vec<Option<RsImage>>> {
+    values
+        .iter()?
+        .map(|item| {
+            let obj = item?;
+            Ok(image_from_python(&obj))
+        })
+        .collect()
+}
+
 fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PythonPasteSource {
     if let Some(image) = image_from_python(value) {
         return pillow_rs::PythonPasteSource::Image(image);
@@ -1508,15 +1523,8 @@ impl PyImage {
 
     #[classmethod]
     fn merge(_cls: &Bound<'_, PyType>, mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
-        let mut images = Vec::new();
-        for item in bands.iter()? {
-            let obj = item?;
-            let py_img = obj.downcast::<PyImage>().map_err(|_| {
-                pyo3::exceptions::PyTypeError::new_err("bands must be a sequence of Image objects")
-            })?;
-            images.push(py_img.borrow().inner.clone());
-        }
-        pillow_rs::image_merge(mode, &images)
+        let inputs = merge_inputs_from_python(bands)?;
+        pillow_rs::image_merge_inputs(mode, &inputs)
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -4181,23 +4189,8 @@ fn chops_offset(
 
 #[pyfunction]
 fn image_merge(mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
-    let mut band_images: Vec<pillow_rs::Image> = Vec::new();
-    let mut invalid_band = false;
-    for item in bands.iter()? {
-        let obj = item?;
-        if let Some(image) = image_from_python(&obj) {
-            band_images.push(image);
-        } else {
-            invalid_band = true;
-        }
-    }
-    if invalid_band {
-        // Preserve Pillow's core-owned mode/arity error ordering. The host
-        // adapter records only that extraction failed; Rust decides whether
-        // the public result is a mode or band-count error.
-        band_images.clear();
-    }
-    let rs = pillow_rs::image_merge(mode, &band_images).map_err(map_error)?;
+    let inputs = merge_inputs_from_python(bands)?;
+    let rs = pillow_rs::image_merge_inputs(mode, &inputs).map_err(map_error)?;
     Ok(PyImage { inner: rs })
 }
 
