@@ -7557,6 +7557,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "mode.i",
+            "name": "i16n-frombytes-nearest",
+            "scenario_inline_image": "i16n-frombytes",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([1, 1]),
+                "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "thumbnail",
             "requirement_suffix": "mode.rgb",
             "name": "rgb-reducing-downscale",

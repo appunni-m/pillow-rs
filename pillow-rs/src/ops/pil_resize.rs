@@ -10,7 +10,7 @@
 //! intermediate rounding to match the two-pass quantization behavior.
 
 use crate::pipeline::ResampleFilter;
-use crate::raster::DynamicImage;
+use crate::raster::{DynamicImage, ImageBuffer, Luma};
 
 // ── Filter kernels ──
 
@@ -110,6 +110,43 @@ fn pixel_at(img: &DynamicImage, x: u32, y: u32) -> [f64; 4] {
             [p[0] as f64, p[1] as f64, p[2] as f64, p[3] as f64]
         }
     }
+}
+
+/// Resize a native 16-bit grayscale image through PIL's nearest-neighbor path.
+///
+/// `I;16*` images carry unsigned 16-bit samples.  Keeping them in the native
+/// buffer is required because converting through `to_rgba8()` changes both the
+/// sample width and the bytes returned by `tobytes()`.
+fn pil_resize_luma16_nearest(
+    img: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    dst_w: u32,
+    dst_h: u32,
+) -> DynamicImage {
+    let sw = img.width();
+    let sh = img.height();
+    let scale_x = sw as f64 / dst_w as f64;
+    let scale_y = sh as f64 / dst_h as f64;
+    let mut result = ImageBuffer::new(dst_w, dst_h);
+
+    let mut xintab = Vec::with_capacity(dst_w as usize);
+    let mut xo = scale_x * 0.5;
+    for _ in 0..dst_w {
+        let xi = xo as u32;
+        xintab.push(if xi >= sw { sw - 1 } else { xi });
+        xo += scale_x;
+    }
+
+    let mut yo = scale_y * 0.5;
+    for dy in 0..dst_h {
+        let sy = if yo >= sh as f64 { sh - 1 } else { yo as u32 };
+        for dx in 0..dst_w {
+            let sx = xintab[dx as usize];
+            result.put_pixel(dx, dy, *img.get_pixel(sx, sy));
+        }
+        yo += scale_y;
+    }
+
+    DynamicImage::ImageLuma16(result)
 }
 
 /// PIL uses 22-bit fixed-point arithmetic (PRECISION_BITS=22) for weights
@@ -579,6 +616,15 @@ pub fn pil_resize(
     // Handle empty
     if dst_w == 0 || dst_h == 0 || img.width() == 0 || img.height() == 0 {
         return DynamicImage::new_rgba8(dst_w, dst_h);
+    }
+
+    // Pillow keeps I;16* samples in the native 16-bit resize path.  The
+    // generic pixel accessor below is byte-oriented and would otherwise
+    // convert this mode to RGBA8 before preserving only its mode label.
+    if matches!(filter, ResampleFilter::Nearest) {
+        if let DynamicImage::ImageLuma16(luma) = img {
+            return pil_resize_luma16_nearest(luma, dst_w, dst_h);
+        }
     }
 
     // Retain original image for final mode preservation
