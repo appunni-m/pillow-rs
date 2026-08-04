@@ -2236,78 +2236,31 @@ impl Image {
     /// Returns [`PilError`] when neither the retained mode metadata nor lazy
     /// image data is sufficient to determine the bands.
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
-        if matches!(self, Image::Paletted(_)) {
-            return Ok(vec!["P".to_string()]);
-        }
-        // Check explicit mode for non-standard band names. Deferred pipelines
-        // carry the same side-channel modes as loaded images (notably PA).
-        if let Some(m) = self.explicit_mode() {
-            let bands: Vec<String> = match m {
-                "CMYK" => vec![
-                    "C".to_string(),
-                    "M".to_string(),
-                    "Y".to_string(),
-                    "K".to_string(),
-                ],
-                "YCbCr" => vec!["Y".to_string(), "Cb".to_string(), "Cr".to_string()],
-                "HSV" => vec!["H".to_string(), "S".to_string(), "V".to_string()],
-                "PA" => vec!["P".to_string(), "A".to_string()],
-                // Pillow preserves the lowercase premultiplied-alpha band
-                // name for RGBa instead of normalizing it to RGBA's "A".
-                "RGBa" => vec![
-                    "R".to_string(),
-                    "G".to_string(),
-                    "B".to_string(),
-                    "a".to_string(),
-                ],
-                "I" | "F" | "P" | "1" => vec![m.to_owned()],
-                "I;16" | "I;16L" | "I;16B" | "I;16N" => vec!["I".to_owned()],
-                _ => vec![],
-            };
-            if !bands.is_empty() {
-                return Ok(bands.iter().map(|s| s.to_string()).collect());
-            }
-        }
-
         // Pillow's Image.getbands -> ImagingCore.getbands derives names from
-        // the mode metadata without touching pixel storage. A decoder can
-        // know that mode from its header before pixel data is available, so a
-        // truncated or otherwise undecodable lazy image still returns its
-        // band names. Only fall through when the mode itself is unknown.
+        // canonical mode metadata without touching pixel storage. `mode()`
+        // already preserves explicit tags for non-standard modes and can read
+        // a decoder header before pixel data is available, so this handles
+        // truncated lazy images without a duplicate pixel-channel fallback.
         let mode = self.mode()?;
-        let bands = match mode.as_str() {
+        let bands: Vec<&str> = match mode.as_str() {
             "CMYK" => vec!["C", "M", "Y", "K"],
             "YCbCr" => vec!["Y", "Cb", "Cr"],
             "HSV" => vec!["H", "S", "V"],
             "PA" => vec!["P", "A"],
             "RGBa" => vec!["R", "G", "B", "a"],
-            "I" | "F" | "P" | "1" | "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+            "I" | "F" | "P" | "1" => {
                 vec![mode.as_str()]
             }
+            // Pillow exposes all unsigned 16-bit luma variants as one logical
+            // band named "I", regardless of their byte order.
+            "I;16" | "I;16L" | "I;16B" | "I;16N" => vec!["I"],
             "L" => vec!["L"],
             "LA" => vec!["L", "A"],
             "RGB" => vec!["R", "G", "B"],
             "RGBA" => vec!["R", "G", "B", "A"],
             _ => Vec::new(),
         };
-        if !bands.is_empty() {
-            return Ok(bands.into_iter().map(str::to_string).collect());
-        }
-
-        let img = self.materialized_shared()?;
-        let bands = match img.color().channel_count() {
-            1 => vec!["L".to_string()],
-            2 => vec!["L".to_string(), "A".to_string()],
-            3 => vec!["R".to_string(), "G".to_string(), "B".to_string()],
-            4 => vec![
-                "R".to_string(),
-                "G".to_string(),
-                "B".to_string(),
-                "A".to_string(),
-            ],
-            _ => vec!["?".to_string()],
-        };
-        Ok(bands)
+        Ok(bands.into_iter().map(str::to_string).collect())
     }
 
     /// Encodes the image using the requested Pillow format name.
