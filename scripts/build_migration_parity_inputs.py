@@ -3489,6 +3489,13 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image",
             "operation": "open",
+            "requirement_suffix": "parameter.mode",
+            "name": "non-string-mode",
+            "values": {"mode": literal(1)},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
             "requirement_suffix": "parameter.fp",
             "name": "embedded-null-bytes",
             "edge": "embedded-null-bytes",
