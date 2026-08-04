@@ -11,7 +11,7 @@ The manifest.yaml was verified against actual PIL 12.2.0 source code and documen
 1. **`open`/`new` wrongly classified as `Image.class_methods`** — they are module-level functions in PIL
 2. **`supported_modes` are systematically under-reported** across most entries
 3. **Several functions have placeholder `(*args, **kwargs)` signatures** that should have real signatures
-4. **Missing functions:** `has_transparency_data()`, `linear_gradient()`, `radial_gradient()`, `ImageSequence.all_frames()`, FreeTypeFont methods, `TransposedFont` class
+4. **Missing functions:** `linear_gradient()`, `radial_gradient()`, `ImageSequence.all_frames()`, FreeTypeFont methods, `TransposedFont` class
 5. **Mode listing inconsistencies** between ImageChops and ImageModule for the same underlying function
 
 ---
@@ -23,7 +23,7 @@ The manifest.yaml was verified against actual PIL 12.2.0 source code and documen
 | # | Severity | Issue | Detail |
 |---|----------|-------|--------|
 | 1 | **HIGH** | `open`/`new` classified as `class_methods` | In PIL these are **module-level functions only**, not methods on the `Image.Image` class. Remove from `class_methods`, keep in `ImageModule.functions` |
-| 2 | **HIGH** | `has_transparency_data()` missing | Real PIL method: `has_transparency_data(self) -> bool`. Not in manifest at all |
+| 2 | **RESOLVED** | `has_transparency_data()` was missing | Added as a `property_get` endpoint with input-only parity and coverage cases |
 | 3 | **HIGH** | `linear_gradient()`, `radial_gradient()` missing from ImageModule | Real PIL module-level functions for creating gradients |
 | 4 | **MEDIUM** | `supported_modes` incomplete for ~25 methods | Most methods work on ALL modes but manifest only lists a subset. E.g., `copy()`, `split()`, `getbands()`, `getpixel()`, `putpixel()`, `load()`, `tobytes()` all work on every mode |
 | 5 | **MEDIUM** | 8 methods have placeholder `(*args, **kwargs)` signatures | `getexif`, `getim`, `getxmp`, `getpalette`, `putpalette`, `apply_transparency`, `get_child_images`, `get_flattened_data` all have real signatures in PIL |
@@ -211,7 +211,7 @@ Several functions appear in multiple places:
 
 ### High Priority (wrong API surface)
 1. Remove `open`/`new` from `Image.class_methods` — keep only in `ImageModule.functions`
-2. Add `has_transparency_data()` to Image.methods
+2. Add `has_transparency_data()` to Image.methods — **completed**
 3. Add `linear_gradient()` and `radial_gradient()` to ImageModule.functions
 4. Add `all_frames()` to ImageSequence
 5. Fix `load_default_imagefont()` and `load_path()` signatures (remove `*args, **kwargs`)

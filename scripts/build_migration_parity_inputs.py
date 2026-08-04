@@ -17204,6 +17204,27 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "has_transparency_data",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-mode",
+            "mode": "RGBA",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "has_transparency_data",
+            "requirement_suffix": "behavior.default",
+            "name": "la-mode",
+            "mode": "LA",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "has_transparency_data",
+            "requirement_suffix": "behavior.default",
+            "name": "p-transparency",
+            "scenario_asset": "image/p-transparency.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getpalette",
             "requirement_suffix": "parameter.rawmode",
             "name": "attached-rgbx",
