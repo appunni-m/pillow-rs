@@ -69545,6 +69545,194 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.info.nuanced.opened-jpeg-format-info",
+      "surface": "PIL.Image.Image",
+      "operation": "info",
+      "covers": [
+        "PIL.Image.Image.info.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.jpg",
+          "sha256": "c4eac9a1418c51055cec8c68c907eab4115f8b9bd6ef42e4516b7300519ecf03",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.info.nuanced.opened-bmp-format-info",
+      "surface": "PIL.Image.Image",
+      "operation": "info",
+      "covers": [
+        "PIL.Image.Image.info.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.bmp",
+          "sha256": "1be07de4fb0652b22524771ea6d9695016c472e5a627878a6786ba255f0a7d34",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.info.nuanced.opened-gif-format-info",
+      "surface": "PIL.Image.Image",
+      "operation": "info",
+      "covers": [
+        "PIL.Image.Image.info.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/p-small.gif",
+          "sha256": "dacb11c9a76f1a096f7aa5768c1395e548b95ba11d3495c6936156d955042b72",
+          "media_type": "image/gif"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.info.nuanced.opened-webp-format-info",
+      "surface": "PIL.Image.Image",
+      "operation": "info",
+      "covers": [
+        "PIL.Image.Image.info.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.webp",
+          "sha256": "a604c170ddee575e5c10228cfe64ffa01911362c598f94549dd18829d8cfa4f7",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "info",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table",
       "surface": "PIL.Image.Image",
       "operation": "apply_transparency",

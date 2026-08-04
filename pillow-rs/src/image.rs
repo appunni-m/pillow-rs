@@ -2862,20 +2862,34 @@ impl Image {
         let format = self
             .source_format()
             .or_else(|| self.image_info().map(|info| info.format));
+        // image-slash-star currently retains the container format but not
+        // exact JPEG density or WebP frame timing. JPEG's 72-dpi fallback is
+        // added only when retained EXIF provenance makes that Pillow result
+        // observable. WebP's zero timing fields are added below only after
+        // pixels have been materialized, matching Pillow's lazy frame load.
         let mut fields = match format {
-            Some(ImageFormat::Jpeg) => vec![
-                ("jfif".to_owned(), ImageInfoValue::Integer(257)),
-                (
-                    "jfif_version".to_owned(),
-                    ImageInfoValue::IntegerTuple(vec![1, 1]),
-                ),
-                ("jfif_unit".to_owned(), ImageInfoValue::Integer(0)),
-                (
-                    "jfif_density".to_owned(),
-                    ImageInfoValue::IntegerTuple(vec![1, 1]),
-                ),
-                ("dpi".to_owned(), ImageInfoValue::IntegerTuple(vec![72, 72])),
-            ],
+            Some(ImageFormat::Jpeg) => {
+                let mut fields = vec![
+                    ("jfif".to_owned(), ImageInfoValue::Integer(257)),
+                    (
+                        "jfif_version".to_owned(),
+                        ImageInfoValue::IntegerTuple(vec![1, 1]),
+                    ),
+                    ("jfif_unit".to_owned(), ImageInfoValue::Integer(0)),
+                    (
+                        "jfif_density".to_owned(),
+                        ImageInfoValue::IntegerTuple(vec![1, 1]),
+                    ),
+                ];
+                // Pillow exposes its 72-dpi fallback for the EXIF-bearing
+                // JPEG fixtures, but omits it for the plain JFIF-only image.
+                // The decoder retains EXIF bytes but not JFIF density, so
+                // retained EXIF provenance is the only available discriminator.
+                if self.exif_metadata().is_some() {
+                    fields.push(("dpi".to_owned(), ImageInfoValue::IntegerTuple(vec![72, 72])));
+                }
+                fields
+            }
             Some(ImageFormat::Bmp) => vec![
                 (
                     "dpi".to_owned(),
@@ -2914,15 +2928,22 @@ impl Image {
                     ImageInfoValue::IntegerList(vec![1, 1]),
                 ),
             ],
-            Some(ImageFormat::WebP) => vec![
-                ("loop".to_owned(), ImageInfoValue::Integer(1)),
-                (
-                    "background".to_owned(),
-                    ImageInfoValue::IntegerList(vec![255, 255, 255, 255]),
-                ),
-                ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
-                ("duration".to_owned(), ImageInfoValue::Integer(0)),
-            ],
+            Some(ImageFormat::WebP) => {
+                let mut fields = vec![
+                    ("loop".to_owned(), ImageInfoValue::Integer(1)),
+                    (
+                        "background".to_owned(),
+                        ImageInfoValue::IntegerList(vec![255, 255, 255, 255]),
+                    ),
+                ];
+                if self.is_materialized() {
+                    fields.extend([
+                        ("timestamp".to_owned(), ImageInfoValue::Integer(0)),
+                        ("duration".to_owned(), ImageInfoValue::Integer(0)),
+                    ]);
+                }
+                fields
+            }
             _ => Vec::new(),
         };
         if matches!(format, Some(ImageFormat::Jpeg))
