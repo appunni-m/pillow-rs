@@ -9652,6 +9652,17 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "parameter.box",
+            "name": "image-box-left-underflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([-2147483649, 0, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
             "name": "image-box-top-overflow",
             "mode": "RGB",
             "im_mode": "RGB",
