@@ -280,12 +280,11 @@ pub fn eval_callable<F>(image: &Image, callback: F) -> Result<Image, PilError>
 where
     F: FnMut(u32) -> Result<i32, PilError>,
 {
-    // Discover the band count in core and build the expanded table here. This
-    // keeps callback LUT construction and multiband replication in one Rust
-    // path, so bindings only adapt the host callback.
-    let n_bands = image.getbands()?.len();
-    let lut = make_lut(n_bands as u32, callback)?;
-    eval(image, &lut)
+    // Keep the callback table single-band here. The shared image-aware path
+    // performs band discovery and replication, preserving the established
+    // point/eval validation and materialization order.
+    let lut = make_lut(1, callback)?;
+    eval_replicated_for_image(image, &lut)
 }
 
 /// Validates and applies a pre-expanded Pillow lookup table.
