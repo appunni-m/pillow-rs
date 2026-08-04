@@ -97,6 +97,16 @@ fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
     Ok(())
 }
 
+/// Host-neutral input classification for `Image.merge` bands.
+#[derive(Debug, Clone)]
+pub enum MergeInput {
+    /// A Rust image extracted by a binding.
+    Image(Image),
+    /// A non-image host value, retaining only its type name for the
+    /// Pillow-compatible attribute error raised by the merge implementation.
+    Invalid(String),
+}
+
 /// Merges single-band images into a multi-band image.
 ///
 /// `mode` determines the required band count: `L=1`, `LA=2`, `RGB=3`, and
@@ -131,20 +141,22 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
 /// Merges host-extracted band inputs while keeping invalid-item handling in
 /// the core contract.
 ///
-/// Binding layers may only know how to turn a host object into an optional
-/// [`Image`]. They must not decide whether a missing item means a mode error,
+/// Binding layers may only classify a host value as an image or retain its
+/// type name. They must not decide whether a missing item means a mode error,
 /// an arity error, or an invalid band. Preserve that ordering here and let the
 /// existing mode/arity validation remain the single source of truth.
-pub fn merge_inputs(mode: &str, bands: &[Option<Image>]) -> Result<Image, PilError> {
+pub fn merge_inputs(mode: &str, bands: &[MergeInput]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
     let mut images = Vec::with_capacity(bands.len());
     for band in bands {
-        let Some(image) = band else {
-            return Err(PilError::TypeError(
-                "bands must be a sequence of Image objects".into(),
-            ));
-        };
-        images.push(image.clone());
+        match band {
+            MergeInput::Image(image) => images.push(image.clone()),
+            MergeInput::Invalid(type_name) => {
+                return Err(PilError::AttributeError(format!(
+                    "'{type_name}' object has no attribute 'load'"
+                )));
+            }
+        }
     }
     merge(mode, &images)
 }
