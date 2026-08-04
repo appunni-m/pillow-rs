@@ -15178,6 +15178,15 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "getcolors",
+            "requirement_suffix": "mode.rgb",
+            "name": "rgb-nonzero",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getcolors",
             "requirement_suffix": "behavior.default",
             "name": "opened-p",
             "scenario_asset": "image/p-small.png",
