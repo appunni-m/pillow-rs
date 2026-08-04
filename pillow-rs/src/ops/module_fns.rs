@@ -76,16 +76,7 @@ pub fn alpha_composite(im1: &Image, im2: &Image) -> Result<Image, PilError> {
     Ok(result)
 }
 
-/// Merges single-band images into a multi-band image.
-///
-/// `mode` determines the required band count: `L=1`, `LA=2`, `RGB=3`, and
-/// `RGBA=4`.
-///
-/// # Errors
-///
-/// Returns [`PilError::ValueError`] when `mode` is unsupported or `bands` has
-/// the wrong length.
-pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
+fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
     let n_expected = match mode {
         "RGB" => 3,
         "RGBA" => 4,
@@ -100,9 +91,23 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
         }
     };
 
-    if bands.len() != n_expected {
+    if band_count != n_expected {
         return Err(PilError::ValueError("wrong number of bands".into()));
     }
+    Ok(())
+}
+
+/// Merges single-band images into a multi-band image.
+///
+/// `mode` determines the required band count: `L=1`, `LA=2`, `RGB=3`, and
+/// `RGBA=4`.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when `mode` is unsupported or `bands` has
+/// the wrong length.
+pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
+    validate_merge_shape(mode, bands.len())?;
 
     let mode_enum = parse_mode(mode)?;
     let mut result = Image::push_op(
@@ -121,6 +126,27 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
         }
     }
     Ok(result)
+}
+
+/// Merges host-extracted band inputs while keeping invalid-item handling in
+/// the core contract.
+///
+/// Binding layers may only know how to turn a host object into an optional
+/// [`Image`]. They must not decide whether a missing item means a mode error,
+/// an arity error, or an invalid band. Preserve that ordering here and let the
+/// existing mode/arity validation remain the single source of truth.
+pub fn merge_inputs(mode: &str, bands: &[Option<Image>]) -> Result<Image, PilError> {
+    validate_merge_shape(mode, bands.len())?;
+    let mut images = Vec::with_capacity(bands.len());
+    for band in bands {
+        let Some(image) = band else {
+            return Err(PilError::TypeError(
+                "bands must be a sequence of Image objects".into(),
+            ));
+        };
+        images.push(image.clone());
+    }
+    merge(mode, &images)
 }
 
 /// Blends two same-sized images by linear interpolation.

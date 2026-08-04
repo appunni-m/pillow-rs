@@ -287,6 +287,7 @@ pub use crate::ops::module_fns::frombytes as image_frombytes;
 pub use crate::ops::module_fns::linear_gradient as image_linear_gradient;
 pub use crate::ops::module_fns::make_lut;
 pub use crate::ops::module_fns::merge as image_merge;
+pub use crate::ops::module_fns::merge_inputs as image_merge_inputs;
 pub use crate::ops::module_fns::radial_gradient as image_radial_gradient;
 pub use crate::ops::module_fns::validate_eval_input;
 pub use crate::ops::param_filters::Color3DLutTable;
