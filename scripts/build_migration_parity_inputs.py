@@ -1009,6 +1009,42 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "quantize-hash-recursive-rebuild":
+            if requested_mode != "RGB":
+                raise ValueError("quantize-hash-recursive-rebuild edge requires RGB mode")
+            # Use 65,537 distinct colors whose channels are all even. After
+            # the first scale increase, the right-shifted colors remain
+            # distinct, forcing QuantHash's recursive rebuild without a large
+            # fixture or probabilistic collision pattern.
+            size = self.scenario_size or [65537, 1]
+            n_pixels = size[0] * size[1]
+            data = bytes(
+                channel
+                for pixel in range(n_pixels)
+                for channel in (
+                    (pixel & 0x7F) * 2,
+                    ((pixel >> 7) & 0x7F) * 2,
+                    ((pixel >> 14) & 0x7F) * 2,
+                )
+            )
+            data_desc = self.inline_bytes(
+                f"{label}-quantize-hash-recursive-rebuild",
+                data,
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge == "quantize-repeated-colors" and label == "image":
             if requested_mode != "RGB":
                 raise ValueError("quantize-repeated-colors edge requires RGB mode")
@@ -2227,6 +2263,14 @@ class WorkflowBuilder:
                     },
                     step_id="setup-quantize-palette",
                 )
+                self.scenario_values["palette"] = binding(palette_step)
+                receiver_step = image_step
+            elif chain == "quantize-palette-empty":
+                image_step = self.ensure_image(mode="RGB")
+                palette_step = self.ensure_image(mode="P", label="palette")
+                # Image.new("P", ...) is a valid palette argument even before
+                # putpalette attaches entries. Keep this public edge separate
+                # so the target must preserve Pillow's empty-palette result.
                 self.scenario_values["palette"] = binding(palette_step)
                 receiver_step = image_step
             elif chain == "quantize-palette-unsupported-source":
@@ -13627,6 +13671,19 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "quantize",
             "requirement_suffix": "parameter.method",
+            "name": "maxcoverage-zero-size",
+            "mode": "RGB",
+            "edge": "zero-size",
+            "values": {
+                "colors": literal(4),
+                "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
             "name": "maxcoverage-repeated-colors",
             "mode": "RGB",
             "edge": "quantize-repeated-colors",
@@ -13646,6 +13703,32 @@ def build_nuanced_cases(
             "seed": 13,
             "values": {
                 "colors": literal(16),
+                "method": literal(2),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "fast-octree-rgba-zero-width",
+            "mode": "RGBA",
+            "edge": "zero-width",
+            "values": {
+                "colors": literal(4),
+                "method": literal(2),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "fast-octree-rgba-zero-height",
+            "mode": "RGBA",
+            "edge": "zero-height",
+            "values": {
+                "colors": literal(4),
                 "method": literal(2),
                 "kmeans": literal(0),
             },
@@ -13706,9 +13789,52 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "quantize",
             "requirement_suffix": "parameter.method",
+            "name": "mediancut-single-color",
+            "mode": "RGB",
+            "edge": "uniform-fill",
+            "pixel": [10, 20, 30],
+            "values": {
+                "colors": literal(16),
+                "method": literal(0),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "mediancut-single-pixel",
+            "mode": "RGB",
+            "size": [1, 1],
+            "edge": "uniform-fill",
+            "pixel": [10, 20, 30],
+            "values": {
+                "colors": literal(16),
+                "method": literal(0),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
             "name": "median-cut-adaptive-hash-rebuild",
             "mode": "RGB",
             "edge": "quantize-hash-rebuild",
+            "values": {
+                "colors": literal(4),
+                "method": literal(0),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "median-cut-adaptive-hash-recursive-rebuild",
+            "mode": "RGB",
+            "size": [65537, 1],
+            "edge": "quantize-hash-recursive-rebuild",
             "values": {
                 "colors": literal(4),
                 "method": literal(0),
@@ -14877,6 +15003,14 @@ def build_nuanced_cases(
             "pixel": [255, 0, 0],
             "chain": "quantize-palette",
             "values": {"dither": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.palette",
+            "name": "palette-image-empty",
+            "mode": "RGB",
+            "chain": "quantize-palette-empty",
         },
         {
             "surface": "PIL.Image.Image",
