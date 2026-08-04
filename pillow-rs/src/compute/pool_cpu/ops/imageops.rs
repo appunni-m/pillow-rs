@@ -547,7 +547,9 @@ pub fn op_pad(
 pub fn op_crop_border(img: &DynamicImage, border: u32) -> Result<DynamicImage, PilError> {
     let b = border;
     let (w, h) = (img.width(), img.height());
-    if 2 * b >= w || 2 * b >= h {
+    // Pillow permits a border exactly half the image size and returns a
+    // zero-sized image; only a strictly oversized border is invalid.
+    if 2 * b > w || 2 * b > h {
         return Err(PilError::ValueError(
             "crop border exceeds image dimensions".into(),
         ));

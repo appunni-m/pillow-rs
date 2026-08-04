@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 73acf33a00061c0ef2b096039053589e960b7b5e31e3a25c34b84bce0abba111
-coverage_run_id: migration-coverage-52e913cfbd8f4021aab46047ee72c30f
+coverage_run_id: migration-coverage-d064326194224f77b6b930beed8f26d8
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -28,7 +28,7 @@ Component aggregate for backlog ordering: `11228/12124` (92.6%).
 
 ## Operations below 95% region coverage
 
-114 of 208 coverage-required operations are below 95%.
+96 of 208 coverage-required operations are below 95%.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -128,24 +128,6 @@ Component aggregate for backlog ordering: `11228/12124` (92.6%).
 | `PIL.Image.new` | `image-core` | 11228/12124 | 92.6% |
 | `PIL.Image.open` | `image-core` | 11228/12124 | 92.6% |
 | `PIL.Image.radial_gradient` | `image-core` | 11228/12124 | 92.6% |
-| `PIL.ImageOps.autocontrast` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.colorize` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.contain` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.cover` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.crop` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.deform` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.equalize` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.exif_transpose` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.expand` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.fit` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.flip` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.grayscale` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.invert` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.mirror` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.pad` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.posterize` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.scale` | `image-ops` | 812/859 | 94.5% |
-| `PIL.ImageOps.solarize` | `image-ops` | 812/859 | 94.5% |
 
 ## Per-file region coverage for involved components
 
@@ -172,6 +154,4 @@ Component aggregate for backlog ordering: `11228/12124` (92.6%).
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% |
 | `image-font` | `pillow-rs/src/font/mod.rs` | 659/685 | 96.2% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
-| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 812/859 | 94.5% |
-| `image-ops` | `pillow-rs-py/python/pillow_rs/imageops.py` | 0/0 | n/a |
 

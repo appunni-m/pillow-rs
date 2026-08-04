@@ -11712,6 +11712,28 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.size",
+            "name": "wide-source-crop",
+            "values": {
+                "size": literal([7, 13]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.method",
+            "name": "numeric-method-default-centering",
+            "values": {
+                "size": literal([13, 7]),
+                "method": literal(0),
+                "centering": literal([0.5, 0.5]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "autocontrast",
             "requirement_suffix": "parameter.mask",
             "name": "valid-l-mask",
@@ -11797,6 +11819,62 @@ def build_nuanced_cases(
             "values": {
                 "size": literal([20, 12]),
                 "centering": literal([0.25, 0.75]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "vertical-padding",
+            "values": {
+                "size": literal([12, 20]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "half-rounded-contain",
+            "size": [4, 3],
+            "values": {
+                "size": literal([2, 2]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "numeric-method-default-color",
+            "values": {
+                "size": literal([20, 12]),
+                "method": literal(0),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "palette-vertical-padding",
+            "mode": "P",
+            "values": {
+                "size": literal([12, 20]),
+                "color": literal(5),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "palette-alpha-vertical-padding",
+            "mode": "PA",
+            "values": {
+                "size": literal([12, 20]),
+                "color": literal([5, 7]),
             },
             "observe_result": "tobytes",
         },
@@ -12163,12 +12241,65 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "parameter.size",
+            "name": "wide-target",
+            "values": {
+                "size": literal([7, 11]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "parameter.size",
+            "name": "half-rounded-height",
+            "size": [4, 3],
+            "values": {
+                "size": literal([2, 2]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "parameter.size",
+            "name": "half-rounded-even-height",
+            "size": [4, 3],
+            "values": {
+                "size": literal([6, 5]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "cover",
             "requirement_suffix": "parameter.method",
             "name": "numeric-method",
             "values": {
                 "method": literal(0),
                 "size": literal([11, 7]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "cover",
+            "requirement_suffix": "parameter.size",
+            "name": "wide-target",
+            "values": {
+                "size": literal([7, 11]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "cover",
+            "requirement_suffix": "parameter.size",
+            "name": "half-rounded-height",
+            "size": [4, 3],
+            "values": {
+                "size": literal([2, 1]),
             },
             "observe_result": "tobytes",
         },
@@ -12291,6 +12422,13 @@ def build_nuanced_cases(
             "pixel": [12, 34, 56],
             "values": {"border": literal(2)},
             "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "crop",
+            "requirement_suffix": "parameter.border",
+            "name": "border-exceeds-image",
+            "values": {"border": literal(8)},
         },
         {
             "surface": "PIL.ImageOps",
