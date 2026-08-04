@@ -314,124 +314,126 @@ impl Image {
             .explicit_mode()
             .map(str::to_owned)
             .unwrap_or_else(|| src_mode.clone());
-        if let Some(src_mode) = Some(effective_src_mode.as_str()) {
-            let target_is_standard = !is_nonstandard_mode(mode);
-            // Non-standard sources must be materialized and converted to RGB
-            // before reaching a standard target OR a CMYK target (Pillow's
-            // CMYK inverse runs on the RGB values).  CMYK->CMYK is identity.
-            if is_nonstandard_mode(src_mode)
-                && (target_is_standard || mode == "CMYK" || (mode == "PA" && src_mode == "P"))
-            {
-                // Extract palette before materializing (P-mode palette may be on Pipeline)
-                let palette = self.palette();
-                let img = self.materialize()?;
-                let converted = if src_mode == "PA" {
-                    // PA stores a palette index and a per-pixel alpha byte.
-                    // Expand both before grayscale/CMYK conversion; treating
-                    // the index as luma makes an unpaletted PA image produce
-                    // visible color where Pillow correctly returns black.
-                    crate::image::expand_palette_alpha(
-                        &img.to_luma_alpha8(),
-                        palette.as_deref().unwrap_or_default(),
-                    )
-                } else {
-                    color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
-                        .unwrap_or_else(|| img.to_rgb8().into())
-                };
-                // For mode "L" etc., derive from the RGB result.
-                let result = if mode == "CMYK" {
-                    if matches!(src_mode, "I" | "F") {
-                        // Pillow's Convert.c sends I/F sources through the
-                        // grayscale-to-CMYK path, not the RGB inverse: C=M=Y=0
-                        // and K=255-gray.  The old Rust path inverted the
-                        // broadcast RGB representation and diverged for these
-                        // source modes.
-                        let gray = color::pil_grayscale(&converted)?;
-                        let (w, h) = gray.dimensions();
-                        let mut cmyk = crate::raster::RgbaImage::new(w, h);
-                        for (out, input) in cmyk.pixels_mut().zip(gray.pixels()) {
-                            *out = crate::raster::Rgba([0, 0, 0, 255 - input[0]]);
-                        }
-                        DynamicImage::ImageRgba8(cmyk)
-                    } else {
-                        // Apply the RGB inverse directly on the converted RGB.
-                        DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
-                            &converted.to_rgb8(),
-                        ))
+        let effective_src_mode_name = effective_src_mode.as_str();
+        let target_is_standard = !is_nonstandard_mode(mode);
+        // Non-standard sources must be materialized and converted to RGB
+        // before reaching a standard target OR a CMYK target (Pillow's
+        // CMYK inverse runs on the RGB values).  CMYK->CMYK is identity.
+        if is_nonstandard_mode(effective_src_mode_name)
+            && (target_is_standard
+                || mode == "CMYK"
+                || (mode == "PA" && effective_src_mode_name == "P"))
+        {
+            let src_mode = effective_src_mode_name;
+            // Extract palette before materializing (P-mode palette may be on Pipeline)
+            let palette = self.palette();
+            let img = self.materialize()?;
+            let converted = if src_mode == "PA" {
+                // PA stores a palette index and a per-pixel alpha byte.
+                // Expand both before grayscale/CMYK conversion; treating
+                // the index as luma makes an unpaletted PA image produce
+                // visible color where Pillow correctly returns black.
+                crate::image::expand_palette_alpha(
+                    &img.to_luma_alpha8(),
+                    palette.as_deref().unwrap_or_default(),
+                )
+            } else {
+                color::convert_from_nonstandard(src_mode, &img, palette.as_deref())
+                    .unwrap_or_else(|| img.to_rgb8().into())
+            };
+            // For mode "L" etc., derive from the RGB result.
+            let result = if mode == "CMYK" {
+                if matches!(src_mode, "I" | "F") {
+                    // Pillow's Convert.c sends I/F sources through the
+                    // grayscale-to-CMYK path, not the RGB inverse: C=M=Y=0
+                    // and K=255-gray.  The old Rust path inverted the
+                    // broadcast RGB representation and diverged for these
+                    // source modes.
+                    let gray = color::pil_grayscale(&converted)?;
+                    let (w, h) = gray.dimensions();
+                    let mut cmyk = crate::raster::RgbaImage::new(w, h);
+                    for (out, input) in cmyk.pixels_mut().zip(gray.pixels()) {
+                        *out = crate::raster::Rgba([0, 0, 0, 255 - input[0]]);
                     }
-                } else if mode == "L" || mode == "LA" {
-                    if mode == "L" && src_mode == "YCbCr" {
-                        // Pillow's C converter maps YCbCr to L through the Y
-                        // band directly, not through the RGB luma.
-                        DynamicImage::ImageLuma8(ycbcr_luma8(&img))
-                    } else if mode == "L" {
-                        DynamicImage::ImageLuma8(color::pil_grayscale(&converted)?)
-                    } else {
-                        let mut la = color::pil_grayscale_alpha(&converted)?;
-                        if src_mode == "P" {
-                            // Pillow carries palette transparency into the LA
-                            // alpha band (putpalettealpha before converting).
-                            let indices = img.to_luma8();
-                            if let Some(table) = palette_alpha_for_convert(self) {
-                                for (op, ip) in la.pixels_mut().zip(indices.pixels()) {
-                                    op[1] = table.get(usize::from(ip[0])).copied().unwrap_or(255);
-                                }
+                    DynamicImage::ImageRgba8(cmyk)
+                } else {
+                    // Apply the RGB inverse directly on the converted RGB.
+                    DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
+                        &converted.to_rgb8(),
+                    ))
+                }
+            } else if mode == "L" || mode == "LA" {
+                if mode == "L" && src_mode == "YCbCr" {
+                    // Pillow's C converter maps YCbCr to L through the Y
+                    // band directly, not through the RGB luma.
+                    DynamicImage::ImageLuma8(ycbcr_luma8(&img))
+                } else if mode == "L" {
+                    DynamicImage::ImageLuma8(color::pil_grayscale(&converted)?)
+                } else {
+                    let mut la = color::pil_grayscale_alpha(&converted)?;
+                    if src_mode == "P" {
+                        // Pillow carries palette transparency into the LA
+                        // alpha band (putpalettealpha before converting).
+                        let indices = img.to_luma8();
+                        if let Some(table) = palette_alpha_for_convert(self) {
+                            for (op, ip) in la.pixels_mut().zip(indices.pixels()) {
+                                op[1] = table.get(usize::from(ip[0])).copied().unwrap_or(255);
                             }
                         }
-                        DynamicImage::ImageLumaA8(la)
                     }
-                } else if mode == "PA" && src_mode == "P" {
-                    // Pillow P->PA keeps the palette indices with the palette
-                    // alpha band (opaque unless a transparency marks entries).
-                    let indices = img.to_luma8();
-                    let (w, h) = indices.dimensions();
-                    let mut pa = crate::raster::GrayAlphaImage::new(w, h);
-                    let table = palette_alpha_for_convert(self);
-                    for (op, ip) in pa.pixels_mut().zip(indices.pixels()) {
-                        op[0] = ip[0];
-                        op[1] = table
-                            .as_ref()
-                            .and_then(|t| t.get(usize::from(ip[0])))
-                            .copied()
-                            .unwrap_or(255);
-                    }
-                    let loaded = crate::image::Image::Loaded(crate::image::LoadedData {
-                        image: std::sync::Arc::new(crate::raster::DynamicImage::ImageLumaA8(pa)),
-                        explicit_mode: Some("PA".to_owned()),
-                        decoded_mode: crate::raster::ColorType::La8.into(),
-                        palette: palette.map(|p| p.to_vec()),
-                        palette_alpha: self.palette_alpha(),
-                        source_format: None,
-                        info: None,
-                        exif: self.exif_metadata(),
-                    });
-                    return Ok(loaded);
-                } else if mode == "RGBA" {
-                    // P sources with palette alpha keep per-entry alpha when
-                    // converting to RGBA; the RGB-only nonstandard path would
-                    // force every pixel opaque.
-                    if src_mode == "P" {
-                        let palette_alpha = self.palette_alpha().unwrap_or_default();
-                        if !palette_alpha.is_empty() {
-                            let indices = img.to_luma8();
-                            let pal = palette.as_deref().unwrap_or_default();
-                            return Ok(Image::from_dynamic(
-                                crate::image::expand_palette(&indices, pal, &palette_alpha),
-                                explicit_mode_for(mode),
-                            ));
-                        }
-                    }
-                    DynamicImage::ImageRgba8(converted.to_rgba8())
-                } else {
-                    converted
-                };
-                if mode != "1" {
-                    return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
+                    DynamicImage::ImageLumaA8(la)
                 }
-                // Binary mode "1" falls through to the shared threshold/dither
-                // path below, which re-derives the grayscale from the
-                // non-standard source and applies Pillow's dither policy.
+            } else if mode == "PA" && src_mode == "P" {
+                // Pillow P->PA keeps the palette indices with the palette
+                // alpha band (opaque unless a transparency marks entries).
+                let indices = img.to_luma8();
+                let (w, h) = indices.dimensions();
+                let mut pa = crate::raster::GrayAlphaImage::new(w, h);
+                let table = palette_alpha_for_convert(self);
+                for (op, ip) in pa.pixels_mut().zip(indices.pixels()) {
+                    op[0] = ip[0];
+                    op[1] = table
+                        .as_ref()
+                        .and_then(|t| t.get(usize::from(ip[0])))
+                        .copied()
+                        .unwrap_or(255);
+                }
+                let loaded = crate::image::Image::Loaded(crate::image::LoadedData {
+                    image: std::sync::Arc::new(crate::raster::DynamicImage::ImageLumaA8(pa)),
+                    explicit_mode: Some("PA".to_owned()),
+                    decoded_mode: crate::raster::ColorType::La8.into(),
+                    palette: palette.map(|p| p.to_vec()),
+                    palette_alpha: self.palette_alpha(),
+                    source_format: None,
+                    info: None,
+                    exif: self.exif_metadata(),
+                });
+                return Ok(loaded);
+            } else if mode == "RGBA" {
+                // P sources with palette alpha keep per-entry alpha when
+                // converting to RGBA; the RGB-only nonstandard path would
+                // force every pixel opaque.
+                if src_mode == "P" {
+                    let palette_alpha = self.palette_alpha().unwrap_or_default();
+                    if !palette_alpha.is_empty() {
+                        let indices = img.to_luma8();
+                        let pal = palette.as_deref().unwrap_or_default();
+                        return Ok(Image::from_dynamic(
+                            crate::image::expand_palette(&indices, pal, &palette_alpha),
+                            explicit_mode_for(mode),
+                        ));
+                    }
+                }
+                DynamicImage::ImageRgba8(converted.to_rgba8())
+            } else {
+                converted
+            };
+            if mode != "1" {
+                return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
             }
+            // Binary mode "1" falls through to the shared threshold/dither
+            // path below, which re-derives the grayscale from the
+            // non-standard source and applies Pillow's dither policy.
         }
 
         if mode == "PA" && src_mode == "L" {

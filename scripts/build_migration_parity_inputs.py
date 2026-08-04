@@ -976,16 +976,19 @@ class WorkflowBuilder:
         if self.edge == "quantize-hash-rebuild":
             # Use one distinct RGB triplet per pixel so the public quantizer
             # crosses QuantHash's 65,536-entry rebuild threshold without
-            # relying on probabilistic random input.
+            # relying on probabilistic random input. Pixel one is chosen to
+            # collide with pixel zero in PIL's masked hash at both scale 0 and
+            # scale 1, exercising linear probing and reinsert collision paths
+            # without increasing the fixture size.
             size = self.scenario_size or [257, 257]
             n_pixels = size[0] * size[1]
             data = bytes(
                 channel
                 for pixel in range(n_pixels)
                 for channel in (
-                    pixel & 0xFF,
-                    (pixel >> 8) & 0xFF,
-                    (pixel >> 16) & 0xFF,
+                    0 if pixel == 1 else pixel & 0xFF,
+                    0 if pixel == 1 else (pixel >> 8) & 0xFF,
+                    4 if pixel == 1 else (pixel >> 16) & 0xFF,
                 )
             )
             data_desc = self.inline_bytes(
@@ -999,6 +1002,35 @@ class WorkflowBuilder:
                 receiver=None,
                 arguments={
                     "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "quantize-repeated-colors" and label == "image":
+            if requested_mode != "RGB":
+                raise ValueError("quantize-repeated-colors edge requires RGB mode")
+            size = self.scenario_size or [8, 8]
+            colors = ((0, 0, 0), (255, 0, 0), (0, 255, 0), (0, 0, 255))
+            n_pixels = size[0] * size[1]
+            data = bytes(
+                channel
+                for pixel in range(n_pixels)
+                for channel in colors[pixel % len(colors)]
+            )
+            data_desc = self.inline_bytes(
+                f"{label}-quantize-repeated-colors",
+                data,
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal("RGB"),
                     "size": literal(size),
                     "data": data_desc,
                 },
@@ -2194,6 +2226,21 @@ class WorkflowBuilder:
                         "rawmode": literal("RGB"),
                     },
                     step_id="setup-quantize-palette",
+                )
+                self.scenario_values["palette"] = binding(palette_step)
+                receiver_step = image_step
+            elif chain == "quantize-palette-unsupported-source":
+                image_step = self.ensure_image(mode="RGBA")
+                palette_step = self.ensure_image(mode="P", label="palette")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(palette_step),
+                    arguments={
+                        "data": literal([0, 0, 0, 255, 0, 0]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-quantize-palette-unsupported-source",
                 )
                 self.scenario_values["palette"] = binding(palette_step)
                 receiver_step = image_step
@@ -11220,6 +11267,19 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "parameter.dither",
+            "name": "integer-none-dither-high-luma",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [255, 255, 255],
+            "values": {
+                "mode": literal("1"),
+                "dither": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-to-la",
             "mode": "CMYK",
@@ -13348,6 +13408,19 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "quantize",
             "requirement_suffix": "parameter.method",
+            "name": "maxcoverage-repeated-colors",
+            "mode": "RGB",
+            "edge": "quantize-repeated-colors",
+            "values": {
+                "colors": literal(4),
+                "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
             "name": "fast-octree-rgba-diverse",
             "mode": "RGBA",
             "edge": "noise-fill",
@@ -13355,6 +13428,32 @@ def build_nuanced_cases(
             "values": {
                 "colors": literal(16),
                 "method": literal(2),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "fast-octree-rgba-transparent",
+            "mode": "RGBA",
+            "edge": "uniform-fill",
+            "pixel": [0, 0, 0, 0],
+            "values": {
+                "colors": literal(4),
+                "method": literal(2),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "fast-octree-rgba-libimagequant",
+            "mode": "RGBA",
+            "values": {
+                "colors": literal(4),
+                "method": literal(3),
                 "kmeans": literal(0),
             },
         },
@@ -13393,6 +13492,19 @@ def build_nuanced_cases(
             "edge": "quantize-hash-rebuild",
             "values": {
                 "colors": literal(4),
+                "method": literal(0),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "mediancut-repeated-colors",
+            "mode": "RGB",
+            "edge": "quantize-repeated-colors",
+            "values": {
+                "colors": literal(8),
                 "method": literal(0),
                 "kmeans": literal(0),
             },
@@ -14269,6 +14381,16 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "convert",
             "requirement_suffix": "parameter.dither",
+            "name": "integer-floydsteinberg-dither-high-luma",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [255, 255, 255],
+            "values": {"mode": literal("1"), "dither": literal(1)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.dither",
             "name": "string-dither-error",
             "mode": "RGB",
             "edge": "nonzero-pixel",
@@ -14527,6 +14649,14 @@ def build_nuanced_cases(
             "pixel": [255, 0, 0],
             "chain": "quantize-palette",
             "values": {"dither": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.palette",
+            "name": "palette-image-unsupported-rgba",
+            "mode": "RGBA",
+            "chain": "quantize-palette-unsupported-source",
         },
         {
             "surface": "PIL.Image.Image",
