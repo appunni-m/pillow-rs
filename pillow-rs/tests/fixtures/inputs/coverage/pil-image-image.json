@@ -1309,6 +1309,8 @@
           "PIL.Image.Image.getextrema.nuanced.f-nonzero",
           "PIL.Image.Image.getextrema.nuanced.i-empty",
           "PIL.Image.Image.getextrema.nuanced.f-empty",
+          "PIL.Image.Image.getextrema.nuanced.la-empty",
+          "PIL.Image.Image.getextrema.nuanced.rgba-empty",
           "PIL.Image.Image.getextrema.nuanced.zero-width",
           "PIL.Image.Image.getextrema.nuanced.zero-height",
           "PIL.Image.Image.histogram.nuanced.nonzero-rgba",

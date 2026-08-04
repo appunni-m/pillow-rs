@@ -55677,6 +55677,106 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getextrema.nuanced.la-empty",
+      "surface": "PIL.Image.Image",
+      "operation": "getextrema",
+      "covers": [
+        "PIL.Image.Image.getextrema.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getextrema",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getextrema.nuanced.rgba-empty",
+      "surface": "PIL.Image.Image",
+      "operation": "getextrema",
+      "covers": [
+        "PIL.Image.Image.getextrema.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getextrema",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getextrema.nuanced.zero-width",
       "surface": "PIL.Image.Image",
       "operation": "getextrema",
