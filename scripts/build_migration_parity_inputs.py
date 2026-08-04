@@ -2560,6 +2560,28 @@ class WorkflowBuilder:
                     step_id="setup-putpalette",
                 )
                 receiver_step = image_step
+            elif chain == "p-short-palette-resize-save":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([1, 2, 3, 4, 5, 6]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
             elif chain == "p-pipeline-paste":
                 destination_step = self.ensure_image(mode="RGB")
                 source_step = self.ensure_image(mode="P", label="source")
@@ -14097,6 +14119,15 @@ def build_nuanced_cases(
             "name": "p-short-palette",
             "mode": "P",
             "chain": "p-short-palette-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "p-short-palette-resize",
+            "mode": "P",
+            "chain": "p-short-palette-resize-save",
             "values": {"format": literal("PNG")},
         },
         {
