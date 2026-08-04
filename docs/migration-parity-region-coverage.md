@@ -21,8 +21,10 @@ not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-Exact operation-level evidence is not available in this report run.
-The component aggregate is `11370/12269` (92.7%), and must not be read as getbbox surface coverage.
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-b325a2875b9b43fcb7c3a1581a3547d8`).
+Rust implementation regions: `104/104` (100.0%).
+Python facade statements: `1/1` (100.0%).
+Component aggregate for backlog ordering: `11370/12269` (92.7%).
 
 ## Operations below 95% region coverage
 
