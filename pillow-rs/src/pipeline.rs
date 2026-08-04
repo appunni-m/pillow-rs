@@ -69,6 +69,12 @@ pub enum PipelineOp {
         expand: bool,
         /// Optional fill color for newly exposed pixels.
         fill: Option<(u8, u8, u8, u8)>,
+        /// Optional center of rotation in source-image coordinates.
+        center: Option<(f64, f64)>,
+        /// Optional post-rotation translation in pixels.
+        translate: Option<(f64, f64)>,
+        /// Whether nearest-neighbor resampling was requested.
+        nearest: bool,
     },
     /// Apply one Pillow transpose operation.
     Transpose {

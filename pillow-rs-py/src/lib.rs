@@ -167,10 +167,15 @@ fn rotate_resample_input_from_python(
 ) -> pillow_rs::RotateResampleInput {
     match value {
         None => pillow_rs::RotateResampleInput::None,
-        Some(value) => value
-            .extract::<String>()
-            .map(pillow_rs::RotateResampleInput::Name)
-            .unwrap_or(pillow_rs::RotateResampleInput::Other),
+        Some(value) => {
+            if let Ok(code) = value.extract::<i64>() {
+                return pillow_rs::RotateResampleInput::Code(code);
+            }
+            value
+                .extract::<String>()
+                .map(pillow_rs::RotateResampleInput::Name)
+                .unwrap_or(pillow_rs::RotateResampleInput::Other)
+        }
     }
 }
 

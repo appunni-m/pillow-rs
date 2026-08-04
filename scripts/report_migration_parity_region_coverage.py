@@ -315,7 +315,7 @@ def main() -> int:
         surface,
     )
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(report + "\n", encoding="utf-8")
+    args.output.write_text(report.rstrip("\n") + "\n", encoding="utf-8")
     getbbox = next(row for row in rows if row["operation"] == GETBBOX_OPERATION)
     if surface is None:
         print(

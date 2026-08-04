@@ -1045,6 +1045,7 @@
           "PIL.Image.Image.rotate.nuanced.non-boolean-expand",
           "PIL.Image.Image.rotate.nuanced.invalid-center-arity",
           "PIL.Image.Image.rotate.nuanced.invalid-translate-arity",
+          "PIL.Image.Image.rotate.nuanced.valid-center-translate",
           "PIL.Image.Image.rotate.nuanced.expanded-red-fill",
           "PIL.Image.Image.transform.nuanced.p-affine-scalar-fill",
           "PIL.Image.Image.transform.nuanced.p-affine-tuple-fill",
