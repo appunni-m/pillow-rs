@@ -114,6 +114,14 @@ fn resolve_pad_color(
     }
 
     fn scalar(value: i64, mode: &str) -> (u8, u8, u8, u8) {
+        if mode == "F" {
+            // Pillow's Image.new/ImageOps.pad keep F samples in their native
+            // four-byte scalar representation. The SIMD pad adapter treats
+            // these bytes as the final pixel, so repeated grayscale bytes
+            // would turn a valid scalar fill into a bogus RGBA sample.
+            let [a, b, c, d] = (value as f32).to_le_bytes();
+            return (a, b, c, d);
+        }
         let value = clamp(value);
         if is_luma_mode(mode) {
             return (value, value, value, u8::MAX);
