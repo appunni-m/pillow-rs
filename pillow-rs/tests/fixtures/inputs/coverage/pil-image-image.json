@@ -1157,6 +1157,7 @@
           "PIL.Image.Image.paste.nuanced.box-noninteger-sequence-error",
           "PIL.Image.Image.paste.nuanced.image-inverted-height-box",
           "PIL.Image.Image.paste.nuanced.two-coordinate-overflow",
+          "PIL.Image.Image.paste.nuanced.two-coordinate-color-mask",
           "PIL.Image.Image.alpha_composite.nuanced.offset-source",
           "PIL.Image.Image.alpha_composite.nuanced.source-scalar-error",
           "PIL.Image.Image.putdata.nuanced.l-bytes",
