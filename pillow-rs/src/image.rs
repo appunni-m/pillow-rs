@@ -2314,6 +2314,9 @@ impl Image {
         if let Some(message) = rejection {
             return Err(PilError::OsError(message.into()));
         }
+        if upper_format == "PNG" {
+            return self.to_png_bytes();
+        }
         let decoded = self.decoded_for_encoding()?;
         Ok(image_slash_star::encode_default(&decoded, save_format)?)
     }
