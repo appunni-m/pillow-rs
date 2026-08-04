@@ -7137,6 +7137,14 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.Image.Image.histogram.mode.i16
+      dimension: mode
+      description: Public behavior for unsigned 16-bit image modes 'I;16*'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
     - id: PIL.Image.Image.histogram.mode.la
       dimension: mode
       description: Public behavior for image mode 'LA'.

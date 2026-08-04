@@ -59,6 +59,42 @@ impl Image {
     }
 }
 
+/// Match Pillow's legacy histogram dispatch for unsigned 16-bit modes.
+///
+/// `src/libImaging/Histo.c` dispatches these `IMAGING_TYPE_SPECIAL` images
+/// through the byte histogram path. The histogram therefore scans the first
+/// `width` bytes of each `width * 2` byte row, rather than converting the
+/// logical `u16` samples to 8-bit luminance values.
+fn histogram_l16_pillow(
+    img: &crate::raster::DynamicImage,
+    mode: &str,
+    mask: Option<&crate::raster::GrayImage>,
+) -> Vec<u32> {
+    let samples = img.to_luma16();
+    let width = img.width() as usize;
+    let height = img.height() as usize;
+    let mut hist = vec![0u32; 256];
+    let big_endian = mode == "I;16B" || (mode != "I;16L" && cfg!(target_endian = "big"));
+
+    for y in 0..height {
+        for x in 0..width {
+            if let Some(mask) = mask {
+                if mask.get_pixel(x as u32, y as u32)[0] == 0 {
+                    continue;
+                }
+            }
+            let sample = samples.as_raw()[y * width + x / 2];
+            let bytes = if big_endian {
+                sample.to_be_bytes()
+            } else {
+                sample.to_le_bytes()
+            };
+            hist[bytes[x % 2] as usize] += 1;
+        }
+    }
+    hist
+}
+
 impl Image {
     /// Returns the bounding box of non-zero image content.
     ///
@@ -227,6 +263,7 @@ impl Image {
     /// mask is non-zero, matching Pillow's masked-histogram semantics.
     pub fn histogram_with_mask(&self, mask: Option<&Image>) -> Result<Vec<u32>, PilError> {
         let img = self.materialize()?;
+        let mode = self.mode_from_materialized(&img);
         let mask_luma = if let Some(mask) = mask {
             let mask_img = mask.materialize()?;
             if (mask_img.width(), mask_img.height()) != (img.width(), img.height()) {
@@ -240,6 +277,11 @@ impl Image {
         } else {
             None
         };
+        if img.color() == crate::raster::ColorType::L16
+            && matches!(mode.as_str(), "I;16" | "I;16L" | "I;16B" | "I;16N")
+        {
+            return Ok(histogram_l16_pillow(&img, &mode, mask_luma.as_ref()));
+        }
         let n_bands = match img.color() {
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
             crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
