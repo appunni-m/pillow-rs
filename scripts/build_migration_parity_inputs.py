@@ -9870,6 +9870,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "behavior.default",
+            "name": "l-callable-expanded-path",
+            "mode": "L",
+            "values": {
+                "args": literal(["clamp-shift-callable"]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "composite",
             "requirement_suffix": "behavior.default",
             "name": "one-mask",

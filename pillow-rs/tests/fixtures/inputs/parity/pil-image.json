@@ -8728,6 +8728,68 @@
       ]
     },
     {
+      "case_id": "PIL.Image.eval.nuanced.l-callable-expanded-path",
+      "surface": "PIL.Image",
+      "operation": "eval",
+      "covers": [
+        "PIL.Image.eval.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "args-callable",
+          "kind": "builtin",
+          "name": "clamp-shift-callable"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "eval",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "args": {
+              "kind": "asset",
+              "asset_id": "args-callable"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.composite.nuanced.one-mask",
       "surface": "PIL.Image",
       "operation": "composite",
