@@ -174,17 +174,16 @@ fn rotate_resample_input_from_python(
 
 fn rotate_expand_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::RotateExpandInput {
+) -> PyResult<pillow_rs::RotateExpandInput> {
     match value {
-        Some(value) if value.is_instance_of::<PyBool>() => value
-            .extract::<bool>()
-            .map(pillow_rs::RotateExpandInput::Boolean)
-            .unwrap_or(pillow_rs::RotateExpandInput::Invalid),
-        None => pillow_rs::RotateExpandInput::Boolean(false),
-        Some(value) => value.extract::<i64>().map_or(
-            pillow_rs::RotateExpandInput::Invalid,
-            pillow_rs::RotateExpandInput::Integer,
+        Some(value) if value.is_instance_of::<PyBool>() => Ok(
+            pillow_rs::RotateExpandInput::Boolean(value.extract::<bool>()?),
         ),
+        None => Ok(pillow_rs::RotateExpandInput::Boolean(false)),
+        Some(value) => match value.extract::<i64>() {
+            Ok(value) => Ok(pillow_rs::RotateExpandInput::Integer(value)),
+            Err(_) => Ok(pillow_rs::RotateExpandInput::Boolean(value.is_truthy()?)),
+        },
     }
 }
 
@@ -743,12 +742,13 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let center = rotate_point_input_from_python(center)?;
         let translate = rotate_point_input_from_python(translate)?;
+        let expand = rotate_expand_input_from_python(expand)?;
         let rs = self
             .inner
             .rotate_with_input(
                 angle,
                 rotate_resample_input_from_python(resample),
-                rotate_expand_input_from_python(expand),
+                expand,
                 center,
                 translate,
                 imageops_color_from_python(fillcolor),

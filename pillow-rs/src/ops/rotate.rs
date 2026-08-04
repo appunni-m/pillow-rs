@@ -22,8 +22,6 @@ pub enum RotateExpandInput {
     Boolean(bool),
     /// An integer accepted by Pillow's truth-value conversion.
     Integer(i64),
-    /// A non-boolean value.
-    Invalid,
 }
 
 /// Host-neutral center or translation input for Pillow's rotate wrapper.
@@ -78,12 +76,9 @@ fn normalize_python_rotate_at_angle(
     expand: RotateExpandInput,
 ) -> Result<bool, PilError> {
     let expand = match expand {
-        RotateExpandInput::Boolean(value) => Ok(value),
-        RotateExpandInput::Integer(value) => Ok(value != 0),
-        RotateExpandInput::Invalid => Err(PilError::TypeError(
-            "'int' object is not subscriptable".to_owned(),
-        )),
-    }?;
+        RotateExpandInput::Boolean(value) => value,
+        RotateExpandInput::Integer(value) => value != 0,
+    };
     if angle % 360.0 != 0.0 {
         if let RotateResampleInput::Name(value) = resample {
             if !matches!(value.as_str(), "NEAREST" | "BILINEAR" | "BICUBIC") {
@@ -108,7 +103,14 @@ impl Image {
         fillcolor: ImageOpsColor,
     ) -> Result<Image, PilError> {
         let normalized_angle = angle % 360.0;
-        let expand = normalize_python_rotate_at_angle(normalized_angle, resample, expand)?;
+        // Pillow skips resampling-name validation only for an exact multiple of
+        // 360 degrees. Route every other angle through the public normalizer;
+        // its contract is specifically the non-zero-angle path.
+        let expand = if normalized_angle % 360.0 != 0.0 {
+            normalize_python_rotate(resample, expand)?
+        } else {
+            normalize_python_rotate_at_angle(normalized_angle, resample, expand)?
+        };
         let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &self.mode()?)?;
         if center.is_truthy() || translate.is_truthy() {
             center.validate()?;
