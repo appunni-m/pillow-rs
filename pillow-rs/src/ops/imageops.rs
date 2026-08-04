@@ -49,16 +49,13 @@ pub enum ImageOpsColor {
 }
 
 pub fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), PilError> {
-    let ImageOpsMask::Image(mask) = mask else {
-        return match mask {
-            ImageOpsMask::None => Ok(()),
-            ImageOpsMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
-                "'{type_name}' object has no attribute 'load'"
-            ))),
-            ImageOpsMask::Image(_) => unreachable!(),
-        };
-    };
-    crate::ops::analysis::validate_transparency_mask(image, &mask)
+    match mask {
+        ImageOpsMask::None => Ok(()),
+        ImageOpsMask::Invalid(type_name) => Err(PilError::AttributeError(format!(
+            "'{type_name}' object has no attribute 'load'"
+        ))),
+        ImageOpsMask::Image(mask) => crate::ops::analysis::validate_transparency_mask(image, &mask),
+    }
 }
 
 fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), PilError> {
