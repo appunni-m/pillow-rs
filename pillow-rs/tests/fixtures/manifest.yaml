@@ -9347,6 +9347,7 @@ surfaces:
         style: positional_or_keyword
         value_types:
         - enum
+        - 'null'
         omission:
           kind: sentinel
           name: NEAREST

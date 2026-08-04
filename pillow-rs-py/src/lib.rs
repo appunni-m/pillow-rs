@@ -168,6 +168,9 @@ fn rotate_resample_input_from_python(
     match value {
         None => pillow_rs::RotateResampleInput::None,
         Some(value) => {
+            if value.is_none() {
+                return pillow_rs::RotateResampleInput::None;
+            }
             if let Ok(code) = value.extract::<i64>() {
                 return pillow_rs::RotateResampleInput::Code(code);
             }
