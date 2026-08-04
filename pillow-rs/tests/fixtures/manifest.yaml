@@ -2441,6 +2441,7 @@ surfaces:
       - id: mode
         style: positional_or_keyword
         value_types:
+        - integer
         - string
         omission:
           kind: literal

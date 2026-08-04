@@ -395,7 +395,9 @@ pub fn validate_python_open_inputs(
             return Err(PilError::ValueError(format!("bad mode '{name}'")));
         }
         PythonOpenModeInput::Invalid(value) => {
-            return Err(PilError::ValueError(format!("bad mode '{value}'")));
+            // Pillow formats a non-string mode with its value directly; the
+            // quotes are reserved for an invalid string mode.
+            return Err(PilError::ValueError(format!("bad mode {value}")));
         }
     }
     if matches!(formats, PythonOpenFormatsInput::Invalid(_)) {

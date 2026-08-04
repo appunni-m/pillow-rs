@@ -5813,6 +5813,45 @@
       ]
     },
     {
+      "case_id": "PIL.Image.open.nuanced.non-string-mode",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.mode"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "encoded-input",
+          "kind": "builtin",
+          "name": "encoded-png-input"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "encoded-input"
+            },
+            "mode": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.open.nuanced.embedded-null-bytes",
       "surface": "PIL.Image",
       "operation": "open",
