@@ -123,7 +123,6 @@ def frombuffer(mode: str, size: tuple[int, int], data, decoder_name: str = "raw"
 
 def eval(image: Image, *args):
     """Apply a function to each pixel. The first arg is a callable."""
-    _core.eval_validate_input(args[0])
     return image.point(args[0])
 
 
