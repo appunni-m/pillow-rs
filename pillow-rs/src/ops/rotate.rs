@@ -24,6 +24,27 @@ fn rotate_uses_nearest(input: &RotateResampleInput) -> bool {
     }
 }
 
+fn unknown_resample_filter(value: impl std::fmt::Display) -> PilError {
+    PilError::ValueError(format!(
+        "Unknown resampling filter ({value}). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
+    ))
+}
+
+fn unsupported_rotate_resample(code: i64) -> PilError {
+    let name = match code {
+        1 => Some("LANCZOS"),
+        4 => Some("BOX"),
+        5 => Some("HAMMING"),
+        _ => None,
+    };
+    match name {
+        Some(name) => PilError::ValueError(format!(
+            "Image.Resampling.{name} ({code}) cannot be used. Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
+        )),
+        None => unknown_resample_filter(code),
+    }
+}
+
 /// Host-neutral boolean input for Pillow's rotate wrapper.
 #[derive(Debug, Clone)]
 pub enum RotateExpandInput {
@@ -68,6 +89,13 @@ impl RotatePointInput {
             ))),
         }
     }
+
+    fn into_values(self) -> Option<(f64, f64)> {
+        match self {
+            Self::Values(values) => values.first().copied().zip(values.get(1).copied()),
+            _ => None,
+        }
+    }
 }
 
 /// Validates the Python-facing rotate arguments and returns the effective
@@ -89,12 +117,18 @@ fn normalize_python_rotate_at_angle(
         RotateExpandInput::Integer(value) => value != 0,
     };
     if angle % 360.0 != 0.0 {
-        if let RotateResampleInput::Name(value) = resample {
-            if !matches!(value.as_str(), "NEAREST" | "BILINEAR" | "BICUBIC") {
-                return Err(PilError::ValueError(format!(
-                    "Unknown resampling filter ({value}). Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or Image.Resampling.BICUBIC (3)"
-                )));
+        match resample {
+            RotateResampleInput::None => return Err(unknown_resample_filter("None")),
+            RotateResampleInput::Code(code) if !matches!(code, 0 | 2 | 3) => {
+                return Err(unsupported_rotate_resample(code));
             }
+            RotateResampleInput::Name(value)
+                if !matches!(value.as_str(), "NEAREST" | "BILINEAR" | "BICUBIC") =>
+            {
+                return Err(unknown_resample_filter(value));
+            }
+            RotateResampleInput::Other => {}
+            _ => {}
         }
     }
     Ok(expand)
@@ -122,24 +156,14 @@ impl Image {
             normalize_python_rotate_at_angle(normalized_angle, resample, expand)?
         };
         let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &self.mode()?)?;
-        let center = if center.is_truthy() {
+        let center_truthy = center.is_truthy();
+        let translate_truthy = translate.is_truthy();
+        if center_truthy || translate_truthy {
             center.validate()?;
-            match center {
-                RotatePointInput::Values(values) => Some((values[0], values[1])),
-                _ => None,
-            }
-        } else {
-            None
-        };
-        let translate = if translate.is_truthy() {
             translate.validate()?;
-            match translate {
-                RotatePointInput::Values(values) => Some((values[0], values[1])),
-                _ => None,
-            }
-        } else {
-            None
-        };
+        }
+        let center = center.into_values();
+        let translate = translate.into_values();
         self.rotate_with_options(
             normalized_angle,
             expand,
