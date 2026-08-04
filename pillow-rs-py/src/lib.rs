@@ -365,17 +365,21 @@ fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
     })
 }
 
-/// Converts a host iterable into optional Rust image handles.
+/// Converts a host iterable into Rust-owned merge input classifications.
 ///
-/// Object extraction is the only binding responsibility here. The core owns
-/// invalid-item errors and merge mode/arity validation through
+/// Object extraction and type-name preservation are the only binding
+/// responsibilities here. The core owns invalid-item errors and merge
+/// mode/arity validation through
 /// `image_merge_inputs`.
-fn merge_inputs_from_python(values: &Bound<'_, PyAny>) -> PyResult<Vec<Option<RsImage>>> {
+fn merge_inputs_from_python(values: &Bound<'_, PyAny>) -> PyResult<Vec<pillow_rs::MergeInput>> {
     values
         .iter()?
         .map(|item| {
             let obj = item?;
-            Ok(image_from_python(&obj))
+            Ok(match image_from_python(&obj) {
+                Some(image) => pillow_rs::MergeInput::Image(image),
+                None => pillow_rs::MergeInput::Invalid(obj.get_type().name()?.to_string()),
+            })
         })
         .collect()
 }

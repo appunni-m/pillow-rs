@@ -6791,6 +6791,41 @@
       ]
     },
     {
+      "case_id": "PIL.Image.merge.nuanced.invalid-band-item",
+      "surface": "PIL.Image",
+      "operation": "merge",
+      "covers": [
+        "PIL.Image.merge.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "merge",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "bands": {
+              "kind": "literal",
+              "value": [
+                null
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.blend.nuanced.mismatched-sizes",
       "surface": "PIL.Image",
       "operation": "blend",

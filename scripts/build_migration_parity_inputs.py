@@ -2882,7 +2882,11 @@ class WorkflowBuilder:
         if (
             self.primary_surface == "PIL.Image"
             and self.primary_operation == "merge"
-            and self.edge not in {"mode-band-mismatch", "invalid-mode"}
+            and self.edge not in {
+                "mode-band-mismatch",
+                "invalid-mode",
+                "invalid-band-item",
+            }
         ):
             # ``Image.merge`` takes a sequence of single-band Image objects.
             # A single binding is useful for error coverage but cannot reach
@@ -2920,6 +2924,15 @@ class WorkflowBuilder:
                 )
             arguments["mode"] = literal(self.mode)
             arguments["bands"] = bindings(band_steps)
+        elif (
+            self.primary_surface == "PIL.Image"
+            and self.primary_operation == "merge"
+            and self.edge == "invalid-band-item"
+        ):
+            # Preserve valid arity so the public input reaches the core's
+            # invalid-item validation instead of stopping at shape checks.
+            arguments["mode"] = literal(self.mode)
+            arguments["bands"] = literal([None])
         call_id = self.add_step(
             self.primary_surface,
             self.primary_operation,
@@ -10113,6 +10126,15 @@ def build_nuanced_cases(
             "name": "wrong-band-count",
             "mode": "RGB",
             "edge": "wrong-band-count",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-band-item",
+            "mode": "L",
+            "edge": "invalid-band-item",
+            "values": {"bands": literal([None])},
         },
         {
             "surface": "PIL.Image",

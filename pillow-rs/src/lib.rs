@@ -271,6 +271,7 @@ pub use crate::ops::imageops::solarize as imageops_solarize;
 pub use crate::ops::imageops::validate_colorize_mode as imageops_validate_colorize_mode;
 pub use crate::ops::imageops::validate_deform_resample as imageops_validate_deform_resample;
 pub use crate::ops::module_fns::EvalInputKind;
+pub use crate::ops::module_fns::MergeInput;
 pub use crate::ops::module_fns::alpha_composite as image_alpha_composite;
 pub use crate::ops::module_fns::blend as image_blend;
 pub use crate::ops::module_fns::composite as image_composite;
