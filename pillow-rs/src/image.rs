@@ -4443,7 +4443,6 @@ impl Image {
         if mode != "1" {
             return Err(PilError::ValueError("not a bitmap".to_owned()));
         }
-        let is_mode1 = mode == "1";
         let img = self.materialized_shared()?;
         let gray = img.to_luma8();
         let (w, h) = (gray.width(), gray.height());
@@ -4452,9 +4451,9 @@ impl Image {
         for y in 0..h {
             for x in 0..w {
                 let v = gray.get_pixel(x, y)[0];
-                // Mode "1": any non-zero value is white (PIL stores mode "1" pixels
-                // as bit values where any non-zero = 1). Mode "L": threshold at 128.
-                let is_white = if is_mode1 { v != 0 } else { v >= 128 };
+                // The mode check above makes this an `Image` mode "1" path:
+                // Pillow stores any non-zero source value as a set bit.
+                let is_white = v != 0;
                 if is_white {
                     // PIL XBM: 1 = white, 0 = black; LSB = leftmost pixel
                     let byte_idx = (x / 8) as usize;
