@@ -6884,6 +6884,81 @@ surfaces:
       metrics:
       - latency
       - throughput
+  - id: has_transparency_data
+    kind: property_get
+    classification: endpoint
+    lifecycle:
+      status: current
+    source:
+      oracle_id: pillow
+      path: PIL.Image.Image.has_transparency_data
+      signature: has_transparency_data(self, /)
+      parameters:
+      - id: self
+        style: receiver
+        value_types:
+        - handle
+        omission:
+          kind: required
+      result:
+        shape: scalar
+        observations:
+        - path: value
+          value_types:
+          - boolean
+          comparison:
+            kind: exact
+        error:
+          fields:
+          - class
+          - kind
+          - message
+          - stage
+          - code
+          message:
+            mode: exact
+            transforms: []
+            reason: null
+    targets:
+    - target_id: pillow-rs-python
+      path: pillow_rs.Image.has_transparency_data
+      signature: has_transparency_data(self, /)
+      support:
+        status: supported
+    requirements:
+    - id: PIL.Image.Image.has_transparency_data.behavior.default
+      dimension: success_path
+      description: Default public behavior of PIL.Image.Image.has_transparency_data.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.Image.Image.has_transparency_data.performance.standard
+      dimension: performance
+      description: Deterministic standard workload for PIL.Image.Image.has_transparency_data.
+      lanes:
+      - parity
+      - benchmark
+      target_profiles:
+      - python-cpu
+    parity:
+      applicability: required
+      target_profiles:
+      - python-cpu
+    coverage:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      component_ids:
+      - image-core
+    benchmark:
+      applicability: required
+      target_profiles:
+      - python-cpu
+      metrics:
+      - latency
+      - throughput
   - id: height
     kind: property_get
     classification: endpoint
