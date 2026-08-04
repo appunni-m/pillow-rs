@@ -17,7 +17,7 @@ use crate::pipeline::{ResampleFilter, TransposeMethod};
 
 /// Box / Nearest-neighbor kernel.
 fn f_kernel_box(x: f64) -> f64 {
-    if x.abs() < 0.5 { 1.0 } else { 0.0 }
+    if x > -0.5 && x <= 0.5 { 1.0 } else { 0.0 }
 }
 
 /// Triangle (bilinear) kernel.

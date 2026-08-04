@@ -750,10 +750,29 @@ class WorkflowBuilder:
                     arguments={"fp": data_descriptor},
                     step_id=self.next_step_id(f"setup-{label}"),
                 )
-            elif self.scenario_inline_image == "i16n-frombytes":
+            elif self.scenario_inline_image in {
+                "i16n-frombytes",
+                "i16l-frombytes",
+                "i16b-frombytes",
+            }:
+                mode = {
+                    "i16n-frombytes": "I;16N",
+                    "i16l-frombytes": "I;16L",
+                    "i16b-frombytes": "I;16B",
+                }[self.scenario_inline_image]
+                data = (
+                    bytes([0, 0, 1, 0, 2, 0, 3, 0])
+                    if mode != "I;16B"
+                    else bytes([0, 0, 0, 1, 0, 2, 0, 3])
+                )
+                asset_id = (
+                    f"{label}-i16n-data"
+                    if mode == "I;16N"
+                    else f"{label}-{self.scenario_inline_image}-data"
+                )
                 data_descriptor = self.inline_bytes(
-                    f"{label}-i16n-data",
-                    bytes([0, 0, 1, 0, 2, 0, 3, 0]),
+                    asset_id,
+                    data,
                     "application/octet-stream",
                 )
                 step_id = self.add_step(
@@ -761,7 +780,7 @@ class WorkflowBuilder:
                     "frombytes",
                     receiver=None,
                     arguments={
-                        "mode": literal("I;16N"),
+                        "mode": literal(mode),
                         "size": literal([2, 2]),
                         "data": data_descriptor,
                     },
@@ -7715,6 +7734,42 @@ def build_nuanced_cases(
             "values": {
                 "size": literal([1, 1]),
                 "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "mode.i",
+            "name": "i16n-frombytes-bilinear",
+            "scenario_inline_image": "i16n-frombytes",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([3, 3]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "mode.i",
+            "name": "i16l-frombytes-bilinear",
+            "scenario_inline_image": "i16l-frombytes",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([3, 3]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "mode.i",
+            "name": "i16b-frombytes-bilinear",
+            "scenario_inline_image": "i16b-frombytes",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([3, 3]),
+                "resample": literal(2),
             },
         },
         {
