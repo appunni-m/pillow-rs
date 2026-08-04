@@ -9445,6 +9445,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "two-coordinate-color-mask",
+            "mode": "RGB",
+            "mask_mode": "L",
+            "values": {
+                "im": literal(255),
+                "box": literal([1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "alpha_composite",
             "requirement_suffix": "behavior.default",
             "name": "offset-source",
