@@ -10,15 +10,13 @@ pub enum RotateResampleInput {
     None,
     /// A numeric Pillow resampling code.
     Code(i64),
-    /// A non-string value that is not an integer or string resampling code.
-    Other,
     /// A symbolic resampling name or an invalid string to validate.
     Name(String),
 }
 
 fn rotate_uses_nearest(input: &RotateResampleInput) -> bool {
     match input {
-        RotateResampleInput::None | RotateResampleInput::Other => true,
+        RotateResampleInput::None => true,
         RotateResampleInput::Code(code) => *code == 0,
         RotateResampleInput::Name(name) => name == "NEAREST",
     }
@@ -127,7 +125,6 @@ fn normalize_python_rotate_at_angle(
             {
                 return Err(unknown_resample_filter(value));
             }
-            RotateResampleInput::Other => {}
             _ => {}
         }
     }

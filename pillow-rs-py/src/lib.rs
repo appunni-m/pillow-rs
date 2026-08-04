@@ -164,20 +164,25 @@ fn resample_input_from_python(
 
 fn rotate_resample_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
-) -> pillow_rs::RotateResampleInput {
+) -> PyResult<pillow_rs::RotateResampleInput> {
     match value {
-        None => pillow_rs::RotateResampleInput::None,
+        None => Ok(pillow_rs::RotateResampleInput::None),
         Some(value) => {
             if value.is_none() {
-                return pillow_rs::RotateResampleInput::None;
+                return Ok(pillow_rs::RotateResampleInput::None);
             }
             if let Ok(code) = value.extract::<i64>() {
-                return pillow_rs::RotateResampleInput::Code(code);
+                return Ok(pillow_rs::RotateResampleInput::Code(code));
             }
-            value
-                .extract::<String>()
-                .map(pillow_rs::RotateResampleInput::Name)
-                .unwrap_or(pillow_rs::RotateResampleInput::Other)
+            if let Ok(name) = value.extract::<String>() {
+                return Ok(pillow_rs::RotateResampleInput::Name(name));
+            }
+            // Pillow's Image.transform formats unsupported host objects in
+            // its unknown-filter error; pass that neutral display form to
+            // core, where the validation and error remain centralized.
+            Ok(pillow_rs::RotateResampleInput::Name(
+                value.str()?.to_string(),
+            ))
         }
     }
 }
@@ -757,7 +762,7 @@ impl PyImage {
             .inner
             .rotate_with_input(
                 angle,
-                rotate_resample_input_from_python(resample),
+                rotate_resample_input_from_python(resample)?,
                 expand,
                 center,
                 translate,
