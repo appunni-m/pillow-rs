@@ -1587,6 +1587,12 @@ impl Image {
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         let source_is_paletted = source.has_palette_samples();
         let palette_safe = source_is_paletted && Self::is_palette_safe_op(&op);
+        let putalpha_mode = match &op {
+            PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
+                Some(*mode)
+            }
+            _ => None,
+        };
         let promotes_p_to_pa = source.has_palette_mode()
             && matches!(
                 &op,
@@ -1623,6 +1629,17 @@ impl Image {
                 | PipelineOp::ExtractBand { .. } => None,
                 _ => source.explicit_mode().map(str::to_owned),
             }
+        };
+        // `push_op` always constructs an Image::Pipeline. Keep putalpha's
+        // output-mode promotion here so P becomes PA without expanding its
+        // indices, while CMYK becomes ordinary RGBA without a CMYK tag;
+        // callers do not need an impossible fallback match after queuing it.
+        let explicit_mode = match putalpha_mode {
+            Some(crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA) => {
+                Some("PA".to_owned())
+            }
+            Some(crate::pipeline::PixelMode::CMYK) => None,
+            _ => explicit_mode,
         };
         let preserve_palette = palette_safe && !matches!(&op, PipelineOp::ExtractBand { .. });
         let source_palette = if preserve_palette {
@@ -3957,19 +3974,7 @@ impl Image {
         let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
             PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
         })?;
-        let mut new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha, mode });
-        if let Image::Pipeline { explicit_mode, .. } = &mut new_self {
-            // Pillow Image.putalpha promotes P to PA without expanding palette
-            // indices. CMYK is converted through RGB and therefore becomes
-            // ordinary RGBA rather than retaining a CMYK side-channel tag.
-            *explicit_mode = match mode {
-                crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA => {
-                    Some("PA".to_owned())
-                }
-                crate::pipeline::PixelMode::CMYK => None,
-                _ => explicit_mode.clone(),
-            };
-        }
+        let new_self = Image::push_op(self, PipelineOp::PutAlpha { alpha, mode });
         *self = new_self;
         Ok(())
     }
@@ -4009,22 +4014,13 @@ impl Image {
         let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
             PilError::ValueError(format!("unsupported putalpha mode: {mode_name}"))
         })?;
-        let mut new_self = Image::push_op(
+        let new_self = Image::push_op(
             self,
             PipelineOp::PutAlphaData {
                 mask: Arc::new(crate::raster::DynamicImage::ImageLuma8(mask_luma)),
                 mode,
             },
         );
-        if let Image::Pipeline { explicit_mode, .. } = &mut new_self {
-            *explicit_mode = match mode {
-                crate::pipeline::PixelMode::P | crate::pipeline::PixelMode::PA => {
-                    Some("PA".to_owned())
-                }
-                crate::pipeline::PixelMode::CMYK => None,
-                _ => explicit_mode.clone(),
-            };
-        }
         *self = new_self;
         Ok(())
     }
