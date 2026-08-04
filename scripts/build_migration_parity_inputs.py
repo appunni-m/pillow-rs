@@ -6561,6 +6561,18 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "ellipse",
+            "requirement_suffix": "behavior.default",
+            "name": "reversed-y-box",
+            "values": {
+                "xy": literal([2, 10, 10, 2]),
+                "fill": literal([255, 0, 0]),
+                "outline": literal([0, 0, 255]),
+                "width": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "rectangle",
             "requirement_suffix": "behavior.default",
             "name": "fill-outline-width",

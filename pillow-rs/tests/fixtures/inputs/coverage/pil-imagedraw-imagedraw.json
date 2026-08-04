@@ -710,6 +710,7 @@
           "PIL.ImageDraw.ImageDraw.ellipse.nuanced.fill-outline-width",
           "PIL.ImageDraw.ImageDraw.ellipse.nuanced.zero-size",
           "PIL.ImageDraw.ImageDraw.ellipse.nuanced.reversed-box",
+          "PIL.ImageDraw.ImageDraw.ellipse.nuanced.reversed-y-box",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.fill-outline-width",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.negative-clipped",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.fully-off-canvas",
