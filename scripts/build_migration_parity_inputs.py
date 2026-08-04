@@ -8049,6 +8049,22 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "rotate",
+            "requirement_suffix": "behavior.default",
+            "name": "valid-center-translate",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "values": {
+                "angle": literal(33.5),
+                "expand": literal(True),
+                "center": literal([8.0, 8.0]),
+                "translate": literal([1, -1]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
             "requirement_suffix": "parameter.fillcolor",
             "name": "expanded-red-fill",
             "mode": "RGB",

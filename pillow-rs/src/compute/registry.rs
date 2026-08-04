@@ -424,6 +424,20 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 
 /// Returns whether the GPU backend has an implementation for `op`.
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    if matches!(
+        op,
+        PipelineOp::Rotate { nearest: true, .. }
+            | PipelineOp::Rotate {
+                center: Some(_),
+                ..
+            }
+            | PipelineOp::Rotate {
+                translate: Some(_),
+                ..
+            }
+    ) {
+        return Ok(false);
+    }
     Ok(registry()?
         .get(variant_key(op))
         .is_some_and(|e| e.gpu_shader.is_some()))
@@ -431,6 +445,20 @@ pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 
 /// Returns whether the SIMD backend has an implementation for `op`.
 pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    if matches!(
+        op,
+        PipelineOp::Rotate { nearest: true, .. }
+            | PipelineOp::Rotate {
+                center: Some(_),
+                ..
+            }
+            | PipelineOp::Rotate {
+                translate: Some(_),
+                ..
+            }
+    ) {
+        return Ok(false);
+    }
     Ok(registry()?
         .get(variant_key(op))
         .is_some_and(|e| e.simd_fn.is_some()))
@@ -1044,9 +1072,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     angle,
                     expand,
                     fill,
+                    center,
+                    translate,
+                    nearest,
                 } = op
                 {
-                    execute_rotate(img, *angle, *expand, *fill, mode)
+                    execute_rotate(
+                        img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
+                    )
                 } else {
                     Err(PilError::ValueError("expected Rotate op".into()))
                 }

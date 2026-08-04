@@ -8,11 +8,20 @@ use crate::pipeline::PipelineOp;
 pub enum RotateResampleInput {
     /// No explicit resampling value was supplied.
     None,
-    /// A non-string value. Pillow's rotate wrapper currently ignores this
-    /// value after checking that it is not a string.
+    /// A numeric Pillow resampling code.
+    Code(i64),
+    /// A non-string value that is not an integer or string resampling code.
     Other,
     /// A symbolic resampling name or an invalid string to validate.
     Name(String),
+}
+
+fn rotate_uses_nearest(input: &RotateResampleInput) -> bool {
+    match input {
+        RotateResampleInput::None | RotateResampleInput::Other => true,
+        RotateResampleInput::Code(code) => *code == 0,
+        RotateResampleInput::Name(name) => name == "NEAREST",
+    }
 }
 
 /// Host-neutral boolean input for Pillow's rotate wrapper.
@@ -103,6 +112,7 @@ impl Image {
         fillcolor: ImageOpsColor,
     ) -> Result<Image, PilError> {
         let normalized_angle = angle % 360.0;
+        let nearest = rotate_uses_nearest(&resample);
         // Pillow skips resampling-name validation only for an exact multiple of
         // 360 degrees. Route every other angle through the public normalizer;
         // its contract is specifically the non-zero-angle path.
@@ -112,11 +122,32 @@ impl Image {
             normalize_python_rotate_at_angle(normalized_angle, resample, expand)?
         };
         let fillcolor = crate::ops::imageops::resolve_imageops_color(fillcolor, &self.mode()?)?;
-        if center.is_truthy() || translate.is_truthy() {
+        let center = if center.is_truthy() {
             center.validate()?;
+            match center {
+                RotatePointInput::Values(values) => Some((values[0], values[1])),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        let translate = if translate.is_truthy() {
             translate.validate()?;
-        }
-        self.rotate(normalized_angle, expand, fillcolor)
+            match translate {
+                RotatePointInput::Values(values) => Some((values[0], values[1])),
+                _ => None,
+            }
+        } else {
+            None
+        };
+        self.rotate_with_options(
+            normalized_angle,
+            expand,
+            fillcolor,
+            center,
+            translate,
+            nearest,
+        )
     }
 
     /// Rotates the image by `angle` degrees.
@@ -133,7 +164,19 @@ impl Image {
         &self,
         angle: f64,
         expand: bool,
-        _fillcolor: Option<(u8, u8, u8, u8)>,
+        fillcolor: Option<(u8, u8, u8, u8)>,
+    ) -> Result<Image, PilError> {
+        self.rotate_with_options(angle, expand, fillcolor, None, None, true)
+    }
+
+    fn rotate_with_options(
+        &self,
+        angle: f64,
+        expand: bool,
+        fillcolor: Option<(u8, u8, u8, u8)>,
+        center: Option<(f64, f64)>,
+        translate: Option<(f64, f64)>,
+        nearest: bool,
     ) -> Result<Image, PilError> {
         let angle = angle % 360.0;
         Ok(Image::push_op(
@@ -141,7 +184,10 @@ impl Image {
             PipelineOp::Rotate {
                 angle,
                 expand,
-                fill: _fillcolor,
+                fill: fillcolor,
+                center,
+                translate,
+                nearest,
             },
         ))
     }

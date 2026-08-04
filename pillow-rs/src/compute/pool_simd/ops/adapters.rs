@@ -1016,6 +1016,7 @@ pub fn simd_rotate(
         angle,
         expand,
         fill,
+        ..
     } = op
     {
         let fill_rgba = match fill {

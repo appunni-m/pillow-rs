@@ -417,6 +417,8 @@ fn rotate_arbitrary_generic(
     expand: bool,
     fill: Option<(u8, u8, u8, u8)>,
     nearest: bool,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
 ) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = img.dimensions();
@@ -434,10 +436,15 @@ fn rotate_arbitrary_generic(
     let aff_b = round_15(rad.sin());
     let aff_d = round_15(-rad.sin());
     let aff_e = aff_a;
-    let center_x = sw / 2.0;
-    let center_y = sh / 2.0;
-    let mut aff_c = aff_a * -center_x + aff_b * -center_y + center_x;
-    let mut aff_f = aff_d * -center_x + aff_e * -center_y + center_y;
+    // Pillow's Image.rotate composes post-translation into the reverse affine
+    // matrix before calculating expand bounds; applying it after sampling
+    // changes both the canvas size and the selected source pixels.
+    let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
+    let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
+    let mut aff_c =
+        aff_a * (-center_x - translate_x) + aff_b * (-center_y - translate_y) + center_x;
+    let mut aff_f =
+        aff_d * (-center_x - translate_x) + aff_e * (-center_y - translate_y) + center_y;
     let transform =
         |x: f64, y: f64, c: f64, f: f64| (aff_a * x + aff_b * y + c, aff_d * x + aff_e * y + f);
 
@@ -754,23 +761,32 @@ pub fn execute_rotate(
     angle: f64,
     expand: bool,
     fill: Option<(u8, u8, u8, u8)>,
+    center: Option<(f64, f64)>,
+    translate: Option<(f64, f64)>,
+    requested_nearest: bool,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let deg = (angle.round() as i32).rem_euclid(360);
+    let has_custom_transform = center.is_some() || translate.is_some();
+    let nearest = requested_nearest
+        || explicit_mode == Some("P")
+        || explicit_mode == Some("1")
+        || explicit_mode == Some("I")
+        || explicit_mode == Some("F");
     // Fast path: exact 90-degree multiples
     // PIL rotates counterclockwise; image crate rotates clockwise.
     // PIL 90° CCW = image crate 270° CW, PIL 270° CCW = image crate 90° CW.
     // For 90/270 with expand=False, compute the clipped result directly
     // by pasting the expanded result centered in the original-sized canvas.
-    let result = if (deg - 90).abs() < 2 || (deg - 90).abs() >= 358 {
+    let result = if !has_custom_transform && ((deg - 90).abs() < 2 || (deg - 90).abs() >= 358) {
         if expand {
             img.rotate270() // 270° CW = 90° CCW (PIL)
         } else {
             rotate_90_non_expand(img, false, fill)?
         }
-    } else if (deg - 180).abs() < 2 {
+    } else if !has_custom_transform && (deg - 180).abs() < 2 {
         img.rotate180()
-    } else if (deg - 270).abs() < 2 || (deg - 270).abs() >= 358 {
+    } else if !has_custom_transform && ((deg - 270).abs() < 2 || (deg - 270).abs() >= 358) {
         if expand {
             img.rotate90() // 90° CW = 270° CCW (PIL)
         } else {
@@ -778,11 +794,7 @@ pub fn execute_rotate(
         }
     } else {
         // Multi-channel arbitrary rotation (no RGBA roundtrip)
-        let nearest = explicit_mode == Some("P")
-            || explicit_mode == Some("1")
-            || explicit_mode == Some("I")
-            || explicit_mode == Some("F");
-        rotate_arbitrary_generic(img, angle, expand, fill, nearest)?
+        rotate_arbitrary_generic(img, angle, expand, fill, nearest, center, translate)?
     };
     Ok(preserve_mode(img, result))
 }
