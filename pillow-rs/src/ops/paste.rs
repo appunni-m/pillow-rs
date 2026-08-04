@@ -638,7 +638,13 @@ fn paste_source_from_color_string(value: &str, mode: &str) -> Result<PasteSource
 }
 
 fn coordinate(value: i64) -> Result<i32, PilError> {
-    i32::try_from(value).map_err(|_| PilError::TypeError("coordinates must be integers".to_owned()))
+    i32::try_from(value).map_err(|_| {
+        if value > i64::from(i32::MAX) {
+            PilError::OverflowError("signed integer is greater than maximum".into())
+        } else {
+            PilError::OverflowError("signed integer is less than minimum".into())
+        }
+    })
 }
 
 fn invalid_component_error(mode: &str) -> PilError {
