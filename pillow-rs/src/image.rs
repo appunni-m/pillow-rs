@@ -2213,8 +2213,8 @@ impl Image {
     ///
     /// # Errors
     ///
-    /// Returns [`PilError`] when lazy image data must be decoded and decoding
-    /// fails.
+    /// Returns [`PilError`] when neither the retained mode metadata nor lazy
+    /// image data is sufficient to determine the bands.
     pub fn getbands(&self) -> Result<Vec<String>, PilError> {
         if matches!(self, Image::Paletted(_)) {
             return Ok(vec!["P".to_string()]);
@@ -2248,6 +2248,32 @@ impl Image {
                 return Ok(bands.iter().map(|s| s.to_string()).collect());
             }
         }
+
+        // Pillow's Image.getbands -> ImagingCore.getbands derives names from
+        // the mode metadata without touching pixel storage. A decoder can
+        // know that mode from its header before pixel data is available, so a
+        // truncated or otherwise undecodable lazy image still returns its
+        // band names. Only fall through when the mode itself is unknown.
+        let mode = self.mode()?;
+        let bands = match mode.as_str() {
+            "CMYK" => vec!["C", "M", "Y", "K"],
+            "YCbCr" => vec!["Y", "Cb", "Cr"],
+            "HSV" => vec!["H", "S", "V"],
+            "PA" => vec!["P", "A"],
+            "RGBa" => vec!["R", "G", "B", "a"],
+            "I" | "F" | "P" | "1" | "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+                vec![mode.as_str()]
+            }
+            "L" => vec!["L"],
+            "LA" => vec!["L", "A"],
+            "RGB" => vec!["R", "G", "B"],
+            "RGBA" => vec!["R", "G", "B", "A"],
+            _ => Vec::new(),
+        };
+        if !bands.is_empty() {
+            return Ok(bands.into_iter().map(str::to_string).collect());
+        }
+
         let img = self.materialized_shared()?;
         let bands = match img.color().channel_count() {
             1 => vec!["L".to_string()],
