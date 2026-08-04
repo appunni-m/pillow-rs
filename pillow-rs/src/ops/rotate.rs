@@ -161,6 +161,12 @@ impl Image {
         }
         let center = center.into_values();
         let translate = translate.into_values();
+        // The ordinary nearest-neighbor call has the same normalized contract
+        // as the public core method. Reuse it after Python-facing validation so
+        // the Python and WASM entry points share one rotation constructor.
+        if nearest && center.is_none() && translate.is_none() {
+            return self.rotate(normalized_angle, expand, fillcolor);
+        }
         self.rotate_with_options(
             normalized_angle,
             expand,
