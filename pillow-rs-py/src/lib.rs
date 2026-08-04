@@ -206,6 +206,22 @@ fn rotate_point_input_from_python(
     })
 }
 
+fn imageops_color_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::ImageOpsColor {
+    let Some(value) = value else {
+        return pillow_rs::ImageOpsColor::None;
+    };
+    if let Ok(value) = value.extract::<String>() {
+        return pillow_rs::ImageOpsColor::Name(value);
+    }
+    if let Ok(value) = value.extract::<i64>() {
+        return pillow_rs::ImageOpsColor::Scalar(value);
+    }
+    if let Ok(values) = value.extract::<Vec<i64>>() {
+        return pillow_rs::ImageOpsColor::Components(values);
+    }
+    pillow_rs::ImageOpsColor::Invalid
+}
+
 fn convert_mode_input_from_python(
     value: Option<&Bound<'_, PyAny>>,
 ) -> PyResult<pillow_rs::PythonConvertModeInput> {
@@ -727,7 +743,6 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let center = rotate_point_input_from_python(center)?;
         let translate = rotate_point_input_from_python(translate)?;
-        let _ = fillcolor;
         let rs = self
             .inner
             .rotate_with_input(
@@ -736,7 +751,7 @@ impl PyImage {
                 rotate_expand_input_from_python(expand),
                 center,
                 translate,
-                None,
+                imageops_color_from_python(fillcolor),
             )
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
@@ -3874,20 +3889,7 @@ fn ops_pad(
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
     let centering = centering_from_python(Some(centering));
-    let color = match color {
-        None => pillow_rs::ImageOpsColor::None,
-        Some(color) => {
-            if let Ok(value) = color.extract::<String>() {
-                pillow_rs::ImageOpsColor::Name(value)
-            } else if let Ok(value) = color.extract::<i64>() {
-                pillow_rs::ImageOpsColor::Scalar(value)
-            } else if let Ok(values) = color.extract::<Vec<i64>>() {
-                pillow_rs::ImageOpsColor::Components(values)
-            } else {
-                pillow_rs::ImageOpsColor::Invalid
-            }
-        }
-    };
+    let color = imageops_color_from_python(color);
 
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {

@@ -82,7 +82,7 @@ fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), Pil
     }
 }
 
-fn resolve_pad_color(
+pub(crate) fn resolve_imageops_color(
     input: ImageOpsColor,
     mode: &str,
 ) -> Result<Option<(u8, u8, u8, u8)>, PilError> {
@@ -605,7 +605,7 @@ pub fn pad_with_input(
     let color_was_none = matches!(&color, ImageOpsColor::None);
     let filter = parse_imageops_filter(filter)?;
     let centering = resolve_centering(centering, true)?;
-    let color = resolve_pad_color(color, &image.mode()?)?;
+    let color = resolve_imageops_color(color, &image.mode()?)?;
     if filter_was_none && color_was_none && centering == (0.5, 0.5) {
         return pad(image, w, h, None, color, centering);
     }
