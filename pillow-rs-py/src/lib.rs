@@ -1404,9 +1404,12 @@ impl PyImage {
 
     /// Applies a sequence or callable LUT through the Rust-owned public path.
     fn point(&self, input: &Bound<'_, PyAny>) -> PyResult<PyImage> {
-        if input.is_instance_of::<PyString>() {
-            pillow_rs::validate_eval_input(pillow_rs::EvalInputKind::String).map_err(map_error)?;
-        }
+        let input_kind = if input.is_instance_of::<PyString>() {
+            pillow_rs::EvalInputKind::String
+        } else {
+            pillow_rs::EvalInputKind::Other
+        };
+        pillow_rs::validate_eval_input(input_kind).map_err(map_error)?;
         if input.is_callable() {
             return pillow_rs::image_eval_callable(&self.inner, |sample| {
                 let result = input.call1((sample,)).map_err(|error| {
