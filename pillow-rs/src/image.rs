@@ -447,6 +447,19 @@ fn decode_float_samples(raw: &[u8]) -> Vec<f64> {
         .collect()
 }
 
+fn validate_scalar_storage(image: &DynamicImage, mode: &str) -> Result<(), PilError> {
+    if !matches!(mode, "I" | "F") {
+        return Ok(());
+    }
+    let expected = CheckedDims::new(image.width(), image.height(), 4)?.total_bytes();
+    if image.as_bytes().len() != expected {
+        return Err(PilError::InternalError(format!(
+            "{mode} image has invalid scalar storage"
+        )));
+    }
+    Ok(())
+}
+
 fn putdata_clip_u8(value: f64) -> u8 {
     if value.is_nan() || value >= 255.0 {
         255
@@ -1333,8 +1346,10 @@ impl Image {
     /// Returns [`PilError`] when lazy decoding, pipeline execution, or format
     /// conversion fails.
     pub fn materialize(&self) -> Result<DynamicImage, PilError> {
-        self.materialized_shared()
-            .map(|image| image.as_ref().clone())
+        let image = self.materialized_shared()?;
+        let mode = self.mode_from_materialized(&image);
+        validate_scalar_storage(&image, &mode)?;
+        Ok(image.as_ref().clone())
     }
 
     /// Materialize a lazy image once before creating independent branches.
@@ -3308,7 +3323,31 @@ impl Image {
             _ => {}
         }
         let img = self.materialized_shared()?;
-        Ok(color_type_to_mode(img.color()).to_string())
+        Ok(self.mode_from_materialized(&img))
+    }
+
+    /// Returns the mode after the caller has already materialized this image.
+    ///
+    /// The fallible [`Image::mode`] method must decode lazy inputs when no
+    /// header mode is available. Once a concrete buffer is in hand, that
+    /// operation cannot fail; keeping this path infallible also makes it clear
+    /// that mode selection does not trigger a second decode.
+    pub(crate) fn mode_from_materialized(&self, image: &DynamicImage) -> String {
+        match self {
+            Image::Paletted(_) => "P".to_owned(),
+            Image::Loaded(data) => data
+                .explicit_mode
+                .clone()
+                .unwrap_or_else(|| image_mode_name(data.decoded_mode).to_owned()),
+            Image::Bytes {
+                info: Some(info), ..
+            } => image_mode_name(info.mode).to_owned(),
+            Image::Pipeline {
+                explicit_mode: Some(mode),
+                ..
+            } => mode.clone(),
+            _ => color_type_to_mode(image.color()).to_owned(),
+        }
     }
 
     /// Returns the known image format name, if the image came from encoded input.
@@ -4171,6 +4210,19 @@ impl Image {
         }
         self.read_scalar_storage(mode, decode_float_samples)
             .map(ScalarImageSamples::Float)
+    }
+
+    /// Decodes scalar samples from a buffer that `Image::materialize` has
+    /// already validated for the requested scalar mode.
+    pub(crate) fn scalar_samples_from_materialized(
+        image: &DynamicImage,
+        mode: &str,
+    ) -> ScalarImageSamples {
+        if mode == "I" {
+            ScalarImageSamples::Integer(decode_integer_samples(image.as_bytes()))
+        } else {
+            ScalarImageSamples::Float(decode_float_samples(image.as_bytes()))
+        }
     }
 
     fn scalar_integer_samples(&self) -> Result<Vec<i32>, PilError> {
