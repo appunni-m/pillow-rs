@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 73acf33a00061c0ef2b096039053589e960b7b5e31e3a25c34b84bce0abba111
-coverage_run_id: migration-coverage-251f2331fc9746599807af87fc895aff
+coverage_run_id: migration-coverage-f9c7063a8623404e8290745452117322
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -21,7 +21,7 @@ not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-33ba68f242874f478b07ee2ac8b14dd2`).
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-a86591ac33d34cb896edce4586f7fefe`).
 Rust implementation regions: `104/104` (100.0%).
 Python facade statements: `1/1` (100.0%).
 Component aggregate for backlog ordering: `11227/12124` (92.6%).
@@ -128,24 +128,24 @@ Component aggregate for backlog ordering: `11227/12124` (92.6%).
 | `PIL.Image.new` | `image-core` | 11227/12124 | 92.6% |
 | `PIL.Image.open` | `image-core` | 11227/12124 | 92.6% |
 | `PIL.Image.radial_gradient` | `image-core` | 11227/12124 | 92.6% |
-| `PIL.ImageOps.autocontrast` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.colorize` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.contain` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.cover` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.crop` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.deform` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.equalize` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.exif_transpose` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.expand` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.fit` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.flip` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.grayscale` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.invert` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.mirror` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.pad` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.posterize` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.scale` | `image-ops` | 813/861 | 94.4% |
-| `PIL.ImageOps.solarize` | `image-ops` | 813/861 | 94.4% |
+| `PIL.ImageOps.autocontrast` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.colorize` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.contain` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.cover` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.crop` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.deform` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.equalize` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.exif_transpose` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.expand` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.fit` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.flip` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.grayscale` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.invert` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.mirror` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.pad` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.posterize` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.scale` | `image-ops` | 812/859 | 94.5% |
+| `PIL.ImageOps.solarize` | `image-ops` | 812/859 | 94.5% |
 
 ## Per-file region coverage for involved components
 
@@ -172,6 +172,6 @@ Component aggregate for backlog ordering: `11227/12124` (92.6%).
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% |
 | `image-font` | `pillow-rs/src/font/mod.rs` | 659/685 | 96.2% |
 | `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |
-| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 813/861 | 94.4% |
+| `image-ops` | `pillow-rs/src/ops/imageops.rs` | 812/859 | 94.5% |
 | `image-ops` | `pillow-rs-py/python/pillow_rs/imageops.py` | 0/0 | n/a |
 
