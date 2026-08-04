@@ -16746,6 +16746,27 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getim",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-default",
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getxmp",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-default",
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getxmp",
+            "requirement_suffix": "mode.l",
+            "name": "l-mode",
+            "mode": "L",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getpalette",
             "requirement_suffix": "parameter.rawmode",
             "name": "attached-rgbx",
