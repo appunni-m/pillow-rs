@@ -9429,6 +9429,18 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "parameter.im",
+            "name": "string-color-hsv",
+            "observe_receiver": True,
+            "mode": "HSV",
+            "values": {
+                "im": literal("red"),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
             "name": "string-color-error",
             "mode": "RGB",
             "values": {
@@ -9500,6 +9512,72 @@ def build_nuanced_cases(
             "values": {
                 "im": literal([255, 0, 0]),
                 "box": literal([2147483648, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-two-coordinate-x-overflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([2147483648, 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-two-coordinate-y-overflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([0, 2147483648]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-box-left-overflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([2147483648, 0, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-box-top-overflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([0, 2147483648, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-box-right-overflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([0, 0, 2147483648, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.box",
+            "name": "image-box-bottom-overflow",
+            "mode": "RGB",
+            "im_mode": "RGB",
+            "values": {
+                "box": literal([0, 0, 1, 2147483648]),
             },
         },
         {
