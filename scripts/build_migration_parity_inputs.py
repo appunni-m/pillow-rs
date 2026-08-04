@@ -2270,6 +2270,19 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "resize-copy":
+                image_step = self.ensure_image(mode="RGB")
+                resized_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+                receiver_step = resized_step
             elif chain == "p-putalpha-convert":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -15253,6 +15266,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
             "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "copy",
+            "requirement_suffix": "behavior.default",
+            "name": "resize-pipeline",
+            "chain": "resize-copy",
         },
         {
             "surface": "PIL.Image.Image",
