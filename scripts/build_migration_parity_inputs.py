@@ -751,11 +751,13 @@ class WorkflowBuilder:
                     step_id=self.next_step_id(f"setup-{label}"),
                 )
             elif self.scenario_inline_image in {
+                "i16-frombytes",
                 "i16n-frombytes",
                 "i16l-frombytes",
                 "i16b-frombytes",
             }:
                 mode = {
+                    "i16-frombytes": "I;16",
                     "i16n-frombytes": "I;16N",
                     "i16l-frombytes": "I;16L",
                     "i16b-frombytes": "I;16B",
@@ -14772,6 +14774,34 @@ def build_nuanced_cases(
             "requirement_suffix": "mode.rgb",
             "name": "opened-png-without-idat",
             "scenario_inline_image": "png-no-idat",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "mode.i16",
+            "name": "i16-frombytes",
+            "scenario_inline_image": "i16-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "mode.i16",
+            "name": "i16l-frombytes",
+            "scenario_inline_image": "i16l-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "mode.i16",
+            "name": "i16b-frombytes",
+            "scenario_inline_image": "i16b-frombytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "mode.i16",
+            "name": "i16n-frombytes",
+            "scenario_inline_image": "i16n-frombytes",
         },
         {
             "surface": "PIL.Image.Image",
