@@ -11613,6 +11613,17 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.centering",
+            "name": "half-centered",
+            "values": {
+                "size": literal([13, 7]),
+                "centering": literal([0.5, 0.25]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "autocontrast",
             "requirement_suffix": "parameter.mask",
             "name": "valid-l-mask",
@@ -11779,6 +11790,17 @@ def build_nuanced_cases(
             "mode": "F",
             "values": {
                 "color": literal([1, 2]),
+                "size": literal([20, 12]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.color",
+            "name": "f-color-name",
+            "mode": "F",
+            "values": {
+                "color": literal("red"),
                 "size": literal([20, 12]),
             },
         },
