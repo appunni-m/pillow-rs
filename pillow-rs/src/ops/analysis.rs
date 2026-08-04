@@ -78,7 +78,7 @@ impl Image {
             return Ok(None);
         }
 
-        let mode = self.mode()?;
+        let mode = self.mode_from_materialized(&img);
         if mode == "I" || mode == "F" {
             let mut left = img_w;
             let mut top = img_h;
@@ -94,7 +94,7 @@ impl Image {
                     bottom = bottom.max(y);
                 }
             };
-            match self.scalar_samples(&mode)? {
+            match crate::image::Image::scalar_samples_from_materialized(&img, &mode) {
                 crate::image::ScalarImageSamples::Integer(values) => {
                     for (index, value) in values.into_iter().enumerate() {
                         update(index, value != 0);
