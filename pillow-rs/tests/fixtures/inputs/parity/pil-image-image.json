@@ -65179,6 +65179,119 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.save.nuanced.p-short-palette-resize",
+      "surface": "PIL.Image.Image",
+      "operation": "save",
+      "covers": [
+        "PIL.Image.Image.save.format.png"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-putpalette",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "setup-resize",
+          "surface": "PIL.Image.Image",
+          "operation": "resize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "resample": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-resize"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            },
+            "format": {
+              "kind": "literal",
+              "value": "PNG"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.save.nuanced.opened-p-load-save",
       "surface": "PIL.Image.Image",
       "operation": "save",
