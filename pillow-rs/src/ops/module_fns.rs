@@ -97,6 +97,26 @@ fn validate_merge_shape(mode: &str, band_count: usize) -> Result<(), PilError> {
     Ok(())
 }
 
+fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError> {
+    // Pillow's ``Image.merge`` accepts an L image for every band.  For
+    // multi-band outputs it also accepts a P image only in the first
+    // position, where the indexed core is treated as a single-byte band;
+    // later P bands fail in ``ImagingMerge`` with ``mode mismatch``.  The
+    // single-band L path has its own ``images do not match`` error.
+    for (index, band) in bands.iter().enumerate() {
+        let band_mode = band.mode()?;
+        let valid = band_mode == "L" || (index == 0 && mode != "L" && band_mode == "P");
+        if !valid {
+            return Err(if mode == "L" {
+                PilError::ValueError("images do not match".into())
+            } else {
+                PilError::ValueError("mode mismatch".into())
+            });
+        }
+    }
+    Ok(())
+}
+
 /// Host-neutral input classification for `Image.merge` bands.
 #[derive(Debug, Clone)]
 pub enum MergeInput {
@@ -118,6 +138,7 @@ pub enum MergeInput {
 /// the wrong length.
 pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
+    validate_merge_band_modes(mode, bands)?;
 
     let mode_enum = parse_mode(mode)?;
     let mut result = Image::push_op(

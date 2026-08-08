@@ -3339,9 +3339,40 @@ class WorkflowBuilder:
             if self.edge == "wrong-band-count":
                 band_count -= 1
             band_steps = []
+            palette_band = {
+                "merge-palette-band-first": 0,
+                "merge-palette-band-after-first": 1,
+            }.get(self.edge)
             for index in range(band_count):
-                band_steps.append(
+                if palette_band == index:
+                    # Pillow accepts a P image as a single-band merge input
+                    # when it is the first band, and rejects it after the
+                    # first band. Keep this as public construction plus
+                    # putpalette so the case exercises the core palette
+                    # boundary instead of fabricating a private Image value.
+                    band = self.add_step(
+                        "PIL.Image",
+                        "new",
+                        receiver=None,
+                        arguments={
+                            "mode": literal("P"),
+                            "size": literal(self.scenario_size or [16, 16]),
+                            "color": literal(1),
+                        },
+                        step_id=f"setup-band-{index + 1}",
+                    )
                     self.add_step(
+                        "PIL.Image.Image",
+                        "putpalette",
+                        receiver=binding(band),
+                        arguments={
+                            "data": literal([10, 20, 30, 40, 50, 60]),
+                            "rawmode": literal("RGB"),
+                        },
+                        step_id=f"setup-band-{index + 1}-palette",
+                    )
+                else:
+                    band = self.add_step(
                         "PIL.Image",
                         "new",
                         receiver=None,
@@ -3356,7 +3387,7 @@ class WorkflowBuilder:
                         },
                         step_id=f"setup-band-{index + 1}",
                     )
-                )
+                band_steps.append(band)
             arguments["mode"] = literal(self.mode)
             arguments["bands"] = bindings(band_steps)
         elif (
@@ -10876,6 +10907,23 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "cmyk-mode",
             "mode": "CMYK",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "palette-band-first",
+            "mode": "RGB",
+            "edge": "merge-palette-band-first",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "palette-band-after-first",
+            "mode": "RGB",
+            "edge": "merge-palette-band-after-first",
         },
         {
             "surface": "PIL.Image",

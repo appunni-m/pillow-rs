@@ -287,6 +287,8 @@
           "PIL.Image.effect_mandelbrot.nuanced.wrong-length",
           "PIL.Image.merge.nuanced.rgb-mode-nonzero",
           "PIL.Image.merge.nuanced.cmyk-mode",
+          "PIL.Image.merge.nuanced.palette-band-first",
+          "PIL.Image.merge.nuanced.palette-band-after-first",
           "PIL.Image.merge.nuanced.invalid-mode",
           "PIL.Image.merge.nuanced.wrong-band-count",
           "PIL.Image.merge.nuanced.invalid-band-item",
