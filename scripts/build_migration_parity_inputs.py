@@ -2720,6 +2720,21 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["im"] = binding(flipped_step)
                 receiver_step = destination_step
+            elif chain == "p-putpalette-paste":
+                destination_step = self.ensure_image(mode="RGB")
+                source_step = self.ensure_image(mode="P", label="source")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(source_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-source-putpalette",
+                )
+                self.scenario_values["im"] = binding(source_step)
+                receiver_step = destination_step
             elif chain == "paste-box-image-mask-conflict":
                 destination_step = self.ensure_image(mode="RGB")
                 source_step = self.ensure_image(mode="RGB", label="im")
@@ -14610,6 +14625,18 @@ def build_nuanced_cases(
             "name": "p-pipeline-source-with-palette",
             "mode": "RGB",
             "chain": "p-putpalette-pipeline-paste",
+            "observe_receiver": True,
+            "values": {
+                "box": literal([0, 0, 16, 16]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "p-source-with-palette",
+            "mode": "RGB",
+            "chain": "p-putpalette-paste",
             "observe_receiver": True,
             "values": {
                 "box": literal([0, 0, 16, 16]),
