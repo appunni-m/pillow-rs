@@ -62,7 +62,10 @@ fn kernel_hamming(x: f64) -> f64 {
         // cosine window. This mirrors the Hamming branch in Pillow's
         // Resample.c and is observable on downsampled impulses.
         let pix = std::f64::consts::PI * x;
-        (pix.sin() / pix) * (0.54 + 0.46 * pix.cos())
+        // Resample.c declares the window constants with an `f` suffix.
+        // Preserve that float-to-double promotion: using f64 literals moves
+        // the final F-mode sample by one ULP.
+        (pix.sin() / pix) * ((0.54_f32 as f64) + (0.46_f32 as f64) * pix.cos())
     }
 }
 
@@ -592,7 +595,7 @@ fn _precompute_coeffs_impl(
 
 // ── Alpha premultiplication ──
 
-fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
+pub(crate) fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
         DynamicImage::ImageRgba8(rgba) => {
             let mut out = rgba.clone();
@@ -616,7 +619,7 @@ fn premultiply_alpha(img: &DynamicImage) -> DynamicImage {
     }
 }
 
-fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
+pub(crate) fn unpremultiply_alpha(img: &DynamicImage) -> DynamicImage {
     match img {
         DynamicImage::ImageRgba8(rgba) => {
             let mut out = rgba.clone();
