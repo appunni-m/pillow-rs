@@ -303,7 +303,7 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
 /// or another [`PilError`] when mode detection fails.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
-    if mode == "LA" || mode == "RGBA" {
+    if matches!(mode.as_str(), "LA" | "PA" | "RGBA") {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
     Ok(Image::push_op(image, PipelineOp::Invert))

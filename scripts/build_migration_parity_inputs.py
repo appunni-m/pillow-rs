@@ -2337,6 +2337,7 @@ class WorkflowBuilder:
                 "PIL.Image.Image",
                 "PIL.ImageDraw.ImageDraw",
                 "PIL.ImageOps",
+                "PIL.ImageEnhance",
             }:
                 raise ValueError(
                     "scenario chains require supported image or image-draw methods"
@@ -3412,7 +3413,7 @@ class WorkflowBuilder:
             # final call must not turn that image into a method receiver.
             call_receiver = (
                 None
-                if self.primary_surface == "PIL.ImageOps"
+                if self.primary_surface in {"PIL.ImageOps", "PIL.ImageEnhance"}
                 else binding(receiver_step)
             )
             call_id = self.add_step(
@@ -3423,6 +3424,21 @@ class WorkflowBuilder:
                 step_id="call",
             )
             observations = [call_id]
+            observation_target = call_id
+            if self.primary_surface == "PIL.ImageEnhance" and operation["kind"] == "type":
+                method_surface = f"PIL.ImageEnhance.{self.primary_operation}"
+                method_operation = self.operations.get(
+                    operation_key(method_surface, "enhance")
+                )
+                if method_operation is not None:
+                    observation_target = self.add_step(
+                        method_surface,
+                        "enhance",
+                        receiver=binding(call_id),
+                        arguments=self.required_arguments(method_operation),
+                        step_id="apply-enhance",
+                    )
+                    observations.append(observation_target)
             if self.scenario_observe_receiver:
                 observation_operation = (
                     "convert"
@@ -3448,7 +3464,7 @@ class WorkflowBuilder:
                     self.add_step(
                         "PIL.Image.Image",
                         self.scenario_observe_result,
-                        receiver=binding(call_id),
+                        receiver=binding(observation_target),
                         arguments={},
                         step_id="observe-result",
                     )
@@ -4214,6 +4230,15 @@ def build_nuanced_cases(
             for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
             for mode in ("1", "P")
         ),
+        {
+            "surface": "PIL.ImageEnhance",
+            "operation": "Brightness",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-pipeline-expansion",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
+            "observe_result": "tobytes",
+        },
         {
             "surface": "PIL.ImageFont.FreeTypeFont",
             "operation": "getlength",
@@ -13704,6 +13729,15 @@ def build_nuanced_cases(
             "mode": "RGB",
             "edge": "nonzero-pixel",
             "pixel": [12, 34, 56],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "invert",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-pipeline-expansion",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
             "observe_result": "tobytes",
         },
         {

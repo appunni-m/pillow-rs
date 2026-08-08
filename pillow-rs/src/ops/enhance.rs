@@ -12,7 +12,7 @@ fn validate_mode(image: &Image, palette_rejects: bool) -> Result<(), PilError> {
     if palette_rejects && mode == "P" {
         return Err(PilError::ValueError("cannot filter palette images".into()));
     }
-    if mode == "P" {
+    if matches!(mode.as_str(), "P" | "PA") {
         return Err(PilError::ValueError("image has wrong mode".into()));
     }
     Ok(())
