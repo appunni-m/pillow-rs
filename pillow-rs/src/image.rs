@@ -2680,14 +2680,7 @@ impl Image {
         let has_alpha = !palette_alpha.is_empty();
         match rawmode {
             "RGB" => Ok(Some(palette)),
-            "RGBA" => {
-                let mut out = Vec::with_capacity(palette.len() / 3 * 4);
-                for (index, color) in palette.chunks_exact(3).enumerate() {
-                    out.extend_from_slice(color);
-                    out.push(palette_alpha.get(index).copied().unwrap_or(255));
-                }
-                Ok(Some(out))
-            }
+            "RGBA" => Ok(self.getpalette_rgba()),
             "RGBX" => {
                 // Pillow has no RGBA->RGBX packer, so palettes carrying alpha
                 // data raise "unrecognized raw mode" for RGBX; palettes
