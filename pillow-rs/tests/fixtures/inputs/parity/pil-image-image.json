@@ -36556,6 +36556,116 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.transform.nuanced.pa-putpalette-affine-default-fill",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-pa-putpalette-transform",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                40,
+                50,
+                60
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                6
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                0,
+                0,
+                1,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.transform.nuanced.p-affine-tuple-fill",
       "surface": "PIL.Image.Image",
       "operation": "transform",
@@ -79052,6 +79162,116 @@
             "resample": {
               "kind": "literal",
               "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.resize.nuanced.pa-putpalette-bilinear-resize",
+      "surface": "PIL.Image.Image",
+      "operation": "resize",
+      "covers": [
+        "PIL.Image.Image.resize.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-pa-putpalette",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                40,
+                50,
+                60
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "setup-pa-resize",
+          "surface": "PIL.Image.Image",
+          "operation": "resize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "resample": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "resize",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-pa-resize"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                4
+              ]
+            },
+            "resample": {
+              "kind": "literal",
+              "value": 2
             }
           }
         }
