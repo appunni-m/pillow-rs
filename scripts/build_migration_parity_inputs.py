@@ -2328,6 +2328,19 @@ class WorkflowBuilder:
                     step_id="setup-pa-putpalette-rotate",
                 )
                 receiver_step = image_step
+            elif chain == "pa-putpalette-transform":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-transform",
+                )
+                receiver_step = image_step
             elif chain == "p-resize-convert-verify":
                 image_step = self.ensure_image(mode="P")
                 resized_step = self.add_step(
@@ -8763,6 +8776,20 @@ def build_nuanced_cases(
                 "data": literal([1, 0, 0, 0, 1, 0]),
                 "resample": literal(3),
                 "fillcolor": literal(5),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-affine-default-fill",
+            "observe_result": "tobytes",
+            "mode": "PA",
+            "chain": "pa-putpalette-transform",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(0),
+                "data": literal([1, 0, 0, 0, 1, 0]),
             },
         },
         {
@@ -16489,6 +16516,15 @@ def build_nuanced_cases(
             "mode": "PA",
             "chain": "pa-putpalette-resize",
             "values": {"size": literal([4, 4]), "resample": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-bilinear-resize",
+            "mode": "PA",
+            "chain": "pa-putpalette-resize",
+            "values": {"size": literal([4, 4]), "resample": literal(2)},
         },
         {
             "surface": "PIL.Image.Image",

@@ -1336,6 +1336,12 @@ impl Image {
                         ..
                     }
                 ))
+            // Pillow's ImagingTransform applies affine/projective sampling to
+            // the native PA index/alpha pair and preserves PA. Keep this
+            // channel-wise operation indexed so a retained RGB palette is not
+            // expanded to RGBA before the transform runs.
+            || (source.explicit_mode() == Some("PA")
+                && matches!(op, PipelineOp::Transform { .. }))
             // Pillow's ImageOps.fit keeps P/PA images indexed through the
             // boxed resize. P uses nearest-neighbour samples regardless of
             // the requested kernel; PA resamples its raw index/alpha bands.
