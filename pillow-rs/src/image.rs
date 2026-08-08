@@ -139,6 +139,16 @@ pub fn default_palette() -> Vec<u8> {
     pal
 }
 
+fn clear_palette_info_alpha(info: &mut Option<ImageInfo>) {
+    let Some(info) = info.as_mut() else {
+        return;
+    };
+    let Some(palette) = info.palette.as_mut() else {
+        return;
+    };
+    palette.alpha.clear();
+}
+
 /// A decoded P-mode (palette) image.
 /// `indices` holds one byte per pixel (the palette index, 0-255).
 /// `palette` holds zero to 768 bytes of retained RGB triples. Missing entries
@@ -3103,10 +3113,12 @@ impl Image {
 
         if let Image::Paletted(data) = self {
             data.palette_alpha = palette_alpha;
+            clear_palette_info_alpha(&mut data.info);
         } else {
             let indices = self.materialize()?.to_luma8();
             let source_format = self.source_format();
-            let info = self.image_info();
+            let mut info = self.image_info();
+            clear_palette_info_alpha(&mut info);
             let exif = self.exif_metadata();
             *self = Image::Paletted(PalettedData {
                 indices,
@@ -3117,11 +3129,6 @@ impl Image {
                 exif,
                 materialized: materialization_cache(),
             });
-        }
-        if let Image::Paletted(data) = self
-            && let Some(palette) = data.info.as_mut().and_then(|info| info.palette.as_mut())
-        {
-            palette.alpha.clear();
         }
         Ok(())
     }

@@ -1560,6 +1560,8 @@
           "PIL.Image.Image.info.nuanced.opened-gif-format-info",
           "PIL.Image.Image.info.nuanced.opened-webp-format-info",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table",
+          "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table-putpalette",
+          "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-table-load",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-resized-bilinear",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-loaded",

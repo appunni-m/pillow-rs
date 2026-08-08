@@ -7,7 +7,7 @@ contract and indexed input mappings only; it contains no measured result.
 generator: scripts/generate_migration_parity_docs.py@1
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: e9793ed33f529f1a1eec6f858df78d545f461fd585a1548ad85e016e90cf3234
+manifest_sha256: 4748153a1f630b7f47143dd144521d06e650ceea1760a71f7297de91e96daf49
 statement_status: declared
 ```
 
@@ -16,12 +16,12 @@ statement_status: declared
 - Scope: `pillow-rs-selected-public-contract` (`full`)
 - Oracle: `Pillow 12.2.0`
 - Target profiles: `python-cpu`
-- Public surfaces: 23
-- Operations: 205
-- Requirements: 1780
-- Indexed parity cases: 1938
-- Indexed coverage plans: 23
-- Indexed benchmark workloads: 204
+- Public surfaces: 24
+- Operations: 209
+- Requirements: 1797
+- Indexed parity cases: 2740
+- Indexed coverage plans: 24
+- Indexed benchmark workloads: 208
 
 ## Declared operations
 
@@ -67,8 +67,9 @@ statement_status: declared
 | `PIL.Image.Image` | `getpixel` | `method` | `PIL.Image.Image.getpixel` | `pillow_rs.Image.getpixel` | 11 |
 | `PIL.Image.Image` | `getprojection` | `method` | `PIL.Image.Image.getprojection` | `pillow_rs.Image.getprojection` | 9 |
 | `PIL.Image.Image` | `getxmp` | `method` | `PIL.Image.Image.getxmp` | `pillow_rs.Image.getxmp` | 5 |
+| `PIL.Image.Image` | `has_transparency_data` | `property_get` | `PIL.Image.Image.has_transparency_data` | `pillow_rs.Image.has_transparency_data` | 2 |
 | `PIL.Image.Image` | `height` | `property_get` | `PIL.Image.Image.height` | `pillow_rs.Image.height` | 2 |
-| `PIL.Image.Image` | `histogram` | `method` | `PIL.Image.Image.histogram` | `pillow_rs.Image.histogram` | 12 |
+| `PIL.Image.Image` | `histogram` | `method` | `PIL.Image.Image.histogram` | `pillow_rs.Image.histogram` | 13 |
 | `PIL.Image.Image` | `info` | `property_get` | `PIL.Image.Image.info` | `pillow_rs.Image.info` | 2 |
 | `PIL.Image.Image` | `load` | `method` | `PIL.Image.Image.load` | `pillow_rs.Image.load` | 9 |
 | `PIL.Image.Image` | `mode` | `property_get` | `PIL.Image.Image.mode` | `pillow_rs.Image.mode` | 2 |
@@ -169,6 +170,9 @@ statement_status: declared
 | `PIL.ImageFilter` | `SMOOTH` | `type` | `PIL.ImageFilter.SMOOTH` | `pillow_rs.ImageFilter.SMOOTH` | 6 |
 | `PIL.ImageFilter` | `SMOOTH_MORE` | `type` | `PIL.ImageFilter.SMOOTH_MORE` | `pillow_rs.ImageFilter.SMOOTH_MORE` | 6 |
 | `PIL.ImageFilter` | `UnsharpMask` | `type` | `PIL.ImageFilter.UnsharpMask` | `pillow_rs.ImageFilter.UnsharpMask` | 9 |
+| `PIL.ImageFilter.Color3DLUT` | `__repr__` | `method` | `PIL.ImageFilter.Color3DLUT.__repr__` | `pillow_rs.imagefilter.Color3DLUT.__repr__` | 2 |
+| `PIL.ImageFilter.Color3DLUT` | `generate` | `function` | `PIL.ImageFilter.Color3DLUT.generate` | `pillow_rs.imagefilter.Color3DLUT.generate` | 6 |
+| `PIL.ImageFilter.Color3DLUT` | `transform` | `method` | `PIL.ImageFilter.Color3DLUT.transform` | `pillow_rs.imagefilter.Color3DLUT.transform` | 6 |
 | `PIL.ImageFont` | `FreeTypeFont` | `type` | `PIL.ImageFont.FreeTypeFont` | `pillow_rs.ImageFont.FreeTypeFont` | 7 |
 | `PIL.ImageFont` | `ImageFont` | `type` | `PIL.ImageFont.ImageFont` | `pillow_rs.ImageFont.ImageFont` | 2 |
 | `PIL.ImageFont` | `MAX_STRING_LENGTH` | `constant` | `PIL.ImageFont.MAX_STRING_LENGTH` | `pillow_rs.ImageFont.MAX_STRING_LENGTH` | 1 |
@@ -241,6 +245,6 @@ accepted as input truth.
 
 | Lane | Documents |
 | --- | ---: |
-| parity | 23 |
-| coverage | 23 |
-| benchmark | 23 |
+| parity | 24 |
+| coverage | 24 |
+| benchmark | 24 |
