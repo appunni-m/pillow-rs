@@ -228,6 +228,32 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
     if variant == "short-app1-length":
         segment = b"\xff\xe1\x00\x01"
         return base[:2] + segment + base[2:]
+    if variant == "header-junk-before-app1":
+        # Pillow's JpegImagePlugin skips non-marker bytes while walking the
+        # header. Keep the JPEG's first APP0 segment intact, then place junk
+        # before a valid Exif APP1 segment so Image.open still accepts the
+        # encoded input and getexif() observes the scanner behavior.
+        if len(base) < 6 or base[2:4] != b"\xff\xe0":
+            raise ValueError("EXIF variant base must begin with an APP0 segment")
+        first_segment_end = 2 + 2 + int.from_bytes(base[4:6], "big")
+        if first_segment_end > len(base):
+            raise ValueError("JPEG APP0 segment extends beyond EXIF variant base")
+        tiff = (
+            b"II\x2a\x00"
+            + struct.pack("<I", 8)
+            + struct.pack("<H", 1)
+            + struct.pack("<HHI", 0x0112, 3, 1)
+            + struct.pack("<H", 2)
+            + b"\x00\x00"
+        )
+        payload = b"Exif\x00\x00" + tiff
+        segment = b"\xff\xe1" + struct.pack(">H", len(payload) + 2) + payload
+        return (
+            base[:first_segment_end]
+            + b"\x12\x34"
+            + segment
+            + base[first_segment_end:]
+        )
 
     if variant in {
         "le-orientation2",
@@ -18966,6 +18992,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "jpeg-short-app1-length",
             "exif_variant": "short-app1-length",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-header-junk-before-app1",
+            "exif_variant": "header-junk-before-app1",
         },
         {
             "surface": "PIL.Image.Image",

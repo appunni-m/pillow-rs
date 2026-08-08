@@ -3202,7 +3202,12 @@ impl Image {
         let mut offset = 2usize;
         while offset + 4 <= data.len() {
             if data[offset] != 0xFF {
-                return None;
+                // Pillow's JpegImagePlugin._open skips non-marker header junk
+                // before reading the next marker. Keep scanning so an APP1
+                // Exif segment after that junk remains observable through
+                // Image.getexif().
+                offset += 1;
+                continue;
             }
             let marker = data[offset + 1];
             // Standalone markers (RST0-7, TEM) and the SOI marker carry no
