@@ -805,6 +805,23 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id(f"setup-{label}"),
                 )
+            elif self.scenario_inline_image == "rgbx-frombytes":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-rgbx-data",
+                    bytes([16, 32, 64, 128]),
+                    "application/octet-stream",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "frombytes",
+                    receiver=None,
+                    arguments={
+                        "mode": literal("RGBX"),
+                        "size": literal([1, 1]),
+                        "data": data_descriptor,
+                    },
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
             elif self.scenario_inline_image == "png-no-idat":
                 data_descriptor = self.inline_bytes(
                     f"{label}-png-no-idat",
@@ -10005,6 +10022,30 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "paste",
             "requirement_suffix": "parameter.im",
+            "name": "float-component-error",
+            "mode": "L",
+            "values": {
+                "im": literal([1.5]),
+                "box": literal([1, 1, 5, 5]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": "rgbx-scalar",
+            "observe_receiver": True,
+            "mode": "RGBX",
+            "scenario_inline_image": "rgbx-frombytes",
+            "values": {
+                "im": literal(9),
+                "box": literal([0, 0, 1, 1]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
             "name": "single-tuple-out-of-range-clamps",
             "observe_receiver": True,
             "mode": "L",
@@ -14611,6 +14652,15 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "i-unsupported",
             "mode": "I",
+            "values": {"alpha": literal(192)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putalpha",
+            "requirement_suffix": "behavior.default",
+            "name": "i16-frombytes-unsupported",
+            "mode": "I;16",
+            "scenario_inline_image": "i16-frombytes",
             "values": {"alpha": literal(192)},
         },
         {
