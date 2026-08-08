@@ -21,7 +21,7 @@ not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-bf10893769ce43a7855482dea12299db4`).
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-cfc77ce212ee4b28892816069b148036`).
 Rust implementation regions: `104/104` (100.0%).
 Python facade statements: `1/1` (100.0%).
 Component aggregate for backlog ordering: `11428/12264` (93.2%).
