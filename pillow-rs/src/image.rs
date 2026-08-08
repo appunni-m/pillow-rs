@@ -1257,6 +1257,10 @@ impl Image {
             // allocated core has no palette attached.
             | PipelineOp::Add { .. }
             | PipelineOp::Subtract { .. }
+            // Image.merge accepts a P image as the first single-byte band of
+            // a multi-band result. Keep its raw index values; expanding the
+            // palette here would turn an index such as 1 into its RGB entry.
+            | PipelineOp::Merge { .. }
             // Image.remap_palette builds an inverse index LUT and separately
             // installs the reordered palette on the result.
             | PipelineOp::RemapPalette { .. }
@@ -1661,7 +1665,10 @@ impl Image {
                     ..
                 }
             );
-        let explicit_mode = if matches!(&op, PipelineOp::ExtractBand { .. }) {
+        let explicit_mode = if matches!(
+            &op,
+            PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
+        ) {
             None
         } else if source_is_paletted {
             if source.explicit_mode() == Some("PA") && matches!(&op, PipelineOp::PutPixel { .. }) {
@@ -1698,7 +1705,11 @@ impl Image {
             Some(crate::pipeline::PixelMode::CMYK) => None,
             _ => explicit_mode,
         };
-        let preserve_palette = palette_safe && !matches!(&op, PipelineOp::ExtractBand { .. });
+        let preserve_palette = palette_safe
+            && !matches!(
+                &op,
+                PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
+            );
         let source_palette = if preserve_palette {
             source.extract_palette()
         } else {
