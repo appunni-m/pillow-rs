@@ -1369,6 +1369,7 @@
           "PIL.Image.Image.histogram.nuanced.masked-nonzero-rgba",
           "PIL.Image.Image.entropy.nuanced.masked-region",
           "PIL.Image.Image.filter.nuanced.f-mode",
+          "PIL.Image.Image.filter.nuanced.i-mode",
           "PIL.Image.Image.filter.nuanced.invalid-filter",
           "PIL.Image.Image.getbbox.nuanced.nonzero-l",
           "PIL.Image.Image.getbbox.nuanced.nonzero-1",
