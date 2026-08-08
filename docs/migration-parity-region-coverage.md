@@ -5,11 +5,11 @@ This is a generated coverage view. The metric is **region coverage**
 not parity proof and does not change the manifest or lane inputs.
 
 ```yaml
-generator: scripts/report_migration_parity_region_coverage.py@3
+generator: scripts/report_migration_parity_region_coverage.py@4
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 4748153a1f630b7f47143dd144521d06e650ceea1760a71f7297de91e96daf49
-coverage_run_id: migration-coverage-7ca27c3b1723439cb3eb4352a357d662
+coverage_run_id: migration-coverage-736f56534fad46b4b14fe07c60d64702
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -17,18 +17,19 @@ threshold: below 95%
 
 The operation table is a component aggregate used only to order the
 backlog. Several public operations share a component, so these rows are
-not operation-level coverage.
+not operation-level coverage. The source-file table below is the
+actionable file order and contains only files below the threshold.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-97c8c1a21b23439aae4337c7370b671e`).
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-cdd28316f07b493fa2d0ed7eb6c31179`).
 Rust implementation regions: `104/104` (100.0%).
 Python facade statements: `1/1` (100.0%).
 Component aggregate for backlog ordering: `13364/14217` (94.0%).
 
-## Operations below 95% region coverage
+## Operations in below-95% components
 
-97 of 209 coverage-required operations are below 95%.
+97 of 209 coverage-required operations belong to a component below 95%; the percentages below are component aggregates.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -130,29 +131,16 @@ Component aggregate for backlog ordering: `13364/14217` (94.0%).
 | `PIL.Image.open` | `image-core` | 13364/14217 | 94.0% |
 | `PIL.Image.radial_gradient` | `image-core` | 13364/14217 | 94.0% |
 
-## Per-file region coverage for involved components
+## Ordered below-95% source-file backlog
+
+Sorted from lowest to highest region coverage, then by component and path.
 
 | Component | File | Region coverage | Percent |
 | --- | --- | ---: | ---: |
+| `image-font` | `pillow-rs/src/lib.rs` | 172/382 | 45.0% |
 | `image-core` | `pillow-rs/src/pipeline.rs` | 36/40 | 90.0% |
 | `image-core` | `pillow-rs/src/image.rs` | 4717/5234 | 90.1% |
 | `image-core` | `pillow-rs/src/ops/crop.rs` | 273/299 | 91.3% |
-| `image-core` | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% |
-| `image-core` | `pillow-rs/src/ops/module_fns.rs` | 518/544 | 95.2% |
-| `image-core` | `pillow-rs/src/ops/convert.rs` | 802/839 | 95.6% |
-| `image-core` | `pillow-rs/src/ops/transform.rs` | 633/659 | 96.1% |
-| `image-core` | `pillow-rs/src/ops/split.rs` | 25/26 | 96.2% |
-| `image-core` | `pillow-rs/src/ops/quantize.rs` | 2809/2898 | 96.9% |
-| `image-core` | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1637/1688 | 97.0% |
-| `image-core` | `pillow-rs/src/ops/rotate.rs` | 168/171 | 98.2% |
-| `image-core` | `pillow-rs/src/ops/transpose.rs` | 64/65 | 98.5% |
-| `image-core` | `pillow-rs/src/ops/analysis.rs` | 428/432 | 99.1% |
-| `image-core` | `pillow-rs-py/python/pillow_rs/image.py` | 0/0 | n/a |
-| `image-core` | `pillow-rs-py/python/pillow_rs/operations.py` | 0/0 | n/a |
-| `image-core` | `pillow-rs/src/ops/array.rs` | 88/88 | 100.0% |
-| `image-core` | `pillow-rs/src/ops/resize.rs` | 224/224 | 100.0% |
-| `image-font` | `pillow-rs/src/lib.rs` | 172/382 | 45.0% |
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% |
+| `image-core` | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% |
-| `image-font` | `pillow-rs/src/font/mod.rs` | 659/685 | 96.2% |
-| `image-font` | `pillow-rs-py/python/pillow_rs/imagefont.py` | 0/0 | n/a |

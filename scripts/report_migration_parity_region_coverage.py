@@ -9,9 +9,9 @@ scoped getbbox artifact is present, this report also records exact operation
 evidence from only getbbox parity inputs: the Python facade statement and the
 Rust getbbox function regions.
 
-Output is a generated markdown report listing every operation with region
-coverage below 95% in ascending order, plus per-file detail for the involved
-components so follow-up case work can target the exact files.
+Output is a generated markdown report listing every operation whose component
+aggregate is below 95% in ascending order, plus an ordered source-file backlog
+for the involved components so follow-up case work can target exact files.
 """
 
 from __future__ import annotations
@@ -185,7 +185,7 @@ def render(
         "not parity proof and does not change the manifest or lane inputs.",
         "",
         "```yaml",
-        f"generator: scripts/report_migration_parity_region_coverage.py@3",
+        f"generator: scripts/report_migration_parity_region_coverage.py@4",
         f"manifest_path: {manifest_path.relative_to(ROOT)}",
         f"manifest_schema: {manifest['schema']}",
         f"manifest_sha256: {manifest_digest}",
@@ -197,7 +197,8 @@ def render(
         "",
         "The operation table is a component aggregate used only to order the",
         "backlog. Several public operations share a component, so these rows are",
-        "not operation-level coverage.",
+        "not operation-level coverage. The source-file table below is the",
+        "actionable file order and contains only files below the threshold.",
         "",
         f"## PIL.Image.Image.getbbox",
         "",
@@ -228,9 +229,9 @@ def render(
         ]
     lines += [
         "",
-        f"## Operations below {THRESHOLD_PERCENT}% region coverage",
+        f"## Operations in below-{THRESHOLD_PERCENT}% components",
         "",
-        f"{len(below)} of {len(rows)} coverage-required operations are below {THRESHOLD_PERCENT}%.",
+        f"{len(below)} of {len(rows)} coverage-required operations belong to a component below {THRESHOLD_PERCENT}%; the percentages below are component aggregates.",
         "",
         "| Operation | Component(s) | Region coverage | Percent |",
         "| --- | --- | ---: | ---: |",
@@ -242,7 +243,9 @@ def render(
         )
     lines += [
         "",
-        "## Per-file region coverage for involved components",
+        f"## Ordered below-{THRESHOLD_PERCENT}% source-file backlog",
+        "",
+        "Sorted from lowest to highest region coverage, then by component and path.",
         "",
         "| Component | File | Region coverage | Percent |",
         "| --- | --- | ---: | ---: |",
@@ -254,10 +257,11 @@ def render(
     for component_id in involved_components:
         for relative, dims in components.get(component_id, {}).items():
             percent = (100.0 * dims["covered"] / dims["total"]) if dims["total"] else None
-            file_rows.append(
-                (component_id, relative, dims["covered"], dims["total"], percent)
-            )
-    file_rows.sort(key=lambda item: (item[0], item[4] if item[4] is not None else 100.0))
+            if percent is not None and percent < THRESHOLD_PERCENT:
+                file_rows.append(
+                    (component_id, relative, dims["covered"], dims["total"], percent)
+                )
+    file_rows.sort(key=lambda item: (item[4], item[0], item[1]))
     for component_id, relative, covered, total, percent in file_rows:
         percent_text = f"{percent:.1f}%" if percent is not None else "n/a"
         lines.append(
