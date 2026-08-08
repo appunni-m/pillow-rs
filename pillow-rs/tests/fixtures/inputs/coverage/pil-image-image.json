@@ -1433,6 +1433,7 @@
           "PIL.Image.Image.putpalette.nuanced.oversized-la-palette",
           "PIL.Image.Image.putpalette.nuanced.invalid-rawmode",
           "PIL.Image.Image.putalpha.nuanced.l-mask",
+          "PIL.Image.Image.putalpha.nuanced.l-source-mask",
           "PIL.Image.Image.putalpha.nuanced.cmyk-mask",
           "PIL.Image.Image.putalpha.nuanced.p-mask",
           "PIL.Image.Image.putalpha.nuanced.la-mask",
