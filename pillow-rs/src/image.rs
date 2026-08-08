@@ -1290,7 +1290,13 @@ impl Image {
             // either band must happen before palette expansion, just like the
             // corresponding ImagingCore band operation.
             PipelineOp::ExtractBand { .. } => true,
-            PipelineOp::CompositeModule { other, .. } => other.has_palette_mode(),
+            PipelineOp::CompositeModule { other, .. } => {
+                // PIL.Image.composite starts from image2 and pastes image1
+                // into it. P and PA operands are both blended as raw sample
+                // bytes; PA is not included in has_palette_mode because that
+                // helper intentionally means a single-byte palette index.
+                other.has_palette_mode() || other.explicit_mode() == Some("PA")
+            }
             PipelineOp::PutPixel {
                 palette_index: true,
                 ..
