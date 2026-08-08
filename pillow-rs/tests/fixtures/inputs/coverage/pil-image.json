@@ -311,6 +311,7 @@
           "PIL.Image.eval.nuanced.l-callable-expanded-path",
           "PIL.Image.composite.nuanced.one-mask",
           "PIL.Image.composite.nuanced.p-output-l-mask",
+          "PIL.Image.composite.nuanced.pa-palette-expansion",
           "PIL.Image.composite.nuanced.rgba-mask",
           "PIL.Image.alpha_composite.nuanced.mismatched-sizes",
           "PIL.Image.frombytes.nuanced.valid-packed",

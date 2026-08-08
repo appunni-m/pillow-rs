@@ -9397,6 +9397,265 @@
       ]
     },
     {
+      "case_id": "PIL.Image.composite.nuanced.pa-palette-expansion",
+      "surface": "PIL.Image",
+      "operation": "composite",
+      "covers": [
+        "PIL.Image.composite.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image1-data-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image1-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  0,
+                  64
+                ],
+                [
+                  1,
+                  128
+                ],
+                [
+                  2,
+                  192
+                ],
+                [
+                  3,
+                  255
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-image1-palette-3",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image1-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                40,
+                50,
+                60,
+                70,
+                80,
+                90
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-4",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-data-5",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image2-4"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  3,
+                  255
+                ],
+                [
+                  2,
+                  192
+                ],
+                [
+                  1,
+                  128
+                ],
+                [
+                  0,
+                  64
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-palette-6",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image2-4"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                100,
+                110,
+                120,
+                130,
+                140,
+                150,
+                160,
+                170,
+                180
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "setup-mask-7",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                1
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-mask-data-8",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-mask-7"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                0,
+                255,
+                0,
+                255
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "composite",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-4"
+            },
+            "mask": {
+              "kind": "binding",
+              "step_id": "setup-mask-7"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.Image.composite.nuanced.rgba-mask",
       "surface": "PIL.Image",
       "operation": "composite",

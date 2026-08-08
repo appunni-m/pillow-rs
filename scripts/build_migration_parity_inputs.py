@@ -723,6 +723,12 @@ class WorkflowBuilder:
             # blended as raw palette indices. Keep the three public inputs in
             # that layout so the parity case reaches the indexed C path.
             requested_mode = "L" if label == "mask" else "P"
+        if self.edge == "pa-composite-palette-expansion":
+            # PIL.Image.composite starts from image2 and pastes image1 into
+            # it. Keep both operands as public PA images with attached
+            # palettes and use an L mask to distinguish native PA blending
+            # from an accidental palette-to-RGBA expansion.
+            requested_mode = "L" if label == "mask" else "PA"
         if self.edge == "webp-alpha-mismatch" and label == "image":
             requested_mode = "RGBA"
         if self.edge == "mode-mismatch" and label not in {"image", "mask"}:
@@ -1214,6 +1220,8 @@ class WorkflowBuilder:
             size = [8, 1] if requested_mode == "1" else [1, 1]
         elif self.edge == "chops-composite-varied-p":
             size = [4, 1]
+        elif self.edge == "pa-composite-palette-expansion":
+            size = [4, 1]
         step_id = self.add_step(
             "PIL.Image",
             "new",
@@ -1284,6 +1292,62 @@ class WorkflowBuilder:
                     "putdata",
                     receiver=binding(step_id),
                     arguments={"data": literal([0, 64, 128, 255])},
+                    step_id=self.next_step_id("setup-mask-data"),
+                )
+        if self.edge == "pa-composite-palette-expansion":
+            if label in {"image1", "image2"}:
+                values = (
+                    [[0, 64], [1, 128], [2, 192], [3, 255]]
+                    if label == "image1"
+                    else [[3, 255], [2, 192], [1, 128], [0, 64]]
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(step_id),
+                    arguments={"data": literal(values)},
+                    step_id=self.next_step_id(f"setup-{label}-data"),
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(step_id),
+                    arguments={
+                        "data": literal(
+                            [
+                                10,
+                                20,
+                                30,
+                                40,
+                                50,
+                                60,
+                                70,
+                                80,
+                                90,
+                            ]
+                            if label == "image1"
+                            else [
+                                100,
+                                110,
+                                120,
+                                130,
+                                140,
+                                150,
+                                160,
+                                170,
+                                180,
+                            ]
+                        ),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-palette"),
+                )
+            else:
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(step_id),
+                    arguments={"data": literal([0, 255, 0, 255])},
                     step_id=self.next_step_id("setup-mask-data"),
                 )
         if self.edge == "effect-spread-p-rgba" and label == "image":
@@ -11226,6 +11290,15 @@ def build_nuanced_cases(
             "name": "p-output-l-mask",
             "mode": "P",
             "mask_mode": "L",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "composite",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-palette-expansion",
+            "mode": "PA",
+            "edge": "pa-composite-palette-expansion",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image",
