@@ -1326,6 +1326,11 @@ impl Image {
                         ..
                     }
                 ))
+            // Pillow's ImageOps.fit keeps P/PA images indexed through the
+            // boxed resize. P uses nearest-neighbour samples regardless of
+            // the requested kernel; PA resamples its raw index/alpha bands.
+            || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
+                && matches!(op, PipelineOp::Fit { .. }))
     }
 
     fn is_dimension_preserving_draw(op: &PipelineOp) -> bool {

@@ -31183,10 +31183,21 @@
               "value": 2
             }
           }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-result"
       ]
     },
     {
@@ -36435,10 +36446,21 @@
               ]
             }
           }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-result"
       ]
     },
     {
@@ -68477,10 +68499,21 @@
               "step_id": "setup-filter-gaussian"
             }
           }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-result"
       ]
     },
     {
@@ -73045,10 +73078,21 @@
               "value": "RGB"
             }
           }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-result"
       ]
     },
     {
@@ -73126,10 +73170,21 @@
               "value": "RGBA"
             }
           }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-result"
       ]
     },
     {

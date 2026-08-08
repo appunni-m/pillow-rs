@@ -243,6 +243,7 @@
           "PIL.ImageOps.fit.nuanced.long-centering",
           "PIL.ImageOps.fit.nuanced.default-centering-pair",
           "PIL.ImageOps.fit.nuanced.invalid-centering-none",
+          "PIL.ImageOps.fit.nuanced.pa-putpalette-expansion",
           "PIL.ImageOps.pad.nuanced.fractional-centering",
           "PIL.ImageOps.pad.nuanced.vertical-padding",
           "PIL.ImageOps.pad.nuanced.half-rounded-contain",

@@ -378,6 +378,14 @@ pub fn op_fit(
     let crop_left = bleed_w + (live_w - crop_w) * centering.0;
     let crop_top = bleed_h + (live_h - crop_h) * centering.1;
     // Use PIL's box-based resize (maps source box to target size)
+    // Pillow's P resize path forces nearest-neighbour sampling even when
+    // ImageOps.fit received another method. PA is different: its two raw
+    // bands are passed through the requested filter and stay indexed.
+    let resize_filter = if explicit_mode == Some("P") {
+        ResampleFilter::Nearest
+    } else {
+        filter
+    };
     let result = pil_resize_boxed(
         img,
         w.max(1),
@@ -386,7 +394,7 @@ pub fn op_fit(
         crop_top,
         crop_left + crop_w,
         crop_top + crop_h,
-        filter,
+        resize_filter,
         explicit_mode,
     );
     Ok(preserve_mode(img, result))
