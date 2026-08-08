@@ -1644,6 +1644,7 @@
           "PIL.Image.Image.entropy.nuanced.masked-nonzero",
           "PIL.Image.Image.entropy.nuanced.masked-nonzero-l",
           "PIL.Image.Image.entropy.nuanced.masked-nonzero-la",
+          "PIL.Image.Image.entropy.nuanced.one-mask",
           "PIL.Image.Image.entropy.nuanced.mask-size-mismatch",
           "PIL.Image.Image.entropy.nuanced.bad-mask-mode",
           "PIL.Image.Image.entropy.nuanced.truthy-non-image-mask",
