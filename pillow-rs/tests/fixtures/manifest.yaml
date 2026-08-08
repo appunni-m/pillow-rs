@@ -3832,7 +3832,7 @@ surfaces:
     targets:
     - target_id: pillow-rs-python
       path: pillow_rs.Image.crop
-      signature: 'crop(self, box: Optional[Tuple[int, int, int, int]] = None) -> ''Image'''
+      signature: 'crop(self, box: Optional[Tuple[float, float, float, float]] = None) -> ''Image'''
       support:
         status: supported
     requirements:

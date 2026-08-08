@@ -5,24 +5,11 @@ use std::sync::Arc;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::Image;
+use crate::ops::crop::check_crop_extent;
 use crate::pipeline::PipelineOp;
-
-const PIL_MAX_IMAGE_PIXELS: u64 = 1024 * 1024 * 1024 / 4 / 3;
-const PIL_DECOMPRESSION_BOMB_LIMIT: u128 = (PIL_MAX_IMAGE_PIXELS as u128) * 2;
 
 fn coordinate_overflow() -> PilError {
     PilError::OverflowError("signed integer is greater than maximum".into())
-}
-
-fn check_crop_extent(width: i64, height: i64) -> Result<(), PilError> {
-    let pixels = u128::from(width.max(1) as u64) * u128::from(height.max(1) as u64);
-    if pixels > PIL_DECOMPRESSION_BOMB_LIMIT {
-        return Err(PilError::DecompressionBombError(format!(
-            "Image size ({pixels} pixels) exceeds limit of {PIL_DECOMPRESSION_BOMB_LIMIT} pixels, \
-             could be decompression bomb DOS attack."
-        )));
-    }
-    Ok(())
 }
 
 /// Source pixels for [`Image::paste`].

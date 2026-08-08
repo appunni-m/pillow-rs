@@ -762,8 +762,8 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn crop(&self, box_coords: Option<(i32, i32, i32, i32)>) -> PyResult<PyImage> {
-        let rs = self.inner.crop(box_coords).map_err(map_error)?;
+    fn crop(&self, box_coords: Option<(f64, f64, f64, f64)>) -> PyResult<PyImage> {
+        let rs = self.inner.crop_float(box_coords).map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
