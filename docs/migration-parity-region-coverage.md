@@ -8,8 +8,8 @@ not parity proof and does not change the manifest or lane inputs.
 generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 5118c6b0c402019a5aa4f848e81e157d8664535d881c02bde6e5a5d4a749fdd4
-coverage_run_id: migration-coverage-335d2247b7fd4c1eae374f7b13174f73
+manifest_sha256: 4748153a1f630b7f47143dd144521d06e650ceea1760a71f7297de91e96daf49
+coverage_run_id: migration-coverage-b63dfb7428bc44e2a5dea9036fbc7c5c
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -21,7 +21,7 @@ not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-7d15760e5f924faaaaf52a0f5c71f136`).
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-db2f46dcf5044289b3b7a36a5df315c8`).
 Rust implementation regions: `104/104` (100.0%).
 Python facade statements: `1/1` (100.0%).
 Component aggregate for backlog ordering: `13361/14213` (94.0%).

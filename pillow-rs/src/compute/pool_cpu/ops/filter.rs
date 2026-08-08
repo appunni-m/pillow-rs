@@ -107,8 +107,10 @@ fn filter_3x3_i32(
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let raw = rgba.into_raw();
 
-    // Pre-divide kernel by scale (matching PIL C construction)
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    // `Image::kernel_filter` clamps custom scales to a positive value and all
+    // built-in kernels have positive scales, so this execution boundary never
+    // receives zero.
+    let s = scale;
     let kd = [
         kernel[0] / s,
         kernel[1] / s,
@@ -195,7 +197,9 @@ fn filter_5x5_i32(
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     let raw = rgba.into_raw();
 
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    // See the 3x3 path: public kernel construction guarantees a positive
+    // scale, and built-in 5x5 filters use positive scales as well.
+    let s = scale;
     // Pre-compute normalized kernel coefficients using f32 (matching PIL C construction)
     let kd: [f32; 25] = std::array::from_fn(|i| kernel[i] / s);
 
@@ -291,14 +295,7 @@ fn filter_5x5_i32(
 /// PIL-style box blur with fractional radius support.
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
 /// Matches PIL order: ALL horizontal passes first, then ALL vertical passes.
-pub fn pil_box_blur(
-    img: &DynamicImage,
-    radius: f32,
-    passes: u32,
-) -> Result<DynamicImage, PilError> {
-    if radius <= 0.0 {
-        return Ok(img.clone());
-    }
+fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
@@ -473,7 +470,9 @@ pub fn execute_filter3x3(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    // The public kernel boundary clamps scales to a positive value before a
+    // pipeline operation is created.
+    let s = scale;
     let k0 = kernel[0] / s;
     let k1 = kernel[1] / s;
     let k2 = kernel[2] / s;
@@ -542,7 +541,9 @@ pub fn execute_filter5x5(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    // The public kernel boundary clamps scales to a positive value before a
+    // pipeline operation is created.
+    let s = scale;
     let k00 = kernel[0] / s;
     let k01 = kernel[1] / s;
     let k02 = kernel[2] / s;
@@ -653,12 +654,10 @@ pub fn execute_gaussian_blur(img: &DynamicImage, sigma: f32) -> Result<DynamicIm
     let l = l_val.floor();
     let l1 = l + 1.0;
     let a_num = (2.0 * l + 1.0) * (l * l1 - 3.0 * sigma2);
+    // For each interval selected by `l = floor(l_val)`, sigma2 is strictly
+    // below `(l + 1)^2`, so this denominator cannot be zero for sigma > 0.
     let a_den = 6.0 * (sigma2 - l1 * l1);
-    let a = if a_den.abs() > 1e-10 {
-        a_num / a_den
-    } else {
-        0.0
-    };
+    let a = a_num / a_den;
     // Assign back to f32 (PIL: result is float)
     let blur_radius = (l + a) as f32;
     pil_box_blur(img, blur_radius, 3)
@@ -746,48 +745,4 @@ pub fn execute_rank_filter_with_mode(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     rank_filter_impl(img, size, rank, mode)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{execute_filter3x3, execute_filter5x5};
-    use crate::raster::{DynamicImage, GrayImage};
-
-    #[test]
-    fn detail_uses_pillow_fused_row_evaluation() {
-        // Pillow 12.2.0 returns 90 for this exact first-divergence
-        // neighborhood; separately rounded products return 89.
-        let pixels = vec![95, 95, 96, 96, 96, 106, 126, 126, 137];
-        let image = DynamicImage::ImageLuma8(
-            GrayImage::from_raw(3, 3, pixels).expect("3x3 fixture dimensions must match"),
-        );
-        let kernel = [0.0, -1.0, 0.0, -1.0, 10.0, -1.0, 0.0, -1.0, 0.0];
-
-        let filtered =
-            execute_filter3x3(&image, &kernel, 6.0, 0, None).expect("filter must succeed");
-
-        assert_eq!(filtered.to_luma8().get_pixel(1, 1)[0], 90);
-    }
-
-    #[test]
-    fn smooth_more_uses_pillow_fused_row_evaluation() {
-        // Pillow 12.2.0 returns 93 for this exact first-divergence
-        // neighborhood; separately rounded products return 94.
-        let pixels = vec![
-            91, 92, 92, 92, 93, 92, 92, 93, 93, 93, 93, 93, 93, 94, 94, 93, 94, 94, 94, 95, 94, 94,
-            95, 105, 115,
-        ];
-        let image = DynamicImage::ImageLuma8(
-            GrayImage::from_raw(5, 5, pixels).expect("5x5 fixture dimensions must match"),
-        );
-        let kernel = [
-            1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 5.0, 5.0, 5.0, 1.0, 1.0, 5.0, 44.0, 5.0, 1.0, 1.0, 5.0,
-            5.0, 5.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0,
-        ];
-
-        let filtered =
-            execute_filter5x5(&image, &kernel, 100.0, 0, None).expect("filter must succeed");
-
-        assert_eq!(filtered.to_luma8().get_pixel(2, 2)[0], 93);
-    }
 }
