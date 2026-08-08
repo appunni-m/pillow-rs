@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2651
-- Unique active workflow signatures: 2651
+- Active parity workflows: 2653
+- Unique active workflow signatures: 2653
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1473
+- Deliberate nuanced workflows: 1475
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 208 |
-| `PIL.Image.Image` | 1237 |
+| `PIL.Image.Image` | 1239 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -326,6 +326,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getdata.nuanced.negative-band`
 - `PIL.Image.Image.getdata.nuanced.opened-png-without-idat`
 - `PIL.Image.Image.getdata.nuanced.opened-rgb`
+- `PIL.Image.Image.getexif.nuanced.deferred-pipeline-image`
 - `PIL.Image.Image.getexif.nuanced.jpeg-empty-app1`
 - `PIL.Image.Image.getexif.nuanced.jpeg-eoi-before-app1`
 - `PIL.Image.Image.getexif.nuanced.jpeg-exif`
@@ -338,6 +339,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getexif.nuanced.jpeg-standalone-rst0`
 - `PIL.Image.Image.getexif.nuanced.jpeg-standalone-soi`
 - `PIL.Image.Image.getexif.nuanced.jpeg-without-exif`
+- `PIL.Image.Image.getexif.nuanced.new-paletted-image`
 - `PIL.Image.Image.getexif.nuanced.png-without-exif`
 - `PIL.Image.Image.getexif.nuanced.tiff-container`
 - `PIL.Image.Image.getextrema.nuanced.f-empty`
