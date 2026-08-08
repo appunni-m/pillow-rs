@@ -302,6 +302,7 @@ coverage_components:
   paths:
   - pillow-rs-py/python/pillow_rs/imagefilter.py
   - pillow-rs/src/ops/filter.rs
+  - pillow-rs/src/compute/pool_cpu/ops/filter.rs
   - pillow-rs/src/ops/param_filters.rs
   dimensions:
   - function

@@ -2982,6 +2982,189 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
+            elif chain == "filter-detail-fused-row":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [95, 95, 96, 96, 96, 106, 126, 126, 137]
+                        )
+                    },
+                    step_id="setup-detail-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "DETAIL",
+                    receiver=None,
+                    arguments={},
+                    step_id="setup-filter-detail",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-smooth-more-fused-row":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [
+                                91,
+                                92,
+                                92,
+                                92,
+                                93,
+                                92,
+                                92,
+                                93,
+                                93,
+                                93,
+                                93,
+                                93,
+                                93,
+                                94,
+                                94,
+                                93,
+                                94,
+                                94,
+                                94,
+                                95,
+                                94,
+                                94,
+                                95,
+                                105,
+                                115,
+                            ]
+                        )
+                    },
+                    step_id="setup-smooth-more-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "SMOOTH_MORE",
+                    receiver=None,
+                    arguments={},
+                    step_id="setup-filter-smooth-more",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-find-edges-negative":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([1, 1, 1, 1, 0, 1, 1, 1, 1])
+                    },
+                    step_id="setup-find-edges-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "FIND_EDGES",
+                    receiver=None,
+                    arguments={},
+                    step_id="setup-filter-find-edges",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-kernel-5x5-negative":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(list(range(1, 26)))
+                    },
+                    step_id="setup-kernel-negative-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "Kernel",
+                    receiver=None,
+                    arguments={
+                        "size": literal([5, 5]),
+                        "kernel": literal([-1.0] * 25),
+                        "scale": literal(1.0),
+                        "offset": literal(0),
+                    },
+                    step_id="setup-filter-kernel-negative",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-box-blur-zero":
+                image_step = self.ensure_image()
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "BoxBlur",
+                    receiver=None,
+                    arguments={"radius": literal(0)},
+                    step_id="setup-filter-box-blur-zero",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-gaussian-blur-zero":
+                image_step = self.ensure_image()
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "GaussianBlur",
+                    receiver=None,
+                    arguments={"radius": literal(0.0)},
+                    step_id="setup-filter-gaussian-zero",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain in {
+                "filter-f-mode-max",
+                "filter-f-mode-min",
+                "filter-f-mode-median",
+                "filter-f-mode-rank",
+            }:
+                image_step = self.ensure_image(mode="F")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [
+                                1.0,
+                                9.0,
+                                3.0,
+                                4.0,
+                                5.0,
+                                6.0,
+                                7.0,
+                                8.0,
+                                2.0,
+                            ]
+                        )
+                    },
+                    step_id="setup-f-mode-rank-data",
+                )
+                filter_name = {
+                    "filter-f-mode-max": "MaxFilter",
+                    "filter-f-mode-min": "MinFilter",
+                    "filter-f-mode-median": "MedianFilter",
+                    "filter-f-mode-rank": "RankFilter",
+                }[chain]
+                filter_arguments = {"size": literal(3)}
+                if filter_name == "RankFilter":
+                    filter_arguments["rank"] = literal(0)
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    filter_name,
+                    receiver=None,
+                    arguments=filter_arguments,
+                    step_id=f"setup-f-mode-{filter_name.lower()}",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
             elif chain in {
                 "palette-getpalette-rgbx",
                 "palette-getpalette-channel",
@@ -14057,6 +14240,134 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "i-mode",
             "mode": "I",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-detail-fused-row",
+            "mode": "I",
+            "size": [3, 3],
+            "chain": "filter-detail-fused-row",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-smooth-more-fused-row",
+            "mode": "I",
+            "size": [5, 5],
+            "chain": "filter-smooth-more-fused-row",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-detail-fused-row",
+            "mode": "L",
+            "size": [3, 3],
+            "chain": "filter-detail-fused-row",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-smooth-more-fused-row",
+            "mode": "L",
+            "size": [5, 5],
+            "chain": "filter-smooth-more-fused-row",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-find-edges-negative",
+            "mode": "L",
+            "size": [3, 3],
+            "chain": "filter-find-edges-negative",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-find-edges-negative",
+            "mode": "I",
+            "size": [3, 3],
+            "chain": "filter-find-edges-negative",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode-max-filter",
+            "mode": "F",
+            "size": [3, 3],
+            "chain": "filter-f-mode-max",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode-min-filter",
+            "mode": "F",
+            "size": [3, 3],
+            "chain": "filter-f-mode-min",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode-median-filter",
+            "mode": "F",
+            "size": [3, 3],
+            "chain": "filter-f-mode-median",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode-rank-filter",
+            "mode": "F",
+            "size": [3, 3],
+            "chain": "filter-f-mode-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-kernel-5x5-negative",
+            "mode": "I",
+            "size": [5, 5],
+            "chain": "filter-kernel-5x5-negative",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "box-blur-zero-radius",
+            "mode": "L",
+            "chain": "filter-box-blur-zero",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "gaussian-blur-zero-radius",
+            "mode": "L",
+            "chain": "filter-gaussian-blur-zero",
             "observe_result": "tobytes",
         },
         {

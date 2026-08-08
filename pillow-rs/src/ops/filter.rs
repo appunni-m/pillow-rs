@@ -133,7 +133,12 @@ impl Image {
         if mode == "PA" && filter_name == "GaussianBlur" {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
-        if mode == "F" {
+        if mode == "F"
+            && !matches!(
+                filter_name,
+                "MaxFilter" | "MinFilter" | "MedianFilter" | "RankFilter"
+            )
+        {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
         Ok(())
