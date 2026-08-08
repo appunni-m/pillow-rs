@@ -2490,6 +2490,19 @@ class WorkflowBuilder:
                     step_id="setup-pa-putpalette",
                 )
                 receiver_step = image_step
+            elif chain == "pa-putpalette-getpalette":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-getpalette",
+                )
+                receiver_step = image_step
             elif chain == "p-putpalette-putalpha-resize":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -15592,6 +15605,22 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "raw-pa-without-palette",
             "mode": "PA",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-after-putpalette",
+            "mode": "PA",
+            "chain": "pa-putpalette-getpalette",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpalette",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-after-putpalette-resize",
+            "mode": "PA",
+            "chain": "pa-putpalette-resize",
         },
         {
             "surface": "PIL.Image.Image",
