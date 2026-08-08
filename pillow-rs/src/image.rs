@@ -1294,6 +1294,22 @@ impl Image {
         }
     }
 
+    /// Returns whether an operation can stay in the source's indexed sample
+    /// layout. Pillow's `libImaging/Filter.c` `PA` path applies convolution to
+    /// the raw index/alpha bands and preserves the `PA` mode; unlike `P`, `PA`
+    /// is a valid input for the built-in convolution filters. Keep this
+    /// source-dependent exception out of [`Self::is_palette_safe_op`] so a
+    /// direct filter on `P` cannot bypass `validate_filter` and become
+    /// accepted.
+    fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
+        Self::is_palette_safe_op(op)
+            || (source.explicit_mode() == Some("PA")
+                && matches!(
+                    op,
+                    PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
+                ))
+    }
+
     fn is_dimension_preserving_draw(op: &PipelineOp) -> bool {
         matches!(
             op,
@@ -1489,7 +1505,9 @@ impl Image {
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
         if source.has_palette_samples() {
-            let all_safe = ops.iter().all(Self::is_palette_safe_op);
+            let all_safe = ops
+                .iter()
+                .all(|op| Self::is_palette_safe_op_for_source(source, op));
             if all_safe {
                 let selected = match backend {
                     Some(backend) => backend,
@@ -1586,7 +1604,7 @@ impl Image {
     /// change mode clear or replace the explicit mode tag.
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         let source_is_paletted = source.has_palette_samples();
-        let palette_safe = source_is_paletted && Self::is_palette_safe_op(&op);
+        let palette_safe = source_is_paletted && Self::is_palette_safe_op_for_source(source, &op);
         let putalpha_mode = match &op {
             PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
                 Some(*mode)
