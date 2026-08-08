@@ -7774,6 +7774,21 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgb-premultiplied-convolution",
+            "mode": "RGBa",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 128],
+            "size": [9, 8],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([9, 3]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
             "requirement_suffix": "mode.la",
             "name": "la-transparent-convolution",
             "observe_result": "tobytes",

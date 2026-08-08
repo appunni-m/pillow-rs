@@ -766,11 +766,14 @@ pub fn pil_resize(
     let orig_img = img;
 
     // CMYK/F/I stored as RGBA8 but 4th channel is NOT alpha (K/float/int byte).
+    // RGBa is already premultiplied storage, so PIL resamples its channels
+    // directly rather than premultiplying them a second time.
     // PIL does NOT premultiply alpha for these modes.
     let is_cmyk = explicit_mode == Some("CMYK");
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !is_cmyk
         && !is_fi
+        && explicit_mode != Some("RGBa")
         && matches!(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
@@ -912,6 +915,7 @@ pub fn pil_resize_boxed(
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !is_cmyk
         && !is_fi
+        && explicit_mode != Some("RGBa")
         && matches!(
             img.color(),
             crate::raster::ColorType::Rgba8 | crate::raster::ColorType::La8
