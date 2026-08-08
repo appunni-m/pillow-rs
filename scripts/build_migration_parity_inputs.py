@@ -2271,6 +2271,19 @@ class WorkflowBuilder:
                     },
                     step_id="setup-pa-resize",
                 )
+            elif chain == "pa-putpalette-rotate":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-rotate",
+                )
+                receiver_step = image_step
             elif chain == "p-resize-convert-verify":
                 image_step = self.ensure_image(mode="P")
                 resized_step = self.add_step(
@@ -2874,6 +2887,27 @@ class WorkflowBuilder:
                     receiver=None,
                     arguments={},
                     step_id="setup-filter-blur",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "pa-putpalette-gaussian-filter":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-gaussian",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "GaussianBlur",
+                    receiver=None,
+                    arguments={"radius": literal(2)},
+                    step_id="setup-filter-gaussian",
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
@@ -8375,6 +8409,20 @@ def build_nuanced_cases(
                 "angle": literal(45),
                 "expand": literal(True),
                 "fillcolor": literal("red"),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": "pa-putpalette-fill",
+            "mode": "PA",
+            "chain": "pa-putpalette-rotate",
+            "values": {
+                "angle": literal(45),
+                "expand": literal(True),
+                "fillcolor": literal([1, 128]),
             },
             "observe_result": "tobytes",
         },
@@ -14471,6 +14519,15 @@ def build_nuanced_cases(
             "name": "pa-putpalette-blur",
             "mode": "PA",
             "chain": "pa-putpalette-blur-filter",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-gaussian",
+            "mode": "PA",
+            "chain": "pa-putpalette-gaussian-filter",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",

@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2639
-- Unique active workflow signatures: 2639
+- Active parity workflows: 2641
+- Unique active workflow signatures: 2641
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1461
+- Deliberate nuanced workflows: 1463
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 208 |
-| `PIL.Image.Image` | 1225 |
+| `PIL.Image.Image` | 1227 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -224,6 +224,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.filter.nuanced.opened-rgb`
 - `PIL.Image.Image.filter.nuanced.p-mode-filter`
 - `PIL.Image.Image.filter.nuanced.pa-putpalette-blur`
+- `PIL.Image.Image.filter.nuanced.pa-putpalette-gaussian`
 - `PIL.Image.Image.frombytes.nuanced.valid-cmyk`
 - `PIL.Image.Image.frombytes.nuanced.valid-f`
 - `PIL.Image.Image.frombytes.nuanced.valid-i`
@@ -701,6 +702,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.rotate.nuanced.non-boolean-expand`
 - `PIL.Image.Image.rotate.nuanced.opened-rgb`
 - `PIL.Image.Image.rotate.nuanced.opened-rgb-270-expand`
+- `PIL.Image.Image.rotate.nuanced.pa-putpalette-fill`
 - `PIL.Image.Image.rotate.nuanced.valid-center-only`
 - `PIL.Image.Image.rotate.nuanced.valid-center-translate`
 - `PIL.Image.Image.rotate.nuanced.valid-translate-only`

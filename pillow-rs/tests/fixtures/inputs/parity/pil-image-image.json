@@ -36250,6 +36250,98 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.rotate.nuanced.pa-putpalette-fill",
+      "surface": "PIL.Image.Image",
+      "operation": "rotate",
+      "covers": [
+        "PIL.Image.Image.rotate.parameter.fillcolor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-pa-putpalette-rotate",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                40,
+                50,
+                60
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "rotate",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "angle": {
+              "kind": "literal",
+              "value": 45
+            },
+            "expand": {
+              "kind": "literal",
+              "value": true
+            },
+            "fillcolor": {
+              "kind": "literal",
+              "value": [
+                1,
+                128
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.transform.nuanced.p-affine-scalar-fill",
       "surface": "PIL.Image.Image",
       "operation": "transform",
@@ -66524,6 +66616,99 @@
             "filter": {
               "kind": "binding",
               "step_id": "setup-filter-blur"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.pa-putpalette-gaussian",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-pa-putpalette-gaussian",
+          "surface": "PIL.Image.Image",
+          "operation": "putpalette",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30,
+                40,
+                50,
+                60
+              ]
+            },
+            "rawmode": {
+              "kind": "literal",
+              "value": "RGB"
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-gaussian",
+          "surface": "PIL.ImageFilter",
+          "operation": "GaussianBlur",
+          "receiver": null,
+          "arguments": {
+            "radius": {
+              "kind": "literal",
+              "value": 2
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-gaussian"
             }
           }
         }
