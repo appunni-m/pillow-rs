@@ -1797,6 +1797,7 @@
           "PIL.Image.Image.getexif.nuanced.jpeg-eoi-before-app1",
           "PIL.Image.Image.getexif.nuanced.jpeg-empty-app1",
           "PIL.Image.Image.getexif.nuanced.jpeg-short-app1-length",
+          "PIL.Image.Image.getexif.nuanced.jpeg-header-junk-before-app1",
           "PIL.Image.Image.getexif.nuanced.jpeg-no-eoi",
           "PIL.Image.Image.getexif.nuanced.png-without-exif",
           "PIL.Image.Image.getexif.nuanced.new-paletted-image",
