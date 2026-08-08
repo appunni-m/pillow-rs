@@ -2249,6 +2249,28 @@ class WorkflowBuilder:
                     },
                     step_id="setup-resize",
                 )
+            elif chain == "pa-putpalette-resize":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-pa-resize",
+                )
             elif chain == "p-resize-convert-verify":
                 image_step = self.ensure_image(mode="P")
                 resized_step = self.add_step(
@@ -2816,6 +2838,27 @@ class WorkflowBuilder:
                     receiver=None,
                     arguments={"size": literal(3)},
                     step_id="setup-filter-mode",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "pa-putpalette-blur-filter":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-filter",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "BLUR",
+                    receiver=None,
+                    arguments={},
+                    step_id="setup-filter-blur",
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
@@ -14408,6 +14451,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-blur",
+            "mode": "PA",
+            "chain": "pa-putpalette-blur-filter",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getbands",
             "requirement_suffix": "behavior.default",
             "name": "cmyk",
@@ -15547,6 +15598,15 @@ def build_nuanced_cases(
             "name": "p-pipeline-resize-resize",
             "mode": "P",
             "chain": "p-resize-resize",
+            "values": {"size": literal([4, 4]), "resample": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-resize",
+            "mode": "PA",
+            "chain": "pa-putpalette-resize",
             "values": {"size": literal([4, 4]), "resample": literal(0)},
         },
         {
