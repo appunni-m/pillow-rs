@@ -395,11 +395,18 @@ fn affine_nearest_fixed(
                     .copy_from_slice(&source[input_index..input_index + channels]);
             } else {
                 for channel in 0..channels.min(4) {
-                    output[output_index + channel] = match channel {
-                        0 => fill.0,
-                        1 => fill.1,
-                        2 => fill.2,
-                        _ => fill.3,
+                    output[output_index + channel] = if channels == 2 && channel == 1 {
+                        // LA/PA normalize their second sample as alpha in
+                        // fill.3; fill.1 is only the duplicated luma/index
+                        // component used by the host-neutral color record.
+                        fill.3
+                    } else {
+                        match channel {
+                            0 => fill.0,
+                            1 => fill.1,
+                            2 => fill.2,
+                            _ => fill.3,
+                        }
                     };
                 }
             }

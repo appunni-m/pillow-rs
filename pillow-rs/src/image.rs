@@ -1308,6 +1308,20 @@ impl Image {
                     op,
                     PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. }
                 ))
+            // Pillow keeps nearest-neighbor PA rotation in its native
+            // index/alpha sample layout, including a two-element fillcolor.
+            // The generic palette-safe rule only accepts a rotation without
+            // a fill because P and PA fill values have different semantics;
+            // this source-specific case carries the already-normalized PA
+            // index/alpha pair through the native-channel rotate kernel.
+            || (source.explicit_mode() == Some("PA")
+                && matches!(
+                    op,
+                    PipelineOp::Rotate {
+                        nearest: true,
+                        ..
+                    }
+                ))
     }
 
     fn is_dimension_preserving_draw(op: &PipelineOp) -> bool {

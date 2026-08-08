@@ -126,6 +126,13 @@ impl Image {
         if mode == "P" && filter_name != "Mode" {
             return Err(PilError::ValueError("cannot filter palette images".into()));
         }
+        // Pillow's ImagingGaussianBlur path rejects PA samples with the
+        // generic wrong-mode error instead of expanding the palette. Keep the
+        // validation at the core boundary so Python and other bindings do not
+        // enter a non-Pillow RGBA fallback.
+        if mode == "PA" && filter_name == "GaussianBlur" {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
         if mode == "F" {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
