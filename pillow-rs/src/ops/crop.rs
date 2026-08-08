@@ -4,6 +4,20 @@ use crate::image::PalettedData;
 use crate::ops::paste::PasteSource;
 use crate::pipeline::PipelineOp;
 
+const PIL_MAX_IMAGE_PIXELS: u64 = 1024 * 1024 * 1024 / 4 / 3;
+const PIL_DECOMPRESSION_BOMB_LIMIT: u128 = (PIL_MAX_IMAGE_PIXELS as u128) * 2;
+
+pub(crate) fn check_crop_extent(width: i64, height: i64) -> Result<(), PilError> {
+    let pixels = u128::from(width.max(1) as u64) * u128::from(height.max(1) as u64);
+    if pixels > PIL_DECOMPRESSION_BOMB_LIMIT {
+        return Err(PilError::DecompressionBombError(format!(
+            "Image size ({pixels} pixels) exceeds limit of {PIL_DECOMPRESSION_BOMB_LIMIT} pixels, \
+             could be decompression bomb DOS attack."
+        )));
+    }
+    Ok(())
+}
+
 impl Image {
     /// Crops a box whose coordinates arrived from an unsigned host binding.
     ///
@@ -11,14 +25,10 @@ impl Image {
     /// and other FFI layers only marshal their native integer types.
     pub fn crop_unsigned(&self, box_coords: (u32, u32, u32, u32)) -> Result<Image, PilError> {
         let coordinates = (
-            i32::try_from(box_coords.0)
-                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
-            i32::try_from(box_coords.1)
-                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
-            i32::try_from(box_coords.2)
-                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
-            i32::try_from(box_coords.3)
-                .map_err(|_| PilError::ValueError("crop coordinate exceeds i32".into()))?,
+            i64::from(box_coords.0),
+            i64::from(box_coords.1),
+            i64::from(box_coords.2),
+            i64::from(box_coords.3),
         );
         self.crop_signed(coordinates)
     }
@@ -52,12 +62,61 @@ impl Image {
             ));
         }
 
-        self.crop_signed(coordinates)
+        self.crop_signed((
+            i64::from(coordinates.0),
+            i64::from(coordinates.1),
+            i64::from(coordinates.2),
+            i64::from(coordinates.3),
+        ))
+    }
+
+    /// Crops using Pillow's floating-point box contract.
+    ///
+    /// Pillow rounds each coordinate with Python's ties-to-even `round` before
+    /// entering the integer crop primitive. Keep that conversion in Rust so
+    /// the Python binding only marshals host numbers and delegates semantics.
+    pub fn crop_float(&self, box_coords: Option<(f64, f64, f64, f64)>) -> Result<Image, PilError> {
+        let Some((left, top, right, bottom)) = box_coords else {
+            return self.crop(None);
+        };
+        if right < left {
+            return Err(PilError::ValueError(
+                "Coordinate 'right' is less than 'left'".into(),
+            ));
+        }
+        if bottom < top {
+            return Err(PilError::ValueError(
+                "Coordinate 'lower' is less than 'upper'".into(),
+            ));
+        }
+        let rounded = (
+            pillow_round(left)?,
+            pillow_round(top)?,
+            pillow_round(right)?,
+            pillow_round(bottom)?,
+        );
+        if rounded.0 < i64::from(i32::MIN)
+            || rounded.1 < i64::from(i32::MIN)
+            || rounded.2 < i64::from(i32::MIN)
+            || rounded.3 < i64::from(i32::MIN)
+            || rounded.0 > i64::from(i32::MAX)
+            || rounded.1 > i64::from(i32::MAX)
+            || rounded.2 > i64::from(i32::MAX)
+            || rounded.3 > i64::from(i32::MAX)
+        {
+            return self.crop_signed(rounded);
+        }
+        self.crop(Some((
+            rounded.0 as i32,
+            rounded.1 as i32,
+            rounded.2 as i32,
+            rounded.3 as i32,
+        )))
     }
 
     fn crop_signed(
         &self,
-        (left, top, right, bottom): (i32, i32, i32, i32),
+        (left, top, right, bottom): (i64, i64, i64, i64),
     ) -> Result<Image, PilError> {
         if right < left {
             return Err(PilError::ValueError(
@@ -70,8 +129,29 @@ impl Image {
             ));
         }
 
-        let output_width = (right - left) as u32;
-        let output_height = (bottom - top) as u32;
+        let output_width = right
+            .checked_sub(left)
+            .ok_or_else(|| PilError::OverflowError("crop width overflow".into()))?;
+        let output_height = bottom
+            .checked_sub(top)
+            .ok_or_else(|| PilError::OverflowError("crop height overflow".into()))?;
+        check_crop_extent(output_width, output_height)?;
+        for coordinate in [left, top, right, bottom] {
+            if coordinate > i64::from(i32::MAX) {
+                return Err(PilError::OverflowError(
+                    "signed integer is greater than maximum".into(),
+                ));
+            }
+            if coordinate < i64::from(i32::MIN) {
+                return Err(PilError::OverflowError(
+                    "signed integer is less than minimum".into(),
+                ));
+            }
+        }
+        let output_width = u32::try_from(output_width)
+            .map_err(|_| PilError::OverflowError("crop width exceeds u32".into()))?;
+        let output_height = u32::try_from(output_height)
+            .map_err(|_| PilError::OverflowError("crop height exceeds u32".into()))?;
         if output_width == 0 || output_height == 0 {
             return self.crop_canvas(output_width, output_height);
         }
@@ -92,7 +172,7 @@ impl Image {
             clip_top as u32,
             clip_right as u32,
             clip_bottom as u32,
-        );
+        )?;
         if clip_left == i64::from(left)
             && clip_top == i64::from(top)
             && clip_right == i64::from(right)
@@ -113,16 +193,17 @@ impl Image {
     /// Crops a non-negative Pillow box after its coordinates have been
     /// normalized by [`Image::crop`].
     ///
-    fn crop_box(&self, left: u32, top: u32, right: u32, bottom: u32) -> Image {
-        Image::push_op(
-            self,
+    fn crop_box(&self, left: u32, top: u32, right: u32, bottom: u32) -> Result<Image, PilError> {
+        let branch = self.materialized_branch()?;
+        Ok(Image::push_op(
+            &branch,
             PipelineOp::Crop {
                 left,
                 top,
                 right,
                 bottom,
             },
-        )
+        ))
     }
 
     fn crop_canvas(&self, width: u32, height: u32) -> Result<Image, PilError> {
@@ -144,4 +225,36 @@ impl Image {
         }
         Image::new(width, height, &mode, (0, 0, 0, 0))
     }
+}
+
+fn pillow_round(value: f64) -> Result<i64, PilError> {
+    if value.is_nan() {
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".into(),
+        ));
+    }
+    if value.is_infinite() {
+        return Err(PilError::OverflowError(
+            "cannot convert float infinity to integer".into(),
+        ));
+    }
+    let max_i64 = 2_f64.powi(63);
+    if value < i64::MIN as f64 || value >= max_i64 {
+        return Err(PilError::OverflowError(
+            "Python int too large to convert to C long".into(),
+        ));
+    }
+
+    let lower = value.floor();
+    let fraction = value - lower;
+    let rounded = if fraction < 0.5 {
+        lower
+    } else if fraction > 0.5 {
+        lower + 1.0
+    } else if (lower as i64) % 2 == 0 {
+        lower
+    } else {
+        lower + 1.0
+    };
+    Ok(rounded as i64)
 }
