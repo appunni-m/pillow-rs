@@ -718,6 +718,11 @@ class WorkflowBuilder:
         requested_mode = mode or self.mode
         if self.edge == "single-band-image":
             requested_mode = "L"
+        if self.edge == "chops-composite-varied-p":
+            # ImageChops.composite accepts an L mask while its P operands are
+            # blended as raw palette indices. Keep the three public inputs in
+            # that layout so the parity case reaches the indexed C path.
+            requested_mode = "L" if label == "mask" else "P"
         if self.edge == "webp-alpha-mismatch" and label == "image":
             requested_mode = "RGBA"
         if self.edge == "mode-mismatch" and label not in {"image", "mask"}:
@@ -1207,6 +1212,8 @@ class WorkflowBuilder:
             size = [8, 8]
         elif self.edge == "valid-frombytes":
             size = [8, 1] if requested_mode == "1" else [1, 1]
+        elif self.edge == "chops-composite-varied-p":
+            size = [4, 1]
         step_id = self.add_step(
             "PIL.Image",
             "new",
@@ -1225,6 +1232,60 @@ class WorkflowBuilder:
             step_id=self.next_step_id(f"setup-{label}"),
         )
         self._image_steps[cache_key] = step_id
+        if self.edge == "chops-composite-varied-p":
+            if label in {"image1", "image2"}:
+                values = [1, 2, 3, 4] if label == "image1" else [5, 6, 7, 8]
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(step_id),
+                    arguments={"data": literal(values)},
+                    step_id=self.next_step_id(f"setup-{label}-data"),
+                )
+                # A short, distinct palette makes an accidental RGB expansion
+                # observable in both pixels and image metadata.
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(step_id),
+                    arguments={
+                        "data": literal(
+                            [
+                                10,
+                                20,
+                                30,
+                                40,
+                                50,
+                                60,
+                                70,
+                                80,
+                                90,
+                            ]
+                            if label == "image1"
+                            else [
+                                100,
+                                110,
+                                120,
+                                130,
+                                140,
+                                150,
+                                160,
+                                170,
+                                180,
+                            ]
+                        ),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-palette"),
+                )
+            else:
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(step_id),
+                    arguments={"data": literal([0, 64, 128, 255])},
+                    step_id=self.next_step_id("setup-mask-data"),
+                )
         if self.edge == "effect-spread-p-rgba" and label == "image":
             # EffectSpread returns a new indexed image while retaining the
             # source palette. Attach that palette through the public API so
@@ -12911,6 +12972,14 @@ def build_nuanced_cases(
                 "centering": literal([0.5, 0.25]),
             },
             "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "composite",
+            "requirement_suffix": "mode.p",
+            "name": "varied-p-indices-with-l-mask",
+            "mode": "P",
+            "edge": "chops-composite-varied-p",
         },
         {
             "surface": "PIL.ImageOps",

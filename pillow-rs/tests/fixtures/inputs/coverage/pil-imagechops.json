@@ -224,7 +224,8 @@
           "PIL.ImageChops.subtract.nuanced.materialized-p",
           "PIL.ImageChops.blend.nuanced.extrapolate-alpha",
           "PIL.ImageChops.blend.nuanced.materialized-p",
-          "PIL.ImageChops.blend.nuanced.palette-pipeline-second"
+          "PIL.ImageChops.blend.nuanced.palette-pipeline-second",
+          "PIL.ImageChops.composite.nuanced.varied-p-indices-with-l-mask"
         ],
         "command_ids": []
       },
