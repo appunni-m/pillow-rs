@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2645
-- Unique active workflow signatures: 2645
+- Active parity workflows: 2651
+- Unique active workflow signatures: 2651
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1467
+- Deliberate nuanced workflows: 1473
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 208 |
-| `PIL.Image.Image` | 1231 |
+| `PIL.Image.Image` | 1237 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -310,10 +310,16 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getcolors.nuanced.opened-rgba`
 - `PIL.Image.Image.getcolors.nuanced.rgb-nonzero`
 - `PIL.Image.Image.getcolors.nuanced.ycbcr-nonzero`
+- `PIL.Image.Image.getdata.nuanced.bytes-cmyk`
 - `PIL.Image.Image.getdata.nuanced.bytes-f-float`
 - `PIL.Image.Image.getdata.nuanced.bytes-i-out-of-range`
+- `PIL.Image.Image.getdata.nuanced.bytes-la`
 - `PIL.Image.Image.getdata.nuanced.bytes-luma`
+- `PIL.Image.Image.getdata.nuanced.bytes-one`
+- `PIL.Image.Image.getdata.nuanced.bytes-p`
+- `PIL.Image.Image.getdata.nuanced.bytes-pa`
 - `PIL.Image.Image.getdata.nuanced.bytes-rgb-multiband`
+- `PIL.Image.Image.getdata.nuanced.bytes-rgba`
 - `PIL.Image.Image.getdata.nuanced.f-nonzero`
 - `PIL.Image.Image.getdata.nuanced.i-invalid-band`
 - `PIL.Image.Image.getdata.nuanced.i-large-nonzero`
