@@ -1719,6 +1719,7 @@
           "PIL.Image.Image.crop.nuanced.negative-left-box",
           "PIL.Image.Image.crop.nuanced.negative-right-box",
           "PIL.Image.Image.crop.nuanced.negative-bottom-box",
+          "PIL.Image.Image.crop.nuanced.fully-negative-box",
           "PIL.Image.Image.crop.nuanced.bottom-padded-box",
           "PIL.Image.Image.crop.nuanced.padded-palette",
           "PIL.Image.Image.rotate.nuanced.opened-rgb",

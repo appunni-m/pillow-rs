@@ -7,6 +7,22 @@ use crate::pipeline::PipelineOp;
 const PIL_MAX_IMAGE_PIXELS: u64 = 1024 * 1024 * 1024 / 4 / 3;
 const PIL_DECOMPRESSION_BOMB_LIMIT: u128 = (PIL_MAX_IMAGE_PIXELS as u128) * 2;
 
+fn validate_crop_order<T: PartialOrd>(
+    (left, top, right, bottom): (T, T, T, T),
+) -> Result<(), PilError> {
+    if right < left {
+        return Err(PilError::ValueError(
+            "Coordinate 'right' is less than 'left'".into(),
+        ));
+    }
+    if bottom < top {
+        return Err(PilError::ValueError(
+            "Coordinate 'lower' is less than 'upper'".into(),
+        ));
+    }
+    Ok(())
+}
+
 pub(crate) fn check_crop_extent(width: i64, height: i64) -> Result<(), PilError> {
     let pixels = u128::from(width.max(1) as u64) * u128::from(height.max(1) as u64);
     if pixels > PIL_DECOMPRESSION_BOMB_LIMIT {
@@ -30,6 +46,7 @@ impl Image {
             i64::from(box_coords.2),
             i64::from(box_coords.3),
         );
+        validate_crop_order(coordinates)?;
         self.crop_signed(coordinates)
     }
 
@@ -48,12 +65,16 @@ impl Image {
         let Some(coordinates) = box_coords else {
             return Ok(self.copy());
         };
+        validate_crop_order(coordinates)?;
 
         // Route the common non-negative path through the same checked
         // conversion used by the unsigned WASM entry point. This keeps the
         // coordinate contract in core and makes both bindings exercise one
         // implementation instead of duplicating dispatch at their boundary.
-        if coordinates.0 >= 0 && coordinates.1 >= 0 && coordinates.2 >= 0 && coordinates.3 >= 0 {
+        if [coordinates.0, coordinates.1, coordinates.2, coordinates.3]
+            .iter()
+            .all(|coordinate| *coordinate >= 0)
+        {
             return self.crop_unsigned((
                 coordinates.0 as u32,
                 coordinates.1 as u32,
@@ -79,30 +100,20 @@ impl Image {
         let Some((left, top, right, bottom)) = box_coords else {
             return self.crop(None);
         };
-        if right < left {
-            return Err(PilError::ValueError(
-                "Coordinate 'right' is less than 'left'".into(),
-            ));
-        }
-        if bottom < top {
-            return Err(PilError::ValueError(
-                "Coordinate 'lower' is less than 'upper'".into(),
-            ));
-        }
+        validate_crop_order((left, top, right, bottom))?;
         let rounded = (
             pillow_round(left)?,
             pillow_round(top)?,
             pillow_round(right)?,
             pillow_round(bottom)?,
         );
-        if rounded.0 < i64::from(i32::MIN)
-            || rounded.1 < i64::from(i32::MIN)
-            || rounded.2 < i64::from(i32::MIN)
-            || rounded.3 < i64::from(i32::MIN)
-            || rounded.0 > i64::from(i32::MAX)
-            || rounded.1 > i64::from(i32::MAX)
-            || rounded.2 > i64::from(i32::MAX)
-            || rounded.3 > i64::from(i32::MAX)
+        let rounded_values = [rounded.0, rounded.1, rounded.2, rounded.3];
+        if rounded_values
+            .iter()
+            .any(|coordinate| *coordinate < i64::from(i32::MIN))
+            || rounded_values
+                .iter()
+                .any(|coordinate| *coordinate > i64::from(i32::MAX))
         {
             return self.crop_signed(rounded);
         }
@@ -118,17 +129,6 @@ impl Image {
         &self,
         (left, top, right, bottom): (i64, i64, i64, i64),
     ) -> Result<Image, PilError> {
-        if right < left {
-            return Err(PilError::ValueError(
-                "Coordinate 'right' is less than 'left'".into(),
-            ));
-        }
-        if bottom < top {
-            return Err(PilError::ValueError(
-                "Coordinate 'lower' is less than 'upper'".into(),
-            ));
-        }
-
         let output_width = right
             .checked_sub(left)
             .ok_or_else(|| PilError::OverflowError("crop width overflow".into()))?;
