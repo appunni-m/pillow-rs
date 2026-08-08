@@ -263,6 +263,7 @@ coverage_components:
   - pillow-rs/src/ops/split.rs
   - pillow-rs/src/ops/transform.rs
   - pillow-rs/src/ops/transpose.rs
+  - pillow-rs/src/compute/pool_cpu/ops/geometry.rs
   dimensions:
   - function
   - line

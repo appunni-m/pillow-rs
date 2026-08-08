@@ -80,6 +80,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
         "pillow-rs/src/ops/split.rs",
         "pillow-rs/src/ops/transform.rs",
         "pillow-rs/src/ops/transpose.rs",
+        "pillow-rs/src/compute/pool_cpu/ops/geometry.rs",
     ),
     "image-draw": (
         "pillow-rs-py/python/pillow_rs/imagedraw.py",
