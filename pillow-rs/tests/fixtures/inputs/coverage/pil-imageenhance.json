@@ -55,7 +55,8 @@
           "PIL.ImageEnhance.Contrast.nuanced.mode-1-reject",
           "PIL.ImageEnhance.Contrast.nuanced.mode-p-reject",
           "PIL.ImageEnhance.Sharpness.nuanced.mode-1-reject",
-          "PIL.ImageEnhance.Sharpness.nuanced.mode-p-reject"
+          "PIL.ImageEnhance.Sharpness.nuanced.mode-p-reject",
+          "PIL.ImageEnhance.Brightness.nuanced.pa-putpalette-pipeline-expansion"
         ],
         "command_ids": []
       },

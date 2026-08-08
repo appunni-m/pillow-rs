@@ -292,6 +292,7 @@
           "PIL.ImageOps.equalize.nuanced.materialized-p",
           "PIL.ImageOps.equalize.nuanced.opened-palette",
           "PIL.ImageOps.invert.nuanced.materialized-rgb",
+          "PIL.ImageOps.invert.nuanced.pa-putpalette-pipeline-expansion",
           "PIL.ImageOps.flip.nuanced.materialized-rgb",
           "PIL.ImageOps.mirror.nuanced.materialized-rgb",
           "PIL.ImageOps.posterize.nuanced.materialized-rgb",
