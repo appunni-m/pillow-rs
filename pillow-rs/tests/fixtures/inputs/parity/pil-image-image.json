@@ -46119,6 +46119,156 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.paste.nuanced.float-component-error",
+      "surface": "PIL.Image.Image",
+      "operation": "paste",
+      "covers": [
+        "PIL.Image.Image.paste.parameter.im"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "paste",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": [
+                1.5
+              ]
+            },
+            "box": {
+              "kind": "literal",
+              "value": [
+                1,
+                1,
+                5,
+                5
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.paste.nuanced.rgbx-scalar",
+      "surface": "PIL.Image.Image",
+      "operation": "paste",
+      "covers": [
+        "PIL.Image.Image.paste.parameter.im"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-rgbx-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "ECBAgA==",
+          "sha256": "e80b549e486ab5a754fffde6b415bce417ecf2e3c62a989b3eeea3c9a80e8de6",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBX"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                1,
+                1
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-rgbx-data"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "paste",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": 9
+            },
+            "box": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                1,
+                1
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.paste.nuanced.single-tuple-out-of-range-clamps",
       "surface": "PIL.Image.Image",
       "operation": "paste",
@@ -66544,6 +66694,70 @@
             "color": {
               "kind": "literal",
               "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "putalpha",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "alpha": {
+              "kind": "literal",
+              "value": 192
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.putalpha.nuanced.i16-frombytes-unsupported",
+      "surface": "PIL.Image.Image",
+      "operation": "putalpha",
+      "covers": [
+        "PIL.Image.Image.putalpha.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-i16-frombytes-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAABAAIAAwA=",
+          "sha256": "245bbd9d484dcf27c714e2690cd6544973de5d54aa9cd82eab23d6046a65faa8",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-i16-frombytes-data"
             }
           }
         },

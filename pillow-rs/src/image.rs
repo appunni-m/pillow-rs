@@ -799,13 +799,16 @@ impl Image {
                 height,
                 crate::raster::Rgb([color.0, color.1, color.2]),
             )),
-            // Pillow's RGBa keeps an explicit mode tag over the same four-byte
-            // storage layout as RGBA; preserve that tag at the Image boundary.
-            "RGBA" | "RGBa" => DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
-                width,
-                height,
-                crate::raster::Rgba([color.0, color.1, color.2, color.3]),
-            )),
+            // Pillow's RGBa and RGBX keep an explicit mode tag over the same
+            // four-byte storage layout as RGBA; preserve that tag at the
+            // Image boundary.
+            "RGBA" | "RGBa" | "RGBX" => {
+                DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_pixel(
+                    width,
+                    height,
+                    crate::raster::Rgba([color.0, color.1, color.2, color.3]),
+                ))
+            }
             "L" => DynamicImage::ImageLuma8(crate::raster::GrayImage::from_pixel(
                 width,
                 height,
@@ -886,6 +889,7 @@ impl Image {
                 | "I"
                 | "F"
                 | "RGBa"
+                | "RGBX"
                 | "PA"
                 | "1"
                 | "I;16"
@@ -990,7 +994,7 @@ impl Image {
             "LA" => FromBytesMode::LA,
             "I;16" | "I;16L" | "I;16B" | "I;16N" => FromBytesMode::L16,
             "RGB" => FromBytesMode::RGB,
-            "RGBA" | "RGBa" => FromBytesMode::RGBA,
+            "RGBA" | "RGBa" | "RGBX" => FromBytesMode::RGBA,
             "CMYK" => FromBytesMode::CMYK,
             "HSV" => FromBytesMode::HSV,
             "YCbCr" => FromBytesMode::YCbCr,
@@ -1127,7 +1131,7 @@ impl Image {
             | FromBytesMode::YCbCr
             | FromBytesMode::I
             | FromBytesMode::F => Some(mode.to_string()),
-            FromBytesMode::RGBA if mode == "RGBa" => Some(mode.to_string()),
+            FromBytesMode::RGBA if matches!(mode, "RGBa" | "RGBX") => Some(mode.to_string()),
             FromBytesMode::L16 => Some(mode.to_string()),
             FromBytesMode::L
             | FromBytesMode::LA
@@ -1817,7 +1821,7 @@ impl Image {
             "L" | "1" | "P" => FormattedPixelValue::Scalar(r),
             "LA" | "PA" => FormattedPixelValue::Components(vec![r, a]),
             "RGB" => FormattedPixelValue::Components(vec![r, g, b]),
-            "RGBA" | "CMYK" => FormattedPixelValue::Components(vec![r, g, b, a]),
+            "RGBA" | "RGBa" | "RGBX" | "CMYK" => FormattedPixelValue::Components(vec![r, g, b, a]),
             _ => FormattedPixelValue::Components(vec![r, g, b]),
         })
     }
@@ -1953,7 +1957,7 @@ impl Image {
             // three-band mode, including YCbCr and HSV; the remaining
             // samples are zero rather than copies of the scalar.
             "YCbCr" | "HSV" => (v, 0, 0, 255),
-            "RGBA" | "CMYK" => (v, 0, 0, 0),
+            "RGBA" | "RGBX" | "CMYK" => (v, 0, 0, 0),
             _ => (v, v, v, 255),
         };
         self.putpixel(x, y, r, g, b, a)
@@ -2280,6 +2284,7 @@ impl Image {
             "HSV" => vec!["H", "S", "V"],
             "PA" => vec!["P", "A"],
             "RGBa" => vec!["R", "G", "B", "a"],
+            "RGBX" => vec!["R", "G", "B", "X"],
             "I" | "F" | "P" | "1" => {
                 vec![mode.as_str()]
             }

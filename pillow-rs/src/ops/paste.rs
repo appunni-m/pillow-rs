@@ -146,16 +146,17 @@ impl PasteSource {
                 )))
             }
             ("LA" | "PA", _) => Err(bad_la()),
-            ("RGB" | "RGBA" | "RGBa" | "CMYK" | "YCbCr" | "HSV", PasteSource::Scalar(value)) => {
-                Ok(ResolvedPasteColor::Bytes((*value, 0, 0, 0)))
-            }
+            (
+                "RGB" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "YCbCr" | "HSV",
+                PasteSource::Scalar(value),
+            ) => Ok(ResolvedPasteColor::Bytes((*value, 0, 0, 0))),
             ("RGB" | "YCbCr" | "HSV", PasteSource::RawScalar(value)) => {
                 let bytes = value.to_le_bytes();
                 Ok(ResolvedPasteColor::Bytes((
                     bytes[0], bytes[1], bytes[2], 255,
                 )))
             }
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::RawScalar(value)) => {
+            ("RGBA" | "RGBa" | "RGBX" | "CMYK", PasteSource::RawScalar(value)) => {
                 let bytes = value.to_le_bytes();
                 Ok(ResolvedPasteColor::Bytes((
                     bytes[0], bytes[1], bytes[2], bytes[3],
@@ -183,10 +184,10 @@ impl PasteSource {
                     255,
                 )))
             }
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgb(r, g, b)) => {
+            ("RGBA" | "RGBa" | "RGBX" | "CMYK", PasteSource::Rgb(r, g, b)) => {
                 Ok(ResolvedPasteColor::Bytes((*r, *g, *b, 255)))
             }
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::RawRgb(r, g, b)) => {
+            ("RGBA" | "RGBa" | "RGBX" | "CMYK", PasteSource::RawRgb(r, g, b)) => {
                 Ok(ResolvedPasteColor::Bytes((
                     clipped_byte(*r),
                     clipped_byte(*g),
@@ -194,10 +195,10 @@ impl PasteSource {
                     255,
                 )))
             }
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgba(r, g, b, a)) => {
+            ("RGBA" | "RGBa" | "RGBX" | "CMYK", PasteSource::Rgba(r, g, b, a)) => {
                 Ok(ResolvedPasteColor::Bytes((*r, *g, *b, *a)))
             }
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::RawRgba(r, g, b, a)) => {
+            ("RGBA" | "RGBa" | "RGBX" | "CMYK", PasteSource::RawRgba(r, g, b, a)) => {
                 Ok(ResolvedPasteColor::Bytes((
                     clipped_byte(*r),
                     clipped_byte(*g),
@@ -205,7 +206,7 @@ impl PasteSource {
                     clipped_byte(*a),
                 )))
             }
-            ("RGB" | "RGBA" | "RGBa" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
+            ("RGB" | "RGBA" | "RGBa" | "RGBX" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
             ("I", PasteSource::Scalar(value)) => Ok(ResolvedPasteColor::Integer(i32::from(*value))),
             ("I", PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Integer(
                 i32::try_from(*value)
