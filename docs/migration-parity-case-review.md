@@ -7,11 +7,11 @@ outputs.
 ## Selection outcome
 
 - Manifest operations: 209
-- Manifest requirements: 1796
-- Active parity workflows: 2625
-- Unique active workflow signatures: 2625
+- Manifest requirements: 1797
+- Active parity workflows: 2638
+- Unique active workflow signatures: 2638
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1448
+- Deliberate nuanced workflows: 1460
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,8 +22,8 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 207 |
-| `PIL.Image.Image` | 1212 |
+| `PIL.Image` | 208 |
+| `PIL.Image.Image` | 1224 |
 | `PIL.ImageChops` | 83 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -215,6 +215,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.entropy.nuanced.masked-nonzero-l`
 - `PIL.Image.Image.entropy.nuanced.masked-nonzero-la`
 - `PIL.Image.Image.entropy.nuanced.masked-region`
+- `PIL.Image.Image.entropy.nuanced.one-mask`
 - `PIL.Image.Image.entropy.nuanced.opened-l`
 - `PIL.Image.Image.entropy.nuanced.opened-png-without-idat`
 - `PIL.Image.Image.entropy.nuanced.truthy-non-image-mask`
@@ -222,6 +223,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.filter.nuanced.invalid-filter`
 - `PIL.Image.Image.filter.nuanced.opened-rgb`
 - `PIL.Image.Image.filter.nuanced.p-mode-filter`
+- `PIL.Image.Image.filter.nuanced.pa-putpalette-blur`
 - `PIL.Image.Image.frombytes.nuanced.valid-cmyk`
 - `PIL.Image.Image.frombytes.nuanced.valid-f`
 - `PIL.Image.Image.frombytes.nuanced.valid-i`
@@ -385,6 +387,11 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.has_transparency_data.nuanced.la-mode`
 - `PIL.Image.Image.has_transparency_data.nuanced.p-transparency`
 - `PIL.Image.Image.has_transparency_data.nuanced.rgba-mode`
+- `PIL.Image.Image.histogram.nuanced.i16-frombytes`
+- `PIL.Image.Image.histogram.nuanced.i16-masked-nonzero`
+- `PIL.Image.Image.histogram.nuanced.i16b-frombytes`
+- `PIL.Image.Image.histogram.nuanced.i16l-frombytes`
+- `PIL.Image.Image.histogram.nuanced.i16n-frombytes`
 - `PIL.Image.Image.histogram.nuanced.mask-size-mismatch`
 - `PIL.Image.Image.histogram.nuanced.masked-nonzero-l`
 - `PIL.Image.Image.histogram.nuanced.masked-nonzero-la`
@@ -655,6 +662,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.i-convolution-negative`
 - `PIL.Image.Image.resize.nuanced.i-convolution-positive`
 - `PIL.Image.Image.resize.nuanced.i-nearest-nonuniform`
+- `PIL.Image.Image.resize.nuanced.i16b-frombytes-bilinear`
+- `PIL.Image.Image.resize.nuanced.i16l-frombytes-bilinear`
+- `PIL.Image.Image.resize.nuanced.i16n-frombytes-bilinear`
 - `PIL.Image.Image.resize.nuanced.i16n-frombytes-nearest`
 - `PIL.Image.Image.resize.nuanced.la-nearest-nonuniform`
 - `PIL.Image.Image.resize.nuanced.la-transparent-convolution`
@@ -668,6 +678,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.overflow-width`
 - `PIL.Image.Image.resize.nuanced.p-pipeline-resize-resize`
 - `PIL.Image.Image.resize.nuanced.p-putpalette-putalpha-bilinear`
+- `PIL.Image.Image.resize.nuanced.pa-putpalette-resize`
 - `PIL.Image.Image.resize.nuanced.rgba-nearest-nonuniform`
 - `PIL.Image.Image.resize.nuanced.rgba-transparent-convolution`
 - `PIL.Image.Image.resize.nuanced.unknown-filter`
@@ -897,6 +908,7 @@ are not copied into the active lane by name.
 - `PIL.Image.linear_gradient.nuanced.one-mode`
 - `PIL.Image.linear_gradient.nuanced.p-mode`
 - `PIL.Image.merge.nuanced.cmyk-mode`
+- `PIL.Image.merge.nuanced.invalid-band-item`
 - `PIL.Image.merge.nuanced.invalid-mode`
 - `PIL.Image.merge.nuanced.rgb-mode-nonzero`
 - `PIL.Image.merge.nuanced.wrong-band-count`
