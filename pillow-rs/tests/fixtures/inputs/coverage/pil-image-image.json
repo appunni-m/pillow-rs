@@ -1774,6 +1774,7 @@
           "PIL.Image.Image.getexif.nuanced.jpeg-no-exif-prefix",
           "PIL.Image.Image.getexif.nuanced.jpeg-standalone-soi",
           "PIL.Image.Image.getexif.nuanced.jpeg-standalone-rst0",
+          "PIL.Image.Image.getexif.nuanced.jpeg-standalone-tem",
           "PIL.Image.Image.getexif.nuanced.jpeg-eoi-before-app1",
           "PIL.Image.Image.getexif.nuanced.jpeg-empty-app1",
           "PIL.Image.Image.getexif.nuanced.jpeg-short-app1-length",

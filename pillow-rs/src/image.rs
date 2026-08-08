@@ -3185,6 +3185,13 @@ impl Image {
             if marker == 0xD9 {
                 return None;
             }
+            // Pillow's JpegImagePlugin stops collecting header metadata at
+            // SOS and hands the remainder to the entropy decoder. Do not
+            // interpret entropy bytes (including later marker-like bytes) as
+            // additional APP segments.
+            if marker == 0xDA {
+                return None;
+            }
             let length = usize::from(u16::from_be_bytes([data[offset + 2], data[offset + 3]]));
             if length < 2 {
                 return None;
