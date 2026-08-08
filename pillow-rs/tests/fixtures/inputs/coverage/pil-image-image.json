@@ -1496,6 +1496,8 @@
           "PIL.Image.Image.convert.nuanced.pa-to-one",
           "PIL.Image.Image.convert.nuanced.pa-palette-to-one",
           "PIL.Image.Image.convert.nuanced.pa-short-palette-to-one",
+          "PIL.Image.Image.convert.nuanced.pa-palette-to-rgb",
+          "PIL.Image.Image.convert.nuanced.pa-palette-to-rgba",
           "PIL.Image.Image.convert.nuanced.raw-p-without-palette-to-rgba",
           "PIL.Image.Image.convert.nuanced.from-cmyk-to-l",
           "PIL.Image.Image.convert.nuanced.from-ycbcr",

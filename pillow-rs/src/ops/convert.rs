@@ -409,6 +409,10 @@ impl Image {
                     exif: self.exif_metadata(),
                 });
                 return Ok(loaded);
+            } else if mode == "RGB" {
+                // PA expansion carries the per-pixel alpha needed by RGBA
+                // conversion, but Pillow's RGB conversion drops that band.
+                DynamicImage::ImageRgb8(converted.to_rgb8())
             } else if mode == "RGBA" {
                 // P sources with palette alpha keep per-entry alpha when
                 // converting to RGBA; the RGB-only nonstandard path would
