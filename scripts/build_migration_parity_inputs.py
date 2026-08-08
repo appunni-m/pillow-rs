@@ -2609,6 +2609,51 @@ class WorkflowBuilder:
                     arguments={"fp": image_asset},
                     step_id="setup-table-transparency",
                 )
+            elif chain == "p-table-transparency-putpalette-apply":
+                image_asset = self.inline_bytes(
+                    "p-table-transparency-putpalette-apply",
+                    indexed_png_with_palette_alpha(),
+                    "image/png",
+                )
+                image_step = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": image_asset},
+                    step_id="setup-table-transparency-putpalette-apply",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([70, 80, 90, 100, 110, 120]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-table-transparency-putpalette",
+                )
+                receiver_step = image_step
+            elif chain == "p-table-transparency-load-apply":
+                image_asset = self.inline_bytes(
+                    "p-table-transparency-load-apply",
+                    indexed_png_with_palette_alpha(),
+                    "image/png",
+                )
+                image_step = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": image_asset},
+                    step_id="setup-table-transparency-load-apply",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-table-transparency-load",
+                )
+                receiver_step = image_step
             elif chain == "p-duplicate-transparency":
                 image_asset = self.inline_bytes(
                     "p-duplicate-transparency",
@@ -16076,6 +16121,24 @@ def build_nuanced_cases(
             "name": "png-p-transparency-table",
             "mode": "P",
             "chain": "p-table-transparency",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-table-putpalette",
+            "mode": "P",
+            "chain": "p-table-transparency-putpalette-apply",
+            "observe_receiver": True,
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-table-load",
+            "mode": "P",
+            "chain": "p-table-transparency-load-apply",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
