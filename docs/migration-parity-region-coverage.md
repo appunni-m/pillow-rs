@@ -8,8 +8,8 @@ not parity proof and does not change the manifest or lane inputs.
 generator: scripts/report_migration_parity_region_coverage.py@3
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
-manifest_sha256: 52d87aaf6bc47380a2249e81c3826abc8a509200d45d8ac4a5d4d30e508b7d2b
-coverage_run_id: migration-coverage-d89b96153e5546d19271efae6a239114
+manifest_sha256: 03536ebd0f79e28947c80fdab8cc1a7a5b9b5cf925ae20f21c3fd253a34830f9
+coverage_run_id: migration-coverage-18cd22d6b0a341ce81770fb6dff62089
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -21,10 +21,10 @@ not operation-level coverage.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-8689a33372b34ea3842dc4615f0aee86`).
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-8a1361cf055e4157b9668a98612c896a`).
 Rust implementation regions: `104/104` (100.0%).
 Python facade statements: `1/1` (100.0%).
-Component aggregate for backlog ordering: `11452/12254` (93.5%).
+Component aggregate for backlog ordering: `13238/14077` (94.0%).
 
 ## Operations below 95% region coverage
 
@@ -58,77 +58,77 @@ Component aggregate for backlog ordering: `11452/12254` (93.5%).
 | `PIL.ImageFont.load_default_imagefont` | `image-font` | 3361/3782 | 88.9% |
 | `PIL.ImageFont.load_path` | `image-font` | 3361/3782 | 88.9% |
 | `PIL.ImageFont.truetype` | `image-font` | 3361/3782 | 88.9% |
-| `PIL.Image.Image.alpha_composite` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.apply_transparency` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.close` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.convert` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.copy` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.crop` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.draft` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.effect_spread` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.entropy` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.filter` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.format` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.frombytes` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.get_child_images` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.get_flattened_data` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getbands` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getbbox` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getchannel` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getcolors` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getdata` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getexif` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getextrema` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getim` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getpalette` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getpixel` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getprojection` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.getxmp` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.has_transparency_data` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.height` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.histogram` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.info` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.load` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.mode` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.paste` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.point` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.putalpha` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.putdata` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.putpalette` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.putpixel` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.quantize` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.reduce` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.remap_palette` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.resize` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.rotate` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.save` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.seek` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.size` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.split` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.tell` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.thumbnail` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.tobitmap` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.tobytes` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.toqimage` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.toqpixmap` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.transform` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.transpose` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.verify` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.Image.width` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.alpha_composite` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.blend` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.composite` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.effect_mandelbrot` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.effect_noise` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.eval` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.fromarray` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.frombuffer` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.frombytes` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.linear_gradient` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.merge` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.new` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.open` | `image-core` | 11452/12254 | 93.5% |
-| `PIL.Image.radial_gradient` | `image-core` | 11452/12254 | 93.5% |
+| `PIL.Image.Image.alpha_composite` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.apply_transparency` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.close` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.convert` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.copy` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.crop` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.draft` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.effect_spread` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.entropy` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.filter` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.format` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.frombytes` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.get_child_images` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.get_flattened_data` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getbands` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getbbox` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getchannel` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getcolors` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getdata` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getexif` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getextrema` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getim` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getpalette` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getpixel` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getprojection` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.getxmp` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.has_transparency_data` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.height` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.histogram` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.info` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.load` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.mode` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.paste` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.point` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.putalpha` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.putdata` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.putpalette` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.putpixel` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.quantize` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.reduce` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.remap_palette` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.resize` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.rotate` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.save` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.seek` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.size` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.split` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.tell` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.thumbnail` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.tobitmap` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.tobytes` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.toqimage` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.toqpixmap` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.transform` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.transpose` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.verify` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.Image.width` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.alpha_composite` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.blend` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.composite` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.effect_mandelbrot` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.effect_noise` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.eval` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.fromarray` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.frombuffer` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.frombytes` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.linear_gradient` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.merge` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.new` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.open` | `image-core` | 13238/14077 | 94.0% |
+| `PIL.Image.radial_gradient` | `image-core` | 13238/14077 | 94.0% |
 
 ## Per-file region coverage for involved components
 
@@ -137,12 +137,13 @@ Component aggregate for backlog ordering: `11452/12254` (93.5%).
 | `image-core` | `pillow-rs/src/ops/crop.rs` | 161/183 | 88.0% |
 | `image-core` | `pillow-rs/src/pipeline.rs` | 35/39 | 89.7% |
 | `image-core` | `pillow-rs/src/image.rs` | 4699/5207 | 90.2% |
-| `image-core` | `pillow-rs/src/ops/paste.rs` | 798/879 | 90.8% |
+| `image-core` | `pillow-rs/src/ops/paste.rs` | 947/1014 | 93.4% |
 | `image-core` | `pillow-rs/src/ops/module_fns.rs` | 518/544 | 95.2% |
 | `image-core` | `pillow-rs/src/ops/convert.rs` | 802/839 | 95.6% |
 | `image-core` | `pillow-rs/src/ops/transform.rs` | 633/659 | 96.1% |
 | `image-core` | `pillow-rs/src/ops/split.rs` | 25/26 | 96.2% |
 | `image-core` | `pillow-rs/src/ops/quantize.rs` | 2809/2898 | 96.9% |
+| `image-core` | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1637/1688 | 97.0% |
 | `image-core` | `pillow-rs/src/ops/rotate.rs` | 168/171 | 98.2% |
 | `image-core` | `pillow-rs/src/ops/transpose.rs` | 64/65 | 98.5% |
 | `image-core` | `pillow-rs/src/ops/analysis.rs` | 428/432 | 99.1% |

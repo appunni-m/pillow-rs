@@ -38,8 +38,16 @@ pub enum PasteSource {
     Rgb(u8, u8, u8),
     /// Paste a four-band pixel value.
     Rgba(u8, u8, u8, u8),
-    /// Backwards-compatible spelling for a solid RGBA color.
-    Color((u8, u8, u8, u8)),
+    /// Paste a Python integer before mode-specific Pillow coercion.
+    RawScalar(i64),
+    /// Paste a Python floating-point scalar in an `F` destination.
+    RawFloat(f64),
+    /// Paste a Python two-component tuple before component clipping.
+    RawLumaAlpha(i64, i64),
+    /// Paste a Python three-component tuple before component clipping.
+    RawRgb(i64, i64, i64),
+    /// Paste a Python four-component tuple before component clipping.
+    RawRgba(i64, i64, i64, i64),
 }
 
 /// Host-neutral source input for the Python `Image.paste` wrapper.
@@ -49,6 +57,8 @@ pub enum PythonPasteSource {
     Image(Image),
     /// A scalar color value before mode-specific validation.
     Scalar(i64),
+    /// A floating-point scalar, accepted by Pillow for `F` images.
+    Float(f64),
     /// A tuple/list color before mode-specific arity validation.
     Components(Vec<i64>),
     /// A Pillow color string before mode-specific conversion.
@@ -108,7 +118,7 @@ impl PasteSource {
         }
     }
 
-    fn solid_color(&self, mode: &str) -> Result<(u8, u8, u8, u8), PilError> {
+    fn solid_color(&self, mode: &str) -> Result<ResolvedPasteColor, PilError> {
         let bad_single =
             || PilError::TypeError("color must be int or single-element tuple".to_owned());
         let bad_la =
@@ -120,25 +130,106 @@ impl PasteSource {
         };
 
         match (mode, self) {
-            ("1" | "L" | "P", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 255)),
+            ("1" | "L" | "P", PasteSource::Scalar(value)) => {
+                Ok(ResolvedPasteColor::Bytes((*value, *value, *value, 255)))
+            }
+            ("1" | "L" | "P", PasteSource::RawScalar(value)) => {
+                let value = clipped_byte(*value);
+                Ok(ResolvedPasteColor::Bytes((value, value, value, 255)))
+            }
             ("1" | "L" | "P", _) => Err(bad_single()),
-            ("LA" | "PA", PasteSource::Scalar(value)) => Ok((*value, *value, *value, 0)),
-            ("LA" | "PA", PasteSource::LumaAlpha(luma, alpha)) => Ok((*luma, *luma, *luma, *alpha)),
+            ("LA" | "PA", PasteSource::Scalar(value)) => {
+                Ok(ResolvedPasteColor::Bytes((*value, *value, *value, 0)))
+            }
+            ("LA" | "PA", PasteSource::RawScalar(value)) => {
+                let bytes = value.to_le_bytes();
+                Ok(ResolvedPasteColor::Bytes((
+                    bytes[0], bytes[0], bytes[0], bytes[3],
+                )))
+            }
+            ("LA" | "PA", PasteSource::LumaAlpha(luma, alpha)) => {
+                Ok(ResolvedPasteColor::Bytes((*luma, *luma, *luma, *alpha)))
+            }
+            ("LA" | "PA", PasteSource::RawLumaAlpha(luma, alpha)) => {
+                Ok(ResolvedPasteColor::Bytes((
+                    clipped_byte(*luma),
+                    clipped_byte(*luma),
+                    clipped_byte(*luma),
+                    clipped_byte(*alpha),
+                )))
+            }
             ("LA" | "PA", _) => Err(bad_la()),
             ("RGB" | "RGBA" | "RGBa" | "CMYK" | "YCbCr" | "HSV", PasteSource::Scalar(value)) => {
-                Ok((*value, 0, 0, 0))
+                Ok(ResolvedPasteColor::Bytes((*value, 0, 0, 0)))
             }
-            ("RGB" | "YCbCr" | "HSV", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
-            ("RGB" | "YCbCr" | "HSV", PasteSource::Rgba(r, g, b, _))
-            | ("RGB" | "YCbCr" | "HSV", PasteSource::Color((r, g, b, _))) => Ok((*r, *g, *b, 255)),
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgb(r, g, b)) => Ok((*r, *g, *b, 255)),
-            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgba(r, g, b, a))
-            | ("RGBA" | "RGBa" | "CMYK", PasteSource::Color((r, g, b, a))) => Ok((*r, *g, *b, *a)),
+            ("RGB" | "YCbCr" | "HSV", PasteSource::RawScalar(value)) => {
+                let bytes = value.to_le_bytes();
+                Ok(ResolvedPasteColor::Bytes((
+                    bytes[0], bytes[1], bytes[2], 255,
+                )))
+            }
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::RawScalar(value)) => {
+                let bytes = value.to_le_bytes();
+                Ok(ResolvedPasteColor::Bytes((
+                    bytes[0], bytes[1], bytes[2], bytes[3],
+                )))
+            }
+            ("RGB" | "YCbCr" | "HSV", PasteSource::Rgb(r, g, b)) => {
+                Ok(ResolvedPasteColor::Bytes((*r, *g, *b, 255)))
+            }
+            ("RGB" | "YCbCr" | "HSV", PasteSource::RawRgb(r, g, b)) => {
+                Ok(ResolvedPasteColor::Bytes((
+                    clipped_byte(*r),
+                    clipped_byte(*g),
+                    clipped_byte(*b),
+                    255,
+                )))
+            }
+            ("RGB" | "YCbCr" | "HSV", PasteSource::Rgba(r, g, b, _)) => {
+                Ok(ResolvedPasteColor::Bytes((*r, *g, *b, 255)))
+            }
+            ("RGB" | "YCbCr" | "HSV", PasteSource::RawRgba(r, g, b, _)) => {
+                Ok(ResolvedPasteColor::Bytes((
+                    clipped_byte(*r),
+                    clipped_byte(*g),
+                    clipped_byte(*b),
+                    255,
+                )))
+            }
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgb(r, g, b)) => {
+                Ok(ResolvedPasteColor::Bytes((*r, *g, *b, 255)))
+            }
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::RawRgb(r, g, b)) => {
+                Ok(ResolvedPasteColor::Bytes((
+                    clipped_byte(*r),
+                    clipped_byte(*g),
+                    clipped_byte(*b),
+                    255,
+                )))
+            }
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::Rgba(r, g, b, a)) => {
+                Ok(ResolvedPasteColor::Bytes((*r, *g, *b, *a)))
+            }
+            ("RGBA" | "RGBa" | "CMYK", PasteSource::RawRgba(r, g, b, a)) => {
+                Ok(ResolvedPasteColor::Bytes((
+                    clipped_byte(*r),
+                    clipped_byte(*g),
+                    clipped_byte(*b),
+                    clipped_byte(*a),
+                )))
+            }
             ("RGB" | "RGBA" | "RGBa" | "CMYK" | "YCbCr" | "HSV", _) => Err(bad_multi()),
-            ("I" | "F", PasteSource::Scalar(value)) => Ok((*value, 0, 0, 0)),
+            ("I", PasteSource::Scalar(value)) => Ok(ResolvedPasteColor::Integer(i32::from(*value))),
+            ("I", PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Integer(
+                i32::try_from(*value)
+                    .map_err(|_| PilError::TypeError("im must be Image or color".to_owned()))?,
+            )),
+            ("F", PasteSource::Scalar(value)) => Ok(ResolvedPasteColor::Float(f32::from(*value))),
+            ("F", PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Float(*value as f32)),
+            ("F", PasteSource::RawFloat(value)) => Ok(ResolvedPasteColor::Float(*value as f32)),
             ("I" | "F", _) => Err(bad_single()),
             ("I;16" | "I;16L" | "I;16B" | "I;16N", PasteSource::Scalar(value)) => {
-                Ok((*value, 0, 0, 0))
+                Ok(ResolvedPasteColor::Luma16(u16::from(*value) * 0x0101))
             }
             ("I;16" | "I;16L" | "I;16B" | "I;16N", _) => Err(bad_single()),
             (_, _) => Err(PilError::ValueError(format!(
@@ -146,6 +237,14 @@ impl PasteSource {
             ))),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ResolvedPasteColor {
+    Bytes((u8, u8, u8, u8)),
+    Integer(i32),
+    Float(f32),
+    Luma16(u16),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -169,18 +268,27 @@ impl Image {
         let destination_mode = self.mode()?;
         let source = match source {
             PythonPasteSource::Image(image) => PasteSource::from_parts(Some(image), 0, 0, 0, 255),
-            PythonPasteSource::Scalar(value) => PasteSource::Scalar(byte_color(value)?),
+            PythonPasteSource::Scalar(value) => paste_scalar_source(value, &destination_mode),
+            PythonPasteSource::Float(value) => PasteSource::RawFloat(value),
             PythonPasteSource::Components(values) => match values.as_slice() {
-                [value] => PasteSource::Scalar(byte_color(*value)?),
-                [luma, alpha] => PasteSource::LumaAlpha(byte_color(*luma)?, byte_color(*alpha)?),
-                [r, g, b] => PasteSource::Rgb(byte_color(*r)?, byte_color(*g)?, byte_color(*b)?),
-                [r, g, b, a] => PasteSource::from_parts(
-                    None,
-                    byte_color(*r)?,
-                    byte_color(*g)?,
-                    byte_color(*b)?,
-                    byte_color(*a)?,
-                ),
+                [value] => paste_scalar_source(*value, &destination_mode),
+                [luma, alpha] => match (u8::try_from(*luma), u8::try_from(*alpha)) {
+                    (Ok(luma), Ok(alpha)) => PasteSource::LumaAlpha(luma, alpha),
+                    _ => PasteSource::RawLumaAlpha(*luma, *alpha),
+                },
+                [r, g, b] => match (u8::try_from(*r), u8::try_from(*g), u8::try_from(*b)) {
+                    (Ok(r), Ok(g), Ok(b)) => PasteSource::Rgb(r, g, b),
+                    _ => PasteSource::RawRgb(*r, *g, *b),
+                },
+                [r, g, b, a] => match (
+                    u8::try_from(*r),
+                    u8::try_from(*g),
+                    u8::try_from(*b),
+                    u8::try_from(*a),
+                ) {
+                    (Ok(r), Ok(g), Ok(b), Ok(a)) => PasteSource::from_parts(None, r, g, b, a),
+                    _ => PasteSource::RawRgba(*r, *g, *b, *a),
+                },
                 _ => return Err(invalid_component_error(&destination_mode)),
             },
             PythonPasteSource::String(value) => {
@@ -496,45 +604,47 @@ impl Image {
             }
             solid => {
                 let color = solid.solid_color(&destination_mode)?;
-                if destination_mode == "P" {
-                    let dims = CheckedDims::new(width, height, 1)?;
-                    let mut indices = dims.alloc_buffer();
-                    indices.fill(color.0);
-                    Image::frombytes("P", (width, height), &indices)?
-                } else if destination_mode == "PA" {
-                    // PA's two raw bands use the same physical layout as LA;
-                    // the destination retains the palette and PA mode tag.
-                    Image::new(width, height, "LA", color)?
-                } else if destination_mode == "F" {
-                    // Pillow's Paste.c writes scalar F-mode colors as the
-                    // destination's float32 sample, not as an integer byte.
-                    // Image::new stores F samples as their four raw LE bytes.
-                    let bytes = f32::from(color.0).to_le_bytes();
-                    Image::new(width, height, "F", (bytes[0], bytes[1], bytes[2], bytes[3]))?
-                } else if matches!(
-                    destination_mode.as_str(),
-                    "I;16" | "I;16L" | "I;16B" | "I;16N"
-                ) {
-                    // Pillow's Paste.c keeps I;16 scalar fills in unsigned
-                    // 16-bit storage. Construct the source with the same
-                    // native sample width; routing it through Image::new's
-                    // RGBA8 fallback would discard the high byte.
-                    // Image.paste receives an 8-bit scalar here. Pillow's
-                    // I;16 getink path writes that byte to both bytes of the
-                    // unsigned sample (7 becomes 0x0707), rather than
-                    // interpreting it as the numeric sample 0x0007.
-                    let sample = u16::from(color.0) * 0x0101;
-                    let pixels = crate::raster::ImageBuffer::from_pixel(
-                        width,
-                        height,
-                        crate::raster::Luma([sample]),
-                    );
-                    Image::from_dynamic(
-                        crate::raster::DynamicImage::ImageLuma16(pixels),
-                        Some(destination_mode.clone()),
-                    )
-                } else {
-                    Image::new(width, height, &destination_mode, color)?
+                match color {
+                    ResolvedPasteColor::Bytes(color) if destination_mode == "P" => {
+                        let dims = CheckedDims::new(width, height, 1)?;
+                        let mut indices = dims.alloc_buffer();
+                        indices.fill(color.0);
+                        Image::frombytes("P", (width, height), &indices)?
+                    }
+                    ResolvedPasteColor::Bytes(color) if destination_mode == "PA" => {
+                        // PA's two raw bands use the same physical layout as LA;
+                        // the destination retains the palette and PA mode tag.
+                        Image::new(width, height, "LA", color)?
+                    }
+                    ResolvedPasteColor::Integer(value) => {
+                        let bytes = value.to_le_bytes();
+                        Image::new(width, height, "I", (bytes[0], bytes[1], bytes[2], bytes[3]))?
+                    }
+                    ResolvedPasteColor::Float(value) => {
+                        // Pillow's Paste.c writes scalar F-mode colors as the
+                        // destination's float32 sample, not as an integer byte.
+                        // Image::new stores F samples as their four raw LE bytes.
+                        let bytes = value.to_le_bytes();
+                        Image::new(width, height, "F", (bytes[0], bytes[1], bytes[2], bytes[3]))?
+                    }
+                    ResolvedPasteColor::Luma16(sample) => {
+                        // Pillow's Paste.c keeps I;16 scalar fills in unsigned
+                        // 16-bit storage. Construct the source with the same
+                        // native sample width; routing it through Image::new's
+                        // RGBA8 fallback would discard the high byte.
+                        let pixels = crate::raster::ImageBuffer::from_pixel(
+                            width,
+                            height,
+                            crate::raster::Luma([sample]),
+                        );
+                        Image::from_dynamic(
+                            crate::raster::DynamicImage::ImageLuma16(pixels),
+                            Some(destination_mode.clone()),
+                        )
+                    }
+                    ResolvedPasteColor::Bytes(color) => {
+                        Image::new(width, height, &destination_mode, color)?
+                    }
                 }
             }
         };
@@ -605,6 +715,25 @@ impl Image {
 
 fn byte_color(value: i64) -> Result<u8, PilError> {
     u8::try_from(value).map_err(|_| PilError::TypeError("im must be Image or color".to_owned()))
+}
+
+fn clipped_byte(value: i64) -> u8 {
+    value.clamp(0, 255) as u8
+}
+
+fn paste_scalar_source(value: i64, mode: &str) -> PasteSource {
+    if matches!(mode, "I;16" | "I;16L" | "I;16B" | "I;16N") {
+        // Pillow's I;16 Paste.c path consumes the low byte of the Python
+        // integer and duplicates it across the unsigned sample. Keeping the
+        // source as the existing byte scalar preserves that behavior without
+        // involving the pending TIFF decoder lane.
+        PasteSource::Scalar(value.to_le_bytes()[0])
+    } else {
+        match u8::try_from(value) {
+            Ok(value) => PasteSource::Scalar(value),
+            Err(_) => PasteSource::RawScalar(value),
+        }
+    }
 }
 
 fn paste_source_from_color_string(value: &str, mode: &str) -> Result<PasteSource, PilError> {

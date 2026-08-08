@@ -391,6 +391,9 @@ fn paste_source_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PythonPasteS
     if let Ok(value) = value.extract::<i64>() {
         return pillow_rs::PythonPasteSource::Scalar(value);
     }
+    if let Ok(value) = value.extract::<f64>() {
+        return pillow_rs::PythonPasteSource::Float(value);
+    }
     if let Ok(values) = value.extract::<Vec<i64>>() {
         return pillow_rs::PythonPasteSource::Components(values);
     }
