@@ -17561,6 +17561,27 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "new-loaded-image",
+            "mode": "RGB",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "new-paletted-image",
+            "mode": "P",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getexif",
+            "requirement_suffix": "behavior.default",
+            "name": "deferred-pipeline-image",
+            "chain": "resize-copy",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getim",
             "requirement_suffix": "behavior.default",
             "name": "rgb-default",

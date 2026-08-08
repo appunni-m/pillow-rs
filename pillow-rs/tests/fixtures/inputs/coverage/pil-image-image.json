@@ -1711,6 +1711,8 @@
           "PIL.Image.Image.getexif.nuanced.jpeg-short-app1-length",
           "PIL.Image.Image.getexif.nuanced.jpeg-no-eoi",
           "PIL.Image.Image.getexif.nuanced.png-without-exif",
+          "PIL.Image.Image.getexif.nuanced.new-paletted-image",
+          "PIL.Image.Image.getexif.nuanced.deferred-pipeline-image",
           "PIL.Image.Image.has_transparency_data.nuanced.rgba-mode",
           "PIL.Image.Image.has_transparency_data.nuanced.la-mode",
           "PIL.Image.Image.has_transparency_data.nuanced.p-transparency",
