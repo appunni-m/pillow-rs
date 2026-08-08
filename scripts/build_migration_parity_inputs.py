@@ -1845,6 +1845,8 @@ class WorkflowBuilder:
             "bitmap",
             "palette",
         } or "image" in value_types:
+            if name == "image" and "image" in self.scenario_values:
+                return self.scenario_values["image"]
             if name == "bitmap" and self.scenario_bitmap_mode is not None:
                 return binding(
                     self.ensure_image(
@@ -2532,6 +2534,20 @@ class WorkflowBuilder:
                     step_id="setup-pa-putpalette",
                 )
                 receiver_step = image_step
+            elif chain == "pa-putpalette-imageops":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-imageops",
+                )
+                self.scenario_values["image"] = binding(image_step)
+                receiver_step = image_step
             elif chain == "pa-putpalette-getpalette":
                 image_step = self.ensure_image(mode="PA")
                 self.add_step(
@@ -3033,6 +3049,16 @@ class WorkflowBuilder:
                         receiver=binding(observation_step or receiver_step),
                         arguments=observation_arguments,
                         step_id="observe-receiver",
+                    )
+                )
+            if self.scenario_observe_result is not None:
+                observations.append(
+                    self.add_step(
+                        "PIL.Image.Image",
+                        self.scenario_observe_result,
+                        receiver=binding(call_id),
+                        arguments={},
+                        step_id="observe-result",
                     )
                 )
             return self.assets, self.steps, observations
@@ -12657,6 +12683,19 @@ def build_nuanced_cases(
             "name": "invalid-centering-none",
             "mode": "RGB",
             "chain": "none-centering-input",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-expansion",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 8]),
+                "resample": literal(0),
+            },
         },
         {
             "surface": "PIL.ImageOps",
