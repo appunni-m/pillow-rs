@@ -2824,7 +2824,10 @@ class WorkflowBuilder:
                     arguments={"fp": image_asset},
                     step_id="setup-table-transparency",
                 )
-            elif chain == "p-table-transparency-putpalette-apply":
+            elif chain in {
+                "p-table-transparency-putpalette-apply",
+                "p-table-transparency-putpalette-empty-apply",
+            }:
                 image_asset = self.inline_bytes(
                     "p-table-transparency-putpalette-apply",
                     indexed_png_with_palette_alpha(),
@@ -2842,7 +2845,11 @@ class WorkflowBuilder:
                     "putpalette",
                     receiver=binding(image_step),
                     arguments={
-                        "data": literal([70, 80, 90, 100, 110, 120]),
+                        "data": literal(
+                            []
+                            if chain == "p-table-transparency-putpalette-empty-apply"
+                            else [70, 80, 90, 100, 110, 120]
+                        ),
                         "rawmode": literal("RGB"),
                     },
                     step_id="setup-table-transparency-putpalette",
@@ -16541,6 +16548,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "png-p-transparency",
             "scenario_asset": "image/p-transparency.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "apply_transparency",
+            "requirement_suffix": "behavior.default",
+            "name": "png-p-transparency-empty-palette",
+            "chain": "p-table-transparency-putpalette-empty-apply",
         },
         {
             "surface": "PIL.Image.Image",
