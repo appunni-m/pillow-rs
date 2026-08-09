@@ -13404,6 +13404,32 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-expansion",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 8]),
+                "method": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "cover",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-expansion",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 8]),
+                "method": literal(3),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "autocontrast",
             "requirement_suffix": "parameter.mask",
             "name": "valid-l-mask",
@@ -13451,6 +13477,15 @@ def build_nuanced_cases(
             "name": "invalid-mask-type",
             "mode": "RGB",
             "chain": "truthy-non-image-mask",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-expansion",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.ImageOps",

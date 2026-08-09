@@ -1361,6 +1361,12 @@ impl Image {
             // the requested kernel; PA resamples its raw index/alpha bands.
             || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
                 && matches!(op, PipelineOp::Fit { .. }))
+            // Pillow's ImageOps.contain/cover are resize wrappers. Their
+            // indexed paths preserve P/PA samples and the source mode while
+            // applying the requested kernel (P still forces nearest inside
+            // the resize implementation).
+            || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
+                && matches!(op, PipelineOp::Contain { .. } | PipelineOp::Cover { .. }))
     }
 
     fn is_dimension_preserving_draw(op: &PipelineOp) -> bool {
