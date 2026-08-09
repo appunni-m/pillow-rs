@@ -10,18 +10,18 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: f09c2886b47904b43a9fb4a88baf58c971b42b40
+base_commit: 16aa663bd7a0ed4f95e480253f3639a1b3db7550
 threshold: 95%
 metric: regions
-total_regions: 106075
-covered_regions: 62028
-region_coverage: 58.4756%
-total_lines: 68019
-covered_lines: 39899
-line_coverage: 58.6586%
-total_branches: 13933
-covered_branches: 6942
-branch_coverage: 49.8242%
+total_regions: 106081
+covered_regions: 62035
+region_coverage: 58.4789%
+total_lines: 68018
+covered_lines: 39898
+line_coverage: 58.6580%
+total_branches: 13935
+covered_branches: 6944
+branch_coverage: 49.8314%
 total_functions: 5280
 covered_functions: 3008
 function_coverage: 56.9697%
@@ -33,22 +33,22 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,855 cases: 2,811 passed, 44 had
+The fresh SIMD parity audit selected all 2,855 cases: 2,812 passed, 43 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
 workflow executed all 24 plans and passed all 2,855 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
-coverage denominator. This pass added public nonzero and empty/single-pixel
-autocontrast workflows plus opaque, partial-alpha, and negative-placement paste
-workflows, and fixed the CPU autocontrast empty-image guard so the shared public
-case executes on both backends.
+coverage denominator. This pass fixed SIMD `Image.merge` handling for a public
+palette-first band case: Pillow consumes that first `P` band as raw one-byte
+samples, while the previous SIMD path expanded the palette and then collapsed
+the multi-band result back to `P`.
 
 SIMD implementation-file coverage is:
 
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
-| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1935/2237 (86.50%) | 1087/1232 (88.23%) | 89/144 (61.81%) | 74/84 (88.10%) |
+| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1938/2239 (86.56%) | 1083/1228 (88.19%) | 89/144 (61.81%) | 73/83 (87.95%) |
 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4823/5123 (94.14%) | 2401/2547 (94.27%) | 627/794 (78.97%) | 102/107 (95.33%) |
-| `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 (88.57%) | 59/67 (88.06%) | 0/0 | 8/12 (66.67%) |
+| `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
 | ---: | --- | ---: | ---: | ---: |
