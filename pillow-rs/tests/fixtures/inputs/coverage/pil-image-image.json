@@ -1047,6 +1047,8 @@
           "PIL.Image.Image.reduce.nuanced.wrong-factor-arity",
           "PIL.Image.Image.reduce.nuanced.wrong-box-arity",
           "PIL.Image.Image.reduce.nuanced.invalid-box-type",
+          "PIL.Image.Image.reduce.nuanced.reversed-box",
+          "PIL.Image.Image.reduce.nuanced.reversed-vertical-box",
           "PIL.Image.Image.quantize.nuanced.fast-octree-rgb",
           "PIL.Image.Image.quantize.nuanced.libimagequant-unavailable",
           "PIL.Image.Image.quantize.nuanced.rgba-mediancut-invalid",
