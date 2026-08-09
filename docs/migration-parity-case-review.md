@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2901
-- Unique active workflow signatures: 2901
+- Active parity workflows: 2907
+- Unique active workflow signatures: 2907
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1723
+- Deliberate nuanced workflows: 1729
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 256 |
+| `PIL.ImageOps` | 262 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -1612,11 +1612,13 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.contain.nuanced.simd-bilinear-la`
 - `PIL.ImageOps.contain.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.contain.nuanced.simd-native-scalar-fallback-f`
+- `PIL.ImageOps.contain.nuanced.simd-nearest-equal-aspect`
 - `PIL.ImageOps.contain.nuanced.simd-nearest-l`
 - `PIL.ImageOps.contain.nuanced.simd-nearest-la`
 - `PIL.ImageOps.contain.nuanced.simd-nearest-rgba`
 - `PIL.ImageOps.contain.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.contain.nuanced.wide-target`
+- `PIL.ImageOps.contain.nuanced.zero-width-source-simd-guard`
 - `PIL.ImageOps.cover.nuanced.half-rounded-height`
 - `PIL.ImageOps.cover.nuanced.materialized-aspect`
 - `PIL.ImageOps.cover.nuanced.numeric-method`
@@ -1624,6 +1626,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.cover.nuanced.simd-bilinear-la`
 - `PIL.ImageOps.cover.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.cover.nuanced.simd-native-scalar-fallback-f`
+- `PIL.ImageOps.cover.nuanced.simd-nearest-equal-aspect`
 - `PIL.ImageOps.cover.nuanced.simd-nearest-l`
 - `PIL.ImageOps.cover.nuanced.simd-nearest-la`
 - `PIL.ImageOps.cover.nuanced.simd-nearest-rgba`
@@ -1680,7 +1683,9 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.fit.nuanced.simd-nearest-l`
 - `PIL.ImageOps.fit.nuanced.simd-nearest-la`
 - `PIL.ImageOps.fit.nuanced.simd-nearest-rgba`
+- `PIL.ImageOps.fit.nuanced.simd-nearest-square-target`
 - `PIL.ImageOps.fit.nuanced.wide-source-crop`
+- `PIL.ImageOps.fit.nuanced.zero-width-source-simd-guard`
 - `PIL.ImageOps.flip.nuanced.materialized-l-odd-height`
 - `PIL.ImageOps.flip.nuanced.materialized-la-odd-height`
 - `PIL.ImageOps.flip.nuanced.materialized-rgb`
@@ -1739,6 +1744,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.pad.nuanced.simd-nearest-rgba`
 - `PIL.ImageOps.pad.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.pad.nuanced.vertical-padding`
+- `PIL.ImageOps.pad.nuanced.zero-width-source-simd-guard`
 - `PIL.ImageOps.posterize.nuanced.materialized-rgb`
 - `PIL.ImageOps.scale.nuanced.materialized-upscale`
 - `PIL.ImageOps.scale.nuanced.simd-bilinear-la`
