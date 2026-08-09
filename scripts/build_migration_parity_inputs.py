@@ -13950,6 +13950,150 @@ def build_nuanced_cases(
                 "method": literal(3),
             },
         },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.method",
+                "name": f"simd-nearest-{mode.lower()}",
+                "mode": mode,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([8, 5]),
+                    "method": literal(0),
+                },
+            }
+            for operation in ("contain", "cover", "fit")
+            for mode in ("L", "LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "scale",
+                "requirement_suffix": "parameter.resample",
+                "name": f"simd-nearest-{mode.lower()}",
+                "mode": mode,
+                "observe_result": "tobytes",
+                "values": {
+                    "factor": literal(1.5),
+                    "resample": literal("NEAREST"),
+                },
+            }
+            for mode in ("L", "LA", "RGBA")
+        ),
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "parameter.size",
+            "name": "simd-nearest-tall-target",
+            "mode": "RGB",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([5, 8]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "cover",
+            "requirement_suffix": "parameter.size",
+            "name": "simd-nearest-tall-target",
+            "mode": "RGB",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([5, 8]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.size",
+            "name": "simd-nearest-equal-aspect",
+            "mode": "RGB",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 6]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "simd-nearest-tall-target",
+            "mode": "RGB",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([5, 8]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "simd-nearest-l",
+            "mode": "L",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 5]),
+                "method": literal(0),
+                "color": literal(42),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "simd-nearest-la",
+            "mode": "LA",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 5]),
+                "method": literal(0),
+                "color": literal([42, 128]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "simd-nearest-rgba",
+            "mode": "RGBA",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 5]),
+                "method": literal(0),
+                "color": literal([1, 2, 3, 4]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "simd-nearest-p",
+            "mode": "P",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 5]),
+                "method": literal(0),
+                "color": literal(5),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "simd-nearest-pa",
+            "mode": "PA",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 5]),
+                "method": literal(0),
+                "color": literal([5, 7]),
+            },
+        },
         {
             "surface": "PIL.ImageOps",
             "operation": "autocontrast",
