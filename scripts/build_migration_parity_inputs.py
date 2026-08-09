@@ -11696,6 +11696,15 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "p-frombytes-without-palette",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
             "requirement_suffix": "behavior.default",
             "name": "no-extension-default-format",
             "edge": "no-extension",
