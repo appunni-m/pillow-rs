@@ -1229,7 +1229,11 @@ impl Image {
     /// convert) need RGB.
     fn is_palette_safe_op(op: &PipelineOp) -> bool {
         match op {
-            PipelineOp::Crop { .. }
+            // ImageChops.duplicate keeps source samples and palette metadata,
+            // but remains a pipeline operation so backend selection is
+            // observable.
+            PipelineOp::Duplicate
+            | PipelineOp::Crop { .. }
             | PipelineOp::Transpose { .. }
             | PipelineOp::Flip
             | PipelineOp::Mirror

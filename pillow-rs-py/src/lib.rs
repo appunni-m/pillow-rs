@@ -2197,6 +2197,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(chops_darker, m)?)?;
     m.add_function(wrap_pyfunction!(chops_lighter, m)?)?;
     m.add_function(wrap_pyfunction!(chops_difference, m)?)?;
+    m.add_function(wrap_pyfunction!(chops_duplicate, m)?)?;
     m.add_function(wrap_pyfunction!(chops_invert, m)?)?;
 
     // More ImageChops
@@ -4088,6 +4089,14 @@ fn chops_difference(image1: &Bound<'_, PyImage>, image2: &Bound<'_, PyImage>) ->
     let rs = Python::with_gil(|py| py.allow_threads(|| pillow_rs::chops_difference(&b1, &b2)))
         .map_err(map_error)?;
     Ok(PyImage { inner: rs })
+}
+
+#[pyfunction]
+fn chops_duplicate(image: &Bound<'_, PyImage>) -> PyResult<PyImage> {
+    let borrowed = image.borrow();
+    Ok(PyImage {
+        inner: pillow_rs::chops_duplicate(&borrowed.inner),
+    })
 }
 
 #[pyfunction]
