@@ -1609,6 +1609,7 @@
           "PIL.Image.Image.resize.nuanced.opened-rgb",
           "PIL.Image.Image.resize.nuanced.p-pipeline-resize-resize",
           "PIL.Image.Image.resize.nuanced.pa-putpalette-resize",
+          "PIL.Image.Image.resize.nuanced.pa-putpalette-resize-resize",
           "PIL.Image.Image.resize.nuanced.pa-putpalette-bilinear-resize",
           "PIL.Image.Image.thumbnail.nuanced.zero-width",
           "PIL.Image.Image.thumbnail.nuanced.zero-height",
