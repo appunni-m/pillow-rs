@@ -2560,6 +2560,12 @@ impl Image {
                 "No packer found from {mode} to {raw_mode}"
             )));
         }
+        // Pillow's default Image.tobytes() path uses the image's current mode
+        // without a raw-mode override. Keep that public route on the canonical
+        // core entry point; explicit raw modes still use the packer below.
+        if args.is_empty() && self.mode()? == mode {
+            return self.tobytes();
+        }
         let mut data = self.tobytes_formatted(mode)?;
         if mode == "RGB" && raw_mode == "RGBA" {
             let mut expanded = Vec::with_capacity(data.len() / 3 * 4);
