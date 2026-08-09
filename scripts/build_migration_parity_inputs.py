@@ -13969,6 +13969,22 @@ def build_nuanced_cases(
         *(
             {
                 "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.method",
+                "name": f"simd-bilinear-{mode.lower()}",
+                "mode": mode,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([9, 6]),
+                    "method": literal(2),
+                },
+            }
+            for operation in ("contain", "cover", "fit")
+            for mode in ("LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
                 "operation": "scale",
                 "requirement_suffix": "parameter.resample",
                 "name": f"simd-nearest-{mode.lower()}",
@@ -13980,6 +13996,21 @@ def build_nuanced_cases(
                 },
             }
             for mode in ("L", "LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "scale",
+                "requirement_suffix": "parameter.resample",
+                "name": f"simd-bilinear-{mode.lower()}",
+                "mode": mode,
+                "observe_result": "tobytes",
+                "values": {
+                    "factor": literal(1.5),
+                    "resample": literal("BILINEAR"),
+                },
+            }
+            for mode in ("LA", "RGBA")
         ),
         {
             "surface": "PIL.ImageOps",
@@ -14094,6 +14125,21 @@ def build_nuanced_cases(
                 "color": literal([5, 7]),
             },
         },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "requirement_suffix": "parameter.method",
+                "name": f"simd-bilinear-{mode.lower()}",
+                "mode": mode,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([9, 6]),
+                    "method": literal(2),
+                },
+            }
+            for mode in ("LA", "RGBA")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "autocontrast",
