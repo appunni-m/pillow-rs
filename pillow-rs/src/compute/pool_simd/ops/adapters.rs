@@ -1536,13 +1536,17 @@ pub fn simd_merge(
                 ));
             }
         };
-        let band_pixels: Vec<Vec<u32>> = bands
-            .iter()
-            .map(|b| {
-                let img = b.materialize_for_ops()?;
-                Ok(pixels_from_dynimg(&img))
-            })
-            .collect::<Result<Vec<_>, PilError>>()?;
+        // Pillow's ImagingMerge consumes every input as a single-byte band.
+        // The current image is already that raw sample buffer, which matters
+        // when the first band is a P image: materialize_for_ops() would expand
+        // palette index 1 into its visible palette color before the merge.
+        // Later P bands are rejected by the public validation, so only those
+        // remaining inputs need ordinary operation materialization here.
+        let mut band_pixels = vec![pixels.clone()];
+        for band in bands.iter().skip(1) {
+            let band_img = band.materialize_for_ops()?;
+            band_pixels.push(pixels_from_dynimg(&band_img));
+        }
         let expected_bands = match mode_code {
             0 => 1,
             1 => 2,
