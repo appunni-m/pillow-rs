@@ -9,24 +9,6 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
-fn clear_palette_for_index_result(image: &Image, result: &mut Image) -> Result<(), PilError> {
-    if matches!(image.mode()?.as_str(), "P" | "PA")
-        && let Image::Pipeline {
-            palette,
-            palette_alpha,
-            ..
-        } = result
-    {
-        // Pillow 12.2.0 libImaging/Chops.c allocates a new P/PA core for
-        // these arithmetic operations and does not copy Image.palette. Keep
-        // the output's raw index/alpha samples while exposing no retained
-        // palette.
-        *palette = Some(Vec::new());
-        *palette_alpha = None;
-    }
-    Ok(())
-}
-
 fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
     if image1.mode()? != "1" || image2.mode()? != "1" {
         return Err(PilError::ValueError("image has wrong mode".into()));
@@ -41,16 +23,14 @@ fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilEr
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Add {
             other: Arc::new(image2.clone()),
             scale,
             offset,
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Subtracts `image2` from `image1` with scale and offset.
@@ -65,16 +45,14 @@ pub fn subtract(
     scale: f64,
     offset: f64,
 ) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Subtract {
             other: Arc::new(image2.clone()),
             scale,
             offset,
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Multiplies two images channel-by-channel.
@@ -84,14 +62,12 @@ pub fn subtract(
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Multiply {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Applies screen blend mode.
@@ -101,14 +77,12 @@ pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Screen {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Keeps the darker pixel at each position.
@@ -118,14 +92,12 @@ pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Darker {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Keeps the lighter pixel at each position.
@@ -135,14 +107,12 @@ pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Lighter {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Computes absolute channel difference between two images.
@@ -152,14 +122,12 @@ pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Difference {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Applies overlay blend mode.
@@ -169,14 +137,12 @@ pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::Overlay {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Applies soft-light blend mode.
@@ -186,14 +152,12 @@ pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::SoftLight {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Applies hard-light blend mode.
@@ -203,14 +167,12 @@ pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::HardLight {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Applies bitwise AND.
@@ -274,22 +236,7 @@ pub(crate) fn duplicate(image: &Image) -> Image {
 /// Returns [`PilError`] while determining the image mode or materializing
 /// the pipeline result.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
-    let mode = image.mode()?;
-
-    let mut result = Image::push_op(image, PipelineOp::InvertChops);
-    if mode == "P"
-        && let Image::Pipeline {
-            palette,
-            palette_alpha,
-            ..
-        } = &mut result
-    {
-        // Pillow's ImagingChopInvert allocates a fresh P core without copying
-        // Image.palette. The bytes are inverted indices and getpalette() is [].
-        *palette = Some(Vec::new());
-        *palette_alpha = None;
-    }
-    Ok(result)
+    Ok(Image::push_op(image, PipelineOp::InvertChops))
 }
 
 /// Offsets image contents by wrapping pixels around both axes.
@@ -324,14 +271,12 @@ pub fn offset_with_default(
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::AddModulo {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Subtracts two images modulo 256.
@@ -341,14 +286,12 @@ pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
-    let mut result = Image::push_op(
+    Ok(Image::push_op(
         image1,
         PipelineOp::SubtractModulo {
             other: Arc::new(image2.clone()),
         },
-    );
-    clear_palette_for_index_result(image1, &mut result)?;
-    Ok(result)
+    ))
 }
 
 /// Fills active channels with a constant byte value.
