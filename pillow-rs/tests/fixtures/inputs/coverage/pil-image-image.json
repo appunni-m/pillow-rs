@@ -1498,6 +1498,7 @@
           "PIL.Image.Image.load.nuanced.p-resize-pipeline",
           "PIL.Image.Image.load.nuanced.p-resize-without-palette",
           "PIL.Image.Image.load.nuanced.p-putpalette-resize-pipeline",
+          "PIL.Image.Image.load.nuanced.p-putpalette-pipeline",
           "PIL.Image.Image.load.nuanced.jpeg-rgb-opened",
           "PIL.Image.Image.verify.nuanced.png-rgb-opened",
           "PIL.Image.Image.verify.nuanced.jpeg-rgb-opened",
