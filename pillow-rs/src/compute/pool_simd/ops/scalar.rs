@@ -2234,6 +2234,14 @@ pub fn fit(
     centering: (f32, f32),
     filter: u32,
 ) -> (Vec<u32>, u32, u32) {
+    // Pillow's ImageOps.fit can materialize a zero-width, non-empty source:
+    // the destination is still allocated and remains zero-filled. Other
+    // empty-dimension cases retain the historical no-sample result here;
+    // callers that need Pillow's division error reject those inputs before
+    // reaching this kernel.
+    if w == 0 && h > 0 && dst_w > 0 && dst_h > 0 {
+        return (vec![0u32; (dst_w * dst_h) as usize], dst_w, dst_h);
+    }
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
     }

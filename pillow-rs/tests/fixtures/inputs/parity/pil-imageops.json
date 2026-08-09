@@ -7622,6 +7622,394 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.contain.nuanced.simd-nearest-equal-aspect",
+      "surface": "PIL.ImageOps",
+      "operation": "contain",
+      "covers": [
+        "PIL.ImageOps.contain.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "contain",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.cover.nuanced.simd-nearest-equal-aspect",
+      "surface": "PIL.ImageOps",
+      "operation": "cover",
+      "covers": [
+        "PIL.ImageOps.cover.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "cover",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.fit.nuanced.simd-nearest-square-target",
+      "surface": "PIL.ImageOps",
+      "operation": "fit",
+      "covers": [
+        "PIL.ImageOps.fit.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "fit",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.contain.nuanced.zero-width-source-simd-guard",
+      "surface": "PIL.ImageOps",
+      "operation": "contain",
+      "covers": [
+        "PIL.ImageOps.contain.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-zero-size-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-zero-size-data"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "contain",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "size",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.fit.nuanced.zero-width-source-simd-guard",
+      "surface": "PIL.ImageOps",
+      "operation": "fit",
+      "covers": [
+        "PIL.ImageOps.fit.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-zero-size-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-zero-size-data"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "fit",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.pad.nuanced.simd-nearest-tall-target",
       "surface": "PIL.ImageOps",
       "operation": "pad",
@@ -7671,6 +8059,89 @@
               "value": [
                 5,
                 8
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageOps.pad.nuanced.zero-width-source-simd-guard",
+      "surface": "PIL.ImageOps",
+      "operation": "pad",
+      "covers": [
+        "PIL.ImageOps.pad.parameter.size"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-zero-size-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "",
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                0,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "image-zero-size-data"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "pad",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
               ]
             },
             "method": {
