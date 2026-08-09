@@ -3783,19 +3783,36 @@ impl Image {
 
     /// Replaces raw I;16 samples from Pillow's bytes fast path.
     ///
-    /// Pillow treats a `bytes` argument to `putdata` as packed storage for
-    /// I;16 modes, rather than as one numeric sample per byte. The payload is
-    /// copied into the image's raw two-byte sample buffer; an incomplete final
-    /// sample remains zero-filled, and bytes beyond the allocated raw storage
-    /// are ignored.
-    pub fn putdata_l16_bytes(&mut self, data: &[u8]) -> Result<(), PilError> {
+    /// Pillow treats a `bytes` argument to `putdata` as byte-oriented storage
+    /// for I;16 modes, rather than as one numeric sample per byte. Its
+    /// `_imaging.c:_putdata` image8 fast path copies at most one logical row's
+    /// worth of input bytes at a time, leaving the remaining byte half of each
+    /// 16-bit row zero-filled. With a scale or offset it applies the same
+    /// clipping to each input byte before placing it in that row layout.
+    pub fn putdata_l16_bytes(
+        &mut self,
+        data: &[u8],
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
         self.validate_putdata_length(data.len())?;
         let (width, height) = self.size()?;
         let dimensions = CheckedDims::new(width, height, 2)?;
         let mode = self.mode()?;
         let mut raw = dimensions.alloc_buffer();
-        let copy_len = data.len().min(raw.len());
-        raw[..copy_len].copy_from_slice(&data[..copy_len]);
+        let width = width as usize;
+        let row_stride = width
+            .checked_mul(2)
+            .ok_or_else(|| PilError::DimensionError("putdata row stride overflow".into()))?;
+        for (index, byte) in data.iter().copied().enumerate() {
+            let row = index / width;
+            let column = index % width;
+            raw[row * row_stride + column] = if scale == 1.0 && offset == 0.0 {
+                byte
+            } else {
+                putdata_clip_u8(f64::from(byte) * scale + offset)
+            };
+        }
         self.load()?;
         if let Image::Loaded(image_data) = self {
             let image = Arc::make_mut(&mut image_data.image);
