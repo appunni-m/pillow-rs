@@ -1564,6 +1564,7 @@
           "PIL.Image.Image.quantize.nuanced.palette-image-unsupported-rgba",
           "PIL.Image.Image.quantize.nuanced.negative-kmeans",
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency",
+          "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-empty-palette",
           "PIL.Image.Image.info.nuanced.p-transparency-table",
           "PIL.Image.Image.info.nuanced.opened-jpeg-format-info",
           "PIL.Image.Image.info.nuanced.opened-bmp-format-info",

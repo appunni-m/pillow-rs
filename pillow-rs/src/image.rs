@@ -3132,7 +3132,16 @@ impl Image {
                 }
             }
             PaletteTransparency::Table(table) => {
-                for (alpha, value) in palette_alpha.iter_mut().zip(table) {
+                for (index, value) in table.into_iter().enumerate() {
+                    let Some(alpha) = palette_alpha.get_mut(index) else {
+                        // Pillow assigns each transparency byte into the
+                        // RGBA palette list directly; a tRNS table longer
+                        // than the retained palette therefore raises the
+                        // same IndexError instead of being silently truncated.
+                        return Err(PilError::IndexError(
+                            "list assignment index out of range".into(),
+                        ));
+                    };
                     *alpha = value;
                 }
             }
