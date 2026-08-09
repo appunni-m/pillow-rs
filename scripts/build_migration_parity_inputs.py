@@ -175,6 +175,28 @@ def png_header_without_image_data() -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IEND", b"")
 
 
+def one_bit_png() -> bytes:
+    """Return a tiny valid grayscale PNG with Pillow's mode ``1``."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", checksum)
+        )
+
+    header = struct.pack(">IIBBBBB", 2, 1, 1, 0, 0, 0, 0)
+    scanline = bytes([0, 0x80])
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(scanline))
+        + chunk(b"IEND", b"")
+    )
+
+
 def little_endian_l16_tiff() -> bytes:
     """Return a minimal valid unsigned-16-bit grayscale TIFF stimulus."""
 
@@ -877,6 +899,19 @@ class WorkflowBuilder:
                 data_descriptor = self.inline_bytes(
                     f"{label}-png-no-idat",
                     png_header_without_image_data(),
+                    "image/png",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "l1-png":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-l1-png",
+                    one_bit_png(),
                     "image/png",
                 )
                 step_id = self.add_step(
@@ -15987,6 +16022,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "png-l-opened",
             "scenario_asset": "image/l-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-one-bit-opened",
+            "scenario_inline_image": "l1-png",
         },
         {
             "surface": "PIL.Image.Image",
