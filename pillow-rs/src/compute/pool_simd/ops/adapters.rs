@@ -7,7 +7,7 @@
 //! 3. Reconstructs `DynamicImage` from the result
 
 use crate::error::PilError;
-use crate::image::{Image, preserve_mode};
+use crate::image::{preserve_mode, Image};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -639,7 +639,7 @@ pub fn simd_quantize(
 // ═══════════════════════════════════════════════════════════════════════
 
 macro_rules! dual_op_adapter {
-    ($name:ident, $scalar_fn:path) => {
+    ($name:ident, $variant:ident, $scalar_fn:path) => {
         pub fn $name(
             img: &DynamicImage,
             op: &PipelineOp,
@@ -648,45 +648,32 @@ macro_rules! dual_op_adapter {
             let (w, h) = img.dimensions();
             let mode_code = mode_to_u32(img, mode);
             let mut pixels = pixels_from_dynimg(img);
-            let other_pixels = match op {
-                PipelineOp::Multiply { other }
-                | PipelineOp::Screen { other }
-                | PipelineOp::Darker { other }
-                | PipelineOp::Lighter { other }
-                | PipelineOp::Difference { other }
-                | PipelineOp::AddModulo { other }
-                | PipelineOp::SubtractModulo { other }
-                | PipelineOp::LogicalAnd { other }
-                | PipelineOp::LogicalOr { other }
-                | PipelineOp::LogicalXor { other }
-                | PipelineOp::Overlay { other }
-                | PipelineOp::HardLight { other }
-                | PipelineOp::SoftLight { other } => pixels_from_arc_for_chops(other, mode)?,
-                _ => {
-                    return Err(PilError::ValueError(
-                        "unexpected op variant for dual operation".into(),
-                    ))
-                }
-            };
-            $scalar_fn(&mut pixels, mode_code, &other_pixels);
+            if let PipelineOp::$variant { other } = op {
+                let other_pixels = pixels_from_arc_for_chops(other, mode)?;
+                $scalar_fn(&mut pixels, mode_code, &other_pixels);
+            }
             Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
         }
     };
 }
 
-dual_op_adapter!(simd_multiply, super::scalar::multiply);
-dual_op_adapter!(simd_screen, super::scalar::screen);
-dual_op_adapter!(simd_darker, super::scalar::darker);
-dual_op_adapter!(simd_lighter, super::scalar::lighter);
-dual_op_adapter!(simd_difference, super::scalar::difference);
-dual_op_adapter!(simd_add_modulo, super::scalar::add_modulo);
-dual_op_adapter!(simd_subtract_modulo, super::scalar::subtract_modulo);
-dual_op_adapter!(simd_logical_and, super::scalar::logical_and);
-dual_op_adapter!(simd_logical_or, super::scalar::logical_or);
-dual_op_adapter!(simd_logical_xor, super::scalar::logical_xor);
-dual_op_adapter!(simd_overlay, super::scalar::overlay);
-dual_op_adapter!(simd_hard_light, super::scalar::hard_light);
-dual_op_adapter!(simd_soft_light, super::scalar::soft_light);
+dual_op_adapter!(simd_multiply, Multiply, super::scalar::multiply);
+dual_op_adapter!(simd_screen, Screen, super::scalar::screen);
+dual_op_adapter!(simd_darker, Darker, super::scalar::darker);
+dual_op_adapter!(simd_lighter, Lighter, super::scalar::lighter);
+dual_op_adapter!(simd_difference, Difference, super::scalar::difference);
+dual_op_adapter!(simd_add_modulo, AddModulo, super::scalar::add_modulo);
+dual_op_adapter!(
+    simd_subtract_modulo,
+    SubtractModulo,
+    super::scalar::subtract_modulo
+);
+dual_op_adapter!(simd_logical_and, LogicalAnd, super::scalar::logical_and);
+dual_op_adapter!(simd_logical_or, LogicalOr, super::scalar::logical_or);
+dual_op_adapter!(simd_logical_xor, LogicalXor, super::scalar::logical_xor);
+dual_op_adapter!(simd_overlay, Overlay, super::scalar::overlay);
+dual_op_adapter!(simd_hard_light, HardLight, super::scalar::hard_light);
+dual_op_adapter!(simd_soft_light, SoftLight, super::scalar::soft_light);
 
 pub fn simd_add(
     img: &DynamicImage,
