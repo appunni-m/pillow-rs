@@ -1670,6 +1670,32 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-mask-pixel"),
             )
+        elif self.edge == "paste-mask-partial-pixel":
+            # A masked paste must be materialized through the public receiver
+            # observation to reach the backend kernel. Use distinct RGBA
+            # source/destination samples and a partial L mask so the SIMD
+            # implementation executes its alpha-aware weighted branch.
+            if requested_mode != "RGBA" and label in {"image", "im"}:
+                raise ValueError("paste-mask-partial-pixel requires RGBA images")
+            if label == "image":
+                value: Any = [30, 60, 90, 64]
+            elif label == "im":
+                value = [200, 150, 100, 192]
+            elif label == "mask":
+                value = 128
+            else:
+                value = None
+            if value is not None:
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal([2, 3]),
+                        "value": literal(value),
+                    },
+                    step_id=self.next_step_id("setup-paste-mask-pixel"),
+                )
         return step_id
 
     def ensure_font(self) -> str:
@@ -19355,6 +19381,7 @@ def build_nuanced_cases(
             "mode": "RGB",
             "im_mode": "RGB",
             "mask_mode": "RGBA",
+            "observe_receiver": True,
             "values": {"box": literal([0, 0, 16, 16])},
         },
         {
@@ -19365,6 +19392,19 @@ def build_nuanced_cases(
             "mode": "RGB",
             "im_mode": "RGB",
             "mask_mode": "LA",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "partial-rgba-l-mask",
+            "mode": "RGBA",
+            "im_mode": "RGBA",
+            "mask_mode": "L",
+            "edge": "paste-mask-partial-pixel",
+            "observe_receiver": True,
             "values": {"box": literal([0, 0, 16, 16])},
         },
         {

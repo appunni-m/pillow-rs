@@ -1815,6 +1815,7 @@
           "PIL.Image.Image.paste.nuanced.rgba-source-into-rgb",
           "PIL.Image.Image.paste.nuanced.rgba-mask",
           "PIL.Image.Image.paste.nuanced.la-mask",
+          "PIL.Image.Image.paste.nuanced.partial-rgba-l-mask",
           "PIL.Image.Image.paste.nuanced.box-image-and-mask-conflict",
           "PIL.Image.Image.paste.nuanced.l-source-into-rgb",
           "PIL.Image.Image.paste.nuanced.scalar-color-rgb",
