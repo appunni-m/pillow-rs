@@ -67,6 +67,19 @@ fn dynimg_mode(img: &DynamicImage) -> u32 {
     }
 }
 
+/// Return whether the image must stay in its native scalar representation.
+///
+/// The SIMD pixel buffer is deliberately an RGBA8 packing.  That is a valid
+/// representation for ordinary byte images, but it is not a valid sample
+/// domain for `F`, `I`, or unsigned 16-bit luma images: converting those modes
+/// through `to_rgba8()` changes the values before the geometry kernel sees
+/// them.  Keep those paths in the shared pure-Rust geometry implementation,
+/// which operates on the native representation and is also used by CPU.
+fn uses_native_scalar_mode(img: &DynamicImage, mode: Option<&str>) -> bool {
+    matches!(mode, Some("F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"))
+        || matches!(img, DynamicImage::ImageLuma16(_))
+}
+
 // ── Helper: DynamicImage ↔ packed u32 ─────────────────────────────────
 
 /// Extract packed u32 RGBA pixels from a DynamicImage.
@@ -832,16 +845,24 @@ pub fn simd_transpose(
 pub fn simd_resize(
     img: &DynamicImage,
     op: &PipelineOp,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Resize {
         w: dst_w,
         h: dst_h,
         filter,
     } = op
     {
+        if uses_native_scalar_mode(img, mode)
+            || !matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
+            || mode == Some("RGBa")
+        {
+            return crate::compute::pool_cpu::ops::geometry::execute_resize(
+                img, *dst_w, *dst_h, filter, mode,
+            );
+        }
+        let pixels = pixels_from_dynimg(img);
         let mode_code = dynimg_mode(img);
         let f = filter_to_u32(filter);
         let (result, new_w, new_h) =
@@ -860,13 +881,18 @@ pub fn simd_thumbnail(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Thumbnail {
         w: dw,
         h: dh,
         filter,
     } = op
     {
+        if uses_native_scalar_mode(img, mode) || !matches!(filter, ResampleFilter::Nearest) {
+            return crate::compute::pool_cpu::ops::geometry::execute_thumbnail(
+                img, *dw, *dh, filter, mode,
+            );
+        }
+        let pixels = pixels_from_dynimg(img);
         let mode_code = dynimg_mode(img);
         let filter_code = if matches!(mode, Some("P" | "PA")) {
             0
@@ -1101,15 +1127,28 @@ pub fn simd_rotate(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
-    let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Rotate {
         angle,
         expand,
         fill,
-        ..
+        center,
+        translate,
+        nearest,
     } = op
     {
+        if uses_native_scalar_mode(img, mode)
+            || matches!(mode, Some("1" | "P" | "PA" | "RGBa"))
+            || matches!(
+                img.color(),
+                crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+            )
+        {
+            return crate::compute::pool_cpu::ops::geometry::execute_rotate(
+                img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
+            );
+        }
+        let mode_code = mode_to_u32(mode);
+        let pixels = pixels_from_dynimg(img);
         let fill_rgba = match fill {
             Some(c) => pack_rgba(*c),
             None => 0u32,
@@ -1203,7 +1242,14 @@ pub fn simd_transform(
     } = op
     {
         let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
-        if !matches!(method, TransformMethod::Affine) {
+        if !matches!(method, TransformMethod::Affine)
+            || uses_native_scalar_mode(img, mode)
+            || matches!(
+                img.color(),
+                crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+            )
+            || mode == Some("RGBa")
+        {
             return crate::compute::pool_cpu::ops::effects::op_transform(
                 img,
                 *dw,
