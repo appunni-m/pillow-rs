@@ -96,6 +96,14 @@ impl BackendImpl for SimdPool {
                 .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
             current = f(&current, op, mode)?;
         }
-        normalize_palette_result(current, mode)
+        // Image.merge consumes a P source as a raw one-byte band but creates
+        // a new multi-band image. Do not run its RGB/LA/RGBA result through
+        // the P-mode normalizer, which is reserved for operations that retain
+        // the source palette sample layout.
+        if ops.iter().any(|op| matches!(op, PipelineOp::Merge { .. })) {
+            Ok(current)
+        } else {
+            normalize_palette_result(current, mode)
+        }
     }
 }
