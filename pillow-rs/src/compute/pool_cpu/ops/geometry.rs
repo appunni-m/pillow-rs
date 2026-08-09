@@ -504,12 +504,14 @@ fn rotate_arbitrary_generic(
     } else {
         for dy in 0..dh {
             for dx in 0..dw {
-                // ImagingTransformAffine maps destination pixel centers into
-                // source space. Geometry.c tests those transformed centers
-                // directly for the source bounds; subtracting a second half
-                // pixel here shifts the valid region by one destination pixel
-                // for expanded rotations such as PA 45-degree bilinear.
+                // Geometry.c first maps the destination pixel center and the
+                // bilinear filter then converts that center to the source
+                // pixel's corner coordinate by subtracting 0.5. Keep the
+                // two stages explicit so arbitrary rotations use the same
+                // source coordinates as Pillow's affine kernel.
                 let (sx_rel, sy_rel) = transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
+                let sx_rel = sx_rel - 0.5;
+                let sy_rel = sy_rel - 0.5;
 
                 let out_idx = (dy * dw + dx) as usize * channels;
 
