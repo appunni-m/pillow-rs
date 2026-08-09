@@ -1852,6 +1852,7 @@ pub fn contain(
     mode: u32,
     dst_w: u32,
     dst_h: u32,
+    filter: u32,
 ) -> (Vec<u32>, u32, u32) {
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
@@ -1859,19 +1860,26 @@ pub fn contain(
     let scale = (dst_w as f64 / w as f64).min(dst_h as f64 / h as f64);
     let new_w = (w as f64 * scale).floor().max(1.0) as u32;
     let new_h = (h as f64 * scale).floor().max(1.0) as u32;
-    resize(pixels, w, h, new_w, new_h, mode, 1)
+    resize(pixels, w, h, new_w, new_h, mode, filter)
 }
 
-/// Scale: resize by a floating-point factor using bilinear interpolation.
+/// Scale: resize by a floating-point factor using the requested filter.
 /// factor: scale multiplier (0.5 = half size, 2.0 = double).
-/// Delegates to resize with bilinear filter (filter=1).
+/// Delegates to [`resize`] with the normalized filter code.
 /// Returns (pixels, dst_w, dst_h).
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn scale(pixels: &[u32], w: u32, h: u32, mode: u32, factor: f64) -> (Vec<u32>, u32, u32) {
+pub fn scale(
+    pixels: &[u32],
+    w: u32,
+    h: u32,
+    mode: u32,
+    factor: f64,
+    filter: u32,
+) -> (Vec<u32>, u32, u32) {
     let dst_w = ((w as f64 * factor) as u32).max(1);
     let dst_h = ((h as f64 * factor) as u32).max(1);
-    resize(pixels, w, h, dst_w, dst_h, mode, 1) // filter=1 = bilinear
+    resize(pixels, w, h, dst_w, dst_h, mode, filter)
 }
 
 /// Cover: scale image to COVER dst_w × dst_h, preserving aspect ratio.
@@ -1886,6 +1894,7 @@ pub fn cover(
     mode: u32,
     dst_w: u32,
     dst_h: u32,
+    filter: u32,
 ) -> (Vec<u32>, u32, u32) {
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
@@ -1893,7 +1902,7 @@ pub fn cover(
     let scale = (dst_w as f64 / w as f64).max(dst_h as f64 / h as f64);
     let nw = (w as f64 * scale).floor().max(1.0) as u32;
     let nh = (h as f64 * scale).floor().max(1.0) as u32;
-    let (resized, _, _) = resize(pixels, w, h, nw, nh, mode, 1);
+    let (resized, _, _) = resize(pixels, w, h, nw, nh, mode, filter);
     let crop_x = (nw.saturating_sub(dst_w)) / 2;
     let crop_y = (nh.saturating_sub(dst_h)) / 2;
     let cw = dst_w.min(nw);
@@ -1918,6 +1927,7 @@ pub fn fit(
     dst_h: u32,
     bleed: f32,
     centering: (f32, f32),
+    filter: u32,
 ) -> (Vec<u32>, u32, u32) {
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
@@ -1927,7 +1937,7 @@ pub fn fit(
     let scale = base_scale * (1.0 + b);
     let nw = (w as f64 * scale).floor().max(1.0) as u32;
     let nh = (h as f64 * scale).floor().max(1.0) as u32;
-    let (resized, _, _) = resize(pixels, w, h, nw, nh, mode, 1);
+    let (resized, _, _) = resize(pixels, w, h, nw, nh, mode, filter);
 
     let (cx, cy) = centering;
     let cx = cx.clamp(0.0, 1.0) as f64;
@@ -2030,6 +2040,22 @@ pub fn quantize(pixels: &mut [u32], w: u32, h: u32, mode: u32, num_colors: u32) 
 /// For L/LA modes: G = B = R (luma carried in R channel).
 /// For RGB/RGBA modes: G and B are independent.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+fn round_positive_ties_even(value: f64) -> u32 {
+    if !value.is_finite() || value <= 0.0 {
+        return 0;
+    }
+    let lower = value.floor();
+    let fraction = value - lower;
+    let rounded = if fraction < 0.5 {
+        lower
+    } else if fraction > 0.5 || (lower as u64) % 2 == 1 {
+        lower + 1.0
+    } else {
+        lower
+    };
+    rounded.min(u32::MAX as f64) as u32
+}
+
 #[inline]
 pub fn pad(
     pixels: &[u32],
@@ -2038,20 +2064,41 @@ pub fn pad(
     mode: u32,
     dst_w: u32,
     dst_h: u32,
+    filter: u32,
+    centering_x: f64,
+    centering_y: f64,
     fill_rgba: u32,
 ) -> (Vec<u32>, u32, u32) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
-    let w_i = w as i32;
-    let h_i = h as i32;
-    let dst_w_i = dst_w as i32;
-    let dst_h_i = dst_h as i32;
 
-    // Compute centering offsets
-    let src_x_off = (w.saturating_sub(dst_w)) / 2;
-    let src_y_off = (h.saturating_sub(dst_h)) / 2;
-    let dst_x_off = (dst_w.saturating_sub(w)) / 2;
-    let dst_y_off = (dst_h.saturating_sub(h)) / 2;
+    // ImageOps.pad first contains the source in the destination, using the
+    // requested resampling filter, then pastes that resized image according to
+    // the centering pair. The previous SIMD adapter copied/cropped the source
+    // directly, which skipped both stages and diverged for non-square targets.
+    if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
+        return (
+            vec![0; (dst_w as usize).saturating_mul(dst_h as usize)],
+            dst_w,
+            dst_h,
+        );
+    }
+    let source_ratio = w as f64 / h as f64;
+    let destination_ratio = dst_w as f64 / dst_h as f64;
+    let (new_w, new_h) = if (source_ratio - destination_ratio).abs() < 1e-10 {
+        (dst_w, dst_h)
+    } else if source_ratio > destination_ratio {
+        (
+            dst_w,
+            round_positive_ties_even(h as f64 / w as f64 * dst_w as f64).max(1),
+        )
+    } else {
+        (
+            round_positive_ties_even(w as f64 / h as f64 * dst_h as f64).max(1),
+            dst_h,
+        )
+    };
+    let (resized, _, _) = resize(pixels, w, h, new_w, new_h, mode, filter);
 
     // Pre-compute mode-aware fill pixel (packed u32)
     let fill_r = fill_rgba & 0xFF;
@@ -2076,26 +2123,21 @@ pub fn pad(
     let dst_size = (dst_w as usize) * (dst_h as usize);
     let mut out = vec![fill; dst_size];
 
-    let src_x_off_i = src_x_off as i32;
-    let src_y_off_i = src_y_off as i32;
-    let dst_x_off_i = dst_x_off as i32;
-    let dst_y_off_i = dst_y_off as i32;
-
-    // Iterate over dest, mapping overlapping pixels back to source
-    for dy in 0..dst_h_i {
-        let sy = dy + src_y_off_i - dst_y_off_i;
-        if sy < 0 || sy >= h_i {
+    let cx = centering_x.clamp(0.0, 1.0);
+    let cy = centering_y.clamp(0.0, 1.0);
+    let offset_x = round_positive_ties_even((dst_w - new_w) as f64 * cx);
+    let offset_y = round_positive_ties_even((dst_h - new_h) as f64 * cy);
+    for sy in 0..new_h {
+        let dy = offset_y + sy;
+        if dy >= dst_h {
             continue;
         }
-        let src_row = (sy * w_i) as usize;
-        let dst_row = (dy * dst_w_i) as usize;
-
-        for dx in 0..dst_w_i {
-            let sx = dx + src_x_off_i - dst_x_off_i;
-            if sx < 0 || sx >= w_i {
+        for sx in 0..new_w {
+            let dx = offset_x + sx;
+            if dx >= dst_w {
                 continue;
             }
-            let sp = pixels[src_row + sx as usize];
+            let sp = resized[(sy * new_w + sx) as usize];
             let out_p = if has_gb {
                 let a = if has_a { sp & 0xFF00_0000 } else { 0xFF00_0000 };
                 (sp & 0x00FF_FFFF) | a
@@ -2104,7 +2146,7 @@ pub fn pad(
                 let a = if has_a { sp & 0xFF00_0000 } else { 0xFF00_0000 };
                 r | (r << 8) | (r << 16) | a
             };
-            out[dst_row + dx as usize] = out_p;
+            out[(dy * dst_w + dx) as usize] = out_p;
         }
     }
 
@@ -2560,7 +2602,7 @@ mod tests {
             }
         }
         // Scale by 0.5 -> should be 2x2
-        let (out, w, h) = scale(&pixels, 4, 4, 3, 0.5);
+        let (out, w, h) = scale(&pixels, 4, 4, 3, 0.5, 1);
         assert_eq!(w, 2, "downscale width");
         assert_eq!(h, 2, "downscale height");
         assert_eq!(out.len(), 4, "downscale pixel count");
@@ -2592,7 +2634,7 @@ mod tests {
             }
         }
         // Scale by 2.0 -> should be 8x8
-        let (out, w, h) = scale(&pixels, 4, 4, 3, 2.0);
+        let (out, w, h) = scale(&pixels, 4, 4, 3, 2.0, 1);
         assert_eq!(w, 8, "upscale width");
         assert_eq!(h, 8, "upscale height");
         assert_eq!(out.len(), 64, "upscale pixel count");
@@ -2616,7 +2658,7 @@ mod tests {
     fn test_scale_minimum_dim() {
         // Scale by a tiny factor should produce at least 1x1
         let pixels = vec![p(255, 128, 64, 255); 100]; // 10x10 solid image
-        let (out, w, h) = scale(&pixels, 10, 10, 3, 0.01);
+        let (out, w, h) = scale(&pixels, 10, 10, 3, 0.01, 1);
         assert!(w >= 1, "min width");
         assert!(h >= 1, "min height");
         assert_eq!(out.len(), (w * h) as usize);
@@ -3850,6 +3892,7 @@ pub fn thumbnail(
     mode: u32,
     dst_w: u32,
     dst_h: u32,
+    filter: u32,
 ) -> (Vec<u32>, u32, u32) {
     if dst_w == 0 || dst_h == 0 {
         return (Vec::new(), 0, 0);
@@ -3874,8 +3917,7 @@ pub fn thumbnail(
     let new_w = (w as f64 * scale).max(1.0) as u32;
     let new_h = (h as f64 * scale).max(1.0) as u32;
 
-    // Delegate to bilinear resize
-    resize(pixels, w, h, new_w, new_h, mode, 1)
+    resize(pixels, w, h, new_w, new_h, mode, filter)
 }
 
 /// Reduce: downsample by `factor` using block averaging.
