@@ -339,7 +339,10 @@ pub fn simd_colorize(
         );
         super::scalar::colorize(&mut pixels, mode_code, &lut);
     }
-    dynimg_from_rgba(pixels, w, h)
+    // Pillow's ImageOps.colorize always promotes its L input to RGB. Keeping
+    // the packed SIMD result as RGBA leaks the implementation storage type
+    // into the public result and breaks exact mode/byte parity.
+    dynimg_from_pixel_mode(pixels, w, h, PixelMode::RGB)
 }
 
 pub fn simd_constant(
@@ -443,7 +446,7 @@ pub fn simd_median_filter(
     if let PipelineOp::MedianFilter { size } = op {
         super::scalar::median_filter(&mut pixels, w, h, mode_code, *size);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_max_filter(
@@ -457,7 +460,7 @@ pub fn simd_max_filter(
     if let PipelineOp::MaxFilter { size } = op {
         super::scalar::max_filter(&mut pixels, w, h, mode_code, *size);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_min_filter(
@@ -471,7 +474,7 @@ pub fn simd_min_filter(
     if let PipelineOp::MinFilter { size } = op {
         super::scalar::min_filter(&mut pixels, w, h, mode_code, *size);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_rank_filter(
@@ -485,7 +488,7 @@ pub fn simd_rank_filter(
     if let PipelineOp::RankFilter { size, rank } = op {
         super::scalar::rank_filter(&mut pixels, w, h, mode_code, *size, *rank);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_filter_3x3(
@@ -504,7 +507,7 @@ pub fn simd_filter_3x3(
     {
         super::scalar::filter_3x3(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_filter_5x5(
@@ -523,7 +526,7 @@ pub fn simd_filter_5x5(
     {
         super::scalar::filter_5x5(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_box_blur(
@@ -537,7 +540,7 @@ pub fn simd_box_blur(
     if let PipelineOp::BoxBlur { radius } = op {
         super::scalar::box_blur(&mut pixels, w, h, mode_code, *radius);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_gaussian_blur(
@@ -551,7 +554,7 @@ pub fn simd_gaussian_blur(
     if let PipelineOp::GaussianBlur { sigma } = op {
         super::scalar::gaussian_blur(&mut pixels, w, h, mode_code, *sigma);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_quantize(
@@ -1154,7 +1157,11 @@ pub fn simd_put_pixel(
         let packed = pack_rgba(*color);
         super::scalar::put_pixel(&mut pixels, w, mode_code, *x, *y, packed);
     }
-    dynimg_from_rgba(pixels, w, h)
+    // `PutPixel` is mode-preserving in Pillow. Rebuilding every result as
+    // RGBA changes the logical mode of an L/LA/RGB pipeline when no explicit
+    // mode tag is present, so a following mode-sensitive operation such as
+    // ImageOps.colorize observes RGBA and raises instead of receiving L.
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_put_data(
@@ -1324,12 +1331,35 @@ pub fn simd_alpha_composite(
 pub fn simd_merge(
     img: &DynamicImage,
     op: &PipelineOp,
-    mode: Option<&str>,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Merge { mode: _cm, bands } = op {
+    if let PipelineOp::Merge {
+        mode: merge_mode,
+        bands,
+    } = op
+    {
+        // The registry `mode` argument carries the source image's legacy mode
+        // tag and is `None` for ordinary Image.merge calls. The operation's
+        // ColorMode is the authoritative output mode and also determines how
+        // many bands are valid. Using the registry tag here made RGB merges
+        // fall through to the RGBA path and index a fourth (nonexistent) band.
+        let (mode_code, output_mode) = match merge_mode {
+            ColorMode::L => (0, PixelMode::L),
+            ColorMode::LA => (1, PixelMode::LA),
+            ColorMode::RGB => (2, PixelMode::RGB),
+            ColorMode::RGBA => (3, PixelMode::RGBA),
+            // CMYK is stored in the packed four-byte representation used by
+            // the RGBA SIMD lane, but retains its logical mode at the Image
+            // layer through the existing explicit-mode tag.
+            ColorMode::CMYK => (3, PixelMode::CMYK),
+            _ => {
+                return Err(PilError::ValueError(
+                    "SIMD merge: unsupported output mode".to_string(),
+                ));
+            }
+        };
         let band_pixels: Vec<Vec<u32>> = bands
             .iter()
             .map(|b| {
@@ -1337,8 +1367,23 @@ pub fn simd_merge(
                 Ok(pixels_from_dynimg(&img))
             })
             .collect::<Result<Vec<_>, PilError>>()?;
+        let expected_bands = match mode_code {
+            0 => 1,
+            1 => 2,
+            2 => 3,
+            3 => 4,
+            _ => unreachable!(),
+        };
+        if band_pixels.len() != expected_bands
+            || band_pixels.iter().any(|band| band.len() != pixels.len())
+        {
+            return Err(PilError::ValueError(
+                "SIMD merge: invalid band shape".to_string(),
+            ));
+        }
         let band_refs: Vec<&[u32]> = band_pixels.iter().map(|v| v.as_slice()).collect();
         super::scalar::merge(&mut pixels, mode_code, &band_refs);
+        return dynimg_from_pixel_mode(pixels, w, h, output_mode);
     }
-    dynimg_from_rgba(pixels, w, h)
+    Err(PilError::ValueError("expected Merge op".to_string()))
 }
