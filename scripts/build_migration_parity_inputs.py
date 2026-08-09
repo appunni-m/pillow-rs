@@ -2494,6 +2494,29 @@ class WorkflowBuilder:
                     },
                     step_id="setup-pa-resize",
                 )
+            elif chain == "pa-putpalette-resize-resize":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-resize-resize-putpalette",
+                )
+                resized_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-pa-first-resize",
+                )
+                receiver_step = resized_step
             elif chain == "pa-putpalette-rotate":
                 image_step = self.ensure_image(mode="PA")
                 self.add_step(
@@ -16855,6 +16878,16 @@ def build_nuanced_cases(
             "name": "pa-putpalette-resize",
             "mode": "PA",
             "chain": "pa-putpalette-resize",
+            "values": {"size": literal([4, 4]), "resample": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-resize-resize",
+            "mode": "PA",
+            "chain": "pa-putpalette-resize-resize",
+            "observe_result": "tobytes",
             "values": {"size": literal([4, 4]), "resample": literal(0)},
         },
         {
