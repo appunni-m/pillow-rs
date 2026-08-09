@@ -1215,6 +1215,8 @@
           "PIL.Image.Image.paste.nuanced.image-box-bottom-overflow",
           "PIL.Image.Image.paste.nuanced.two-coordinate-color-mask",
           "PIL.Image.Image.alpha_composite.nuanced.offset-source",
+          "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend",
+          "PIL.Image.Image.alpha_composite.nuanced.nonzero-la-blend",
           "PIL.Image.Image.alpha_composite.nuanced.source-scalar-error",
           "PIL.Image.Image.putdata.nuanced.l-bytes",
           "PIL.Image.Image.putdata.nuanced.opened-i16-values",

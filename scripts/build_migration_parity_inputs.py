@@ -1696,6 +1696,32 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id("setup-paste-mask-pixel"),
                 )
+        elif self.edge == "alpha-composite-nonzero-pixel" and label in {
+            "image",
+            "im",
+        }:
+            # The ordinary alpha-composite corpus initializes both operands to
+            # transparent black. Keep this as a public putpixel workflow so
+            # the SIMD Porter-Duff body executes with nonzero alpha on both
+            # operands, including the LA mode's luma mirroring path.
+            if requested_mode == "LA":
+                value = [40, 64] if label == "image" else [200, 192]
+            elif requested_mode == "RGBA":
+                value = [30, 60, 90, 64] if label == "image" else [200, 150, 100, 192]
+            else:
+                raise ValueError(
+                    "alpha-composite-nonzero-pixel requires RGBA or LA images"
+                )
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 3]),
+                    "value": literal(value),
+                },
+                step_id=self.next_step_id("setup-alpha-composite-pixel"),
+            )
         return step_id
 
     def ensure_font(self) -> str:
@@ -11382,6 +11408,24 @@ def build_nuanced_cases(
             "values": {
                 "source": literal([1, 1]),
             },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "behavior.default",
+            "name": "nonzero-rgba-blend",
+            "observe_receiver": True,
+            "mode": "RGBA",
+            "edge": "alpha-composite-nonzero-pixel",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "requirement_suffix": "mode.la",
+            "name": "nonzero-la-blend",
+            "observe_receiver": True,
+            "mode": "LA",
+            "edge": "alpha-composite-nonzero-pixel",
         },
         {
             "surface": "PIL.Image.Image",
