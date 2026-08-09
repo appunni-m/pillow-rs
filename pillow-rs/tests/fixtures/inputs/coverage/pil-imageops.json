@@ -337,6 +337,7 @@
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-invalid-orientation",
           "PIL.ImageOps.exif_transpose.nuanced.jpeg-le-orientation2-in-place",
           "PIL.ImageOps.exif_transpose.nuanced.tiff-no-orientation",
+          "PIL.ImageOps.exif_transpose.nuanced.jpeg-to-p-orientation6",
           "PIL.ImageOps.equalize.nuanced.unsupported-mode-cmyk",
           "PIL.ImageOps.equalize.nuanced.unsupported-mode-i",
           "PIL.ImageOps.equalize.nuanced.unsupported-mode-f",

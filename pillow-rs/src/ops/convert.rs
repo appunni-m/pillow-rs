@@ -597,11 +597,23 @@ impl Image {
             for (i, pixel) in out.pixels_mut().enumerate() {
                 pixel[0] = indices.get(i).copied().unwrap_or(0);
             }
+            // Pillow retains the source EXIF record across mode conversion;
+            // this matters when a converted indexed image is subsequently
+            // passed to ImageOps.exif_transpose. Keep the encoded metadata on
+            // the pipeline source so the public operation can remove the
+            // orientation tag after transposing the palette indices.
+            let source = crate::image::LoadedData {
+                image: Arc::new(DynamicImage::ImageLuma8(out)),
+                explicit_mode: Some("P".to_string()),
+                decoded_mode: crate::raster::ColorType::L8.into(),
+                palette: None,
+                palette_alpha: None,
+                source_format: self.source_format(),
+                info: self.image_info(),
+                exif: self.exif_metadata(),
+            };
             return Ok(Image::Pipeline {
-                source: Arc::new(Image::from_dynamic(
-                    DynamicImage::ImageLuma8(out),
-                    Some("P".to_string()),
-                )),
+                source: Arc::new(Image::Loaded(source)),
                 ops: vec![],
                 format: None,
                 explicit_mode: Some("P".to_string()),

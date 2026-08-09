@@ -2497,7 +2497,17 @@ class WorkflowBuilder:
 
             chain = self.scenario_chain
             observation_step: str | None = None
-            if chain == "resize-verify":
+            if chain == "jpeg-to-p-exif-transpose":
+                image_step = self.ensure_image(mode="RGB")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "convert",
+                    receiver=binding(image_step),
+                    arguments={"mode": literal("P")},
+                    step_id="setup-convert-p",
+                )
+                self.scenario_values["image"] = binding(receiver_step)
+            elif chain == "resize-verify":
                 image_step = self.ensure_image(mode="RGB")
                 receiver_step = self.add_step(
                     "PIL.Image.Image",
@@ -14649,6 +14659,15 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "tiff-no-orientation",
             "scenario_asset": "image/rgb-small.tiff",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "jpeg-to-p-orientation6",
+            "scenario_asset": "image/exif-orientation6.jpg",
+            "chain": "jpeg-to-p-exif-transpose",
             "observe_result": "tobytes",
         },
         {

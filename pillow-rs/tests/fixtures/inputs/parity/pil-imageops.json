@@ -13238,6 +13238,81 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.exif_transpose.nuanced.jpeg-to-p-orientation6",
+      "surface": "PIL.ImageOps",
+      "operation": "exif_transpose",
+      "covers": [
+        "PIL.ImageOps.exif_transpose.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/exif-orientation6.jpg",
+          "sha256": "5d2ff2bc69a2854df3858dd8c4525776bcee4c915b37cc3af3920ff3c337058b",
+          "media_type": "image/jpeg"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "setup-convert-p",
+          "surface": "PIL.Image.Image",
+          "operation": "convert",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "exif_transpose",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-convert-p"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.equalize.nuanced.unsupported-mode-cmyk",
       "surface": "PIL.ImageOps",
       "operation": "equalize",
