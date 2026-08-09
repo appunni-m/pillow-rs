@@ -10,7 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 16aa663bd7a0ed4f95e480253f3639a1b3db7550
+base_commit: d5594a8b1fc1bf206ae5b3da9d8d2d2100ee0417
+coverage_run_id: migration-coverage-b2437ed0b17046f99469af04b2110d40
+parity_run_id: migration-parity-20bb7c610ca148978777fbacf1e780ca
 threshold: 95%
 metric: regions
 total_regions: 106081
@@ -25,6 +27,10 @@ branch_coverage: 49.8314%
 total_functions: 5280
 covered_functions: 3008
 function_coverage: 56.9697%
+simd_impl_regions: 6858/7471 (91.7949%)
+simd_impl_lines: 3546/3845 (92.2237%)
+simd_impl_branches: 718/940 (76.3830%)
+simd_impl_functions: 184/203 (90.6404%)
 in_repo_files_below_threshold: 33
 external_dependency_files_below_threshold: 43
 ```
