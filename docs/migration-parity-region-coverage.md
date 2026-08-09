@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@4
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 4748153a1f630b7f47143dd144521d06e650ceea1760a71f7297de91e96daf49
-coverage_run_id: migration-coverage-d34b06c34c8449a4a33d1319e244fad6
+coverage_run_id: migration-coverage-3368ee42873b41099abe1ca4b40189f1
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -29,7 +29,7 @@ Component aggregate for backlog ordering: `13488/14325` (94.2%).
 
 ## Operations in below-95% components
 
-97 of 209 coverage-required operations belong to a component below 95%; the percentages below are component aggregates.
+118 of 209 coverage-required operations belong to a component below 95%; the percentages below are component aggregates.
 
 | Operation | Component(s) | Region coverage | Percent |
 | --- | --- | ---: | ---: |
@@ -59,6 +59,27 @@ Component aggregate for backlog ordering: `13488/14325` (94.2%).
 | `PIL.ImageFont.load_default_imagefont` | `image-font` | 3361/3782 | 88.9% |
 | `PIL.ImageFont.load_path` | `image-font` | 3361/3782 | 88.9% |
 | `PIL.ImageFont.truetype` | `image-font` | 3361/3782 | 88.9% |
+| `PIL.ImageChops.add` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.add_modulo` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.blend` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.composite` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.constant` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.darker` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.difference` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.duplicate` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.hard_light` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.invert` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.lighter` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.logical_and` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.logical_or` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.logical_xor` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.multiply` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.offset` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.overlay` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.screen` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.soft_light` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.subtract` | `image-chops` | 228/244 | 93.4% |
+| `PIL.ImageChops.subtract_modulo` | `image-chops` | 228/244 | 93.4% |
 | `PIL.Image.Image.alpha_composite` | `image-core` | 13488/14325 | 94.2% |
 | `PIL.Image.Image.apply_transparency` | `image-core` | 13488/14325 | 94.2% |
 | `PIL.Image.Image.close` | `image-core` | 13488/14325 | 94.2% |
@@ -143,4 +164,5 @@ Sorted from lowest to highest region coverage, then by component and path.
 | `image-font` | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% |
 | `image-core` | `pillow-rs/src/ops/crop.rs` | 287/312 | 92.0% |
 | `image-core` | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% |
+| `image-chops` | `pillow-rs/src/ops/chops.rs` | 228/244 | 93.4% |
 | `image-font` | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% |
