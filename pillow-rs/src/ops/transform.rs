@@ -228,6 +228,11 @@ impl Image {
                             .map_err(|_| PilError::ValueError("box coordinate overflow".into()))
                     })
                     .collect::<Result<Vec<_>, _>>()?;
+                // Pillow's imaging core rejects reversed reduce boxes before
+                // crop validation and reports the generic empty-box error.
+                if coords[2] < coords[0] || coords[3] < coords[1] {
+                    return Err(PilError::ValueError("box can't be empty".into()));
+                }
                 self.crop(Some((coords[0], coords[1], coords[2], coords[3])))?
             }
             ReduceBox::Sequence(values) => {

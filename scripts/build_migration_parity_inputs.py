@@ -8864,6 +8864,26 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.box",
+            "name": "reversed-box",
+            "values": {
+                "factor": literal([2, 2]),
+                "box": literal([8, 8, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "parameter.box",
+            "name": "reversed-vertical-box",
+            "values": {
+                "factor": literal([2, 2]),
+                "box": literal([2, 8, 8, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "quantize",
             "requirement_suffix": "parameter.method",
             "name": "fast-octree-rgb",
