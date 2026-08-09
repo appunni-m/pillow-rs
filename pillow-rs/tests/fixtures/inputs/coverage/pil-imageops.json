@@ -354,7 +354,13 @@
           "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-i",
           "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-f",
           "PIL.ImageOps.autocontrast.nuanced.unsupported-mode-one",
-          "PIL.ImageOps.autocontrast.nuanced.p-mode"
+          "PIL.ImageOps.autocontrast.nuanced.p-mode",
+          "PIL.ImageOps.autocontrast.nuanced.nonzero-l-range",
+          "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-range",
+          "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-green-blue-fallback",
+          "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-red-fallback",
+          "PIL.ImageOps.autocontrast.nuanced.single-pixel-l",
+          "PIL.ImageOps.autocontrast.nuanced.empty-l"
         ],
         "command_ids": []
       },

@@ -35,6 +35,13 @@ use crate::pipeline::ResampleFilter;
 pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
+    // Pillow's ImageOps.autocontrast preserves an empty image instead of
+    // sending its zero-pixel buffer through the ordinary allocation guard.
+    // Keep this public behavior here so the CPU lane matches the SIMD scalar
+    // implementation and retains the source mode for a 0×0 result.
+    if w == 0 || h == 0 {
+        return Ok(img.clone());
+    }
     let dims = CheckedDims::new(w, h, 1)?;
     let total = dims.total_pixels() as f64;
     let raw = img.as_bytes();

@@ -1655,6 +1655,27 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-origin-pixel"),
             )
+        elif self.edge == "autocontrast-varied-range" and label == "image":
+            # A two-pixel public putdata workflow gives autocontrast distinct
+            # low/high histogram values without relying on a native probe.
+            # The small image also makes cutoff=0 reach the stretch body.
+            if self.scenario_pixel is not None:
+                data = self.scenario_pixel
+            elif requested_mode == "L":
+                data = [0, 120]
+            elif requested_mode == "RGB":
+                data = [[0, 0, 0], [30, 60, 90]]
+            else:
+                raise ValueError(
+                    "autocontrast-varied-range requires L or RGB images"
+                )
+            self.add_step(
+                "PIL.Image.Image",
+                "putdata",
+                receiver=binding(step_id),
+                arguments={"data": literal(data)},
+                step_id=self.next_step_id("setup-autocontrast-data"),
+            )
         elif self.edge == "mask-nonzero-pixel" and label == "mask":
             # Keep the primary image at its default value while selecting one
             # pixel through the public L/1 mask. This complements the
@@ -1695,6 +1716,40 @@ class WorkflowBuilder:
                         "value": literal(value),
                     },
                     step_id=self.next_step_id("setup-paste-mask-pixel"),
+                )
+        elif self.edge in {
+            "paste-mask-opaque-pixel",
+            "paste-mask-partial-l-pixel",
+        }:
+            if requested_mode not in {"L", "RGBA"} and label in {"image", "im"}:
+                raise ValueError("paste mask pixel edges require L or RGBA images")
+            if self.edge == "paste-mask-opaque-pixel":
+                if label == "mask":
+                    value = 255
+                elif requested_mode == "L":
+                    value = 40 if label == "image" else 200
+                elif requested_mode == "RGBA":
+                    value = (
+                        [30, 60, 90, 64]
+                        if label == "image"
+                        else [200, 150, 100, 192]
+                    )
+                else:
+                    value = None
+            elif requested_mode == "L":
+                value = 40 if label == "image" else 200 if label == "im" else 128
+            else:
+                value = None
+            if value is not None:
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal([2, 3]),
+                        "value": literal(value),
+                    },
+                    step_id=self.next_step_id("setup-paste-mask-edge-pixel"),
                 )
         elif self.edge == "alpha-composite-nonzero-pixel" and label in {
             "image",
@@ -1955,6 +2010,8 @@ class WorkflowBuilder:
             return [0, 0, 32, 32]
         if edge == "negative-coords" and name == "box":
             return [-2, -2, 8, 8]
+        if edge == "paste-negative-materialized" and name == "box":
+            return [-2, -2]
         if edge == "zero-size-crop" and name == "box":
             return [0, 0, 0, 0]
         if edge == "full-image-crop" and name == "box":
@@ -15100,6 +15157,67 @@ def build_nuanced_cases(
             "mode": "P",
         },
         {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.l",
+            "name": "nonzero-l-range",
+            "mode": "L",
+            "edge": "autocontrast-varied-range",
+            "size": [2, 1],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.rgb",
+            "name": "nonzero-rgb-range",
+            "mode": "RGB",
+            "edge": "autocontrast-varied-range",
+            "size": [2, 1],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.rgb",
+            "name": "nonzero-rgb-green-blue-fallback",
+            "mode": "RGB",
+            "edge": "autocontrast-varied-range",
+            "pixel": [[0, 0, 0], [30, 0, 0]],
+            "size": [2, 1],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.rgb",
+            "name": "nonzero-rgb-red-fallback",
+            "mode": "RGB",
+            "edge": "autocontrast-varied-range",
+            "pixel": [[0, 30, 60], [0, 60, 120]],
+            "size": [2, 1],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.l",
+            "name": "single-pixel-l",
+            "mode": "L",
+            "edge": "autocontrast-single-pixel",
+            "size": [1, 1],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.l",
+            "name": "empty-l",
+            "mode": "L",
+            "edge": "zero-size",
+            "observe_result": "tobytes",
+        },
+        {
             "surface": "PIL.ImageFilter",
             "operation": "Kernel",
             "requirement_suffix": "behavior.default",
@@ -16599,6 +16717,7 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "color-zero-region",
             "mode": "RGB",
+            "observe_receiver": True,
             "values": {
                 "im": literal([255, 0, 0]),
                 "box": literal([1, 1, 1, 1]),
@@ -19450,6 +19569,54 @@ def build_nuanced_cases(
             "edge": "paste-mask-partial-pixel",
             "observe_receiver": True,
             "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "opaque-rgba-l-mask",
+            "mode": "RGBA",
+            "im_mode": "RGBA",
+            "mask_mode": "L",
+            "edge": "paste-mask-opaque-pixel",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "opaque-l-mask",
+            "mode": "L",
+            "im_mode": "L",
+            "mask_mode": "L",
+            "edge": "paste-mask-opaque-pixel",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "partial-l-mask",
+            "mode": "L",
+            "im_mode": "L",
+            "mask_mode": "L",
+            "edge": "paste-mask-partial-l-pixel",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "edge.negative-coords",
+            "name": "negative-coords-materialized",
+            "mode": "RGBA",
+            "im_mode": "RGBA",
+            "mask_mode": "L",
+            "edge": "paste-negative-materialized",
+            "observe_receiver": True,
+            "values": {"box": literal([-2, -2])},
         },
         {
             "surface": "PIL.Image.Image",
