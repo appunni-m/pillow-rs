@@ -7,7 +7,7 @@
 //! 3. Reconstructs `DynamicImage` from the result
 
 use crate::error::PilError;
-use crate::image::{preserve_mode, Image};
+use crate::image::{Image, preserve_mode};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -52,6 +52,13 @@ fn filter_to_u32(f: &ResampleFilter) -> u32 {
         ResampleFilter::Nearest | ResampleFilter::Box => 0,
         _ => 1,
     }
+}
+
+/// The packed SIMD resize kernel currently implements nearest and bilinear.
+/// Higher-order filters stay on the shared pure-Rust Pillow-compatible path
+/// until their coefficient arithmetic is ported exactly.
+fn simd_resize_filter_supported(filter: &ResampleFilter) -> bool {
+    matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
 }
 
 /// Pack a `(r,g,b,a)` tuple into a u32 for SIMD functions.
@@ -183,6 +190,20 @@ fn arc_to_dynimg(arc: &Arc<Image>) -> Result<DynamicImage, PilError> {
 /// Extract packed u32 pixels from an Arc<Image>.
 fn pixels_from_arc(arc: &Arc<Image>) -> Result<Vec<u32>, PilError> {
     let img = arc_to_dynimg(arc)?;
+    Ok(pixels_from_dynimg(&img))
+}
+
+/// Extract an operand in the sample domain required by ImageChops.
+///
+/// The ordinary materialization helper expands palette images for color
+/// operations. Pillow's Chops C kernels instead combine raw P/PA samples, so
+/// indexed Chops operands must stay in their native one- or two-byte layout.
+fn pixels_from_arc_for_chops(arc: &Arc<Image>, mode: Option<&str>) -> Result<Vec<u32>, PilError> {
+    let img = if matches!(mode, Some("P" | "PA")) {
+        arc.materialize_indices()?
+    } else {
+        arc.materialize_for_ops()?
+    };
     Ok(pixels_from_dynimg(&img))
 }
 
@@ -375,7 +396,9 @@ pub fn simd_constant(
             (*value as u32) | ((*value as u32) << 8) | ((*value as u32) << 16) | 0xFF00_0000;
         super::scalar::constant(&mut pixels, mode_code, packed);
     }
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
+    // ImageChops.constant always allocates a one-band L image; it does not
+    // preserve the source mode.
+    dynimg_from_pixel_mode(pixels, w, h, PixelMode::L)
 }
 
 pub fn simd_offset(
@@ -441,7 +464,7 @@ pub fn simd_autocontrast(
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Autocontrast { cutoff } = op {
-        super::scalar::autocontrast(&mut pixels, w, h, mode_code, (*cutoff as u32).max(1));
+        super::scalar::autocontrast(&mut pixels, w, h, mode_code, *cutoff as u32);
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -585,15 +608,16 @@ pub fn simd_box_blur(
 pub fn simd_gaussian_blur(
     img: &DynamicImage,
     op: &PipelineOp,
-    mode: Option<&str>,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::GaussianBlur { sigma } = op {
-        super::scalar::gaussian_blur(&mut pixels, w, h, mode_code, *sigma);
+        // The shared CPU implementation retains Pillow's fractional box-blur
+        // radius and 24-bit accumulator. The packed SIMD approximation rounds
+        // that radius to an integer, which first diverges in UnsharpMask's
+        // nonuniform threshold cases.
+        return crate::compute::pool_cpu::ops::filter::execute_gaussian_blur(img, *sigma);
     }
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
+    Err(PilError::ValueError("expected GaussianBlur op".into()))
 }
 
 pub fn simd_quantize(
@@ -637,7 +661,7 @@ macro_rules! dual_op_adapter {
                 | PipelineOp::LogicalXor { other }
                 | PipelineOp::Overlay { other }
                 | PipelineOp::HardLight { other }
-                | PipelineOp::SoftLight { other } => pixels_from_arc(other)?,
+                | PipelineOp::SoftLight { other } => pixels_from_arc_for_chops(other, mode)?,
                 _ => {
                     return Err(PilError::ValueError(
                         "unexpected op variant for dual operation".into(),
@@ -678,7 +702,7 @@ pub fn simd_add(
         offset,
     } = op
     {
-        let other_pixels = pixels_from_arc(other)?;
+        let other_pixels = pixels_from_arc_for_chops(other, mode)?;
         super::scalar::add(
             &mut pixels,
             mode_code,
@@ -704,7 +728,7 @@ pub fn simd_subtract(
         offset,
     } = op
     {
-        let other_pixels = pixels_from_arc(other)?;
+        let other_pixels = pixels_from_arc_for_chops(other, mode)?;
         super::scalar::subtract(
             &mut pixels,
             mode_code,
@@ -922,6 +946,11 @@ pub fn simd_contain(
         filter,
     } = op
     {
+        if uses_native_scalar_mode(img, mode) || !simd_resize_filter_supported(filter) {
+            return crate::compute::pool_cpu::ops::imageops::op_contain(
+                img, *dw, *dh, *filter, mode,
+            );
+        }
         let mode_code = dynimg_mode(img);
         let filter_code = if matches!(mode, Some("P" | "PA")) {
             0
@@ -949,6 +978,9 @@ pub fn simd_cover(
         filter,
     } = op
     {
+        if uses_native_scalar_mode(img, mode) || !simd_resize_filter_supported(filter) {
+            return crate::compute::pool_cpu::ops::imageops::op_cover(img, *dw, *dh, *filter, mode);
+        }
         let mode_code = dynimg_mode(img);
         let filter_code = if matches!(mode, Some("P" | "PA")) {
             0
@@ -979,6 +1011,11 @@ pub fn simd_fit(
         ..
     } = op
     {
+        if uses_native_scalar_mode(img, mode) || !simd_resize_filter_supported(filter) {
+            return crate::compute::pool_cpu::ops::imageops::op_fit(
+                img, *dw, *dh, *filter, *bleed, *centering, mode,
+            );
+        }
         let mode_code = dynimg_mode(img);
         let filter_code = if matches!(mode, Some("P" | "PA")) {
             0
@@ -1010,6 +1047,9 @@ pub fn simd_scale(
     let (w, h) = img.dimensions();
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Scale { factor, filter } = op {
+        if uses_native_scalar_mode(img, mode) || !simd_resize_filter_supported(filter) {
+            return crate::compute::pool_cpu::ops::imageops::op_scale(img, *factor, *filter, mode);
+        }
         let mode_code = dynimg_mode(img);
         let filter_code = if matches!(mode, Some("P" | "PA")) {
             0
@@ -1039,6 +1079,11 @@ pub fn simd_pad(
         centering,
     } = op
     {
+        if uses_native_scalar_mode(img, mode) || !simd_resize_filter_supported(filter) {
+            return crate::compute::pool_cpu::ops::imageops::op_pad(
+                img, *dw, *dh, *filter, *color, *centering, mode,
+            );
+        }
         let filter_code = if matches!(mode, Some("P" | "PA")) {
             0
         } else {

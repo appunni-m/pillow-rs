@@ -10,27 +10,28 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: a887384f2c659715979ba1d7dbbcb3ef3afe2870
-coverage_run_id: migration-coverage-7562f1c722a14ad2b2c94a719ea344bd
-parity_run_id: migration-parity-0d629afdce3f4ffc9a635482a16cdf03
+base_commit: 48cff96276dc39e58b4ac75a1053acd6b8a12965
+coverage_run_id: migration-coverage-b0fcbf35a2ba45c99b1b879e63a27c6f
+parity_run_id: migration-parity-50e5ed41bbaa4fdfa1d973b5e0f092fe
+source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106081
-covered_regions: 62037
-region_coverage: 58.4808%
-total_lines: 68018
-covered_lines: 39899
-line_coverage: 58.6595%
-total_branches: 13935
-covered_branches: 6944
-branch_coverage: 49.8314%
-total_functions: 5280
-covered_functions: 3008
-function_coverage: 56.9697%
-simd_impl_regions: 6860/7471 (91.8217%)
-simd_impl_lines: 3547/3845 (92.2497%)
-simd_impl_branches: 718/940 (76.3830%)
-simd_impl_functions: 184/203 (90.6404%)
+total_regions: 106090
+covered_regions: 62595
+region_coverage: 59.0018%
+total_lines: 68112
+covered_lines: 40280
+line_coverage: 59.1379%
+total_branches: 13955
+covered_branches: 6990
+branch_coverage: 50.0896%
+total_functions: 5281
+covered_functions: 3021
+function_coverage: 57.2051%
+simd_impl_regions: 6812/7480 (91.0695%)
+simd_impl_lines: 3608/3939 (91.5969%)
+simd_impl_branches: 712/960 (74.1667%)
+simd_impl_functions: 185/204 (90.6863%)
 in_repo_files_below_threshold: 33
 external_dependency_files_below_threshold: 43
 ```
@@ -39,7 +40,7 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,856 cases: 2,813 passed, 43 had
+The fresh SIMD parity audit selected all 2,856 cases: 2,853 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
 workflow executed all 24 plans and passed all 2,856 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
@@ -49,14 +50,24 @@ parity and exercises the RGB nearest-neighbor SIMD thumbnail path. Earlier
 work also fixed SIMD `Image.merge` handling for a public palette-first band
 case: Pillow consumes that first `P` band as raw one-byte samples, while the
 previous SIMD path expanded the palette and then collapsed the multi-band
-result back to `P`.
+result back to `P`. The three remaining mismatches are the two known 16-bit
+`PIL.Image.Image.paste` inputs (`opened-i16-scalar` and `opened-i16n-scalar`),
+which remain pending for the TIFF/16-bit lane, and
+`PIL.ImageFont.FreeTypeFont.set_variation_by_axes`, which is tracked in the
+separate fontdone parity lane.
+
+The higher-order ImageOps resize filters and Gaussian blur now use the shared
+exact pure-Rust CPU implementation because the packed SIMD kernels only
+implement nearest/bilinear resize and an approximate integer-radius blur.
+This removes false parity from the SIMD lane while keeping those operations
+covered and the unsupported SIMD approximation out of production results.
 
 SIMD implementation-file coverage is:
 
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
-| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1940/2239 (86.65%) | 1084/1228 (88.27%) | 89/144 (61.81%) | 73/83 (87.95%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4823/5123 (94.14%) | 2401/2547 (94.27%) | 627/794 (78.97%) | 102/107 (95.33%) |
+| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1974/2295 (86.01%) | 1118/1269 (88.10%) | 103/164 (62.80%) | 75/85 (88.24%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4741/5076 (93.40%) | 2428/2600 (93.38%) | 607/794 (76.45%) | 101/106 (95.28%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
@@ -82,7 +93,7 @@ SIMD implementation-file coverage is:
 | 19 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
 | 20 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
 | 21 | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1394/1700 | 82.0% | 730/871 |
-| 22 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1940/2239 | 86.6% | 1084/1228 |
+| 22 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1974/2295 | 86.0% | 1118/1269 |
 | 23 | `pillow-rs/src/ops/pil_resize.rs` | 1020/1159 | 88.0% | 613/679 |
 | 24 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 | 89.0% | 62/70 |
 | 25 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
@@ -93,4 +104,4 @@ SIMD implementation-file coverage is:
 | 30 | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% | 474/487 |
 | 31 | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% | 1274/1317 |
 | 32 | `pillow-rs/src/raster/buffer.rs` | 272/290 | 93.8% | 184/202 |
-| 33 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4823/5123 | 94.1% | 2401/2547 |
+| 33 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4741/5076 | 93.4% | 2428/2600 |
