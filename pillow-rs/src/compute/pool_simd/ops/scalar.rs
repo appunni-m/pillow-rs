@@ -198,9 +198,11 @@ pub fn duplicate(pixels: &mut [u32], mode: u32) {
     }
 }
 
-/// InvertChops: 255 - channel for all active channels.
-/// Identical formula to ImageOps.invert. R always inverted (carries luma in L/LA).
-/// G/B inverted only for mode >= 2 (RGB, RGBA). Alpha preserved in LA/RGBA.
+/// InvertChops: 255 - every channel in the image.
+///
+/// Unlike ImageOps.invert, ImageChops.invert includes the alpha byte. The
+/// previous SIMD implementation reused the ImageOps alpha-preserving rule,
+/// which first diverged for LA/RGBA inputs with non-opaque alpha.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn invert_chops(pixels: &mut [u32], mode: u32) {
@@ -215,15 +217,19 @@ pub fn invert_chops(pixels: &mut [u32], mode: u32) {
         let out_r = 255 - r;
         let out_g = if has_gb { 255 - g } else { g };
         let out_b = if has_gb { 255 - b } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            (255 - (a >> 24)) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
 }
 
-/// Add: (pixel + other) * scale + offset, clamped 0..255 per active channel.
+/// Add: (pixel + other) / scale + offset, clamped 0..255 per active channel.
 /// Dual-input: iterates over pixels and other simultaneously.
-/// Alpha preserved in LA/RGBA, forced to 0xFF in L/RGB.
+/// All channels, including alpha, are combined for LA/RGBA.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn add(pixels: &mut [u32], mode: u32, other: &[u32], scale: f32, offset: f32) {
@@ -233,25 +239,33 @@ pub fn add(pixels: &mut [u32], mode: u32, other: &[u32], scale: f32, offset: f32
         let r = *p & 0xFF;
         let g = (*p >> 8) & 0xFF;
         let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
+        let a = (*p >> 24) & 0xFF;
 
         let or = *o & 0xFF;
         let og = (*o >> 8) & 0xFF;
         let ob = (*o >> 16) & 0xFF;
+        let oa = (*o >> 24) & 0xFF;
 
-        let out_r = ((r as f32 + or as f32) * scale + offset).clamp(0.0, 255.0) as u32;
-        let out_g_raw = ((g as f32 + og as f32) * scale + offset).clamp(0.0, 255.0) as u32;
-        let out_b_raw = ((b as f32 + ob as f32) * scale + offset).clamp(0.0, 255.0) as u32;
+        // Pillow's ImageChops API names this parameter `scale`, but the C
+        // kernel divides by it. The SIMD adapter previously multiplied,
+        // causing the first divergence on non-default scale/offset cases.
+        let out_r = ((r as f32 + or as f32) / scale + offset).clamp(0.0, 255.0) as u32;
+        let out_g_raw = ((g as f32 + og as f32) / scale + offset).clamp(0.0, 255.0) as u32;
+        let out_b_raw = ((b as f32 + ob as f32) / scale + offset).clamp(0.0, 255.0) as u32;
 
         let out_g = if has_gb { out_g_raw } else { g };
         let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            (((a as f32 + oa as f32) / scale + offset).clamp(0.0, 255.0) as u32) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
 }
 
-/// Subtract: (pixel - other) * scale + offset, clamped 0..255 per active channel.
+/// Subtract: (pixel - other) / scale + offset, clamped 0..255 per active channel.
 /// Dual-input: iterates over pixels and other simultaneously.
 /// Alpha preserved in LA/RGBA, forced to 0xFF in L/RGB.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
@@ -263,19 +277,25 @@ pub fn subtract(pixels: &mut [u32], mode: u32, other: &[u32], scale: f32, offset
         let r = *p & 0xFF;
         let g = (*p >> 8) & 0xFF;
         let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
+        let a = (*p >> 24) & 0xFF;
 
         let or = *o & 0xFF;
         let og = (*o >> 8) & 0xFF;
         let ob = (*o >> 16) & 0xFF;
+        let oa = (*o >> 24) & 0xFF;
 
-        let out_r = ((r as f32 - or as f32) * scale + offset).clamp(0.0, 255.0) as u32;
-        let out_g_raw = ((g as f32 - og as f32) * scale + offset).clamp(0.0, 255.0) as u32;
-        let out_b_raw = ((b as f32 - ob as f32) * scale + offset).clamp(0.0, 255.0) as u32;
+        // Keep the same divide-first contract as Pillow's Chops.c kernel.
+        let out_r = ((r as f32 - or as f32) / scale + offset).clamp(0.0, 255.0) as u32;
+        let out_g_raw = ((g as f32 - og as f32) / scale + offset).clamp(0.0, 255.0) as u32;
+        let out_b_raw = ((b as f32 - ob as f32) / scale + offset).clamp(0.0, 255.0) as u32;
 
         let out_g = if has_gb { out_g_raw } else { g };
         let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            (((a as f32 - oa as f32) / scale + offset).clamp(0.0, 255.0) as u32) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -296,11 +316,16 @@ pub fn multiply(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = ar * br / 255;
         let out_g = if has_gb { ag * bg / 255 } else { ag };
         let out_b = if has_gb { ab * bb / 255 } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24) * ba / 255) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -319,6 +344,7 @@ pub fn screen(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = 255 - ((255 - ar) * (255 - br) / 255);
         let out_g = if has_gb {
@@ -331,7 +357,11 @@ pub fn screen(pixels: &mut [u32], mode: u32, other: &[u32]) {
         } else {
             ab
         };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            (255 - ((255 - (aa >> 24)) * (255 - ba) / 255)) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -350,11 +380,16 @@ pub fn darker(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = ar.min(br);
         let out_g = if has_gb { ag.min(bg) } else { ag };
         let out_b = if has_gb { ab.min(bb) } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24).min(ba)) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -373,11 +408,16 @@ pub fn lighter(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = ar.max(br);
         let out_g = if has_gb { ag.max(bg) } else { ag };
         let out_b = if has_gb { ab.max(bb) } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24).max(ba)) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -396,6 +436,7 @@ pub fn difference(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = (ar as i32 - br as i32).unsigned_abs();
         let out_g = if has_gb {
@@ -408,7 +449,11 @@ pub fn difference(pixels: &mut [u32], mode: u32, other: &[u32]) {
         } else {
             ab
         };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24) as i32 - ba as i32).unsigned_abs() << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -429,6 +474,7 @@ pub fn add_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = (ar.wrapping_add(br)) & 0xFF;
         let out_g_raw = (ag.wrapping_add(bg)) & 0xFF;
@@ -436,7 +482,11 @@ pub fn add_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24).wrapping_add(ba) & 0xFF) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -457,6 +507,7 @@ pub fn subtract_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = (ar.wrapping_sub(br)) & 0xFF;
         let out_g_raw = (ag.wrapping_sub(bg)) & 0xFF;
@@ -464,7 +515,11 @@ pub fn subtract_modulo(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24).wrapping_sub(ba) & 0xFF) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -485,6 +540,7 @@ pub fn logical_and(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = ar & br;
         let out_g_raw = ag & bg;
@@ -492,7 +548,11 @@ pub fn logical_and(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24) & ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -513,6 +573,7 @@ pub fn logical_or(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = ar | br;
         let out_g_raw = ag | bg;
@@ -520,7 +581,11 @@ pub fn logical_or(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24) | ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -541,6 +606,7 @@ pub fn logical_xor(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let out_r = ar ^ br;
         let out_g_raw = ag ^ bg;
@@ -548,7 +614,11 @@ pub fn logical_xor(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ((aa >> 24) ^ ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -694,6 +764,7 @@ pub fn overlay(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let ch = |a: u32, b: u32| -> u32 {
             if a < 128 {
@@ -709,7 +780,11 @@ pub fn overlay(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ch(aa >> 24, ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -731,6 +806,7 @@ pub fn hard_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let ch = |a: u32, b: u32| -> u32 {
             if b < 128 {
@@ -746,7 +822,11 @@ pub fn hard_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ch(aa >> 24, ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -769,6 +849,7 @@ pub fn soft_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let ch = |a: u32, b: u32| -> u32 {
             let term1 = ((255 - a) * a * b) / 65536;
@@ -782,7 +863,11 @@ pub fn soft_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        let out_a = if has_a {
+            ch(aa >> 24, ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
@@ -1316,6 +1401,10 @@ pub fn filter_3x3(
             sum_b += row(16, 1, &normalized[0..3]);
             sum_b += row(16, 0, &normalized[3..6]);
             sum_b += row(16, -1, &normalized[6..9]);
+            let mut sum_a = offset as f32 + 0.5;
+            sum_a += row(24, 1, &normalized[0..3]);
+            sum_a += row(24, 0, &normalized[3..6]);
+            sum_a += row(24, -1, &normalized[6..9]);
 
             let out_r = clip8_filter(sum_r);
             let out_g_raw = clip8_filter(sum_g);
@@ -1325,9 +1414,11 @@ pub fn filter_3x3(
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };
 
-            let sp = src[base(0, 0)];
-            let a = sp & 0xFF00_0000;
-            let out_a = if has_a { a } else { 0xFF00_0000 };
+            let out_a = if has_a {
+                clip8_filter(sum_a) << 24
+            } else {
+                0xFF00_0000
+            };
 
             let idx = base(0, 0);
             pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
@@ -1399,6 +1490,12 @@ pub fn filter_5x5(
             sum_b += row(16, 0, &normalized[10..15]);
             sum_b += row(16, -1, &normalized[15..20]);
             sum_b += row(16, -2, &normalized[20..25]);
+            let mut sum_a = offset as f32 + 0.5;
+            sum_a += row(24, 2, &normalized[0..5]);
+            sum_a += row(24, 1, &normalized[5..10]);
+            sum_a += row(24, 0, &normalized[10..15]);
+            sum_a += row(24, -1, &normalized[15..20]);
+            sum_a += row(24, -2, &normalized[20..25]);
 
             let out_r = clip8_filter(sum_r);
             let out_g_raw = clip8_filter(sum_g);
@@ -1407,9 +1504,11 @@ pub fn filter_5x5(
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };
 
-            let sp = src[base(0, 0)];
-            let a = sp & 0xFF00_0000;
-            let out_a = if has_a { a } else { 0xFF00_0000 };
+            let out_a = if has_a {
+                clip8_filter(sum_a) << 24
+            } else {
+                0xFF00_0000
+            };
 
             let idx = base(0, 0);
             pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
@@ -1510,7 +1609,7 @@ pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) 
     }
 }
 
-// ── Spatial operations (mirror, transpose, box_blur, gaussian_blur) ──────────
+// ── Spatial operations (mirror, transpose, box_blur) ───────────────────────
 
 /// Mirror: horizontal coordinate remap. output[y][x] = input[y][W-1-x]
 /// Mode-aware: processes each row by swapping pairs from ends toward center.
@@ -1841,47 +1940,6 @@ pub fn box_blur(pixels: &mut [u32], w: u32, h: u32, mode: u32, radius: u32) {
     }
 }
 
-/// Gaussian blur: approximate Gaussian using 3 passes of box blur.
-///
-/// Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al., 2011),
-/// computing the equivalent box blur radius from sigma.
-///
-/// For L/LA modes: G = B = R after blurring (luma carried in R channel).
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn gaussian_blur(pixels: &mut [u32], w: u32, h: u32, mode: u32, sigma: f32) {
-    if sigma <= 0.0 {
-        return;
-    }
-
-    // Compute effective box blur radius from sigma using PIL's formula.
-    // sigma2 = sigma^2 / 3
-    // l = floor(((12*sigma2+1)^0.5 - 1) / 2)
-    // l1 = l + 1
-    // a = (2*l+1)*(l*l1 - 3*sigma2) / (6*(sigma2 - l1*l1))
-    // blur_radius = l + a
-    let passes = 3.0f64;
-    let sigma2 = sigma as f64 * sigma as f64 / passes;
-    let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
-    let l = l_val.floor();
-    let l1 = l + 1.0;
-    let a_num = (2.0 * l + 1.0) * (l * l1 - 3.0 * sigma2);
-    let a_den = 6.0 * (sigma2 - l1 * l1);
-    let a = if a_den.abs() > 1e-10 {
-        a_num / a_den
-    } else {
-        0.0
-    };
-    let blur_radius = (l + a) as f32;
-
-    // Call box_blur for 3 passes with the computed radius (minimum 1).
-    let r = blur_radius.round() as u32;
-    let r = if r == 0 { 1 } else { r };
-    box_blur(pixels, w, h, mode, r);
-    box_blur(pixels, w, h, mode, r);
-    box_blur(pixels, w, h, mode, r);
-}
-
 /// Resize image using nearest-neighbor or bilinear sampling.
 ///
 /// PIL pixel-centered coordinate mapping:
@@ -1909,6 +1967,39 @@ pub fn resize(
     mode: u32,
     filter: u32,
 ) -> (Vec<u32>, u32, u32) {
+    resize_box(
+        pixels,
+        src_w,
+        src_h,
+        dst_w,
+        dst_h,
+        mode,
+        filter,
+        0.0,
+        0.0,
+        src_w as f64,
+        src_h as f64,
+    )
+}
+
+/// Resize a floating-point source box to the destination dimensions.
+///
+/// This is the same packed-pixel kernel as [`resize`], with the source box
+/// kept fractional for ImageOps.fit's `box=` contract.
+#[inline]
+fn resize_box(
+    pixels: &[u32],
+    src_w: u32,
+    src_h: u32,
+    dst_w: u32,
+    dst_h: u32,
+    mode: u32,
+    filter: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+) -> (Vec<u32>, u32, u32) {
     let has_gb = mode >= 2; // RGB or RGBA
     let has_a = mode == 1 || mode == 3; // LA or RGBA
 
@@ -1920,8 +2011,8 @@ pub fn resize(
     let count = (dst_w * dst_h) as usize;
     let mut output = vec![0u32; count];
 
-    let sw_f = src_w as f64;
-    let sh_f = src_h as f64;
+    let sw_f = box_right - box_left;
+    let sh_f = box_bottom - box_top;
     let dw_f = dst_w as f64;
     let dh_f = dst_h as f64;
 
@@ -1933,11 +2024,11 @@ pub fn resize(
         // ── Nearest-neighbor ──
         for dy in 0..dst_h {
             // PIL: floor((dy + 0.5) * src_h / dst_h)
-            let sy = ((dy as f64 + 0.5) * sh_f / dh_f) as u32;
+            let sy = (box_top + (dy as f64 + 0.5) * sh_f / dh_f) as u32;
             let sy = sy.min(src_h_max);
             for dx in 0..dst_w {
                 // PIL: floor((dx + 0.5) * src_w / dst_w)
-                let sx = ((dx as f64 + 0.5) * sw_f / dw_f) as u32;
+                let sx = (box_left + (dx as f64 + 0.5) * sw_f / dw_f) as u32;
                 let sx = sx.min(src_w_max);
 
                 let sp = pixels[(sy * src_w + sx) as usize];
@@ -1957,14 +2048,14 @@ pub fn resize(
     } else {
         // ── Bilinear (and fallback for Bicubic/Lanczos/Box/Hamming) ──
         for dy in 0..dst_h {
-            let cy = (dy as f64 + 0.5) * sh_f / dh_f;
+            let cy = box_top + (dy as f64 + 0.5) * sh_f / dh_f;
             let sy_floor = cy.floor();
             let fy = cy - sy_floor;
             let y0 = (sy_floor as u32).min(src_h_max);
             let y1 = (y0 + 1).min(src_h_max);
 
             for dx in 0..dst_w {
-                let cx = (dx as f64 + 0.5) * sw_f / dw_f;
+                let cx = box_left + (dx as f64 + 0.5) * sw_f / dw_f;
                 let sx_floor = cx.floor();
                 let fx = cx - sx_floor;
                 let x0 = (sx_floor as u32).min(src_w_max);
@@ -2054,9 +2145,19 @@ pub fn contain(
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
     }
-    let scale = (dst_w as f64 / w as f64).min(dst_h as f64 / h as f64);
-    let new_w = (w as f64 * scale).floor().max(1.0) as u32;
-    let new_h = (h as f64 * scale).floor().max(1.0) as u32;
+    let image_ratio = w as f64 / h as f64;
+    let destination_ratio = dst_w as f64 / dst_h as f64;
+    let (new_w, new_h) = if image_ratio != destination_ratio {
+        if image_ratio > destination_ratio {
+            let new_h = round_positive_ties_even(h as f64 / w as f64 * dst_w as f64);
+            (dst_w, new_h.max(1))
+        } else {
+            let new_w = round_positive_ties_even(w as f64 / h as f64 * dst_h as f64);
+            (new_w.max(1), dst_h)
+        }
+    } else {
+        (dst_w, dst_h)
+    };
     resize(pixels, w, h, new_w, new_h, mode, filter)
 }
 
@@ -2074,8 +2175,8 @@ pub fn scale(
     factor: f64,
     filter: u32,
 ) -> (Vec<u32>, u32, u32) {
-    let dst_w = ((w as f64 * factor) as u32).max(1);
-    let dst_h = ((h as f64 * factor) as u32).max(1);
+    let dst_w = round_positive_ties_even(w as f64 * factor).max(1);
+    let dst_h = round_positive_ties_even(h as f64 * factor).max(1);
     resize(pixels, w, h, dst_w, dst_h, mode, filter)
 }
 
@@ -2096,16 +2197,23 @@ pub fn cover(
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
     }
-    let scale = (dst_w as f64 / w as f64).max(dst_h as f64 / h as f64);
-    let nw = (w as f64 * scale).floor().max(1.0) as u32;
-    let nh = (h as f64 * scale).floor().max(1.0) as u32;
-    let (resized, _, _) = resize(pixels, w, h, nw, nh, mode, filter);
-    let crop_x = (nw.saturating_sub(dst_w)) / 2;
-    let crop_y = (nh.saturating_sub(dst_h)) / 2;
-    let cw = dst_w.min(nw);
-    let ch = dst_h.min(nh);
-    let cropped = crop_rect(&resized, nw, nh, mode, crop_x, crop_y, cw, ch);
-    (cropped, cw, ch)
+    let image_ratio = w as f64 / h as f64;
+    let destination_ratio = dst_w as f64 / dst_h as f64;
+    let (new_w, new_h) = if image_ratio != destination_ratio {
+        if image_ratio < destination_ratio {
+            let new_h = round_positive_ties_even(h as f64 / w as f64 * dst_w as f64);
+            (dst_w, new_h.max(1))
+        } else {
+            let new_w = round_positive_ties_even(w as f64 / h as f64 * dst_h as f64);
+            (new_w.max(1), dst_h)
+        }
+    } else {
+        (dst_w, dst_h)
+    };
+    // ImageOps.cover returns the resized image. It deliberately does not
+    // crop the overflow back to the requested box; the old SIMD path did so
+    // and first diverged on non-square targets.
+    resize(pixels, w, h, new_w, new_h, mode, filter)
 }
 
 /// Fit: like contain but with bleed (zoom) and centering offset.
@@ -2129,63 +2237,47 @@ pub fn fit(
     if w == 0 || h == 0 || dst_w == 0 || dst_h == 0 {
         return (pixels.to_vec(), w, h);
     }
-    let b = bleed.max(0.0) as f64;
-    let base_scale = (dst_w as f64 / w as f64).min(dst_h as f64 / h as f64);
-    let scale = base_scale * (1.0 + b);
-    let nw = (w as f64 * scale).floor().max(1.0) as u32;
-    let nh = (h as f64 * scale).floor().max(1.0) as u32;
-    let (resized, _, _) = resize(pixels, w, h, nw, nh, mode, filter);
-
+    let b = if (0.0..0.5).contains(&bleed) {
+        bleed as f64
+    } else {
+        0.0
+    };
     let (cx, cy) = centering;
     let cx = cx.clamp(0.0, 1.0) as f64;
     let cy = cy.clamp(0.0, 1.0) as f64;
-    let crop_x = ((nw as f64 - dst_w as f64) * cx + 0.5).floor().max(0.0) as u32;
-    let crop_y = ((nh as f64 - dst_h as f64) * cy + 0.5).floor().max(0.0) as u32;
-    let crop_x = crop_x.min(nw.saturating_sub(1));
-    let crop_y = crop_y.min(nh.saturating_sub(1));
-    let cw = dst_w.min(nw);
-    let ch = dst_h.min(nh);
-    let cropped = crop_rect(&resized, nw, nh, mode, crop_x, crop_y, cw, ch);
-    (cropped, cw, ch)
-}
 
-/// Crop helper: extract a sub-rectangle from packed u32 pixel buffer.
-/// Mode-aware: G/B handled per mode, alpha preserved/clamped.
-/// For L/LA modes (mode < 2): G = B = R (luma carried in R).
-/// For L/RGB modes (mode 0 or 2): alpha forced to 0xFF.
-#[inline]
-fn crop_rect(
-    pixels: &[u32],
-    src_w: u32,
-    _src_h: u32,
-    mode: u32,
-    x: u32,
-    y: u32,
-    w: u32,
-    h: u32,
-) -> Vec<u32> {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    let sz = (w * h) as usize;
-    let mut out = vec![0u32; sz];
-    for dy in 0..h {
-        for dx in 0..w {
-            let src_idx = ((y + dy) * src_w + (x + dx)) as usize;
-            let sp = pixels[src_idx];
-            let r = sp & 0xFF;
-            let dst_idx = (dy * w + dx) as usize;
-            if has_gb {
-                let g = (sp >> 8) & 0xFF;
-                let b = (sp >> 16) & 0xFF;
-                let a = if has_a { sp & 0xFF00_0000 } else { 0xFF00_0000 };
-                out[dst_idx] = r | (g << 8) | (b << 16) | a;
-            } else {
-                let a = if has_a { sp & 0xFF00_0000 } else { 0xFF00_0000 };
-                out[dst_idx] = r | (r << 8) | (r << 16) | a;
-            }
-        }
-    }
-    out
+    // Match ImageOps.fit's floating-point crop box. Resampling this box
+    // directly is important: resizing first and cropping integer pixels loses
+    // the fractional centering contract and can even return the wrong size.
+    let bleed_w = b * w as f64;
+    let bleed_h = b * h as f64;
+    let live_w = w as f64 - bleed_w * 2.0;
+    let live_h = h as f64 - bleed_h * 2.0;
+    let live_ratio = live_w / live_h;
+    let output_ratio = dst_w as f64 / dst_h as f64;
+    let (crop_w, crop_h) = if live_ratio == output_ratio {
+        (live_w, live_h)
+    } else if live_ratio >= output_ratio {
+        (output_ratio * live_h, live_h)
+    } else {
+        (live_w, live_w / output_ratio)
+    };
+    let crop_left = bleed_w + (live_w - crop_w) * cx;
+    let crop_top = bleed_h + (live_h - crop_h) * cy;
+    let (cropped, _, _) = resize_box(
+        pixels,
+        w,
+        h,
+        dst_w,
+        dst_h,
+        mode,
+        filter,
+        crop_left,
+        crop_top,
+        crop_left + crop_w,
+        crop_top + crop_h,
+    );
+    (cropped, dst_w, dst_h)
 }
 
 /// Quantize: reduce colors to num_colors using uniform quantization.
@@ -2473,12 +2565,11 @@ mod tests {
         add, add_modulo, alpha_composite, autocontrast, blend, blend_module, box_blur, brightness,
         color_saturation, colorize, composite, composite_module, constant, contain, contrast,
         convert, cover, crop, crop_border, darker, difference, duplicate, equalize, eval, expand,
-        filter_3x3, filter_5x5, fit, flip, gaussian_blur, grayscale, hard_light, invert,
-        invert_chops, lighter, logical_and, logical_or, logical_xor, max_filter, median_filter,
-        merge, min_filter, mirror, multiply, offset, overlay, pad, paste, point_op, posterize,
-        put_alpha, put_data, put_pixel, quantize, rank_filter, reduce, remap_palette, resize,
-        rotate, scale, screen, sharpness, soft_light, solarize, subtract, subtract_modulo,
-        thumbnail, transform, transpose,
+        filter_3x3, filter_5x5, fit, flip, grayscale, hard_light, invert, invert_chops, lighter,
+        logical_and, logical_or, logical_xor, max_filter, median_filter, merge, min_filter, mirror,
+        multiply, offset, overlay, pad, paste, point_op, posterize, put_alpha, put_data, put_pixel,
+        quantize, rank_filter, reduce, remap_palette, resize, rotate, scale, screen, sharpness,
+        soft_light, solarize, subtract, subtract_modulo, thumbnail, transform, transpose,
     };
 
     /// Helper: create a packed u32 pixel from RGBA bytes.
