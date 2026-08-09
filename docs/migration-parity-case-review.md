@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2895
-- Unique active workflow signatures: 2895
+- Active parity workflows: 2901
+- Unique active workflow signatures: 2901
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1717
+- Deliberate nuanced workflows: 1723
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 211 |
-| `PIL.Image.Image` | 1391 |
+| `PIL.Image.Image` | 1397 |
 | `PIL.ImageChops` | 113 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -802,7 +802,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.rgba-transparent-convolution`
 - `PIL.Image.Image.resize.nuanced.unknown-filter`
 - `PIL.Image.Image.resize.nuanced.zero-height`
+- `PIL.Image.Image.resize.nuanced.zero-height-source-simd-guard`
 - `PIL.Image.Image.resize.nuanced.zero-width`
+- `PIL.Image.Image.resize.nuanced.zero-width-source-simd-guard`
 - `PIL.Image.Image.rotate.nuanced.expanded-red-fill`
 - `PIL.Image.Image.rotate.nuanced.f-explicit-bilinear-nearest`
 - `PIL.Image.Image.rotate.nuanced.fractional-expanded`
@@ -837,6 +839,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.rotate.nuanced.valid-center-only`
 - `PIL.Image.Image.rotate.nuanced.valid-center-translate`
 - `PIL.Image.Image.rotate.nuanced.valid-translate-only`
+- `PIL.Image.Image.rotate.nuanced.zero-height-source-simd-guard`
+- `PIL.Image.Image.rotate.nuanced.zero-width-source-simd-guard`
 - `PIL.Image.Image.save.nuanced.cmyk-bmp-error`
 - `PIL.Image.Image.save.nuanced.cmyk-png-error`
 - `PIL.Image.Image.save.nuanced.f-bmp-error`
@@ -982,6 +986,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.unknown-method`
 - `PIL.Image.Image.transform.nuanced.ycbcr-affine-rgba-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.ycbcr-affine-tuple-fill`
+- `PIL.Image.Image.transform.nuanced.zero-height-source-simd-guard`
+- `PIL.Image.Image.transform.nuanced.zero-width-source-simd-guard`
 - `PIL.Image.Image.transpose.nuanced.l-method-0`
 - `PIL.Image.Image.transpose.nuanced.l-method-1`
 - `PIL.Image.Image.transpose.nuanced.l-method-2`
