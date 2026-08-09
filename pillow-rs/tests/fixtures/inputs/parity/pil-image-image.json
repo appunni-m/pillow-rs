@@ -70438,6 +70438,91 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.save.nuanced.p-frombytes-without-palette-pipeline",
+      "surface": "PIL.Image.Image",
+      "operation": "save",
+      "covers": [
+        "PIL.Image.Image.save.format.png"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "raw-p-no-palette-data",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAwABAgMAAQIDAAECAw==",
+          "sha256": "c709faa7d08bbfafc87e29d350f3947c9b7b2ec5a498f2dcfda45fe87435a383",
+          "media_type": "application/octet-stream"
+        },
+        {
+          "id": "output",
+          "kind": "builtin",
+          "name": "temporary-output-path"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "raw-p-no-palette-data"
+            }
+          }
+        },
+        {
+          "step_id": "setup-pipeline-flip",
+          "surface": "PIL.ImageOps",
+          "operation": "flip",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "save",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-pipeline-flip"
+          },
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "output"
+            },
+            "format": {
+              "kind": "literal",
+              "value": "PNG"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.filter.nuanced.p-mode-filter",
       "surface": "PIL.Image.Image",
       "operation": "filter",

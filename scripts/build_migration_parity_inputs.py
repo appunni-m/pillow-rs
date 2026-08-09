@@ -3129,6 +3129,15 @@ class WorkflowBuilder:
                     arguments={"image": binding(image_step)},
                     step_id="setup-chops-invert",
                 )
+            elif chain == "p-frombytes-no-palette-flip-save":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.ImageOps",
+                    "flip",
+                    receiver=None,
+                    arguments={"image": binding(image_step)},
+                    step_id="setup-pipeline-flip",
+                )
             elif chain == "p-full-palette-putpixel":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -15685,6 +15694,16 @@ def build_nuanced_cases(
             "name": "p-invert-pipeline",
             "mode": "P",
             "chain": "p-invert-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "p-frombytes-without-palette-pipeline",
+            "mode": "P",
+            "edge": "raw-p-no-palette",
+            "chain": "p-frombytes-no-palette-flip-save",
             "values": {"format": literal("PNG")},
         },
         {

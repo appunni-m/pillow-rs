@@ -1470,6 +1470,7 @@
           "PIL.Image.Image.save.nuanced.p-short-palette-resize",
           "PIL.Image.Image.save.nuanced.opened-p-load-save",
           "PIL.Image.Image.save.nuanced.p-invert-pipeline",
+          "PIL.Image.Image.save.nuanced.p-frombytes-without-palette-pipeline",
           "PIL.Image.Image.filter.nuanced.p-mode-filter",
           "PIL.Image.Image.filter.nuanced.pa-putpalette-blur",
           "PIL.Image.Image.filter.nuanced.pa-putpalette-gaussian",
