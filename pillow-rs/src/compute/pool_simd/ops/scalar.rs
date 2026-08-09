@@ -646,31 +646,34 @@ pub fn constant(pixels: &mut [u32], mode: u32, value: u32) {
     }
 }
 
-/// Offset: pixel value += offset per channel, clamped 0..255.
-/// dx added to R (always active). dy added to G and B only for mode >= 2.
-/// Named to match PIL's x=dx, y=dy convention.
+/// Offset pixels with Pillow's toroidal source-coordinate semantics.
+///
+/// `ImageChops.offset` moves pixels by `(dx, dy)` and wraps at each image
+/// edge; it does not modify channel values. Keep the signed offsets until the
+/// dimension-aware `rem_euclid` below so negative offsets and non-power-of-two
+/// widths behave like `libImaging/Offset.c`.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
-pub fn offset(pixels: &mut [u32], mode: u32, dx: u32, dy: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-
-    for p in pixels.iter_mut() {
-        let r = *p & 0xFF;
-        let g = (*p >> 8) & 0xFF;
-        let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
-
-        let out_r = (r + dx).min(255);
-        let out_g_raw = (g + dy).min(255);
-        let out_b_raw = (b + dy).min(255);
-
-        let out_g = if has_gb { out_g_raw } else { g };
-        let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
+pub fn offset(pixels: &mut [u32], w: u32, h: u32, _mode: u32, dx: i32, dy: i32) {
+    if w == 0 || h == 0 {
+        return;
     }
+
+    let mut out = vec![0u32; pixels.len()];
+    let width = i64::from(w);
+    let height = i64::from(h);
+    for py in 0..h {
+        for px in 0..w {
+            let sx = (i64::from(px) - i64::from(dx)).rem_euclid(width) as usize;
+            let sy = (i64::from(py) - i64::from(dy)).rem_euclid(height) as usize;
+            let destination = (py * w + px) as usize;
+            let source = sy * w as usize + sx;
+            if destination < out.len() && source < pixels.len() {
+                out[destination] = pixels[source];
+            }
+        }
+    }
+    pixels.copy_from_slice(&out);
 }
 
 // ── Blend-mode operations (dual-input, PIL ImageChops) ──
@@ -2861,14 +2864,15 @@ mod tests {
 
 // ── Geometry and spatial operations (rotate, remap_palette, equalize) ────────
 
-/// Bilinear interpolation helper: combine 4 corner values with fractional weights.
+/// Geometry.c stores byte bilinear samples by truncating the interpolated
+/// value, unlike the resize helper above which rounds its result.
 #[inline(always)]
-fn bilinear_interp(c00: u32, c10: u32, c01: u32, c11: u32, fx: f64, fy: f64) -> u32 {
+fn bilinear_interp_truncated(c00: u32, c10: u32, c01: u32, c11: u32, fx: f64, fy: f64) -> u32 {
     let v = (1.0 - fx) * (1.0 - fy) * c00 as f64
         + fx * (1.0 - fy) * c10 as f64
         + (1.0 - fx) * fy * c01 as f64
         + fx * fy * c11 as f64;
-    v.round() as u32
+    v as u32
 }
 
 /// Histogram equalization helper: build a LUT from a 256-bin histogram using PIL's
@@ -2939,18 +2943,27 @@ pub fn rotate(
 
     let sw = w as f64;
     let sh = h as f64;
-    // Pillow's destination-to-source inverse mapping uses the negative angle.
-    // The forward sign puts an exposed fill region on the opposite diagonal.
+    // Keep this transform aligned with pool_cpu::ops::geometry.  Pillow rounds
+    // the trigonometric coefficients to 15 decimal places and rounds the two
+    // expanded outer edges independently; taking ceil(max-min) loses a pixel
+    // for odd dimensions and fractional rotations.
     let rad = -angle_deg.to_radians();
-    let cos = rad.cos();
-    let sin = rad.sin();
+    let round_15 = |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
+    let aff_a = round_15(rad.cos());
+    let aff_b = round_15(rad.sin());
+    let aff_d = round_15(-rad.sin());
+    let aff_e = aff_a;
+    let center_x = sw / 2.0;
+    let center_y = sh / 2.0;
+    let mut aff_c = aff_a * -center_x + aff_b * -center_y + center_x;
+    let mut aff_f = aff_d * -center_x + aff_e * -center_y + center_y;
+    let transform =
+        |x: f64, y: f64, c: f64, f: f64| (aff_a * x + aff_b * y + c, aff_d * x + aff_e * y + f);
 
-    // Compute bounding box of rotated image by transforming the 4 corners.
     let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
     let (mut min_x, mut min_y, mut max_x, mut max_y) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
     for &(cx, cy) in &corners {
-        let rx = cx * cos - cy * sin;
-        let ry = cx * sin + cy * cos;
+        let (rx, ry) = transform(cx, cy, aff_c, aff_f);
         min_x = min_x.min(rx);
         max_x = max_x.max(rx);
         min_y = min_y.min(ry);
@@ -2958,18 +2971,19 @@ pub fn rotate(
     }
 
     let (dw, dh) = if expand {
-        ((max_x - min_x).ceil() as u32, (max_y - min_y).ceil() as u32)
+        (
+            (max_x.ceil() - min_x.floor()) as u32,
+            (max_y.ceil() - min_y.floor()) as u32,
+        )
     } else {
         (w, h)
     };
 
-    let ox = if expand { -min_x } else { 0.0 };
-    let oy = if expand { -min_y } else { 0.0 };
-
-    let cx_src = sw / 2.0;
-    let cy_src = sh / 2.0;
-    let cx_dst = dw as f64 / 2.0;
-    let cy_dst = dh as f64 / 2.0;
+    if expand {
+        let shift_x = -(dw as f64 - sw) / 2.0;
+        let shift_y = -(dh as f64 - sh) / 2.0;
+        (aff_c, aff_f) = transform(shift_x, shift_y, aff_c, aff_f);
+    }
 
     // Pre-extract fill color components for mode-aware handling
     let fill_r = fill_rgba & 0xFF;
@@ -2981,9 +2995,12 @@ pub fn rotate(
 
     for dy in 0..dh {
         for dx in 0..dw {
-            // Inverse rotation: map destination (dx, dy) to source coordinate
-            let src_x = (dx as f64 + ox - cx_dst) * cos + (dy as f64 + oy - cy_dst) * sin + cx_src;
-            let src_y = -(dx as f64 + ox - cx_dst) * sin + (dy as f64 + oy - cy_dst) * cos + cy_src;
+            // Map the destination pixel center through the reverse affine
+            // transform, then move from center space to Pillow's filter-side
+            // source corner coordinates.
+            let (src_x, src_y) = transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
+            let src_x = src_x - 0.5;
+            let src_y = src_y - 0.5;
 
             let out_idx = (dy * dw + dx) as usize;
 
@@ -3019,9 +3036,9 @@ pub fn rotate(
                 let b11 = (p11 >> 16) & 0xFF;
 
                 // Bilinear interpolate per channel
-                let out_r = bilinear_interp(r00, r10, r01, r11, fx, fy);
-                let out_g_raw = bilinear_interp(g00, g10, g01, g11, fx, fy);
-                let out_b_raw = bilinear_interp(b00, b10, b01, b11, fx, fy);
+                let out_r = bilinear_interp_truncated(r00, r10, r01, r11, fx, fy);
+                let out_g_raw = bilinear_interp_truncated(g00, g10, g01, g11, fx, fy);
+                let out_b_raw = bilinear_interp_truncated(b00, b10, b01, b11, fx, fy);
 
                 let out_g = if has_gb { out_g_raw } else { out_r };
                 let out_b = if has_gb { out_b_raw } else { out_r };
