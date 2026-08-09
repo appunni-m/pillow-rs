@@ -13756,6 +13756,22 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageChops",
+            "operation": "offset",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-width",
+            "mode": "L",
+            "edge": "zero-width",
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "offset",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-height",
+            "mode": "RGBA",
+            "edge": "zero-height",
+        },
+        {
+            "surface": "PIL.ImageChops",
             "operation": "add",
             "requirement_suffix": "behavior.default",
             "name": "scale-offset",

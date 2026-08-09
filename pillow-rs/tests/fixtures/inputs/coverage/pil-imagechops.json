@@ -221,6 +221,8 @@
           "PIL.ImageChops.logical_or.nuanced.valid-first-invalid-second-mode",
           "PIL.ImageChops.logical_xor.nuanced.valid-first-invalid-second-mode",
           "PIL.ImageChops.invert.nuanced.rgba",
+          "PIL.ImageChops.offset.nuanced.zero-width",
+          "PIL.ImageChops.offset.nuanced.zero-height",
           "PIL.ImageChops.add.nuanced.scale-offset",
           "PIL.ImageChops.add.nuanced.materialized-p",
           "PIL.ImageChops.subtract.nuanced.scale-offset",

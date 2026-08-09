@@ -10,27 +10,27 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 91457a11d2d704629e89f5bf54731ca5f0332f53
-coverage_run_id: migration-coverage-87adecf8d2cd4a0c860160be1db8571b
-parity_run_id: migration-parity-3feb447fc2e14bce93fa28f76d71257f
+base_commit: 0129e8cf23523e826102beae2503bd7b1f2c97bb
+coverage_run_id: migration-coverage-aca07b270a5146919030281a6422eee3
+parity_run_id: migration-parity-f726b2df3ab94344938d84546797e00a
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106090
-covered_regions: 62634
-region_coverage: 59.0386%
-total_lines: 68095
-covered_lines: 40283
-line_coverage: 59.1571%
+total_regions: 106085
+covered_regions: 62633
+region_coverage: 59.0404%
+total_lines: 68094
+covered_lines: 40284
+line_coverage: 59.1594%
 total_branches: 13955
-covered_branches: 7007
-branch_coverage: 50.2114%
+covered_branches: 7008
+branch_coverage: 50.2330%
 total_functions: 5281
 covered_functions: 3021
 function_coverage: 57.2051%
-simd_impl_regions: 6851/7480 (91.5909%)
-simd_impl_lines: 3611/3922 (92.0704%)
-simd_impl_branches: 729/960 (75.9375%)
+simd_impl_regions: 6852/7480 (91.6043%)
+simd_impl_lines: 3612/3922 (92.0959%)
+simd_impl_branches: 731/960 (76.1458%)
 simd_impl_functions: 185/204 (90.6863%)
 in_repo_files_below_threshold: 33
 external_dependency_files_below_threshold: 43
@@ -40,13 +40,16 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,887 cases: 2,884 passed, 3 had
+The fresh SIMD parity audit selected all 2,889 cases: 2,886 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,887 execution checks. The
+workflow executed all 24 plans and passed all 2,889 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
-coverage denominator. The previous SIMD batch added 21 input-only
+coverage denominator. This refresh adds two input-only public
+`PIL.ImageChops.offset` cases for zero-width and zero-height images, reaching
+the SIMD offset early-return branch; both cases pass source/target parity. The
+previous SIMD batch added 21 input-only
 nearest-neighbor and alternate/aspect cases covering `L`, `LA`, `RGBA`, `P`,
-and `PA` ImageOps paths. This refresh adds 10 input-only bilinear cases for
+and `PA` ImageOps paths. The preceding refresh added 10 input-only bilinear cases for
 `LA` and `RGBA` across `contain`, `cover`, `fit`, `scale`, and `pad`; all ten
 new cases pass source/target parity. Earlier work also added
 `PIL.Image.Image.thumbnail.nuanced.rgb-nearest-simd-path` and fixed SIMD
@@ -70,7 +73,7 @@ SIMD implementation-file coverage is:
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1983/2295 (86.41%) | 1103/1252 (88.10%) | 105/164 (64.02%) | 75/85 (88.24%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4771/5076 (93.99%) | 2446/2600 (94.08%) | 622/794 (78.34%) | 101/106 (95.28%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4772/5076 (94.00%) | 2447/2600 (94.12%) | 624/794 (78.59%) | 101/106 (95.28%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
@@ -107,4 +110,4 @@ SIMD implementation-file coverage is:
 | 30 | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% | 474/487 |
 | 31 | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% | 1274/1317 |
 | 32 | `pillow-rs/src/raster/buffer.rs` | 272/290 | 93.8% | 184/202 |
-| 33 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4771/5076 | 94.0% | 2446/2600 |
+| 33 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4772/5076 | 94.0% | 2447/2600 |
