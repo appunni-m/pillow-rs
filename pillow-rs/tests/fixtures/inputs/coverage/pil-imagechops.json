@@ -249,7 +249,10 @@
           "PIL.ImageChops.hard_light.nuanced.varied-indexed-p",
           "PIL.ImageChops.hard_light.nuanced.varied-indexed-pa",
           "PIL.ImageChops.soft_light.nuanced.varied-indexed-p",
-          "PIL.ImageChops.soft_light.nuanced.varied-indexed-pa"
+          "PIL.ImageChops.soft_light.nuanced.varied-indexed-pa",
+          "PIL.ImageChops.overlay.nuanced.high-low-rgb",
+          "PIL.ImageChops.hard_light.nuanced.high-low-rgb",
+          "PIL.ImageChops.soft_light.nuanced.high-low-rgb"
         ],
         "command_ids": []
       },
