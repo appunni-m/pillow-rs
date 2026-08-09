@@ -18246,6 +18246,21 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "thumbnail",
+            "requirement_suffix": "parameter.resample",
+            "name": "rgb-nearest-simd-path",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "size": [16, 16],
+            "values": {
+                "size": literal([4, 4]),
+                "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
             "requirement_suffix": "behavior.default",
             "name": "i-specialized-path",
             "observe_receiver": True,
