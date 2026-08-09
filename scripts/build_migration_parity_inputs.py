@@ -10941,6 +10941,20 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "putdata",
+            "requirement_suffix": "parameter.offset",
+            "name": "i16-bytes-offset-only",
+            "observe_receiver": True,
+            "mode": "I;16",
+            "size": [2, 2],
+            "values": {
+                "data": bytes_literal([1, 2, 3]),
+                "scale": literal(1),
+                "offset": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
             "requirement_suffix": "behavior.default",
             "name": "i16l-bytes-sequence",
             "observe_receiver": True,

@@ -48586,6 +48586,89 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.putdata.nuanced.i16-bytes-offset-only",
+      "surface": "PIL.Image.Image",
+      "operation": "putdata",
+      "covers": [
+        "PIL.Image.Image.putdata.parameter.offset"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AQID",
+          "sha256": "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I;16"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            },
+            "scale": {
+              "kind": "literal",
+              "value": 1
+            },
+            "offset": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.putdata.nuanced.i16l-bytes-sequence",
       "surface": "PIL.Image.Image",
       "operation": "putdata",

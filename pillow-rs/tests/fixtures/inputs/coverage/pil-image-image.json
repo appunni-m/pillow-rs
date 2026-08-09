@@ -1213,6 +1213,7 @@
           "PIL.Image.Image.putdata.nuanced.i16-bytes-sequence",
           "PIL.Image.Image.putdata.nuanced.i16-short-odd-bytes",
           "PIL.Image.Image.putdata.nuanced.i16-bytes-scale-offset",
+          "PIL.Image.Image.putdata.nuanced.i16-bytes-offset-only",
           "PIL.Image.Image.putdata.nuanced.i16l-bytes-sequence",
           "PIL.Image.Image.putdata.nuanced.i16b-bytes-sequence",
           "PIL.Image.Image.putdata.nuanced.i16n-bytes-sequence",
