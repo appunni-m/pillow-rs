@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2855
-- Unique active workflow signatures: 2855
+- Active parity workflows: 2895
+- Unique active workflow signatures: 2895
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1677
+- Deliberate nuanced workflows: 1717
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,8 +23,8 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 211 |
-| `PIL.Image.Image` | 1388 |
-| `PIL.ImageChops` | 111 |
+| `PIL.Image.Image` | 1391 |
+| `PIL.ImageChops` | 113 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
 | `PIL.ImageDraw.ImageDraw` | 451 |
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 221 |
+| `PIL.ImageOps` | 256 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -262,7 +262,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.filter.nuanced.i-mode-smooth-more-fused-row`
 - `PIL.Image.Image.filter.nuanced.invalid-filter`
 - `PIL.Image.Image.filter.nuanced.l-mode-detail-fused-row`
+- `PIL.Image.Image.filter.nuanced.l-mode-detail-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.l-mode-find-edges-negative`
+- `PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.l-mode-smooth-more-fused-row`
 - `PIL.Image.Image.filter.nuanced.opened-rgb`
 - `PIL.Image.Image.filter.nuanced.p-mode-filter`
@@ -878,6 +880,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.thumbnail.nuanced.overflow-height-bound`
 - `PIL.Image.Image.thumbnail.nuanced.overflow-width-bound`
 - `PIL.Image.Image.thumbnail.nuanced.p-forces-nearest`
+- `PIL.Image.Image.thumbnail.nuanced.rgb-nearest-simd-path`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-reducing-downscale`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-reducing-partial-edge`
 - `PIL.Image.Image.thumbnail.nuanced.rgba-alpha-downscale`
@@ -1150,6 +1153,8 @@ are not copied into the active lane by name.
 - `PIL.ImageChops.logical_xor.nuanced.valid-first-invalid-second-mode`
 - `PIL.ImageChops.multiply.nuanced.varied-indexed-p`
 - `PIL.ImageChops.multiply.nuanced.varied-indexed-pa`
+- `PIL.ImageChops.offset.nuanced.zero-height`
+- `PIL.ImageChops.offset.nuanced.zero-width`
 - `PIL.ImageChops.overlay.nuanced.high-low-rgb`
 - `PIL.ImageChops.overlay.nuanced.varied-indexed-p`
 - `PIL.ImageChops.overlay.nuanced.varied-indexed-pa`
@@ -1598,11 +1603,25 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.contain.nuanced.materialized-aspect`
 - `PIL.ImageOps.contain.nuanced.numeric-method`
 - `PIL.ImageOps.contain.nuanced.pa-putpalette-expansion`
+- `PIL.ImageOps.contain.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.contain.nuanced.simd-bilinear-rgba`
+- `PIL.ImageOps.contain.nuanced.simd-native-scalar-fallback-f`
+- `PIL.ImageOps.contain.nuanced.simd-nearest-l`
+- `PIL.ImageOps.contain.nuanced.simd-nearest-la`
+- `PIL.ImageOps.contain.nuanced.simd-nearest-rgba`
+- `PIL.ImageOps.contain.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.contain.nuanced.wide-target`
 - `PIL.ImageOps.cover.nuanced.half-rounded-height`
 - `PIL.ImageOps.cover.nuanced.materialized-aspect`
 - `PIL.ImageOps.cover.nuanced.numeric-method`
 - `PIL.ImageOps.cover.nuanced.pa-putpalette-expansion`
+- `PIL.ImageOps.cover.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.cover.nuanced.simd-bilinear-rgba`
+- `PIL.ImageOps.cover.nuanced.simd-native-scalar-fallback-f`
+- `PIL.ImageOps.cover.nuanced.simd-nearest-l`
+- `PIL.ImageOps.cover.nuanced.simd-nearest-la`
+- `PIL.ImageOps.cover.nuanced.simd-nearest-rgba`
+- `PIL.ImageOps.cover.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.cover.nuanced.wide-target`
 - `PIL.ImageOps.crop.nuanced.border-exceeds-image`
 - `PIL.ImageOps.crop.nuanced.materialized-border`
@@ -1648,6 +1667,13 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.fit.nuanced.numeric-method-default-centering`
 - `PIL.ImageOps.fit.nuanced.pa-putpalette-expansion`
 - `PIL.ImageOps.fit.nuanced.short-centering`
+- `PIL.ImageOps.fit.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.fit.nuanced.simd-bilinear-rgba`
+- `PIL.ImageOps.fit.nuanced.simd-native-scalar-fallback-f`
+- `PIL.ImageOps.fit.nuanced.simd-nearest-equal-aspect`
+- `PIL.ImageOps.fit.nuanced.simd-nearest-l`
+- `PIL.ImageOps.fit.nuanced.simd-nearest-la`
+- `PIL.ImageOps.fit.nuanced.simd-nearest-rgba`
 - `PIL.ImageOps.fit.nuanced.wide-source-crop`
 - `PIL.ImageOps.flip.nuanced.materialized-l-odd-height`
 - `PIL.ImageOps.flip.nuanced.materialized-la-odd-height`
@@ -1698,9 +1724,23 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.pad.nuanced.rgba-explicit-alpha-name`
 - `PIL.ImageOps.pad.nuanced.rgba-scalar-color`
 - `PIL.ImageOps.pad.nuanced.rgba-three-components`
+- `PIL.ImageOps.pad.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.pad.nuanced.simd-bilinear-rgba`
+- `PIL.ImageOps.pad.nuanced.simd-nearest-l`
+- `PIL.ImageOps.pad.nuanced.simd-nearest-la`
+- `PIL.ImageOps.pad.nuanced.simd-nearest-p`
+- `PIL.ImageOps.pad.nuanced.simd-nearest-pa`
+- `PIL.ImageOps.pad.nuanced.simd-nearest-rgba`
+- `PIL.ImageOps.pad.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.pad.nuanced.vertical-padding`
 - `PIL.ImageOps.posterize.nuanced.materialized-rgb`
 - `PIL.ImageOps.scale.nuanced.materialized-upscale`
+- `PIL.ImageOps.scale.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.scale.nuanced.simd-bilinear-rgba`
+- `PIL.ImageOps.scale.nuanced.simd-native-scalar-fallback-f`
+- `PIL.ImageOps.scale.nuanced.simd-nearest-l`
+- `PIL.ImageOps.scale.nuanced.simd-nearest-la`
+- `PIL.ImageOps.scale.nuanced.simd-nearest-rgba`
 - `PIL.ImageOps.solarize.nuanced.materialized-l`
 - `PIL.ImageOps.solarize.nuanced.materialized-rgb-high-channels`
 - `PIL.ImagePalette.ImagePalette.getcolor.nuanced.empty-tuple-rejected`
