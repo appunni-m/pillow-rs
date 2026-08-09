@@ -3041,6 +3041,29 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["im"] = binding(flipped_step)
                 receiver_step = destination_step
+            elif chain == "p-putpalette-pipeline-load":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pipeline-load-putpalette",
+                )
+                pipeline_step = self.add_step(
+                    "PIL.ImageOps",
+                    "flip",
+                    receiver=None,
+                    arguments={"image": binding(image_step)},
+                    step_id="setup-pipeline-load-flip",
+                )
+                # Keep the derived P image as the receiver. The final load()
+                # must materialize the indexed pipeline into a concrete
+                # Paletted image while preserving its retained palette.
+                receiver_step = pipeline_step
             elif chain == "p-putpalette-paste":
                 destination_step = self.ensure_image(mode="RGB")
                 source_step = self.ensure_image(mode="P", label="source")
@@ -15847,6 +15870,15 @@ def build_nuanced_cases(
             "name": "p-putpalette-resize-pipeline",
             "mode": "P",
             "chain": "p-putpalette-resize",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "p-putpalette-pipeline",
+            "mode": "P",
+            "chain": "p-putpalette-pipeline-load",
+            "observe_receiver": True,
         },
         {
             "surface": "PIL.Image.Image",
