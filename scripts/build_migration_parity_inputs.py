@@ -2709,6 +2709,20 @@ class WorkflowBuilder:
                     arguments={"mode": literal("RGB")},
                     step_id="setup-convert",
                 )
+            elif chain == "p-resize-equalize":
+                image_step = self.ensure_image(mode="P")
+                resized_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
+                self.scenario_values["image"] = binding(resized_step)
+                receiver_step = resized_step
             elif chain == "p-resize-rotate-fill":
                 image_step = self.ensure_image(mode="P")
                 receiver_step = self.add_step(
@@ -14206,6 +14220,15 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "materialized-p",
             "mode": "P",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "behavior.default",
+            "name": "p-resize-pipeline",
+            "mode": "P",
+            "chain": "p-resize-equalize",
             "observe_result": "tobytes",
         },
         {

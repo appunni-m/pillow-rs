@@ -293,6 +293,7 @@
           "PIL.ImageOps.autocontrast.nuanced.materialized-l",
           "PIL.ImageOps.equalize.nuanced.materialized-l",
           "PIL.ImageOps.equalize.nuanced.materialized-p",
+          "PIL.ImageOps.equalize.nuanced.p-resize-pipeline",
           "PIL.ImageOps.equalize.nuanced.opened-palette",
           "PIL.ImageOps.invert.nuanced.materialized-rgb",
           "PIL.ImageOps.invert.nuanced.pa-putpalette-pipeline-expansion",
