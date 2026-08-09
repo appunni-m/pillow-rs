@@ -3635,6 +3635,24 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
+            elif chain == "filter-detail-small":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={"data": literal([1, 2, 3, 4])},
+                    step_id="setup-detail-small-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "DETAIL",
+                    receiver=None,
+                    arguments={},
+                    step_id="setup-filter-detail-small",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
             elif chain == "filter-smooth-more-fused-row":
                 image_step = self.ensure_image()
                 self.add_step(
@@ -3725,6 +3743,29 @@ class WorkflowBuilder:
                         "offset": literal(0),
                     },
                     step_id="setup-filter-kernel-negative",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain == "filter-kernel-5x5-small":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={"data": literal(list(range(1, 17)))},
+                    step_id="setup-kernel-small-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "Kernel",
+                    receiver=None,
+                    arguments={
+                        "size": literal([5, 5]),
+                        "kernel": literal([-1.0] * 25),
+                        "scale": literal(1.0),
+                        "offset": literal(0),
+                    },
+                    step_id="setup-filter-kernel-small",
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
@@ -14418,12 +14459,78 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-rgb-odd-height",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "size": [4, 3],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-l-odd-height",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "size": [4, 3],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-la-odd-height",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 128],
+            "size": [4, 3],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "mirror",
             "requirement_suffix": "behavior.default",
             "name": "materialized-rgb",
             "mode": "RGB",
             "edge": "nonzero-pixel",
             "pixel": [12, 34, 56],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-rgb-odd-width",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "size": [3, 4],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-l-odd-width",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "size": [3, 4],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-la-odd-width",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 128],
+            "size": [3, 4],
             "observe_result": "tobytes",
         },
         {
@@ -14445,6 +14552,17 @@ def build_nuanced_cases(
             "mode": "L",
             "edge": "nonzero-pixel",
             "pixel": 180,
+            "values": {"threshold": literal(100)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "solarize",
+            "requirement_suffix": "parameter.threshold",
+            "name": "materialized-rgb-high-channels",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [180, 180, 180],
             "values": {"threshold": literal(100)},
             "observe_result": "tobytes",
         },
@@ -15263,6 +15381,16 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "requirement_suffix": "behavior.default",
+            "name": "i-mode-detail-small-guard",
+            "mode": "I",
+            "size": [2, 2],
+            "chain": "filter-detail-small",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
             "name": "i-mode-smooth-more-fused-row",
             "mode": "I",
             "size": [5, 5],
@@ -15357,6 +15485,16 @@ def build_nuanced_cases(
             "mode": "I",
             "size": [5, 5],
             "chain": "filter-kernel-5x5-negative",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-kernel-5x5-small-guard",
+            "mode": "I",
+            "size": [4, 4],
+            "chain": "filter-kernel-5x5-small",
             "observe_result": "tobytes",
         },
         {
@@ -18850,6 +18988,28 @@ def build_nuanced_cases(
             }
             for mode in ("L", "LA")
             for method in range(7)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower()}-odd-method-{method}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "size": [3, 3],
+                "values": {"method": literal(method)},
+                "observe_result": "tobytes",
+            }
+            for mode, pixel, method in (
+                ("L", 200, 0),
+                ("LA", [200, 128], 0),
+                ("RGB", [200, 100, 50], 0),
+                ("L", 200, 3),
+                ("LA", [200, 128], 3),
+                ("RGB", [200, 100, 50], 3),
+            )
         ),
         {
             "surface": "PIL.Image.Image",

@@ -1,35 +1,42 @@
 # SIMD coverage backlog below 95%
 
-Generated from the managed SIMD LLVM snapshot; this is execution coverage, not parity proof.
+Generated from the local SIMD LLVM report at
+`target/coverage/migration-parity-rust.json`; this is execution coverage, not
+parity proof. Coverage MCP was unavailable (`Transport closed`) for this
+refresh, so this report is local diagnostic evidence rather than a managed
+snapshot.
 
 ```yaml
-snapshot_id: bac42522-dc60-4900-80f0-40128b86ae7d
+snapshot_id: null
+provenance: local-llvm-report
 suite: migration-parity-rust-simd
-commit: ee32b1a731b4c72e33dcba5b838518e7e8f7de92
+base_commit: 37a5609e012ad6aaa74075fc50af6abd92301181
 threshold: 95%
 metric: regions
-total_regions: 106059
-covered_regions: 61173
-region_coverage: 57.6783%
-total_lines: 67985
-covered_lines: 39498
-line_coverage: 58.0981%
+total_regions: 105994
+covered_regions: 61233
+region_coverage: 57.7703%
+total_lines: 67940
+covered_lines: 39527
+line_coverage: 58.1793%
 total_branches: 13923
-covered_branches: 6840
-branch_coverage: 49.1273%
-total_functions: 5282
+covered_branches: 6865
+branch_coverage: 49.3069%
+total_functions: 5276
 covered_functions: 2995
-function_coverage: 56.7020%
+function_coverage: 56.7665%
 in_repo_files_below_threshold: 33
 external_dependency_files_below_threshold: 43
 ```
 
-The in-repository list is ordered from lowest to highest region coverage. 43 below-threshold files from the sibling `fontdone` dependency are intentionally not included in the actionable pillow-rs list.
+The in-repository list is ordered from lowest to highest region coverage. The
+43 below-threshold files from the sibling `fontdone` dependency are excluded
+from the actionable pillow-rs list; they are an external-library backlog.
 
-The latest managed parity audit selected all 2,808 SIMD cases: 2,751 passed,
-57 had ordinary parity mismatches, and 0 had infrastructure errors. The
-mismatches remain visible in the parity result; they are not removed from the
-coverage denominator.
+The fresh SIMD parity audit selected all 2,840 cases: 2,783 passed, 57 had
+ordinary parity mismatches, and 0 had infrastructure errors. The mismatches
+remain visible in the parity result; they are not removed from the coverage
+denominator.
 
 | Rank | File | Regions | Region coverage | Lines |
 | ---: | --- | ---: | ---: | ---: |
@@ -51,10 +58,10 @@ coverage denominator.
 | 16 | `pillow-rs/src/error.rs` | 3/6 | 50.0% | 3/6 |
 | 17 | `pillow-rs/src/raster/color/pixel_rgb.rs` | 48/78 | 61.5% | 27/48 |
 | 18 | `pillow-rs-py/src/lib.rs` | 4619/5868 | 78.7% | 3092/3626 |
-| 19 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4221/5113 | 82.6% | 2115/2529 |
-| 20 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
-| 21 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
-| 22 | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1394/1700 | 82.0% | 730/871 |
+| 19 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
+| 20 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
+| 21 | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1394/1700 | 82.0% | 730/871 |
+| 22 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4281/5113 | 83.7% | 2144/2529 |
 | 23 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1889/2220 | 85.1% | 1068/1222 |
 | 24 | `pillow-rs/src/color.rs` | 1061/1235 | 85.9% | 601/687 |
 | 25 | `pillow-rs/src/ops/pil_resize.rs` | 1020/1159 | 88.0% | 613/679 |
