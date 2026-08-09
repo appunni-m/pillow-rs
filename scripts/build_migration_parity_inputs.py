@@ -1615,6 +1615,33 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
+        elif self.edge == "chops-binary-high-low" and label in {
+            "image1",
+            "image2",
+        }:
+            if requested_mode != "RGB" or self.scenario_pixel is None:
+                raise ValueError(
+                    "chops-binary-high-low requires RGB operands and a pixel"
+                )
+            # Exercise both sides of the public ImageChops channel formulas.
+            # The regular nonzero-pixel setup changes only image1, leaving the
+            # second operand at zero and making its high-channel branches
+            # unreachable through the input-only parity workflow.
+            pixel = (
+                self.scenario_pixel
+                if label == "image1"
+                else [50, 200, 150]
+            )
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 3]),
+                    "value": literal(pixel),
+                },
+                step_id=self.next_step_id("setup-high-low-pixel"),
+            )
         elif self.edge == "nonzero-pixel-origin" and label in {"image", "image1"}:
             if self.scenario_pixel is None:
                 raise ValueError("nonzero-pixel-origin edge requires a scenario pixel")
@@ -13661,6 +13688,19 @@ def build_nuanced_cases(
             )
             for mode in ("P", "PA")
         ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": "high-low-rgb",
+                "mode": "RGB",
+                "edge": "chops-binary-high-low",
+                "pixel": [200, 100, 50],
+                "observe_result": "tobytes",
+            }
+            for operation in ("overlay", "hard_light", "soft_light")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "fit",
@@ -18798,6 +18838,19 @@ def build_nuanced_cases(
             "scenario_asset": "image/rgb-small.png",
             "values": {"method": literal(0)},
         },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower()}-method-{method}",
+                "mode": mode,
+                "values": {"method": literal(method)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("L", "LA")
+            for method in range(7)
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "transpose",
