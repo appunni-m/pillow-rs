@@ -1332,6 +1332,31 @@ impl Image {
         }
     }
 
+    /// Whether an indexed ImageChops result intentionally has no palette.
+    ///
+    /// Pillow's `libImaging/Chops.c` allocates a fresh indexed core for these
+    /// operations and does not copy `Image.palette`. Keep the policy beside
+    /// pipeline construction so every result is handled through the invariant
+    /// that [`Self::push_op`] always creates an [`Image::Pipeline`].
+    fn indexed_chops_result_without_palette(op: &PipelineOp) -> bool {
+        matches!(
+            op,
+            PipelineOp::InvertChops
+                | PipelineOp::Add { .. }
+                | PipelineOp::Subtract { .. }
+                | PipelineOp::Multiply { .. }
+                | PipelineOp::Screen { .. }
+                | PipelineOp::Darker { .. }
+                | PipelineOp::Lighter { .. }
+                | PipelineOp::Difference { .. }
+                | PipelineOp::Overlay { .. }
+                | PipelineOp::HardLight { .. }
+                | PipelineOp::SoftLight { .. }
+                | PipelineOp::AddModulo { .. }
+                | PipelineOp::SubtractModulo { .. }
+        )
+    }
+
     /// Returns whether an operation can stay in the source's indexed sample
     /// layout. Pillow's `libImaging/Filter.c` `PA` path applies convolution to
     /// the raw index/alpha bands and preserves the `PA` mode; unlike `P`, `PA`
@@ -1674,6 +1699,8 @@ impl Image {
     pub fn push_op(source: &Image, op: PipelineOp) -> Image {
         let source_is_paletted = source.has_palette_samples();
         let palette_safe = source_is_paletted && Self::is_palette_safe_op_for_source(source, &op);
+        let indexed_chops_result_without_palette =
+            source_is_paletted && Self::indexed_chops_result_without_palette(&op);
         let putalpha_mode = match &op {
             PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
                 Some(*mode)
@@ -1736,12 +1763,16 @@ impl Image {
                 &op,
                 PipelineOp::ExtractBand { .. } | PipelineOp::Merge { .. }
             );
-        let source_palette = if preserve_palette {
+        let source_palette = if indexed_chops_result_without_palette {
+            Some(Vec::new())
+        } else if preserve_palette {
             source.extract_palette()
         } else {
             None
         };
-        let source_palette_alpha = if preserve_palette {
+        let source_palette_alpha = if indexed_chops_result_without_palette {
+            None
+        } else if preserve_palette {
             source.palette_alpha()
         } else {
             None

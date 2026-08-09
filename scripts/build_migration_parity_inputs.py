@@ -813,6 +813,11 @@ class WorkflowBuilder:
                 requested_mode = "L"
         if self.edge == "blend-second-palette" and label == "im2":
             requested_mode = "P"
+        if self.edge == "chops-logical-second-invalid":
+            # The logical ImageChops functions short-circuit after validating
+            # image1.  Keep image1 valid and image2 invalid so the public
+            # mode-check reaches its second operand branch.
+            requested_mode = "1" if label == "image1" else "L"
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
@@ -13503,6 +13508,17 @@ def build_nuanced_cases(
             "name": "la",
             "mode": "LA",
         },
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": "valid-first-invalid-second-mode",
+                "mode": "1",
+                "edge": "chops-logical-second-invalid",
+            }
+            for operation in ("logical_and", "logical_or", "logical_xor")
+        ),
         {
             "surface": "PIL.ImageChops",
             "operation": "invert",
