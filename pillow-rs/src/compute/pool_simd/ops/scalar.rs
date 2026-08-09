@@ -3025,10 +3025,6 @@ pub fn rotate(
     expand: bool,
     fill_rgba: u32,
 ) -> (Vec<u32>, u32, u32) {
-    if w == 0 || h == 0 {
-        return (Vec::new(), w, h);
-    }
-
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
 
@@ -3081,6 +3077,17 @@ pub fn rotate(
     let fill_g = (fill_rgba >> 8) & 0xFF;
     let fill_b = (fill_rgba >> 16) & 0xFF;
     let fill_a = fill_rgba & 0xFF00_0000;
+
+    if w == 0 || h == 0 {
+        // Pillow still computes the expanded canvas for an empty source and
+        // fills it; returning the original dimensions loses the 90-degree
+        // width/height swap and diverges before any pixel sampling occurs.
+        let out_g = if has_gb { fill_g } else { fill_r };
+        let out_b = if has_gb { fill_b } else { fill_r };
+        let out_a = if has_a { fill_a } else { 0xFF00_0000 };
+        let fill_pixel = fill_r | (out_g << 8) | (out_b << 16) | out_a;
+        return (vec![fill_pixel; (dw * dh) as usize], dw, dh);
+    }
 
     let mut out = vec![0u32; (dw * dh) as usize];
 
