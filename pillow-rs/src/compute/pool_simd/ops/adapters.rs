@@ -7,7 +7,7 @@
 //! 3. Reconstructs `DynamicImage` from the result
 
 use crate::error::PilError;
-use crate::image::{Image, preserve_mode};
+use crate::image::{preserve_mode, Image};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -387,9 +387,7 @@ pub fn simd_offset(
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Offset { x, y } = op {
-        let dx = x.rem_euclid(256) as u32;
-        let dy = y.rem_euclid(256) as u32;
-        super::scalar::offset(&mut pixels, mode_code, dx, dy);
+        super::scalar::offset(&mut pixels, w, h, mode_code, *x, *y);
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -1185,12 +1183,36 @@ pub fn simd_reduce(
 pub fn simd_convert(
     img: &DynamicImage,
     op: &PipelineOp,
-    _mode: Option<&str>,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
     let src_mode = dynimg_mode(img);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Convert { mode: cm, .. } = op {
+    if let PipelineOp::Convert {
+        mode: cm, dither, ..
+    } = op
+    {
+        // The packed SIMD converter only represents byte L/LA/RGB/RGBA/CMYK
+        // samples. Keep scalar-mode and color-space conversions on the shared
+        // pure-Rust converter instead of returning an RGBA-shaped result for a
+        // public HSV, YCbCr, I, or F image.
+        if matches!(
+            cm,
+            ColorMode::HSV
+                | ColorMode::YCbCr
+                | ColorMode::I
+                | ColorMode::F
+                | ColorMode::P
+                | ColorMode::Mode1
+        ) {
+            return crate::compute::pool_cpu::ops::color::op_convert(
+                img,
+                cm,
+                dither.as_ref(),
+                mode,
+                None,
+            );
+        }
         let target_mode = color_mode_to_u32(cm);
         let (result, _nw, _nh) = super::scalar::convert(&pixels, w, h, src_mode, target_mode);
         // `convert` returns packed RGBA storage for every logical target. The
@@ -1466,7 +1488,7 @@ pub fn simd_alpha_composite(
             src.1,
         );
     }
-    dynimg_from_rgba(pixels, w, h)
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
