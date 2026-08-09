@@ -444,7 +444,11 @@ pub fn simd_median_filter(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::MedianFilter { size } = op {
-        super::scalar::median_filter(&mut pixels, w, h, mode_code, *size);
+        if mode == Some("F") {
+            super::scalar::rank_filter_f32(&mut pixels, w, h, *size, size * size / 2);
+        } else {
+            super::scalar::median_filter(&mut pixels, w, h, mode_code, *size);
+        }
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -458,7 +462,11 @@ pub fn simd_max_filter(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::MaxFilter { size } = op {
-        super::scalar::max_filter(&mut pixels, w, h, mode_code, *size);
+        if mode == Some("F") {
+            super::scalar::rank_filter_f32(&mut pixels, w, h, *size, size * size - 1);
+        } else {
+            super::scalar::max_filter(&mut pixels, w, h, mode_code, *size);
+        }
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -472,7 +480,11 @@ pub fn simd_min_filter(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::MinFilter { size } = op {
-        super::scalar::min_filter(&mut pixels, w, h, mode_code, *size);
+        if mode == Some("F") {
+            super::scalar::rank_filter_f32(&mut pixels, w, h, *size, 0);
+        } else {
+            super::scalar::min_filter(&mut pixels, w, h, mode_code, *size);
+        }
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -486,7 +498,11 @@ pub fn simd_rank_filter(
     let mode_code = mode_to_u32(mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::RankFilter { size, rank } = op {
-        super::scalar::rank_filter(&mut pixels, w, h, mode_code, *size, *rank);
+        if mode == Some("F") {
+            super::scalar::rank_filter_f32(&mut pixels, w, h, *size, *rank);
+        } else {
+            super::scalar::rank_filter(&mut pixels, w, h, mode_code, *size, *rank);
+        }
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -505,7 +521,11 @@ pub fn simd_filter_3x3(
         offset,
     } = op
     {
-        super::scalar::filter_3x3(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
+        if mode == Some("I") {
+            super::scalar::filter_3x3_i32(&mut pixels, w, h, kernel, *scale, *offset);
+        } else {
+            super::scalar::filter_3x3(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
+        }
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -524,7 +544,11 @@ pub fn simd_filter_5x5(
         offset,
     } = op
     {
-        super::scalar::filter_5x5(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
+        if mode == Some("I") {
+            super::scalar::filter_5x5_i32(&mut pixels, w, h, kernel, *scale, *offset);
+        } else {
+            super::scalar::filter_5x5(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
+        }
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
