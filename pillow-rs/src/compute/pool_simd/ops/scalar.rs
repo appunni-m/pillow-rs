@@ -833,6 +833,166 @@ pub fn blend_module(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
 
 // ── Rank-based window filter operations ──
 
+/// Evaluate one Pillow convolution row in the same contraction order as the
+/// CPU filter implementation.
+///
+/// Pillow's arm64 build starts with the centre product and then emits fused
+/// multiply-adds for the left and right products. Keeping that order here is
+/// required for exact byte parity when a result is just below an integer.
+#[inline]
+fn pillow_kernel_row_3(pixels: [f32; 3], kernel: &[f32]) -> f32 {
+    let sum = pixels[1] * kernel[1];
+    let sum = pixels[0].mul_add(kernel[0], sum);
+    pixels[2].mul_add(kernel[2], sum)
+}
+
+/// Five-tap counterpart of [`pillow_kernel_row_3`].
+#[inline]
+fn pillow_kernel_row_5(pixels: [f32; 5], kernel: &[f32]) -> f32 {
+    let sum = pixels[1] * kernel[1];
+    let sum = pixels[0].mul_add(kernel[0], sum);
+    let sum = pixels[2].mul_add(kernel[2], sum);
+    let sum = pixels[3].mul_add(kernel[3], sum);
+    pixels[4].mul_add(kernel[4], sum)
+}
+
+/// Pillow's UINT8 filter clamp: truncate values in the open interval and
+/// clamp the endpoints before storing a byte.
+#[inline]
+fn clip8_filter(value: f32) -> u32 {
+    if value <= 0.0 {
+        0
+    } else if value >= 255.0 {
+        255
+    } else {
+        value as u32
+    }
+}
+
+/// Rank a neighborhood of raw IEEE-754 samples stored in packed RGBA words.
+///
+/// Modes `F` and `I` use four bytes per logical sample in the image buffer.
+/// The SIMD packed-u8 filters cannot treat those bytes as independent color
+/// channels, so the F path ranks the complete f32 sample while retaining the
+/// same single-dispatch SIMD adapter and raw byte representation.
+#[inline]
+pub fn rank_filter_f32(pixels: &mut [u32], w: u32, h: u32, size: u32, rank: u32) {
+    let half = (size / 2) as i32;
+    let w_i = w as i32;
+    let h_i = h as i32;
+    let area = (size * size) as usize;
+    let rank = rank.min((area - 1) as u32) as usize;
+    let src = pixels.to_vec();
+
+    for y in 0..h_i {
+        for x in 0..w_i {
+            let mut values = Vec::with_capacity(area);
+            for dy in -half..=half {
+                for dx in -half..=half {
+                    let sx = (x + dx).clamp(0, w_i - 1);
+                    let sy = (y + dy).clamp(0, h_i - 1);
+                    values.push(f32::from_bits(src[(sy * w_i + sx) as usize]));
+                }
+            }
+            values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            pixels[(y * w_i + x) as usize] = values[rank].to_bits();
+        }
+    }
+}
+
+/// Apply a 3x3 filter to raw I-mode samples stored as little-endian i32 bits.
+/// The bounds, reversed Y-axis, f32 accumulation, rounding, and negative
+/// clipping match `pool_cpu::ops::filter::filter_3x3_i32`.
+#[inline]
+pub fn filter_3x3_i32(pixels: &mut [u32], w: u32, h: u32, kernel: &[f32], scale: f32, offset: i32) {
+    if w < 3 || h < 3 {
+        return;
+    }
+    let w_i = w as i32;
+    let h_i = h as i32;
+    let src = pixels.to_vec();
+    let s = scale;
+    let normalized: [f32; 9] = std::array::from_fn(|index| kernel[index] / s);
+
+    for y in 1..h_i - 1 {
+        for x in 1..w_i - 1 {
+            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w_i + (x + dx)) as usize };
+            let read = |dx: i32, dy: i32| -> f32 { (src[base(dx, dy)] as i32) as f32 };
+            let bottom =
+                pillow_kernel_row_3([read(-1, 1), read(0, 1), read(1, 1)], &normalized[0..3]);
+            let middle =
+                pillow_kernel_row_3([read(-1, 0), read(0, 0), read(1, 0)], &normalized[3..6]);
+            let top =
+                pillow_kernel_row_3([read(-1, -1), read(0, -1), read(1, -1)], &normalized[6..9]);
+            let mut value = offset as f32 + 0.5;
+            value += bottom;
+            value += middle;
+            value += top;
+            pixels[base(0, 0)] = if value >= 0.0 { value as i32 as u32 } else { 0 };
+        }
+    }
+}
+
+/// Apply a 5x5 filter to raw I-mode samples stored as little-endian i32 bits.
+/// This mirrors [`filter_3x3_i32`] with the corresponding five-tap rows.
+#[inline]
+pub fn filter_5x5_i32(pixels: &mut [u32], w: u32, h: u32, kernel: &[f32], scale: f32, offset: i32) {
+    if w < 5 || h < 5 {
+        return;
+    }
+    let w_i = w as i32;
+    let h_i = h as i32;
+    let src = pixels.to_vec();
+    let s = scale;
+    let normalized: [f32; 25] = std::array::from_fn(|index| kernel[index] / s);
+
+    for y in 2..h_i - 2 {
+        for x in 2..w_i - 2 {
+            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w_i + (x + dx)) as usize };
+            let read = |dx: i32, dy: i32| -> f32 { (src[base(dx, dy)] as i32) as f32 };
+            let bottom0 = pillow_kernel_row_5(
+                [read(-2, 2), read(-1, 2), read(0, 2), read(1, 2), read(2, 2)],
+                &normalized[0..5],
+            );
+            let bottom1 = pillow_kernel_row_5(
+                [read(-2, 1), read(-1, 1), read(0, 1), read(1, 1), read(2, 1)],
+                &normalized[5..10],
+            );
+            let middle = pillow_kernel_row_5(
+                [read(-2, 0), read(-1, 0), read(0, 0), read(1, 0), read(2, 0)],
+                &normalized[10..15],
+            );
+            let top1 = pillow_kernel_row_5(
+                [
+                    read(-2, -1),
+                    read(-1, -1),
+                    read(0, -1),
+                    read(1, -1),
+                    read(2, -1),
+                ],
+                &normalized[15..20],
+            );
+            let top0 = pillow_kernel_row_5(
+                [
+                    read(-2, -2),
+                    read(-1, -2),
+                    read(0, -2),
+                    read(1, -2),
+                    read(2, -2),
+                ],
+                &normalized[20..25],
+            );
+            let mut value = offset as f32 + 0.5;
+            value += bottom0;
+            value += bottom1;
+            value += middle;
+            value += top1;
+            value += top0;
+            pixels[base(0, 0)] = if value >= 0.0 { value as i32 as u32 } else { 0 };
+        }
+    }
+}
+
 /// Median filter: for each pixel, output median of size×size neighborhood.
 ///
 /// For each pixel, collects all R (and G/B for RGB/RGBA) channel values within
@@ -1115,46 +1275,61 @@ pub fn filter_3x3(
     scale: f32,
     offset: i32,
 ) {
+    if w < 3 || h < 3 {
+        return;
+    }
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
     let src = pixels.to_vec();
     let w_i = w as i32;
     let h_i = h as i32;
-    let half = 1i32;
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let s = scale;
+    let normalized: [f32; 9] = std::array::from_fn(|index| kernel[index] / s);
 
-    for y in 0..h_i {
-        for x in 0..w_i {
-            let mut sum_r: f32 = 0.0;
-            let mut sum_g: f32 = 0.0;
-            let mut sum_b: f32 = 0.0;
+    // Pillow leaves the one-pixel border unchanged for convolution filters;
+    // only the fully covered interior is evaluated.
+    for y in 1..h_i - 1 {
+        for x in 1..w_i - 1 {
+            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w_i + (x + dx)) as usize };
+            let channel = |shift: u32, dx: i32, dy: i32| -> f32 {
+                ((src[base(dx, dy)] >> shift) & 0xFF) as f32
+            };
+            let row = |shift: u32, dy: i32, coefficients: &[f32]| -> f32 {
+                pillow_kernel_row_3(
+                    [
+                        channel(shift, -1, dy),
+                        channel(shift, 0, dy),
+                        channel(shift, 1, dy),
+                    ],
+                    coefficients,
+                )
+            };
+            let mut sum_r = offset as f32 + 0.5;
+            sum_r += row(0, 1, &normalized[0..3]);
+            sum_r += row(0, 0, &normalized[3..6]);
+            sum_r += row(0, -1, &normalized[6..9]);
+            let mut sum_g = offset as f32 + 0.5;
+            sum_g += row(8, 1, &normalized[0..3]);
+            sum_g += row(8, 0, &normalized[3..6]);
+            sum_g += row(8, -1, &normalized[6..9]);
+            let mut sum_b = offset as f32 + 0.5;
+            sum_b += row(16, 1, &normalized[0..3]);
+            sum_b += row(16, 0, &normalized[3..6]);
+            sum_b += row(16, -1, &normalized[6..9]);
 
-            for ky in -half..=half {
-                for kx in -half..=half {
-                    let sx = (x + kx).clamp(0, w_i - 1);
-                    let sy = (y + ky).clamp(0, h_i - 1);
-                    let sp = src[(sy * w_i + sx) as usize];
-                    let ki = ((ky + half) * 3 + (kx + half)) as usize;
-                    let k = kernel[ki];
-                    sum_r += (sp & 0xFF) as f32 * k;
-                    sum_g += ((sp >> 8) & 0xFF) as f32 * k;
-                    sum_b += ((sp >> 16) & 0xFF) as f32 * k;
-                }
-            }
-
-            let out_r = ((sum_r / s + offset as f32 + 0.5) as i32).clamp(0, 255) as u32;
-            let out_g_raw = ((sum_g / s + offset as f32 + 0.5) as i32).clamp(0, 255) as u32;
-            let out_b_raw = ((sum_b / s + offset as f32 + 0.5) as i32).clamp(0, 255) as u32;
+            let out_r = clip8_filter(sum_r);
+            let out_g_raw = clip8_filter(sum_g);
+            let out_b_raw = clip8_filter(sum_b);
 
             // L/LA: G = B = out_r; RGB/RGBA: independent G and B
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };
 
-            let sp = src[(y * w_i + x) as usize];
+            let sp = src[base(0, 0)];
             let a = sp & 0xFF00_0000;
             let out_a = if has_a { a } else { 0xFF00_0000 };
 
-            let idx = (y * w_i + x) as usize;
+            let idx = base(0, 0);
             pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
         }
     }
@@ -1176,45 +1351,67 @@ pub fn filter_5x5(
     scale: f32,
     offset: i32,
 ) {
+    if w < 5 || h < 5 {
+        return;
+    }
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
     let src = pixels.to_vec();
     let w_i = w as i32;
     let h_i = h as i32;
-    let half = 2i32;
-    let s = if scale.abs() < 1e-10 { 1.0 } else { scale };
+    let s = scale;
+    let normalized: [f32; 25] = std::array::from_fn(|index| kernel[index] / s);
 
-    for y in 0..h_i {
-        for x in 0..w_i {
-            let mut sum_r: f32 = 0.0;
-            let mut sum_g: f32 = 0.0;
-            let mut sum_b: f32 = 0.0;
+    // As in Pillow's ImagingFilter, the two-pixel border is copied through.
+    for y in 2..h_i - 2 {
+        for x in 2..w_i - 2 {
+            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w_i + (x + dx)) as usize };
+            let channel = |shift: u32, dx: i32, dy: i32| -> f32 {
+                ((src[base(dx, dy)] >> shift) & 0xFF) as f32
+            };
+            let row = |shift: u32, dy: i32, coefficients: &[f32]| -> f32 {
+                pillow_kernel_row_5(
+                    [
+                        channel(shift, -2, dy),
+                        channel(shift, -1, dy),
+                        channel(shift, 0, dy),
+                        channel(shift, 1, dy),
+                        channel(shift, 2, dy),
+                    ],
+                    coefficients,
+                )
+            };
+            let mut sum_r = offset as f32 + 0.5;
+            sum_r += row(0, 2, &normalized[0..5]);
+            sum_r += row(0, 1, &normalized[5..10]);
+            sum_r += row(0, 0, &normalized[10..15]);
+            sum_r += row(0, -1, &normalized[15..20]);
+            sum_r += row(0, -2, &normalized[20..25]);
+            let mut sum_g = offset as f32 + 0.5;
+            sum_g += row(8, 2, &normalized[0..5]);
+            sum_g += row(8, 1, &normalized[5..10]);
+            sum_g += row(8, 0, &normalized[10..15]);
+            sum_g += row(8, -1, &normalized[15..20]);
+            sum_g += row(8, -2, &normalized[20..25]);
+            let mut sum_b = offset as f32 + 0.5;
+            sum_b += row(16, 2, &normalized[0..5]);
+            sum_b += row(16, 1, &normalized[5..10]);
+            sum_b += row(16, 0, &normalized[10..15]);
+            sum_b += row(16, -1, &normalized[15..20]);
+            sum_b += row(16, -2, &normalized[20..25]);
 
-            for ky in -half..=half {
-                for kx in -half..=half {
-                    let sx = (x + kx).clamp(0, w_i - 1);
-                    let sy = (y + ky).clamp(0, h_i - 1);
-                    let sp = src[(sy * w_i + sx) as usize];
-                    let ki = ((ky + half) * 5 + (kx + half)) as usize;
-                    let k = kernel[ki];
-                    sum_r += (sp & 0xFF) as f32 * k;
-                    sum_g += ((sp >> 8) & 0xFF) as f32 * k;
-                    sum_b += ((sp >> 16) & 0xFF) as f32 * k;
-                }
-            }
-
-            let out_r = ((sum_r / s + offset as f32 + 0.5) as i32).clamp(0, 255) as u32;
-            let out_g_raw = ((sum_g / s + offset as f32 + 0.5) as i32).clamp(0, 255) as u32;
-            let out_b_raw = ((sum_b / s + offset as f32 + 0.5) as i32).clamp(0, 255) as u32;
+            let out_r = clip8_filter(sum_r);
+            let out_g_raw = clip8_filter(sum_g);
+            let out_b_raw = clip8_filter(sum_b);
 
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };
 
-            let sp = src[(y * w_i + x) as usize];
+            let sp = src[base(0, 0)];
             let a = sp & 0xFF00_0000;
             let out_a = if has_a { a } else { 0xFF00_0000 };
 
-            let idx = (y * w_i + x) as usize;
+            let idx = base(0, 0);
             pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
         }
     }

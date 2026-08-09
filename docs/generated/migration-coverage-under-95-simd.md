@@ -3,9 +3,9 @@
 Generated from the managed SIMD LLVM snapshot; this is execution coverage, not parity proof.
 
 ```yaml
-snapshot_id: d5ebddad-4741-40c3-8abf-ac9fcb3a056a
+snapshot_id: 74ba5dfd-7811-4421-b52e-77645f51ba3b
 suite: migration-parity-rust-simd
-commit: c57cd2d50b4803e4de9466a58fe2fed5cabfefbe
+commit: b689ca7e5c63f9fc46122441edbe2fdee8e90430
 threshold: 95%
 metric: regions
 in_repo_files_below_threshold: 33
@@ -38,8 +38,8 @@ The in-repository list is ordered from lowest to highest region coverage. 43 bel
 | 20 | `pillow-rs-py/src/lib.rs` | 4619/5868 | 78.7% | 3092/3626 |
 | 21 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
 | 22 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
-| 23 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 3995/4840 | 82.5% | 1994/2372 |
-| 24 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1773/2065 | 85.9% | 1033/1171 |
+| 23 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4283/5130 | 83.5% | 2152/2534 |
+| 24 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1812/2104 | 86.1% | 1049/1193 |
 | 25 | `pillow-rs/src/color.rs` | 1061/1235 | 85.9% | 601/687 |
 | 26 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 | 88.6% | 59/67 |
 | 27 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
