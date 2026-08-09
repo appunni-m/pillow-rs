@@ -3088,6 +3088,34 @@ class WorkflowBuilder:
                     step_id="setup-opened-p-load",
                 )
                 receiver_step = image_step
+            elif chain == "opened-gif-putpalette-save":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-opened-gif-load",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        # p-small.gif has a four-entry global palette. Keep
+                        # that 12-byte source prefix and make the padded tail
+                        # observable so operational_palette exercises both
+                        # sides of its source-prefix check.
+                        "data": literal(
+                            [0, 0, 0, 255, 0, 0, 0, 0, 0, 0, 0, 0]
+                            + [1]
+                            + [0] * (768 - 13)
+                        ),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-opened-gif-putpalette",
+                )
+                receiver_step = image_step
             elif chain == "opened-p-putpalette-getpalette":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -15859,6 +15887,16 @@ def build_nuanced_cases(
             "name": "opened-p-load-save",
             "scenario_asset": "image/p-small.png",
             "chain": "opened-p-load-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "opened-gif-putpalette-save",
+            "mode": "P",
+            "scenario_asset": "image/p-small.gif",
+            "chain": "opened-gif-putpalette-save",
             "values": {"format": literal("PNG")},
         },
         {
