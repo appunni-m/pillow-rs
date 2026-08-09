@@ -1295,7 +1295,16 @@ pub fn simd_transform(
             arr[..len].copy_from_slice(&data[..len]);
             arr
         };
-        let f = filter_to_u32(filter);
+        // Pillow keeps palette/index images on nearest-neighbor sampling even
+        // when a different public resampling filter is requested. Preserve
+        // the CPU path's mode-specific behavior before entering the packed
+        // SIMD transform kernel; interpolating palette indices would produce
+        // invalid colors rather than a filtered image.
+        let f = if matches!(mode, Some("1" | "P")) {
+            0
+        } else {
+            filter_to_u32(filter)
+        };
         let fill_rgba = match resolved_fill {
             Some(c) => pack_rgba(c),
             None => 0u32,

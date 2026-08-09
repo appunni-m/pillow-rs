@@ -908,7 +908,10 @@ fn transform_affine_generic(
                         + fx * (1.0 - fy) * p10
                         + (1.0 - fx) * fy * p01
                         + fx * fy * p11;
-                    out[out_idx + ch] = v.round() as u8;
+                    // Pillow's ImagingTransformAffine byte path stores the
+                    // weighted sample by truncating toward zero; rounding
+                    // here turns exact half-way samples one value too high.
+                    out[out_idx + ch] = v.clamp(0.0, 255.0) as u8;
                 }
             } else {
                 for ch in 0..channels.min(4) {

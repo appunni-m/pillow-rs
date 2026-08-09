@@ -2,6 +2,7 @@
 
 use crate::error::PilError;
 use crate::image::Image;
+use crate::ops::resize::{parse_resample_input, ResampleInput};
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
 
 /// Host-neutral transform data after the binding has performed only Python
@@ -396,18 +397,28 @@ impl Image {
     /// converted to neutral Rust inputs.
     ///
     /// Methods `0` through `4` cover affine, extent, perspective, quad, and
-    /// mesh transforms. Resampling and fill are retained in the public
-    /// signature for compatibility; the current core transform backend
-    /// samples with nearest-neighbor, matching the existing implementation.
+    /// mesh transforms. Resampling is parsed and retained in the core pipeline
+    /// so the selected backend observes the public Pillow filter.
     pub fn transform_public(
         &self,
         size: (u32, u32),
         method: i32,
         data: Option<TransformData>,
-        _resample: i32,
+        resample: i32,
         _fill: i32,
         fillcolor: Option<TransformFill>,
     ) -> Result<Image, PilError> {
+        let requested_filter =
+            parse_resample_input(Some(ResampleInput::Code(i64::from(resample))))?;
+        // Pillow's indexed affine transform keeps the raw palette index and
+        // therefore uses nearest-neighbor sampling regardless of the public
+        // filter code. Keep the operation palette-safe so materialization does
+        // not expand P into RGB before the backend runs.
+        let filter = if self.has_palette_mode() || self.explicit_mode() == Some("1") {
+            ResampleFilter::Nearest
+        } else {
+            requested_filter
+        };
         let (fill, palette_fill) = self.public_transform_fill(fillcolor)?;
         match method {
             0 => {
@@ -419,9 +430,9 @@ impl Image {
                 // their index, while tuple/name fills resolve to palette index
                 // zero through the same helper.
                 if let Some(index) = palette_fill {
-                    self.transform_affine_palette_index(size, &matrix, index)
+                    self.transform_affine_palette_index_with_filter(size, &matrix, index, filter)
                 } else {
-                    self.transform_affine(size, &matrix, fill)
+                    self.transform_affine_with_palette_fill(size, &matrix, fill, None, filter)
                 }
             }
             1 => {
@@ -451,7 +462,7 @@ impl Image {
                     (y1 - y0) / f64::from(size.1),
                     *y0,
                 ];
-                self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill)
+                self.transform_affine_with_palette_fill(size, &matrix, fill, palette_fill, filter)
             }
             2 | 3 => {
                 let Some(TransformData::Affine(data)) = data else {
@@ -472,9 +483,16 @@ impl Image {
                         &data[..8],
                         fill,
                         palette_fill,
+                        filter,
                     )
                 } else {
-                    self.transform_quad_with_palette_fill(size, &data[..8], fill, palette_fill)
+                    self.transform_quad_with_palette_fill(
+                        size,
+                        &data[..8],
+                        fill,
+                        palette_fill,
+                        filter,
+                    )
                 }
             }
             4 => {
@@ -510,7 +528,7 @@ impl Image {
                     }
                     None => return Err(PilError::ValueError("missing method data".into())),
                 };
-                self.transform_mesh(size, data, fill)
+                self.transform_mesh_with_filter(size, data, fill, filter)
             }
             _ => Err(PilError::ValueError("unknown transformation method".into())),
         }
@@ -532,7 +550,13 @@ impl Image {
         fillcolor: (u8, u8, u8, u8),
     ) -> Result<Image, PilError> {
         let palette_fill = self.has_palette_mode().then_some(0);
-        self.transform_affine_with_palette_fill(size, matrix, fillcolor, palette_fill)
+        self.transform_affine_with_palette_fill(
+            size,
+            matrix,
+            fillcolor,
+            palette_fill,
+            ResampleFilter::Nearest,
+        )
     }
 
     /// Applies an affine transform to a `P` image using a raw fill index.
@@ -556,11 +580,32 @@ impl Image {
                 "palette fill index requires mode P".into(),
             ));
         }
+        self.transform_affine_palette_index_with_filter(
+            size,
+            matrix,
+            fill_index,
+            ResampleFilter::Nearest,
+        )
+    }
+
+    fn transform_affine_palette_index_with_filter(
+        &self,
+        size: (u32, u32),
+        matrix: &[f64],
+        fill_index: u8,
+        filter: ResampleFilter,
+    ) -> Result<Image, PilError> {
+        if !self.has_palette_mode() {
+            return Err(PilError::ValueError(
+                "palette fill index requires mode P".into(),
+            ));
+        }
         self.transform_affine_with_palette_fill(
             size,
             matrix,
             (fill_index, 0, 0, 255),
             Some(fill_index),
+            filter,
         )
     }
 
@@ -570,6 +615,7 @@ impl Image {
         matrix: &[f64],
         fillcolor: (u8, u8, u8, u8),
         palette_fill: Option<u8>,
+        filter: ResampleFilter,
     ) -> Result<Image, PilError> {
         if matrix.len() != 6 {
             return Err(PilError::ValueError(
@@ -587,7 +633,7 @@ impl Image {
                 h: dst_h,
                 method: TransformMethod::Affine,
                 data,
-                filter: ResampleFilter::Nearest,
+                filter,
                 fill,
                 palette_fill,
             },
@@ -600,6 +646,7 @@ impl Image {
         data: &[f64],
         fillcolor: (u8, u8, u8, u8),
         palette_fill: Option<u8>,
+        filter: ResampleFilter,
     ) -> Result<Image, PilError> {
         if data.len() != 8 {
             return Err(PilError::ValueError("wrong number of data points".into()));
@@ -611,7 +658,7 @@ impl Image {
                 h: size.1,
                 method: TransformMethod::Perspective,
                 data: data.to_vec(),
-                filter: ResampleFilter::Nearest,
+                filter,
                 fill: Some(fillcolor),
                 palette_fill,
             },
@@ -624,6 +671,7 @@ impl Image {
         data: &[f64],
         fillcolor: (u8, u8, u8, u8),
         palette_fill: Option<u8>,
+        filter: ResampleFilter,
     ) -> Result<Image, PilError> {
         if data.len() != 8 {
             return Err(PilError::ValueError("wrong number of data points".into()));
@@ -635,7 +683,7 @@ impl Image {
                 h: size.1,
                 method: TransformMethod::Quad,
                 data: data.to_vec(),
-                filter: ResampleFilter::Nearest,
+                filter,
                 fill: Some(fillcolor),
                 palette_fill,
             },
@@ -670,6 +718,16 @@ impl Image {
         data: Vec<f64>,
         fillcolor: (u8, u8, u8, u8),
     ) -> Result<Image, PilError> {
+        self.transform_mesh_with_filter(size, data, fillcolor, ResampleFilter::Nearest)
+    }
+
+    fn transform_mesh_with_filter(
+        &self,
+        size: (u32, u32),
+        data: Vec<f64>,
+        fillcolor: (u8, u8, u8, u8),
+        filter: ResampleFilter,
+    ) -> Result<Image, PilError> {
         Ok(Image::push_op(
             self,
             PipelineOp::Transform {
@@ -677,7 +735,7 @@ impl Image {
                 h: size.1,
                 method: TransformMethod::Mesh,
                 data,
-                filter: ResampleFilter::Nearest,
+                filter,
                 fill: Some(fillcolor),
                 palette_fill: None,
             },

@@ -3291,27 +3291,31 @@ pub fn transform(
                     let inv_fx = 1.0 - fx;
                     let inv_fy = 1.0 - fy;
 
-                    // Horizontal then vertical interpolation
-                    let top_r = inv_fx * r00 + fx * r10;
-                    let top_g = inv_fx * g00 + fx * g10;
-                    let top_b = inv_fx * b00 + fx * b10;
-                    let top_a = inv_fx * a00 + fx * a10;
+                    // Keep the same term order as the CPU byte path. Pillow's
+                    // ImagingTransformAffine stores weighted samples by
+                    // truncating toward zero, so exact half-way values round
+                    // down instead of receiving a +0.5 adjustment.
+                    let out_r_f = inv_fx * inv_fy * r00
+                        + fx * inv_fy * r10
+                        + inv_fx * fy * r01
+                        + fx * fy * r11;
+                    let out_g_f = inv_fx * inv_fy * g00
+                        + fx * inv_fy * g10
+                        + inv_fx * fy * g01
+                        + fx * fy * g11;
+                    let out_b_f = inv_fx * inv_fy * b00
+                        + fx * inv_fy * b10
+                        + inv_fx * fy * b01
+                        + fx * fy * b11;
+                    let out_a_f = inv_fx * inv_fy * a00
+                        + fx * inv_fy * a10
+                        + inv_fx * fy * a01
+                        + fx * fy * a11;
 
-                    let bot_r = inv_fx * r01 + fx * r11;
-                    let bot_g = inv_fx * g01 + fx * g11;
-                    let bot_b = inv_fx * b01 + fx * b11;
-                    let bot_a = inv_fx * a01 + fx * a11;
-
-                    let out_r_f = inv_fy * top_r + fy * bot_r;
-                    let out_g_f = inv_fy * top_g + fy * bot_g;
-                    let out_b_f = inv_fy * top_b + fy * bot_b;
-                    let out_a_f = inv_fy * top_a + fy * bot_a;
-
-                    // Round to nearest integer and clamp to [0, 255]
-                    let out_r = ((out_r_f + 0.5) as u32).min(255);
-                    let out_g_raw = ((out_g_f + 0.5) as u32).min(255);
-                    let out_b_raw = ((out_b_f + 0.5) as u32).min(255);
-                    let out_a_raw = ((out_a_f + 0.5) as u32).min(255);
+                    let out_r = out_r_f.clamp(0.0, 255.0) as u32;
+                    let out_g_raw = out_g_f.clamp(0.0, 255.0) as u32;
+                    let out_b_raw = out_b_f.clamp(0.0, 255.0) as u32;
+                    let out_a_raw = out_a_f.clamp(0.0, 255.0) as u32;
 
                     // Mode-aware channel output
                     let out_g = if has_gb { out_g_raw } else { out_r };
