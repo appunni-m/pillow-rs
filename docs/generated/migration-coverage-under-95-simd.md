@@ -10,22 +10,22 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 4ccc19e0903eed26a993c33757d008d280790cdb
+base_commit: e3c5e21639468e5e5789daf83dbadb3abe403ffd
 threshold: 95%
 metric: regions
-total_regions: 106036
-covered_regions: 61716
-region_coverage: 58.2028%
-total_lines: 67962
-covered_lines: 39752
-line_coverage: 58.4915%
-total_branches: 13921
-covered_branches: 6887
-branch_coverage: 49.4720%
-total_functions: 5278
-covered_functions: 3011
-function_coverage: 57.0481%
-in_repo_files_below_threshold: 32
+total_regions: 106059
+covered_regions: 61841
+region_coverage: 58.3081%
+total_lines: 68018
+covered_lines: 39820
+line_coverage: 58.5433%
+total_branches: 13927
+covered_branches: 6899
+branch_coverage: 49.5369%
+total_functions: 5280
+covered_functions: 3010
+function_coverage: 57.0076%
+in_repo_files_below_threshold: 33
 external_dependency_files_below_threshold: 43
 ```
 
@@ -34,18 +34,21 @@ The in-repository list is ordered from lowest to highest region coverage. The
 from the actionable pillow-rs list; they are an external-library backlog.
 
 The fresh SIMD parity audit selected all 2,842 cases: 2,798 passed, 44 had
-ordinary parity mismatches, and 0 had infrastructure errors. The mismatches
-remain visible in the parity result; they are not removed from the coverage
-denominator. The public SIMD coverage additions and fixes in this pass were
-RGB bilinear rotation and affine-transform workflows, toroidal offset
-semantics, non-byte conversion fallback, and alpha-composite mode preservation.
+ordinary parity mismatches, and 0 had infrastructure errors. The coverage
+workflow executed all 24 plans and passed all 2,842 execution checks. The
+mismatches remain visible in the parity result; they are not removed from the
+coverage denominator. The public SIMD coverage additions and fixes in this
+pass were RGB bilinear rotation and affine-transform workflows, public
+transform filter propagation, Pillow-compatible byte truncation, palette-safe
+indexed transforms, toroidal offset semantics, non-byte conversion fallback,
+and alpha-composite mode preservation.
 
 SIMD implementation-file coverage is:
 
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
-| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1927/2232 (86.33%) | 1084/1230 (88.13%) | 89/144 (61.81%) | 74/84 (88.10%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4510/5143 (87.69%) | 2247/2543 (88.36%) | 576/794 (72.54%) | 102/107 (95.33%) |
+| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1932/2237 (86.37%) | 1086/1232 (88.15%) | 89/144 (61.81%) | 74/84 (88.10%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4625/5123 (90.28%) | 2305/2547 (90.50%) | 584/794 (73.55%) | 102/107 (95.33%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 (88.57%) | 59/67 (88.06%) | 0/0 | 8/12 (66.67%) |
 
 | Rank | File | Regions | Region coverage | Lines |
@@ -61,7 +64,7 @@ SIMD implementation-file coverage is:
 | 9 | `pillow-rs/src/raster/color/from_primitive.rs` | 16/80 | 20.0% | 8/43 |
 | 10 | `pillow-rs/src/raster/dynamic.rs` | 337/1519 | 22.2% | 201/787 |
 | 11 | `pillow-rs/src/compute/pool_cpu/ops/color.rs` | 119/506 | 23.5% | 55/217 |
-| 12 | `pillow-rs/src/compute/pool_cpu/ops/effects.rs` | 990/2649 | 37.4% | 532/1321 |
+| 12 | `pillow-rs/src/compute/pool_cpu/ops/effects.rs` | 990/2649 | 37.4% | 532/1324 |
 | 13 | `pillow-rs/src/compute/registry.rs` | 999/2235 | 44.7% | 704/1368 |
 | 14 | `pillow-rs/src/raster/color/from_color.rs` | 85/190 | 44.7% | 49/102 |
 | 15 | `pillow-rs/src/lib.rs` | 172/382 | 45.0% | 176/392 |
@@ -71,14 +74,15 @@ SIMD implementation-file coverage is:
 | 19 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
 | 20 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
 | 21 | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1394/1700 | 82.0% | 730/871 |
-| 22 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1927/2232 | 86.3% | 1084/1230 |
-| 23 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4510/5143 | 87.7% | 2247/2543 |
-| 24 | `pillow-rs/src/ops/pil_resize.rs` | 1020/1159 | 88.0% | 613/679 |
-| 25 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 | 88.6% | 59/67 |
-| 26 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
+| 22 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1932/2237 | 86.4% | 1086/1232 |
+| 23 | `pillow-rs/src/ops/pil_resize.rs` | 1020/1159 | 88.0% | 613/679 |
+| 24 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 | 88.6% | 59/67 |
+| 25 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
+| 26 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4625/5123 | 90.3% | 2305/2547 |
 | 27 | `pillow-rs/src/image.rs` | 4797/5291 | 90.7% | 3007/3263 |
-| 28 | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% | 402/418 |
-| 29 | `pillow-rs/src/ops/crop.rs` | 287/312 | 92.0% | 200/206 |
-| 30 | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% | 474/487 |
-| 31 | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% | 1274/1317 |
-| 32 | `pillow-rs/src/raster/buffer.rs` | 272/290 | 93.8% | 184/202 |
+| 28 | `pillow-rs/src/ops/transform.rs` | 644/703 | 91.6% | 459/507 |
+| 29 | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% | 402/418 |
+| 30 | `pillow-rs/src/ops/crop.rs` | 287/312 | 92.0% | 200/206 |
+| 31 | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% | 474/487 |
+| 32 | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% | 1274/1317 |
+| 33 | `pillow-rs/src/raster/buffer.rs` | 272/290 | 93.8% | 184/202 |

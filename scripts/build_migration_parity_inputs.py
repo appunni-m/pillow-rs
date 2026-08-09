@@ -9589,7 +9589,7 @@ def build_nuanced_cases(
             "values": {
                 "size": literal([9, 8]),
                 "method": literal(0),
-                "data": literal([1, 0, 0, 0, 1, 0]),
+                "data": literal([1, 0, 0.25, 0, 1, 0.25]),
                 "resample": literal(2),
             },
         },
