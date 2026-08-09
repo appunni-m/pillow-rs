@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1797
-- Active parity workflows: 2845
-- Unique active workflow signatures: 2845
+- Active parity workflows: 2855
+- Unique active workflow signatures: 2855
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1667
+- Deliberate nuanced workflows: 1677
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 211 |
-| `PIL.Image.Image` | 1384 |
+| `PIL.Image.Image` | 1388 |
 | `PIL.ImageChops` | 111 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 215 |
+| `PIL.ImageOps` | 221 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -540,7 +540,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.la-negative-scalar-packs`
 - `PIL.Image.Image.paste.nuanced.la-source-into-rgb`
 - `PIL.Image.Image.paste.nuanced.loaded-p-source`
+- `PIL.Image.Image.paste.nuanced.negative-coords-materialized`
 - `PIL.Image.Image.paste.nuanced.none-source-error`
+- `PIL.Image.Image.paste.nuanced.opaque-l-mask`
+- `PIL.Image.Image.paste.nuanced.opaque-rgba-l-mask`
 - `PIL.Image.Image.paste.nuanced.opened-i16-scalar`
 - `PIL.Image.Image.paste.nuanced.opened-i16-two-tuple-error`
 - `PIL.Image.Image.paste.nuanced.opened-i16n-scalar`
@@ -552,6 +555,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.pa-five-tuple-error`
 - `PIL.Image.Image.paste.nuanced.pa-from-l`
 - `PIL.Image.Image.paste.nuanced.pa-from-p`
+- `PIL.Image.Image.paste.nuanced.partial-l-mask`
 - `PIL.Image.Image.paste.nuanced.partial-rgba-l-mask`
 - `PIL.Image.Image.paste.nuanced.region-mask-mismatch`
 - `PIL.Image.Image.paste.nuanced.rgb-four-component-clamps`
@@ -1567,10 +1571,16 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.truetype.nuanced.negative-fractional-size`
 - `PIL.ImageFont.truetype.nuanced.oversized-size`
 - `PIL.ImageFont.truetype.nuanced.zero-size`
+- `PIL.ImageOps.autocontrast.nuanced.empty-l`
 - `PIL.ImageOps.autocontrast.nuanced.invalid-mask-type`
 - `PIL.ImageOps.autocontrast.nuanced.mask-size-mismatch`
 - `PIL.ImageOps.autocontrast.nuanced.materialized-l`
+- `PIL.ImageOps.autocontrast.nuanced.nonzero-l-range`
+- `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-green-blue-fallback`
+- `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-range`
+- `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-red-fallback`
 - `PIL.ImageOps.autocontrast.nuanced.p-mode`
+- `PIL.ImageOps.autocontrast.nuanced.single-pixel-l`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-cmyk`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-f`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-i`
