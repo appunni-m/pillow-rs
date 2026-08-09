@@ -20,9 +20,13 @@ use std::sync::Arc;
 
 /// Convert PIL mode string to SIMD mode code.
 /// 0=L, 1=LA, 2=RGB, 3=RGBA
-fn mode_to_u32(mode: Option<&str>) -> u32 {
+fn mode_to_u32(img: &DynamicImage, mode: Option<&str>) -> u32 {
     match mode {
-        None | Some("RGBA") => 3,
+        // Most ordinary Pillow modes have no explicit tag. Derive those from
+        // the native raster so L/LA/RGB pipelines exercise the matching SIMD
+        // lane instead of being treated as RGBA storage.
+        None => dynimg_mode(img),
+        Some("RGBA") => 3,
         Some("RGB") => 2,
         Some("LA" | "PA") => 1,
         Some("L" | "1" | "P") => 0,
@@ -191,7 +195,7 @@ pub fn simd_invert(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::invert(&mut pixels, mode_code);
@@ -203,7 +207,7 @@ pub fn simd_grayscale(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::grayscale(&mut pixels, mode_code);
@@ -218,7 +222,7 @@ pub fn simd_duplicate(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::duplicate(&mut pixels, mode_code);
@@ -230,7 +234,7 @@ pub fn simd_invert_chops(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::invert_chops(&mut pixels, mode_code);
@@ -247,7 +251,7 @@ pub fn simd_solarize(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Solarize { threshold } = op {
         super::scalar::solarize(&mut pixels, mode_code, *threshold);
@@ -261,7 +265,7 @@ pub fn simd_posterize(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Posterize { bits } = op {
         super::scalar::posterize(&mut pixels, mode_code, *bits as u32);
@@ -275,7 +279,7 @@ pub fn simd_brightness(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Brightness { factor } = op {
         super::scalar::brightness(&mut pixels, mode_code, (factor * 1000.0) as u32);
@@ -289,7 +293,7 @@ pub fn simd_contrast(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Contrast { factor } = op {
         super::scalar::contrast(&mut pixels, mode_code, (factor * 1000.0) as u32);
@@ -303,7 +307,7 @@ pub fn simd_color_saturation(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::ColorSaturation { factor } = op {
         super::scalar::color_saturation(&mut pixels, mode_code, (factor * 1000.0) as u32);
@@ -317,7 +321,7 @@ pub fn simd_sharpness(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Sharpness { factor } = op {
         super::scalar::sharpness(&mut pixels, w, h, mode_code, (factor * 1000.0) as u32);
@@ -331,7 +335,7 @@ pub fn simd_colorize(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Colorize {
         black,
@@ -364,7 +368,7 @@ pub fn simd_constant(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Constant { value } = op {
         let packed =
@@ -380,7 +384,7 @@ pub fn simd_offset(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Offset { x, y } = op {
         let dx = x.rem_euclid(256) as u32;
@@ -400,7 +404,7 @@ pub fn simd_flip(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::flip(&mut pixels, w, h, mode_code);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
@@ -412,7 +416,7 @@ pub fn simd_mirror(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::mirror(&mut pixels, w, h, mode_code);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
@@ -424,7 +428,7 @@ pub fn simd_equalize(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     super::scalar::equalize(&mut pixels, w, h, mode_code);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
@@ -436,7 +440,7 @@ pub fn simd_autocontrast(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Autocontrast { cutoff } = op {
         super::scalar::autocontrast(&mut pixels, w, h, mode_code, (*cutoff as u32).max(1));
@@ -454,7 +458,7 @@ pub fn simd_median_filter(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::MedianFilter { size } = op {
         if mode == Some("F") {
@@ -472,7 +476,7 @@ pub fn simd_max_filter(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::MaxFilter { size } = op {
         if mode == Some("F") {
@@ -490,7 +494,7 @@ pub fn simd_min_filter(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::MinFilter { size } = op {
         if mode == Some("F") {
@@ -508,7 +512,7 @@ pub fn simd_rank_filter(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::RankFilter { size, rank } = op {
         if mode == Some("F") {
@@ -526,7 +530,7 @@ pub fn simd_filter_3x3(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Filter3x3 {
         kernel,
@@ -549,7 +553,7 @@ pub fn simd_filter_5x5(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Filter5x5 {
         kernel,
@@ -572,7 +576,7 @@ pub fn simd_box_blur(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::BoxBlur { radius } = op {
         super::scalar::box_blur(&mut pixels, w, h, mode_code, *radius);
@@ -586,7 +590,7 @@ pub fn simd_gaussian_blur(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::GaussianBlur { sigma } = op {
         super::scalar::gaussian_blur(&mut pixels, w, h, mode_code, *sigma);
@@ -600,7 +604,7 @@ pub fn simd_quantize(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Quantize { colors, .. } = op {
         super::scalar::quantize(&mut pixels, w, h, mode_code, *colors);
@@ -620,7 +624,7 @@ macro_rules! dual_op_adapter {
             mode: Option<&str>,
         ) -> Result<DynamicImage, PilError> {
             let (w, h) = img.dimensions();
-            let mode_code = mode_to_u32(mode);
+            let mode_code = mode_to_u32(img, mode);
             let mut pixels = pixels_from_dynimg(img);
             let other_pixels = match op {
                 PipelineOp::Multiply { other }
@@ -668,7 +672,7 @@ pub fn simd_add(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Add {
         other,
@@ -694,7 +698,7 @@ pub fn simd_subtract(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Subtract {
         other,
@@ -720,7 +724,7 @@ pub fn simd_blend(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Blend { other, alpha } = op {
         let other_pixels = pixels_from_arc(other)?;
@@ -735,7 +739,7 @@ pub fn simd_blend_module(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::BlendModule { other, alpha } = op {
         let other_pixels = pixels_from_arc(other)?;
@@ -750,7 +754,7 @@ pub fn simd_composite(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Composite { other, mask } = op {
         let other_pixels = pixels_from_arc(other)?;
@@ -766,7 +770,7 @@ pub fn simd_composite_module(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::CompositeModule {
         other,
@@ -817,7 +821,7 @@ pub fn simd_transpose(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let method_code: u32 = match op {
         PipelineOp::Transpose { method } => match method {
             TransposeMethod::FlipLeftRight => 0,
@@ -1027,7 +1031,7 @@ pub fn simd_pad(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Pad {
         w: dw,
@@ -1071,7 +1075,7 @@ pub fn simd_expand(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Expand { border, fill } = op {
         let fill_rgba = pack_rgba(*fill);
@@ -1088,7 +1092,7 @@ pub fn simd_crop_border(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::CropBorder { border } = op {
         let (result, nw, nh) = super::scalar::crop_border(&pixels, w, h, mode_code, *border);
@@ -1104,7 +1108,7 @@ pub fn simd_crop(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Crop {
         left,
@@ -1147,7 +1151,7 @@ pub fn simd_rotate(
                 img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
             );
         }
-        let mode_code = mode_to_u32(mode);
+        let mode_code = mode_to_u32(img, mode);
         let pixels = pixels_from_dynimg(img);
         let fill_rgba = match fill {
             Some(c) => pack_rgba(*c),
@@ -1167,7 +1171,7 @@ pub fn simd_reduce(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::Reduce { x_factor, y_factor } = op {
         let (result, nw, nh) =
@@ -1210,7 +1214,7 @@ pub fn simd_remap_palette(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
     if let PipelineOp::RemapPalette { dest_map } = op {
         let mut inverse = [0u8; 256];
@@ -1261,7 +1265,7 @@ pub fn simd_transform(
                 mode,
             );
         }
-        let mode_code = mode_to_u32(mode);
+        let mode_code = mode_to_u32(img, mode);
         let pixels = pixels_from_dynimg(img);
         let matrix: [f64; 8] = {
             let mut arr = [0.0f64; 8];
@@ -1292,7 +1296,7 @@ pub fn simd_put_pixel(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::PutPixel { x, y, color, .. } = op {
         let packed = pack_rgba(*color);
@@ -1339,7 +1343,7 @@ pub fn simd_eval(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::Eval { lut } = op {
         let lut_arr: [u8; 1024] = {
@@ -1362,7 +1366,7 @@ pub fn simd_point_op(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::PointOp { lut } = op {
         let lut_arr: [u8; 1024] = {
@@ -1390,7 +1394,7 @@ pub fn simd_paste(
     } else if mode == Some("PA") {
         1
     } else if mode.is_some() {
-        mode_to_u32(mode)
+        mode_to_u32(img, mode)
     } else {
         dynimg_mode(img)
     };
@@ -1442,7 +1446,7 @@ pub fn simd_alpha_composite(
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(mode);
+    let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
     if let PipelineOp::AlphaComposite { source, dest, src } = op {
         let src_img = arc_to_dynimg(source)?;
