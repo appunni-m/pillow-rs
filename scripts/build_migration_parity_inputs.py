@@ -221,6 +221,52 @@ def little_endian_l16_tiff() -> bytes:
     return bytes(data)
 
 
+def little_endian_special_tiff(mode: str) -> bytes:
+    """Return a minimal little-endian TIFF for scalar or CMYK mode parity."""
+
+    if mode == "F":
+        bits = 32
+        photometric = 1
+        samples = 1
+        sample_format = 3
+        pixels = struct.pack("<2f", 1.5, -2.25)
+    elif mode == "I":
+        bits = 32
+        photometric = 1
+        samples = 1
+        sample_format = 2
+        pixels = struct.pack("<2i", 42, -7)
+    elif mode == "CMYK":
+        bits = 8
+        photometric = 5
+        samples = 4
+        sample_format = 1
+        pixels = bytes([16, 32, 64, 128, 200, 150, 100, 50])
+    else:
+        raise ValueError(f"unsupported special TIFF mode: {mode}")
+
+    strip_offset = 134
+    entries = [
+        (256, 4, 1, struct.pack("<I", 2)),
+        (257, 4, 1, struct.pack("<I", 1)),
+        (258, 3, 1, struct.pack("<H", bits) + b"\x00\x00"),
+        (259, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+        (262, 3, 1, struct.pack("<H", photometric) + b"\x00\x00"),
+        (273, 4, 1, struct.pack("<I", strip_offset)),
+        (277, 3, 1, struct.pack("<H", samples) + b"\x00\x00"),
+        (278, 4, 1, struct.pack("<I", 1)),
+        (279, 4, 1, struct.pack("<I", len(pixels))),
+        (339, 3, 1, struct.pack("<H", sample_format) + b"\x00\x00"),
+    ]
+    data = bytearray(b"II*\x00" + struct.pack("<I", 8))
+    data += struct.pack("<H", len(entries))
+    for tag, kind, count, value in entries:
+        data += struct.pack("<HHI", tag, kind, count) + value
+    data += struct.pack("<I", 0)
+    data += pixels
+    return bytes(data)
+
+
 def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
     """Add one deterministic EXIF APP1 variant to a valid JPEG stimulus.
 
@@ -814,6 +860,24 @@ class WorkflowBuilder:
                 data_descriptor = self.inline_bytes(
                     f"{label}-l16-tiff",
                     little_endian_l16_tiff(),
+                    "image/tiff",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image in {"cmyk-tiff", "f32-tiff", "i32-tiff"}:
+                mode = {
+                    "cmyk-tiff": "CMYK",
+                    "f32-tiff": "F",
+                    "i32-tiff": "I",
+                }[self.scenario_inline_image]
+                data_descriptor = self.inline_bytes(
+                    f"{label}-{self.scenario_inline_image}",
+                    little_endian_special_tiff(mode),
                     "image/tiff",
                 )
                 step_id = self.add_step(
@@ -16029,6 +16093,30 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "png-one-bit-opened",
             "scenario_inline_image": "l1-png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-cmyk-tiff",
+            "scenario_inline_image": "cmyk-tiff",
+            "values": {"xy": literal([0, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-f32-tiff",
+            "scenario_inline_image": "f32-tiff",
+            "values": {"xy": literal([0, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-i32-tiff",
+            "scenario_inline_image": "i32-tiff",
+            "values": {"xy": literal([0, 0])},
         },
         {
             "surface": "PIL.Image.Image",

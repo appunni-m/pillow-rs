@@ -72784,6 +72784,174 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getpixel.nuanced.opened-cmyk-tiff",
+      "surface": "PIL.Image.Image",
+      "operation": "getpixel",
+      "covers": [
+        "PIL.Image.Image.getpixel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-cmyk-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAQAAAAIBAwABAAAACAAAAAMBAwABAAAAAQAAAAYBAwABAAAABQAAABEBBAABAAAAhgAAABUBAwABAAAABAAAABYBBAABAAAAAQAAABcBBAABAAAACAAAAFMBAwABAAAAAQAAAAAAAAAQIECAyJZkMg==",
+          "sha256": "2af435776386e5cf2279e73434681db2c7096c7b47b55cb0d4dfbe9ca0359490",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-cmyk-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getpixel.nuanced.opened-f32-tiff",
+      "surface": "PIL.Image.Image",
+      "operation": "getpixel",
+      "covers": [
+        "PIL.Image.Image.getpixel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-f32-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAQAAAAIBAwABAAAAIAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABUBAwABAAAAAQAAABYBBAABAAAAAQAAABcBBAABAAAACAAAAFMBAwABAAAAAwAAAAAAAAAAAMA/AAAQwA==",
+          "sha256": "71acd763a521412d29411c67777e0881bf98263162c87e65320c41e4c9b66bfd",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-f32-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.getpixel.nuanced.opened-i32-tiff",
+      "surface": "PIL.Image.Image",
+      "operation": "getpixel",
+      "covers": [
+        "PIL.Image.Image.getpixel.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-i32-tiff",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "SUkqAAgAAAAKAAABBAABAAAAAgAAAAEBBAABAAAAAQAAAAIBAwABAAAAIAAAAAMBAwABAAAAAQAAAAYBAwABAAAAAQAAABEBBAABAAAAhgAAABUBAwABAAAAAQAAABYBBAABAAAAAQAAABcBBAABAAAACAAAAFMBAwABAAAAAgAAAAAAAAAqAAAA+f///w==",
+          "sha256": "6becbfd759ee79631d2ec6d0040c48218910f46fff1a8ff17e4e5111f2127d2a",
+          "media_type": "image/tiff"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-i32-tiff"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.load.nuanced.png-p-opened",
       "surface": "PIL.Image.Image",
       "operation": "load",
