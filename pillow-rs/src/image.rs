@@ -1345,6 +1345,11 @@ impl Image {
             // native-channel rotate kernel.
             || (source.explicit_mode() == Some("PA")
                 && matches!(op, PipelineOp::Rotate { .. }))
+            // Pillow keeps P rotation in its native index layout, including a
+            // fillcolor. The rotate backend forces nearest sampling for P and
+            // interprets the first normalized fill component as the raw index.
+            || (source.explicit_mode() == Some("P")
+                && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow's ImagingTransform applies affine/projective sampling to
             // the native PA index/alpha pair and preserves PA. Keep this
             // channel-wise operation indexed so a retained RGB palette is not

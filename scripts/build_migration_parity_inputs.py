@@ -2709,6 +2709,18 @@ class WorkflowBuilder:
                     arguments={"mode": literal("RGB")},
                     step_id="setup-convert",
                 )
+            elif chain == "p-resize-rotate-fill":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-resize",
+                )
             elif chain == "p-resize-putalpha-verify":
                 image_step = self.ensure_image(mode="P")
                 resized_step = self.add_step(
@@ -9317,6 +9329,22 @@ def build_nuanced_cases(
                 "resample": literal(2),
                 "expand": literal(True),
                 "fillcolor": literal([1, 128]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": "p-resize-rotate-fill",
+            "mode": "P",
+            "chain": "p-resize-rotate-fill",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+            "values": {
+                "angle": literal(45),
+                "expand": literal(True),
+                "fillcolor": literal(5),
             },
             "observe_result": "tobytes",
         },
@@ -19970,6 +19998,16 @@ def build_nuanced_cases(
             "mode": "P",
             "chain": "palette-transparency-convert",
             "values": {"mode": literal("LA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "p-resize-convert-pipeline",
+            "mode": "P",
+            "chain": "p-resize-convert-verify",
+            "observe_result": "tobytes",
+            "values": {"mode": literal("RGB")},
         },
         {
             "surface": "PIL.Image.Image",
