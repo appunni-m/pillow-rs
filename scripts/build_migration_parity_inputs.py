@@ -729,6 +729,8 @@ class WorkflowBuilder:
             # palettes and use an L mask to distinguish native PA blending
             # from an accidental palette-to-RGBA expansion.
             requested_mode = "L" if label == "mask" else "PA"
+        if self.edge == "loaded-p-paste-source" and label == "im":
+            requested_mode = "P"
         if self.edge == "webp-alpha-mismatch" and label == "image":
             requested_mode = "RGBA"
         if self.edge == "mode-mismatch" and label not in {"image", "mask"}:
@@ -931,6 +933,31 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "loaded-p-paste-source" and label == "im":
+            # Keep this path public: open the committed indexed PNG, then
+            # explicitly load it so the operation receives Image::Paletted
+            # rather than the still-deferred Image::Bytes representation.
+            asset_id = self.ref(
+                f"{label}-asset",
+                "image/p-small.png",
+                "image/png",
+            )
+            opened_step = self.add_step(
+                "PIL.Image",
+                "open",
+                receiver=None,
+                arguments={"fp": asset_id},
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self.add_step(
+                "PIL.Image.Image",
+                "load",
+                receiver=binding(opened_step),
+                arguments={},
+                step_id=self.next_step_id(f"setup-{label}-load"),
+            )
+            self._image_steps[cache_key] = opened_step
+            return opened_step
         if self.scenario_asset is not None:
             # Stimulus workflows that open an encoded container (for example
             # the JPEG-with-EXIF `ImageOps.exif_transpose` cases) build the
@@ -15717,6 +15744,19 @@ def build_nuanced_cases(
             "observe_receiver": True,
             "values": {
                 "box": literal([0, 0, 16, 16]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-p-source",
+            "mode": "RGB",
+            "edge": "loaded-p-paste-source",
+            "size": [8, 8],
+            "observe_receiver": True,
+            "values": {
+                "box": literal([0, 0, 8, 8]),
             },
         },
         {
