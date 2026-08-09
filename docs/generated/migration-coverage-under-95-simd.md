@@ -3,9 +3,9 @@
 Generated from the managed SIMD LLVM snapshot; this is execution coverage, not parity proof.
 
 ```yaml
-snapshot_id: c39342ec-e5de-41a5-99a1-18dba22feea3
+snapshot_id: d5ebddad-4741-40c3-8abf-ac9fcb3a056a
 suite: migration-parity-rust-simd
-commit: d8e8dc3454bee8dd7aaaf6cd6ccd51b6fd1008c4
+commit: c57cd2d50b4803e4de9466a58fe2fed5cabfefbe
 threshold: 95%
 metric: regions
 in_repo_files_below_threshold: 33
@@ -16,11 +16,11 @@ The in-repository list is ordered from lowest to highest region coverage. 43 bel
 
 | Rank | File | Regions | Region coverage | Lines |
 | ---: | --- | ---: | ---: | ---: |
-| 1 | `pillow-rs/src/compute/pool_cpu/ops/filter.rs` | 0/959 | 0.0% | 0/568 |
-| 2 | `pillow-rs/src/compute/pool_cpu/ops/chops.rs` | 0/561 | 0.0% | 0/319 |
-| 3 | `pillow-rs/src/compute/pool_cpu/ops/enhance.rs` | 0/398 | 0.0% | 0/216 |
-| 4 | `pillow-rs/src/raster/traits/primitive.rs` | 0/225 | 0.0% | 0/132 |
-| 5 | `pillow-rs/src/ops/utils.rs` | 0/65 | 0.0% | 0/48 |
+| 1 | `pillow-rs/src/compute/pool_cpu/ops/chops.rs` | 0/561 | 0.0% | 0/319 |
+| 2 | `pillow-rs/src/compute/pool_cpu/ops/enhance.rs` | 0/398 | 0.0% | 0/216 |
+| 3 | `pillow-rs/src/compute/pool_cpu/ops/filter.rs` | 0/959 | 0.0% | 0/568 |
+| 4 | `pillow-rs/src/ops/utils.rs` | 0/65 | 0.0% | 0/48 |
+| 5 | `pillow-rs/src/raster/traits/primitive.rs` | 0/225 | 0.0% | 0/132 |
 | 6 | `pillow-rs/src/raster/traits/view.rs` | 0/25 | 0.0% | 0/24 |
 | 7 | `pillow-rs/src/compute/pool_gpu/mod.rs` | 6/1718 | 0.3% | 6/1263 |
 | 8 | `pillow-rs/src/compute/pool_cpu/ops/imageops.rs` | 69/961 | 7.2% | 42/519 |
@@ -35,12 +35,12 @@ The in-repository list is ordered from lowest to highest region coverage. 43 bel
 | 17 | `pillow-rs/src/lib.rs` | 172/382 | 45.0% | 176/392 |
 | 18 | `pillow-rs/src/error.rs` | 3/6 | 50.0% | 3/6 |
 | 19 | `pillow-rs/src/raster/color/pixel_rgb.rs` | 48/78 | 61.5% | 27/48 |
-| 20 | `pillow-rs-py/src/lib.rs` | 4620/5868 | 78.7% | 3092/3626 |
+| 20 | `pillow-rs-py/src/lib.rs` | 4619/5868 | 78.7% | 3092/3626 |
 | 21 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
 | 22 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
 | 23 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 3995/4840 | 82.5% | 1994/2372 |
-| 24 | `pillow-rs/src/color.rs` | 1061/1235 | 85.9% | 601/687 |
-| 25 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1773/2065 | 85.9% | 1033/1171 |
+| 24 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1773/2065 | 85.9% | 1033/1171 |
+| 25 | `pillow-rs/src/color.rs` | 1061/1235 | 85.9% | 601/687 |
 | 26 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 | 88.6% | 59/67 |
 | 27 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
 | 28 | `pillow-rs/src/image.rs` | 4797/5291 | 90.7% | 3007/3263 |
