@@ -14028,6 +14028,33 @@ def build_nuanced_cases(
             }
             for mode in ("LA", "RGBA")
         ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.method",
+                "name": "simd-native-scalar-fallback-f",
+                "mode": "F",
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([9, 6]),
+                    "method": literal(0),
+                },
+            }
+            for operation in ("contain", "cover", "fit")
+        ),
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.resample",
+            "name": "simd-native-scalar-fallback-f",
+            "mode": "F",
+            "observe_result": "tobytes",
+            "values": {
+                "factor": literal(1.5),
+                "resample": literal("NEAREST"),
+            },
+        },
         {
             "surface": "PIL.ImageOps",
             "operation": "contain",
