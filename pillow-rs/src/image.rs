@@ -1253,10 +1253,20 @@ impl Image {
             // newly allocated core image intentionally has no palette.
             | PipelineOp::InvertChops
             // Pillow's Chops.c arithmetic also operates on raw indexed
-            // samples for P images. The result remains P, but its newly
-            // allocated core has no palette attached.
+            // samples for P/PA images. The result remains indexed, but its
+            // newly allocated core has no palette attached.
             | PipelineOp::Add { .. }
             | PipelineOp::Subtract { .. }
+            | PipelineOp::Multiply { .. }
+            | PipelineOp::Screen { .. }
+            | PipelineOp::Darker { .. }
+            | PipelineOp::Lighter { .. }
+            | PipelineOp::Difference { .. }
+            | PipelineOp::Overlay { .. }
+            | PipelineOp::HardLight { .. }
+            | PipelineOp::SoftLight { .. }
+            | PipelineOp::AddModulo { .. }
+            | PipelineOp::SubtractModulo { .. }
             // ImageOps.expand allocates the destination in the source mode;
             // P and PA therefore carry raw index (and alpha) samples through
             // the border operation instead of being expanded to RGB(A).

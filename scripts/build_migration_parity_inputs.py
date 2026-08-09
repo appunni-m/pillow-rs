@@ -1372,6 +1372,8 @@ class WorkflowBuilder:
             size = [4, 1]
         elif self.edge == "chops-composite-opened-p-pipeline":
             size = [8, 8]
+        elif self.edge == "chops-binary-varied-indexed":
+            size = [4, 1]
         elif self.edge == "pa-composite-palette-expansion":
             size = [4, 1]
         step_id = self.add_step(
@@ -1446,6 +1448,62 @@ class WorkflowBuilder:
                     arguments={"data": literal([0, 64, 128, 255])},
                     step_id=self.next_step_id("setup-mask-data"),
                 )
+        if self.edge == "chops-binary-varied-indexed":
+            if requested_mode not in {"P", "PA"} or label not in {"image1", "image2"}:
+                raise ValueError(
+                    "chops-binary-varied-indexed requires P/PA image operands"
+                )
+            if requested_mode == "P":
+                values = [1, 2, 3, 4] if label == "image1" else [5, 6, 7, 8]
+            else:
+                values = (
+                    [[0, 64], [1, 128], [2, 192], [3, 255]]
+                    if label == "image1"
+                    else [[3, 255], [2, 192], [1, 128], [0, 64]]
+                )
+            self.add_step(
+                "PIL.Image.Image",
+                "putdata",
+                receiver=binding(step_id),
+                arguments={"data": literal(values)},
+                step_id=self.next_step_id(f"setup-{label}-data"),
+            )
+            # Keep the palette distinct on each operand so parity observes
+            # indexed arithmetic rather than an accidental RGB expansion.
+            self.add_step(
+                "PIL.Image.Image",
+                "putpalette",
+                receiver=binding(step_id),
+                arguments={
+                    "data": literal(
+                        [
+                            10,
+                            20,
+                            30,
+                            40,
+                            50,
+                            60,
+                            70,
+                            80,
+                            90,
+                        ]
+                        if label == "image1"
+                        else [
+                            100,
+                            110,
+                            120,
+                            130,
+                            140,
+                            150,
+                            160,
+                            170,
+                            180,
+                        ]
+                    ),
+                    "rawmode": literal("RGB"),
+                },
+                step_id=self.next_step_id(f"setup-{label}-palette"),
+            )
         if self.edge == "pa-composite-palette-expansion":
             if label in {"image1", "image2"}:
                 values = (
@@ -13563,6 +13621,30 @@ def build_nuanced_cases(
             "edge": "chops-composite-opened-p-pipeline",
             "observe_result": "tobytes",
         },
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"varied-indexed-{mode.lower()}",
+                "mode": mode,
+                "edge": "chops-binary-varied-indexed",
+                "observe_result": "tobytes",
+            }
+            for operation in (
+                "add_modulo",
+                "subtract_modulo",
+                "multiply",
+                "screen",
+                "darker",
+                "lighter",
+                "difference",
+                "overlay",
+                "hard_light",
+                "soft_light",
+            )
+            for mode in ("P", "PA")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "fit",
