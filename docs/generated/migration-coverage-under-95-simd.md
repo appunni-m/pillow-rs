@@ -3,7 +3,7 @@
 Generated from the managed SIMD LLVM snapshot; this is execution coverage, not parity proof.
 
 ```yaml
-snapshot_id: 74ba5dfd-7811-4421-b52e-77645f51ba3b
+snapshot_id: 28b5111a-e692-4734-9522-75a6a57d25bf
 suite: migration-parity-rust-simd
 commit: b689ca7e5c63f9fc46122441edbe2fdee8e90430
 threshold: 95%
