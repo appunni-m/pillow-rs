@@ -9,7 +9,7 @@ generator: scripts/report_migration_parity_region_coverage.py@4
 manifest_path: pillow-rs/tests/fixtures/manifest.yaml
 manifest_schema: migration-parity/manifest@2
 manifest_sha256: 4748153a1f630b7f47143dd144521d06e650ceea1760a71f7297de91e96daf49
-coverage_run_id: migration-coverage-25651f8f9d864c149fc8b636987eae53
+coverage_run_id: migration-coverage-8f0cd2e43734489baa5254a7bdc2bdf5
 coverage_target_profile: python-cpu
 metric: region
 threshold: below 95%
@@ -22,7 +22,7 @@ actionable file order and contains only files below the threshold.
 
 ## PIL.Image.Image.getbbox
 
-Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-66a97422875e4d18b27824840bea48b9`).
+Scoped input-only evidence covers `38` getbbox cases (run `migration-coverage-50d75773492e4036b203a70e5adada88`).
 Rust implementation regions: `104/104` (100.0%).
 Python facade statements: `1/1` (100.0%).
 Component aggregate for backlog ordering: `13423/14279` (94.0%).
