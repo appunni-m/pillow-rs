@@ -786,7 +786,10 @@ class WorkflowBuilder:
         requested_mode = mode or self.mode
         if self.edge == "single-band-image":
             requested_mode = "L"
-        if self.edge == "chops-composite-varied-p":
+        if self.edge in {
+            "chops-composite-varied-p",
+            "chops-composite-opened-p-pipeline",
+        }:
             # ImageChops.composite accepts an L mask while its P operands are
             # blended as raw palette indices. Keep the three public inputs in
             # that layout so the parity case reaches the indexed C path.
@@ -1057,6 +1060,27 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = opened_step
             return opened_step
+        if (
+            self.edge == "chops-composite-opened-p-pipeline"
+            and label == "image2"
+        ):
+            asset_id = self.ref("image2-asset", "image/p-small.png", "image/png")
+            opened_step = self.add_step(
+                "PIL.Image",
+                "open",
+                receiver=None,
+                arguments={"fp": asset_id},
+                step_id="setup-image2-open",
+            )
+            pipeline_step = self.add_step(
+                "PIL.ImageOps",
+                "flip",
+                receiver=None,
+                arguments={"image": binding(opened_step)},
+                step_id="setup-image2-flip",
+            )
+            self._image_steps[cache_key] = pipeline_step
+            return pipeline_step
         if self.scenario_asset is not None:
             # Stimulus workflows that open an encoded container (for example
             # the JPEG-with-EXIF `ImageOps.exif_transpose` cases) build the
@@ -1346,6 +1370,8 @@ class WorkflowBuilder:
             size = [8, 1] if requested_mode == "1" else [1, 1]
         elif self.edge == "chops-composite-varied-p":
             size = [4, 1]
+        elif self.edge == "chops-composite-opened-p-pipeline":
+            size = [8, 8]
         elif self.edge == "pa-composite-palette-expansion":
             size = [4, 1]
         step_id = self.add_step(
@@ -2910,6 +2936,28 @@ class WorkflowBuilder:
                     step_id="setup-putpalette",
                 )
                 receiver_step = image_step
+            elif chain == "p-putpalette-pipeline-remap":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pipeline-remap-putpalette",
+                )
+                # Keep the receiver as a public P pipeline so remap_palette
+                # is exercised after a lazy indexed operation, not only on a
+                # concrete Paletted image.
+                receiver_step = self.add_step(
+                    "PIL.ImageOps",
+                    "flip",
+                    receiver=None,
+                    arguments={"image": binding(image_step)},
+                    step_id="setup-pipeline-remap-flip",
+                )
             elif chain == "p-table-transparency":
                 image_asset = self.inline_bytes(
                     "p-table-transparency",
@@ -3163,6 +3211,15 @@ class WorkflowBuilder:
                         "resample": literal(0),
                     },
                     step_id="setup-resize",
+                )
+            elif chain == "opened-p-full-palette-pipeline-save":
+                image_step = self.ensure_image(mode="P")
+                receiver_step = self.add_step(
+                    "PIL.ImageOps",
+                    "flip",
+                    receiver=None,
+                    arguments={"image": binding(image_step)},
+                    step_id="setup-full-palette-flip",
                 )
             elif chain == "p-pipeline-paste":
                 destination_step = self.ensure_image(mode="RGB")
@@ -13409,6 +13466,15 @@ def build_nuanced_cases(
             "edge": "chops-composite-varied-p",
         },
         {
+            "surface": "PIL.ImageChops",
+            "operation": "composite",
+            "requirement_suffix": "mode.p",
+            "name": "opened-p-pipeline-secondary",
+            "mode": "P",
+            "edge": "chops-composite-opened-p-pipeline",
+            "observe_result": "tobytes",
+        },
+        {
             "surface": "PIL.ImageOps",
             "operation": "fit",
             "requirement_suffix": "parameter.size",
@@ -15878,6 +15944,16 @@ def build_nuanced_cases(
             "name": "p-short-palette-resize",
             "mode": "P",
             "chain": "p-short-palette-resize-save",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "opened-p-full-palette-pipeline",
+            "mode": "P",
+            "scenario_asset": "image/p-small.png",
+            "chain": "opened-p-full-palette-pipeline-save",
             "values": {"format": literal("PNG")},
         },
         {
@@ -19997,6 +20073,16 @@ def build_nuanced_cases(
             "mode": "P",
             "chain": "p-putpalette-remap",
             "values": {"dest_map": literal([0, 1])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "remap_palette",
+            "requirement_suffix": "mode.p",
+            "name": "pipeline-attached-palette-remap",
+            "mode": "P",
+            "chain": "p-putpalette-pipeline-remap",
+            "values": {"dest_map": literal([0, 1])},
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image.Image",
