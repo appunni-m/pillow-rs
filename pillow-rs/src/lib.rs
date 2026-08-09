@@ -219,6 +219,7 @@ pub use crate::ops::chops::add_modulo as chops_add_modulo;
 pub use crate::ops::chops::constant as chops_constant;
 pub use crate::ops::chops::darker as chops_darker;
 pub use crate::ops::chops::difference as chops_difference;
+pub use crate::ops::chops::duplicate as chops_duplicate;
 pub use crate::ops::chops::hard_light as chops_hard_light;
 pub use crate::ops::chops::invert as chops_invert;
 pub use crate::ops::chops::lighter as chops_lighter;

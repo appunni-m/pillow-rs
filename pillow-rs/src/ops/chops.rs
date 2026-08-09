@@ -223,10 +223,13 @@ pub fn logical_xor(image1: &Image, image2: &Image) -> Result<Image, PilError> {
     ))
 }
 
-/// Duplicate an image.
-#[allow(dead_code)]
-pub(crate) fn duplicate(image: &Image) -> Image {
-    image.copy()
+/// Duplicate an image through the compute pipeline.
+///
+/// Keeping this as a real operation preserves the public ImageChops entry
+/// point for backend selection, including the SIMD duplicate path, while
+/// retaining Pillow's mode and palette metadata through `Image::push_op`.
+pub fn duplicate(image: &Image) -> Image {
+    Image::push_op(image, PipelineOp::Duplicate)
 }
 
 /// Inverts an image through the ImageChops compatibility surface.

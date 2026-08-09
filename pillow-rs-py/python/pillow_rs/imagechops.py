@@ -45,7 +45,7 @@ def invert(image: Image) -> Image:
 
 def duplicate(image: Image) -> Image:
     """Duplicate an image."""
-    return image.copy()
+    return Image(_core.chops_duplicate(image._rust_image))
 
 
 def constant(image: Image, value: int) -> Image:
