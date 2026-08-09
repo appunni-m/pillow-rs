@@ -579,16 +579,46 @@ pub fn op_scale(
 }
 
 /// Expand: add a border of `border` pixels with `fill` color around the image.
-/// The fill is a 4-tuple (r,g,b,a). Mode-appropriate fill resolution is done
-/// in the Python binding layer to match PIL's Image.new behavior.
+/// The fill is a 4-tuple (r,g,b,a). Indexed `P`/`PA` inputs retain their raw
+/// sample layout; the tuple's first byte is the `P` index and the first and
+/// fourth bytes are the `PA` index/alpha pair.
 pub fn op_expand(
     img: &DynamicImage,
     border: u32,
     fill: (u8, u8, u8, u8),
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width(), img.height());
     let new_w = w + 2 * border;
     let new_h = h + 2 * border;
+
+    if mode == Some("P") {
+        let source = img.to_luma8();
+        let mut expanded =
+            crate::raster::GrayImage::from_pixel(new_w, new_h, crate::raster::Luma([fill.0]));
+        for py in 0..h {
+            for px in 0..w {
+                expanded.put_pixel(px + border, py + border, *source.get_pixel(px, py));
+            }
+        }
+        return Ok(DynamicImage::ImageLuma8(expanded));
+    }
+
+    if mode == Some("PA") {
+        let source = img.to_luma_alpha8();
+        let mut expanded = crate::raster::GrayAlphaImage::from_pixel(
+            new_w,
+            new_h,
+            crate::raster::LumaA([fill.0, fill.3]),
+        );
+        for py in 0..h {
+            for px in 0..w {
+                expanded.put_pixel(px + border, py + border, *source.get_pixel(px, py));
+            }
+        }
+        return Ok(DynamicImage::ImageLumaA8(expanded));
+    }
+
     let mut expanded = DynamicImage::new_rgba8(new_w, new_h);
     for py in 0..new_h {
         for px in 0..new_w {

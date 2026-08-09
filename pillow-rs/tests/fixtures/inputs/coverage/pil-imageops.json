@@ -299,6 +299,7 @@
           "PIL.ImageOps.solarize.nuanced.materialized-l",
           "PIL.ImageOps.grayscale.nuanced.materialized-rgb",
           "PIL.ImageOps.expand.nuanced.materialized-border",
+          "PIL.ImageOps.expand.nuanced.pa-putpalette-materialized",
           "PIL.ImageOps.crop.nuanced.materialized-border",
           "PIL.ImageOps.crop.nuanced.border-exceeds-image",
           "PIL.ImageOps.scale.nuanced.materialized-upscale",

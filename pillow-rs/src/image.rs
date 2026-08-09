@@ -1257,6 +1257,10 @@ impl Image {
             // allocated core has no palette attached.
             | PipelineOp::Add { .. }
             | PipelineOp::Subtract { .. }
+            // ImageOps.expand allocates the destination in the source mode;
+            // P and PA therefore carry raw index (and alpha) samples through
+            // the border operation instead of being expanded to RGB(A).
+            | PipelineOp::Expand { .. }
             // Image.merge accepts a P image as the first single-byte band of
             // a multi-band result. Keep its raw index values; expanding the
             // palette here would turn an index such as 1 into its RGB entry.
@@ -5234,6 +5238,30 @@ mod tests {
                 vec![7, 90, 7, 90],
                 Some(palette)
             )
+        );
+    }
+
+    #[test]
+    fn imageops_expand_preserves_palette_attached_pa_samples() {
+        let mut image = Image::new(2, 2, "PA", (1, 0, 0, 7)).expect("PA image must be valid");
+        image
+            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
+            .expect("RGB palette must be valid");
+
+        let expanded = crate::ops::imageops::expand(&image, 1, (0, 0, 0, 0))
+            .expect("PA expansion must succeed");
+
+        assert_eq!(expanded.mode().expect("mode must be available"), "PA");
+        assert_eq!(
+            expanded.tobytes().expect("PA bytes must be available"),
+            vec![
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 7, 1, 7, 0, 0, 0, 0, 1, 7, 1, 7, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0,
+            ]
+        );
+        assert_eq!(
+            expanded.getpalette_trimmed(),
+            Some(vec![10, 20, 30, 40, 50, 60])
         );
     }
 

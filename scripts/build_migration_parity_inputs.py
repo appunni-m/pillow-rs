@@ -13887,6 +13887,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "expand",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-putpalette-materialized",
+            "mode": "PA",
+            "chain": "pa-putpalette-imageops",
+            "values": {"border": literal(1)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "crop",
             "requirement_suffix": "parameter.border",
             "name": "materialized-border",
@@ -16897,6 +16907,7 @@ def build_nuanced_cases(
             "name": "pa-putpalette-bilinear-resize",
             "mode": "PA",
             "chain": "pa-putpalette-resize",
+            "observe_result": "tobytes",
             "values": {"size": literal([4, 4]), "resample": literal(2)},
         },
         {

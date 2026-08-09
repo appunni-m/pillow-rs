@@ -79761,10 +79761,21 @@
               "value": 2
             }
           }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
         }
       ],
       "observations": [
-        "call"
+        "call",
+        "observe-result"
       ]
     },
     {
