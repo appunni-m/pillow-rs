@@ -8633,6 +8633,26 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.box",
+            "name": "reversed-box",
+            "values": {
+                "size": literal([4, 4]),
+                "box": literal([8, 8, 2, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.box",
+            "name": "reversed-vertical-box",
+            "values": {
+                "size": literal([4, 4]),
+                "box": literal([2, 8, 8, 2]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "thumbnail",
             "requirement_suffix": "parameter.resample",
             "name": "unknown-filter",

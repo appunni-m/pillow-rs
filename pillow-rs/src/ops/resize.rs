@@ -84,6 +84,13 @@ impl Image {
         let filter = parse_resample_input(filter)?;
         let (w, h) = positive_dimensions(size, "height and width must be > 0")?;
         if let Some(box_coords) = box_coords {
+            // Pillow's imaging core rejects a source rectangle whose right or
+            // bottom edge precedes its left or top edge with this resize
+            // specific error. Do this before delegating to crop: crop has a
+            // separate public error contract for reversed coordinates.
+            if box_coords.2 < box_coords.0 || box_coords.3 < box_coords.1 {
+                return Err(PilError::ValueError("box can't be empty".into()));
+            }
             return self
                 .crop(Some(box_coords))?
                 .resize_with_filter((w, h), filter);

@@ -1022,6 +1022,8 @@
           "PIL.Image.Image.resize.nuanced.overflow-width",
           "PIL.Image.Image.resize.nuanced.overflow-height",
           "PIL.Image.Image.resize.nuanced.opened-png-without-idat-box",
+          "PIL.Image.Image.resize.nuanced.reversed-box",
+          "PIL.Image.Image.resize.nuanced.reversed-vertical-box",
           "PIL.Image.Image.thumbnail.nuanced.unknown-filter",
           "PIL.Image.Image.thumbnail.nuanced.negative-width",
           "PIL.Image.Image.thumbnail.nuanced.negative-height",
