@@ -1659,6 +1659,7 @@
           "PIL.Image.Image.thumbnail.nuanced.zero-candidate-materialized",
           "PIL.Image.Image.thumbnail.nuanced.l-reducing-downscale",
           "PIL.Image.Image.thumbnail.nuanced.rgb-reducing-partial-edge",
+          "PIL.Image.Image.thumbnail.nuanced.rgb-nearest-simd-path",
           "PIL.Image.Image.thumbnail.nuanced.i-specialized-path",
           "PIL.Image.Image.rotate.nuanced.rgba-90-non-expand-materialized",
           "PIL.Image.Image.rotate.nuanced.rgb-270-expand-materialized",
