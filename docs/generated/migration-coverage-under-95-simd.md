@@ -10,21 +10,21 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 2586a74d59c9e2c24af069e41c8ad389cd367eed
+base_commit: 07cdf8bd7690dab8959c3a1a85d6890e51bde2a8
 threshold: 95%
 metric: regions
-total_regions: 106059
-covered_regions: 61909
-region_coverage: 58.3722%
-total_lines: 68018
-covered_lines: 39853
-line_coverage: 58.5918%
-total_branches: 13927
-covered_branches: 6908
-branch_coverage: 49.6015%
+total_regions: 106071
+covered_regions: 61936
+region_coverage: 58.3911%
+total_lines: 68014
+covered_lines: 39857
+line_coverage: 58.6012%
+total_branches: 13929
+covered_branches: 6914
+branch_coverage: 49.6374%
 total_functions: 5280
-covered_functions: 3010
-function_coverage: 57.0076%
+covered_functions: 3008
+function_coverage: 56.9697%
 in_repo_files_below_threshold: 33
 external_dependency_files_below_threshold: 43
 ```
@@ -33,33 +33,34 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,843 cases: 2,799 passed, 44 had
+The fresh SIMD parity audit selected all 2,845 cases: 2,801 passed, 44 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,843 execution checks. The
+workflow executed all 24 plans and passed all 2,845 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. The public SIMD coverage additions and fixes in this
 pass were RGB bilinear rotation and affine-transform workflows, public
 transform filter propagation, Pillow-compatible byte truncation, palette-safe
 indexed transforms, toroidal offset semantics, non-byte conversion fallback,
-alpha-composite mode preservation, and observed partial-alpha masked paste
-workflows that execute the SIMD paste kernel.
+alpha-composite mode preservation, nonzero RGBA/LA alpha-composite workflows,
+and observed partial-alpha masked paste workflows that execute the SIMD paste
+kernel.
 
 SIMD implementation-file coverage is:
 
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 1935/2237 (86.50%) | 1087/1232 (88.23%) | 89/144 (61.81%) | 74/84 (88.10%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4690/5123 (91.55%) | 2337/2547 (91.76%) | 593/794 (74.69%) | 102/107 (95.33%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4731/5123 (92.35%) | 2359/2547 (92.62%) | 599/794 (75.44%) | 102/107 (95.33%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 (88.57%) | 59/67 (88.06%) | 0/0 | 8/12 (66.67%) |
 
 | Rank | File | Regions | Region coverage | Lines |
 | ---: | --- | ---: | ---: | ---: |
-| 1 | `pillow-rs/src/raster/traits/view.rs` | 0/25 | 0.0% | 0/24 |
-| 2 | `pillow-rs/src/ops/utils.rs` | 0/65 | 0.0% | 0/48 |
-| 3 | `pillow-rs/src/raster/traits/primitive.rs` | 0/225 | 0.0% | 0/132 |
-| 4 | `pillow-rs/src/compute/pool_cpu/ops/enhance.rs` | 0/398 | 0.0% | 0/216 |
-| 5 | `pillow-rs/src/compute/pool_cpu/ops/chops.rs` | 0/561 | 0.0% | 0/319 |
-| 6 | `pillow-rs/src/compute/pool_cpu/ops/filter.rs` | 0/959 | 0.0% | 0/568 |
+| 1 | `pillow-rs/src/compute/pool_cpu/ops/chops.rs` | 0/561 | 0.0% | 0/319 |
+| 2 | `pillow-rs/src/compute/pool_cpu/ops/enhance.rs` | 0/398 | 0.0% | 0/216 |
+| 3 | `pillow-rs/src/compute/pool_cpu/ops/filter.rs` | 0/959 | 0.0% | 0/568 |
+| 4 | `pillow-rs/src/ops/utils.rs` | 0/65 | 0.0% | 0/48 |
+| 5 | `pillow-rs/src/raster/traits/primitive.rs` | 0/225 | 0.0% | 0/132 |
+| 6 | `pillow-rs/src/raster/traits/view.rs` | 0/25 | 0.0% | 0/24 |
 | 7 | `pillow-rs/src/compute/pool_gpu/mod.rs` | 6/1718 | 0.3% | 6/1263 |
 | 8 | `pillow-rs/src/compute/pool_cpu/ops/imageops.rs` | 69/961 | 7.2% | 42/519 |
 | 9 | `pillow-rs/src/raster/color/from_primitive.rs` | 16/80 | 20.0% | 8/43 |
@@ -80,10 +81,10 @@ SIMD implementation-file coverage is:
 | 24 | `pillow-rs/src/compute/pool_simd/mod.rs` | 93/105 | 88.6% | 59/67 |
 | 25 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
 | 26 | `pillow-rs/src/image.rs` | 4797/5291 | 90.7% | 3007/3263 |
-| 27 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4690/5123 | 91.5% | 2337/2547 |
-| 28 | `pillow-rs/src/ops/transform.rs` | 644/703 | 91.6% | 459/507 |
-| 29 | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% | 402/418 |
-| 30 | `pillow-rs/src/ops/crop.rs` | 287/312 | 92.0% | 200/206 |
+| 27 | `pillow-rs/src/ops/transform.rs` | 644/703 | 91.6% | 459/507 |
+| 28 | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% | 402/418 |
+| 29 | `pillow-rs/src/ops/crop.rs` | 287/312 | 92.0% | 200/206 |
+| 30 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4731/5123 | 92.3% | 2359/2547 |
 | 31 | `pillow-rs/src/ops/paste.rs` | 942/1010 | 93.3% | 474/487 |
 | 32 | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% | 1274/1317 |
 | 33 | `pillow-rs/src/raster/buffer.rs` | 272/290 | 93.8% | 184/202 |
