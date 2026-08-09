@@ -1502,6 +1502,7 @@
           "PIL.Image.Image.load.nuanced.png-rgb-opened",
           "PIL.Image.Image.load.nuanced.png-rgba-opened",
           "PIL.Image.Image.load.nuanced.png-l-opened",
+          "PIL.Image.Image.load.nuanced.png-one-bit-opened",
           "PIL.Image.Image.load.nuanced.png-p-opened",
           "PIL.Image.Image.load.nuanced.png-p-transparency",
           "PIL.Image.Image.load.nuanced.gif-p-opened",

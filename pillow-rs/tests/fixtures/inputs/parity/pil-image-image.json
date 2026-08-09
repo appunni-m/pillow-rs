@@ -72736,6 +72736,54 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.load.nuanced.png-one-bit-opened",
+      "surface": "PIL.Image.Image",
+      "operation": "load",
+      "covers": [
+        "PIL.Image.Image.load.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-l1-png",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAABAQAAAADcWUInAAAACklEQVR4nGNoAAAAggCBd81ytgAAAABJRU5ErkJggg==",
+          "sha256": "8ea71493e9c7b8cc08b3de1b3c8acf3e9340404914900fc54e513f11987ac7bb",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-l1-png"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "load",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.load.nuanced.png-p-opened",
       "surface": "PIL.Image.Image",
       "operation": "load",
