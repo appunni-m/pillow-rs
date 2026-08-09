@@ -505,14 +505,11 @@ fn rotate_arbitrary_generic(
         for dy in 0..dh {
             for dx in 0..dw {
                 // ImagingTransformAffine maps destination pixel centers into
-                // source space, then its bilinear filter shifts those source
-                // coordinates back to pixel-corner coordinates. Applying the
-                // two half-pixel adjustments here preserves the same affine
-                // edge and interpolation weights as Pillow's Geometry.c.
-                let (mut sx_rel, mut sy_rel) =
-                    transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
-                sx_rel -= 0.5;
-                sy_rel -= 0.5;
+                // source space. Geometry.c tests those transformed centers
+                // directly for the source bounds; subtracting a second half
+                // pixel here shifts the valid region by one destination pixel
+                // for expanded rotations such as PA 45-degree bilinear.
+                let (sx_rel, sy_rel) = transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
 
                 let out_idx = (dy * dw + dx) as usize * channels;
 
@@ -864,6 +861,16 @@ pub fn execute_rotate(
     let deg = (angle.round() as i32).rem_euclid(360);
     let has_custom_transform = center.is_some() || translate.is_some();
     let nearest = requested_nearest || explicit_mode == Some("P") || explicit_mode == Some("1");
+    // Pillow's PA transform path samples the raw index/alpha bands directly;
+    // unlike LA and RGBA, it does not use a premultiplied intermediate. The
+    // public fillcolor arrives as (index, index, index, alpha) so the generic
+    // four-component record can represent it; normalize that record to the
+    // native two-band layout before either nearest or interpolated sampling.
+    let fill = if explicit_mode == Some("PA") {
+        fill.map(|(index, _, _, alpha)| (index, alpha, 0, alpha))
+    } else {
+        fill
+    };
     // Fast path: exact 90-degree multiples
     // PIL rotates counterclockwise; image crate rotates clockwise.
     // PIL 90° CCW = image crate 270° CW, PIL 270° CCW = image crate 90° CW.
@@ -889,7 +896,10 @@ pub fn execute_rotate(
         // samples back. RGBa is already premultiplied and must remain a direct
         // native-channel path, just as in pil_resize.
         let needs_alpha_roundtrip = !nearest
-            && !matches!(explicit_mode, Some("RGBa") | Some("F") | Some("I"))
+            && !matches!(
+                explicit_mode,
+                Some("PA") | Some("RGBa") | Some("F") | Some("I")
+            )
             && matches!(
                 img.color(),
                 crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8

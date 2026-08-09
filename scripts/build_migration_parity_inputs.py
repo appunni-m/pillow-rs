@@ -2619,6 +2619,28 @@ class WorkflowBuilder:
                     },
                     step_id="setup-pa-resize",
                 )
+            elif chain == "pa-putpalette-resize-rotate":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-resize-rotate",
+                )
+                receiver_step = self.add_step(
+                    "PIL.Image.Image",
+                    "resize",
+                    receiver=binding(image_step),
+                    arguments={
+                        "size": literal([8, 8]),
+                        "resample": literal(0),
+                    },
+                    step_id="setup-pa-resize-before-rotate",
+                )
             elif chain == "pa-putpalette-resize-resize":
                 image_step = self.ensure_image(mode="PA")
                 self.add_step(
@@ -9278,6 +9300,21 @@ def build_nuanced_cases(
             "chain": "pa-putpalette-rotate",
             "values": {
                 "angle": literal(45),
+                "expand": literal(True),
+                "fillcolor": literal([1, 128]),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.fillcolor",
+            "name": "pa-putpalette-resize-rotate-fill",
+            "mode": "PA",
+            "chain": "pa-putpalette-resize-rotate",
+            "values": {
+                "angle": literal(45),
+                "resample": literal(2),
                 "expand": literal(True),
                 "fillcolor": literal([1, 128]),
             },
