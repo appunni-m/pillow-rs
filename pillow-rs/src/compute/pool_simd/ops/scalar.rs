@@ -590,17 +590,18 @@ pub fn color_saturation(pixels: &mut [u32], mode: u32, factor_fp: u32) {
 /// black_rgb / white_rgb packed as 0x00_BB_GGRR (no alpha).
 /// For L/LA: luma = R. For RGB/RGBA: luma = BT.601.
 /// Apply the Pillow ``ImageOps.colorize`` LUT per pixel.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+///
+/// Pillow always promotes `ImageOps.colorize` to RGB.  The packed buffer can
+/// still carry an alpha lane while the adapter is running, but the result
+/// must use every LUT channel rather than preserving the source G/B lanes.
 #[inline]
 pub fn colorize(pixels: &mut [u32], mode: u32, lut: &[[u8; 256]; 3]) {
     let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
 
     for p in pixels.iter_mut() {
         let r = *p & 0xFF;
         let g = (*p >> 8) & 0xFF;
         let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
 
         let luma = if has_gb {
             ((299 * r + 587 * g + 114 * b + 500) / 1000).min(255) as i32
@@ -610,14 +611,10 @@ pub fn colorize(pixels: &mut [u32], mode: u32, lut: &[[u8; 256]; 3]) {
 
         let index = luma.clamp(0, 255) as usize;
         let out_r = lut[0][index] as u32;
-        let out_g_raw = lut[1][index] as u32;
-        let out_b_raw = lut[2][index] as u32;
+        let out_g = lut[1][index] as u32;
+        let out_b = lut[2][index] as u32;
 
-        let out_g = if has_gb { out_g_raw } else { g };
-        let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
+        *p = out_r | (out_g << 8) | (out_b << 16) | 0xFF00_0000;
     }
 }
 
