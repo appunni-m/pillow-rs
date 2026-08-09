@@ -1633,7 +1633,7 @@ impl PyImage {
                 return slf
                     .try_borrow_mut()?
                     .inner
-                    .putdata_l16_bytes(bytes.as_bytes())
+                    .putdata_l16_bytes(bytes.as_bytes(), scale, offset)
                     .map_err(map_error);
             }
 

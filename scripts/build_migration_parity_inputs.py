@@ -10914,6 +10914,34 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "i16-short-odd-bytes",
+            "observe_receiver": True,
+            "mode": "I;16",
+            "size": [2, 2],
+            "values": {
+                # An odd byte count exercises Pillow's zero-filled partial
+                # final sample without going through a TIFF decoder.
+                "data": bytes_literal([0x70, 0x11, 0x34]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "parameter.scale",
+            "name": "i16-bytes-scale-offset",
+            "observe_receiver": True,
+            "mode": "I;16",
+            "size": [2, 2],
+            "values": {
+                "data": bytes_literal([1, 2, 3]),
+                "scale": literal(2),
+                "offset": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "i16l-bytes-sequence",
             "observe_receiver": True,
             "mode": "I;16L",
@@ -11810,6 +11838,28 @@ def build_nuanced_cases(
             "name": "rgba-tuples",
             "observe_receiver": True,
             "mode": "RGBA",
+            "values": {
+                "data": literal([[255, 0, 0, 128]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-premultiplied-tag-tuples",
+            "observe_receiver": True,
+            "mode": "RGBa",
+            "values": {
+                "data": literal([[255, 0, 0, 128]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgbx-tag-tuples",
+            "observe_receiver": True,
+            "mode": "RGBX",
             "values": {
                 "data": literal([[255, 0, 0, 128]] * 9),
             },
