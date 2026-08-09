@@ -1718,6 +1718,8 @@
           "PIL.Image.Image.crop.nuanced.reversed-box",
           "PIL.Image.Image.crop.nuanced.reversed-vertical-box",
           "PIL.Image.Image.crop.nuanced.zero-height-box",
+          "PIL.Image.Image.crop.nuanced.zero-width-box",
+          "PIL.Image.Image.crop.nuanced.float-nan-bottom",
           "PIL.Image.Image.crop.nuanced.disjoint-box",
           "PIL.Image.Image.crop.nuanced.vertically-disjoint-box",
           "PIL.Image.Image.crop.nuanced.top-padded-box",
