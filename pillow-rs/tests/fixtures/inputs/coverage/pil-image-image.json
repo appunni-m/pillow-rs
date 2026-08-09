@@ -1236,6 +1236,7 @@
           "PIL.Image.Image.putdata.nuanced.la-packed",
           "PIL.Image.Image.putdata.nuanced.rgb-packed",
           "PIL.Image.Image.save.nuanced.p-png",
+          "PIL.Image.Image.save.nuanced.p-frombytes-without-palette",
           "PIL.Image.Image.save.nuanced.no-extension-default-format",
           "PIL.Image.Image.save.nuanced.i-png",
           "PIL.Image.Image.save.nuanced.i-bmp-error",
