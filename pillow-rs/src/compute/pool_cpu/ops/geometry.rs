@@ -510,8 +510,15 @@ fn rotate_arbitrary_generic(
                 // two stages explicit so arbitrary rotations use the same
                 // source coordinates as Pillow's affine kernel.
                 let (sx_rel, sy_rel) = transform(dx as f64 + 0.5, dy as f64 + 0.5, aff_c, aff_f);
-                let sx_rel = sx_rel - 0.5;
-                let sy_rel = sy_rel - 0.5;
+                let (sx_rel, sy_rel) = if explicit_mode == Some("PA") {
+                    // The palette-preserving PA pipeline has already
+                    // expressed its index samples in pixel-center space.
+                    // Keep that established convention while regular byte
+                    // modes follow Geometry.c's filter-side subtraction.
+                    (sx_rel, sy_rel)
+                } else {
+                    (sx_rel - 0.5, sy_rel - 0.5)
+                };
 
                 let out_idx = (dy * dw + dx) as usize * channels;
 
