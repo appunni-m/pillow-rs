@@ -197,6 +197,41 @@ def one_bit_png() -> bytes:
     )
 
 
+def luma_alpha_png() -> bytes:
+    """Return a tiny valid 8-bit grayscale+alpha PNG."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", checksum)
+        )
+
+    header = struct.pack(">IIBBBBB", 2, 2, 8, 4, 0, 0, 0)
+    scanlines = bytes(
+        [
+            0,
+            16,
+            64,
+            128,
+            192,
+            0,
+            32,
+            255,
+            224,
+            96,
+        ]
+    )
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(scanlines))
+        + chunk(b"IEND", b"")
+    )
+
+
 def grayscale_16_png() -> bytes:
     """Return a tiny valid 16-bit grayscale PNG stimulus."""
 
@@ -1068,6 +1103,19 @@ class WorkflowBuilder:
                 data_descriptor = self.inline_bytes(
                     f"{label}-l1-png",
                     one_bit_png(),
+                    "image/png",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "la-png":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-la-png",
+                    luma_alpha_png(),
                     "image/png",
                 )
                 step_id = self.add_step(
@@ -9150,6 +9198,24 @@ def build_nuanced_cases(
                 "resample": literal(0),
             },
         },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "requirement_suffix": "mode.1",
+                "name": f"mode-one-{name}-simd-fallback",
+                "observe_result": "tobytes",
+                "mode": "1",
+                "edge": "nonzero-pixel",
+                "pixel": 1,
+                "size": [9, 8],
+                "values": {
+                    "size": literal([5, 3]),
+                    "resample": literal(resample),
+                },
+            }
+            for name, resample in (("bicubic", 3), ("lanczos", 1))
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
@@ -19206,6 +19272,21 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "load",
             "requirement_suffix": "behavior.default",
+            "name": "la-png-opened",
+            "scenario_inline_image": "la-png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "la-png-decoded",
+            "scenario_inline_image": "la-png",
+            "values": {"xy": literal([1, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
             "name": "l16-png-opened",
             "scenario_inline_image": "l16-png",
         },
@@ -21864,6 +21945,21 @@ def build_nuanced_cases(
                 "observe_result": "tobytes",
             }
             for method in (2, 4, 5, 6)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "behavior.default",
+                "name": f"rgba-dimension-method-{method}",
+                "mode": "RGBA",
+                "edge": "nonzero-pixel",
+                "pixel": [200, 100, 50, 128],
+                "size": [3, 2],
+                "values": {"method": literal(method)},
+                "observe_result": "tobytes",
+            }
+            for method in (2, 4)
         ),
         *(
             {
