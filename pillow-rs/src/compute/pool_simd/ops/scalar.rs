@@ -2288,43 +2288,6 @@ pub fn fit(
     (cropped, dst_w, dst_h)
 }
 
-/// Quantize: reduce colors to num_colors using uniform quantization.
-/// Each active channel is divided into `cbrt(num_colors)` levels, then quantized
-/// to the nearest bin center via `(val / step) * step + step/2`.
-/// Mode-aware: only R quantized for L/LA; R, G, B quantized for RGB/RGBA.
-/// Alpha preserved in LA/RGBA, forced to 0xFF in L/RGB.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn quantize(pixels: &mut [u32], w: u32, h: u32, mode: u32, num_colors: u32) {
-    let _ = (w, h);
-    if !(2..256).contains(&num_colors) {
-        return;
-    }
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-
-    let levels = (num_colors as f64).cbrt().round().max(2.0) as u32;
-    let step = 256u32 / levels;
-    let half_step = step / 2;
-
-    for p in pixels.iter_mut() {
-        let r = *p & 0xFF;
-        let g = (*p >> 8) & 0xFF;
-        let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
-
-        let out_r = ((r / step) * step + half_step).min(255);
-        let out_g_raw = ((g / step) * step + half_step).min(255);
-        let out_b_raw = ((b / step) * step + half_step).min(255);
-
-        let out_g = if has_gb { out_g_raw } else { g };
-        let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
-    }
-}
-
 // ── Spatial operations (pad, expand, crop_border) ──────────────────────────────
 
 /// Pad/crop image to dst_w×dst_h, centering the source.
@@ -2571,13 +2534,13 @@ mod tests {
     #[allow(unused_imports)]
     use super::{
         add, add_modulo, alpha_composite, autocontrast, blend, blend_module, box_blur, brightness,
-        color_saturation, colorize, composite, composite_module, constant, contain, contrast,
-        convert, cover, crop, crop_border, darker, difference, duplicate, equalize, eval, expand,
-        filter_3x3, filter_5x5, fit, flip, grayscale, hard_light, invert, invert_chops, lighter,
-        logical_and, logical_or, logical_xor, max_filter, median_filter, merge, min_filter, mirror,
-        multiply, offset, overlay, pad, paste, point_op, posterize, put_alpha, put_data, put_pixel,
-        quantize, rank_filter, reduce, remap_palette, resize, rotate, scale, screen, sharpness,
-        soft_light, solarize, subtract, subtract_modulo, thumbnail, transform, transpose,
+        color_saturation, colorize, composite_module, constant, contain, contrast, convert, cover,
+        crop, crop_border, darker, difference, duplicate, equalize, eval, expand, filter_3x3,
+        filter_5x5, fit, flip, grayscale, hard_light, invert, invert_chops, lighter, logical_and,
+        logical_or, logical_xor, max_filter, median_filter, merge, min_filter, mirror, multiply,
+        offset, overlay, pad, paste, posterize, put_alpha, put_data, put_pixel, rank_filter,
+        reduce, remap_palette, resize, rotate, scale, screen, sharpness, soft_light, solarize,
+        subtract, subtract_modulo, thumbnail, transform, transpose,
     };
 
     /// Helper: create a packed u32 pixel from RGBA bytes.
@@ -3919,61 +3882,7 @@ pub fn eval(pixels: &mut [u32], mode: u32, lut: &[u8; 1024]) {
     }
 }
 
-/// Apply per-channel lookup table (same semantics as `eval`).
-///
-/// 1024-byte LUT, 256 entries per channel. Mode-aware channel application.
-/// Delegates to `eval`.
-///
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn point_op(pixels: &mut [u32], mode: u32, lut: &[u8; 1024]) {
-    eval(pixels, mode, lut)
-}
-
 // ── Composite, Merge, Sharpen, Autocontrast ────────────────────────────────
-
-/// Composite: blend two images using a single-channel (grayscale) mask.
-///
-/// `out = (pixels * mask + other * (255 - mask)) / 255` per active channel.
-///
-/// Uses the R byte of the mask pixel as the uniform blend weight for all
-/// active channels. This matches PIL's `Image.composite()` and
-/// `ImageChops.composite()` with a grayscale mask — distinct from
-/// `composite_module` above which applies per-channel mask bytes.
-///
-/// Mode-aware: R always composited; G/B composited for RGB/RGBA (mode >= 2),
-/// preserved from original for L/LA. Alpha preserved for LA/RGBA,
-/// forced to 0xFF for L/RGB.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn composite(pixels: &mut [u32], mode: u32, other: &[u32], mask: &[u32]) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    for ((p, o), m) in pixels.iter_mut().zip(other.iter()).zip(mask.iter()) {
-        let r = *p & 0xFF;
-        let g = (*p >> 8) & 0xFF;
-        let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
-
-        let or = *o & 0xFF;
-        let og = (*o >> 8) & 0xFF;
-        let ob = (*o >> 16) & 0xFF;
-
-        // Single mask value from R byte (grayscale image packed as u32)
-        let mv = *m & 0xFF;
-        let inv_mv = 255 - mv;
-
-        let out_r = (r * mv + or * inv_mv) / 255;
-        let out_g_raw = (g * mv + og * inv_mv) / 255;
-        let out_b_raw = (b * mv + ob * inv_mv) / 255;
-
-        let out_g = if has_gb { out_g_raw } else { g };
-        let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
-    }
-}
 
 /// Merge: combine single-channel bands into a multi-channel image.
 ///
