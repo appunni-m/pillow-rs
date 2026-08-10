@@ -1707,6 +1707,8 @@
           "PIL.Image.Image.resize.nuanced.f-horizontal-only-hamming",
           "PIL.Image.Image.resize.nuanced.one-threshold-materialized",
           "PIL.Image.Image.crop.nuanced.in-bounds-subregion",
+          "PIL.Image.Image.crop.nuanced.simd-alpha-la",
+          "PIL.Image.Image.crop.nuanced.simd-alpha-rgba",
           "PIL.Image.Image.reduce.nuanced.partial-right-bottom-block",
           "PIL.Image.Image.reduce.nuanced.identity-factor",
           "PIL.Image.Image.thumbnail.nuanced.aspect-floor-rounding",
