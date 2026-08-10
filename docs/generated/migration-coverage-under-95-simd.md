@@ -10,27 +10,27 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 0b0479b1cb1c03f4559ce2837707bf635673cce8
-coverage_run_id: migration-coverage-8c04abb046204485893869007eb44e27
-parity_run_id: migration-parity-b26b2a4c3cd8464aba78d6ac675b3925
+base_commit: 52645cc81e3726700878ac95e6c4352a05a21531
+coverage_run_id: migration-coverage-8611bdf17c8e49feb2becac760a29214
+parity_run_id: migration-parity-75c253111b8844acafc66788f77c9ebc
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
 total_regions: 105972
-covered_regions: 62838
-region_coverage: 59.2968%
+covered_regions: 62839
+region_coverage: 59.2977%
 total_lines: 68095
 covered_lines: 40398
 line_coverage: 59.3259%
 total_branches: 13931
-covered_branches: 7085
-branch_coverage: 50.8578%
+covered_branches: 7087
+branch_coverage: 50.8722%
 total_functions: 5290
 covered_functions: 3026
 function_coverage: 57.2023%
-simd_impl_regions: 7038/7266 (96.8621%)
+simd_impl_regions: 7039/7266 (96.8759%)
 simd_impl_lines: 3727/3835 (97.1838%)
-simd_impl_branches: 800/952 (84.0336%)
+simd_impl_branches: 802/952 (84.2437%)
 simd_impl_functions: 188/197 (95.4315%)
 in_repo_files_below_threshold: 32
 external_dependency_files_below_threshold: 43
@@ -40,18 +40,18 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,985 cases: 2,982 passed, 3 had
+The fresh SIMD parity audit selected all 2,987 cases: 2,984 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,985 execution checks. The
+workflow executed all 24 plans and passed all 2,987 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
 their orphan scalar helpers were removed from the SIMD registry/source. Their
 `PipelineOp` variants remain available to the core/GPU pipeline; public paths
 use the exact quantizer, module-based blend/composite, and `Eval` paths. The
-SIMD implementation files now total 7,038/7,266 regions (96.8621%); the
+SIMD implementation files now total 7,039/7,266 regions (96.8759%); the
 remaining SIMD-specific backlog is concentrated in `ops/adapters.rs` and
-`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,916/5,002 regions (98.2807%). A
+`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,917/5,002 regions (98.3007%). A
 prior refresh added one input-only public RGB nearest-neighbour thumbnail case
 with a destination larger than the source, reaching the SIMD scalar
 thumbnail no-shrink copy/alpha-clamp path; it passes source/target parity on
@@ -133,6 +133,12 @@ short-circuited before the explicit `RGBa` guard in the SIMD adapter; the
 nearest case reaches that public mode branch and passes source/target parity on
 both safe CPU and SIMD lanes, adding one SIMD branch.
 
+The latest refresh added two reachable input-only `ImageOps` workflows: an
+odd-width RGBA mirror case that preserves the middle pixel's alpha and a
+fractional-centering pad case that rounds the positive offset upward. Both
+pass source/target parity on CPU and SIMD, adding one SIMD region and two
+SIMD branches in the scalar implementation.
+
 The three remaining mismatches are the two known 16-bit
 `PIL.Image.Image.paste` inputs (`opened-i16-scalar` and `opened-i16n-scalar`),
 which remain pending for the TIFF/16-bit lane, and
@@ -161,7 +167,7 @@ SIMD implementation-file coverage is:
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2025/2155 (93.97%) | 1119/1176 (95.15%) | 109/156 (69.87%) | 76/81 (93.83%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4916/5002 (98.28%) | 2546/2589 (98.34%) | 689/794 (86.78%) | 103/103 (100.00%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4917/5002 (98.30%) | 2546/2589 (98.34%) | 691/794 (87.03%) | 103/103 (100.00%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
