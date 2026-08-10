@@ -1094,7 +1094,7 @@ pub fn filter_5x5_i32(pixels: &mut [u32], w: u32, h: u32, kernel: &[f32], scale:
 ///
 /// For L/LA modes (mode < 2): only R channel is processed. G and B mirror R.
 /// For RGB/RGBA modes (mode >= 2): R, G, B processed independently.
-/// Alpha is preserved in LA/RGBA, forced to 0xFF in L/RGB.
+/// Alpha is filtered independently in LA/RGBA, and forced to 0xFF in L/RGB.
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
@@ -1113,20 +1113,31 @@ pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
-            let pixel = src[idx];
-            let a_orig = pixel & 0xFF00_0000;
-
             // Collect R channel values from window
             let mut r_vals = Vec::with_capacity(area);
+            let mut a_vals = Vec::new();
+            if has_a {
+                a_vals.reserve(area);
+            }
             for dy in -half..=half {
                 for dx in -half..=half {
                     let sx = (x + dx).clamp(0, w_i - 1);
                     let sy = (y + dy).clamp(0, h_i - 1);
-                    r_vals.push((src[(sy * w_i + sx) as usize] & 0xFF) as u8);
+                    let sp = src[(sy * w_i + sx) as usize];
+                    r_vals.push((sp & 0xFF) as u8);
+                    if has_a {
+                        a_vals.push((sp >> 24) as u8);
+                    }
                 }
             }
             r_vals.sort_unstable();
             let out_r = r_vals[mid] as u32;
+            let out_a = if has_a {
+                a_vals.sort_unstable();
+                (a_vals[mid] as u32) << 24
+            } else {
+                0xFF00_0000
+            };
 
             if has_gb {
                 let mut g_vals = Vec::with_capacity(area);
@@ -1144,10 +1155,8 @@ pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
                 b_vals.sort_unstable();
                 let out_g = g_vals[mid] as u32;
                 let out_b = b_vals[mid] as u32;
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
             } else {
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
             }
         }
@@ -1159,7 +1168,7 @@ pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 /// Tracks running max per channel while iterating the window (no sorting needed).
 /// For L/LA modes (mode < 2): only R channel is tracked. G and B mirror R.
 /// For RGB/RGBA modes (mode >= 2): R, G, B tracked independently.
-/// Alpha is preserved in LA/RGBA, forced to 0xFF in L/RGB.
+/// Alpha is filtered independently in LA/RGBA, and forced to 0xFF in L/RGB.
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
@@ -1176,20 +1185,26 @@ pub fn max_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
-            let pixel = src[idx];
-            let a_orig = pixel & 0xFF00_0000;
-
             // Track running max for R channel
             let mut max_r = 0u8;
+            let mut max_a = 0u8;
             for dy in -half..=half {
                 for dx in -half..=half {
                     let sx = (x + dx).clamp(0, w_i - 1);
                     let sy = (y + dy).clamp(0, h_i - 1);
                     let sp = src[(sy * w_i + sx) as usize];
                     max_r = max_r.max((sp & 0xFF) as u8);
+                    if has_a {
+                        max_a = max_a.max((sp >> 24) as u8);
+                    }
                 }
             }
             let out_r = max_r as u32;
+            let out_a = if has_a {
+                (max_a as u32) << 24
+            } else {
+                0xFF00_0000
+            };
 
             if has_gb {
                 let mut max_g = 0u8;
@@ -1205,10 +1220,8 @@ pub fn max_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
                 }
                 let out_g = max_g as u32;
                 let out_b = max_b as u32;
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
             } else {
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
             }
         }
@@ -1220,7 +1233,7 @@ pub fn max_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 /// Tracks running min per channel while iterating the window (no sorting needed).
 /// For L/LA modes (mode < 2): only R channel is tracked. G and B mirror R.
 /// For RGB/RGBA modes (mode >= 2): R, G, B tracked independently.
-/// Alpha is preserved in LA/RGBA, forced to 0xFF in L/RGB.
+/// Alpha is filtered independently in LA/RGBA, and forced to 0xFF in L/RGB.
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
@@ -1237,20 +1250,26 @@ pub fn min_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
-            let pixel = src[idx];
-            let a_orig = pixel & 0xFF00_0000;
-
             // Track running min for R channel
             let mut min_r = 255u8;
+            let mut min_a = 255u8;
             for dy in -half..=half {
                 for dx in -half..=half {
                     let sx = (x + dx).clamp(0, w_i - 1);
                     let sy = (y + dy).clamp(0, h_i - 1);
                     let sp = src[(sy * w_i + sx) as usize];
                     min_r = min_r.min((sp & 0xFF) as u8);
+                    if has_a {
+                        min_a = min_a.min((sp >> 24) as u8);
+                    }
                 }
             }
             let out_r = min_r as u32;
+            let out_a = if has_a {
+                (min_a as u32) << 24
+            } else {
+                0xFF00_0000
+            };
 
             if has_gb {
                 let mut min_g = 255u8;
@@ -1266,10 +1285,8 @@ pub fn min_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
                 }
                 let out_g = min_g as u32;
                 let out_b = min_b as u32;
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
             } else {
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
             }
         }
@@ -1284,7 +1301,7 @@ pub fn min_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 ///
 /// For L/LA modes (mode < 2): only R channel is sorted. G and B mirror R.
 /// For RGB/RGBA modes (mode >= 2): R, G, B sorted independently.
-/// Alpha is preserved in LA/RGBA, forced to 0xFF in L/RGB.
+/// Alpha is filtered independently in LA/RGBA, and forced to 0xFF in L/RGB.
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
@@ -1303,20 +1320,31 @@ pub fn rank_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32, ran
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
-            let pixel = src[idx];
-            let a_orig = pixel & 0xFF00_0000;
-
             // Collect R channel values from window
             let mut r_vals = Vec::with_capacity(area);
+            let mut a_vals = Vec::new();
+            if has_a {
+                a_vals.reserve(area);
+            }
             for dy in -half..=half {
                 for dx in -half..=half {
                     let sx = (x + dx).clamp(0, w_i - 1);
                     let sy = (y + dy).clamp(0, h_i - 1);
-                    r_vals.push((src[(sy * w_i + sx) as usize] & 0xFF) as u8);
+                    let sp = src[(sy * w_i + sx) as usize];
+                    r_vals.push((sp & 0xFF) as u8);
+                    if has_a {
+                        a_vals.push((sp >> 24) as u8);
+                    }
                 }
             }
             r_vals.sort_unstable();
             let out_r = r_vals[rank] as u32;
+            let out_a = if has_a {
+                a_vals.sort_unstable();
+                (a_vals[rank] as u32) << 24
+            } else {
+                0xFF00_0000
+            };
 
             if has_gb {
                 let mut g_vals = Vec::with_capacity(area);
@@ -1334,10 +1362,8 @@ pub fn rank_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32, ran
                 b_vals.sort_unstable();
                 let out_g = g_vals[rank] as u32;
                 let out_b = b_vals[rank] as u32;
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
             } else {
-                let out_a = if has_a { a_orig } else { 0xFF00_0000 };
                 pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
             }
         }

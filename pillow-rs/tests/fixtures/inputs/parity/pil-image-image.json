@@ -64050,6 +64050,386 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.filter.nuanced.l-mode-detail-width-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-detail-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-detail-small-width",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-detail-small-width"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.l-mode-detail-height-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-detail-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-detail-small-height",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-detail-small-height"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.i-mode-detail-width-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-detail-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-detail-small-width",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-detail-small-width"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.i-mode-detail-height-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-detail-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-detail-small-height",
+          "surface": "PIL.ImageFilter",
+          "operation": "DETAIL",
+          "receiver": null,
+          "arguments": {}
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-detail-small-height"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.filter.nuanced.i-mode-smooth-more-fused-row",
       "surface": "PIL.Image.Image",
       "operation": "filter",
@@ -64988,6 +65368,530 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.filter.nuanced.la-max-filter-simd-alpha",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-filter-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  10,
+                  255
+                ],
+                [
+                  40,
+                  128
+                ],
+                [
+                  70,
+                  0
+                ],
+                [
+                  20,
+                  64
+                ],
+                [
+                  50,
+                  192
+                ],
+                [
+                  80,
+                  32
+                ],
+                [
+                  30,
+                  96
+                ],
+                [
+                  60,
+                  224
+                ],
+                [
+                  90,
+                  16
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-maxfilter",
+          "surface": "PIL.ImageFilter",
+          "operation": "MaxFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-la-maxfilter"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.la-min-filter-simd-alpha",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-filter-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  10,
+                  255
+                ],
+                [
+                  40,
+                  128
+                ],
+                [
+                  70,
+                  0
+                ],
+                [
+                  20,
+                  64
+                ],
+                [
+                  50,
+                  192
+                ],
+                [
+                  80,
+                  32
+                ],
+                [
+                  30,
+                  96
+                ],
+                [
+                  60,
+                  224
+                ],
+                [
+                  90,
+                  16
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-minfilter",
+          "surface": "PIL.ImageFilter",
+          "operation": "MinFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-la-minfilter"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.la-median-filter-simd-alpha",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-filter-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  10,
+                  255
+                ],
+                [
+                  40,
+                  128
+                ],
+                [
+                  70,
+                  0
+                ],
+                [
+                  20,
+                  64
+                ],
+                [
+                  50,
+                  192
+                ],
+                [
+                  80,
+                  32
+                ],
+                [
+                  30,
+                  96
+                ],
+                [
+                  60,
+                  224
+                ],
+                [
+                  90,
+                  16
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-medianfilter",
+          "surface": "PIL.ImageFilter",
+          "operation": "MedianFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-la-medianfilter"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.la-rank-filter-simd-alpha",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.mode.la"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                3,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-filter-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                [
+                  10,
+                  255
+                ],
+                [
+                  40,
+                  128
+                ],
+                [
+                  70,
+                  0
+                ],
+                [
+                  20,
+                  64
+                ],
+                [
+                  50,
+                  192
+                ],
+                [
+                  80,
+                  32
+                ],
+                [
+                  30,
+                  96
+                ],
+                [
+                  60,
+                  224
+                ],
+                [
+                  90,
+                  16
+                ]
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-la-rankfilter",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 3
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-la-rankfilter"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-negative",
       "surface": "PIL.Image.Image",
       "operation": "filter",
@@ -65430,6 +66334,626 @@
             "filter": {
               "kind": "binding",
               "step_id": "setup-filter-kernel-small"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-width-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                5
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-kernel-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-kernel-small-width",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0
+              ]
+            },
+            "scale": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "offset": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-kernel-small-width"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-height-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                4
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-kernel-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-kernel-small-height",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0
+              ]
+            },
+            "scale": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "offset": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-kernel-small-height"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-width-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                5
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-kernel-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-kernel-small-width",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0
+              ]
+            },
+            "scale": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "offset": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-kernel-small-width"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-height-small-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "filter",
+      "covers": [
+        "PIL.Image.Image.filter.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                4
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-kernel-small-rectangular-data",
+          "surface": "PIL.Image.Image",
+          "operation": "putdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                2,
+                3,
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15,
+                16,
+                17,
+                18,
+                19,
+                20
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-filter-kernel-small-height",
+          "surface": "PIL.ImageFilter",
+          "operation": "Kernel",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                5
+              ]
+            },
+            "kernel": {
+              "kind": "literal",
+              "value": [
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0,
+                -1.0
+              ]
+            },
+            "scale": {
+              "kind": "literal",
+              "value": 1.0
+            },
+            "offset": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "setup-filter-kernel-small-height"
             }
           }
         },

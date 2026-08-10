@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 2973
-- Unique active workflow signatures: 2973
+- Active parity workflows: 2985
+- Unique active workflow signatures: 2985
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1791
+- Deliberate nuanced workflows: 1803
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 213 |
-| `PIL.Image.Image` | 1421 |
+| `PIL.Image.Image` | 1433 |
 | `PIL.ImageChops` | 122 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -261,17 +261,29 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.filter.nuanced.gaussian-blur-zero-radius`
 - `PIL.Image.Image.filter.nuanced.i-mode`
 - `PIL.Image.Image.filter.nuanced.i-mode-detail-fused-row`
+- `PIL.Image.Image.filter.nuanced.i-mode-detail-height-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.i-mode-detail-small-guard`
+- `PIL.Image.Image.filter.nuanced.i-mode-detail-width-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.i-mode-find-edges-negative`
+- `PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-height-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-negative`
 - `PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-small-guard`
+- `PIL.Image.Image.filter.nuanced.i-mode-kernel-5x5-width-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.i-mode-smooth-more-fused-row`
 - `PIL.Image.Image.filter.nuanced.invalid-filter`
 - `PIL.Image.Image.filter.nuanced.l-mode-detail-fused-row`
+- `PIL.Image.Image.filter.nuanced.l-mode-detail-height-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.l-mode-detail-small-simd-guard`
+- `PIL.Image.Image.filter.nuanced.l-mode-detail-width-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.l-mode-find-edges-negative`
+- `PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-height-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-small-simd-guard`
+- `PIL.Image.Image.filter.nuanced.l-mode-kernel-5x5-width-small-simd-guard`
 - `PIL.Image.Image.filter.nuanced.l-mode-smooth-more-fused-row`
+- `PIL.Image.Image.filter.nuanced.la-max-filter-simd-alpha`
+- `PIL.Image.Image.filter.nuanced.la-median-filter-simd-alpha`
+- `PIL.Image.Image.filter.nuanced.la-min-filter-simd-alpha`
+- `PIL.Image.Image.filter.nuanced.la-rank-filter-simd-alpha`
 - `PIL.Image.Image.filter.nuanced.opened-rgb`
 - `PIL.Image.Image.filter.nuanced.p-mode-filter`
 - `PIL.Image.Image.filter.nuanced.pa-putpalette-blur`

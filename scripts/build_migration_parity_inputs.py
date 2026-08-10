@@ -3782,6 +3782,27 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
+            elif chain in {
+                "filter-detail-small-width",
+                "filter-detail-small-height",
+            }:
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={"data": literal(list(range(1, 7)))},
+                    step_id="setup-detail-small-rectangular-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "DETAIL",
+                    receiver=None,
+                    arguments={},
+                    step_id=f"setup-filter-detail-small-{chain.rsplit('-', 1)[-1]}",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
             elif chain == "filter-smooth-more-fused-row":
                 image_step = self.ensure_image()
                 self.add_step(
@@ -3898,6 +3919,32 @@ class WorkflowBuilder:
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
+            elif chain in {
+                "filter-kernel-5x5-small-width",
+                "filter-kernel-5x5-small-height",
+            }:
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={"data": literal(list(range(1, 21)))},
+                    step_id="setup-kernel-small-rectangular-data",
+                )
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    "Kernel",
+                    receiver=None,
+                    arguments={
+                        "size": literal([5, 5]),
+                        "kernel": literal([-1.0] * 25),
+                        "scale": literal(1.0),
+                        "offset": literal(0),
+                    },
+                    step_id=f"setup-filter-kernel-small-{chain.rsplit('-', 1)[-1]}",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
             elif chain == "filter-box-blur-zero":
                 image_step = self.ensure_image()
                 filter_step = self.add_step(
@@ -3963,6 +4010,52 @@ class WorkflowBuilder:
                     receiver=None,
                     arguments=filter_arguments,
                     step_id=f"setup-f-mode-{filter_name.lower()}",
+                )
+                self.scenario_values["filter"] = binding(filter_step)
+                receiver_step = image_step
+            elif chain in {
+                "filter-la-max",
+                "filter-la-min",
+                "filter-la-median",
+                "filter-la-rank",
+            }:
+                image_step = self.ensure_image(mode="LA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putdata",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [
+                                [10, 255],
+                                [40, 128],
+                                [70, 0],
+                                [20, 64],
+                                [50, 192],
+                                [80, 32],
+                                [30, 96],
+                                [60, 224],
+                                [90, 16],
+                            ]
+                        )
+                    },
+                    step_id="setup-la-filter-data",
+                )
+                filter_name = {
+                    "filter-la-max": "MaxFilter",
+                    "filter-la-min": "MinFilter",
+                    "filter-la-median": "MedianFilter",
+                    "filter-la-rank": "RankFilter",
+                }[chain]
+                filter_arguments = {"size": literal(3)}
+                if filter_name == "RankFilter":
+                    filter_arguments["rank"] = literal(0)
+                filter_step = self.add_step(
+                    "PIL.ImageFilter",
+                    filter_name,
+                    receiver=None,
+                    arguments=filter_arguments,
+                    step_id=f"setup-la-{filter_name.lower()}",
                 )
                 self.scenario_values["filter"] = binding(filter_step)
                 receiver_step = image_step
@@ -16459,6 +16552,46 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "requirement_suffix": "behavior.default",
+            "name": "l-mode-detail-width-small-simd-guard",
+            "mode": "L",
+            "size": [2, 3],
+            "chain": "filter-detail-small-width",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-detail-height-small-simd-guard",
+            "mode": "L",
+            "size": [3, 2],
+            "chain": "filter-detail-small-height",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-detail-width-small-simd-guard",
+            "mode": "I",
+            "size": [2, 3],
+            "chain": "filter-detail-small-width",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-detail-height-small-simd-guard",
+            "mode": "I",
+            "size": [3, 2],
+            "chain": "filter-detail-small-height",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
             "name": "i-mode-smooth-more-fused-row",
             "mode": "I",
             "size": [5, 5],
@@ -16548,6 +16681,46 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "filter",
+            "requirement_suffix": "mode.la",
+            "name": "la-max-filter-simd-alpha",
+            "mode": "LA",
+            "size": [3, 3],
+            "chain": "filter-la-max",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "mode.la",
+            "name": "la-min-filter-simd-alpha",
+            "mode": "LA",
+            "size": [3, 3],
+            "chain": "filter-la-min",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "mode.la",
+            "name": "la-median-filter-simd-alpha",
+            "mode": "LA",
+            "size": [3, 3],
+            "chain": "filter-la-median",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "mode.la",
+            "name": "la-rank-filter-simd-alpha",
+            "mode": "LA",
+            "size": [3, 3],
+            "chain": "filter-la-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
             "requirement_suffix": "behavior.default",
             "name": "i-mode-kernel-5x5-negative",
             "mode": "I",
@@ -16573,6 +16746,46 @@ def build_nuanced_cases(
             "mode": "L",
             "size": [4, 4],
             "chain": "filter-kernel-5x5-small",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-kernel-5x5-width-small-simd-guard",
+            "mode": "L",
+            "size": [4, 5],
+            "chain": "filter-kernel-5x5-small-width",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-kernel-5x5-height-small-simd-guard",
+            "mode": "L",
+            "size": [5, 4],
+            "chain": "filter-kernel-5x5-small-height",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-kernel-5x5-width-small-simd-guard",
+            "mode": "I",
+            "size": [4, 5],
+            "chain": "filter-kernel-5x5-small-width",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "i-mode-kernel-5x5-height-small-simd-guard",
+            "mode": "I",
+            "size": [5, 4],
+            "chain": "filter-kernel-5x5-small-height",
             "observe_result": "tobytes",
         },
         {
