@@ -447,7 +447,8 @@
           "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-green-blue-fallback",
           "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-red-fallback",
           "PIL.ImageOps.autocontrast.nuanced.single-pixel-l",
-          "PIL.ImageOps.autocontrast.nuanced.empty-l"
+          "PIL.ImageOps.autocontrast.nuanced.empty-l",
+          "PIL.ImageOps.autocontrast.nuanced.empty-height-l"
         ],
         "command_ids": []
       },

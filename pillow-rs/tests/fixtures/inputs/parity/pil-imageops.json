@@ -21907,6 +21907,69 @@
         "call",
         "observe-result"
       ]
+    },
+    {
+      "case_id": "PIL.ImageOps.autocontrast.nuanced.empty-height-l",
+      "surface": "PIL.ImageOps",
+      "operation": "autocontrast",
+      "covers": [
+        "PIL.ImageOps.autocontrast.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                0
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "autocontrast",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
     }
   ]
 }
