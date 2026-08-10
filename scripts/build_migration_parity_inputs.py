@@ -14267,6 +14267,19 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "parameter.dither",
+            "name": "rgb-to-p-no-dither",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "values": {
+                "mode": literal("P"),
+                "dither": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "mode.p",
             "name": "l-to-p",
             "mode": "L",
@@ -18782,6 +18795,18 @@ def build_nuanced_cases(
             "name": "l16-png-opened",
             "scenario_inline_image": "l16-png",
             "values": {"xy": literal([0, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-putpixel",
+            "scenario_inline_image": "l16-png",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(0x1234),
+            },
         },
         {
             "surface": "PIL.Image.Image",
