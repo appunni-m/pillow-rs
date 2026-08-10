@@ -12726,6 +12726,50 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "pa-packed",
+            "observe_receiver": True,
+            "mode": "PA",
+            "values": {
+                "data": literal([0x40000002] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-packed",
+            "observe_receiver": True,
+            "mode": "CMYK",
+            "values": {
+                "data": literal([0x04030201] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "ycbcr-packed",
+            "observe_receiver": True,
+            "mode": "YCbCr",
+            "values": {
+                "data": literal([0x00808010] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-packed",
+            "observe_receiver": True,
+            "mode": "HSV",
+            "values": {
+                "data": literal([0x00808010] * 9),
+            },
+        },
+        {
             "surface": "PIL.ImageStat",
             "operation": "Stat",
             "requirement_suffix": "behavior.default",

@@ -1652,6 +1652,28 @@ impl PyImage {
             }
         }
 
+        // Exact built-in numeric lists and tuples have no user callbacks to
+        // observe between writes. Let Rust normalize them in one operation so
+        // the selected CPU/SIMD backend can process the complete pixel batch.
+        // Subclasses, nested values, and arbitrary sequences continue through
+        // the re-entrant per-item path below.
+        if data.downcast_exact::<PyList>().is_ok() || data.downcast_exact::<PyTuple>().is_ok() {
+            if let Ok(values) = data.extract::<Vec<i64>>() {
+                return slf
+                    .try_borrow_mut()?
+                    .inner
+                    .putdata_integer_values(&values, scale, offset)
+                    .map_err(map_error);
+            }
+            if let Ok(values) = data.extract::<Vec<f64>>() {
+                return slf
+                    .try_borrow_mut()?
+                    .inner
+                    .putdata_numeric_values(&values, scale, offset)
+                    .map_err(map_error);
+            }
+        }
+
         // Pillow's image8 fast path reads the underlying bytes directly, even
         // for a bytes subclass that overrides Python iteration.
         if matches!(mode.as_str(), "1" | "L" | "P") {
