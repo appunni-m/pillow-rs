@@ -14670,6 +14670,31 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "edge": "zero-height",
         },
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "offset",
+                "requirement_suffix": "behavior.default",
+                "name": f"materialized-{mode.lower()}-{xoffset}-{yoffset}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {
+                    "xoffset": literal(xoffset),
+                    "yoffset": literal(yoffset),
+                },
+                # The ordinary offset cases only validate the lazy call. These
+                # cases force the toroidal copy through each public channel
+                # family while remaining valid Pillow inputs.
+                "observe_result": "tobytes",
+            }
+            for mode, xoffset, yoffset, pixel in (
+                ("L", 1, -1, 37),
+                ("LA", -2, 1, [37, 211]),
+                ("RGB", 5, -3, [37, 211, 89]),
+                ("RGBA", -4, 3, [37, 211, 89, 173]),
+            )
+        ),
         {
             "surface": "PIL.ImageChops",
             "operation": "add",
