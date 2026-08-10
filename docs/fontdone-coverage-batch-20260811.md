@@ -1,49 +1,120 @@
 # Fontdone coverage batch audit — 2026-08-11
 
-This is a documentation-only audit for managed worktree
-`07b6deb5-15b8-432a-b579-964f58d8dbb0`, branch
-`codex/coverage-batch-fontdone-20260811`. It does not change Pillow runtime
-code or the sibling `/Users/lazytrot/work/fontdone` checkout.
+This is a documentation-only audit performed in the isolated checkout
+`/private/tmp/pillow-rs-fontdone-coverage-audit`, branch
+`codex/fontdone-coverage-audit`, based on Pillow-RS commit `9742b4d53`. It does
+not change Pillow-RS runtime code or the sibling
+`/Users/lazytrot/work/fontdone` checkout.
 
 Paths beginning with `fontdone/` below are relative to
 `/Users/lazytrot/work/fontdone`. Source and manifest line ranges are exact for
 the inspected checkout.
 
-## Evidence boundary
+## Evidence boundary and freshness
 
-Only the current fontdone evidence was used:
+The sibling fontdone checkout was clean at source `HEAD`
+`fdc509f3dcca3ae1bb65c4e0dcfc83c8df78b432` when inspected. The exact
+source-matched production evidence is the generated LLVM report
+`/Users/lazytrot/work/fontdone/target/coverage/unified-runtime-all-lanes.json`.
+Its build marker is `251c26b8e661b11634ee11245c5f8a84e5de9599-clean`. The
+following read-only source-equivalence check returned exit 0:
+
+```text
+git diff --quiet 251c26b8e661b11634ee11245c5f8a84e5de9599..HEAD -- \
+  src/pfr.rs src/tt/svg.rs src/tt/sbix.rs src/tt/sbit.rs \
+  src/autohint/cjk.rs src/autohint/coverage.rs src/autohint/globals.rs \
+  src/autohint/latin.rs src/autohint/loader.rs src/autohint/types.rs \
+  src/api.rs src/font.rs src/grays.rs src/ffi/handles.rs \
+  src/scaler.rs src/render.rs src/tt/cff.rs src/tt/cmap.rs \
+  src/tt/name.rs src/tt/post.rs src/tt/fvar.rs src/tt/gvar.rs \
+  src/tt/hvar.rs src/tt/mvar.rs src/tt/varstore.rs
+```
+
+Therefore the report’s per-file production metrics below are source-matched
+to current fontdone `HEAD`. The report’s whole-project total also includes an
+older test-harness/preparation state, so it is not presented as a current
+`HEAD` aggregate denominator.
 
 | Evidence | Result and limitation |
 |---|---|
-| `fontdone/doc/runtime_parity_evidence.json` (`evidence_kind=full_runtime_parity`) | Recorded 2026-08-10 from `make test-parity` at source commit `2330ee507a9de66c504ded2c3a6ccde0fd3dce57`: 7,853 runnable, 7,853 passed, 0 failed, 3 pending; 218/218 function routes. This is fontdone parity evidence, not Pillow parity and not a fresh run at the current sibling `HEAD`. |
-| `fontdone/doc/compatibility_snapshot.json` | 2026-08-10 committed coverage snapshot from source commit `06a8ce2b91d041d1bc75618e579480d11f182dcd`, Coverage MCP run `669d796d-c1aa-411c-ad12-98a6d2089fc0`: lines 50,573/54,362 (93.03%), branches 10,101/12,522 (80.67%), functions 3,479/3,833 (90.76%), regions 69,451/75,449 (92.05%). |
-| `fontdone/target/coverage/unified-runtime-all-lanes.json` plus `.build-state` and preparation state | Working generated artifact: lines 51,839/54,811 (94.58%), branches 10,383/12,598 (82.42%), functions 3,516/3,847 (91.40%), regions 71,470/75,922 (94.14%). Its build state is `251c26b8e661b11634ee11245c5f8a84e5de9599-clean`; preparation state is `2330ee507a9de66c504ded2c3a6ccde0fd3dce57-dirty`. It is useful current file-level evidence, but is not a current-`HEAD` committed baseline. |
-| `fontdone/doc/FREETYPE_SUPPORT.md` and `fontdone/doc/DEVELOPMENT.md` | The former is the application-adoption contract; the latter records maintained coverage-only probes and the distinction between coverage and parity. |
+| `fontdone/target/coverage/unified-runtime-all-lanes.json` plus `.build-state` and preparation state | Source-matched production file evidence: report totals are 51,839/54,811 lines (94.58%), 10,383/12,598 branches (82.42%), 3,516/3,847 functions (91.40%), and 71,470/75,922 regions (94.14%), but those aggregate totals are not a current-`HEAD` harness baseline. |
+| `fontdone/doc/compatibility_snapshot.json` | Historical committed snapshot at source `06a8ce2b91d041d1bc75618e579480d11f182dcd`, run `669d796d-c1aa-411c-ad12-98a6d2089fc0`; not used as current coverage evidence. |
+| `fontdone/doc/runtime_parity_evidence.json` (`evidence_kind=full_runtime_parity`) | Historical recorded parity at source `2330ee507a9de66c504ded2c3a6ccde0fd3dce57`: 7,853 runnable, 7,853 passed, 0 failed, 3 pending; not a fresh run at current sibling `HEAD`, and not Pillow parity. |
+| `fontdone/doc/FREETYPE_SUPPORT.md`, `fontdone/doc/DEVELOPMENT.md`, and `fontdone/doc/ROADMAP.md` | Current source-adoption classifications, maintained probe descriptions, and source-matched historical coverage decisions. |
 
 The auto-selected Pillow operation snapshot was deliberately not used as a
 fontdone baseline. No crash, GPU, or pending-TIFF lane was run or treated as
 evidence.
 
 Coverage is not parity: executing a line or branch does not prove that its
-result matches C. The raw segment records in the LLVM report are not treated
-as uncovered source lines; the aggregate summaries above and the maintained
-source/probe records are the reliable evidence here.
+result matches C. The LLVM report’s line/region/function summaries are used for
+the exact file metrics below; raw segment records are not promoted to
+line-level gap claims. No fontdone test, parity, coverage, or fixture command
+was run for this audit.
+
+## Source-matched production metrics
+
+These are LLVM executable-line, region, branch, and function summaries from
+the report above. They are not physical `wc -l` counts and are not a public
+parity score.
+
+| Area | Lines | Regions | Branches | Functions |
+|---|---:|---:|---:|---:|
+| `src/pfr.rs` | 285/285 | 550/627 | 70/70 | 23/23 |
+| `src/tt/svg.rs` | 59/59 | 104/104 | 14/14 | 6/6 |
+| `src/tt/sbix.rs` | 146/153 | 206/235 | 22/22 | 13/20 |
+| `src/tt/sbit.rs` | 785/826 | 1,142/1,295 | 96/96 | 44/85 |
+| `src/autohint/cjk.rs` | 858/879 | 1,152/1,180 | 372/398 | 18/18 |
+| `src/autohint/coverage.rs` | 28/28 | 35/35 | 4/4 | 7/7 |
+| `src/autohint/globals.rs` | 272/272 | 444/446 | 88/88 | 18/18 |
+| `src/autohint/latin.rs` | 2,891/2,978 | 4,189/4,299 | 1,142/1,269 | 67/69 |
+| `src/autohint/loader.rs` | 229/229 | 404/404 | 64/64 | 5/5 |
+| `src/autohint/types.rs` | 102/102 | 69/69 | 0/0 | 14/14 |
+| `src/scaler.rs` | 1,448/1,497 | 1,572/1,618 | 218/246 | 70/72 |
+| `src/render.rs` | 2,353/2,463 | 3,305/3,441 | 423/486 | 144/159 |
+| `src/tt/cff.rs` | 883/913 | 1,261/1,363 | 132/132 | 67/94 |
+| `src/tt/cmap.rs` | 853/853 | 1,126/1,128 | 174/174 | 62/62 |
+| `src/tt/name.rs` | 374/374 | 517/518 | 124/124 | 38/38 |
+| `src/tt/post.rs` | 96/97 | 184/190 | 23/24 | 7/7 |
+| `src/tt/fvar.rs` | 99/99 | 130/130 | 20/20 | 2/2 |
+| `src/tt/gvar.rs` | 577/582 | 938/965 | 126/126 | 46/51 |
+| `src/tt/hvar.rs` | 45/47 | 70/79 | 6/6 | 5/7 |
+| `src/tt/mvar.rs` | 64/67 | 97/113 | 6/6 | 4/7 |
+| `src/tt/varstore.rs` | 243/252 | 419/452 | 66/66 | 14/20 |
+
+The adjacent dispatch/ABI files are also source-matched, but their large
+denominators must not be treated as Pillow public-operation gaps:
+
+| Context file | Lines | Regions | Branches | Functions |
+|---|---:|---:|---:|---:|
+| `src/api.rs` | 1,311/1,360 | 1,902/1,966 | 273/326 | 112/112 |
+| `src/font.rs` | 5,900/6,307 | 8,417/9,146 | 809/962 | 482/587 |
+| `src/grays.rs` | 806/839 | 1,099/1,131 | 179/190 | 35/36 |
+| `src/ffi/handles.rs` | 11,221/12,073 | 15,247/16,555 | 2,175/2,865 | 817/881 |
+
+These files mix public route dispatch, ABI record/lifetime handling, and
+defensive validation. Any remaining ABI gap requires an existing manifest route
+or a separately authorized ABI contract case; null-pointer fabrication,
+allocator tricks, and direct private-handle calls are not safe coverage inputs.
 
 ## Classified count
 
-The requested scope contains **9/9 lane families classified**. At the probe
-level there are **9 safe public-probe candidates**, **5 unsupported or not
-application-ready surfaces**, **5 defensive/unreachable groups**, and **1
-coverage-only non-public helper**. These counts intentionally overlap by lane:
-they describe different decisions about the same code, not additional parity
-cases.
+The requested scope contains **9/9 lane families classified**. The
+classifications intentionally overlap by lane, so this audit does not invent a
+single additive “remaining gap” count. Five families have source-backed public
+input follow-up candidates (SBIT, autohint, scaler/render, CFF, and
+variations); PFR and SVG have no remaining executable line/branch/function
+gap; SBIX and CMap/SFNT are constrained by decoder or adoption status. The
+remaining records are split between public follow-up candidates,
+unsupported/planned surfaces, defensive invariants, and one coverage-only
+helper.
 
 | Classification | Count | Meaning |
 |---|---:|---|
-| Reachable public-probe candidates | 9 | A maintained byte/input-only route can reach the public operation or its public Rust equivalent without unsafe memory fabrication. |
-| Unsupported/not application-ready | 5 | The route is excluded, decoder-limited, or marked `Partial`, `Planned`, or `Implemented; mapping incomplete` by the adoption contract. |
-| Defensive/unreachable | 5 | A guard is caller-proven, parser-invariant, architecture-specific, or removed as unreachable; manufacturing invalid internal state is not a safe probe. |
-| Coverage-only non-public helper | 1 | A direct synthetic helper exists only to close a measured implementation branch and must not be counted as public parity coverage. |
+| Source-backed public follow-up | Five lane families | A maintained byte/input-only route can reach the public operation or its public Rust equivalent without unsafe memory fabrication. |
+| Unsupported/planned or not application-ready | Lane-specific | The route is decoder-limited or marked `Partial`, `Planned`, or `Implemented; mapping incomplete` by the adoption contract. |
+| Defensive/unreachable | Lane-specific | A guard is caller-proven, parser-invariant, architecture-specific, or removed as unreachable; manufacturing invalid internal state is not a safe probe. |
+| Coverage-only non-public helper | One helper | A direct synthetic helper exists only to close a measured implementation branch and must not be counted as public parity coverage. |
 
 ## Lane findings and candidate probes
 
@@ -57,13 +128,18 @@ service are in `fontdone/src/pfr.rs:47-389`; PFR face construction is
 regions). Existing valid and malformed inputs are under
 `fontdone/tests/fixtures/input/fonts/pfr/`.
 
-**Classification: reachable public probe; no justified new coverage-only
-gap.** The manifest already names `FT_Get_PFR_Advance`,
+**Classification: no remaining executable-line, branch, or function gap.** The
+source-matched report has only region-only residuals, and the current roadmap
+records the PFR malformed-input cluster as having no relevant line or branch
+gaps (`fontdone/doc/ROADMAP.md:553`). The manifest names
+`FT_Get_PFR_Advance`,
 `FT_Get_PFR_Kerning`, and `FT_Get_PFR_Metrics` cases at
 `fontdone/tests/manifest.yaml:9979-10019`. The support contract marks all
 three `Complete` at `fontdone/doc/FREETYPE_SUPPORT.md:231-236`.
 
-**Safe candidate.** Open `basic-metrics-and-kerning.pfr` or
+**Optional public evidence only.** If a later fontdone parity task needs to
+explain the remaining region-only records, open `basic-metrics-and-kerning.pfr`
+or
 `fixed-advance.pfr` through the memory-face route, then probe the three
 services with a valid glyph/kerning pair and the optional output combinations;
 use a non-PFR face as the ordinary error/fallback control. Dependencies are a
@@ -80,19 +156,22 @@ states merely to consume the remaining region count.
 ### 2. SVG
 
 **Observed evidence.** The parser is `fontdone/src/tt/svg.rs:34-120` and is
-fully summarized at 59/59 lines, 14/14 branches, and 6/6 functions. Table
+fully summarized at 59/59 lines, 104/104 regions, 14/14 branches, and 6/6
+functions. Table
 integration is `fontdone/src/font.rs:3836-3838`; the public load-side document
 route is `fontdone/src/font.rs:5784-5815`. Maintained malformed inputs are
 under `fontdone/tests/fixtures/input/fonts/svg/`.
 
-**Classification: reachable parser/metadata probe; SVG rendering is
-unsupported/not application-ready.** `FT_LOAD_NO_SVG` and `FT_LOAD_SVG_ONLY`
+**Classification: parser coverage complete; SVG/color rendering remains
+unsupported or not application-ready.** `FT_LOAD_NO_SVG` and `FT_LOAD_SVG_ONLY`
 are specified at `fontdone/tests/manifest.yaml:946-1002`, but both need an
 OpenType font containing an SVG glyph and a fallback/non-SVG glyph. The
 adoption contract explicitly excludes SVG/color compositing because the
 renderer is a monochrome alpha-mask renderer (`fontdone/doc/FREETYPE_SUPPORT.md:61-69`).
 
-**Safe candidate.** Use `otsvg-glyph.ttf` and `otsvg-glyph-range-gap.ttf` to
+No coverage-fixing case is justified by the current source-matched report.
+If a future parity task expands SVG behavior, use `otsvg-glyph.ttf` and
+`otsvg-glyph-range-gap.ttf` to
 open a real face and compare `FT_Load_Glyph` with the default, `NO_SVG`, and
 `SVG_ONLY` flags, including a glyph in the range gap. Use the short,
 out-of-bounds, truncated-record, and gzip fixtures for face-open errors. The
@@ -114,7 +193,7 @@ manufacture bounds failures; their callers establish the table bounds.
 22/22 branches, and 13/20 functions. Existing SBIX inputs are under
 `fontdone/tests/fixtures/input/fonts/sbix/`.
 
-**Classification: reachable public select/load probes; bitmap decoding is
+**Classification: public strike/error probes are covered; bitmap decoding is
 unsupported; one internal precondition is defensive/unreachable.** The
 maintained coverage-only `FT_Select_Size` probe is public Rust API usage at
 `fontdone/tests/unified_fixture_parity.rs:112-133`, invoked from the existing
@@ -123,7 +202,12 @@ the valid and invalid strike indices for `sbix-bitmap-only.ttf`. The broader
 `FT_Load_Glyph` SBIX error matrix is described at
 `fontdone/tests/manifest.yaml:1731-1756`.
 
-**Safe candidate.** Open `sbix-bitmap-only.ttf`, select strike 0 and an
+The current roadmap records `sbix.rs` at 22/22 branches with no relevant gaps
+after the strike-invariant cleanup (`fontdone/doc/ROADMAP.md:551`). The
+remaining 7 executable lines, 29 regions, and 7 functions are not sufficient
+evidence of a missing public route: they include decoder/error variants and
+the already-proven strike precondition. A later parity task may open
+`sbix-bitmap-only.ttf`, select strike 0 and an
 invalid strike, then load present/missing glyphs through `FT_Load_Glyph` and
 the documented load flags. Add or retain PNG/JPEG/TIFF/`rgbl`/unknown-type
 fixtures only as expected decoder errors: the Rust implementation deliberately
@@ -156,7 +240,11 @@ existing `FT_Select_Size` case at
 `fontdone/tests/unified_fixture_parity.rs:51588-51599`. The public SBIT-only
 manifest route is `fontdone/tests/manifest.yaml:980-990`.
 
-**Safe candidate.** Use `FT_Select_Size`/`FT_Load_Glyph` with `SBITS_ONLY` on
+The current roadmap records 96/96 SBIT branches after the shape-invariant
+cleanup (`fontdone/doc/ROADMAP.md:550`). Remaining line, region, and function
+records are therefore not automatically public gaps; they include helper
+variants and unsupported/defensive paths. A later parity task may use
+`FT_Select_Size`/`FT_Load_Glyph` with `SBITS_ONLY` on
 the maintained strike fixtures, varying a real strike, a hit, a missing glyph,
 and a no-matching-strike size. Compare bitmap bytes, dimensions, pitch,
 pixel mode, and metrics. This is safe because the input is a complete font and
@@ -178,14 +266,15 @@ flag cases are `fontdone/tests/manifest.yaml:818-832` for FORCE_AUTOHINT and
 `:882-892` for NO_AUTOHINT. The maintained autohint fixture corpus is under
 `fontdone/tests/fixtures/input/fonts/autohint/`.
 
-**Classification: reachable public load probes; one direct helper is
-coverage-only and non-public.** The existing synthetic Latin segment probe is
+**Classification: residual public script/size paths plus one non-public
+coverage-only helper.** The existing synthetic Latin segment probe is
 `fontdone/tests/unified_fixture_parity.rs:72-110`, called only for the
 U+0245 target-mono case at `:4829-4850`. It reaches a measured segment-merge
 branch but does not add a parity case or public API evidence. Coverage-mask
 reset/assert handling is `:65866-65930`.
 
-**Safe candidate.** Add or retain maintained public `FT_Load_Char`/
+The public residuals are valid candidates for a separately authorized
+fontdone parity batch. Add or retain maintained public `FT_Load_Char`/
 `FT_Load_Glyph` inputs across the Latin, CJK, Indic, Arabic, and mixed-script
 fixtures, varying size, target mode, FORCE_AUTOHINT, and NO_AUTOHINT. Compare
 the complete glyph slot/bitmap/metrics output and, where deliberately
@@ -204,7 +293,7 @@ functions. Render-mode dispatch and loaded-outline rendering are
 paths begin at `:391-671`, with the working summary at 2,353/2,463 lines,
 423/486 branches, and 144/159 functions.
 
-**Classification: reachable public mode probes; LCD is partial; excluded
+**Classification: reachable public mode probes remain; LCD is partial; excluded
 lanes remain out of scope.** `FT_Render_Glyph` is `Complete` in the adoption
 contract (`fontdone/doc/FREETYPE_SUPPORT.md:93-105`); LCD filter/geometry
 operations are `Partial` at `:167-169`.
@@ -228,7 +317,9 @@ pure CFF cubic, CFF2, CID, malformed header/index/dict/charset/charstring,
 and ROS cases, are under `fontdone/tests/fixtures/input/fonts/cff/`.
 
 **Classification: reachable public face-open/load probes; internal malformed
-decoder states are not a public coverage obligation.** `FT_Load_Glyph` is
+decoder states are not a public coverage obligation.** The branch summary is
+complete (132/132), while the remaining function/region records need a public
+route before they become an actionable coverage item. `FT_Load_Glyph` is
 `Complete` (`fontdone/doc/FREETYPE_SUPPORT.md:88-95`), and the CID metadata
 functions are `Complete` at `:231-233`.
 
@@ -252,8 +343,8 @@ lines, 174/174 branches, and 62/62 functions. Format-14 face methods are
 and `fontdone/src/tt/post.rs` (96/97 lines, 23/24 branches, 7/7 functions).
 SFNT table methods are `fontdone/src/font.rs:5376-5443`.
 
-**Classification: reachable CMap/table probes; SFNT name/language mapping is
-planned or incomplete.** `FT_Get_CMap_Format`, `FT_Sfnt_Table_Info`, and
+**Classification: CMap parser coverage is effectively complete; public SFNT
+name/language mapping is planned or incomplete.** `FT_Get_CMap_Format`, `FT_Sfnt_Table_Info`, and
 `FT_Load_Sfnt_Table` are `Complete`, while `FT_Get_Sfnt_Table` is `Partial`;
 the adoption statuses are `fontdone/doc/FREETYPE_SUPPORT.md:170-177`.
 `FT_Get_CMap_Language_ID` and the SFNT name/lang APIs remain `Planned` at
@@ -283,7 +374,10 @@ variant-selector entry points at `:14490-14537`. Variable fixtures are under
 
 **Classification: reachable variable-font input probes; most variation ABI
 operations are planned; varstore invalid arithmetic is defensive/unreachable.**
-The adoption contract marks the format-14 variant APIs
+`fvar.rs` and all variation branch summaries are complete in the source-matched
+report; residual line/function/region records are concentrated in `gvar`,
+`hvar`, `mvar`, and `varstore` helpers. The adoption contract marks the
+format-14 variant APIs
 `Implemented; mapping incomplete` and most MM/variation APIs `Planned`
 (`fontdone/doc/FREETYPE_SUPPORT.md:210-230`). Thus an internal FVAR/GVAR/HVAR/
 MVAR path being exercised is not evidence that the full public variation
@@ -323,15 +417,17 @@ The following must stay out of the candidate count:
 ## Result
 
 The evidence supports committing this audit as a separate documentation
-artifact. It records nine lane families, nine safe public-probe candidates,
-five unsupported/not-application-ready surfaces, five defensive/unreachable
-groups, and one non-public coverage-only helper. The remaining separate
-fontdone parity blocker is exactly three pending safety-extension cases:
+artifact. It records nine classified lane families, source-matched production
+metrics, five source-backed public follow-up families, and explicit
+unsupported/planned, defensive, and coverage-only dispositions. The separate
+historical fontdone parity record contains exactly three pending
+safety-extension cases:
 `freetype.FT_Done_FreeType.error_invalid_or_foreign_library_handle`,
 `freetype.FT_Face_Properties.error_null_face`, and
 `ftimage.FT_Outline.null_internal_pointer_safety_extension`. They are excluded
 from the pinned-C numerator/denominator because the inputs are undefined or
 memory-unsafe, and fontdone rejects them without dereference; they are not
-missing runtime routes. Fontdone’s recorded parity result is therefore
-7,853 passed / 0 failed / 3 pending, and is not combined with Pillow parity or
-with any coverage percentage.
+missing runtime routes. The recorded 7,853 passed / 0 failed / 3 pending
+result is historical evidence only and is not combined with Pillow parity or
+with any coverage percentage. No source, manifest, fixture, threshold, or
+runtime file was changed by this audit.
