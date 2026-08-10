@@ -1605,12 +1605,19 @@ class WorkflowBuilder:
         elif self.edge == "nonzero-pixel" and label in {"image", "image1"}:
             if self.scenario_pixel is None:
                 raise ValueError("nonzero-pixel edge requires a scenario pixel")
+            # Keep the setup pixel inside the declared image.  Most cases use
+            # the default 16x16 fixture, but the odd-width transpose cases
+            # intentionally use 3x3 images; (2, 3) silently made those public
+            # workflows dependency-skipped instead of exercising transpose.
+            width, height = self.scenario_size or [16, 16]
+            x = min(2, max(0, width - 1))
+            y = min(3, max(0, height - 1))
             self.add_step(
                 "PIL.Image.Image",
                 "putpixel",
                 receiver=binding(step_id),
                 arguments={
-                    "xy": literal([2, 3]),
+                    "xy": literal([x, y]),
                     "value": literal(self.scenario_pixel),
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
