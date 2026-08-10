@@ -282,7 +282,6 @@
           "PIL.ImageOps.contain.nuanced.zero-width-source-simd-guard",
           "PIL.ImageOps.cover.nuanced.zero-width-source-simd-guard",
           "PIL.ImageOps.fit.nuanced.zero-width-source-simd-guard",
-          "PIL.ImageOps.fit.nuanced.zero-height-source-simd-guard",
           "PIL.ImageOps.pad.nuanced.simd-nearest-tall-target",
           "PIL.ImageOps.pad.nuanced.simd-nearest-equal-aspect",
           "PIL.ImageOps.pad.nuanced.simd-nearest-half-round",
