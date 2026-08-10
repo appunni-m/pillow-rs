@@ -8162,6 +8162,32 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "arc",
+            "requirement_suffix": "behavior.default",
+            "name": "even-short",
+            "values": {
+                "xy": literal([0, 0, 12, 10]),
+                "start": literal(15),
+                "end": literal(75),
+                "fill": literal([255, 0, 0]),
+                "width": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "arc",
+            "requirement_suffix": "behavior.default",
+            "name": "even-wrapped",
+            "values": {
+                "xy": literal([0, 0, 12, 10]),
+                "start": literal(15),
+                "end": literal(0),
+                "fill": literal([255, 0, 0]),
+                "width": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
             "operation": "chord",
             "requirement_suffix": "behavior.default",
             "name": "fill-outline",
