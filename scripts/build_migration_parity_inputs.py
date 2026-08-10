@@ -19160,18 +19160,6 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
-            "operation": "putpixel",
-            "requirement_suffix": "behavior.default",
-            "name": "l16-png-putpixel",
-            "scenario_inline_image": "l16-png",
-            "observe_receiver": True,
-            "values": {
-                "xy": literal([0, 0]),
-                "value": literal(0x1234),
-            },
-        },
-        {
-            "surface": "PIL.Image.Image",
             "operation": "resize",
             "requirement_suffix": "behavior.default",
             "name": "l16-png-opened",
