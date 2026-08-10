@@ -3286,7 +3286,7 @@ pub fn equalize(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
 /// (packed 0xAABBGGRR).
 ///
 /// Returns (output_pixels, dst_w, dst_h).
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// mode: 0=L, 1=LA, 2=RGB-like, 3=RGBA, 4=CMYK-like four-byte storage
 #[inline]
 pub fn transform(
     pixels: &[u32],
@@ -3301,6 +3301,7 @@ pub fn transform(
 ) -> (Vec<u32>, u32, u32) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
+    let has_fourth = mode == 1 || mode == 3 || mode == 4;
     let nearest = filter == 0;
 
     let aff_a = matrix[0];
@@ -3310,15 +3311,46 @@ pub fn transform(
     let aff_e = matrix[4];
     let aff_f = matrix[5];
 
-    // Pre-compute mode-aware fill pixel
+    // The affine byte kernel receives fill samples in the same packed layout
+    // as its input. For alpha modes Pillow writes that fill into the temporary
+    // premultiplied buffer without premultiplying it first, then expands it
+    // when converting back to straight-alpha output.
     let fill_r = fill_rgba & 0xFF;
     let fill_g = (fill_rgba >> 8) & 0xFF;
     let fill_b = (fill_rgba >> 16) & 0xFF;
-    let fill_a = fill_rgba & 0xFF00_0000;
-    let fill_out_g = if has_gb { fill_g } else { fill_r };
-    let fill_out_b = if has_gb { fill_b } else { fill_r };
-    let fill_out_a = if has_a { fill_a } else { 0xFF00_0000 };
-    let fill_pixel = fill_r | (fill_out_g << 8) | (fill_out_b << 16) | fill_out_a;
+    let fill_a = (fill_rgba >> 24) & 0xFF;
+    let unpremultiply = |value: u32, alpha: u32| {
+        if alpha == 0 {
+            0
+        } else {
+            (value.saturating_mul(255) / alpha).min(255)
+        }
+    };
+    let fill_out_r = if has_a && !nearest {
+        unpremultiply(fill_r, fill_a)
+    } else {
+        fill_r
+    };
+    let fill_out_g = if has_gb {
+        if has_a && !nearest {
+            unpremultiply(fill_g, fill_a)
+        } else {
+            fill_g
+        }
+    } else {
+        fill_out_r
+    };
+    let fill_out_b = if has_gb {
+        if has_a && !nearest {
+            unpremultiply(fill_b, fill_a)
+        } else {
+            fill_b
+        }
+    } else {
+        fill_out_r
+    };
+    let fill_out_a = if has_fourth { fill_a } else { 255 };
+    let fill_pixel = fill_out_r | (fill_out_g << 8) | (fill_out_b << 16) | (fill_out_a << 24);
 
     // Guard against empty source dimensions (avoids underflow on w-1 / h-1)
     if w == 0 || h == 0 {
@@ -3349,7 +3381,7 @@ pub fn transform(
                     let a_val = sp & 0xFF00_0000;
                     let og = if has_gb { g } else { r };
                     let ob = if has_gb { b_val } else { r };
-                    let oa = if has_a { a_val } else { 0xFF00_0000 };
+                    let oa = if has_fourth { a_val } else { 0xFF00_0000 };
                     out[out_idx] = r | (og << 8) | (ob << 16) | oa;
                 } else {
                     out[out_idx] = fill_pixel;
@@ -3417,20 +3449,61 @@ pub fn transform(
                         + fx * inv_fy * b10
                         + inv_fx * fy * b01
                         + fx * fy * b11;
-                    let out_a_f = inv_fx * inv_fy * a00
-                        + fx * inv_fy * a10
-                        + inv_fx * fy * a01
-                        + fx * fy * a11;
-
-                    let out_r = out_r_f.clamp(0.0, 255.0) as u32;
-                    let out_g_raw = out_g_f.clamp(0.0, 255.0) as u32;
-                    let out_b_raw = out_b_f.clamp(0.0, 255.0) as u32;
-                    let out_a_raw = out_a_f.clamp(0.0, 255.0) as u32;
+                    let out_a_raw = bilinear_interp_truncated(
+                        a00 as u32, a10 as u32, a01 as u32, a11 as u32, fx, fy,
+                    );
+                    let (out_r, out_g_raw, out_b_raw) = if has_a {
+                        let premultiply = |value: u32, alpha: u32| {
+                            ((value.saturating_mul(alpha) + 127) / 255).min(255)
+                        };
+                        let interpolate = |c00: u32, c10: u32, c01: u32, c11: u32| {
+                            bilinear_interp_truncated(c00, c10, c01, c11, fx, fy)
+                        };
+                        (
+                            unpremultiply(
+                                interpolate(
+                                    premultiply(r00 as u32, a00 as u32),
+                                    premultiply(r10 as u32, a10 as u32),
+                                    premultiply(r01 as u32, a01 as u32),
+                                    premultiply(r11 as u32, a11 as u32),
+                                ),
+                                out_a_raw,
+                            ),
+                            unpremultiply(
+                                interpolate(
+                                    premultiply(g00 as u32, a00 as u32),
+                                    premultiply(g10 as u32, a10 as u32),
+                                    premultiply(g01 as u32, a01 as u32),
+                                    premultiply(g11 as u32, a11 as u32),
+                                ),
+                                out_a_raw,
+                            ),
+                            unpremultiply(
+                                interpolate(
+                                    premultiply(b00 as u32, a00 as u32),
+                                    premultiply(b10 as u32, a10 as u32),
+                                    premultiply(b01 as u32, a01 as u32),
+                                    premultiply(b11 as u32, a11 as u32),
+                                ),
+                                out_a_raw,
+                            ),
+                        )
+                    } else {
+                        (
+                            out_r_f.clamp(0.0, 255.0) as u32,
+                            out_g_f.clamp(0.0, 255.0) as u32,
+                            out_b_f.clamp(0.0, 255.0) as u32,
+                        )
+                    };
 
                     // Mode-aware channel output
                     let out_g = if has_gb { out_g_raw } else { out_r };
                     let out_b = if has_gb { out_b_raw } else { out_r };
-                    let out_a = if has_a { out_a_raw << 24 } else { 0xFF00_0000 };
+                    let out_a = if has_fourth {
+                        out_a_raw << 24
+                    } else {
+                        0xFF00_0000
+                    };
 
                     out[out_idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
                 } else {

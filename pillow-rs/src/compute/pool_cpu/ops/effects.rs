@@ -2,6 +2,7 @@
 
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
+use crate::ops::pil_resize::{premultiply_alpha, unpremultiply_alpha};
 use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransformMethod};
 use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, ImageBuffer, RgbImage, RgbaImage,
@@ -865,7 +866,16 @@ fn transform_affine_generic(
     let channels = img.color().channel_count() as usize;
     let raw = img.as_bytes();
     let (sw, sh) = img.dimensions();
-    let fill_color = fill.unwrap_or((0, 0, 0, 255));
+    let fill_color = fill.unwrap_or_else(|| {
+        if matches!(
+            img.color(),
+            crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+        ) {
+            (0, 0, 0, 0)
+        } else {
+            (0, 0, 0, 255)
+        }
+    });
 
     let mut out = vec![0u8; (dst_w * dst_h) as usize * channels];
 
@@ -1147,8 +1157,26 @@ pub fn op_transform(
             let i_f_mode = explicit_mode == Some("I") || explicit_mode == Some("F");
             let use_nearest = matches!(filter, ResampleFilter::Nearest) || p_mode || i_f_mode;
 
+            // Pillow's ImagingTransformAffine resamples LA/RGBA through the
+            // premultiplied La/RGBa modes, then unpremultiplies the result.
+            // The fill sample is written as supplied into that temporary mode
+            // and is unpremultiplied along with the sampled pixels.
+            let needs_alpha_roundtrip = !use_nearest
+                && !matches!(explicit_mode, Some("PA") | Some("RGBa"))
+                && !matches!(explicit_mode, Some("CMYK" | "I" | "F"))
+                && matches!(
+                    img.color(),
+                    crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+                );
+            let work = if needs_alpha_roundtrip {
+                premultiply_alpha(img)
+            } else {
+                img.clone()
+            };
+            let transform_fill = fill;
+
             let result = transform_affine_generic(
-                img,
+                &work,
                 w,
                 h,
                 aff_a,
@@ -1157,9 +1185,14 @@ pub fn op_transform(
                 aff_d,
                 aff_e,
                 aff_f,
-                fill,
+                transform_fill,
                 use_nearest,
             )?;
+            let result = if needs_alpha_roundtrip {
+                unpremultiply_alpha(&result)
+            } else {
+                result
+            };
             Ok(preserve_mode(img, result))
         }
         &TransformMethod::Mesh => {

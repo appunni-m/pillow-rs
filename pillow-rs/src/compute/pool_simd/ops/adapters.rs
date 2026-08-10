@@ -80,6 +80,17 @@ fn dynimg_mode(img: &DynamicImage) -> u32 {
     }
 }
 
+/// Convert transform mode strings to the packed kernel's logical channel
+/// layout. Unlike most SIMD operations, affine transforms must distinguish
+/// three-byte modes from four-byte non-alpha storage such as CMYK.
+fn transform_mode_to_u32(img: &DynamicImage, mode: Option<&str>) -> u32 {
+    match mode {
+        Some("HSV" | "YCbCr") => 2,
+        Some("CMYK") => 4,
+        _ => mode_to_u32(img, mode),
+    }
+}
+
 /// Return whether the image must stay in its native scalar representation.
 ///
 /// The SIMD pixel buffer is deliberately an RGBA8 packing.  That is a valid
@@ -1258,18 +1269,12 @@ pub fn simd_transform(
     } = op
     {
         let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
-        // Check the explicit premultiplied mode before the storage-color guard.
-        // RGBa is represented by the same Rgba8 raster as RGBA, but Pillow's
-        // transform path must keep its premultiplied samples on the exact CPU
-        // implementation.  Keeping this condition first also makes the mode
-        // decision observable in the SIMD coverage lane.
+        // Keep explicit premultiplied RGBa, non-affine methods, and native
+        // scalar modes on the exact CPU implementation. LA/RGBA are supported
+        // by the SIMD scalar kernel and must not be redirected by storage type.
         if mode == Some("RGBa")
             || !matches!(method, TransformMethod::Affine)
             || uses_native_scalar_mode(img, mode)
-            || matches!(
-                img.color(),
-                crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-            )
         {
             return crate::compute::pool_cpu::ops::effects::op_transform(
                 img,
@@ -1282,7 +1287,7 @@ pub fn simd_transform(
                 mode,
             );
         }
-        let mode_code = mode_to_u32(img, mode);
+        let mode_code = transform_mode_to_u32(img, mode);
         let pixels = pixels_from_dynimg(img);
         let matrix: [f64; 8] = {
             let mut arr = [0.0f64; 8];
@@ -1301,7 +1306,17 @@ pub fn simd_transform(
             filter_to_u32(filter)
         };
         let fill_rgba = match resolved_fill {
-            Some(c) => pack_rgba(c),
+            Some((r, g, b, a)) => {
+                // The packed kernel always receives RGBA-shaped samples. PIL
+                // stores LA fills as (gray, alpha), so duplicate gray into
+                // the RGB lanes and carry alpha in the packed high byte.
+                let canonical = match mode_code {
+                    0 => (r, r, r, 255),
+                    1 => (r, r, r, g),
+                    _ => (r, g, b, a),
+                };
+                pack_rgba(canonical)
+            }
             None => 0u32,
         };
         let (result, nw, nh) =
