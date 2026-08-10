@@ -10,9 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 831228df9518a708217658bb78631c1d292fd99d
-coverage_run_id: migration-coverage-baf9b0855cbe4146b281a122af907fcc
-parity_run_id: migration-parity-3f9d4c63ca7842849d1744e52cabcd68
+base_commit: 8a92e62fa5578aae4cbaaf538994bbfe51dee6a9
+coverage_run_id: migration-coverage-90e8d80de8014a248bc4e8182c84214b
+parity_run_id: migration-parity-83795cc623fc4f3fb6e1f7518bead352
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
