@@ -931,7 +931,8 @@ class WorkflowBuilder:
         # requires paste masks to be L/LA/1, and this case intentionally keeps
         # the destination/source in I;16L while the mask stays L.
         use_inline_image = self.scenario_inline_image is not None and not (
-            label == "mask" and self.edge == "paste-i16-mask"
+            label == "mask"
+            and self.edge in {"paste-i16-mask", "paste-i16-rgba-mask"}
         )
         if use_inline_image:
             if self.scenario_inline_image == "l16-tiff":
@@ -1867,17 +1868,18 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id("setup-paste-mask-edge-pixel"),
                 )
-        elif self.edge == "paste-i16-mask" and label == "mask":
+        elif self.edge in {"paste-i16-mask", "paste-i16-rgba-mask"} and label == "mask":
             # Keep one copied sample on the partial-mask path while the other
             # samples remain zero, exercising the native I;16 blend without
             # routing through the pending TIFF decoder.
+            value = 128 if self.edge == "paste-i16-mask" else [0, 0, 0, 128]
             self.add_step(
                 "PIL.Image.Image",
                 "putpixel",
                 receiver=binding(step_id),
                 arguments={
                     "xy": literal([0, 0]),
-                    "value": literal(128),
+                    "value": literal(value),
                 },
                 step_id=self.next_step_id("setup-paste-i16-mask-pixel"),
             )
@@ -11486,6 +11488,92 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "transform",
             "requirement_suffix": "parameter.data",
+            "name": "perspective-zero-denominator-fill",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 0, 0, 1, 0, -1, 0]),
+                "fillcolor": literal([7, 8, 9]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": "perspective-nearest-outside-fill",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 100, 0, 1, 100, 0, 0]),
+                "resample": literal(0),
+                "fillcolor": literal([7, 8, 9]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": "perspective-bilinear-outside-fill",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 100, 0, 1, 100, 0, 0]),
+                "resample": literal(2),
+                "fillcolor": literal([7, 8, 9]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "mode.l",
+            "name": "perspective-outside-fill-l",
+            "observe_result": "tobytes",
+            "mode": "L",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 100, 0, 1, 100, 0, 0]),
+                "fillcolor": literal(7),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "mode.la",
+            "name": "perspective-outside-fill-la",
+            "observe_result": "tobytes",
+            "mode": "LA",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 100, 0, 1, 100, 0, 0]),
+                "fillcolor": literal([7, 8]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "mode.rgba",
+            "name": "perspective-outside-fill-rgba",
+            "observe_result": "tobytes",
+            "mode": "RGBA",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 100, 0, 1, 100, 0, 0]),
+                "fillcolor": literal([7, 8, 9, 10]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
             "name": "invalid-scalar-data",
             "mode": "RGB",
             "values": {
@@ -11689,6 +11777,22 @@ def build_nuanced_cases(
                 "data": literal([
                     [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6]],
                 ]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "mesh-outside-source-fill",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([
+                    [[0, 0, 6, 6], [-100, -100, -90, -100, -90, -90, -100, -90]],
+                ]),
+                "fillcolor": literal([7, 8, 9]),
             },
         },
         {
@@ -22174,6 +22278,20 @@ def build_nuanced_cases(
             "size": [2, 2],
             "scenario_inline_image": "i16l-frombytes",
             "edge": "paste-i16-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16l-partial-rgba-mask",
+            "mode": "I;16L",
+            "im_mode": "I;16L",
+            "mask_mode": "RGBA",
+            "size": [2, 2],
+            "scenario_inline_image": "i16l-frombytes",
+            "edge": "paste-i16-rgba-mask",
             "observe_receiver": True,
             "values": {"box": literal([0, 0, 2, 2])},
         },
