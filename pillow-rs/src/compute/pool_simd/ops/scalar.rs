@@ -4195,7 +4195,10 @@ pub fn autocontrast(pixels: &mut [u32], w: u32, h: u32, mode: u32, cutoff: u32) 
         for p in pixels.iter_mut() {
             let r = *p & 0xFF;
             let a = *p & 0xFF00_0000;
-            let out_r = ((r - lo) * 255 / range).min(255);
+            // Pillow clamps values below the low percentile to zero. Using
+            // saturating subtraction preserves that behavior instead of
+            // panicking on a valid histogram with a nonzero cutoff.
+            let out_r = (r.saturating_sub(lo) * 255 / range).min(255);
             let out_a = if has_a { a } else { 0xFF00_0000 };
             *p = out_r | (out_r << 8) | (out_r << 16) | out_a;
         }
@@ -4237,17 +4240,17 @@ pub fn autocontrast(pixels: &mut [u32], w: u32, h: u32, mode: u32, cutoff: u32) 
             let a = *p & 0xFF00_0000;
 
             let out_r = if do_r {
-                ((r - r_lo) * 255 / r_range).min(255)
+                (r.saturating_sub(r_lo) * 255 / r_range).min(255)
             } else {
                 r
             };
             let out_g = if do_g {
-                ((g - g_lo) * 255 / g_range).min(255)
+                (g.saturating_sub(g_lo) * 255 / g_range).min(255)
             } else {
                 g
             };
             let out_b = if do_b {
-                ((b - b_lo) * 255 / b_range).min(255)
+                (b.saturating_sub(b_lo) * 255 / b_range).min(255)
             } else {
                 b
             };
