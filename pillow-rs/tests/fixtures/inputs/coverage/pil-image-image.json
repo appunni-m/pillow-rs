@@ -1723,6 +1723,7 @@
           "PIL.Image.Image.rotate.nuanced.f-explicit-bilinear-nearest",
           "PIL.Image.Image.rotate.nuanced.rgba-fractional-nearest",
           "PIL.Image.Image.rotate.nuanced.rgba-fractional-bilinear",
+          "PIL.Image.Image.rotate.nuanced.la-fractional-bilinear-simd",
           "PIL.Image.Image.rotate.nuanced.one-explicit-bilinear-nearest",
           "PIL.Image.Image.rotate.nuanced.p-explicit-bilinear-nearest",
           "PIL.Image.Image.rotate.nuanced.rgba-tall-90-non-expand",

@@ -1139,13 +1139,9 @@ pub fn simd_rotate(
         nearest,
     } = op
     {
-        if uses_native_scalar_mode(img, mode)
-            || matches!(mode, Some("1" | "P" | "PA" | "RGBa"))
-            || matches!(
-                img.color(),
-                crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
-            )
-        {
+        // Bilinear LA/RGBA remains in the packed kernel; it performs the same
+        // premultiplied alpha round-trip as the exact affine path below.
+        if uses_native_scalar_mode(img, mode) || matches!(mode, Some("1" | "P" | "PA" | "RGBa")) {
             return crate::compute::pool_cpu::ops::geometry::execute_rotate(
                 img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
             );

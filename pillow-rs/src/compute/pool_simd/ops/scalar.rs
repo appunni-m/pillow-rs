@@ -2972,6 +2972,20 @@ fn bilinear_interp_truncated(c00: u32, c10: u32, c01: u32, c11: u32, fx: f64, fy
     v as u32
 }
 
+#[inline(always)]
+fn premultiply_rotate_channel(value: u32, alpha: u32) -> u32 {
+    (value as f64 * alpha as f64 / 255.0 + 0.5) as u32
+}
+
+#[inline(always)]
+fn unpremultiply_rotate_channel(value: u32, alpha: u32) -> u32 {
+    if alpha == 0 {
+        0
+    } else {
+        (value as f64 * 255.0 / alpha as f64) as u32
+    }
+}
+
 /// Histogram equalization helper: build a LUT from a 256-bin histogram using PIL's
 /// step formula. Returns identity LUT if step <= 0 or only one non-zero bin.
 #[inline(always)]
@@ -3128,31 +3142,101 @@ pub fn rotate(
                 let p01 = pixels[(sy1 * w + sx) as usize];
                 let p11 = pixels[(sy1 * w + sx1) as usize];
 
-                let r00 = p00 & 0xFF;
-                let g00 = (p00 >> 8) & 0xFF;
-                let b00 = (p00 >> 16) & 0xFF;
-                let a00 = p00 & 0xFF00_0000;
-
-                let r10 = p10 & 0xFF;
-                let g10 = (p10 >> 8) & 0xFF;
-                let b10 = (p10 >> 16) & 0xFF;
-
-                let r01 = p01 & 0xFF;
-                let g01 = (p01 >> 8) & 0xFF;
-                let b01 = (p01 >> 16) & 0xFF;
-
-                let r11 = p11 & 0xFF;
-                let g11 = (p11 >> 8) & 0xFF;
-                let b11 = (p11 >> 16) & 0xFF;
+                let a00 = (p00 >> 24) & 0xFF;
+                let a10 = (p10 >> 24) & 0xFF;
+                let a01 = (p01 >> 24) & 0xFF;
+                let a11 = (p11 >> 24) & 0xFF;
+                // Pillow's RGBA/LA rotate path first converts to RGBa/La,
+                // samples premultiplied channels, then truncates the
+                // unpremultiplication on return. The old SIMD path sampled
+                // straight channels and kept only p00's alpha, which first
+                // diverged on a fractional RGBA rotation at transparent
+                // edges (Pillow Geometry.c / Image.rotate alpha round-trip).
+                let r00 = if has_a {
+                    premultiply_rotate_channel(p00 & 0xFF, a00)
+                } else {
+                    p00 & 0xFF
+                };
+                let g00 = if has_a {
+                    premultiply_rotate_channel((p00 >> 8) & 0xFF, a00)
+                } else {
+                    (p00 >> 8) & 0xFF
+                };
+                let b00 = if has_a {
+                    premultiply_rotate_channel((p00 >> 16) & 0xFF, a00)
+                } else {
+                    (p00 >> 16) & 0xFF
+                };
+                let r10 = if has_a {
+                    premultiply_rotate_channel(p10 & 0xFF, a10)
+                } else {
+                    p10 & 0xFF
+                };
+                let g10 = if has_a {
+                    premultiply_rotate_channel((p10 >> 8) & 0xFF, a10)
+                } else {
+                    (p10 >> 8) & 0xFF
+                };
+                let b10 = if has_a {
+                    premultiply_rotate_channel((p10 >> 16) & 0xFF, a10)
+                } else {
+                    (p10 >> 16) & 0xFF
+                };
+                let r01 = if has_a {
+                    premultiply_rotate_channel(p01 & 0xFF, a01)
+                } else {
+                    p01 & 0xFF
+                };
+                let g01 = if has_a {
+                    premultiply_rotate_channel((p01 >> 8) & 0xFF, a01)
+                } else {
+                    (p01 >> 8) & 0xFF
+                };
+                let b01 = if has_a {
+                    premultiply_rotate_channel((p01 >> 16) & 0xFF, a01)
+                } else {
+                    (p01 >> 16) & 0xFF
+                };
+                let r11 = if has_a {
+                    premultiply_rotate_channel(p11 & 0xFF, a11)
+                } else {
+                    p11 & 0xFF
+                };
+                let g11 = if has_a {
+                    premultiply_rotate_channel((p11 >> 8) & 0xFF, a11)
+                } else {
+                    (p11 >> 8) & 0xFF
+                };
+                let b11 = if has_a {
+                    premultiply_rotate_channel((p11 >> 16) & 0xFF, a11)
+                } else {
+                    (p11 >> 16) & 0xFF
+                };
 
                 // Bilinear interpolate per channel
-                let out_r = bilinear_interp_truncated(r00, r10, r01, r11, fx, fy);
-                let out_g_raw = bilinear_interp_truncated(g00, g10, g01, g11, fx, fy);
-                let out_b_raw = bilinear_interp_truncated(b00, b10, b01, b11, fx, fy);
+                let out_r_sample = bilinear_interp_truncated(r00, r10, r01, r11, fx, fy);
+                let out_g_sample = bilinear_interp_truncated(g00, g10, g01, g11, fx, fy);
+                let out_b_sample = bilinear_interp_truncated(b00, b10, b01, b11, fx, fy);
+                let out_a_raw = bilinear_interp_truncated(a00, a10, a01, a11, fx, fy);
+                let out_r = if has_a {
+                    unpremultiply_rotate_channel(out_r_sample, out_a_raw)
+                } else {
+                    out_r_sample
+                };
+                let out_g_raw = if has_a {
+                    unpremultiply_rotate_channel(out_g_sample, out_a_raw)
+                } else {
+                    out_g_sample
+                };
+                let out_b_raw = if has_a {
+                    unpremultiply_rotate_channel(out_b_sample, out_a_raw)
+                } else {
+                    out_b_sample
+                };
 
                 let out_g = if has_gb { out_g_raw } else { out_r };
                 let out_b = if has_gb { out_b_raw } else { out_r };
-                let out_a = if has_a { a00 } else { 0xFF00_0000 };
+                let out_a = if has_a { out_a_raw << 24 } else { 0xFF00_0000 };
 
                 out[out_idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
             } else {
