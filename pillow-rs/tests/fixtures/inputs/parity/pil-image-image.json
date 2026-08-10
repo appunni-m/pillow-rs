@@ -38973,6 +38973,124 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-fill-boundary-simd",
+      "surface": "PIL.Image.Image",
+      "operation": "transform",
+      "covers": [
+        "PIL.Image.Image.transform.parameter.resample"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                8
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                200,
+                100,
+                50
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "transform",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                8
+              ]
+            },
+            "method": {
+              "kind": "literal",
+              "value": 0
+            },
+            "data": {
+              "kind": "literal",
+              "value": [
+                1,
+                0,
+                -0.25,
+                0,
+                1,
+                -0.25
+              ]
+            },
+            "resample": {
+              "kind": "literal",
+              "value": 2
+            },
+            "fillcolor": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.transform.nuanced.cmyk-affine-tuple-fill",
       "surface": "PIL.Image.Image",
       "operation": "transform",
@@ -58081,6 +58199,85 @@
                 32,
                 32,
                 36,
+                36
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "observe-receiver",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-receiver"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.Image.paste.nuanced.color-box-vertical-outside-destination-simd-guard",
+      "surface": "PIL.Image.Image",
+      "operation": "paste",
+      "covers": [
+        "PIL.Image.Image.paste.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "paste",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "im": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "box": {
+              "kind": "literal",
+              "value": [
+                0,
+                32,
+                4,
                 36
               ]
             }

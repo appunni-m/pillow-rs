@@ -10060,6 +10060,24 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": "rgb-affine-bilinear-fill-boundary-simd",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "size": [9, 8],
+            "values": {
+                "size": literal([9, 8]),
+                "method": literal(0),
+                "data": literal([1, 0, -0.25, 0, 1, -0.25]),
+                "resample": literal(2),
+                "fillcolor": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-affine-tuple-fill",
             "observe_result": "tobytes",
@@ -13375,6 +13393,18 @@ def build_nuanced_cases(
             "values": {
                 "im": literal([255, 0, 0]),
                 "box": literal([32, 32, 36, 36]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "behavior.default",
+            "name": "color-box-vertical-outside-destination-simd-guard",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "im": literal([255, 0, 0]),
+                "box": literal([0, 32, 4, 36]),
             },
         },
         {
