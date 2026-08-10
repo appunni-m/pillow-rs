@@ -4367,7 +4367,7 @@ pub fn reduce(
     x_factor: u32,
     y_factor: u32,
 ) -> (Vec<u32>, u32, u32) {
-    if (x_factor < 2 && y_factor < 2) || w < x_factor || h < y_factor {
+    if x_factor < 2 && y_factor < 2 {
         // Cannot reduce — return copy with alpha clamping
         let has_a = mode == 1 || mode == 3;
         let out: Vec<u32> = pixels
@@ -4418,12 +4418,18 @@ pub fn reduce(
                 }
             }
 
-            // Round to nearest over the actual block size.
-            let half = count / 2;
-            let out_r = ((sum_r + half) / count) as u32;
-            let out_g_raw = ((sum_g + half) / count) as u32;
-            let out_b_raw = ((sum_b + half) / count) as u32;
-            let out_a_raw = ((sum_a + half) / count) as u32;
+            // Pillow's Reduce.c uses a truncated fixed-point reciprocal for
+            // each (possibly partial) block. Integer division rounds some
+            // half-way partial blocks one value too high (for example, a
+            // single 255 sample in a six-pixel block is 42, not 43).
+            let block_average = |sum: u64| -> u32 {
+                let multiplier = (1u128 << 32) / (u128::from(count) * 256);
+                (((u128::from(sum) + u128::from(count / 2)) * multiplier) >> 24) as u32
+            };
+            let out_r = block_average(sum_r);
+            let out_g_raw = block_average(sum_g);
+            let out_b_raw = block_average(sum_b);
+            let out_a_raw = block_average(sum_a);
 
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };

@@ -19770,6 +19770,20 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "requirement_suffix": "behavior.default",
+            "name": "factor-larger-than-image",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [255, 128, 64],
+            "size": [2, 3],
+            "values": {
+                "factor": literal([4, 4]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "thumbnail",
             "requirement_suffix": "behavior.default",
             "name": "aspect-floor-rounding",

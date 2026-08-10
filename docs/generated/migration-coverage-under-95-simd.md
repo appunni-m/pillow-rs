@@ -5,31 +5,31 @@ execution coverage, not parity proof. The parity run is recorded separately
 and keeps ordinary mismatches visible.
 
 ```yaml
-snapshot_id: ca605bc3-bec1-4271-8579-689040a228de
+snapshot_id: 2f4a5c42-5360-4efc-9b33-8b8dfe1d5f76
 provenance: coverage-mcp-managed
 suite: migration-parity-rust-simd
-base_commit: a5c07720fbb76f23cbd0ba30aec096c7b62c9329
-coverage_run_id: 711f7c79-647d-4bdf-887a-c2ed352eaf19
-parity_run_id: 06a1f20d-1c3e-41f8-a3d8-95e8dcda13f2
+base_commit: f796a935d6a68b4a6be06aa7cccd2d96206ee1c5
+coverage_run_id: e1472579-920d-4e93-ba37-b5a26b21464f
+parity_run_id: 506c42a9-2912-4b09-9abf-36af4a5a417c
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106446
-covered_regions: 63235
-region_coverage: 59.4057%
-total_lines: 68474
-covered_lines: 40664
-line_coverage: 59.3860%
-total_branches: 14056
-covered_branches: 7193
-branch_coverage: 51.1739%
-total_functions: 5313
-covered_functions: 3041
-function_coverage: 57.2370%
-simd_impl_regions: 7246/7448 (97.2879%)
-simd_impl_lines: 3853/3943 (97.7175%)
-simd_impl_branches: 874/1004 (87.0518%)
-simd_impl_functions: 194/203 (95.5665%)
+total_regions: 106451
+covered_regions: 63240
+region_coverage: 59.4076%
+total_lines: 68478
+covered_lines: 40668
+line_coverage: 59.3884%
+total_branches: 14052
+covered_branches: 7191
+branch_coverage: 51.1742%
+total_functions: 5314
+covered_functions: 3042
+function_coverage: 57.2450%
+simd_impl_regions: 7251/7453 (97.2897%)
+simd_impl_lines: 3857/3947 (97.7198%)
+simd_impl_branches: 872/1000 (87.2000%)
+simd_impl_functions: 195/204 (95.5882%)
 in_repo_files_below_threshold: 32
 external_dependency_files_below_threshold: 43
 ```
@@ -38,18 +38,25 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The latest managed SIMD refresh selected all 3,055 cases: 3,052 passed, 3 had
+The latest managed SIMD refresh selected all 3,056 cases: 3,053 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors or not-run cases.
-The coverage workflow executed all 24 plans and passed all 3,055 execution
+The coverage workflow executed all 24 plans and passed all 3,056 execution
 checks. The mismatches remain visible in the parity result; they are not
-removed from the coverage denominator. Four legacy zero-execution SIMD adapters
+removed from the coverage denominator. The new input-only
+`PIL.Image.Image.reduce.nuanced.factor-larger-than-image` case exposed the
+first SIMD divergence: for a valid factor larger than the image, Rust returned
+the original dimensions while Pillow's `Reduce.c` emits ceil-sized partial
+blocks. After that guard was removed, integer division rounded a one-sample
+255/6 block to 43; Pillow's truncated fixed-point reciprocal produces 42.
+The pure-Rust SIMD scalar reduction now matches both behaviors, and the focused
+CPU/SIMD cases pass. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
 their orphan scalar helpers were removed from the SIMD registry/source. Their
 `PipelineOp` variants remain available to the core/GPU pipeline; public paths
 use the exact quantizer, module-based blend/composite, and `Eval` paths. The
-SIMD implementation files now total 7,246/7,448 regions (97.2879%); the
+SIMD implementation files now total 7,251/7,453 regions (97.2897%); the
 remaining SIMD-specific backlog is concentrated in `ops/adapters.rs` and
-`pool_simd/mod.rs`, while `ops/scalar.rs` is at 5,104/5,164 regions (98.8381%).
+`pool_simd/mod.rs`, while `ops/scalar.rs` is at 5,109/5,169 regions (98.8392%).
 This refresh added a core-owned integer `putdata` bulk path: exact built-in
 lists and tuples now preserve Pillow's numeric-versus-packed mode distinction
 in Rust and reach one SIMD `PutData` operation instead of binding-side
@@ -241,9 +248,9 @@ storage retain their native semantics. The latest refresh routes valid LA/RGBA
 bilinear rotations through the SIMD kernel, interpolates alpha, and applies
 Pillow's truncated premultiply/unpremultiply round trip at transparent edges.
 The new LA input and existing RGBA input pass on CPU and SIMD. The current
-SIMD implementation aggregate is 7,246/7,448 regions (97.2879%), 3,853/3,943
-lines (97.7175%), 874/1,004 branches (87.0518%), and 194/203 functions
-(95.5665%).
+SIMD implementation aggregate is 7,251/7,453 regions (97.2897%), 3,857/3,947
+lines (97.7198%), 872/1,000 branches (87.2000%), and 195/204 functions
+(95.5882%).
 
 The final SIMD coverage refresh added two generator-backed, observed public
 `Image.Image.crop` workflows for LA and RGBA. Both pass on CPU and SIMD and
@@ -252,26 +259,26 @@ branch coverage increased from 761/846 to 762/846. That previous 3,048-case
 lane had 3,045 passes, the same three ordinary mismatches, and no
 infrastructure errors or not-run cases.
 
-The current refresh adds one observed public RGB `ImageOps.fit` workflow with
+An earlier refresh added one observed public RGB `ImageOps.fit` workflow with
 an out-of-range `bleed=1.0` and a nearest-neighbour method. The first
 divergence was that the Rust deferred pipeline passed the invalid bleed into
 backend-specific geometry, while Pillow normalizes it to `0.0` at the public
 call boundary. Core now owns that normalization for CPU, SIMD, and GPU; the
-case passes on the SIMD lane. The full 3,055-case lane has 3,052 passes and
+case passed on the SIMD lane. The latest 3,056-case lane has 3,053 passes and
 three ordinary mismatches, with zero infrastructure errors or not-run cases.
-The merged report is 63,235/106,446 regions (59.4057%) overall; the SIMD
-implementation aggregate remains 7,246/7,448 regions (97.2879%), because the
+The merged report is 63,240/106,451 regions (59.4076%) overall; the SIMD
+implementation aggregate is 7,251/7,453 regions (97.2897%), because the
 remaining zero-execution SIMD regions are defensive or invalid internal-shape
 paths rather than reachable public workflows.
 
-This refresh also adds an input-only `tobytes` observation to the existing
+An earlier refresh also added an input-only `tobytes` observation to the existing
 indexed `PIL.Image.composite` workflow. It materializes the public lazy result
 and confirms that the indexed SIMD path executes on the real `Image.composite`
 surface; the case passes on CPU and SIMD. The implementation aggregate is
 unchanged because the same indexed branch was already covered by
 `ImageChops.composite`.
 
-This refresh adds six generator-backed, input-only SIMD cases: RGB
+An earlier refresh added six generator-backed, input-only SIMD cases: RGB
 `ImageOps.equalize`, L-mode bilinear `ImageOps.pad`, and RGB dimension-changing
 `Image.Image.transpose` methods 2, 4, 5, and 6. All six pass on both CPU and
 SIMD. They expand the public parity denominator from 3,049 to 3,055 without
@@ -284,7 +291,7 @@ SIMD implementation-file coverage is:
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2045/2175 (94.02%) | 1125/1182 (95.18%) | 110/156 (70.51%) | 77/82 (93.90%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 5104/5164 (98.84%) | 2666/2691 (99.07%) | 762/846 (90.07%) | 108/108 (100.00%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 5109/5169 (98.84%) | 2670/2695 (99.07%) | 760/842 (90.26%) | 109/109 (100.00%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
