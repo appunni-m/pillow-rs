@@ -1097,6 +1097,7 @@
           "PIL.Image.Image.transform.nuanced.cmyk-affine-name-fill",
           "PIL.Image.Image.transform.nuanced.rgb-affine-scalar-negative-fill",
           "PIL.Image.Image.transform.nuanced.rgba-affine-default-fill",
+          "PIL.Image.Image.transform.nuanced.rgb-premultiplied-affine-guard",
           "PIL.Image.Image.transform.nuanced.rgb-affine-clamped-tuple-fill",
           "PIL.Image.Image.transform.nuanced.l-affine-single-tuple-fill",
           "PIL.Image.Image.transform.nuanced.l-affine-invalid-tuple-fill",
