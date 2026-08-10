@@ -1013,6 +1013,7 @@
           "PIL.Image.Image.thumbnail.nuanced.rgba-alpha-downscale",
           "PIL.Image.Image.thumbnail.nuanced.simd-nearest-p",
           "PIL.Image.Image.thumbnail.nuanced.simd-nearest-pa",
+          "PIL.Image.Image.thumbnail.nuanced.rgb-nearest-no-shrink-simd",
           "PIL.Image.Image.thumbnail.nuanced.bilinear-filter-name",
           "PIL.Image.Image.thumbnail.nuanced.box-filter-name",
           "PIL.Image.Image.thumbnail.nuanced.hamming-filter-name",
