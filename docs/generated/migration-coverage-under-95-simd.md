@@ -10,24 +10,24 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 7bc1cd583a272fc1f25fb6429d1de3642569253e
-coverage_run_id: migration-coverage-d834e870cd8a4ddfa35b61e1e678e2e5
-parity_run_id: migration-parity-e4cd3ea99ac34a74affc1f68bee4d113
+base_commit: 831228df9518a708217658bb78631c1d292fd99d
+coverage_run_id: migration-coverage-baf9b0855cbe4146b281a122af907fcc
+parity_run_id: migration-parity-3f9d4c63ca7842849d1744e52cabcd68
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106464
-covered_regions: 63227
-region_coverage: 59.3881%
-total_lines: 68474
-covered_lines: 40659
-line_coverage: 59.3787%
-total_branches: 14060
-covered_branches: 7190
-branch_coverage: 51.1380%
-total_functions: 5312
-covered_functions: 3040
-function_coverage: 57.2289%
+total_regions: 106458
+covered_regions: 63235
+region_coverage: 59.3990%
+total_lines: 68472
+covered_lines: 40664
+line_coverage: 59.3878%
+total_branches: 14056
+covered_branches: 7193
+branch_coverage: 51.1739%
+total_functions: 5313
+covered_functions: 3041
+function_coverage: 57.2370%
 simd_impl_regions: 7246/7448 (97.2879%)
 simd_impl_lines: 3853/3943 (97.7175%)
 simd_impl_branches: 874/1004 (87.0518%)
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The latest full SIMD refresh selected all 3,048 cases: 3,045 passed, 3 had
+The latest full SIMD refresh selected all 3,049 cases: 3,046 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors or not-run cases.
-The coverage workflow executed all 24 plans and passed all 3,048 execution
+The coverage workflow executed all 24 plans and passed all 3,049 execution
 checks. The mismatches remain visible in the parity result; they are not
 removed from the coverage denominator. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
@@ -250,9 +250,21 @@ lines (97.7175%), 874/1,004 branches (87.0518%), and 194/203 functions
 The final SIMD coverage refresh added two generator-backed, observed public
 `Image.Image.crop` workflows for LA and RGBA. Both pass on CPU and SIMD and
 exercise the packed crop alpha-preservation branch; the scalar implementation
-branch coverage increased from 761/846 to 762/846. The complete 3,048-case
-lane has 3,045 passes, the same three ordinary mismatches, and no
+branch coverage increased from 761/846 to 762/846. That previous 3,048-case
+lane had 3,045 passes, the same three ordinary mismatches, and no
 infrastructure errors or not-run cases.
+
+The current refresh adds one observed public RGB `ImageOps.fit` workflow with
+an out-of-range `bleed=1.0` and a nearest-neighbour method. The first
+divergence was that the Rust deferred pipeline passed the invalid bleed into
+backend-specific geometry, while Pillow normalizes it to `0.0` at the public
+call boundary. Core now owns that normalization for CPU, SIMD, and GPU; the
+case passes on the SIMD lane. The full 3,049-case lane has 3,046 passes and
+three ordinary mismatches, with zero infrastructure errors or not-run cases.
+The merged report is 63,235/106,458 regions (59.3990%) overall; the SIMD
+implementation aggregate remains 7,246/7,448 regions (97.2879%), because the
+remaining zero-execution SIMD regions are defensive or invalid internal-shape
+paths rather than reachable public workflows.
 
 SIMD implementation-file coverage is:
 

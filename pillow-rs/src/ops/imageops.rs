@@ -528,7 +528,7 @@ pub fn fit(
             w,
             h,
             filter,
-            bleed,
+            bleed: normalize_fit_bleed(bleed),
             centering,
         },
     ))
@@ -568,10 +568,21 @@ pub fn fit_with_input(
             w,
             h,
             filter,
-            bleed,
+            bleed: normalize_fit_bleed(bleed),
             centering,
         },
     ))
+}
+
+// Pillow's ImageOps.fit normalizes invalid bleed values before calculating the
+// crop box. Keep this at the public core boundary so CPU, SIMD, and GPU receive
+// the same deferred operation value instead of each reimplementing the rule.
+fn normalize_fit_bleed(bleed: f64) -> f64 {
+    if 0.0 <= bleed && bleed < 0.5 {
+        bleed
+    } else {
+        0.0
+    }
 }
 
 // Pillow evaluates ImageOps.cover/fit's source aspect ratio when the public

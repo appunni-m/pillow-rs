@@ -230,6 +230,7 @@
           "PIL.ImageOps.solarize.mode.la",
           "PIL.ImageOps.solarize.mode.rgba",
           "PIL.ImageOps.fit.nuanced.fractional-centering",
+          "PIL.ImageOps.fit.nuanced.materialized-bleed-fallback",
           "PIL.ImageOps.fit.nuanced.half-centered",
           "PIL.ImageOps.fit.nuanced.wide-source-crop",
           "PIL.ImageOps.fit.nuanced.numeric-method-default-centering",
