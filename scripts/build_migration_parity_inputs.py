@@ -14383,7 +14383,7 @@ def build_nuanced_cases(
                 },
             }
             for operation in ("contain", "cover", "fit")
-            for mode in ("LA", "RGBA")
+            for mode in ("RGB", "LA", "RGBA")
         ),
         *(
             {
@@ -14413,7 +14413,7 @@ def build_nuanced_cases(
                     "resample": literal("BILINEAR"),
                 },
             }
-            for mode in ("LA", "RGBA")
+            for mode in ("RGB", "LA", "RGBA")
         ),
         *(
             {
@@ -14699,7 +14699,7 @@ def build_nuanced_cases(
                     "method": literal(2),
                 },
             }
-            for mode in ("LA", "RGBA")
+            for mode in ("RGB", "LA", "RGBA")
         ),
         {
             "surface": "PIL.ImageOps",
@@ -17513,6 +17513,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "rgba-premultiplied-mode",
             "mode": "RGBa",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getbands",
+            "requirement_suffix": "behavior.default",
+            "name": "rgbx-mode",
+            "mode": "RGBX",
         },
         {
             "surface": "PIL.Image.Image",

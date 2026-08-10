@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 2966
-- Unique active workflow signatures: 2966
+- Active parity workflows: 2972
+- Unique active workflow signatures: 2972
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1784
+- Deliberate nuanced workflows: 1790
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 213 |
-| `PIL.Image.Image` | 1419 |
+| `PIL.Image.Image` | 1420 |
 | `PIL.ImageChops` | 122 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 280 |
+| `PIL.ImageOps` | 285 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -300,6 +300,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getbands.nuanced.opened-png-without-idat`
 - `PIL.Image.Image.getbands.nuanced.pa-mode`
 - `PIL.Image.Image.getbands.nuanced.rgba-premultiplied-mode`
+- `PIL.Image.Image.getbands.nuanced.rgbx-mode`
 - `PIL.Image.Image.getbands.nuanced.ycbcr`
 - `PIL.Image.Image.getbbox.nuanced.alpha-only-false-rgb`
 - `PIL.Image.Image.getbbox.nuanced.alpha-only-rgba`
@@ -1649,6 +1650,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.contain.nuanced.numeric-method`
 - `PIL.ImageOps.contain.nuanced.pa-putpalette-expansion`
 - `PIL.ImageOps.contain.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.contain.nuanced.simd-bilinear-rgb`
 - `PIL.ImageOps.contain.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.contain.nuanced.simd-native-scalar-fallback-f`
 - `PIL.ImageOps.contain.nuanced.simd-nearest-equal-aspect`
@@ -1665,6 +1667,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.cover.nuanced.numeric-method`
 - `PIL.ImageOps.cover.nuanced.pa-putpalette-expansion`
 - `PIL.ImageOps.cover.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.cover.nuanced.simd-bilinear-rgb`
 - `PIL.ImageOps.cover.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.cover.nuanced.simd-native-scalar-fallback-f`
 - `PIL.ImageOps.cover.nuanced.simd-nearest-equal-aspect`
@@ -1723,6 +1726,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.fit.nuanced.pa-putpalette-expansion`
 - `PIL.ImageOps.fit.nuanced.short-centering`
 - `PIL.ImageOps.fit.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.fit.nuanced.simd-bilinear-rgb`
 - `PIL.ImageOps.fit.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.fit.nuanced.simd-native-scalar-fallback-f`
 - `PIL.ImageOps.fit.nuanced.simd-nearest-equal-aspect`
@@ -1787,6 +1791,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.pad.nuanced.rgba-scalar-color`
 - `PIL.ImageOps.pad.nuanced.rgba-three-components`
 - `PIL.ImageOps.pad.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.pad.nuanced.simd-bilinear-rgb`
 - `PIL.ImageOps.pad.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.pad.nuanced.simd-nearest-equal-aspect`
 - `PIL.ImageOps.pad.nuanced.simd-nearest-half-round`
@@ -1801,6 +1806,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.posterize.nuanced.materialized-rgb`
 - `PIL.ImageOps.scale.nuanced.materialized-upscale`
 - `PIL.ImageOps.scale.nuanced.simd-bilinear-la`
+- `PIL.ImageOps.scale.nuanced.simd-bilinear-rgb`
 - `PIL.ImageOps.scale.nuanced.simd-bilinear-rgba`
 - `PIL.ImageOps.scale.nuanced.simd-native-scalar-fallback-f`
 - `PIL.ImageOps.scale.nuanced.simd-nearest-l`
