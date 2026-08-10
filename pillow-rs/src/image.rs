@@ -3835,6 +3835,40 @@ impl Image {
         self.putdata_values(&values, scale, offset)
     }
 
+    /// Replaces exact integer samples through Pillow's numeric-or-packed
+    /// `putdata` path.
+    ///
+    /// Pillow interprets an integer as a scaled numeric sample for
+    /// single-band modes, but as a little-endian packed pixel for multiband
+    /// modes. Bindings only need to extract the host integer sequence; this
+    /// mode distinction belongs here so every backend receives the same
+    /// canonical operation.
+    pub fn putdata_integer_values(
+        &mut self,
+        values: &[i64],
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
+        let mode_name = self.mode()?;
+        let values = if matches!(
+            mode_name.as_str(),
+            "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+        ) {
+            values
+                .iter()
+                .copied()
+                .map(|value| PutDataValue::Number(value as f64))
+                .collect::<Vec<_>>()
+        } else {
+            values
+                .iter()
+                .copied()
+                .map(PutDataValue::Packed)
+                .collect::<Vec<_>>()
+        };
+        self.putdata_values(&values, scale, offset)
+    }
+
     /// Validates the sequence length before host-language value coercion.
     ///
     /// Pillow rejects an oversized `putdata` sequence before converting any
