@@ -10,24 +10,24 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 74aae329301a08d14cb2cdaf052232118c6f2af2
-coverage_run_id: migration-coverage-64fe6265a3874b4f85d6f1cb9e5964cf
-parity_run_id: migration-parity-d25a2f604bc941698a5b5df7f15d95cf
+base_commit: 1f92b266ba60c279ad16a6382cc216be524bb0ae
+coverage_run_id: migration-coverage-5715866906a04d09bfd160236cac5246
+parity_run_id: migration-parity-7306a64fd02640d891c51feddbe8b694
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106043
-covered_regions: 62718
-region_coverage: 59.1439%
-total_lines: 68033
+total_regions: 106066
+covered_regions: 62716
+region_coverage: 59.1292%
+total_lines: 68045
 covered_lines: 40327
-line_coverage: 59.2756%
-total_branches: 13935
+line_coverage: 59.2652%
+total_branches: 13937
 covered_branches: 7032
-branch_coverage: 50.4629%
+branch_coverage: 50.4556%
 total_functions: 5282
 covered_functions: 3025
-function_coverage: 57.2917%
+function_coverage: 57.2700%
 simd_impl_regions: 6947/7492 (92.7256%)
 simd_impl_lines: 3664/3915 (93.5888%)
 simd_impl_branches: 763/974 (78.3368%)
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,914 cases: 2,911 passed, 3 had
+The fresh SIMD parity audit selected all 2,922 cases: 2,919 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,914 execution checks. The
+workflow executed all 24 plans and passed all 2,922 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. The adapter cleanup binds each generated dual-image
 adapter to its own `PipelineOp` variant. Before the change, every generated
@@ -50,7 +50,10 @@ adapter expanded a 13-variant match, creating unreachable branches for the
 other twelve variants; the public SIMD case count and the three known
 mismatches are unchanged. The implementation bucket is now 6,947/7,492
 regions (92.7256%) and `pool_simd/ops/scalar.rs` remains above 95% at
-4,846/5,100 regions.
+4,846/5,100 regions. Four input-only CMYK ImageEnhance cases now exercise the
+public enhancement constructors on both safe CPU and SIMD runs. Two shared CPU
+divergences were also fixed and rechecked through SIMD: RGBA-to-LA now carries
+source alpha, and ImageOps.contain preserves a computed zero-width result.
 The zero-width `fit` case exposed the first divergence: Pillow allocates the
 requested destination and leaves it zero-filled, while Rust previously
 returned the empty source dimensions. The SIMD scalar fit path now preserves
@@ -117,12 +120,12 @@ SIMD implementation-file coverage is:
 | 6 | `pillow-rs/src/compute/pool_gpu/mod.rs` | 6/1718 | 0.3% | 6/1263 |
 | 7 | `pillow-rs/src/compute/pool_cpu/ops/filter.rs` | 183/959 | 19.1% | 82/568 |
 | 8 | `pillow-rs/src/raster/color/from_primitive.rs` | 16/80 | 20.0% | 8/43 |
-| 9 | `pillow-rs/src/raster/dynamic.rs` | 349/1519 | 23.0% | 210/787 |
-| 10 | `pillow-rs/src/compute/pool_cpu/ops/color.rs` | 119/506 | 23.5% | 55/217 |
+| 9 | `pillow-rs/src/compute/pool_cpu/ops/color.rs` | 119/531 | 22.4% | 55/229 |
+| 10 | `pillow-rs/src/raster/dynamic.rs` | 349/1519 | 23.0% | 210/787 |
 | 11 | `pillow-rs/src/compute/pool_cpu/ops/effects.rs` | 990/2649 | 37.4% | 532/1324 |
 | 12 | `pillow-rs/src/raster/color/from_color.rs` | 85/190 | 44.7% | 49/102 |
 | 13 | `pillow-rs/src/compute/registry.rs` | 1000/2235 | 44.7% | 705/1368 |
-| 14 | `pillow-rs/src/compute/pool_cpu/ops/imageops.rs` | 433/965 | 44.9% | 251/522 |
+| 14 | `pillow-rs/src/compute/pool_cpu/ops/imageops.rs` | 431/963 | 44.8% | 251/522 |
 | 15 | `pillow-rs/src/lib.rs` | 172/382 | 45.0% | 176/392 |
 | 16 | `pillow-rs/src/error.rs` | 3/6 | 50.0% | 3/6 |
 | 17 | `pillow-rs/src/raster/color/pixel_rgb.rs` | 48/78 | 61.5% | 27/48 |
