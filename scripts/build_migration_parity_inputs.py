@@ -12570,6 +12570,7 @@ def build_nuanced_cases(
             "name": "p-output-l-mask",
             "mode": "P",
             "mask_mode": "L",
+            "observe_result": "tobytes",
         },
         {
             "surface": "PIL.Image",
