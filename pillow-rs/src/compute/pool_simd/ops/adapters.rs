@@ -7,7 +7,7 @@
 //! 3. Reconstructs `DynamicImage` from the result
 
 use crate::error::PilError;
-use crate::image::{preserve_mode, Image};
+use crate::image::{Image, preserve_mode};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -54,9 +54,11 @@ fn filter_to_u32(f: &ResampleFilter) -> u32 {
     }
 }
 
-/// The packed SIMD resize kernel currently implements nearest and bilinear.
-/// Higher-order filters stay on the shared pure-Rust Pillow-compatible path
-/// until their coefficient arithmetic is ported exactly.
+/// The packed SIMD resize kernel covers nearest-neighbor and bilinear input
+/// paths. Direct public RGB resize with bilinear filtering is handled by the
+/// shared exact Rust resampler in `simd_resize`; the other ImageOps wrappers
+/// retain their established packed bilinear path until its coefficient-table
+/// arithmetic is ported exactly.
 fn simd_resize_filter_supported(filter: &ResampleFilter) -> bool {
     matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
 }
@@ -823,7 +825,8 @@ pub fn simd_resize(
     } = op
     {
         if uses_native_scalar_mode(img, mode)
-            || !matches!(filter, ResampleFilter::Nearest | ResampleFilter::Bilinear)
+            || !simd_resize_filter_supported(filter)
+            || matches!(filter, ResampleFilter::Bilinear)
             || mode == Some("RGBa")
         {
             return crate::compute::pool_cpu::ops::geometry::execute_resize(

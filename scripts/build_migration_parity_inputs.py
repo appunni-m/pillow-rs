@@ -9915,6 +9915,21 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": "opened-rgb-affine-bilinear-simd",
+            "scenario_asset": "image/rgb-small.png",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([9, 8]),
+                "method": literal(0),
+                "data": literal([1, 0, 0.25, 0, 1, 0.25]),
+                "resample": literal(2),
+                "fillcolor": literal("red"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "cmyk-affine-tuple-fill",
             "observe_result": "tobytes",
@@ -18571,6 +18586,30 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": "opened-rgb-bilinear-simd",
+            "scenario_asset": "image/rgb-small.png",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([7, 5]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": "opened-rgb-nearest-simd",
+            "scenario_asset": "image/rgb-small.png",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([7, 5]),
+                "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
             "requirement_suffix": "behavior.default",
             "name": "p-pipeline-resize-resize",
             "mode": "P",
@@ -19879,6 +19918,20 @@ def build_nuanced_cases(
             "name": "opened-rgb-270-expand",
             "scenario_asset": "image/rgb-small.png",
             "values": {"angle": literal(270), "expand": literal(True)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.resample",
+            "name": "opened-rgb-bilinear-fill-simd",
+            "scenario_asset": "image/rgb-small.png",
+            "observe_result": "tobytes",
+            "values": {
+                "angle": literal(33.5),
+                "expand": literal(True),
+                "resample": literal(2),
+                "fillcolor": literal("red"),
+            },
         },
         {
             "surface": "PIL.Image.Image",

@@ -10,27 +10,27 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 48f129695d99d7aa60ff932c73fa290d19909c39
-coverage_run_id: migration-coverage-da33c4b8d75647d2aeeb75d1610e2045
-parity_run_id: migration-parity-d6c479637e224eec901af1cf74a8daae
+base_commit: f55d670cf1185c4f898144504eae1f258b3d6372
+coverage_run_id: migration-coverage-2498a789639d43ea844202755152320a
+parity_run_id: migration-parity-dd6e52b702884dacb34ad8d6f55038f3
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 105797
-covered_regions: 62775
-region_coverage: 59.3353%
-total_lines: 67968
-covered_lines: 40352
-line_coverage: 59.3691%
-total_branches: 13917
-covered_branches: 7052
-branch_coverage: 50.6718%
+total_regions: 105836
+covered_regions: 62817
+region_coverage: 59.3532%
+total_lines: 67977
+covered_lines: 40365
+line_coverage: 59.3804%
+total_branches: 13931
+covered_branches: 7065
+branch_coverage: 50.7142%
 total_functions: 5277
 covered_functions: 3026
 function_coverage: 57.3432%
-simd_impl_regions: 7008/7246 (96.7154%)
-simd_impl_lines: 3689/3805 (96.9514%)
-simd_impl_branches: 781/948 (82.3840%)
+simd_impl_regions: 7022/7257 (96.7617%)
+simd_impl_lines: 3694/3806 (97.0573%)
+simd_impl_branches: 780/948 (82.2785%)
 simd_impl_functions: 188/197 (95.4315%)
 in_repo_files_below_threshold: 32
 external_dependency_files_below_threshold: 43
@@ -40,18 +40,18 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,945 cases: 2,942 passed, 3 had
+The fresh SIMD parity audit selected all 2,949 cases: 2,946 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,945 execution checks. The
+workflow executed all 24 plans and passed all 2,949 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
 their orphan scalar helpers were removed from the SIMD registry/source. Their
 `PipelineOp` variants remain available to the core/GPU pipeline; public paths
 use the exact quantizer, module-based blend/composite, and `Eval` paths. The
-SIMD implementation files now total 7,008/7,246 regions (96.7154%); the
+SIMD implementation files now total 7,022/7,257 regions (96.7617%); the
 remaining SIMD-specific backlog is concentrated in `ops/adapters.rs` and
-`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,890/4,983 regions (98.1337%). A
+`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,900/4,993 regions (98.1374%). A
 prior refresh added one input-only public RGB nearest-neighbour thumbnail case
 with a destination larger than the source, reaching the SIMD scalar
 thumbnail no-shrink copy/alpha-clamp path; it passes source/target parity on
@@ -119,18 +119,27 @@ separate fontdone parity lane. There is no GPU/crash-lane result in this
 report; that lane remains intentionally excluded after the prior device-hang
 incident.
 
-The higher-order ImageOps resize filters and Gaussian blur now use the shared
-exact pure-Rust CPU implementation because the packed SIMD kernels only
-implement nearest/bilinear resize and an approximate integer-radius blur.
-This removes false parity from the SIMD lane while keeping those operations
-covered and the unsupported SIMD approximation out of production results.
+This refresh added four reachable public RGB workflows: affine bilinear
+transform, direct bilinear resize, nearest-neighbour resize, and arbitrary
+bilinear rotate. The first resize divergence was Pillow's coefficient-table
+resampler versus the packed SIMD kernel's centered four-neighbour
+approximation, so direct public bilinear resize now uses the shared exact
+pure-Rust resampler. The rotate divergence was Pillow's half-pixel bilinear
+support and edge clamping versus Rust's earlier fill-at-image-boundary rule;
+the ordinary byte path now matches that support while preserving PA's legacy
+index/alpha convention. All four workflows pass on the safe CPU and SIMD
+lanes. The higher-order ImageOps resize filters and Gaussian blur continue to
+use the shared exact pure-Rust CPU implementation because the packed SIMD
+kernels only implement nearest/bilinear resize and an approximate
+integer-radius blur. GPU execution remains intentionally excluded after the
+prior device-hang incident.
 
 SIMD implementation-file coverage is:
 
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
-| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2021/2154 (93.83%) | 1117/1175 (95.06%) | 109/156 (69.87%) | 76/81 (93.83%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4890/4983 (98.13%) | 2510/2560 (98.05%) | 670/790 (84.81%) | 103/103 (100.00%) |
+| `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2025/2155 (93.97%) | 1119/1176 (95.15%) | 108/156 (69.23%) | 76/81 (93.83%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4900/4993 (98.14%) | 2513/2560 (98.16%) | 670/790 (84.81%) | 103/103 (100.00%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
@@ -166,4 +175,4 @@ SIMD implementation-file coverage is:
 | 29 | `pillow-rs/src/ops/pil_resize.rs` | 1083/1159 | 93.4% | 642/679 |
 | 30 | `pillow-rs/src/font/imagingft.rs` | 1954/2087 | 93.6% | 1274/1317 |
 | 31 | `pillow-rs/src/raster/buffer.rs` | 272/290 | 93.8% | 184/202 |
-| 32 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2021/2154 | 93.8% | 1117/1175 |
+| 32 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2025/2155 | 94.0% | 1119/1176 |
