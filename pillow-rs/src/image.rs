@@ -247,7 +247,7 @@ pub enum PutDataValue {
 pub enum FormattedPixelValue {
     /// An unsigned byte scalar from `1`, `L`, or `P` mode.
     Scalar(u8),
-    /// A signed 32-bit scalar from `I` mode.
+    /// A signed scalar from `I` or unsigned 16-bit `I;16*` mode.
     Integer(i32),
     /// A 32-bit floating-point scalar from `F` mode, widened for bindings.
     Float(f64),
@@ -260,7 +260,7 @@ pub enum FormattedPixelValue {
 pub enum FormattedImageData {
     /// Scalar samples, including an explicitly selected band.
     Scalars(Vec<u8>),
-    /// Signed 32-bit scalar samples from `I` mode.
+    /// Signed scalar samples from `I` or unsigned 16-bit `I;16*` mode.
     IntegerScalars(Vec<i32>),
     /// 32-bit floating-point scalar samples from `F` mode, widened for bindings.
     FloatScalars(Vec<f64>),
@@ -280,7 +280,7 @@ pub enum FormattedExtrema {
     Single((u8, u8)),
     /// One `(minimum, maximum)` pair per band.
     Multiple(Vec<(u8, u8)>),
-    /// A signed 32-bit scalar image's `(minimum, maximum)` pair.
+    /// An integer scalar image's `(minimum, maximum)` pair, including `I;16*`.
     Integer((i32, i32)),
     /// A 32-bit floating-point scalar image's `(minimum, maximum)` pair.
     Float((f64, f64)),
@@ -1900,6 +1900,22 @@ impl Image {
         let img = self.materialized_shared()?;
         let mode = self.mode_from_materialized(&img);
         let (width, height) = (img.width(), img.height());
+        if is_l16_mode(&mode) {
+            if x >= width || y >= height {
+                return Err(PilError::IndexError("image index out of range".into()));
+            }
+            let index = (y as usize)
+                .checked_mul(width as usize)
+                .and_then(|row| row.checked_add(x as usize))
+                .ok_or_else(|| PilError::InternalError("pixel index overflow".into()))?;
+            return img
+                .to_luma16()
+                .as_raw()
+                .get(index)
+                .copied()
+                .map(|value| FormattedPixelValue::Integer(i32::from(value)))
+                .ok_or_else(|| PilError::InternalError("I;16 pixel index out of bounds".into()));
+        }
         if mode == "I" || mode == "F" {
             if x >= width || y >= height {
                 return Err(PilError::IndexError("image index out of range".into()));
@@ -3736,6 +3752,20 @@ impl Image {
     /// list/tuple representation.
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
         let mode = self.mode()?;
+        if is_l16_mode(&mode) {
+            if band.is_some_and(|band| band != 0) {
+                return Err(PilError::ValueError("band index out of range".into()));
+            }
+            return Ok(FormattedImageData::IntegerScalars(
+                self.materialized_shared()?
+                    .to_luma16()
+                    .as_raw()
+                    .iter()
+                    .copied()
+                    .map(i32::from)
+                    .collect(),
+            ));
+        }
         if mode == "I" || mode == "F" {
             if band.is_some() {
                 return Err(PilError::ValueError("image has wrong mode".into()));
@@ -4193,8 +4223,9 @@ impl Image {
     ///
     /// The result is `None` when the image contains more than `maxcolors`
     /// distinct colors. Each color is returned in the scalar or tuple shape
-    /// matching the image mode. `I` values retain signed 32-bit precision and
-    /// `F` values retain their 32-bit floating-point value.
+    /// matching the image mode. `I` values retain signed 32-bit precision,
+    /// `I;16*` values follow Pillow's wrong-mode error contract, and `F` values
+    /// retain their 32-bit floating-point value.
     ///
     /// # Errors
     ///
@@ -4306,6 +4337,20 @@ impl Image {
                     })
                 })
                 .ok_or_else(|| PilError::InternalError("I image has no scalar samples".into()))?;
+            return Ok(FormattedExtrema::Integer((minimum, maximum)));
+        }
+        if is_l16_mode(&mode) {
+            let image = self.materialized_shared()?;
+            let luma = image.to_luma16();
+            let values = luma.as_raw().iter().copied().map(i32::from);
+            let (minimum, maximum) = values
+                .fold(None, |extrema: Option<(i32, i32)>, value| {
+                    Some(match extrema {
+                        Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
+                        None => (value, value),
+                    })
+                })
+                .ok_or_else(|| PilError::InternalError("I;16 image has no samples".into()))?;
             return Ok(FormattedExtrema::Integer((minimum, maximum)));
         }
         if mode == "F" {
