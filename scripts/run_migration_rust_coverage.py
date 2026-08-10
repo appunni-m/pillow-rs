@@ -278,6 +278,10 @@ def run(args: argparse.Namespace) -> int:
     # allowing repeated coverage runs for unchanged code to reuse Cargo's
     # instrumented build.
     build_fingerprint, build_cache_hit = prepare_llvm_target()
+    profile_temp_dir: Path | None = None
+    if args.profile == DEFAULT_LLVM_PROFILE:
+        profile_temp_dir = Path(tempfile.mkdtemp(prefix="pillow-rs-llvm-", dir="/private/tmp"))
+        args.profile = profile_temp_dir / DEFAULT_LLVM_PROFILE.name
     if args.profile.exists():
         args.profile.unlink()
 
@@ -319,7 +323,8 @@ def run(args: argparse.Namespace) -> int:
             return
         for raw_profile in args.profile.parent.glob("*.raw"):
             if raw_profile.is_file():
-                raw_profile.rename(raw_profile.with_suffix(".profraw"))
+                destination = LLVM_COV_TARGET / raw_profile.with_suffix(".profraw").name
+                shutil.move(str(raw_profile), destination)
 
     try:
         build_env = os.environ.copy()
@@ -529,6 +534,8 @@ def run(args: argparse.Namespace) -> int:
             restore_path.unlink()
             print(f"restored extension: {EXTENSION}")
         remove_build_profiles()
+        if profile_temp_dir is not None:
+            shutil.rmtree(profile_temp_dir, ignore_errors=True)
     return 0
 
 
