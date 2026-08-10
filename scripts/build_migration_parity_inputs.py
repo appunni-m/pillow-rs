@@ -197,6 +197,31 @@ def one_bit_png() -> bytes:
     )
 
 
+def grayscale_16_png() -> bytes:
+    """Return a tiny valid 16-bit grayscale PNG stimulus."""
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", checksum)
+        )
+
+    header = struct.pack(">IIBBBBB", 2, 2, 16, 0, 0, 0, 0)
+    scanline = b"".join(
+        bytes([0]) + struct.pack(">HH", 0x1234, 0x5678)
+        for _ in (0, 1)
+    )
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(scanline))
+        + chunk(b"IEND", b"")
+    )
+
+
 def little_endian_l16_tiff() -> bytes:
     """Return a minimal valid unsigned-16-bit grayscale TIFF stimulus."""
 
@@ -991,6 +1016,19 @@ class WorkflowBuilder:
                 data_descriptor = self.inline_bytes(
                     f"{label}-l1-png",
                     one_bit_png(),
+                    "image/png",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "l16-png":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-l16-png",
+                    grayscale_16_png(),
                     "image/png",
                 )
                 step_id = self.add_step(
@@ -11134,6 +11172,40 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": "perspective-bilinear-simd",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "size": [9, 8],
+            "values": {
+                "size": literal([9, 8]),
+                "method": literal(2),
+                "data": literal([1, 0, 0, 0, 1, 0, 0, 0]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.resample",
+            "name": "quad-bilinear-simd",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "size": [9, 8],
+            "values": {
+                "size": literal([9, 8]),
+                "method": literal(3),
+                "data": literal([0, 0, 0, 8, 9, 8, 9, 0]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "parameter.data",
             "name": "invalid-scalar-data",
             "mode": "RGB",
@@ -18597,6 +18669,43 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "png-one-bit-opened",
             "scenario_inline_image": "l1-png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-opened",
+            "scenario_inline_image": "l16-png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-opened",
+            "scenario_inline_image": "l16-png",
+            "values": {"xy": literal([0, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-opened",
+            "scenario_inline_image": "l16-png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getextrema",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-opened",
+            "scenario_inline_image": "l16-png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "format.png",
+            "name": "l16-png-opened",
+            "scenario_inline_image": "l16-png",
+            "values": {"format": literal("PNG")},
         },
         {
             "surface": "PIL.Image.Image",
