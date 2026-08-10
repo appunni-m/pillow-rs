@@ -33,7 +33,7 @@ DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "coverage-result-rust.jso
 DEFAULT_PYTHON_REPORT = ROOT / "target" / "coverage" / "migration-parity-python.json"
 DEFAULT_LLVM_REPORT = ROOT / "target" / "coverage" / "migration-parity-rust.json"
 DEFAULT_LLVM_PROFILE = (
-    ROOT / "target" / "llvm-cov-target" / "pillow-rs-%p-%m.profraw"
+    ROOT / "target" / "llvm-cov-target" / "pillow-rs-%p-%m.raw"
 )
 DEFAULT_COVERAGE_DATA = ROOT / "target" / "coverage" / ".migration-parity-python-rust"
 EXTENSION = (
@@ -120,7 +120,7 @@ def prepare_llvm_target() -> tuple[str, bool]:
 
     # Profiles are run-specific evidence. Never let a cached build make a
     # later run accumulate execution counts from an older input corpus.
-    for pattern in ("*.profraw", "*.profdata", "*-profraw-list"):
+    for pattern in ("*.raw", "*.profraw", "*.profdata", "*-profraw-list"):
         for stale in LLVM_COV_TARGET.rglob(pattern):
             stale.unlink()
     return fingerprint, cached
@@ -305,6 +305,22 @@ def run(args: argparse.Namespace) -> int:
         for stale in ROOT.glob("default_*.profraw"):
             stale.unlink()
 
+    def materialize_profiles() -> None:
+        """Expose freshly written raw profiles to cargo-llvm-cov.
+
+        Some managed runners remove ``*.profraw`` files between subprocesses
+        as disposable instrumentation artifacts. LLVM's runtime does not
+        require that suffix, so keep the run files under ``.raw`` while the
+        parity subprocesses execute and rename them only at the report
+        boundary, where cargo-llvm-cov expects ``*.profraw``.
+        """
+
+        if args.profile.suffix != ".raw":
+            return
+        for raw_profile in args.profile.parent.glob("*.raw"):
+            if raw_profile.is_file():
+                raw_profile.rename(raw_profile.with_suffix(".profraw"))
+
     try:
         build_env = os.environ.copy()
         build_env["RUSTUP_TOOLCHAIN"] = "nightly"
@@ -393,6 +409,8 @@ def run(args: argparse.Namespace) -> int:
                 cwd=ROOT,
                 check=True,
             )
+
+        materialize_profiles()
 
         llvm_version = subprocess.run(
             ["cargo", "+nightly", "llvm-cov", "--version"],
