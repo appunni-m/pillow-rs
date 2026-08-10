@@ -319,7 +319,10 @@ pub fn op_contain(
         let new_w = bankers_round(iw as f64 / ih as f64 * h as f64) as u32;
         (new_w, h)
     };
-    let result = pil_resize(img, nw.max(1), nh.max(1), filter, explicit_mode);
+    // Pillow preserves a zero dimension when the source aspect-ratio math
+    // rounds one axis to zero. `pil_resize` has an explicit empty-image path;
+    // clamping here would turn a valid 0×N result into 1×N.
+    let result = pil_resize(img, nw, nh, filter, explicit_mode);
     Ok(preserve_mode(img, result))
 }
 

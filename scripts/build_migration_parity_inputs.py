@@ -4801,6 +4801,20 @@ def build_nuanced_cases(
             for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
             for mode in ("1", "P")
         ),
+        # Exercise the native CMYK branches in each ImageEnhance operation
+        # through the public Image.new -> constructor -> enhance workflow.
+        *(
+            {
+                "surface": "PIL.ImageEnhance",
+                "operation": class_name,
+                "requirement_suffix": "mode.cmyk",
+                "name": "mode-cmyk",
+                "mode": "CMYK",
+                "edge": "uniform-fill",
+                "pixel": [16, 32, 48, 64],
+            }
+            for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
+        ),
         {
             "surface": "PIL.ImageEnhance",
             "operation": "Brightness",

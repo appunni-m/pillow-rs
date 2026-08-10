@@ -27,9 +27,29 @@ pub fn op_convert(
             let gray = pil_grayscale(img)?;
             let (w, h) = gray.dimensions();
             let mut ga = crate::raster::GrayAlphaImage::new(w, h);
-            for (gap, gp) in ga.pixels_mut().zip(gray.pixels()) {
+            // Pillow's convert.c carries the source alpha through an RGBA
+            // to LA conversion.  RGBX uses an unused byte instead of alpha,
+            // while CMYK/I/F are four-byte storage formats rather than alpha
+            // images; those modes therefore retain the opaque default.
+            let source_alpha = if matches!(img.color(), crate::raster::ColorType::Rgba8)
+                && !matches!(explicit_mode, Some("RGBX" | "CMYK" | "I" | "F"))
+            {
+                Some(
+                    img.as_bytes()
+                        .chunks_exact(4)
+                        .map(|pixel| pixel[3])
+                        .collect::<Vec<_>>(),
+                )
+            } else {
+                None
+            };
+            for (index, (gap, gp)) in ga.pixels_mut().zip(gray.pixels()).enumerate() {
                 gap[0] = gp[0];
-                gap[1] = 255;
+                gap[1] = source_alpha
+                    .as_ref()
+                    .and_then(|alpha| alpha.get(index))
+                    .copied()
+                    .unwrap_or(255);
             }
             Ok(DynamicImage::ImageLumaA8(ga))
         }

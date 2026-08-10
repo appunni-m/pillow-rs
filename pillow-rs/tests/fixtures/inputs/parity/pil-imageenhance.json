@@ -277,6 +277,74 @@
       ]
     },
     {
+      "case_id": "PIL.ImageEnhance.Brightness.mode.cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Brightness",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
       "case_id": "PIL.ImageEnhance.Color.behavior.default",
       "surface": "PIL.ImageEnhance",
       "operation": "Color",
@@ -504,6 +572,74 @@
             "mode": {
               "kind": "literal",
               "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Color",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Color",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Color.mode.cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Color",
+      "covers": [
+        "PIL.ImageEnhance.Color.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
             },
             "size": {
               "kind": "literal",
@@ -827,6 +963,74 @@
       ]
     },
     {
+      "case_id": "PIL.ImageEnhance.Contrast.mode.cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Contrast",
+      "covers": [
+        "PIL.ImageEnhance.Contrast.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Contrast",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Contrast",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
       "case_id": "PIL.ImageEnhance.Sharpness.behavior.default",
       "surface": "PIL.ImageEnhance",
       "operation": "Sharpness",
@@ -1054,6 +1258,74 @@
             "mode": {
               "kind": "literal",
               "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Sharpness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Sharpness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Sharpness.mode.cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Sharpness",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
             },
             "size": {
               "kind": "literal",
@@ -1609,6 +1881,298 @@
             "color": {
               "kind": "literal",
               "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Sharpness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Sharpness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.nuanced.mode-cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Brightness",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Color.nuanced.mode-cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Color",
+      "covers": [
+        "PIL.ImageEnhance.Color.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Color",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Color",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Contrast.nuanced.mode-cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Contrast",
+      "covers": [
+        "PIL.ImageEnhance.Contrast.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Contrast",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "apply-enhance",
+          "surface": "PIL.ImageEnhance.Contrast",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-enhance"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Sharpness.nuanced.mode-cmyk",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Sharpness",
+      "covers": [
+        "PIL.ImageEnhance.Sharpness.mode.cmyk"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
             }
           }
         },

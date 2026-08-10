@@ -19438,6 +19438,14 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageEnhance.Brightness.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
     - id: PIL.ImageEnhance.Brightness.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageEnhance.Brightness.
@@ -19548,6 +19556,14 @@ surfaces:
     - id: PIL.ImageEnhance.Color.mode.rgba
       dimension: mode
       description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageEnhance.Color.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
       lanes:
       - parity
       - coverage
@@ -19668,6 +19684,14 @@ surfaces:
       - coverage
       target_profiles:
       - python-cpu
+    - id: PIL.ImageEnhance.Contrast.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
     - id: PIL.ImageEnhance.Contrast.performance.standard
       dimension: performance
       description: Deterministic standard workload for PIL.ImageEnhance.Contrast.
@@ -19778,6 +19802,14 @@ surfaces:
     - id: PIL.ImageEnhance.Sharpness.mode.rgba
       dimension: mode
       description: Public behavior for image mode 'RGBA'.
+      lanes:
+      - parity
+      - coverage
+      target_profiles:
+      - python-cpu
+    - id: PIL.ImageEnhance.Sharpness.mode.cmyk
+      dimension: mode
+      description: Public behavior for image mode 'CMYK'.
       lanes:
       - parity
       - coverage
