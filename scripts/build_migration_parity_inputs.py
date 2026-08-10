@@ -18773,6 +18773,13 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "format",
+            "requirement_suffix": "behavior.default",
+            "name": "opened-png",
+            "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "info",
             "requirement_suffix": "behavior.default",
             "name": "opened-bmp-format-info",
