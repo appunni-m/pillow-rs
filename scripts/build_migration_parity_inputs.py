@@ -14945,6 +14945,20 @@ def build_nuanced_cases(
         {
             "surface": "PIL.ImageOps",
             "operation": "pad",
+            "requirement_suffix": "parameter.centering",
+            "name": "fractional-centering-round-up",
+            "mode": "RGB",
+            "size": [4, 2],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([5, 3]),
+                "method": literal(0),
+                "centering": literal([0.5, 0.75]),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
             "requirement_suffix": "parameter.method",
             "name": "numeric-method-default-color",
             "values": {
@@ -15620,6 +15634,17 @@ def build_nuanced_cases(
             "mode": "LA",
             "edge": "nonzero-pixel",
             "pixel": [200, 128],
+            "size": [3, 4],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "behavior.default",
+            "name": "materialized-rgba-odd-width",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 80, 40, 96],
             "size": [3, 4],
             "observe_result": "tobytes",
         },
