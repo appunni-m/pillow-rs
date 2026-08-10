@@ -10,9 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: dd2416855bea37b13fe61598765903db696c382a
-coverage_run_id: migration-coverage-8ff58fbac53f4e2d8118383c35eb455a
-parity_run_id: migration-parity-67b486683e564c778338e33f294493a9
+base_commit: 0dd946ff99a848a80eabd4570cc241d9c108a9ff
+coverage_run_id: migration-coverage-28e16de229b24d4480922f3512495b28
+parity_run_id: migration-parity-459bd4586410472f94db916dade12b87
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The latest full SIMD refresh selected all 3,049 cases: 3,046 passed, 3 had
+The latest full SIMD refresh selected all 3,055 cases: 3,052 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors or not-run cases.
-The coverage workflow executed all 24 plans and passed all 3,049 execution
+The coverage workflow executed all 24 plans and passed all 3,055 execution
 checks. The mismatches remain visible in the parity result; they are not
 removed from the coverage denominator. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
@@ -259,7 +259,7 @@ an out-of-range `bleed=1.0` and a nearest-neighbour method. The first
 divergence was that the Rust deferred pipeline passed the invalid bleed into
 backend-specific geometry, while Pillow normalizes it to `0.0` at the public
 call boundary. Core now owns that normalization for CPU, SIMD, and GPU; the
-case passes on the SIMD lane. The full 3,049-case lane has 3,046 passes and
+case passes on the SIMD lane. The full 3,055-case lane has 3,052 passes and
 three ordinary mismatches, with zero infrastructure errors or not-run cases.
 The merged report is 63,235/106,446 regions (59.4057%) overall; the SIMD
 implementation aggregate remains 7,246/7,448 regions (97.2879%), because the
@@ -272,6 +272,14 @@ and confirms that the indexed SIMD path executes on the real `Image.composite`
 surface; the case passes on CPU and SIMD. The implementation aggregate is
 unchanged because the same indexed branch was already covered by
 `ImageChops.composite`.
+
+This refresh adds six generator-backed, input-only SIMD cases: RGB
+`ImageOps.equalize`, L-mode bilinear `ImageOps.pad`, and RGB dimension-changing
+`Image.Image.transpose` methods 2, 4, 5, and 6. All six pass on both CPU and
+SIMD. They expand the public parity denominator from 3,049 to 3,055 without
+introducing mismatches or infrastructure errors; the SIMD implementation
+aggregate remains 7,246/7,448 regions (97.2879%) because the exercised paths
+were already covered by neighboring public cases.
 
 SIMD implementation-file coverage is:
 
@@ -303,10 +311,10 @@ SIMD implementation-file coverage is:
 | 18 | `pillow-rs-py/src/lib.rs` | 4645/5907 | 78.6% | 3109/3647 |
 | 19 | `pillow-rs/src/checked_dims.rs` | 45/56 | 80.4% | 37/63 |
 | 20 | `pillow-rs/src/compute/mod.rs` | 129/159 | 81.1% | 88/109 |
-| 21 | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1422/1728 | 82.3% | 738/879 |
+| 21 | `pillow-rs/src/compute/pool_cpu/ops/geometry.rs` | 1421/1728 | 82.2% | 737/879 |
 | 22 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 | 89.0% | 62/70 |
 | 23 | `pillow-rs/src/raster/color/pixel_luma.rs` | 54/60 | 90.0% | 32/38 |
-| 24 | `pillow-rs/src/image.rs` | 4820/5326 | 90.5% | 3016/3287 |
+| 24 | `pillow-rs/src/image.rs` | 4823/5329 | 90.5% | 3018/3289 |
 | 25 | `pillow-rs/src/ops/transform.rs` | 644/703 | 91.6% | 459/507 |
 | 26 | `pillow-rs/src/font/pilfont.rs` | 576/628 | 91.7% | 402/418 |
 | 27 | `pillow-rs/src/ops/crop.rs` | 287/312 | 92.0% | 200/206 |
