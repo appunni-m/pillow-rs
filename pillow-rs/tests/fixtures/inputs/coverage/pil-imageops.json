@@ -357,6 +357,7 @@
           "PIL.ImageOps.autocontrast.nuanced.materialized-l",
           "PIL.ImageOps.autocontrast.nuanced.alpha-la",
           "PIL.ImageOps.autocontrast.nuanced.alpha-rgba",
+          "PIL.ImageOps.autocontrast.nuanced.cutoff-clamped-range",
           "PIL.ImageOps.equalize.nuanced.materialized-l",
           "PIL.ImageOps.equalize.nuanced.alpha-la",
           "PIL.ImageOps.equalize.nuanced.alpha-rgba",

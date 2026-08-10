@@ -6371,6 +6371,42 @@
       ]
     },
     {
+      "case_id": "PIL.Image.effect_noise.nuanced.clamped-extremes",
+      "surface": "PIL.Image",
+      "operation": "effect_noise",
+      "covers": [
+        "PIL.Image.effect_noise.parameter.sigma"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "effect_noise",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "sigma": {
+              "kind": "literal",
+              "value": 1000000.0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.merge.nuanced.rgb-mode-nonzero",
       "surface": "PIL.Image",
       "operation": "merge",

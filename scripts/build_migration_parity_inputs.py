@@ -12523,6 +12523,16 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "effect_noise",
+            "requirement_suffix": "parameter.sigma",
+            "name": "clamped-extremes",
+            "values": {
+                "size": literal([16, 16]),
+                "sigma": literal(1_000_000.0),
+            },
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "merge",
             "requirement_suffix": "behavior.default",
             "name": "rgb-mode-nonzero",
@@ -16057,6 +16067,21 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "edge": "nonzero-pixel",
             "pixel": [120, 80, 40, 96],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "parameter.cutoff",
+            "name": "cutoff-clamped-range",
+            "mode": "L",
+            "size": [10, 1],
+            "edge": "autocontrast-varied-range",
+            "pixel": [0, 1, 2, 3, 4, 5, 6, 7, 7, 9],
+            "values": {
+                "size": literal([10, 1]),
+                "cutoff": literal(20),
+            },
             "observe_result": "tobytes",
         },
         {

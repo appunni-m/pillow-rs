@@ -285,6 +285,7 @@
           "PIL.Image.effect_mandelbrot.nuanced.zero-height",
           "PIL.Image.effect_mandelbrot.nuanced.negative-height",
           "PIL.Image.effect_mandelbrot.nuanced.wrong-length",
+          "PIL.Image.effect_noise.nuanced.clamped-extremes",
           "PIL.Image.merge.nuanced.rgb-mode-nonzero",
           "PIL.Image.merge.nuanced.cmyk-mode",
           "PIL.Image.merge.nuanced.palette-band-first",
