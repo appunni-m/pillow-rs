@@ -14535,6 +14535,22 @@ def build_nuanced_cases(
                 "resample": literal("BICUBIC"),
             },
         },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.bleed",
+            "name": "materialized-bleed-fallback",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "size": [8, 8],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 8]),
+                "bleed": literal(1.0),
+                "method": literal(0),
+            },
+        },
         *(
             {
                 "surface": "PIL.ImageChops",
