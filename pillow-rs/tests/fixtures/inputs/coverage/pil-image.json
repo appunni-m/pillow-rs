@@ -309,6 +309,8 @@
           "PIL.Image.eval.nuanced.invalid-lut-length",
           "PIL.Image.eval.nuanced.clamp-shift-callable",
           "PIL.Image.eval.nuanced.l-callable-expanded-path",
+          "PIL.Image.eval.nuanced.la-alpha-lut",
+          "PIL.Image.eval.nuanced.rgba-alpha-lut",
           "PIL.Image.composite.nuanced.one-mask",
           "PIL.Image.composite.nuanced.p-output-l-mask",
           "PIL.Image.composite.nuanced.pa-palette-expansion",

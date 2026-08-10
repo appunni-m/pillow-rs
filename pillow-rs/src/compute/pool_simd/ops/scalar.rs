@@ -891,6 +891,7 @@ pub fn blend(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
         let br = *o & 0xFF;
         let bg = (*o >> 8) & 0xFF;
         let bb = (*o >> 16) & 0xFF;
+        let ba = (*o >> 24) & 0xFF;
 
         let ch = |a: u32, b: u32| -> u32 {
             (a as f32 * inv_a + b as f32 * a_f).clamp(0.0, 255.0) as u32
@@ -902,7 +903,14 @@ pub fn blend(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
 
         let out_g = if has_gb { out_g_raw } else { ag };
         let out_b = if has_gb { out_b_raw } else { ab };
-        let out_a = if has_a { aa } else { 0xFF00_0000 };
+        // Pillow's ImagingBlend interpolates every stored channel, including
+        // alpha, for LA/RGBA images. Preserving `aa` here first diverged for
+        // non-opaque two-image blends.
+        let out_a = if has_a {
+            ch(aa >> 24, ba) << 24
+        } else {
+            0xFF00_0000
+        };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }

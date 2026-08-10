@@ -221,6 +221,10 @@
           "PIL.ImageChops.logical_or.nuanced.valid-first-invalid-second-mode",
           "PIL.ImageChops.logical_xor.nuanced.valid-first-invalid-second-mode",
           "PIL.ImageChops.invert.nuanced.rgba",
+          "PIL.ImageChops.duplicate.nuanced.alpha-la",
+          "PIL.ImageChops.duplicate.nuanced.alpha-rgba",
+          "PIL.ImageChops.constant.nuanced.alpha-la",
+          "PIL.ImageChops.constant.nuanced.alpha-rgba",
           "PIL.ImageChops.offset.nuanced.zero-width",
           "PIL.ImageChops.offset.nuanced.zero-height",
           "PIL.ImageChops.add.nuanced.scale-offset",
@@ -230,6 +234,10 @@
           "PIL.ImageChops.blend.nuanced.extrapolate-alpha",
           "PIL.ImageChops.blend.nuanced.materialized-p",
           "PIL.ImageChops.blend.nuanced.palette-pipeline-second",
+          "PIL.ImageChops.blend.nuanced.alpha-la",
+          "PIL.ImageChops.blend.nuanced.alpha-rgba",
+          "PIL.ImageChops.composite.nuanced.alpha-la",
+          "PIL.ImageChops.composite.nuanced.alpha-rgba",
           "PIL.ImageChops.composite.nuanced.varied-p-indices-with-l-mask",
           "PIL.ImageChops.composite.nuanced.opened-p-pipeline-secondary",
           "PIL.ImageChops.add_modulo.nuanced.varied-indexed-p",
@@ -254,7 +262,8 @@
           "PIL.ImageChops.soft_light.nuanced.varied-indexed-pa",
           "PIL.ImageChops.overlay.nuanced.high-low-rgb",
           "PIL.ImageChops.hard_light.nuanced.high-low-rgb",
-          "PIL.ImageChops.soft_light.nuanced.high-low-rgb"
+          "PIL.ImageChops.soft_light.nuanced.high-low-rgb",
+          "PIL.ImageChops.overlay.nuanced.rgba-alpha"
         ],
         "command_ids": []
       },
