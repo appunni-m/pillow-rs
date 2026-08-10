@@ -1094,6 +1094,7 @@
           "PIL.Image.Image.transform.nuanced.p-affine-tuple-fill",
           "PIL.Image.Image.transform.nuanced.rgb-affine-tuple-fill",
           "PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-simd",
+          "PIL.Image.Image.transform.nuanced.l-affine-bilinear-simd",
           "PIL.Image.Image.transform.nuanced.opened-rgb-affine-bilinear-simd",
           "PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-fill-boundary-simd",
           "PIL.Image.Image.transform.nuanced.cmyk-affine-tuple-fill",

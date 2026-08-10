@@ -10,27 +10,27 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: a5e770ffa903a9c97136d9ded711d53852612da8
-coverage_run_id: migration-coverage-67567532e8d64ae0bb19e77886c27b45
-parity_run_id: migration-parity-e385bfe644f946bda23bdb6b694d7c8d
+base_commit: 60ec2537f46307cbf85f074a823e75adca104a6a
+coverage_run_id: migration-coverage-a55bb7c4849a486d83bbde0f6ddb6a38
+parity_run_id: migration-parity-fb1f5dbae3864416a17cd430ce1601aa
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
 total_regions: 106276
-covered_regions: 63039
-region_coverage: 59.3163%
+covered_regions: 63041
+region_coverage: 59.3182%
 total_lines: 68365
 covered_lines: 40549
 line_coverage: 59.3125%
 total_branches: 13998
-covered_branches: 7129
-branch_coverage: 50.9287%
+covered_branches: 7131
+branch_coverage: 50.9430%
 total_functions: 5306
 covered_functions: 3034
 function_coverage: 57.1806%
-simd_impl_regions: 7058/7266 (97.1374%)
+simd_impl_regions: 7060/7266 (97.1643%)
 simd_impl_lines: 3745/3835 (97.6532%)
-simd_impl_branches: 813/952 (85.3992%)
+simd_impl_branches: 815/952 (85.6092%)
 simd_impl_functions: 188/197 (95.4315%)
 in_repo_files_below_threshold: 32
 external_dependency_files_below_threshold: 43
@@ -40,22 +40,18 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The final SIMD refresh selected all 3,032 cases: 3,029 passed, 3 had
+The latest full SIMD refresh selected all 3,037 cases: 3,034 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 3,032 execution checks. The
+workflow executed all 24 plans and passed all 3,037 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
-coverage denominator. The new input-only LA/RGBA Chops and valid mode-1
-logical-operation cases all pass on SIMD. They improve public mode coverage,
-but do not change the LLVM numerators because the newly exercised regions were
-already covered by other public modes; the remaining SIMD-specific regions are
-defensive/error paths rather than additional valid workflows. Four legacy zero-execution SIMD adapters
+coverage denominator. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
 their orphan scalar helpers were removed from the SIMD registry/source. Their
 `PipelineOp` variants remain available to the core/GPU pipeline; public paths
 use the exact quantizer, module-based blend/composite, and `Eval` paths. The
-SIMD implementation files now total 7,058/7,266 regions (97.1374%); the
+SIMD implementation files now total 7,060/7,266 regions (97.1643%); the
 remaining SIMD-specific backlog is concentrated in `ops/adapters.rs` and
-`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,936/5,002 regions (98.6805%).
+`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,938/5,002 regions (98.7205%).
 This refresh added a core-owned integer `putdata` bulk path: exact built-in
 lists and tuples now preserve Pillow's numeric-versus-packed mode distinction
 in Rust and reach one SIMD `PutData` operation instead of binding-side
@@ -197,6 +193,14 @@ keeps the encoded metadata path represented in operation coverage; it does not
 change the SIMD implementation numerator because `format` is outside the
 compute lane.
 
+The latest refresh added five valid input-only SIMD workflows: LA and RGBA
+`ImageOps.autocontrast`, LA and RGBA `ImageOps.equalize`, and an `L` affine
+bilinear `Image.transform`. All five pass source/target parity on both safe CPU
+and SIMD lanes. The alpha workflows reach two previously uncovered SIMD scalar
+regions and branches, raising the implementation aggregate to 7,060/7,266
+regions (97.1643%) and 815/952 branches (85.6092%); lines and functions remain
+unchanged.
+
 The latest refresh added two reachable input-only `ImageOps` workflows: an
 odd-width RGBA mirror case that preserves the middle pixel's alpha and a
 fractional-centering pad case that rounds the positive offset upward. Both
@@ -231,7 +235,7 @@ SIMD implementation-file coverage is:
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2025/2155 (93.97%) | 1119/1176 (95.15%) | 110/156 (70.51%) | 76/81 (93.83%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4936/5002 (98.68%) | 2564/2589 (99.03%) | 701/794 (88.29%) | 103/103 (100.00%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4938/5002 (98.72%) | 2564/2589 (99.03%) | 703/794 (88.54%) | 103/103 (100.00%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
