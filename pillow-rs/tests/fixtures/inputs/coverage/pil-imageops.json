@@ -438,6 +438,8 @@
           "PIL.ImageOps.autocontrast.nuanced.simd-alpha-la-range",
           "PIL.ImageOps.autocontrast.nuanced.simd-alpha-rgba-range",
           "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-range",
+          "PIL.ImageOps.autocontrast.nuanced.uniform-rgb-no-range",
+          "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-blue-fallback",
           "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-green-blue-fallback",
           "PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-red-fallback",
           "PIL.ImageOps.autocontrast.nuanced.single-pixel-l",

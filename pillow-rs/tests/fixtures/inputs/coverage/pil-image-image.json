@@ -1089,6 +1089,7 @@
           "PIL.Image.Image.rotate.nuanced.p-resize-rotate-fill",
           "PIL.Image.Image.transform.nuanced.p-affine-scalar-fill",
           "PIL.Image.Image.transform.nuanced.zero-width-source-simd-guard",
+          "PIL.Image.Image.transform.nuanced.zero-width-rgba-source-simd-guard",
           "PIL.Image.Image.transform.nuanced.zero-height-source-simd-guard",
           "PIL.Image.Image.transform.nuanced.pa-putpalette-affine-default-fill",
           "PIL.Image.Image.transform.nuanced.p-affine-tuple-fill",
