@@ -10,27 +10,27 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 68d5d827f8bc382dfaf51b7ffa95a604597cc38b
-coverage_run_id: migration-coverage-7169667ee6aa4f5fa6b11dd833413fe1
-parity_run_id: migration-parity-da555ae5b07c4716a841eebeaa6d0748
+base_commit: 48f129695d99d7aa60ff932c73fa290d19909c39
+coverage_run_id: migration-coverage-da33c4b8d75647d2aeeb75d1610e2045
+parity_run_id: migration-parity-d6c479637e224eec901af1cf74a8daae
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 105821
-covered_regions: 62773
-region_coverage: 59.3200%
-total_lines: 67946
+total_regions: 105797
+covered_regions: 62775
+region_coverage: 59.3353%
+total_lines: 67968
 covered_lines: 40352
-line_coverage: 59.3883%
-total_branches: 13913
-covered_branches: 7048
-branch_coverage: 50.6577%
-total_functions: 5275
+line_coverage: 59.3691%
+total_branches: 13917
+covered_branches: 7052
+branch_coverage: 50.6718%
+total_functions: 5277
 covered_functions: 3026
-function_coverage: 57.3649%
-simd_impl_regions: 7006/7246 (96.6878%)
+function_coverage: 57.3432%
+simd_impl_regions: 7008/7246 (96.7154%)
 simd_impl_lines: 3689/3805 (96.9514%)
-simd_impl_branches: 777/948 (81.9620%)
+simd_impl_branches: 781/948 (82.3840%)
 simd_impl_functions: 188/197 (95.4315%)
 in_repo_files_below_threshold: 32
 external_dependency_files_below_threshold: 43
@@ -40,19 +40,19 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,939 cases: 2,936 passed, 3 had
+The fresh SIMD parity audit selected all 2,945 cases: 2,942 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,939 execution checks. The
+workflow executed all 24 plans and passed all 2,945 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
 their orphan scalar helpers were removed from the SIMD registry/source. Their
 `PipelineOp` variants remain available to the core/GPU pipeline; public paths
 use the exact quantizer, module-based blend/composite, and `Eval` paths. The
-SIMD implementation files now total 7,006/7,246 regions (96.6878%); the
+SIMD implementation files now total 7,008/7,246 regions (96.7154%); the
 remaining SIMD-specific backlog is concentrated in `ops/adapters.rs` and
-`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,888/4,983 regions (98.0915%). The
-latest refresh added one input-only public RGB nearest-neighbour thumbnail case
+`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,890/4,983 regions (98.1337%). A
+prior refresh added one input-only public RGB nearest-neighbour thumbnail case
 with a destination larger than the source, reaching the SIMD scalar
 thumbnail no-shrink copy/alpha-clamp path; it passes source/target parity on
 both safe CPU and SIMD lanes and raises the scalar implementation by 19
@@ -60,7 +60,11 @@ regions, 11 lines, and 3 branches. That case also exposed a shared-core
 divergence: Pillow never enlarges an in-place thumbnail, while Rust previously
 queued the larger bound and the CPU path returned 8x8 for a 4x4 source. The
 public Rust thumbnail dimension validation now caps positive bounds at the
-loaded source dimensions.
+loaded source dimensions. The current refresh replaced six rejected
+`ImageOps` alpha-mode cases with six reachable input-only SIMD cases: LA and
+RGBA no-shrink thumbnails, LA and RGBA no-reduce operations, and LA and RGBA
+same-mode conversions. All six pass source/target parity. They add 2 SIMD
+regions and 4 SIMD branches; lines and functions were already covered.
 Ten new
 input-only indexed `P`/`PA` nearest-neighbour cases cover `thumbnail`,
 `contain`, `cover`, `fit`, and `scale` on CPU and SIMD. The first divergence
@@ -126,7 +130,7 @@ SIMD implementation-file coverage is:
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2021/2154 (93.83%) | 1117/1175 (95.06%) | 109/156 (69.87%) | 76/81 (93.83%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4888/4983 (98.09%) | 2510/2560 (98.05%) | 666/790 (84.30%) | 103/103 (100.00%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4890/4983 (98.13%) | 2510/2560 (98.05%) | 670/790 (84.81%) | 103/103 (100.00%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |

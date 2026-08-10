@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 2939
-- Unique active workflow signatures: 2939
+- Active parity workflows: 2945
+- Unique active workflow signatures: 2945
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1757
+- Deliberate nuanced workflows: 1763
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 211 |
-| `PIL.Image.Image` | 1409 |
+| `PIL.Image.Image` | 1415 |
 | `PIL.ImageChops` | 113 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -143,6 +143,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.l-to-pa`
 - `PIL.Image.Image.convert.nuanced.l-to-rgb`
 - `PIL.Image.Image.convert.nuanced.l-to-rgba`
+- `PIL.Image.Image.convert.nuanced.la-same-mode-simd`
 - `PIL.Image.Image.convert.nuanced.la-to-rgb`
 - `PIL.Image.Image.convert.nuanced.la-to-rgba`
 - `PIL.Image.Image.convert.nuanced.non-integer-dither-error`
@@ -193,6 +194,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.rgb-to-p`
 - `PIL.Image.Image.convert.nuanced.rgb-to-ycbcr`
 - `PIL.Image.Image.convert.nuanced.rgb-to-ycbcr-nonzero`
+- `PIL.Image.Image.convert.nuanced.rgba-same-mode-simd`
 - `PIL.Image.Image.convert.nuanced.rgba-to-l`
 - `PIL.Image.Image.convert.nuanced.rgba-to-la`
 - `PIL.Image.Image.convert.nuanced.rgba-to-rgb`
@@ -749,11 +751,13 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.reduce.nuanced.identity-factor`
 - `PIL.Image.Image.reduce.nuanced.invalid-box-type`
 - `PIL.Image.Image.reduce.nuanced.invalid-factor-string`
+- `PIL.Image.Image.reduce.nuanced.la-no-reduce-alpha-simd`
 - `PIL.Image.Image.reduce.nuanced.non-square-factors`
 - `PIL.Image.Image.reduce.nuanced.odd-size-factor-three`
 - `PIL.Image.Image.reduce.nuanced.partial-right-bottom-block`
 - `PIL.Image.Image.reduce.nuanced.reversed-box`
 - `PIL.Image.Image.reduce.nuanced.reversed-vertical-box`
+- `PIL.Image.Image.reduce.nuanced.rgba-no-reduce-alpha-simd`
 - `PIL.Image.Image.reduce.nuanced.wrong-box-arity`
 - `PIL.Image.Image.reduce.nuanced.wrong-factor-arity`
 - `PIL.Image.Image.reduce.nuanced.zero-factor`
@@ -877,6 +881,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.thumbnail.nuanced.hamming-filter-name`
 - `PIL.Image.Image.thumbnail.nuanced.i-specialized-path`
 - `PIL.Image.Image.thumbnail.nuanced.l-reducing-downscale`
+- `PIL.Image.Image.thumbnail.nuanced.la-nearest-no-shrink-simd`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height-candidate-zero`
 - `PIL.Image.Image.thumbnail.nuanced.negative-height-nonsquare`
@@ -894,6 +899,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.thumbnail.nuanced.rgb-reducing-downscale`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-reducing-partial-edge`
 - `PIL.Image.Image.thumbnail.nuanced.rgba-alpha-downscale`
+- `PIL.Image.Image.thumbnail.nuanced.rgba-nearest-no-shrink-simd`
 - `PIL.Image.Image.thumbnail.nuanced.simd-nearest-p`
 - `PIL.Image.Image.thumbnail.nuanced.simd-nearest-pa`
 - `PIL.Image.Image.thumbnail.nuanced.unknown-filter`
