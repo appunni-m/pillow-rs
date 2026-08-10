@@ -247,6 +247,7 @@
           "PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-rgba-threshold",
           "PIL.ImageFilter.UnsharpMask.nuanced.nonuniform-l-in-range-clip",
           "PIL.ImageFilter.Color3DLUT.nuanced.valid-rgba-target",
+          "PIL.ImageFilter.Color3DLUT.nuanced.clamp-and-negative-rounding",
           "PIL.ImageFilter.Color3DLUT.nuanced.wrong-source-mode",
           "PIL.ImageFilter.Color3DLUT.nuanced.target-too-narrow",
           "PIL.ImageFilter.Color3DLUT.nuanced.unrecognized-target-mode",
