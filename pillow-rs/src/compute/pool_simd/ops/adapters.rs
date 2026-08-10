@@ -1258,13 +1258,18 @@ pub fn simd_transform(
     } = op
     {
         let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
-        if !matches!(method, TransformMethod::Affine)
+        // Check the explicit premultiplied mode before the storage-color guard.
+        // RGBa is represented by the same Rgba8 raster as RGBA, but Pillow's
+        // transform path must keep its premultiplied samples on the exact CPU
+        // implementation.  Keeping this condition first also makes the mode
+        // decision observable in the SIMD coverage lane.
+        if mode == Some("RGBa")
+            || !matches!(method, TransformMethod::Affine)
             || uses_native_scalar_mode(img, mode)
             || matches!(
                 img.color(),
                 crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
             )
-            || mode == Some("RGBa")
         {
             return crate::compute::pool_cpu::ops::effects::op_transform(
                 img,

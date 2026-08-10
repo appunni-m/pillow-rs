@@ -10142,6 +10142,22 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgb-premultiplied-affine-guard",
+            "mode": "RGBa",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 128],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(0),
+                "data": literal([1, 0, 0, 0, 1, 0]),
+                "resample": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "behavior.default",
             "name": "rgb-affine-clamped-tuple-fill",
             "observe_result": "tobytes",
