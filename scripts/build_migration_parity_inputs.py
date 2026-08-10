@@ -9022,6 +9022,22 @@ def build_nuanced_cases(
                 "size": literal([4, 3]),
             },
         },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "parameter.resample",
+                "name": f"simd-nearest-{mode.lower()}",
+                "mode": mode,
+                "chain": "pa-putpalette-imageops" if mode == "PA" else None,
+                "observe_receiver": True,
+                "values": {
+                    "size": literal([4, 4]),
+                    "resample": literal(0),
+                },
+            }
+            for mode in ("P", "PA")
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "thumbnail",
@@ -14139,6 +14155,23 @@ def build_nuanced_cases(
                 "surface": "PIL.ImageOps",
                 "operation": operation,
                 "requirement_suffix": "parameter.method",
+                "name": f"simd-nearest-{mode.lower()}",
+                "mode": mode,
+                "chain": "pa-putpalette-imageops" if mode == "PA" else None,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([8, 5]),
+                    "method": literal(0),
+                },
+            }
+            for operation in ("contain", "cover", "fit")
+            for mode in ("P", "PA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.method",
                 "name": f"simd-bilinear-{mode.lower()}",
                 "mode": mode,
                 "observe_result": "tobytes",
@@ -14179,6 +14212,22 @@ def build_nuanced_cases(
                 },
             }
             for mode in ("LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "scale",
+                "requirement_suffix": "parameter.resample",
+                "name": f"simd-nearest-{mode.lower()}",
+                "mode": mode,
+                "chain": "pa-putpalette-imageops" if mode == "PA" else None,
+                "observe_result": "tobytes",
+                "values": {
+                    "factor": literal(1.5),
+                    "resample": literal("NEAREST"),
+                },
+            }
+            for mode in ("P", "PA")
         ),
         *(
             {

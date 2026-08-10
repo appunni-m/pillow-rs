@@ -2670,7 +2670,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Filter5x5", adapters::simd_filter_5x5)?;
     simd_set(m, "BoxBlur", adapters::simd_box_blur)?;
     simd_set(m, "GaussianBlur", adapters::simd_gaussian_blur)?;
-    simd_set(m, "Quantize", adapters::simd_quantize)?;
+    // These legacy variants are retained for the core/GPU pipeline ABI, but
+    // current public constructors use the exact quantizer, module-based
+    // blend/composite, and Eval paths. Keep them on the safe CPU fallback rather
+    // than advertising unreachable SIMD adapters in the backend registry.
 
     // Section E: Dual-image per-pixel ops
     simd_set(m, "Add", adapters::simd_add)?;
@@ -2688,9 +2691,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Overlay", adapters::simd_overlay)?;
     simd_set(m, "HardLight", adapters::simd_hard_light)?;
     simd_set(m, "SoftLight", adapters::simd_soft_light)?;
-    simd_set(m, "Blend", adapters::simd_blend)?;
     simd_set(m, "BlendModule", adapters::simd_blend_module)?;
-    simd_set(m, "Composite", adapters::simd_composite)?;
     simd_set(m, "CompositeModule", adapters::simd_composite_module)?;
 
     // Section F: Ops that change dimensions
@@ -2716,7 +2717,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "PutData", adapters::simd_put_data)?;
     simd_set(m, "PutAlpha", adapters::simd_put_alpha)?;
     simd_set(m, "Eval", adapters::simd_eval)?;
-    simd_set(m, "PointOp", adapters::simd_point_op)?;
     simd_set(m, "Paste", adapters::simd_paste)?;
     simd_set(m, "AlphaComposite", adapters::simd_alpha_composite)?;
     simd_set(m, "Merge", adapters::simd_merge)?;

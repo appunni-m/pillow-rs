@@ -1304,6 +1304,11 @@ impl Image {
             // resize step uses nearest-neighbour samples for these modes,
             // and the pad fill is another raw index/alpha pair.
             PipelineOp::Pad { .. } => true,
+            // ImageOps.scale delegates to the resize path. Indexed P/PA
+            // samples force nearest-neighbour scaling and remain indexed;
+            // expanding them here would change the public result mode before
+            // the SIMD/CPU resize adapter can preserve the raw samples.
+            PipelineOp::Scale { .. } => true,
             // Pillow's PA bands are the raw index and alpha bytes. Extracting
             // either band must happen before palette expansion, just like the
             // corresponding ImagingCore band operation.

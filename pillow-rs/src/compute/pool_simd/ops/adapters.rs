@@ -620,20 +620,6 @@ pub fn simd_gaussian_blur(
     Err(PilError::ValueError("expected GaussianBlur op".into()))
 }
 
-pub fn simd_quantize(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Quantize { colors, .. } = op {
-        super::scalar::quantize(&mut pixels, w, h, mode_code, *colors);
-    }
-    dynimg_from_rgba(pixels, w, h)
-}
-
 // ═══════════════════════════════════════════════════════════════════════
 // Section E: Dual-image per-pixel ops (Add, Subtract, Multiply, ...)
 // ═══════════════════════════════════════════════════════════════════════
@@ -727,21 +713,6 @@ pub fn simd_subtract(
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
-pub fn simd_blend(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Blend { other, alpha } = op {
-        let other_pixels = pixels_from_arc(other)?;
-        super::scalar::blend(&mut pixels, mode_code, &other_pixels, *alpha);
-    }
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
-}
-
 pub fn simd_blend_module(
     img: &DynamicImage,
     op: &PipelineOp,
@@ -753,22 +724,6 @@ pub fn simd_blend_module(
     if let PipelineOp::BlendModule { other, alpha } = op {
         let other_pixels = pixels_from_arc(other)?;
         super::scalar::blend_module(&mut pixels, mode_code, &other_pixels, *alpha);
-    }
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
-}
-
-pub fn simd_composite(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Composite { other, mask } = op {
-        let other_pixels = pixels_from_arc(other)?;
-        let mask_pixels = pixels_from_arc(mask)?;
-        super::scalar::composite(&mut pixels, mode_code, &other_pixels, &mask_pixels);
     }
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
@@ -1416,29 +1371,6 @@ pub fn simd_eval(
             arr
         };
         super::scalar::eval(&mut pixels, mode_code, &lut_arr);
-    }
-    Ok(crate::image::preserve_mode(
-        img,
-        dynimg_from_rgba(pixels, w, h)?,
-    ))
-}
-
-pub fn simd_point_op(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PointOp { lut } = op {
-        let lut_arr: [u8; 1024] = {
-            let mut arr = [0u8; 1024];
-            let len = lut.len().min(1024);
-            arr[..len].copy_from_slice(&lut[..len]);
-            arr
-        };
-        super::scalar::point_op(&mut pixels, mode_code, &lut_arr);
     }
     Ok(crate::image::preserve_mode(
         img,
