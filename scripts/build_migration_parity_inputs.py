@@ -863,7 +863,14 @@ class WorkflowBuilder:
                 )
             self._image_steps[cache_key] = step_id
             return step_id
-        if self.scenario_inline_image is not None:
+        # A typed inline source may still be paired with a separately typed
+        # public mask. Do not reuse the source stimulus for that mask; Pillow
+        # requires paste masks to be L/LA/1, and this case intentionally keeps
+        # the destination/source in I;16L while the mask stays L.
+        use_inline_image = self.scenario_inline_image is not None and not (
+            label == "mask" and self.edge == "paste-i16-mask"
+        )
+        if use_inline_image:
             if self.scenario_inline_image == "l16-tiff":
                 data_descriptor = self.inline_bytes(
                     f"{label}-l16-tiff",
@@ -1771,6 +1778,20 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id("setup-paste-mask-edge-pixel"),
                 )
+        elif self.edge == "paste-i16-mask" and label == "mask":
+            # Keep one copied sample on the partial-mask path while the other
+            # samples remain zero, exercising the native I;16 blend without
+            # routing through the pending TIFF decoder.
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([0, 0]),
+                    "value": literal(128),
+                },
+                step_id=self.next_step_id("setup-paste-i16-mask-pixel"),
+            )
         elif self.edge == "alpha-composite-nonzero-pixel" and label in {
             "image",
             "im",
@@ -2437,6 +2458,11 @@ class WorkflowBuilder:
                     "encoded-input",
                     f"encoded-{self.image_format.lower()}-input",
                 )
+            if (
+                self.primary_operation == "save"
+                and self.edge == "save-in-memory-stream"
+            ):
+                return self.builtin("output-stream", "in-memory-byte-stream")
             if (
                 self.primary_operation == "save"
                 and self.edge == "no-extension"
@@ -14671,6 +14697,22 @@ def build_nuanced_cases(
                 "method": literal(0),
             },
         },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.bleed",
+            "name": "negative-bleed-fallback",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "size": [8, 8],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([8, 8]),
+                "bleed": literal(-0.1),
+                "method": literal(0),
+            },
+        },
         *(
             {
                 "surface": "PIL.ImageChops",
@@ -15100,12 +15142,40 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "cover",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-height-source-simd-guard",
+            "mode": "L",
+            "edge": "zero-size-frombytes",
+            "size": [2, 0],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([2, 2]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "fit",
             "requirement_suffix": "parameter.size",
             "name": "zero-width-source-simd-guard",
             "mode": "L",
             "edge": "zero-size-frombytes",
             "size": [0, 2],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([2, 2]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-height-source-simd-guard",
+            "mode": "L",
+            "edge": "zero-size-frombytes",
+            "size": [2, 0],
             "observe_result": "tobytes",
             "values": {
                 "size": literal([2, 2]),
@@ -16196,6 +16266,15 @@ def build_nuanced_cases(
             "name": "pa-putpalette-materialized",
             "mode": "PA",
             "chain": "pa-putpalette-imageops",
+            "values": {"border": literal(1)},
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "expand",
+            "requirement_suffix": "behavior.default",
+            "name": "p-mode-materialized",
+            "mode": "P",
             "values": {"border": literal(1)},
             "observe_result": "tobytes",
         },
@@ -18186,6 +18265,14 @@ def build_nuanced_cases(
             "mode": "RGB",
             "edge": "nonzero-pixel",
             "pixel": [200, 100, 50],
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
+            "requirement_suffix": "behavior.default",
+            "name": "in-memory-stream",
+            "edge": "save-in-memory-stream",
             "values": {"format": literal("PNG")},
         },
         {
@@ -21421,6 +21508,20 @@ def build_nuanced_cases(
             "edge": "paste-mask-partial-l-pixel",
             "observe_receiver": True,
             "values": {"box": literal([0, 0, 16, 16])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16l-partial-l-mask",
+            "mode": "I;16L",
+            "im_mode": "I;16L",
+            "mask_mode": "L",
+            "size": [2, 2],
+            "scenario_inline_image": "i16l-frombytes",
+            "edge": "paste-i16-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
         },
         {
             "surface": "PIL.Image.Image",
