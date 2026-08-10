@@ -463,7 +463,15 @@ fn validate_scalar_storage(image: &DynamicImage, mode: &str) -> Result<(), PilEr
     if !matches!(mode, "I" | "F") {
         return Ok(());
     }
-    let expected = CheckedDims::new(image.width(), image.height(), 4)?.total_bytes();
+    // Pillow permits empty scalar images from `Image.frombytes`. CheckedDims
+    // intentionally rejects zero dimensions for allocations, so validate the
+    // already-existing empty buffer directly before using it for non-empty
+    // images.
+    let expected = if image.width() == 0 || image.height() == 0 {
+        0
+    } else {
+        CheckedDims::new(image.width(), image.height(), 4)?.total_bytes()
+    };
     if image.as_bytes().len() != expected {
         return Err(PilError::InternalError(format!(
             "{mode} image has invalid scalar storage"

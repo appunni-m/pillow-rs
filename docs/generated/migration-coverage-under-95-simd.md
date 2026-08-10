@@ -10,24 +10,24 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 63213a86b63a0722ee96f47553df427908a1ebac
-coverage_run_id: migration-coverage-3aa036e52267407aab6873e9f84fb0ca
-parity_run_id: migration-parity-a7eb00e426b742cebf228964828a3c53
+base_commit: a5e770ffa903a9c97136d9ded711d53852612da8
+coverage_run_id: migration-coverage-67567532e8d64ae0bb19e77886c27b45
+parity_run_id: migration-parity-e385bfe644f946bda23bdb6b694d7c8d
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106123
-covered_regions: 62922
-region_coverage: 59.2916%
-total_lines: 68233
-covered_lines: 40452
-line_coverage: 59.2851%
-total_branches: 13944
-covered_branches: 7106
-branch_coverage: 50.9610%
-total_functions: 5301
-covered_functions: 3029
-function_coverage: 57.1402%
+total_regions: 106276
+covered_regions: 63039
+region_coverage: 59.3163%
+total_lines: 68365
+covered_lines: 40549
+line_coverage: 59.3125%
+total_branches: 13998
+covered_branches: 7129
+branch_coverage: 50.9287%
+total_functions: 5306
+covered_functions: 3034
+function_coverage: 57.1806%
 simd_impl_regions: 7058/7266 (97.1374%)
 simd_impl_lines: 3745/3835 (97.6532%)
 simd_impl_branches: 813/952 (85.3992%)
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The final SIMD refresh selected all 3,030 cases: 3,027 passed, 3 had
+The final SIMD refresh selected all 3,032 cases: 3,029 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 3,030 execution checks. The
+workflow executed all 24 plans and passed all 3,032 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. The new input-only LA/RGBA Chops and valid mode-1
 logical-operation cases all pass on SIMD. They improve public mode coverage,
@@ -159,6 +159,15 @@ for premultiplied samples while making the public branch reachable. The case
 passes source/target parity on both safe CPU and SIMD lanes and raises SIMD
 branch coverage from 805/952 to 806/952; the region, line, and function
 numerators are unchanged.
+
+The final refresh added input-only public `F` and `I` resize cases with a
+zero-width source. Rust's scalar-storage validator previously rejected these
+valid empty images through the nonzero allocation guard before the SIMD
+adapter could reach its intentional native-scalar CPU fallback. The validator
+now accepts an already-existing empty scalar buffer, and both cases pass on
+CPU and SIMD. They increase merged Rust coverage to 63,039/106,276 regions;
+the SIMD implementation aggregate remains 7,058/7,266 because the native
+`F`/`I` path intentionally executes in the shared CPU geometry code.
 
 The latest refresh added two reachable public SIMD workflows: an RGB affine
 bilinear transform with an out-of-bounds fill boundary and a solid RGB paste
