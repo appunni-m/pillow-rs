@@ -1001,6 +1001,7 @@
           "PIL.Image.Image.resize.nuanced.la-nearest-nonuniform",
           "PIL.Image.Image.resize.nuanced.rgba-transparent-convolution",
           "PIL.Image.Image.resize.nuanced.rgb-premultiplied-convolution",
+          "PIL.Image.Image.resize.nuanced.rgb-premultiplied-nearest",
           "PIL.Image.Image.resize.nuanced.la-transparent-convolution",
           "PIL.Image.Image.resize.nuanced.i-nearest-nonuniform",
           "PIL.Image.Image.resize.nuanced.i-convolution-positive",
