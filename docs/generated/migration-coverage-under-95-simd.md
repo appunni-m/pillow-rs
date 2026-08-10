@@ -10,9 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: c8732d2a7533671679ee5349c001035ec6dceeaf
-coverage_run_id: migration-coverage-c752d477e98b497ea0e036b1140cc70d
-parity_run_id: migration-parity-e778eabb63d243f3a5d83bbf1353a12b
+base_commit: 246004662f69a9c5ea9b19551d4e17f321b295eb
+coverage_run_id: migration-coverage-e7aebf140656442e8804accd9e61d1aa
+parity_run_id: migration-parity-6e0aae3c1bd44241ae9280c57541f700
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
@@ -23,14 +23,14 @@ total_lines: 68233
 covered_lines: 40452
 line_coverage: 59.2851%
 total_branches: 13944
-covered_branches: 7099
-branch_coverage: 50.9108%
+covered_branches: 7102
+branch_coverage: 50.9323%
 total_functions: 5301
 covered_functions: 3029
 function_coverage: 57.1402%
 simd_impl_regions: 7054/7266 (97.0823%)
 simd_impl_lines: 3745/3835 (97.6532%)
-simd_impl_branches: 806/952 (84.6639%)
+simd_impl_branches: 809/952 (84.9790%)
 simd_impl_functions: 188/197 (95.4315%)
 in_repo_files_below_threshold: 32
 external_dependency_files_below_threshold: 43
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The final SIMD refresh selected all 3,026 cases: 3,023 passed, 3 had
+The final SIMD refresh selected all 3,028 cases: 3,025 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 3,026 execution checks. The
+workflow executed all 24 plans and passed all 3,028 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. The new input-only LA/RGBA Chops and valid mode-1
 logical-operation cases all pass on SIMD. They improve public mode coverage,
@@ -160,6 +160,13 @@ passes source/target parity on both safe CPU and SIMD lanes and raises SIMD
 branch coverage from 805/952 to 806/952; the region, line, and function
 numerators are unchanged.
 
+The latest refresh added two reachable public SIMD workflows: an RGB affine
+bilinear transform with an out-of-bounds fill boundary and a solid RGB paste
+whose box is vertically outside the destination. Both materialize bytes and
+pass source/target parity on CPU and SIMD. They add three SIMD branches in the
+scalar implementation, raising the SIMD aggregate from 806/952 to 809/952
+(84.9790%); regions, lines, and functions remain unchanged.
+
 The current refresh added four valid input-only RGBA `ImageEnhance` workflows
 for `Brightness`, `Color`, `Contrast`, and `Sharpness`. They pass source/target
 parity on both safe CPU and SIMD lanes and exercise the public alpha-preserving
@@ -208,7 +215,7 @@ SIMD implementation-file coverage is:
 | File | Regions | Lines | Branches | Functions |
 | --- | ---: | ---: | ---: | ---: |
 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 2025/2155 (93.97%) | 1119/1176 (95.15%) | 110/156 (70.51%) | 76/81 (93.83%) |
-| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4932/5002 (98.60%) | 2564/2589 (99.03%) | 694/794 (87.41%) | 103/103 (100.00%) |
+| `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 4932/5002 (98.60%) | 2564/2589 (99.03%) | 697/794 (87.78%) | 103/103 (100.00%) |
 | `pillow-rs/src/compute/pool_simd/mod.rs` | 97/109 (88.99%) | 62/70 (88.57%) | 2/2 (100.00%) | 9/13 (69.23%) |
 
 | Rank | File | Regions | Region coverage | Lines |
