@@ -175,6 +175,9 @@ def render(
 ) -> str:
     manifest_digest = sha256_file(manifest_path)
     run_id = coverage["identity"]["run_id"]
+    target = coverage.get("identity", {}).get("targets", [{}])[0]
+    target_profile = target.get("target_profile", "unknown")
+    backend = target.get("backend", "unknown")
     below = [row for row in rows if row["percent"] is not None and row["percent"] < THRESHOLD_PERCENT]
     below.sort(key=lambda row: (row["percent"] or 0, row["operation"]))
     lines = [
@@ -185,12 +188,13 @@ def render(
         "not parity proof and does not change the manifest or lane inputs.",
         "",
         "```yaml",
-        f"generator: scripts/report_migration_parity_region_coverage.py@4",
+        f"generator: scripts/report_migration_parity_region_coverage.py@5",
         f"manifest_path: {manifest_path.relative_to(ROOT)}",
         f"manifest_schema: {manifest['schema']}",
         f"manifest_sha256: {manifest_digest}",
         f"coverage_run_id: {run_id}",
-        "coverage_target_profile: python-cpu",
+        f"coverage_target_profile: {target_profile}",
+        f"coverage_backend: {backend}",
         "metric: region",
         f"threshold: below {THRESHOLD_PERCENT}%",
         "```",
