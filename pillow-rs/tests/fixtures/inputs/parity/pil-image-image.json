@@ -83677,6 +83677,53 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.format.nuanced.opened-png",
+      "surface": "PIL.Image.Image",
+      "operation": "format",
+      "covers": [
+        "PIL.Image.Image.format.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-asset",
+          "kind": "ref",
+          "path": "image/rgb-small.png",
+          "sha256": "fccc343d9cb00e0bf3a8f2b0c07cbee37bb28ac29443925cdf56bc07890b8f76",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-asset"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "format",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.info.nuanced.opened-bmp-format-info",
       "surface": "PIL.Image.Image",
       "operation": "info",

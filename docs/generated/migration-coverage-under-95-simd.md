@@ -11,23 +11,23 @@ snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
 base_commit: 70d3fa6f048df24d81d6ec5aa2c6e8b0c909edfb
-coverage_run_id: migration-coverage-59a426f4825f463298219427b1b5dc6e
-parity_run_id: migration-parity-b4f87002ade54812b7e35cdd2c18e03c
+coverage_run_id: migration-coverage-2c090fc390b44e94a339b89072d7235a
+parity_run_id: migration-parity-7d4406831e65401197693b171626a16b
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106042
+total_regions: 106120
 covered_regions: 62918
-region_coverage: 59.3331%
-total_lines: 68139
+region_coverage: 59.2895%
+total_lines: 68233
 covered_lines: 40454
-line_coverage: 59.3698%
-total_branches: 13930
+line_coverage: 59.2880%
+total_branches: 13942
 covered_branches: 7098
-branch_coverage: 50.9548%
-total_functions: 5295
+branch_coverage: 50.9109%
+total_functions: 5301
 covered_functions: 3029
-function_coverage: 57.2049%
+function_coverage: 57.1402%
 simd_impl_regions: 7054/7266 (97.0823%)
 simd_impl_lines: 3745/3835 (97.6532%)
 simd_impl_branches: 805/952 (84.5588%)
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The final SIMD refresh selected all 3,024 cases: 3,021 passed, 3 had
+The final SIMD refresh selected all 3,025 cases: 3,022 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 3,024 execution checks. The
+workflow executed all 24 plans and passed all 3,025 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. The new input-only LA/RGBA Chops and valid mode-1
 logical-operation cases all pass on SIMD. They improve public mode coverage,
@@ -159,6 +159,12 @@ enhancement contract. The merged SIMD LLVM numerators remain unchanged because
 the corresponding scalar alpha branches were already reached by other valid
 public workflows; these cases close the missing manifest coverage requirements
 without inflating implementation coverage.
+
+The latest refresh also adds a reviewed encoded-source `PIL.Image.Image.format`
+workflow to the generated public input corpus. It passes on CPU and SIMD and
+keeps the encoded metadata path represented in operation coverage; it does not
+change the SIMD implementation numerator because `format` is outside the
+compute lane.
 
 The latest refresh added two reachable input-only `ImageOps` workflows: an
 odd-width RGBA mirror case that preserves the middle pixel's alpha and a

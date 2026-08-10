@@ -1628,6 +1628,7 @@
           "PIL.Image.Image.apply_transparency.nuanced.png-p-transparency-empty-palette",
           "PIL.Image.Image.info.nuanced.p-transparency-table",
           "PIL.Image.Image.info.nuanced.opened-jpeg-format-info",
+          "PIL.Image.Image.format.nuanced.opened-png",
           "PIL.Image.Image.info.nuanced.opened-bmp-format-info",
           "PIL.Image.Image.info.nuanced.opened-gif-format-info",
           "PIL.Image.Image.info.nuanced.opened-webp-format-info",
