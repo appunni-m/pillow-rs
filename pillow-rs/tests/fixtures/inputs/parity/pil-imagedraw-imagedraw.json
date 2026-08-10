@@ -36410,6 +36410,190 @@
       ]
     },
     {
+      "case_id": "PIL.ImageDraw.ImageDraw.arc.nuanced.even-short",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "arc",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.arc.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "arc",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                12,
+                10
+              ]
+            },
+            "start": {
+              "kind": "literal",
+              "value": 15
+            },
+            "end": {
+              "kind": "literal",
+              "value": 75
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "width": {
+              "kind": "literal",
+              "value": 2
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.arc.nuanced.even-wrapped",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "arc",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.arc.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "arc",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                12,
+                10
+              ]
+            },
+            "start": {
+              "kind": "literal",
+              "value": 15
+            },
+            "end": {
+              "kind": "literal",
+              "value": 0
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "width": {
+              "kind": "literal",
+              "value": 2
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageDraw.ImageDraw.chord.nuanced.fill-outline",
       "surface": "PIL.ImageDraw.ImageDraw",
       "operation": "chord",

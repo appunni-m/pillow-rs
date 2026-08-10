@@ -712,6 +712,8 @@
           "PIL.ImageDraw.ImageDraw.arc.nuanced.wrapped-negative-angles",
           "PIL.ImageDraw.ImageDraw.arc.nuanced.tall-ellipse-axis-transpose",
           "PIL.ImageDraw.ImageDraw.arc.nuanced.axis-boundary-sweep",
+          "PIL.ImageDraw.ImageDraw.arc.nuanced.even-short",
+          "PIL.ImageDraw.ImageDraw.arc.nuanced.even-wrapped",
           "PIL.ImageDraw.ImageDraw.chord.nuanced.fill-outline",
           "PIL.ImageDraw.ImageDraw.chord.nuanced.full-sweep",
           "PIL.ImageDraw.ImageDraw.chord.nuanced.empty-sweep",
