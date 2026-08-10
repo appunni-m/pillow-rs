@@ -18807,6 +18807,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-out-of-bounds",
+            "scenario_inline_image": "l16-png",
+            "values": {"xy": literal([2, 0])},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "putpixel",
             "requirement_suffix": "behavior.default",
             "name": "l16-png-putpixel",
@@ -18816,6 +18824,14 @@ def build_nuanced_cases(
                 "xy": literal([0, 0]),
                 "value": literal(0x1234),
             },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-out-of-bounds",
+            "scenario_inline_image": "l16-png",
+            "values": {"xy": literal([2, 0]), "value": literal(1)},
         },
         {
             "surface": "PIL.Image.Image",
