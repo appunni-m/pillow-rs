@@ -1580,6 +1580,7 @@
           "PIL.Image.Image.getdata.nuanced.l16-png-opened",
           "PIL.Image.Image.getextrema.nuanced.l16-png-opened",
           "PIL.Image.Image.save.nuanced.l16-png-opened",
+          "PIL.Image.Image.crop.nuanced.l16-png-opened",
           "PIL.Image.Image.getpixel.nuanced.opened-cmyk-tiff",
           "PIL.Image.Image.getpixel.nuanced.opened-f32-tiff",
           "PIL.Image.Image.getpixel.nuanced.opened-i32-tiff",

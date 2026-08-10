@@ -18709,6 +18709,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-opened",
+            "scenario_inline_image": "l16-png",
+            "values": {"box": literal([0, 0, 1, 1])},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getpixel",
             "requirement_suffix": "behavior.default",
             "name": "opened-cmyk-tiff",
