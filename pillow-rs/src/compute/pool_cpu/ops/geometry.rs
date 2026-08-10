@@ -477,6 +477,7 @@ fn rotate_arbitrary_generic(
 
     let raw = img.as_bytes();
     let fill_color = fill.unwrap_or((0, 0, 0, 0));
+    let pa_mode = explicit_mode == Some("PA");
 
     let mut out = CheckedDims::new(dw, dh, channels as u8)?.alloc_buffer();
 
@@ -522,7 +523,25 @@ fn rotate_arbitrary_generic(
 
                 let out_idx = (dy * dw + dx) as usize * channels;
 
-                if sx_rel >= 0.0 && sx_rel < sw && sy_rel >= 0.0 && sy_rel < sh {
+                // Pillow's regular byte bilinear filter has a half-pixel
+                // footprint. PA keeps its established index/alpha sampling
+                // convention, so retain its integer-domain bounds here.
+                let in_filter_support = if pa_mode {
+                    sx_rel >= 0.0 && sx_rel < sw && sy_rel >= 0.0 && sy_rel < sh
+                } else {
+                    sx_rel >= -0.5 && sx_rel < sw - 0.5 && sy_rel >= -0.5 && sy_rel < sh - 0.5
+                };
+                if in_filter_support {
+                    let sx_rel = if pa_mode {
+                        sx_rel
+                    } else {
+                        sx_rel.clamp(0.0, sw - 1.0)
+                    };
+                    let sy_rel = if pa_mode {
+                        sy_rel
+                    } else {
+                        sy_rel.clamp(0.0, sh - 1.0)
+                    };
                     let sx = sx_rel.floor() as u32;
                     let sy = sy_rel.floor() as u32;
                     let fx = sx_rel - sx as f64;
@@ -534,10 +553,22 @@ fn rotate_arbitrary_generic(
                         let p10 = raw[(sy * w + sx1) as usize * channels + c] as f64;
                         let p01 = raw[(sy1 * w + sx) as usize * channels + c] as f64;
                         let p11 = raw[(sy1 * w + sx1) as usize * channels + c] as f64;
-                        let v = (1.0 - fx) * (1.0 - fy) * p00
-                            + fx * (1.0 - fy) * p10
-                            + (1.0 - fx) * fy * p01
-                            + fx * fy * p11;
+                        // Evaluate the two horizontal blends first for
+                        // regular byte modes. This preserves an exact
+                        // constant edge sample in f64; expanding all four
+                        // products can leave a value such as
+                        // 14.999999999999998, which C's fixed-point
+                        // accumulator reports as 15 after truncation. PA
+                        // retains its established arithmetic ordering.
+                        let v = if pa_mode {
+                            (1.0 - fx) * (1.0 - fy) * p00
+                                + fx * (1.0 - fy) * p10
+                                + (1.0 - fx) * fy * p01
+                                + fx * fy * p11
+                        } else {
+                            (1.0 - fy) * ((1.0 - fx) * p00 + fx * p10)
+                                + fy * ((1.0 - fx) * p01 + fx * p11)
+                        };
                         // Geometry.c's UINT8 bilinear filter stores a C cast
                         // of the interpolated value, which truncates toward
                         // zero. This matters for the premultiplied alpha

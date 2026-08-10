@@ -2930,10 +2930,11 @@ mod tests {
 /// value, unlike the resize helper above which rounds its result.
 #[inline(always)]
 fn bilinear_interp_truncated(c00: u32, c10: u32, c01: u32, c11: u32, fx: f64, fy: f64) -> u32 {
-    let v = (1.0 - fx) * (1.0 - fy) * c00 as f64
-        + fx * (1.0 - fy) * c10 as f64
-        + (1.0 - fx) * fy * c01 as f64
-        + fx * fy * c11 as f64;
+    // Blend horizontally before the vertical blend. Apart from matching the
+    // source kernel's operation order, this keeps a constant edge sample
+    // exactly constant instead of turning 15 into 14 on an f64 roundoff.
+    let v = (1.0 - fy) * ((1.0 - fx) * c00 as f64 + fx * c10 as f64)
+        + fy * ((1.0 - fx) * c01 as f64 + fx * c11 as f64);
     v as u32
 }
 
@@ -3073,7 +3074,13 @@ pub fn rotate(
 
             let out_idx = (dy * dw + dx) as usize;
 
-            if src_x >= 0.0 && src_x < sw && src_y >= 0.0 && src_y < sh {
+            // Pillow's bilinear filter has a half-pixel footprint. Coordinates
+            // in [-0.5, width - 0.5) remain samples at the image edge, where
+            // the source coordinate is clamped; only points outside that
+            // support use the fill color.
+            if src_x >= -0.5 && src_x < sw - 0.5 && src_y >= -0.5 && src_y < sh - 0.5 {
+                let src_x = src_x.clamp(0.0, sw - 1.0);
+                let src_y = src_y.clamp(0.0, sh - 1.0);
                 // Bilinear interpolation of source pixels
                 let sx = src_x.floor() as u32;
                 let sy = src_y.floor() as u32;
