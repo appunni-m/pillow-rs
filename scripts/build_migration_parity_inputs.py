@@ -4928,6 +4928,21 @@ def build_nuanced_cases(
             }
             for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
         ),
+        # RGBA is a supported ImageEnhance input. Keep the alpha lane in the
+        # public corpus so the SIMD implementations exercise their
+        # mode-aware alpha-preserving branches through the real wrapper.
+        *(
+            {
+                "surface": "PIL.ImageEnhance",
+                "operation": class_name,
+                "requirement_suffix": "mode.rgba",
+                "name": "mode-rgba",
+                "mode": "RGBA",
+                "edge": "uniform-fill",
+                "pixel": [16, 32, 48, 96],
+            }
+            for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
+        ),
         {
             "surface": "PIL.ImageEnhance",
             "operation": "Brightness",

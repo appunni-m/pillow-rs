@@ -10,9 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 3fbe21b5d288f0853c8cc10ca308cdb1a5661573
-coverage_run_id: migration-coverage-b23e40aec66d463ea22bf2afc1bb5ba7
-parity_run_id: migration-parity-d2dd7d54966a4b1bb09da3a53b80f4a4
+base_commit: 70d3fa6f048df24d81d6ec5aa2c6e8b0c909edfb
+coverage_run_id: migration-coverage-59a426f4825f463298219427b1b5dc6e
+parity_run_id: migration-parity-b4f87002ade54812b7e35cdd2c18e03c
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
@@ -40,9 +40,9 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The final SIMD refresh selected all 3,020 cases: 3,017 passed, 3 had
+The final SIMD refresh selected all 3,024 cases: 3,021 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 3,020 execution checks. The
+workflow executed all 24 plans and passed all 3,024 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
 coverage denominator. The new input-only LA/RGBA Chops and valid mode-1
 logical-operation cases all pass on SIMD. They improve public mode coverage,
@@ -151,6 +151,14 @@ The current refresh added one valid input-only `RGBa` nearest-neighbour
 short-circuited before the explicit `RGBa` guard in the SIMD adapter; the
 nearest case reaches that public mode branch and passes source/target parity on
 both safe CPU and SIMD lanes, adding one SIMD branch.
+
+The current refresh added four valid input-only RGBA `ImageEnhance` workflows
+for `Brightness`, `Color`, `Contrast`, and `Sharpness`. They pass source/target
+parity on both safe CPU and SIMD lanes and exercise the public alpha-preserving
+enhancement contract. The merged SIMD LLVM numerators remain unchanged because
+the corresponding scalar alpha branches were already reached by other valid
+public workflows; these cases close the missing manifest coverage requirements
+without inflating implementation coverage.
 
 The latest refresh added two reachable input-only `ImageOps` workflows: an
 odd-width RGBA mirror case that preserves the middle pixel's alpha and a
