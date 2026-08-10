@@ -19915,6 +19915,22 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "rotate",
+            "requirement_suffix": "mode.la",
+            "name": "la-fractional-bilinear-simd",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 128],
+            "size": [9, 8],
+            "values": {
+                "angle": literal(33.5),
+                "expand": literal(True),
+                "resample": literal(2),
+            },
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
             "requirement_suffix": "behavior.default",
             "name": "one-explicit-bilinear-nearest",
             "observe_result": "tobytes",
