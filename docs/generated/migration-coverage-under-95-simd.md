@@ -10,18 +10,18 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 8a92e62fa5578aae4cbaaf538994bbfe51dee6a9
-coverage_run_id: migration-coverage-90e8d80de8014a248bc4e8182c84214b
-parity_run_id: migration-parity-83795cc623fc4f3fb6e1f7518bead352
+base_commit: dd2416855bea37b13fe61598765903db696c382a
+coverage_run_id: migration-coverage-8ff58fbac53f4e2d8118383c35eb455a
+parity_run_id: migration-parity-67b486683e564c778338e33f294493a9
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106458
+total_regions: 106446
 covered_regions: 63235
-region_coverage: 59.3990%
-total_lines: 68472
+region_coverage: 59.4057%
+total_lines: 68474
 covered_lines: 40664
-line_coverage: 59.3878%
+line_coverage: 59.3860%
 total_branches: 14056
 covered_branches: 7193
 branch_coverage: 51.1739%
@@ -261,10 +261,17 @@ backend-specific geometry, while Pillow normalizes it to `0.0` at the public
 call boundary. Core now owns that normalization for CPU, SIMD, and GPU; the
 case passes on the SIMD lane. The full 3,049-case lane has 3,046 passes and
 three ordinary mismatches, with zero infrastructure errors or not-run cases.
-The merged report is 63,235/106,458 regions (59.3990%) overall; the SIMD
+The merged report is 63,235/106,446 regions (59.4057%) overall; the SIMD
 implementation aggregate remains 7,246/7,448 regions (97.2879%), because the
 remaining zero-execution SIMD regions are defensive or invalid internal-shape
 paths rather than reachable public workflows.
+
+This refresh also adds an input-only `tobytes` observation to the existing
+indexed `PIL.Image.composite` workflow. It materializes the public lazy result
+and confirms that the indexed SIMD path executes on the real `Image.composite`
+surface; the case passes on CPU and SIMD. The implementation aggregate is
+unchanged because the same indexed branch was already covered by
+`ImageChops.composite`.
 
 SIMD implementation-file coverage is:
 
