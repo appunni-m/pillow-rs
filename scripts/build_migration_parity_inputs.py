@@ -1615,6 +1615,19 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
+        elif self.edge == "nonzero-pixel-safe" and label in {"image", "image1"}:
+            if self.scenario_pixel is None:
+                raise ValueError("nonzero-pixel-safe edge requires a scenario pixel")
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 2]),
+                    "value": literal(self.scenario_pixel),
+                },
+                step_id=self.next_step_id("setup-safe-varied-pixel"),
+            )
         elif self.edge == "chops-binary-high-low" and label in {
             "image1",
             "image2",
@@ -15182,6 +15195,17 @@ def build_nuanced_cases(
             "surface": "PIL.ImageOps",
             "operation": "flip",
             "requirement_suffix": "behavior.default",
+            "name": "simd-rgb-odd-height-valid",
+            "mode": "RGB",
+            "edge": "nonzero-pixel-safe",
+            "pixel": [12, 34, 56],
+            "size": [4, 3],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "flip",
+            "requirement_suffix": "behavior.default",
             "name": "materialized-l-odd-height",
             "mode": "L",
             "edge": "nonzero-pixel",
@@ -15217,6 +15241,17 @@ def build_nuanced_cases(
             "name": "materialized-rgb-odd-width",
             "mode": "RGB",
             "edge": "nonzero-pixel",
+            "pixel": [12, 34, 56],
+            "size": [3, 4],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "mirror",
+            "requirement_suffix": "behavior.default",
+            "name": "simd-rgb-odd-width-valid",
+            "mode": "RGB",
+            "edge": "nonzero-pixel-safe",
             "pixel": [12, 34, 56],
             "size": [3, 4],
             "observe_result": "tobytes",
@@ -19816,6 +19851,26 @@ def build_nuanced_cases(
                 ("L", 200, 3),
                 ("LA", [200, 128], 3),
                 ("RGB", [200, 100, 50], 3),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "behavior.default",
+                "name": f"{mode.lower()}-odd-rotate180-valid",
+                "mode": mode,
+                "edge": "nonzero-pixel-safe",
+                "pixel": pixel,
+                "size": [3, 3],
+                "values": {"method": literal(3)},
+                "observe_result": "tobytes",
+            }
+            for mode, pixel in (
+                ("L", 200),
+                ("LA", [200, 128]),
+                ("RGB", [200, 100, 50]),
+                ("RGBA", [200, 100, 50, 128]),
             )
         ),
         {
