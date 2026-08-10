@@ -797,6 +797,12 @@ pub fn simd_transpose(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if uses_native_scalar_mode(img, mode) {
+        if let PipelineOp::Transpose { method } = op {
+            return crate::compute::pool_cpu::ops::geometry::execute_transpose(img, method);
+        }
+        return Err(PilError::ValueError("expected Transpose op".into()));
+    }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let method_code: u32 = match op {
@@ -1106,6 +1112,20 @@ pub fn simd_crop(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if uses_native_scalar_mode(img, mode) {
+        if let PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } = op
+        {
+            return crate::compute::pool_cpu::ops::geometry::execute_crop(
+                img, *left, *top, *right, *bottom,
+            );
+        }
+        return Err(PilError::ValueError("expected Crop op".into()));
+    }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
@@ -1402,6 +1422,28 @@ pub fn simd_paste(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if uses_native_scalar_mode(img, mode) {
+        if let PipelineOp::Paste {
+            source,
+            x,
+            y,
+            mask,
+            mask_alpha,
+            ..
+        } = op
+        {
+            return crate::compute::pool_cpu::ops::effects::op_paste(
+                img,
+                source,
+                i64::from(*x),
+                i64::from(*y),
+                mask,
+                *mask_alpha,
+                mode,
+            );
+        }
+        return Err(PilError::ValueError("expected Paste op".into()));
+    }
     let (w, h) = img.dimensions();
     let mode_code = if mode == Some("P") {
         0
