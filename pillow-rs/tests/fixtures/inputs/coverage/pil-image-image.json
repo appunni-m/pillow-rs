@@ -1065,6 +1065,8 @@
           "PIL.Image.Image.rotate.nuanced.fractional-expanded",
           "PIL.Image.Image.rotate.nuanced.zero-width-source-simd-guard",
           "PIL.Image.Image.rotate.nuanced.zero-height-source-simd-guard",
+          "PIL.Image.Image.rotate.nuanced.zero-width-source-simd-fractional-empty-fill",
+          "PIL.Image.Image.rotate.nuanced.l-explicit-bilinear-simd-mode-path",
           "PIL.Image.Image.rotate.nuanced.rgb-explicit-bilinear-simd",
           "PIL.Image.Image.rotate.nuanced.rgb-explicit-bilinear-non-expand-simd",
           "PIL.Image.Image.rotate.nuanced.invalid-resample-name",
