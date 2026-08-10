@@ -1594,6 +1594,7 @@
           "PIL.Image.Image.getextrema.nuanced.l16-png-opened",
           "PIL.Image.Image.save.nuanced.l16-png-opened",
           "PIL.Image.Image.crop.nuanced.l16-png-opened",
+          "PIL.Image.Image.putpixel.nuanced.l16-png-putpixel",
           "PIL.Image.Image.resize.nuanced.l16-png-opened",
           "PIL.Image.Image.rotate.nuanced.l16-png-opened",
           "PIL.Image.Image.transpose.nuanced.l16-png-opened",

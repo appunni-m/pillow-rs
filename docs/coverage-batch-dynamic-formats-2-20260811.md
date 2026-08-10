@@ -48,7 +48,8 @@ a public PNG parity case.
 
 ## Verification
 
-- `make migration-parity-inputs`: deterministic generation succeeded.
+- `make migration-parity-inputs`: deterministic generation succeeded; the
+  generated corpus counts are recorded by the maintained inventory check.
 - Focused CPU parity: 1 selected, 1 executed, 1 passed, 0 infrastructure
   errors.
 - Focused SIMD parity: 1 selected, 1 executed, 1 passed, 0 infrastructure
@@ -57,5 +58,9 @@ a public PNG parity case.
   `dynamic.rs` remained 388/865.
 - `make migration-parity-inputs-check` passed, including the crash quarantine
   reproduction check.
+- The originating isolated worker checkout also recorded the pre-existing
+  legacy duplicate-accounting assertion failure because its deprecated fixture
+  directories were absent (expected 1592, found 0). That failure was retained
+  as visible evidence and no fixture or denominator was changed to hide it.
 
 The pending TIFF, crash, GPU, and fontdone lanes were not used.
