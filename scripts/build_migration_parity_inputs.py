@@ -12262,6 +12262,26 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "mode.la",
+            "name": "la-alpha-lut",
+            "mode": "LA",
+            "values": {
+                "args": literal([[index % 256 for index in range(512)]]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "eval",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgba-alpha-lut",
+            "mode": "RGBA",
+            "values": {
+                "args": literal([[index % 256 for index in range(1024)]]),
+            },
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "composite",
             "requirement_suffix": "behavior.default",
             "name": "one-mask",
@@ -14033,6 +14053,33 @@ def build_nuanced_cases(
             "name": "rgba",
             "mode": "RGBA",
         },
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "duplicate",
+                "requirement_suffix": "behavior.default",
+                "name": f"alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "constant",
+                "requirement_suffix": "behavior.default",
+                "name": f"alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "values": {"value": literal(37)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
         {
             "surface": "PIL.ImageChops",
             "operation": "offset",
@@ -14132,6 +14179,33 @@ def build_nuanced_cases(
                 "resample": literal("BICUBIC"),
             },
         },
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "blend",
+                "requirement_suffix": "behavior.default",
+                "name": f"alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "values": {"alpha": literal(0.25)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "composite",
+                "requirement_suffix": "behavior.default",
+                "name": f"alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "fit",
@@ -14197,6 +14271,16 @@ def build_nuanced_cases(
             }
             for operation in ("overlay", "hard_light", "soft_light")
         ),
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "overlay",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-alpha",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 80, 40, 96],
+            "observe_result": "tobytes",
+        },
         {
             "surface": "PIL.ImageOps",
             "operation": "fit",
@@ -15203,12 +15287,52 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.la",
+            "name": "alpha-la",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 96],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.rgba",
+            "name": "alpha-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 80, 40, 96],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "equalize",
             "requirement_suffix": "mode.l",
             "name": "materialized-l",
             "mode": "L",
             "edge": "nonzero-pixel",
             "pixel": 120,
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "mode.la",
+            "name": "alpha-la",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 96],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "mode.rgba",
+            "name": "alpha-rgba",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 80, 40, 96],
             "observe_result": "tobytes",
         },
         {
