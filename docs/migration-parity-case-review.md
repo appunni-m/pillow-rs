@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 3020
-- Unique active workflow signatures: 3020
+- Active parity workflows: 3024
+- Unique active workflow signatures: 3024
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1838
+- Deliberate nuanced workflows: 1842
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -28,7 +28,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
 | `PIL.ImageDraw.ImageDraw` | 451 |
-| `PIL.ImageEnhance` | 33 |
+| `PIL.ImageEnhance` | 37 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
 | `PIL.ImageEnhance.Contrast` | 1 |
@@ -1528,16 +1528,20 @@ are not copied into the active lane by name.
 - `PIL.ImageEnhance.Brightness.nuanced.mode-1-reject`
 - `PIL.ImageEnhance.Brightness.nuanced.mode-cmyk`
 - `PIL.ImageEnhance.Brightness.nuanced.mode-p-reject`
+- `PIL.ImageEnhance.Brightness.nuanced.mode-rgba`
 - `PIL.ImageEnhance.Brightness.nuanced.pa-putpalette-pipeline-expansion`
 - `PIL.ImageEnhance.Color.nuanced.mode-1-reject`
 - `PIL.ImageEnhance.Color.nuanced.mode-cmyk`
 - `PIL.ImageEnhance.Color.nuanced.mode-p-reject`
+- `PIL.ImageEnhance.Color.nuanced.mode-rgba`
 - `PIL.ImageEnhance.Contrast.nuanced.mode-1-reject`
 - `PIL.ImageEnhance.Contrast.nuanced.mode-cmyk`
 - `PIL.ImageEnhance.Contrast.nuanced.mode-p-reject`
+- `PIL.ImageEnhance.Contrast.nuanced.mode-rgba`
 - `PIL.ImageEnhance.Sharpness.nuanced.mode-1-reject`
 - `PIL.ImageEnhance.Sharpness.nuanced.mode-cmyk`
 - `PIL.ImageEnhance.Sharpness.nuanced.mode-p-reject`
+- `PIL.ImageEnhance.Sharpness.nuanced.mode-rgba`
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-channels`
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-size`
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.short-callback-result`

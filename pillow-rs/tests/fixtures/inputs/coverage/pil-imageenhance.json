@@ -68,6 +68,10 @@
           "PIL.ImageEnhance.Color.nuanced.mode-cmyk",
           "PIL.ImageEnhance.Contrast.nuanced.mode-cmyk",
           "PIL.ImageEnhance.Sharpness.nuanced.mode-cmyk",
+          "PIL.ImageEnhance.Brightness.nuanced.mode-rgba",
+          "PIL.ImageEnhance.Color.nuanced.mode-rgba",
+          "PIL.ImageEnhance.Contrast.nuanced.mode-rgba",
+          "PIL.ImageEnhance.Sharpness.nuanced.mode-rgba",
           "PIL.ImageEnhance.Brightness.nuanced.pa-putpalette-pipeline-expansion"
         ],
         "command_ids": []
