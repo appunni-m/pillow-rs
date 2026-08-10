@@ -10,21 +10,21 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 59914be2e381a2418e7b90af1b00442f039b0642
-coverage_run_id: migration-coverage-902e184b7d8c499fa3ba569ed1ba2ba5
-parity_run_id: migration-parity-8a0d3256232e4316a399ae91856b4d16
+base_commit: b2c834d0e77827d6650904bb149820471c7cfc31
+coverage_run_id: migration-coverage-ae9a5d6c543f470bafd02271f30e4c60
+parity_run_id: migration-parity-fbfe464b65b3478c83c0f5ba29e0f7eb
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
-total_regions: 106006
+total_regions: 105978
 covered_regions: 62870
-region_coverage: 59.3080%
-total_lines: 68113
+region_coverage: 59.3236%
+total_lines: 68098
 covered_lines: 40417
-line_coverage: 59.3382%
-total_branches: 13937
+line_coverage: 59.3512%
+total_branches: 13923
 covered_branches: 7093
-branch_coverage: 50.8933%
+branch_coverage: 50.9445%
 total_functions: 5292
 covered_functions: 3028
 function_coverage: 57.2184%
@@ -40,7 +40,7 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 3,016 cases: 3,013 passed, 3 had
+The final SIMD refresh selected all 3,016 cases: 3,013 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
 workflow executed all 24 plans and passed all 3,016 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
