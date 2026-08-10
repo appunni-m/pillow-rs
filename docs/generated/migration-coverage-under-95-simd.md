@@ -5,12 +5,12 @@ execution coverage, not parity proof. The parity run is recorded separately
 and keeps ordinary mismatches visible.
 
 ```yaml
-snapshot_id: 147b9c61-fb43-4b5d-94de-f903820e1e3e
+snapshot_id: 65244f08-9f96-44bf-9649-8b4a8666d52d
 provenance: coverage-mcp-managed
 suite: migration-parity-rust-simd
-base_commit: 847178a01dde2f444c016893f3e0d58ab48f3137
-coverage_run_id: 8f255186-cf04-47df-97ae-b96229b6195b
-parity_run_id: 22909703-2393-4f82-8bf2-3bfb000f1388
+base_commit: fe860c7269d1e2acd1e03a579efa1ba0d43d246e
+coverage_run_id: 1856f3d4-cc3a-4d23-bee3-cb48c8c6896c
+parity_run_id: 06a1f20d-1c3e-41f8-a3d8-95e8dcda13f2
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
