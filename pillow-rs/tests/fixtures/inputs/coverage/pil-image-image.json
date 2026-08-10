@@ -1642,6 +1642,8 @@
           "PIL.Image.Image.convert.nuanced.pa-palette-to-rgba",
           "PIL.Image.Image.convert.nuanced.raw-p-without-palette-to-rgba",
           "PIL.Image.Image.convert.nuanced.from-cmyk-to-l",
+          "PIL.Image.Image.convert.nuanced.from-l-to-cmyk-gray-branch",
+          "PIL.Image.Image.convert.nuanced.from-la-to-cmyk-gray-branch",
           "PIL.Image.Image.convert.nuanced.from-ycbcr",
           "PIL.Image.Image.convert.nuanced.from-hsv-to-rgb",
           "PIL.Image.Image.convert.nuanced.from-f-to-l",
