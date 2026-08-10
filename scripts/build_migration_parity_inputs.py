@@ -4257,6 +4257,7 @@ class WorkflowBuilder:
             palette_band = {
                 "merge-palette-band-first": 0,
                 "merge-palette-band-after-first": 1,
+                "merge-l-mode-mismatch": 0,
             }.get(self.edge)
             for index in range(band_count):
                 if palette_band == index:
@@ -12587,6 +12588,14 @@ def build_nuanced_cases(
             "mode": "L",
             "edge": "invalid-band-item",
             "values": {"bands": literal([None])},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "l-mode-band-mismatch",
+            "mode": "L",
+            "edge": "merge-l-mode-mismatch",
         },
         {
             "surface": "PIL.Image",
