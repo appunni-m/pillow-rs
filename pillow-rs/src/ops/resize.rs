@@ -182,14 +182,24 @@ impl Image {
         // clamps the eventual result to the source dimensions. Keep the
         // public bound in i64 until after validation; converting the request
         // directly to u32 incorrectly rejected values such as 2**32.
-        let width = thumbnail_bound(size.0);
+        let requested_width = thumbnail_bound(size.0);
+        let width = if source_width == 0 {
+            requested_width
+        } else {
+            requested_width.min(source_width)
+        };
         if size.1 < 0 {
             return Ok((
                 width,
                 Self::thumbnail_height_for_width(width, (source_width, source_height))?,
             ));
         }
-        let height = thumbnail_bound(size.1);
+        let requested_height = thumbnail_bound(size.1);
+        let height = if source_height == 0 {
+            requested_height
+        } else {
+            requested_height.min(source_height)
+        };
         Ok((width, height))
     }
 
