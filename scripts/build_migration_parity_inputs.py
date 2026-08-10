@@ -10121,6 +10121,23 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "mode.la",
+            "name": "la-affine-bilinear-simd",
+            "observe_result": "tobytes",
+            "mode": "LA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 96],
+            "size": [9, 8],
+            "values": {
+                "size": literal([9, 8]),
+                "method": literal(0),
+                "data": literal([1, 0, 0.25, 0, 1, 0.25]),
+                "resample": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "parameter.resample",
             "name": "opened-rgb-affine-bilinear-simd",
             "scenario_asset": "image/rgb-small.png",
@@ -10149,6 +10166,24 @@ def build_nuanced_cases(
                 "data": literal([1, 0, -0.25, 0, 1, -0.25]),
                 "resample": literal(2),
                 "fillcolor": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgba-affine-bilinear-fill-boundary-simd",
+            "observe_result": "tobytes",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 96],
+            "size": [9, 8],
+            "values": {
+                "size": literal([9, 8]),
+                "method": literal(0),
+                "data": literal([1, 0, -1, 0, 1, -1]),
+                "resample": literal(2),
+                "fillcolor": literal([1, 2, 3, 4]),
             },
         },
         {
@@ -15797,6 +15832,19 @@ def build_nuanced_cases(
             "pixel": [12, 34, 56],
             "observe_result": "tobytes",
         },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"simd-alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "invert",
@@ -15936,6 +15984,20 @@ def build_nuanced_cases(
             "values": {"bits": literal(4)},
             "observe_result": "tobytes",
         },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "posterize",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"simd-alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "values": {"bits": literal(4)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "solarize",
@@ -15958,6 +16020,20 @@ def build_nuanced_cases(
             "values": {"threshold": literal(100)},
             "observe_result": "tobytes",
         },
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "solarize",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"simd-alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "values": {"threshold": literal(100)},
+                "observe_result": "tobytes",
+            }
+            for mode in ("LA", "RGBA")
+        ),
         {
             "surface": "PIL.ImageOps",
             "operation": "grayscale",
