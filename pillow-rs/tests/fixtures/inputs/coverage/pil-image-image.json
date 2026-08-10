@@ -1518,6 +1518,7 @@
           "PIL.Image.Image.getbands.nuanced.f-mode",
           "PIL.Image.Image.getbands.nuanced.pa-mode",
           "PIL.Image.Image.getbands.nuanced.rgba-premultiplied-mode",
+          "PIL.Image.Image.getbands.nuanced.rgbx-mode",
           "PIL.Image.Image.getbands.nuanced.i16-mode",
           "PIL.Image.Image.getbands.nuanced.i16l-mode",
           "PIL.Image.Image.getbands.nuanced.i16b-mode",
