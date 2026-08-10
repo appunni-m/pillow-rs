@@ -1,18 +1,16 @@
 # SIMD coverage backlog below 95%
 
-Generated from the local SIMD LLVM report at
-`target/coverage/migration-parity-rust.json`; this is execution coverage, not
-parity proof. Coverage MCP was unavailable (`Transport closed`) for this
-refresh, so this report is local diagnostic evidence rather than a managed
-snapshot.
+Generated from the managed SIMD LLVM snapshot for the execution lane; this is
+execution coverage, not parity proof. The parity run is recorded separately
+and keeps ordinary mismatches visible.
 
 ```yaml
-snapshot_id: null
-provenance: local-llvm-report
+snapshot_id: 9cfe55c1-c385-40d5-a3ad-b1bdc1cd2b98
+provenance: coverage-mcp-managed
 suite: migration-parity-rust-simd
-base_commit: 9b4c1ba5afd1faca3229acfe7de5cd6e48364673
-coverage_run_id: migration-coverage-9e502e43cf7a4e15bedbf395272752fc
-parity_run_id: migration-parity-6f7c575ffe4a41fd9b43a515d76e56b0
+base_commit: 24ff1cc805cf3b52c7c5cf1a763e364c2333ed63
+coverage_run_id: 2921645e-927c-400d-9cca-39d93592f39f
+parity_run_id: 8cac17d8-46d0-4f6b-bb4e-95e3a3ed08bd
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
@@ -40,7 +38,7 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The latest full SIMD refresh selected all 3,055 cases: 3,052 passed, 3 had
+The latest managed SIMD refresh selected all 3,055 cases: 3,052 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors or not-run cases.
 The coverage workflow executed all 24 plans and passed all 3,055 execution
 checks. The mismatches remain visible in the parity result; they are not
