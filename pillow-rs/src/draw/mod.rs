@@ -601,8 +601,9 @@ impl Draw {
     ///
     /// # Errors
     ///
-    /// Currently returns `Ok(())`; deferred pipeline execution reports later
-    /// materialization failures.
+    /// Returns [`PilError::ValueError`] when the right or bottom edge precedes
+    /// the corresponding left or top edge, matching Pillow's public draw
+    /// validation before the operation is queued.
     pub fn rectangle(
         &mut self,
         x0: i32,
@@ -613,6 +614,16 @@ impl Draw {
         outline: Option<(u8, u8, u8, u8)>,
         width: u32,
     ) -> Result<(), PilError> {
+        if x1 < x0 {
+            return Err(PilError::ValueError(
+                "x1 must be greater than or equal to x0".into(),
+            ));
+        }
+        if y1 < y0 {
+            return Err(PilError::ValueError(
+                "y1 must be greater than or equal to y0".into(),
+            ));
+        }
         let (fill, outline) = self.shape_inks(fill, outline);
         self.image = Image::push_op(
             &self.image,
