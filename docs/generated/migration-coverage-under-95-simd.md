@@ -10,9 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 52645cc81e3726700878ac95e6c4352a05a21531
-coverage_run_id: migration-coverage-8611bdf17c8e49feb2becac760a29214
-parity_run_id: migration-parity-75c253111b8844acafc66788f77c9ebc
+base_commit: 19c487bfb0e8d8f644804e4ea2abb72c5186e2cb
+coverage_run_id: migration-coverage-0ff925f595fe40359be373ae99b6113b
+parity_run_id: migration-parity-20cbe0ed760f4dc8b13694ae510b6133
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
@@ -40,11 +40,15 @@ The in-repository list is ordered from lowest to highest region coverage. The
 43 below-threshold files from the sibling `fontdone` dependency are excluded
 from the actionable pillow-rs list; they are an external-library backlog.
 
-The fresh SIMD parity audit selected all 2,987 cases: 2,984 passed, 3 had
+The fresh SIMD parity audit selected all 3,013 cases: 3,010 passed, 3 had
 ordinary parity mismatches, and 0 had infrastructure errors. The coverage
-workflow executed all 24 plans and passed all 2,987 execution checks. The
+workflow executed all 24 plans and passed all 3,013 execution checks. The
 mismatches remain visible in the parity result; they are not removed from the
-coverage denominator. Four legacy zero-execution SIMD adapters
+coverage denominator. The new input-only LA/RGBA Chops and valid mode-1
+logical-operation cases all pass on SIMD. They improve public mode coverage,
+but do not change the LLVM numerators because the newly exercised regions were
+already covered by other public modes; the remaining SIMD-specific regions are
+defensive/error paths rather than additional valid workflows. Four legacy zero-execution SIMD adapters
 (`simd_quantize`, `simd_blend`, `simd_composite`, and `simd_point_op`) and
 their orphan scalar helpers were removed from the SIMD registry/source. Their
 `PipelineOp` variants remain available to the core/GPU pipeline; public paths

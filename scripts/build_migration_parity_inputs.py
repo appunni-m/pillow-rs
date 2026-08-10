@@ -14161,6 +14161,19 @@ def build_nuanced_cases(
             }
             for operation in ("logical_and", "logical_or", "logical_xor")
         ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": "valid-mode-1",
+                "mode": "1",
+                "edge": "nonzero-pixel",
+                "pixel": 1,
+                "observe_result": "tobytes",
+            }
+            for operation in ("logical_and", "logical_or", "logical_xor")
+        ),
         {
             "surface": "PIL.ImageChops",
             "operation": "invert",
@@ -14378,6 +14391,31 @@ def build_nuanced_cases(
                 "surface": "PIL.ImageChops",
                 "operation": operation,
                 "requirement_suffix": "behavior.default",
+                "name": f"alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "observe_result": "tobytes",
+            }
+            for operation in (
+                "add_modulo",
+                "subtract_modulo",
+                "multiply",
+                "screen",
+                "darker",
+                "lighter",
+                "difference",
+                "overlay",
+                "hard_light",
+                "soft_light",
+            )
+            for mode in ("LA", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
                 "name": "high-low-rgb",
                 "mode": "RGB",
                 "edge": "chops-binary-high-low",
@@ -14385,6 +14423,24 @@ def build_nuanced_cases(
                 "observe_result": "tobytes",
             }
             for operation in ("overlay", "hard_light", "soft_light")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"alpha-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": [120, 96] if mode == "LA" else [120, 80, 40, 96],
+                "values": {
+                    "scale": literal(2),
+                    "offset": literal(1),
+                },
+                "observe_result": "tobytes",
+            }
+            for operation in ("add", "subtract")
+            for mode in ("LA", "RGBA")
         ),
         {
             "surface": "PIL.ImageChops",
