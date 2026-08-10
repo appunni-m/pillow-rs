@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 2964
-- Unique active workflow signatures: 2964
+- Active parity workflows: 2966
+- Unique active workflow signatures: 2966
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1782
+- Deliberate nuanced workflows: 1784
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -39,7 +39,7 @@ arguments, and observations remain part of the signature.
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 278 |
+| `PIL.ImageOps` | 280 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -1679,6 +1679,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.crop.nuanced.materialized-border`
 - `PIL.ImageOps.equalize.nuanced.alpha-la`
 - `PIL.ImageOps.equalize.nuanced.alpha-rgba`
+- `PIL.ImageOps.equalize.nuanced.empty-l`
 - `PIL.ImageOps.equalize.nuanced.invalid-mask-type`
 - `PIL.ImageOps.equalize.nuanced.mask-size-mismatch`
 - `PIL.ImageOps.equalize.nuanced.materialized-l`
@@ -1731,6 +1732,7 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.fit.nuanced.simd-nearest-pa`
 - `PIL.ImageOps.fit.nuanced.simd-nearest-rgba`
 - `PIL.ImageOps.fit.nuanced.simd-nearest-square-target`
+- `PIL.ImageOps.fit.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.fit.nuanced.wide-source-crop`
 - `PIL.ImageOps.fit.nuanced.zero-width-source-simd-guard`
 - `PIL.ImageOps.flip.nuanced.materialized-l-odd-height`
