@@ -246,6 +246,44 @@ def little_endian_l16_tiff() -> bytes:
     return bytes(data)
 
 
+def little_endian_rgb_tiff_orientation6() -> bytes:
+    """Return a minimal RGB TIFF with a valid EXIF Orientation tag."""
+
+    bits_offset = 146
+    strip_offset = 152
+    pixels = bytes(
+        [
+            255, 0, 0,
+            0, 255, 0,
+            0, 0, 255,
+            255, 255, 0,
+            255, 0, 255,
+            0, 255, 255,
+        ]
+    )
+    entries = [
+        (256, 4, 1, struct.pack("<I", 2)),
+        (257, 4, 1, struct.pack("<I", 3)),
+        (258, 3, 3, struct.pack("<I", bits_offset)),
+        (259, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+        (262, 3, 1, struct.pack("<H", 2) + b"\x00\x00"),
+        (273, 4, 1, struct.pack("<I", strip_offset)),
+        (274, 3, 1, struct.pack("<H", 6) + b"\x00\x00"),
+        (277, 3, 1, struct.pack("<H", 3) + b"\x00\x00"),
+        (278, 4, 1, struct.pack("<I", 3)),
+        (279, 4, 1, struct.pack("<I", len(pixels))),
+        (284, 3, 1, struct.pack("<H", 1) + b"\x00\x00"),
+    ]
+    data = bytearray(b"II*\x00" + struct.pack("<I", 8))
+    data += struct.pack("<H", len(entries))
+    for tag, kind, count, value in entries:
+        data += struct.pack("<HHI", tag, kind, count) + value
+    data += struct.pack("<I", 0)
+    data += struct.pack("<3H", 8, 8, 8)
+    data += pixels
+    return bytes(data)
+
+
 def little_endian_special_tiff(mode: str) -> bytes:
     """Return a minimal little-endian TIFF for scalar or CMYK mode parity."""
 
@@ -900,6 +938,19 @@ class WorkflowBuilder:
                 data_descriptor = self.inline_bytes(
                     f"{label}-l16-tiff",
                     little_endian_l16_tiff(),
+                    "image/tiff",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "rgb-tiff-exif-orientation6":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-rgb-tiff-exif-orientation6",
+                    little_endian_rgb_tiff_orientation6(),
                     "image/tiff",
                 )
                 step_id = self.add_step(
@@ -16967,6 +17018,14 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "tiff-no-orientation",
             "scenario_asset": "image/rgb-small.tiff",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": "tiff-orientation6-materialized",
+            "scenario_inline_image": "rgb-tiff-exif-orientation6",
             "observe_result": "tobytes",
         },
         {
