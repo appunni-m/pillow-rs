@@ -1024,6 +1024,8 @@
           "PIL.Image.Image.resize.nuanced.zero-width",
           "PIL.Image.Image.resize.nuanced.zero-width-source-simd-guard",
           "PIL.Image.Image.resize.nuanced.zero-height-source-simd-guard",
+          "PIL.Image.Image.resize.nuanced.f-zero-width-source-geometry-guard",
+          "PIL.Image.Image.resize.nuanced.i-zero-width-source-geometry-guard",
           "PIL.Image.Image.resize.nuanced.zero-height",
           "PIL.Image.Image.resize.nuanced.negative-width",
           "PIL.Image.Image.resize.nuanced.negative-height",
