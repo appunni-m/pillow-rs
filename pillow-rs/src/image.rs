@@ -2053,6 +2053,9 @@ impl Image {
     ///
     /// Returns the same errors as [`Image::putpixel`].
     pub fn putpixel_mode(&mut self, x: u32, y: u32, v: u8, mode: &str) -> Result<(), PilError> {
+        if is_l16_mode(mode) {
+            return self.putpixel_l16(x, y, i64::from(v));
+        }
         if mode == "P" {
             let (w, h) = self.size()?;
             if x >= w || y >= h {
@@ -2083,6 +2086,39 @@ impl Image {
             _ => (v, v, v, 255),
         };
         self.putpixel(x, y, r, g, b, a)
+    }
+
+    /// Writes one integer sample for Pillow's unsigned 16-bit luma modes.
+    ///
+    /// These modes are stored as native `u16` samples, while their public byte
+    /// order is applied only when the image is serialized. Keep the integer
+    /// conversion here so `putpixel` preserves Pillow's modulo-65536 behavior
+    /// for negative and over-range values without routing the value through the
+    /// eight-bit `PipelineOp::PutPixel` representation.
+    fn putpixel_l16(&mut self, x: u32, y: u32, value: i64) -> Result<(), PilError> {
+        let (width, height) = self.size()?;
+        if x >= width || y >= height {
+            return Err(PilError::IndexError("image index out of range".into()));
+        }
+        let pixel_index = (y as usize)
+            .checked_mul(width as usize)
+            .and_then(|row| row.checked_add(x as usize))
+            .ok_or_else(|| PilError::DimensionError("pixel index overflow".into()))?;
+        self.load()?;
+        if let Image::Loaded(data) = self {
+            let image = Arc::make_mut(&mut data.image);
+            let destination = image
+                .as_mut_luma16()
+                .ok_or_else(|| PilError::InternalError("putpixel I;16 storage mismatch".into()))?;
+            let pixel = destination.as_mut().get_mut(pixel_index).ok_or_else(|| {
+                PilError::InternalError("putpixel I;16 offset out of bounds".into())
+            })?;
+            *pixel = value as u16;
+            return Ok(());
+        }
+        Err(PilError::InternalError(
+            "putpixel I;16 did not materialize writable storage".into(),
+        ))
     }
 
     /// Writes a scalar pixel for Pillow's numeric `I` and `F` modes.
@@ -2116,6 +2152,9 @@ impl Image {
         let mode = self.mode()?;
         match value {
             PutPixelValue::Integer(value) => {
+                if is_l16_mode(&mode) {
+                    return self.putpixel_l16(x, y, value);
+                }
                 if matches!(mode.as_str(), "I" | "F") {
                     return self.putpixel_mode_scalar(x, y, value as f64, &mode);
                 }
