@@ -17184,6 +17184,15 @@ def build_nuanced_cases(
             "observe_result": "tobytes",
         },
         {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "mode.l",
+            "name": "empty-height-l",
+            "mode": "L",
+            "edge": "zero-height",
+            "observe_result": "tobytes",
+        },
+        {
             "surface": "PIL.ImageFilter",
             "operation": "Kernel",
             "requirement_suffix": "behavior.default",
