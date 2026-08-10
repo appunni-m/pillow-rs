@@ -10,9 +10,9 @@ snapshot.
 snapshot_id: null
 provenance: local-llvm-report
 suite: migration-parity-rust-simd
-base_commit: 190a4ea7a14a8ced53605c659c591e7104dfb307
-coverage_run_id: migration-coverage-cff373a93c7341ce8a19825442d6e143
-parity_run_id: migration-parity-5a3504e90173441cad33f9d58ae7b410
+base_commit: 4acba941804755c97c2146b6a20d9b8e90de652a
+coverage_run_id: migration-coverage-49f328b306f14cb28a9e118b9e4fcf88
+parity_run_id: migration-parity-6cdeb0fbfe984cf3a7790f055e20a8c1
 source_dirty_at_collection: true
 threshold: 95%
 metric: regions
@@ -51,7 +51,7 @@ their orphan scalar helpers were removed from the SIMD registry/source. Their
 use the exact quantizer, module-based blend/composite, and `Eval` paths. The
 SIMD implementation files now total 7,031/7,260 regions (96.8457%); the
 remaining SIMD-specific backlog is concentrated in `ops/adapters.rs` and
-`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,909/4,996 regions (98.2574%). A
+`pool_simd/mod.rs`, while `ops/scalar.rs` is at 4,909/4,996 regions (98.2586%). A
 prior refresh added one input-only public RGB nearest-neighbour thumbnail case
 with a destination larger than the source, reaching the SIMD scalar
 thumbnail no-shrink copy/alpha-clamp path; it passes source/target parity on
