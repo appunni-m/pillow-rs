@@ -15140,6 +15140,18 @@ def build_nuanced_cases(
         ),
         {
             "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.method",
+            "name": "simd-bilinear-l",
+            "mode": "L",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([9, 6]),
+                "method": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
             "operation": "autocontrast",
             "requirement_suffix": "parameter.mask",
             "name": "valid-l-mask",
@@ -16464,6 +16476,16 @@ def build_nuanced_cases(
             "mode": "RGBA",
             "edge": "nonzero-pixel",
             "pixel": [128, 160, 192, 224],
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "mode.rgb",
+            "name": "simd-rgb",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [128, 160, 192],
             "observe_result": "tobytes",
         },
         {
@@ -20828,6 +20850,21 @@ def build_nuanced_cases(
             }
             for mode in ("L", "LA")
             for method in range(7)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "behavior.default",
+                "name": f"rgb-dimension-method-{method}",
+                "mode": "RGB",
+                "edge": "nonzero-pixel",
+                "pixel": [200, 100, 50],
+                "size": [3, 2],
+                "values": {"method": literal(method)},
+                "observe_result": "tobytes",
+            }
+            for method in (2, 4, 5, 6)
         ),
         *(
             {
