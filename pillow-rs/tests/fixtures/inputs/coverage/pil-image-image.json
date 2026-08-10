@@ -1761,6 +1761,7 @@
           "PIL.Image.Image.crop.nuanced.simd-alpha-rgba",
           "PIL.Image.Image.reduce.nuanced.partial-right-bottom-block",
           "PIL.Image.Image.reduce.nuanced.identity-factor",
+          "PIL.Image.Image.reduce.nuanced.mixed-identity-factor",
           "PIL.Image.Image.reduce.nuanced.factor-larger-than-image",
           "PIL.Image.Image.thumbnail.nuanced.aspect-floor-rounding",
           "PIL.Image.Image.thumbnail.nuanced.aspect-ceil-rounding",
