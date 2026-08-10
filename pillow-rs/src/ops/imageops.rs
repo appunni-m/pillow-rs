@@ -486,6 +486,7 @@ pub fn contain_with_input(
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn cover(image: &Image, w: u32, h: u32, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
+    validate_cover_source(image)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
@@ -500,6 +501,7 @@ pub fn cover_with_input(
         return cover(image, w, h, None);
     }
     let filter = parse_imageops_filter(filter)?;
+    validate_cover_source(image)?;
     Ok(Image::push_op(image, PipelineOp::Cover { w, h, filter }))
 }
 
@@ -519,6 +521,7 @@ pub fn fit(
     centering: (f64, f64),
 ) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
+    validate_fit_source(image)?;
     Ok(Image::push_op(
         image,
         PipelineOp::Fit {
@@ -558,6 +561,7 @@ pub fn fit_with_input(
     if filter_was_none && centering == (0.5, 0.5) {
         return fit(image, w, h, None, bleed, centering);
     }
+    validate_fit_source(image)?;
     Ok(Image::push_op(
         image,
         PipelineOp::Fit {
@@ -568,6 +572,25 @@ pub fn fit_with_input(
             centering,
         },
     ))
+}
+
+// Pillow evaluates ImageOps.cover/fit's source aspect ratio when the public
+// call is made. Keep those division errors in core instead of allowing a
+// deferred SIMD/CPU pipeline to turn an invalid empty input into an image.
+fn validate_cover_source(image: &Image) -> Result<(), PilError> {
+    let (width, height) = image.size()?;
+    if width == 0 || height == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    Ok(())
+}
+
+fn validate_fit_source(image: &Image) -> Result<(), PilError> {
+    let (_, height) = image.size()?;
+    if height == 0 {
+        return Err(PilError::ZeroDivisionError("float division by zero".into()));
+    }
+    Ok(())
 }
 
 /// Resizes and pads an image to exactly `(w, h)`.
