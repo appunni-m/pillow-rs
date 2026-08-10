@@ -359,6 +359,8 @@ def run(args: argparse.Namespace) -> int:
         for stale in LLVM_COV_TARGET.glob("*.profraw"):
             stale.unlink()
         run_env = os.environ.copy()
+        target_python = str(ROOT / "pillow-rs-py" / "python")
+        run_env["PYTHONPATH"] = target_python + os.pathsep + run_env.get("PYTHONPATH", "")
         run_env["LLVM_PROFILE_FILE"] = str(args.profile)
         child_output = ROOT / "target" / "coverage" / "child-coverage-result.json"
         subprocess.run(
@@ -407,7 +409,7 @@ def run(args: argparse.Namespace) -> int:
                     str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
                 ],
                 env={
-                    **os.environ,
+                    **run_env,
                     "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
                     "LLVM_PROFILE_FILE": str(args.profile),
                 },
