@@ -223,6 +223,15 @@ mod tests {
     }
 
     #[test]
+    fn byte_count_overflow_rejected_before_allocation() {
+        // The pixel product still fits in u64, but multiplying it by the
+        // maximum byte channel count must be rejected before any allocation.
+        let error = CheckedDims::new_with_limit(u32::MAX, u32::MAX, u8::MAX, u64::MAX)
+            .expect_err("byte-count overflow must be rejected");
+        assert!(error.to_string().contains("buffer size overflow"));
+    }
+
+    #[test]
     fn exceeds_max_pixels() {
         let d = CheckedDims::new_with_limit(100, 100, 1, DEFAULT_MAX_PIXELS).unwrap();
         assert_eq!(d.total_pixels(), 10_000);

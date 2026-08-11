@@ -3808,10 +3808,10 @@ impl Image {
     pub fn getdata_formatted(&self, band: Option<i32>) -> Result<FormattedImageData, PilError> {
         let mode = self.mode()?;
         if is_l16_mode(&mode) {
-            if band.is_some_and(|band| band != 0) {
-                // Pillow's ImagingCore.getdata rejects band selection for
-                // I;16 modes with the mode error, rather than the generic
-                // index error used by ordinary multi-band images.
+            if band.is_some() {
+                // Pillow's ImagingCore.getdata rejects every explicit band
+                // selection for I;16 modes with the mode error, rather than
+                // the generic index error used by ordinary multi-band images.
                 return Err(PilError::ValueError("image has wrong mode".into()));
             }
             return Ok(FormattedImageData::IntegerScalars(
