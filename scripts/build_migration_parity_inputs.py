@@ -967,7 +967,8 @@ class WorkflowBuilder:
         # the destination/source in I;16L while the mask stays L.
         use_inline_image = self.scenario_inline_image is not None and not (
             label == "mask"
-            and self.edge in {"paste-i16-mask", "paste-i16-rgba-mask"}
+            and self.edge
+            in {"paste-i16-mask", "paste-i16-rgba-mask", "paste-i16-rgba-mask-opaque"}
         )
         if use_inline_image:
             if self.scenario_inline_image == "l16-tiff":
@@ -1916,11 +1917,20 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id("setup-paste-mask-edge-pixel"),
                 )
-        elif self.edge in {"paste-i16-mask", "paste-i16-rgba-mask"} and label == "mask":
-            # Keep one copied sample on the partial-mask path while the other
-            # samples remain zero, exercising the native I;16 blend without
+        elif self.edge in {
+            "paste-i16-mask",
+            "paste-i16-rgba-mask",
+            "paste-i16-rgba-mask-opaque",
+        } and label == "mask":
+            # Keep one copied sample on the boundary-mask path while the other
+            # samples remain zero, exercising native I;16 mask handling without
             # routing through the pending TIFF decoder.
-            value = 128 if self.edge == "paste-i16-mask" else [0, 0, 0, 128]
+            if self.edge == "paste-i16-mask":
+                value = 128
+            elif self.edge == "paste-i16-rgba-mask-opaque":
+                value = [0, 0, 0, 255]
+            else:
+                value = [0, 0, 0, 128]
             self.add_step(
                 "PIL.Image.Image",
                 "putpixel",
@@ -11896,6 +11906,21 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "transform",
             "requirement_suffix": "parameter.data",
+            "name": "identity-mesh-rgba",
+            "observe_result": "tobytes",
+            "mode": "RGBA",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([
+                    [[0, 0, 6, 6], [0, 0, 6, 0, 6, 6, 0, 6]],
+                ]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
             "name": "mesh-outside-source-fill",
             "observe_result": "tobytes",
             "mode": "RGB",
@@ -11904,6 +11929,22 @@ def build_nuanced_cases(
                 "method": literal(4),
                 "data": literal([
                     [[0, 0, 6, 6], [-100, -100, -90, -100, -90, -90, -100, -90]],
+                ]),
+                "fillcolor": literal([7, 8, 9]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "mesh-source-boundary-all-sides",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([6, 6]),
+                "method": literal(4),
+                "data": literal([
+                    [[0, 0, 6, 6], [-1, -1, -1, 8, 8, 8, 8, -1]],
                 ]),
                 "fillcolor": literal([7, 8, 9]),
             },
@@ -22576,6 +22617,20 @@ def build_nuanced_cases(
             "size": [2, 2],
             "scenario_inline_image": "i16l-frombytes",
             "edge": "paste-i16-rgba-mask",
+            "observe_receiver": True,
+            "values": {"box": literal([0, 0, 2, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.mask",
+            "name": "i16l-opaque-rgba-mask",
+            "mode": "I;16L",
+            "im_mode": "I;16L",
+            "mask_mode": "RGBA",
+            "size": [2, 2],
+            "scenario_inline_image": "i16l-frombytes",
+            "edge": "paste-i16-rgba-mask-opaque",
             "observe_receiver": True,
             "values": {"box": literal([0, 0, 2, 2])},
         },
