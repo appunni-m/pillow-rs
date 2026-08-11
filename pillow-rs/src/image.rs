@@ -314,8 +314,10 @@ pub enum PutPixelValue {
     Integer(i64),
     /// A non-integral numeric value, accepted by Pillow's `F` mode.
     Float(f64),
-    /// A list or tuple of byte components.
-    Components(Vec<u8>),
+    /// A list or tuple of integer components, retaining the source range.
+    Components(Vec<i64>),
+    /// A list or tuple of floating-point components, retaining fractional values.
+    FloatComponents(Vec<f64>),
     /// A value that is not a supported scalar or component sequence.
     Invalid,
 }
@@ -2190,13 +2192,27 @@ impl Image {
                 )
             }),
             PutPixelValue::Components(values) => match values.as_slice() {
-                [value] => self.putpixel_mode(x, y, *value, &mode),
-                [value, alpha] => self.putpixel(x, y, *value, 0, 0, *alpha),
-                [r, g, b] => self.putpixel(x, y, *r, *g, *b, 255),
-                [r, g, b, a] => self.putpixel(x, y, *r, *g, *b, *a),
+                [value] if is_l16_mode(&mode) => self.putpixel_l16(x, y, *value),
+                [value] if matches!(mode.as_str(), "I" | "F") => {
+                    self.putpixel_mode_scalar(x, y, *value as f64, &mode)
+                }
+                [value] => self.putpixel_mode(x, y, *value as u8, &mode),
+                [value, alpha] => self.putpixel(x, y, *value as u8, 0, 0, *alpha as u8),
+                [r, g, b] => self.putpixel(x, y, *r as u8, *g as u8, *b as u8, 255),
+                [r, g, b, a] => self.putpixel(x, y, *r as u8, *g as u8, *b as u8, *a as u8),
                 _ => Err(PilError::TypeError(
                     "color must be int, or tuple of one, three or four elements".into(),
                 )),
+            },
+            PutPixelValue::FloatComponents(values) => match values.as_slice() {
+                [value] if mode == "F" => self.putpixel_mode_scalar(x, y, *value, &mode),
+                _ => Err(if mode.len() == 1 {
+                    PilError::TypeError("color must be int or single-element tuple".into())
+                } else {
+                    PilError::TypeError(
+                        "color must be int, or tuple of one, three or four elements".into(),
+                    )
+                }),
             },
         }
     }
@@ -3793,7 +3809,10 @@ impl Image {
         let mode = self.mode()?;
         if is_l16_mode(&mode) {
             if band.is_some_and(|band| band != 0) {
-                return Err(PilError::ValueError("band index out of range".into()));
+                // Pillow's ImagingCore.getdata rejects band selection for
+                // I;16 modes with the mode error, rather than the generic
+                // index error used by ordinary multi-band images.
+                return Err(PilError::ValueError("image has wrong mode".into()));
             }
             return Ok(FormattedImageData::IntegerScalars(
                 self.materialized_shared()?

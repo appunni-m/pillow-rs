@@ -605,6 +605,22 @@ fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<P
     Ok(PutDataValue::Components(components))
 }
 
+fn putpixel_value_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PutPixelValue {
+    if let Ok(value) = value.extract::<i64>() {
+        return pillow_rs::PutPixelValue::Integer(value);
+    }
+    if let Ok(values) = value.extract::<Vec<i64>>() {
+        return pillow_rs::PutPixelValue::Components(values);
+    }
+    if let Ok(values) = value.extract::<Vec<f64>>() {
+        return pillow_rs::PutPixelValue::FloatComponents(values);
+    }
+    if let Ok(value) = value.extract::<f64>() {
+        return pillow_rs::PutPixelValue::Float(value);
+    }
+    pillow_rs::PutPixelValue::Invalid
+}
+
 #[pymethods]
 impl PyImage {
     #[new]
@@ -1759,15 +1775,7 @@ impl PyImage {
     }
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
     fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let value = if let Ok(value) = value.extract::<i64>() {
-            pillow_rs::PutPixelValue::Integer(value)
-        } else if let Ok(value) = value.extract::<Vec<u8>>() {
-            pillow_rs::PutPixelValue::Components(value)
-        } else if let Ok(value) = value.extract::<f64>() {
-            pillow_rs::PutPixelValue::Float(value)
-        } else {
-            pillow_rs::PutPixelValue::Invalid
-        };
+        let value = putpixel_value_from_python(value);
         self.inner
             .putpixel_value(xy.0, xy.1, value)
             .map_err(map_error)
