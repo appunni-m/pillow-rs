@@ -8,8 +8,8 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 3168
-- Unique active workflow signatures: 3168
+- Active parity workflows: 3169
+- Unique active workflow signatures: 3169
 - Active exact-duplicate groups: 0
 - Deliberate nuanced workflows: 1986
 

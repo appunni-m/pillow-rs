@@ -1178,6 +1178,7 @@
           "PIL.Image.Image.transform.nuanced.quad-bilinear-simd",
           "PIL.Image.Image.transform.nuanced.perspective-zero-denominator-fill",
           "PIL.Image.Image.transform.nuanced.perspective-nearest-outside-fill",
+          "PIL.Image.Image.transform.nuanced.perspective-nan-denominator-fill",
           "PIL.Image.Image.transform.nuanced.perspective-bilinear-outside-fill",
           "PIL.Image.Image.transform.nuanced.perspective-outside-fill-l",
           "PIL.Image.Image.transform.nuanced.perspective-outside-fill-la",

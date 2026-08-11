@@ -11662,6 +11662,19 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "transform",
+            "requirement_suffix": "parameter.data",
+            "name": "perspective-nan-denominator-fill",
+            "observe_result": "tobytes",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 1]),
+                "method": literal(2),
+                "data": literal([1, 0, 0, 0, 1, 0, float("nan"), 0]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "transform",
             "requirement_suffix": "parameter.resample",
             "name": "perspective-bilinear-outside-fill",
             "observe_result": "tobytes",
