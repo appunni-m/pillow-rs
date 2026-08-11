@@ -11,7 +11,7 @@ outputs.
 - Active parity workflows: 3169
 - Unique active workflow signatures: 3169
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1986
+- Deliberate nuanced workflows: 1987
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -23,7 +23,7 @@ arguments, and observations remain part of the signature.
 | surface | active workflows |
 | --- | ---: |
 | `PIL.Image` | 218 |
-| `PIL.Image.Image` | 1534 |
+| `PIL.Image.Image` | 1535 |
 | `PIL.ImageChops` | 152 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
@@ -1067,6 +1067,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.perspective-bilinear-simd`
 - `PIL.Image.Image.transform.nuanced.perspective-method`
 - `PIL.Image.Image.transform.nuanced.perspective-missing-data`
+- `PIL.Image.Image.transform.nuanced.perspective-nan-denominator-fill`
 - `PIL.Image.Image.transform.nuanced.perspective-nearest-outside-fill`
 - `PIL.Image.Image.transform.nuanced.perspective-outside-fill-l`
 - `PIL.Image.Image.transform.nuanced.perspective-outside-fill-la`

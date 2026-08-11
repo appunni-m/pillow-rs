@@ -20,6 +20,10 @@ These are the highest percentages established by the fixed public manifest and
 the final safe corpus. The active-project and GPU-excluded safe denominators
 are also reported separately in the denominator record; no files, operations,
 cases, thresholds, or expected outputs were removed to obtain them.
+The whole LLVM rows are a reproducibility reference only: pre-existing dirty
+changes in the separately audited sibling `fontdone` changed that combined
+denominator between full snapshots. The active Pillow and public Rust union
+denominators are unchanged.
 
 ## Retained batch
 
@@ -41,8 +45,17 @@ final corpus. Two smaller-mask workflows were valid public error cases and
 passed focused source/target parity, but `Image.paste` rejected the mask-size
 mismatch before entering `compute/pool_cpu/ops/effects.rs`; the managed run
 left the targeted defensive branch unchanged. The generator entries were
-removed and the final denominator remains 3,168. This preserves the finding
-without retaining cases that add no reachable coverage.
+removed and the denominator remained 3,168 before the final transform batch.
+This preserves the finding without retaining cases that add no reachable
+coverage.
+
+The final transform batch added one valid declarative case:
+`PIL.Image.Image.transform.nuanced.perspective-nan-denominator-fill`. Focused
+CPU and SIMD parity both passed, and managed focused LLVM coverage changed
+`pillow-rs/src/compute/pool_cpu/ops/effects.rs:1016` from 3/4 to 4/4 covered
+branches in each lane. The related line 1021 remains 1/2 because the
+non-finite coordinate rejection path was not reached by this valid public
+mapping. The corpus is now 3,169 workflows.
 
 ## Worker reports
 
@@ -96,21 +109,27 @@ All workers used isolated worktrees. No worker pushed or edited `main`.
 
 ## Verification record
 
-- `make migration-parity-inputs` — regenerated 3,168 workflows.
+- `make migration-parity-inputs` — regenerated 3,169 workflows.
 - `make migration-parity-inputs-check` — passed 15 tests.
 - `make migration-parity-evidence-check` — passed 11 tests; 209 operations,
   zero stale/incompatible evidence.
 - `make migration-parity-case CASE_ID=PIL.Image.Image.getdata.nuanced.l16-png-band-zero` — passed after `make build`.
-- `make migration-parity-test` — 3,168 executed; 3,167 passed and 1 known
+- `make migration-parity-test` — 3,169 executed; 3,168 passed and 1 known
   variable-font failure.
-- Managed safe CPU coverage run `2896a8c2-bc2c-4f79-a763-8120a1f79e00`,
-  snapshot `653dd4e1-ec53-4e0e-8529-7ca3878dbff1` — passed and ingested;
-  `39,434/68,544` lines, `6,610/13,978` branches, `3,047/5,332`
-  functions, `61,017/106,544` regions.
-- Managed safe SIMD coverage run `e716fce8-75d1-4db9-81fa-593964a5b1d7`,
-  snapshot `1fa4ab68-b1cc-4442-a335-4c8680e95493` — passed and ingested;
-  `41,067/68,544` lines, `7,312/13,978` branches, `3,066/5,332`
-  functions, `63,987/106,544` regions.
+- Managed focused CPU run `f63d1621-34f4-418a-8355-6ec9063e9796`, LLVM
+  snapshot `a1ad8946-9544-4802-8093-d2cf507a52e9` — passed and ingested;
+  `effects.rs:1016` reached 4/4 branches.
+- Managed focused SIMD run `8df0919a-aa92-4154-8a3f-d432dccf0514`, LLVM
+  snapshot `c54265b2-9b5a-496d-b4d3-e42689df1c04` — passed and ingested;
+  `effects.rs:1016` reached 4/4 branches.
+- Managed safe CPU coverage run `fc0f294d-4460-4721-ac8b-0ff15d0a7053`,
+  snapshot `1df97c40-11ce-46c0-b425-e6a60ebde1a2` — passed and ingested;
+  `39,434/68,561` lines, `6,611/13,976` branches, `3,047/5,333`
+  functions, `61,017/106,554` regions.
+- Managed safe SIMD coverage run `0cefd6a7-dabc-4038-b888-acc551c600d4`,
+  snapshot `095aef5e-bb1c-4e07-b4c0-b1b8bc76bffa` — passed and ingested;
+  `41,067/68,561` lines, `7,313/13,976` branches, `3,066/5,333`
+  functions, `63,987/106,554` regions.
 - `make test-core` — passed 77 tests with 0 failures, including the new
   byte-overflow guard. The maintained target also invokes five existing
   `pool_gpu` unit tests; no GPU parity or GPU coverage lane was run, and no
