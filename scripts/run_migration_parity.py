@@ -213,6 +213,14 @@ def decode_literal(
             return BufferedArrayInterfaceValue(value)
         if protocol == "getmesh":
             return DeformerValue(value)
+        if protocol == "public-class":
+            surface = value.get("surface")
+            name = value.get("name")
+            if not isinstance(surface, str) or not isinstance(name, str):
+                raise ValueError(
+                    "public-class requires string surface and name"
+                )
+            return getattr(import_surface(side, surface), name)
         if protocol == "text-repeat":
             text = value.get("text")
             repeat = value.get("repeat")
