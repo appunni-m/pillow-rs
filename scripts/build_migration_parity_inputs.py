@@ -4365,7 +4365,13 @@ class WorkflowBuilder:
                 "merge-palette-band-after-first": 1,
                 "merge-l-mode-mismatch": 0,
             }.get(self.edge)
+            band_size = self.scenario_size or [16, 16]
             for index in range(band_count):
+                current_band_size = (
+                    [8, 16]
+                    if self.edge == "merge-band-size-mismatch" and index == 1
+                    else band_size
+                )
                 if palette_band == index:
                     # Pillow accepts a P image as a single-band merge input
                     # when it is the first band, and rejects it after the
@@ -4378,7 +4384,7 @@ class WorkflowBuilder:
                         receiver=None,
                         arguments={
                             "mode": literal("P"),
-                            "size": literal(self.scenario_size or [16, 16]),
+                            "size": literal(current_band_size),
                             "color": literal(1),
                         },
                         step_id=f"setup-band-{index + 1}",
@@ -4400,7 +4406,7 @@ class WorkflowBuilder:
                         receiver=None,
                         arguments={
                             "mode": literal("L"),
-                            "size": literal(self.scenario_size or [16, 16]),
+                            "size": literal(current_band_size),
                             "color": literal(
                                 17
                                 if self.edge == "merge-rgb-nonzero"
@@ -9217,6 +9223,20 @@ def build_nuanced_cases(
                 "resample": literal(0),
             },
         },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.size",
+            "name": "zero-width-source-bilinear-guard",
+            "mode": "L",
+            "edge": "zero-size-frombytes",
+            "size": [0, 2],
+            "values": {
+                "size": literal([2, 2]),
+                "resample": literal(2),
+            },
+            "observe_result": "size",
+        },
         *(
             {
                 "surface": "PIL.Image.Image",
@@ -13074,6 +13094,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image",
+            "operation": "merge",
+            "requirement_suffix": "behavior.default",
+            "name": "band-size-mismatch",
+            "mode": "RGB",
+            "edge": "merge-band-size-mismatch",
+        },
+        {
+            "surface": "PIL.Image",
             "operation": "blend",
             "requirement_suffix": "behavior.default",
             "name": "mismatched-sizes",
@@ -15364,6 +15392,35 @@ def build_nuanced_cases(
                 "centering": literal([0.5, 0.25]),
             },
             "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgba-boxed-alpha-path",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [120, 80, 40, 96],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([7, 5]),
+                "method": literal(2),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "fit",
+            "requirement_suffix": "mode.rgba",
+            "name": "rgb-premultiplied-boxed",
+            "mode": "RGBa",
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50, 128],
+            "size": [9, 8],
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([4, 3]),
+                "method": literal(2),
+            },
         },
         {
             "surface": "PIL.ImageChops",

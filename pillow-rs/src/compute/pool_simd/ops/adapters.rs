@@ -973,7 +973,13 @@ pub fn simd_fit(
         ..
     } = op
     {
-        if uses_native_scalar_mode(img, mode) || !simd_resize_filter_supported(filter) {
+        // RGBa stores premultiplied channels. Keep it on the exact native
+        // implementation instead of treating its packed bytes as straight
+        // RGBA samples in the SIMD fit kernel.
+        if uses_native_scalar_mode(img, mode)
+            || !simd_resize_filter_supported(filter)
+            || mode == Some("RGBa")
+        {
             return crate::compute::pool_cpu::ops::imageops::op_fit(
                 img, *dw, *dh, *filter, *bleed, *centering, mode,
             );
@@ -1582,9 +1588,9 @@ pub fn simd_merge(
         if band_pixels.len() != expected_bands
             || band_pixels.iter().any(|band| band.len() != pixels.len())
         {
-            return Err(PilError::ValueError(
-                "SIMD merge: invalid band shape".to_string(),
-            ));
+            // Match Pillow's ImagingMerge contract and the CPU lane. This is
+            // also the safe boundary before scalar merge indexes each band.
+            return Err(PilError::ValueError("size mismatch".to_string()));
         }
         let band_refs: Vec<&[u32]> = band_pixels.iter().map(|v| v.as_slice()).collect();
         super::scalar::merge(&mut pixels, mode_code, &band_refs);
