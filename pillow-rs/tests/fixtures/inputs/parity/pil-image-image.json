@@ -84137,6 +84137,59 @@
       ]
     },
     {
+      "case_id": "PIL.Image.Image.getdata.nuanced.l16-png-band-zero",
+      "surface": "PIL.Image.Image",
+      "operation": "getdata",
+      "covers": [
+        "PIL.Image.Image.getdata.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "image-l16-png",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACEAAAAAAHTY67AAAAD0lEQVR4nGMQMgmrYAARAAl+AikmTn7RAAAAAElFTkSuQmCC",
+          "sha256": "18643e116a3b656c899c4c58f416a879c967de417944194ed317773b16764fb5",
+          "media_type": "image/png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "image-l16-png"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.Image.Image",
+          "operation": "getdata",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "band": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.Image.getextrema.nuanced.l16-png-opened",
       "surface": "PIL.Image.Image",
       "operation": "getextrema",

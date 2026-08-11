@@ -19596,6 +19596,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": "l16-png-band-zero",
+            "scenario_inline_image": "l16-png",
+            "values": {"band": literal(0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getextrema",
             "requirement_suffix": "behavior.default",
             "name": "l16-png-opened",

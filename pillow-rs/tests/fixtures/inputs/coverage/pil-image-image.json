@@ -1615,6 +1615,7 @@
           "PIL.Image.Image.putpixel.nuanced.l16-png-y-out-of-bounds",
           "PIL.Image.Image.getdata.nuanced.l16-png-opened",
           "PIL.Image.Image.getdata.nuanced.l16-png-invalid-band",
+          "PIL.Image.Image.getdata.nuanced.l16-png-band-zero",
           "PIL.Image.Image.getextrema.nuanced.l16-png-opened",
           "PIL.Image.Image.save.nuanced.l16-png-opened",
           "PIL.Image.Image.crop.nuanced.l16-png-opened",
