@@ -400,6 +400,7 @@
           "PIL.ImageOps.colorize.nuanced.two-color",
           "PIL.ImageOps.colorize.nuanced.three-color",
           "PIL.ImageOps.colorize.nuanced.mapped-points",
+          "PIL.ImageOps.colorize.nuanced.four-component-colors",
           "PIL.ImageOps.colorize.nuanced.mode-one",
           "PIL.ImageOps.colorize.nuanced.invalid-points",
           "PIL.ImageOps.colorize.nuanced.invalid-mid-points",
