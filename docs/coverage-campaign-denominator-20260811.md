@@ -9,7 +9,7 @@ failed cases.
 
 - Requested baseline commit: `4fafda8ef320f12a3fdae21dc573fa65e03c9338`.
 - Current checkout when this record was created: `3111a048fb7b401abc3ab7614a4a844a9959d3d1`.
-- Final measured checkout: `49105e55e3da7846daeef035ea04b12ebdc0e68e`.
+- Final measured checkout: `e05cd9ee7c7a22ff7afab68f396ce86e25018f88`.
 - CPU baseline snapshot: `fa368338-3d54-4e67-b01f-42c7ef525dcc`.
 - SIMD baseline snapshot: `e0d57644-1c2b-4793-9b9d-91c55a3096f3`.
 - Public manifest: `pillow-rs/tests/fixtures/manifest.yaml`, schema
@@ -23,6 +23,14 @@ The reviewed typed-format batch added one active workflow,
 corpus to 3,168 workflows. The generator and input reproducibility checks
 passed after regeneration; no expected output, oracle hash, threshold, or
 coverage percentage denominator was edited.
+
+The final focused batch added one further valid workflow,
+`PIL.Image.Image.transform.nuanced.perspective-nan-denominator-fill`, bringing
+the current corpus to 3,169 workflows. It passes source/target parity and
+reaches the non-finite perspective denominator branch in
+`pillow-rs/src/compute/pool_cpu/ops/effects.rs`; the focused CPU and SIMD LLVM
+snapshots both record line 1016 at 4/4 branches (up from 3/4). No expected
+output, oracle hash, threshold, or coverage percentage denominator was edited.
 
 `make migration-parity-fixtures-check` also exposed a pre-existing
 manifest-authority diff in this dirty checkout (for example, the tracked
@@ -101,13 +109,20 @@ GPU-excluded safe implementation denominator below.
 
 ### Post-batch managed evidence
 
-These are the final safe managed snapshots for the dirty checkout at commit
-`49105e55e3da7846daeef035ea04b12ebdc0e68e`. The source/input changes were
-present during measurement; the pre-existing user changes were preserved.
-Compared with the prior managed snapshot at `3111a048fb7b401abc3ab7614a4a844a9959d3d1`,
-the reviewed `checked_dims.rs` regression guard and `image.rs` I;16 contract
-fix add 9 counted lines, 2 branch sites, and 16 regions; no source file was
-removed from the measured scope.
+These are the final safe managed snapshots for the checkout at commit
+`e05cd9ee7c7a22ff7afab68f396ce86e25018f88`. The source/input changes are
+present in that commit; the pre-existing user changes remain preserved.
+The final whole-LLVM denominator is not a stable Pillow denominator: between
+the prior full snapshot and this run, pre-existing dirty sibling `fontdone`
+changes altered `fontdone/src/ffi/handles.rs` (-3 lines, -2 branches,
+-3 regions), `fontdone/src/font.rs` (+18 lines, +1 function, +13 regions),
+and `fontdone/src/render.rs` (+2 lines). The Pillow active and public
+denominators did not change; the whole rows below remain a reproducibility
+reference that includes the separately audited sibling. The reviewed
+`checked_dims.rs` regression guard and `image.rs` I;16 contract fix add 9
+counted lines, 2 branch sites, and 16 regions relative to the earlier
+Pillow-scoped source inventory; no source file was removed from the measured
+scope.
 The `active safe` rows exclude only `pillow-rs/src/compute/pool_gpu/mod.rs`;
 the `active project` rows retain that source file but do not claim GPU
 execution. The `public Rust union` is the de-duplicated 28-path manifest
@@ -115,12 +130,12 @@ component union.
 
 | scope | lane | lines | branches | functions | regions |
 | --- | --- | ---: | ---: | ---: | ---: |
-| whole LLVM snapshot | CPU | 39,434/68,544 (57.53%) | 6,610/13,978 (47.29%) | 3,047/5,332 (57.15%) | 61,017/106,544 (57.27%) |
-| whole LLVM snapshot | SIMD | 41,067/68,544 (59.91%) | 7,312/13,978 (52.31%) | 3,066/5,332 (57.50%) | 63,987/106,544 (60.06%) |
-| active project (core + PyO3) | CPU | 23,615/31,932 (73.95%) | 3,624/5,358 (67.64%) | 1,993/2,753 (72.39%) | 38,605/53,684 (71.91%) |
-| active project (core + PyO3) | SIMD | 25,248/31,932 (79.07%) | 4,326/5,358 (80.74%) | 2,012/2,753 (73.08%) | 41,575/53,684 (77.44%) |
-| active safe (GPU coordinator excluded) | CPU | 23,609/30,669 (76.98%) | 3,624/5,228 (69.32%) | 1,991/2,673 (74.49%) | 38,599/51,966 (74.28%) |
-| active safe (GPU coordinator excluded) | SIMD | 25,242/30,669 (82.30%) | 4,326/5,228 (82.75%) | 2,010/2,673 (75.20%) | 41,569/51,966 (79.99%) |
+| whole LLVM snapshot | CPU | 39,434/68,561 (57.52%) | 6,611/13,976 (47.30%) | 3,047/5,333 (57.13%) | 61,017/106,554 (57.26%) |
+| whole LLVM snapshot | SIMD | 41,067/68,561 (59.90%) | 7,313/13,976 (52.33%) | 3,066/5,333 (57.49%) | 63,987/106,554 (60.05%) |
+| active project (core + PyO3) | CPU | 23,615/31,932 (73.95%) | 3,625/5,358 (67.66%) | 1,993/2,753 (72.39%) | 38,605/53,684 (71.91%) |
+| active project (core + PyO3) | SIMD | 25,248/31,932 (79.07%) | 4,327/5,358 (80.76%) | 2,012/2,753 (73.08%) | 41,575/53,684 (77.44%) |
+| active safe (GPU coordinator excluded) | CPU | 23,609/30,669 (76.98%) | 3,625/5,228 (69.34%) | 1,991/2,673 (74.49%) | 38,599/51,966 (74.28%) |
+| active safe (GPU coordinator excluded) | SIMD | 25,242/30,669 (82.30%) | 4,327/5,228 (82.77%) | 2,010/2,673 (75.20%) | 41,569/51,966 (79.99%) |
 | public Rust component union | CPU | 14,624/15,491 (94.40%) | 2,685/2,876 (93.36%) | 1,119/1,315 (85.10%) | 23,657/25,215 (93.82%) |
 | public Rust component union | SIMD | 14,044/15,491 (90.66%) | 2,651/2,876 (92.18%) | 1,096/1,315 (83.35%) | 22,682/25,215 (89.95%) |
 
@@ -137,12 +152,16 @@ Prior managed run IDs and snapshots (before the final source commit):
   `2dffe5d2-3685-4efe-b3a7-56298fdda6dc`.
 
 Final managed run IDs and snapshots:
-- Final CPU run `2896a8c2-bc2c-4f79-a763-8120a1f79e00`, snapshot
-  `653dd4e1-ec53-4e0e-8529-7ca3878dbff1`.
-- Final SIMD run `e716fce8-75d1-4db9-81fa-593964a5b1d7`, snapshot
-  `1fa4ab68-b1cc-4442-a335-4c8680e95493`.
-- Focused typed-case parity passed after rebuilding the target; final full CPU
-  parity executed 3,168 cases with 3,167 passed and one retained
+- Focused non-finite transform CPU run `f63d1621-34f4-418a-8355-6ec9063e9796`,
+  LLVM snapshot `a1ad8946-9544-4802-8093-d2cf507a52e9`.
+- Focused non-finite transform SIMD run `8df0919a-aa92-4154-8a3f-d432dccf0514`,
+  LLVM snapshot `c54265b2-9b5a-496d-b4d3-e42689df1c04`.
+- Final CPU run `fc0f294d-4460-4721-ac8b-0ff15d0a7053`, snapshot
+  `1df97c40-11ce-46c0-b425-e6a60ebde1a2`.
+- Final SIMD run `0cefd6a7-dabc-4038-b888-acc551c600d4`, snapshot
+  `095aef5e-bb1c-4e07-b4c0-b1b8bc76bffa`.
+- Focused typed-case and non-finite-transform parity passed; final full CPU
+  parity executed 3,169 cases with 3,168 passed and one retained
   variable-font mismatch.
 
 ### Public-contract Rust component union
@@ -154,11 +173,11 @@ contract evidence but are not falsely represented as LLVM Rust lines.
 
 | lane | lines | branches | functions | regions |
 | --- | ---: | ---: | ---: | ---: |
-| CPU | 14,523 / 15,379 (94.43%) | 2,640 / 2,842 (92.89%) | 1,113 / 1,303 (85.42%) | 23,469 / 25,007 (93.85%) |
-| SIMD | 13,928 / 15,379 (90.57%) | 2,603 / 2,842 (91.59%) | 1,089 / 1,303 (83.58%) | 22,466 / 25,007 (89.84%) |
+| CPU | 14,624 / 15,491 (94.40%) | 2,685 / 2,876 (93.36%) | 1,119 / 1,315 (85.10%) | 23,657 / 25,215 (93.82%) |
+| SIMD | 14,044 / 15,491 (90.66%) | 2,651 / 2,876 (92.18%) | 1,096 / 1,315 (83.35%) | 22,682 / 25,215 (89.95%) |
 
 The contract input denominator is separately 209 operations / 1,801
-requirements / 3,168 workflows. A workflow is contract evidence only when
+requirements / 3,169 workflows. A workflow is contract evidence only when
 the source and target both pass; an operation with a signature-only or
 unmeasured result is not counted as covered.
 
