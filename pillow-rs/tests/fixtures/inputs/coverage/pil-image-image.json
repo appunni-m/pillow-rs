@@ -1044,6 +1044,7 @@
           "PIL.Image.Image.thumbnail.nuanced.negative-height-nonsquare",
           "PIL.Image.Image.thumbnail.nuanced.zero-size-zero-width-source",
           "PIL.Image.Image.thumbnail.nuanced.zero-size-zero-height-source",
+          "PIL.Image.Image.thumbnail.nuanced.positive-bound-zero-height-source",
           "PIL.Image.Image.thumbnail.nuanced.negative-height-zero-width-source",
           "PIL.Image.Image.thumbnail.nuanced.negative-height-zero-height-source",
           "PIL.Image.Image.thumbnail.nuanced.negative-height-zero-size-source",
