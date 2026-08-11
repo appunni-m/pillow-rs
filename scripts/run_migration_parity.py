@@ -273,6 +273,9 @@ class AssetStore:
     def _builtin(self, name: str, asset_id: str) -> Any:
         if name in ENCODED_INPUTS:
             return self._write_asset(asset_id, ENCODED_INPUTS[name], ".bin")
+        if name.startswith("encoded-") and name.endswith("-input-stream"):
+            encoded_name = name.removesuffix("-stream")
+            return io.BytesIO(ENCODED_INPUTS[encoded_name])
         if name == "temporary-output-path":
             return str(self._tempdir / f"{asset_id}.out")
         if name == "temporary-output-no-extension-path":

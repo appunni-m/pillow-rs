@@ -2593,6 +2593,11 @@ class WorkflowBuilder:
                         "missing-input",
                         "missing/does-not-exist.png",
                     )
+                if self.edge == "in-memory-byte-stream":
+                    return self.builtin(
+                        "encoded-input-stream",
+                        f"encoded-{self.image_format.lower()}-input-stream",
+                    )
                 return self.builtin(
                     "encoded-input",
                     f"encoded-{self.image_format.lower()}-input",
@@ -5063,6 +5068,20 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.fp",
             "name": "non-null-bytes",
             "edge": "non-null-bytes",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.fp",
+            "name": "in-memory-byte-stream",
+            "edge": "in-memory-byte-stream",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.fp",
+            "name": "nonexistent-path-no-formats",
+            "edge": "nonexistent-file-no-formats",
         },
         # Exercise the public ImageEnhance constructor plus enhance() call on
         # the modes rejected by the Rust core. These are behavioral parity
