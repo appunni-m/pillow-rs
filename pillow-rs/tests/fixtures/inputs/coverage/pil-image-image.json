@@ -1923,6 +1923,7 @@
           "PIL.Image.Image.point.nuanced.opened-rgb",
           "PIL.Image.Image.point.nuanced.expanded-rgb-lut",
           "PIL.Image.Image.filter.nuanced.opened-rgb",
+          "PIL.Image.Image.filter.nuanced.class-gaussian-blur",
           "PIL.Image.Image.convert.nuanced.opened-rgb",
           "PIL.Image.Image.convert.nuanced.i16-frombytes-to-rgba",
           "PIL.Image.Image.convert.nuanced.opened-rgba",

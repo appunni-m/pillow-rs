@@ -8,10 +8,10 @@ outputs.
 
 - Manifest operations: 209
 - Manifest requirements: 1801
-- Active parity workflows: 3055
-- Unique active workflow signatures: 3055
+- Active parity workflows: 3167
+- Unique active workflow signatures: 3167
 - Active exact-duplicate groups: 0
-- Deliberate nuanced workflows: 1873
+- Deliberate nuanced workflows: 1985
 
 The generator merges only exact behavior-bearing duplicates. Case IDs
 and `covers` membership are labels and therefore do not create a second
@@ -22,24 +22,24 @@ arguments, and observations remain part of the signature.
 
 | surface | active workflows |
 | --- | ---: |
-| `PIL.Image` | 213 |
-| `PIL.Image.Image` | 1456 |
-| `PIL.ImageChops` | 148 |
+| `PIL.Image` | 218 |
+| `PIL.Image.Image` | 1533 |
+| `PIL.ImageChops` | 152 |
 | `PIL.ImageColor` | 46 |
 | `PIL.ImageDraw` | 3 |
-| `PIL.ImageDraw.ImageDraw` | 451 |
+| `PIL.ImageDraw.ImageDraw` | 464 |
 | `PIL.ImageEnhance` | 37 |
 | `PIL.ImageEnhance.Brightness` | 1 |
 | `PIL.ImageEnhance.Color` | 1 |
 | `PIL.ImageEnhance.Contrast` | 1 |
 | `PIL.ImageEnhance.Sharpness` | 1 |
-| `PIL.ImageFilter` | 124 |
+| `PIL.ImageFilter` | 125 |
 | `PIL.ImageFilter.Color3DLUT` | 14 |
 | `PIL.ImageFont` | 29 |
 | `PIL.ImageFont.FreeTypeFont` | 122 |
 | `PIL.ImageFont.ImageFont` | 15 |
 | `PIL.ImageFont.TransposedFont` | 13 |
-| `PIL.ImageOps` | 302 |
+| `PIL.ImageOps` | 314 |
 | `PIL.ImagePalette` | 3 |
 | `PIL.ImagePalette.ImagePalette` | 18 |
 | `PIL.ImageSequence` | 4 |
@@ -119,6 +119,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.from-cmyk-to-l`
 - `PIL.Image.Image.convert.nuanced.from-f-to-l`
 - `PIL.Image.Image.convert.nuanced.from-hsv-to-rgb`
+- `PIL.Image.Image.convert.nuanced.from-l-to-cmyk-gray-branch`
+- `PIL.Image.Image.convert.nuanced.from-la-to-cmyk-gray-branch`
 - `PIL.Image.Image.convert.nuanced.from-one-to-l`
 - `PIL.Image.Image.convert.nuanced.from-one-to-rgb`
 - `PIL.Image.Image.convert.nuanced.from-ycbcr`
@@ -134,15 +136,20 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.i-to-1`
 - `PIL.Image.Image.convert.nuanced.i-to-cmyk`
 - `PIL.Image.Image.convert.nuanced.i-to-rgb`
+- `PIL.Image.Image.convert.nuanced.i16-frombytes-to-rgba`
 - `PIL.Image.Image.convert.nuanced.integer-floydsteinberg-dither`
 - `PIL.Image.Image.convert.nuanced.integer-floydsteinberg-dither-high-luma`
+- `PIL.Image.Image.convert.nuanced.integer-floydsteinberg-dither-observed`
 - `PIL.Image.Image.convert.nuanced.integer-none-dither`
 - `PIL.Image.Image.convert.nuanced.integer-none-dither-high-luma`
+- `PIL.Image.Image.convert.nuanced.integer-none-dither-observed`
 - `PIL.Image.Image.convert.nuanced.l-to-la`
 - `PIL.Image.Image.convert.nuanced.l-to-p`
 - `PIL.Image.Image.convert.nuanced.l-to-pa`
 - `PIL.Image.Image.convert.nuanced.l-to-rgb`
+- `PIL.Image.Image.convert.nuanced.l-to-rgb-observed-nonzero`
 - `PIL.Image.Image.convert.nuanced.l-to-rgba`
+- `PIL.Image.Image.convert.nuanced.l16-png-to-rgb`
 - `PIL.Image.Image.convert.nuanced.la-same-mode-simd`
 - `PIL.Image.Image.convert.nuanced.la-to-rgb`
 - `PIL.Image.Image.convert.nuanced.la-to-rgba`
@@ -169,8 +176,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.p-putalpha-to-rgba`
 - `PIL.Image.Image.convert.nuanced.p-putpalette-putalpha-to-one`
 - `PIL.Image.Image.convert.nuanced.p-putpalette-putalpha-to-rgba`
+- `PIL.Image.Image.convert.nuanced.p-putpalette-to-rgb-observed`
 - `PIL.Image.Image.convert.nuanced.p-resize-convert-pipeline`
 - `PIL.Image.Image.convert.nuanced.p-to-cmyk`
+- `PIL.Image.Image.convert.nuanced.p-to-hsv-nonzero`
 - `PIL.Image.Image.convert.nuanced.p-to-la-with-palette-transparency`
 - `PIL.Image.Image.convert.nuanced.p-to-la-without-transparency`
 - `PIL.Image.Image.convert.nuanced.p-to-rgb`
@@ -186,17 +195,21 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.convert.nuanced.rgb-matrix-wrong-length`
 - `PIL.Image.Image.convert.nuanced.rgb-to-cmyk`
 - `PIL.Image.Image.convert.nuanced.rgb-to-f`
+- `PIL.Image.Image.convert.nuanced.rgb-to-f-observed-nonzero`
 - `PIL.Image.Image.convert.nuanced.rgb-to-hsv`
 - `PIL.Image.Image.convert.nuanced.rgb-to-hsv-b-max`
 - `PIL.Image.Image.convert.nuanced.rgb-to-hsv-g-max`
 - `PIL.Image.Image.convert.nuanced.rgb-to-hsv-nonzero`
 - `PIL.Image.Image.convert.nuanced.rgb-to-i`
+- `PIL.Image.Image.convert.nuanced.rgb-to-i-observed-nonzero`
 - `PIL.Image.Image.convert.nuanced.rgb-to-p`
+- `PIL.Image.Image.convert.nuanced.rgb-to-p-no-dither`
 - `PIL.Image.Image.convert.nuanced.rgb-to-ycbcr`
 - `PIL.Image.Image.convert.nuanced.rgb-to-ycbcr-nonzero`
 - `PIL.Image.Image.convert.nuanced.rgba-same-mode-simd`
 - `PIL.Image.Image.convert.nuanced.rgba-to-l`
 - `PIL.Image.Image.convert.nuanced.rgba-to-la`
+- `PIL.Image.Image.convert.nuanced.rgba-to-la-observed-nonzero`
 - `PIL.Image.Image.convert.nuanced.rgba-to-rgb`
 - `PIL.Image.Image.convert.nuanced.string-dither-error`
 - `PIL.Image.Image.convert.nuanced.unknown-mode`
@@ -222,6 +235,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.crop.nuanced.float-rounds-up-from-half`
 - `PIL.Image.Image.crop.nuanced.fully-negative-box`
 - `PIL.Image.Image.crop.nuanced.in-bounds-subregion`
+- `PIL.Image.Image.crop.nuanced.l16-png-opened`
 - `PIL.Image.Image.crop.nuanced.large-bottom-coordinate-offset`
 - `PIL.Image.Image.crop.nuanced.large-coordinate-offset`
 - `PIL.Image.Image.crop.nuanced.large-negative-coordinate-offset`
@@ -242,8 +256,12 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.crop.nuanced.vertically-disjoint-box`
 - `PIL.Image.Image.crop.nuanced.zero-height-box`
 - `PIL.Image.Image.crop.nuanced.zero-width-box`
+- `PIL.Image.Image.effect_spread.nuanced.l-single-pixel`
+- `PIL.Image.Image.effect_spread.nuanced.la-single-pixel`
 - `PIL.Image.Image.effect_spread.nuanced.p-rgba-palette-single-pixel`
 - `PIL.Image.Image.effect_spread.nuanced.p-rgba-palette-zero-distance`
+- `PIL.Image.Image.effect_spread.nuanced.rgb-single-pixel`
+- `PIL.Image.Image.effect_spread.nuanced.rgba-single-pixel`
 - `PIL.Image.Image.entropy.nuanced.bad-mask-mode`
 - `PIL.Image.Image.entropy.nuanced.mask-size-mismatch`
 - `PIL.Image.Image.entropy.nuanced.masked-nonzero`
@@ -255,6 +273,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.entropy.nuanced.opened-png-without-idat`
 - `PIL.Image.Image.entropy.nuanced.truthy-non-image-mask`
 - `PIL.Image.Image.filter.nuanced.box-blur-zero-radius`
+- `PIL.Image.Image.filter.nuanced.class-gaussian-blur`
 - `PIL.Image.Image.filter.nuanced.f-mode`
 - `PIL.Image.Image.filter.nuanced.f-mode-max-filter`
 - `PIL.Image.Image.filter.nuanced.f-mode-median-filter`
@@ -388,6 +407,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getdata.nuanced.f-nonzero`
 - `PIL.Image.Image.getdata.nuanced.i-invalid-band`
 - `PIL.Image.Image.getdata.nuanced.i-large-nonzero`
+- `PIL.Image.Image.getdata.nuanced.l16-png-invalid-band`
+- `PIL.Image.Image.getdata.nuanced.l16-png-opened`
 - `PIL.Image.Image.getdata.nuanced.negative-band`
 - `PIL.Image.Image.getdata.nuanced.opened-png-without-idat`
 - `PIL.Image.Image.getdata.nuanced.opened-rgb`
@@ -413,6 +434,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getextrema.nuanced.f-nonzero`
 - `PIL.Image.Image.getextrema.nuanced.i-empty`
 - `PIL.Image.Image.getextrema.nuanced.i-large-nonzero`
+- `PIL.Image.Image.getextrema.nuanced.l16-png-opened`
 - `PIL.Image.Image.getextrema.nuanced.la-empty`
 - `PIL.Image.Image.getextrema.nuanced.nonzero-rgba`
 - `PIL.Image.Image.getextrema.nuanced.opened-png-without-idat`
@@ -446,6 +468,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.getpixel.nuanced.i-large-nonzero`
 - `PIL.Image.Image.getpixel.nuanced.i-x-out-of-bounds`
 - `PIL.Image.Image.getpixel.nuanced.i-y-out-of-bounds`
+- `PIL.Image.Image.getpixel.nuanced.l16-png-opened`
+- `PIL.Image.Image.getpixel.nuanced.l16-png-out-of-bounds`
+- `PIL.Image.Image.getpixel.nuanced.l16-png-y-out-of-bounds`
+- `PIL.Image.Image.getpixel.nuanced.la-png-decoded`
 - `PIL.Image.Image.getpixel.nuanced.opened-cmyk-tiff`
 - `PIL.Image.Image.getpixel.nuanced.opened-f32-tiff`
 - `PIL.Image.Image.getpixel.nuanced.opened-i32-tiff`
@@ -496,6 +522,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.load.nuanced.bmp-rgb-opened`
 - `PIL.Image.Image.load.nuanced.gif-p-opened`
 - `PIL.Image.Image.load.nuanced.jpeg-rgb-opened`
+- `PIL.Image.Image.load.nuanced.l16-png-opened`
+- `PIL.Image.Image.load.nuanced.la-png-opened`
 - `PIL.Image.Image.load.nuanced.p-putpalette-pipeline`
 - `PIL.Image.Image.load.nuanced.p-putpalette-resize-pipeline`
 - `PIL.Image.Image.load.nuanced.p-resize-pipeline`
@@ -547,6 +575,9 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.paste.nuanced.i-negative-scalar-preserves`
 - `PIL.Image.Image.paste.nuanced.i-overflow-scalar-preserves`
 - `PIL.Image.Image.paste.nuanced.i-two-tuple-error`
+- `PIL.Image.Image.paste.nuanced.i16l-opaque-rgba-mask`
+- `PIL.Image.Image.paste.nuanced.i16l-partial-l-mask`
+- `PIL.Image.Image.paste.nuanced.i16l-partial-rgba-mask`
 - `PIL.Image.Image.paste.nuanced.image-box-bottom-overflow`
 - `PIL.Image.Image.paste.nuanced.image-box-left-overflow`
 - `PIL.Image.Image.paste.nuanced.image-box-left-underflow`
@@ -700,10 +731,12 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putpalette.nuanced.rgba-palette`
 - `PIL.Image.Image.putpixel.nuanced.f-float`
 - `PIL.Image.Image.putpixel.nuanced.f-scalar`
+- `PIL.Image.Image.putpixel.nuanced.f-singleton-tuple`
 - `PIL.Image.Image.putpixel.nuanced.f-x-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.f-y-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.hsv-scalar`
 - `PIL.Image.Image.putpixel.nuanced.i-scalar`
+- `PIL.Image.Image.putpixel.nuanced.i-singleton-tuple`
 - `PIL.Image.Image.putpixel.nuanced.i-x-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.i-y-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.invalid-component-count`
@@ -711,6 +744,10 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.putpixel.nuanced.invalid-component-type-rgb`
 - `PIL.Image.Image.putpixel.nuanced.l-float-error`
 - `PIL.Image.Image.putpixel.nuanced.l-negative-integer`
+- `PIL.Image.Image.putpixel.nuanced.l16-png-out-of-bounds`
+- `PIL.Image.Image.putpixel.nuanced.l16-png-putpixel`
+- `PIL.Image.Image.putpixel.nuanced.l16-png-singleton-tuple`
+- `PIL.Image.Image.putpixel.nuanced.l16-png-y-out-of-bounds`
 - `PIL.Image.Image.putpixel.nuanced.la-two-tuple`
 - `PIL.Image.Image.putpixel.nuanced.one-tuple-equals-scalar`
 - `PIL.Image.Image.putpixel.nuanced.p-after-bitmap-no-palette-tuple`
@@ -769,11 +806,13 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.quantize.nuanced.palette-image-red-no-dither`
 - `PIL.Image.Image.quantize.nuanced.palette-image-unsupported-rgba`
 - `PIL.Image.Image.quantize.nuanced.rgba-mediancut-invalid`
+- `PIL.Image.Image.reduce.nuanced.factor-larger-than-image`
 - `PIL.Image.Image.reduce.nuanced.float-factor-sequence`
 - `PIL.Image.Image.reduce.nuanced.identity-factor`
 - `PIL.Image.Image.reduce.nuanced.invalid-box-type`
 - `PIL.Image.Image.reduce.nuanced.invalid-factor-string`
 - `PIL.Image.Image.reduce.nuanced.la-no-reduce-alpha-simd`
+- `PIL.Image.Image.reduce.nuanced.mixed-identity-factor`
 - `PIL.Image.Image.reduce.nuanced.non-square-factors`
 - `PIL.Image.Image.reduce.nuanced.odd-size-factor-three`
 - `PIL.Image.Image.reduce.nuanced.partial-right-bottom-block`
@@ -811,12 +850,16 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.i16l-frombytes-bilinear`
 - `PIL.Image.Image.resize.nuanced.i16n-frombytes-bilinear`
 - `PIL.Image.Image.resize.nuanced.i16n-frombytes-nearest`
+- `PIL.Image.Image.resize.nuanced.l16-png-opened`
 - `PIL.Image.Image.resize.nuanced.la-nearest-nonuniform`
 - `PIL.Image.Image.resize.nuanced.la-transparent-convolution`
 - `PIL.Image.Image.resize.nuanced.lanczos-kernel-boundaries`
+- `PIL.Image.Image.resize.nuanced.mode-one-bicubic-simd-fallback`
+- `PIL.Image.Image.resize.nuanced.mode-one-lanczos-simd-fallback`
 - `PIL.Image.Image.resize.nuanced.negative-height`
 - `PIL.Image.Image.resize.nuanced.negative-width`
 - `PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos`
+- `PIL.Image.Image.resize.nuanced.one-mode-box-resize`
 - `PIL.Image.Image.resize.nuanced.one-threshold-materialized`
 - `PIL.Image.Image.resize.nuanced.opened-png-without-idat-box`
 - `PIL.Image.Image.resize.nuanced.opened-rgb`
@@ -839,6 +882,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.resize.nuanced.zero-height`
 - `PIL.Image.Image.resize.nuanced.zero-height-source-simd-guard`
 - `PIL.Image.Image.resize.nuanced.zero-width`
+- `PIL.Image.Image.resize.nuanced.zero-width-source-bilinear-guard`
 - `PIL.Image.Image.resize.nuanced.zero-width-source-simd-guard`
 - `PIL.Image.Image.rotate.nuanced.expanded-red-fill`
 - `PIL.Image.Image.rotate.nuanced.f-explicit-bilinear-nearest`
@@ -853,6 +897,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.rotate.nuanced.invalid-resample-unknown-code`
 - `PIL.Image.Image.rotate.nuanced.invalid-translate-arity`
 - `PIL.Image.Image.rotate.nuanced.l-explicit-bilinear-simd-mode-path`
+- `PIL.Image.Image.rotate.nuanced.l16-png-opened`
 - `PIL.Image.Image.rotate.nuanced.la-fractional-bilinear-simd`
 - `PIL.Image.Image.rotate.nuanced.mode-l-90-non-expand`
 - `PIL.Image.Image.rotate.nuanced.mode-la-90-non-expand`
@@ -879,6 +924,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.rotate.nuanced.valid-center-translate`
 - `PIL.Image.Image.rotate.nuanced.valid-translate-only`
 - `PIL.Image.Image.rotate.nuanced.zero-height-source-simd-guard`
+- `PIL.Image.Image.rotate.nuanced.zero-width-rgb-source-simd-fractional-empty-fill`
+- `PIL.Image.Image.rotate.nuanced.zero-width-rgba-source-simd-fractional-empty-fill`
 - `PIL.Image.Image.rotate.nuanced.zero-width-source-simd-fractional-empty-fill`
 - `PIL.Image.Image.rotate.nuanced.zero-width-source-simd-guard`
 - `PIL.Image.Image.save.nuanced.cmyk-bmp-error`
@@ -887,6 +934,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.save.nuanced.f-png-error`
 - `PIL.Image.Image.save.nuanced.i-bmp-error`
 - `PIL.Image.Image.save.nuanced.i-png`
+- `PIL.Image.Image.save.nuanced.in-memory-stream`
+- `PIL.Image.Image.save.nuanced.l16-png-opened`
 - `PIL.Image.Image.save.nuanced.no-extension-default-format`
 - `PIL.Image.Image.save.nuanced.opened-gif-putpalette-save`
 - `PIL.Image.Image.save.nuanced.opened-p-full-palette-pipeline`
@@ -925,6 +974,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.thumbnail.nuanced.overflow-height-bound`
 - `PIL.Image.Image.thumbnail.nuanced.overflow-width-bound`
 - `PIL.Image.Image.thumbnail.nuanced.p-forces-nearest`
+- `PIL.Image.Image.thumbnail.nuanced.positive-bound-zero-height-source`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-nearest-no-shrink-simd`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-nearest-simd-path`
 - `PIL.Image.Image.thumbnail.nuanced.rgb-reducing-downscale`
@@ -980,6 +1030,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.i16-affine-scalar-fill`
 - `PIL.Image.Image.transform.nuanced.i16-affine-single-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.identity-mesh`
+- `PIL.Image.Image.transform.nuanced.identity-mesh-rgba`
 - `PIL.Image.Image.transform.nuanced.invalid-data-type`
 - `PIL.Image.Image.transform.nuanced.invalid-fillcolor-mapping`
 - `PIL.Image.Image.transform.nuanced.invalid-fillcolor-type`
@@ -999,6 +1050,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.malformed-mesh-short-bbox`
 - `PIL.Image.Image.transform.nuanced.malformed-mesh-short-quad`
 - `PIL.Image.Image.transform.nuanced.malformed-mesh-too-many-items`
+- `PIL.Image.Image.transform.nuanced.mesh-outside-source-fill`
+- `PIL.Image.Image.transform.nuanced.mesh-source-boundary-all-sides`
 - `PIL.Image.Image.transform.nuanced.missing-mesh-data`
 - `PIL.Image.Image.transform.nuanced.opened-rgb-affine-bilinear-simd`
 - `PIL.Image.Image.transform.nuanced.p-affine-invalid-tuple-fill`
@@ -1009,19 +1062,35 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.p-affine-single-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.p-affine-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.pa-putpalette-affine-default-fill`
+- `PIL.Image.Image.transform.nuanced.perspective-bilinear-outside-fill`
+- `PIL.Image.Image.transform.nuanced.perspective-bilinear-simd`
 - `PIL.Image.Image.transform.nuanced.perspective-method`
 - `PIL.Image.Image.transform.nuanced.perspective-missing-data`
+- `PIL.Image.Image.transform.nuanced.perspective-nearest-outside-fill`
+- `PIL.Image.Image.transform.nuanced.perspective-outside-fill-l`
+- `PIL.Image.Image.transform.nuanced.perspective-outside-fill-la`
+- `PIL.Image.Image.transform.nuanced.perspective-outside-fill-rgba`
 - `PIL.Image.Image.transform.nuanced.perspective-short-data`
+- `PIL.Image.Image.transform.nuanced.perspective-zero-denominator-fill`
+- `PIL.Image.Image.transform.nuanced.quad-bilinear-simd`
 - `PIL.Image.Image.transform.nuanced.quad-method`
 - `PIL.Image.Image.transform.nuanced.quad-short-data`
 - `PIL.Image.Image.transform.nuanced.raw-mesh-short-bbox-after-valid-item`
 - `PIL.Image.Image.transform.nuanced.raw-mesh-short-quad-after-valid-item`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-bottom-boundary-simd`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-fill-boundary-simd`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-left-boundary-simd`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-right-boundary-simd`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-simd`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-bilinear-top-boundary-simd`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-clamped-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-explicit-alpha-name-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-invalid-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-name-fill`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-nearest-bottom-boundary-simd`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-nearest-left-boundary-simd`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-nearest-right-boundary-simd`
+- `PIL.Image.Image.transform.nuanced.rgb-affine-nearest-top-boundary-simd`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-rgba-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-scalar-negative-fill`
 - `PIL.Image.Image.transform.nuanced.rgb-affine-single-tuple-fill`
@@ -1038,6 +1107,7 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transform.nuanced.ycbcr-affine-rgba-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.ycbcr-affine-tuple-fill`
 - `PIL.Image.Image.transform.nuanced.zero-height-source-simd-guard`
+- `PIL.Image.Image.transform.nuanced.zero-width-rgba-source-simd-guard`
 - `PIL.Image.Image.transform.nuanced.zero-width-source-simd-guard`
 - `PIL.Image.Image.transpose.nuanced.l-method-0`
 - `PIL.Image.Image.transpose.nuanced.l-method-1`
@@ -1049,6 +1119,11 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transpose.nuanced.l-odd-method-0`
 - `PIL.Image.Image.transpose.nuanced.l-odd-method-3`
 - `PIL.Image.Image.transpose.nuanced.l-odd-rotate180-valid`
+- `PIL.Image.Image.transpose.nuanced.l16-png-flip-top-bottom`
+- `PIL.Image.Image.transpose.nuanced.l16-png-opened`
+- `PIL.Image.Image.transpose.nuanced.l16-png-rotate-180`
+- `PIL.Image.Image.transpose.nuanced.l16-png-rotate-270`
+- `PIL.Image.Image.transpose.nuanced.l16-png-rotate-90`
 - `PIL.Image.Image.transpose.nuanced.la-method-0`
 - `PIL.Image.Image.transpose.nuanced.la-method-1`
 - `PIL.Image.Image.transpose.nuanced.la-method-2`
@@ -1067,6 +1142,8 @@ are not copied into the active lane by name.
 - `PIL.Image.Image.transpose.nuanced.rgb-odd-method-0`
 - `PIL.Image.Image.transpose.nuanced.rgb-odd-method-3`
 - `PIL.Image.Image.transpose.nuanced.rgb-odd-rotate180-valid`
+- `PIL.Image.Image.transpose.nuanced.rgba-dimension-method-2`
+- `PIL.Image.Image.transpose.nuanced.rgba-dimension-method-4`
 - `PIL.Image.Image.transpose.nuanced.rgba-odd-rotate180-valid`
 - `PIL.Image.Image.transpose.nuanced.unknown-integer`
 - `PIL.Image.Image.verify.nuanced.bmp-rgb-opened`
@@ -1101,6 +1178,7 @@ are not copied into the active lane by name.
 - `PIL.Image.effect_mandelbrot.nuanced.wrong-length`
 - `PIL.Image.effect_mandelbrot.nuanced.zero-height`
 - `PIL.Image.effect_mandelbrot.nuanced.zero-size`
+- `PIL.Image.effect_noise.nuanced.clamped-extremes`
 - `PIL.Image.eval.nuanced.clamp-shift-callable`
 - `PIL.Image.eval.nuanced.invalid-lut-length`
 - `PIL.Image.eval.nuanced.l-callable-expanded-path`
@@ -1142,9 +1220,11 @@ are not copied into the active lane by name.
 - `PIL.Image.linear_gradient.nuanced.invalid-single-character-mode`
 - `PIL.Image.linear_gradient.nuanced.one-mode`
 - `PIL.Image.linear_gradient.nuanced.p-mode`
+- `PIL.Image.merge.nuanced.band-size-mismatch`
 - `PIL.Image.merge.nuanced.cmyk-mode`
 - `PIL.Image.merge.nuanced.invalid-band-item`
 - `PIL.Image.merge.nuanced.invalid-mode`
+- `PIL.Image.merge.nuanced.l-mode-band-mismatch`
 - `PIL.Image.merge.nuanced.palette-band-after-first`
 - `PIL.Image.merge.nuanced.palette-band-first`
 - `PIL.Image.merge.nuanced.rgb-mode-nonzero`
@@ -1186,9 +1266,11 @@ are not copied into the active lane by name.
 - `PIL.Image.open.nuanced.formats-accepted`
 - `PIL.Image.open.nuanced.formats-rejected`
 - `PIL.Image.open.nuanced.formats-single-string`
+- `PIL.Image.open.nuanced.in-memory-byte-stream`
 - `PIL.Image.open.nuanced.invalid-mode`
 - `PIL.Image.open.nuanced.non-null-bytes`
 - `PIL.Image.open.nuanced.non-string-mode`
+- `PIL.Image.open.nuanced.nonexistent-path-no-formats`
 - `PIL.Image.open.nuanced.read-mode`
 - `PIL.Image.radial_gradient.nuanced.f-mode`
 - `PIL.Image.radial_gradient.nuanced.i-mode`
@@ -1245,6 +1327,10 @@ are not copied into the active lane by name.
 - `PIL.ImageChops.multiply.nuanced.alpha-rgba`
 - `PIL.ImageChops.multiply.nuanced.varied-indexed-p`
 - `PIL.ImageChops.multiply.nuanced.varied-indexed-pa`
+- `PIL.ImageChops.offset.nuanced.materialized-l-1-1`
+- `PIL.ImageChops.offset.nuanced.materialized-la-2-1`
+- `PIL.ImageChops.offset.nuanced.materialized-rgb-5-3`
+- `PIL.ImageChops.offset.nuanced.materialized-rgba-4-3`
 - `PIL.ImageChops.offset.nuanced.zero-height`
 - `PIL.ImageChops.offset.nuanced.zero-width`
 - `PIL.ImageChops.overlay.nuanced.alpha-la`
@@ -1314,6 +1400,8 @@ are not copied into the active lane by name.
 - `PIL.ImageColor.getrgb.nuanced.rgba-syntax`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.axis-boundary-sweep`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.empty-sweep`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.even-short`
+- `PIL.ImageDraw.ImageDraw.arc.nuanced.even-wrapped`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.fill-width`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.full-sweep`
 - `PIL.ImageDraw.ImageDraw.arc.nuanced.tall-ellipse-axis-transpose`
@@ -1384,6 +1472,8 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.reversed-y-box`
 - `PIL.ImageDraw.ImageDraw.ellipse.nuanced.zero-size`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.canvas-ycbcr-int-fill`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.descending-horizontal`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.descending-vertical`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.empty-points-no-op`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.flat-points`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.horizontal`
@@ -1404,6 +1494,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.line.nuanced.vertical`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.wide`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve`
+- `PIL.ImageDraw.ImageDraw.line.nuanced.wide-zero-length`
 - `PIL.ImageDraw.ImageDraw.line.nuanced.width-three`
 - `PIL.ImageDraw.ImageDraw.multiline_text.nuanced.bytes-latin1`
 - `PIL.ImageDraw.ImageDraw.multiline_text.nuanced.centered-anchored`
@@ -1419,6 +1510,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.pieslice.nuanced.full-sweep`
 - `PIL.ImageDraw.ImageDraw.pieslice.nuanced.narrow-sweep`
 - `PIL.ImageDraw.ImageDraw.pieslice.nuanced.wide-sweep`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.bottom-y-boundary`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.empty-points-no-op`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.flat-points`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.invalid-sequence-contents-error`
@@ -1428,6 +1520,8 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.point.nuanced.la-invalid-component-count`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.la-negative-integer-fill`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.malformed-nested-point-error`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.negative-x-boundary`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.negative-y-boundary`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.odd-flat-points-error`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.pa-default-ink`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.pa-invalid-component-count`
@@ -1437,6 +1531,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.point.nuanced.rejected-rgb-non-numeric-component`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.rgb-negative-component-error`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.rgb-two-component-error`
+- `PIL.ImageDraw.ImageDraw.point.nuanced.right-x-boundary`
 - `PIL.ImageDraw.ImageDraw.point.nuanced.scalar-points-error`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.above-canvas`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.canvas-cmyk`
@@ -1445,9 +1540,12 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.concave-collinear-clipped`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.empty-points-error`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.fill-outline`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.horizontal-backtrack`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.horizontal-only`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.horizontal-runs`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.malformed-nested-point-error`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.off-left-interval`
+- `PIL.ImageDraw.ImageDraw.polygon.nuanced.off-right-interval`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.out-of-bounds`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.outline-width`
 - `PIL.ImageDraw.ImageDraw.polygon.nuanced.paired-points`
@@ -1473,6 +1571,7 @@ are not copied into the active lane by name.
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.malformed-nested-box-error`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.negative-clipped`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.nested-box`
+- `PIL.ImageDraw.ImageDraw.rectangle.nuanced.reversed-box`
 - `PIL.ImageDraw.ImageDraw.rectangle.nuanced.too-many-nested-box-points-error`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.heptagon-rotated`
 - `PIL.ImageDraw.ImageDraw.regular_polygon.nuanced.invalid-side-count-error`
@@ -1563,6 +1662,7 @@ are not copied into the active lane by name.
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-channels`
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.invalid-size`
 - `PIL.ImageFilter.Color3DLUT.generate.nuanced.short-callback-result`
+- `PIL.ImageFilter.Color3DLUT.nuanced.clamp-and-negative-rounding`
 - `PIL.ImageFilter.Color3DLUT.nuanced.empty-table`
 - `PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-last-dimension`
 - `PIL.ImageFilter.Color3DLUT.nuanced.invalid-size-middle-dimension`
@@ -1688,11 +1788,14 @@ are not copied into the active lane by name.
 - `PIL.ImageFont.truetype.nuanced.zero-size`
 - `PIL.ImageOps.autocontrast.nuanced.alpha-la`
 - `PIL.ImageOps.autocontrast.nuanced.alpha-rgba`
+- `PIL.ImageOps.autocontrast.nuanced.cutoff-clamped-range`
+- `PIL.ImageOps.autocontrast.nuanced.empty-height-l`
 - `PIL.ImageOps.autocontrast.nuanced.empty-l`
 - `PIL.ImageOps.autocontrast.nuanced.invalid-mask-type`
 - `PIL.ImageOps.autocontrast.nuanced.mask-size-mismatch`
 - `PIL.ImageOps.autocontrast.nuanced.materialized-l`
 - `PIL.ImageOps.autocontrast.nuanced.nonzero-l-range`
+- `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-blue-fallback`
 - `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-green-blue-fallback`
 - `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-range`
 - `PIL.ImageOps.autocontrast.nuanced.nonzero-rgb-red-fallback`
@@ -1700,11 +1803,13 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.autocontrast.nuanced.simd-alpha-la-range`
 - `PIL.ImageOps.autocontrast.nuanced.simd-alpha-rgba-range`
 - `PIL.ImageOps.autocontrast.nuanced.single-pixel-l`
+- `PIL.ImageOps.autocontrast.nuanced.uniform-rgb-no-range`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-cmyk`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-f`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-i`
 - `PIL.ImageOps.autocontrast.nuanced.unsupported-mode-one`
 - `PIL.ImageOps.autocontrast.nuanced.valid-l-mask`
+- `PIL.ImageOps.colorize.nuanced.four-component-colors`
 - `PIL.ImageOps.colorize.nuanced.invalid-mid-points`
 - `PIL.ImageOps.colorize.nuanced.invalid-midpoint-above-whitepoint`
 - `PIL.ImageOps.colorize.nuanced.invalid-points`
@@ -1746,11 +1851,13 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.cover.nuanced.simd-nearest-rgba`
 - `PIL.ImageOps.cover.nuanced.simd-nearest-tall-target`
 - `PIL.ImageOps.cover.nuanced.wide-target`
+- `PIL.ImageOps.cover.nuanced.zero-height-source-simd-guard`
 - `PIL.ImageOps.cover.nuanced.zero-width-source-simd-guard`
 - `PIL.ImageOps.crop.nuanced.border-exceeds-image`
 - `PIL.ImageOps.crop.nuanced.materialized-border`
 - `PIL.ImageOps.equalize.nuanced.alpha-la`
 - `PIL.ImageOps.equalize.nuanced.alpha-rgba`
+- `PIL.ImageOps.equalize.nuanced.empty-height-l`
 - `PIL.ImageOps.equalize.nuanced.empty-l`
 - `PIL.ImageOps.equalize.nuanced.invalid-mask-type`
 - `PIL.ImageOps.equalize.nuanced.mask-size-mismatch`
@@ -1787,7 +1894,9 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.exif_transpose.nuanced.jpeg-to-p-orientation6`
 - `PIL.ImageOps.exif_transpose.nuanced.jpeg-truncated-entry`
 - `PIL.ImageOps.exif_transpose.nuanced.tiff-no-orientation`
+- `PIL.ImageOps.exif_transpose.nuanced.tiff-orientation6-materialized`
 - `PIL.ImageOps.expand.nuanced.materialized-border`
+- `PIL.ImageOps.expand.nuanced.p-mode-materialized`
 - `PIL.ImageOps.expand.nuanced.pa-putpalette-materialized`
 - `PIL.ImageOps.fit.nuanced.default-centering-pair`
 - `PIL.ImageOps.fit.nuanced.fractional-centering`
@@ -1795,8 +1904,11 @@ are not copied into the active lane by name.
 - `PIL.ImageOps.fit.nuanced.invalid-centering-none`
 - `PIL.ImageOps.fit.nuanced.long-centering`
 - `PIL.ImageOps.fit.nuanced.materialized-bleed-fallback`
+- `PIL.ImageOps.fit.nuanced.negative-bleed-fallback`
 - `PIL.ImageOps.fit.nuanced.numeric-method-default-centering`
 - `PIL.ImageOps.fit.nuanced.pa-putpalette-expansion`
+- `PIL.ImageOps.fit.nuanced.rgb-premultiplied-boxed`
+- `PIL.ImageOps.fit.nuanced.rgba-boxed-alpha-path`
 - `PIL.ImageOps.fit.nuanced.short-centering`
 - `PIL.ImageOps.fit.nuanced.simd-bilinear-la`
 - `PIL.ImageOps.fit.nuanced.simd-bilinear-rgb`

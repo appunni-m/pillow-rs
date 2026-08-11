@@ -22347,6 +22347,22 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "class-gaussian-blur",
+            "mode": "RGB",
+            "values": {
+                "filter": literal(
+                    {
+                        "protocol": "public-class",
+                        "surface": "PIL.ImageFilter",
+                        "name": "GaussianBlur",
+                    }
+                )
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "convert",
             "requirement_suffix": "mode.l",
             "name": "opened-rgb",
