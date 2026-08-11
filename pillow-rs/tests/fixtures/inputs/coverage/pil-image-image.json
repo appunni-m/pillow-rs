@@ -992,6 +992,7 @@
           "PIL.Image.Image.point.nuanced.rgb-invalid-lut-length",
           "PIL.Image.Image.resize.nuanced.noninteger-ratio-lanczos",
           "PIL.Image.Image.resize.nuanced.one-mode-box-resize",
+          "PIL.Image.Image.resize.nuanced.zero-width-source-bilinear-guard",
           "PIL.Image.Image.resize.nuanced.mode-one-bicubic-simd-fallback",
           "PIL.Image.Image.resize.nuanced.mode-one-lanczos-simd-fallback",
           "PIL.Image.Image.resize.nuanced.p-putpalette-putalpha-bilinear",

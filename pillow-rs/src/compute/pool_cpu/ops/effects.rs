@@ -411,6 +411,12 @@ pub fn op_merge(
     band_pixels.push(first_gray.into_raw());
     for band in bands.iter().skip(1) {
         let b_img = band.materialize_for_ops()?;
+        // Pillow's ImagingMerge rejects bands with different dimensions. Do
+        // this check before indexing the packed samples so a malformed merge
+        // is a public ValueError instead of a Rust bounds panic.
+        if b_img.dimensions() != (w, h) {
+            return Err(PilError::ValueError("size mismatch".into()));
+        }
         let b_gray = b_img.to_luma8();
         band_pixels.push(b_gray.into_raw());
     }

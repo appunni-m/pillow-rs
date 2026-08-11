@@ -117,6 +117,19 @@ fn validate_merge_band_modes(mode: &str, bands: &[Image]) -> Result<(), PilError
     Ok(())
 }
 
+fn validate_merge_band_sizes(bands: &[Image]) -> Result<(), PilError> {
+    let expected = bands[0].size()?;
+    for band in bands.iter().skip(1) {
+        // Pillow's ImagingMerge rejects mismatched dimensions at the public
+        // call boundary. Keep this validation eager so a lazy pipeline cannot
+        // defer the ValueError into result serialization.
+        if band.size()? != expected {
+            return Err(PilError::ValueError("size mismatch".into()));
+        }
+    }
+    Ok(())
+}
+
 /// Host-neutral input classification for `Image.merge` bands.
 #[derive(Debug, Clone)]
 pub enum MergeInput {
@@ -139,6 +152,7 @@ pub enum MergeInput {
 pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
     validate_merge_shape(mode, bands.len())?;
     validate_merge_band_modes(mode, bands)?;
+    validate_merge_band_sizes(bands)?;
 
     let mode_enum = parse_mode(mode)?;
     let mut result = Image::push_op(
