@@ -36,6 +36,14 @@ measurements. The aggregate denominators changed with the current source
 artifact, so the exact final numerator/denominator tables—not a synthetic
 percentage delta—are authoritative.
 
+One additional I;16L paste candidate was audited and discarded before the
+final corpus. Two smaller-mask workflows were valid public error cases and
+passed focused source/target parity, but `Image.paste` rejected the mask-size
+mismatch before entering `compute/pool_cpu/ops/effects.rs`; the managed run
+left the targeted defensive branch unchanged. The generator entries were
+removed and the final denominator remains 3,168. This preserves the finding
+without retaining cases that add no reachable coverage.
+
 ## Worker reports
 
 All workers used isolated worktrees. No worker pushed or edited `main`.
@@ -63,6 +71,20 @@ All workers used isolated worktrees. No worker pushed or edited `main`.
   coordinator paths, and some reachable typed/operation branches. The CPU
   worker’s invert batch and SIMD worker’s adapter batch supplied the required
   two-attempt no-gain evidence for their assigned candidates.
+- The exact residual is classified in the audit set: registry common/CPU-only/
+  SIMD-only dispatch gaps and typed mismatch guards in
+  [`coverage-gap-audit-registry-20260811.md`](coverage-gap-audit-registry-20260811.md),
+  CPU effects/projective/LUT/Mandelbrot candidates and defensive lines in
+  [`coverage-gap-audit-cpu-effects-20260811.md`](coverage-gap-audit-cpu-effects-20260811.md),
+  SIMD scalar-closure bypasses in
+  [`coverage-gap-audit-simd-filter-enhance-20260811.md`](coverage-gap-audit-simd-filter-enhance-20260811.md),
+  typed/native-format dependencies in
+  [`coverage-audit-typed-formats-v1-20260811.md`](coverage-audit-typed-formats-v1-20260811.md)
+  and [`coverage-gap-audit-bindings-dynamic-20260811.md`](coverage-gap-audit-bindings-dynamic-20260811.md),
+  and binding protocol gaps in the latter document. These documents retain
+  the exact managed line/branch/function ranges and classify each as reachable
+  follow-up, prevalidated/defensive, backend-unreachable, native-format
+  dependent, unsupported, or explicitly excluded.
 - `pillow-rs-py/src/lib.rs` is an LLVM observation only (3,127/3,656 lines,
   286/352 branches, 401/503 functions, 4,684/5,918 regions). There is no
   managed PyO3 component. `pillow-rs-js/src/lib.rs` is not measured.
@@ -79,11 +101,16 @@ All workers used isolated worktrees. No worker pushed or edited `main`.
 - `make migration-parity-evidence-check` — passed 11 tests; 209 operations,
   zero stale/incompatible evidence.
 - `make migration-parity-case CASE_ID=PIL.Image.Image.getdata.nuanced.l16-png-band-zero` — passed after `make build`.
-- `make migration-parity-test` — 3,167 passed, 1 known variable-font failure.
-- Managed safe CPU coverage run `99c8ce2b-e258-4311-ba82-d3fac07a890e`, snapshot
-  `85909121-065c-498c-8c83-1445a8c6bbe0` — passed and ingested.
-- Managed safe SIMD coverage run `7ca8937f-4e51-4294-912b-9fccec4b8615`,
-  snapshot `2dffe5d2-3685-4efe-b3a7-56298fdda6dc` — passed and ingested.
+- `make migration-parity-test` — 3,168 executed; 3,167 passed and 1 known
+  variable-font failure.
+- Managed safe CPU coverage run `2896a8c2-bc2c-4f79-a763-8120a1f79e00`,
+  snapshot `653dd4e1-ec53-4e0e-8529-7ca3878dbff1` — passed and ingested;
+  `39,434/68,544` lines, `6,610/13,978` branches, `3,047/5,332`
+  functions, `61,017/106,544` regions.
+- Managed safe SIMD coverage run `e716fce8-75d1-4db9-81fa-593964a5b1d7`,
+  snapshot `1fa4ab68-b1cc-4442-a335-4c8680e95493` — passed and ingested;
+  `41,067/68,544` lines, `7,312/13,978` branches, `3,066/5,332`
+  functions, `63,987/106,544` regions.
 - `make test-core` — passed 77 tests with 0 failures, including the new
   byte-overflow guard. The maintained target also invokes five existing
   `pool_gpu` unit tests; no GPU parity or GPU coverage lane was run, and no

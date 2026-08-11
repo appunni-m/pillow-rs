@@ -9,13 +9,14 @@ failed cases.
 
 - Requested baseline commit: `4fafda8ef320f12a3fdae21dc573fa65e03c9338`.
 - Current checkout when this record was created: `3111a048fb7b401abc3ab7614a4a844a9959d3d1`.
+- Final measured checkout: `49105e55e3da7846daeef035ea04b12ebdc0e68e`.
 - CPU baseline snapshot: `fa368338-3d54-4e67-b01f-42c7ef525dcc`.
 - SIMD baseline snapshot: `e0d57644-1c2b-4793-9b9d-91c55a3096f3`.
 - Public manifest: `pillow-rs/tests/fixtures/manifest.yaml`, schema
   `migration-parity/manifest@2`.
-- Public inventory: 209 operations, 1,801 manifest requirements, and 3,167
-  active unique workflows. The input check reproduced the tracked inputs and
-  crash-quarantine ledger exactly.
+- Public inventory at campaign start: 209 operations, 1,801 manifest
+  requirements, and 3,167 active unique workflows. The input check reproduced
+  the tracked inputs and crash-quarantine ledger exactly.
 
 The reviewed typed-format batch added one active workflow,
 `PIL.Image.Image.getdata.nuanced.l16-png-band-zero`, bringing the current
@@ -74,9 +75,9 @@ same reviewed scope.
 
 ## Denominators
 
-### Whole-project snapshot
+### Supplied baseline snapshot denominators
 
-This is the literal LLVM snapshot denominator, including sibling `fontdone`,
+This is the literal supplied LLVM snapshot denominator, including sibling `fontdone`,
 GPU coordinator code, and all other measured files. It is useful for
 reproducibility, but it is not a public-contract score.
 
@@ -85,7 +86,7 @@ reproducibility, but it is not a public-contract score.
 | CPU | 39,111 / 68,478 | 6,513 / 14,052 | 3,023 / 5,314 | 60,400 / 106,451 |
 | SIMD | 40,667 / 68,478 | 7,196 / 14,052 | 3,042 / 5,314 | 63,241 / 106,451 |
 
-### Active Pillow Rust scope
+### Supplied baseline active Pillow Rust scope
 
 This is the union of the measured `pillow-rs` core and `pillow-rs-py/src`
 files. It excludes sibling `fontdone`, but retains the measured GPU
@@ -101,8 +102,12 @@ GPU-excluded safe implementation denominator below.
 ### Post-batch managed evidence
 
 These are the final safe managed snapshots for the dirty checkout at commit
-`3111a048fb7b401abc3ab7614a4a844a9959d3d1`. The source/input changes were
+`49105e55e3da7846daeef035ea04b12ebdc0e68e`. The source/input changes were
 present during measurement; the pre-existing user changes were preserved.
+Compared with the prior managed snapshot at `3111a048fb7b401abc3ab7614a4a844a9959d3d1`,
+the reviewed `checked_dims.rs` regression guard and `image.rs` I;16 contract
+fix add 9 counted lines, 2 branch sites, and 16 regions; no source file was
+removed from the measured scope.
 The `active safe` rows exclude only `pillow-rs/src/compute/pool_gpu/mod.rs`;
 the `active project` rows retain that source file but do not claim GPU
 execution. The `public Rust union` is the de-duplicated 28-path manifest
@@ -110,8 +115,8 @@ component union.
 
 | scope | lane | lines | branches | functions | regions |
 | --- | --- | ---: | ---: | ---: | ---: |
-| whole LLVM snapshot | CPU | 39,425/68,535 (57.53%) | 6,608/13,976 (47.28%) | 3,047/5,332 (57.15%) | 61,001/106,528 (57.26%) |
-| whole LLVM snapshot | SIMD | 41,058/68,535 (59.91%) | 7,310/13,976 (52.30%) | 3,066/5,332 (57.50%) | 63,971/106,528 (60.05%) |
+| whole LLVM snapshot | CPU | 39,434/68,544 (57.53%) | 6,610/13,978 (47.29%) | 3,047/5,332 (57.15%) | 61,017/106,544 (57.27%) |
+| whole LLVM snapshot | SIMD | 41,067/68,544 (59.91%) | 7,312/13,978 (52.31%) | 3,066/5,332 (57.50%) | 63,987/106,544 (60.06%) |
 | active project (core + PyO3) | CPU | 23,615/31,932 (73.95%) | 3,624/5,358 (67.64%) | 1,993/2,753 (72.39%) | 38,605/53,684 (71.91%) |
 | active project (core + PyO3) | SIMD | 25,248/31,932 (79.07%) | 4,326/5,358 (80.74%) | 2,012/2,753 (73.08%) | 41,575/53,684 (77.44%) |
 | active safe (GPU coordinator excluded) | CPU | 23,609/30,669 (76.98%) | 3,624/5,228 (69.32%) | 1,991/2,673 (74.49%) | 38,599/51,966 (74.28%) |
@@ -124,15 +129,21 @@ adapters.rs and scalar.rs) is 3,888/3,982 lines, 893/1,014 branches,
 195/204 functions, and 7,303/7,508 regions. This is reported separately
 because the public component paths intentionally name CPU implementations.
 
-Managed run IDs and snapshots:
+Prior managed run IDs and snapshots (before the final source commit):
 
 - CPU run `99c8ce2b-e258-4311-ba82-d3fac07a890e`, snapshot
   `85909121-065c-498c-8c83-1445a8c6bbe0`.
 - SIMD run `7ca8937f-4e51-4294-912b-9fccec4b8615`, snapshot
   `2dffe5d2-3685-4efe-b3a7-56298fdda6dc`.
-- Focused typed-case parity passed after rebuilding the target; full parity
-  executed 3,168 cases with 3,167 passed and one pre-existing variable-font
-  mismatch retained as a failure.
+
+Final managed run IDs and snapshots:
+- Final CPU run `2896a8c2-bc2c-4f79-a763-8120a1f79e00`, snapshot
+  `653dd4e1-ec53-4e0e-8529-7ca3878dbff1`.
+- Final SIMD run `e716fce8-75d1-4db9-81fa-593964a5b1d7`, snapshot
+  `1fa4ab68-b1cc-4442-a335-4c8680e95493`.
+- Focused typed-case parity passed after rebuilding the target; final full CPU
+  parity executed 3,168 cases with 3,167 passed and one retained
+  variable-font mismatch.
 
 ### Public-contract Rust component union
 
@@ -147,7 +158,7 @@ contract evidence but are not falsely represented as LLVM Rust lines.
 | SIMD | 13,928 / 15,379 (90.57%) | 2,603 / 2,842 (91.59%) | 1,089 / 1,303 (83.58%) | 22,466 / 25,007 (89.84%) |
 
 The contract input denominator is separately 209 operations / 1,801
-requirements / 3,167 workflows. A workflow is contract evidence only when
+requirements / 3,168 workflows. A workflow is contract evidence only when
 the source and target both pass; an operation with a signature-only or
 unmeasured result is not counted as covered.
 
