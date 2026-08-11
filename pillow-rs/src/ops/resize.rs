@@ -196,7 +196,10 @@ impl Image {
         }
         let requested_height = thumbnail_bound(size.1);
         let height = if source_height == 0 {
-            requested_height
+            // Pillow raises ZeroDivisionError for a positive thumbnail bound
+            // when the source has no rows; do this at the public call instead
+            // of queueing an operation that would fail only during execution.
+            return Err(PilError::ZeroDivisionError("division by zero".into()));
         } else {
             requested_height.min(source_height)
         };
