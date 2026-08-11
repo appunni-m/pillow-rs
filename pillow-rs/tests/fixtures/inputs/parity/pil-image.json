@@ -5928,6 +5928,76 @@
       ]
     },
     {
+      "case_id": "PIL.Image.open.nuanced.in-memory-byte-stream",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.fp"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "encoded-input-stream",
+          "kind": "builtin",
+          "name": "encoded-png-input-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "encoded-input-stream"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.Image.open.nuanced.nonexistent-path-no-formats",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.fp"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "missing-input",
+          "kind": "missing",
+          "path": "missing/does-not-exist.png"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "missing-input"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.linear_gradient.nuanced.i-mode",
       "surface": "PIL.Image",
       "operation": "linear_gradient",

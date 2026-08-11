@@ -273,6 +273,8 @@
           "PIL.Image.open.nuanced.non-string-mode",
           "PIL.Image.open.nuanced.embedded-null-bytes",
           "PIL.Image.open.nuanced.non-null-bytes",
+          "PIL.Image.open.nuanced.in-memory-byte-stream",
+          "PIL.Image.open.nuanced.nonexistent-path-no-formats",
           "PIL.Image.linear_gradient.nuanced.i-mode",
           "PIL.Image.linear_gradient.nuanced.f-mode",
           "PIL.Image.linear_gradient.nuanced.invalid-single-character-mode",
