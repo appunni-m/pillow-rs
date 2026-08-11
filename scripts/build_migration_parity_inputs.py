@@ -3298,6 +3298,29 @@ class WorkflowBuilder:
                     step_id="setup-putalpha",
                 )
                 receiver_step = image_step
+            elif chain == "p-putpalette-convert":
+                image_step = self.ensure_image(mode="P")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal([10, 20, 30, 40, 50, 60]),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-putpalette",
+                )
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(image_step),
+                    arguments={
+                        "xy": literal([2, 3]),
+                        "value": literal(1),
+                    },
+                    step_id="setup-varied-pixel",
+                )
+                receiver_step = image_step
             elif chain == "p-putpalette-putalpha-convert":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -23802,6 +23825,16 @@ def build_nuanced_cases(
             "mode": "P",
             "chain": "p-putalpha-convert",
             "values": {"mode": literal("RGBA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.rgb",
+            "name": "p-putpalette-to-rgb-observed",
+            "mode": "P",
+            "chain": "p-putpalette-convert",
+            "observe_result": "tobytes",
+            "values": {"mode": literal("RGB")},
         },
         {
             "surface": "PIL.Image.Image",

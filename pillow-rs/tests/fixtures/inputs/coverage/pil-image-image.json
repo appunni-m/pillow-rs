@@ -2027,6 +2027,7 @@
           "PIL.Image.Image.save.nuanced.quantized-pipeline",
           "PIL.Image.Image.load.nuanced.p-resize-putalpha",
           "PIL.Image.Image.convert.nuanced.p-putalpha-to-rgba",
+          "PIL.Image.Image.convert.nuanced.p-putpalette-to-rgb-observed",
           "PIL.Image.Image.getchannel.nuanced.p-resize-preserves-p-channel",
           "PIL.Image.Image.convert.nuanced.p-putpalette-putalpha-to-rgba",
           "PIL.Image.Image.convert.nuanced.p-putpalette-putalpha-to-one",
