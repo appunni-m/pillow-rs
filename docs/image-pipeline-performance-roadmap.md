@@ -2,8 +2,8 @@
 
 Status: active — verified slices recorded; remaining work is open  
 Reviewed: 2026-08-12  
-Code revision reviewed: `d00e74e57b2c554f27a31e336236b79d37961ebe` with additional uncommitted worktree changes  
-Benchmark evidence: `build/migration-parity/benchmark-result.json`, managed run `89b1c9d6-0cfb-4b4d-85ae-e8a06c10b1f0`
+Code revision reviewed: `60f7f357e9047370c1b0daa81f730c15064e77e9` with additional uncommitted worktree changes  
+Benchmark evidence: `build/migration-parity/benchmark-result.json`, managed run `d8567f9d-5bd9-43da-938f-62d77912d88f`
 
 ## Purpose
 
@@ -34,7 +34,9 @@ This ledger records verified slices; an item remains open until its complete
 | 2026-08-12 | CPU rolling-window BoxBlur/GaussianBlur | isolated worker branch commit `d00e74e57b2c554f27a31e336236b79d37961ebe`; `make -C pillow-rs test-core`; focused CPU parity 5/5; full CPU parity 3,677/3,678 | The 240-case edge/radius/mode matrix was byte-identical. Release 1024² GaussianBlur(2)→invert improved from 96.956 ms to 30.824 ms median (3.15×), but remains slower than Pillow’s 10.108 ms median. |
 | 2026-08-12 | SIMD BoxBlur alpha accumulation correction | isolated worker commit `4e6deae8e6bd13b72c3e1502b9a421b53b81f30e`; focused SIMD parity 6/6; full SIMD parity 3,677/3,678 | LA and RGBA radii 1/2/3 now match exactly. The remaining full-lane failure is the shared variable-font axis-overflow case; this slice does not claim SIMD acceleration. |
 | 2026-08-12 | Four-backend release benchmark after blur and SIMD correctness slices | managed Coverage MCP run `89b1c9d6-0cfb-4b4d-85ae-e8a06c10b1f0`; `migration-parity-benchmark` validator; 4 workloads, 100 samples per subject | Correctness passed for all four workloads. Current medians (Pillow / CPU / SIMD / GPU): transpose×2 1.518 / 3.880 / 33.355 / 10.514 ms; GaussianBlur+invert 8.343 / 28.604 / 40.762 / 28.644 ms; multiply+screen 5.482 / 5.367 / 33.325 / 12.428 ms; invert+mirror 1.844 / 3.152 / 30.519 / 10.574 ms. SIMD/GPU labels remain diagnostic until native execution receipts are implemented. |
-| 2026-08-12 | Coverage denominator after the verified slices | Coverage MCP snapshot `d51ad1a7-7357-47f2-9384-a7dd18c12865`, suite `pillow-rs-combined-cpu-simd-20260811`; compared with `068bf419-8dd5-4b02-b452-af4179d61b20` | 33,344 lines / 27,934 covered (83.7752%); 5,720 branches / 4,586 covered (80.1748%); 2,853 functions / 2,213 covered (77.5675%); 55,622 regions / 46,492 covered (83.5856%). The denominator grew by 191 lines, 16 branches, 4 functions, and 84 regions from reviewed worktree scope additions; rates therefore moved slightly despite 142 additional covered lines, 12 branches, 4 functions, and 48 regions. Unit-test pass counts are not coverage numerator data. |
+| 2026-08-12 | Native-layout SIMD point/geometry fast paths | focused SIMD parity 8/8; managed benchmark `d8567f9d-5bd9-43da-938f-62d77912d88f`; unified all-backend receipt `50363c67-5278-4f11-88bc-f378fd19a86a` | Ordinary L/LA/RGB/RGBA invert, ImageChops invert, and mirror avoid RGBA packing. The current invert workload measured Pillow / CPU / SIMD / GPU at 1.829 / 3.301 / 1.431 / 10.444 ms. This is a native-layout safe-Rust fast path, not proof of architecture-specific SIMD instructions. |
+| 2026-08-12 | Four-backend release benchmark after native-layout fast paths | managed Coverage MCP run `d8567f9d-5bd9-43da-938f-62d77912d88f`; validator reported 4 measured, 0 not-run, 0 budget failures | Current medians (Pillow / CPU / SIMD / GPU): transpose×2 1.552 / 3.888 / 33.094 / 10.450 ms; GaussianBlur+invert 8.510 / 28.932 / 27.162 / 28.427 ms; multiply+screen 5.567 / 5.499 / 33.894 / 11.535 ms; invert+mirror 1.829 / 3.301 / 1.431 / 10.444 ms. The benchmark is correctness-gated; SIMD/GPU native receipts remain open. |
+| 2026-08-12 | Coverage denominator after native-layout fast paths | Coverage MCP snapshot `bd7f3ba7-318d-4c5c-8ece-71f757c7df38`, suite `pillow-rs-combined-cpu-simd-20260811`; compared with `d51ad1a7-7357-47f2-9384-a7dd18c12865` | 33,421 lines / 27,976 covered (83.7078%); 5,736 branches / 4,584 covered (79.9163%); 2,856 functions / 2,215 covered (77.5560%); 55,783 regions / 46,543 covered (83.4358%). The denominator grew by 77 lines, 16 branches, 3 functions, and 161 regions; covered items changed by +42, −2, +2, and +51 respectively. The rate decrease is recorded, not hidden. Unit-test pass counts are not coverage numerator data. |
 
 The single managed coverage number above is explicitly the registered CPU+SIMD
 LLVM suite. It includes compiled GPU and binding source files where that suite
@@ -153,10 +155,10 @@ kernel microbenchmark.
 
 | Workload | Pillow median | CPU median | SIMD median | GPU median | SIMD / CPU | GPU / CPU |
 |---|---:|---:|---:|---:|---:|---:|
-| transpose × 2 | 1.518 ms | 3.880 ms | 33.355 ms | 10.514 ms | 8.60× slower | 2.71× slower |
-| GaussianBlur + invert | 8.343 ms | 28.604 ms | 40.762 ms | 28.644 ms | 1.43× slower | 1.00× slower |
-| multiply + screen | 5.482 ms | 5.367 ms | 33.325 ms | 12.428 ms | 6.21× slower | 2.32× slower |
-| invert + mirror | 1.844 ms | 3.152 ms | 30.519 ms | 10.574 ms | 9.68× slower | 3.35× slower |
+| transpose × 2 | 1.552 ms | 3.888 ms | 33.094 ms | 10.450 ms | 8.51× slower | 2.69× slower |
+| GaussianBlur + invert | 8.510 ms | 28.932 ms | 27.162 ms | 28.427 ms | 0.94× CPU (6.1% faster) | 0.98× CPU (1.7% faster) |
+| multiply + screen | 5.567 ms | 5.499 ms | 33.894 ms | 11.535 ms | 6.16× slower | 2.10× slower |
+| invert + mirror | 1.829 ms | 3.301 ms | 1.431 ms | 10.444 ms | 0.43× CPU (56.7% faster) | 3.16× slower |
 
 The artifact identifies Pillow 12.2.0, CPython 3.12, macOS 15.7.7 arm64, and a
 dirty target tree at the revision stated above. These numbers are a prioritizing
