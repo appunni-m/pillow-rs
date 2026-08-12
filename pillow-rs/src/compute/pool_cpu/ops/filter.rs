@@ -292,75 +292,307 @@ fn filter_5x5_i32(
 
 // ── PIL-style box blur ──
 
+const BOX_BLUR_SCALE: u32 = 1 << 24;
+const BOX_BLUR_BIAS: u32 = 1 << 23;
+
+#[inline(always)]
+fn blur_line_step(
+    source: &[u8],
+    destination: &mut [u8],
+    accumulator: &mut [u32],
+    line_start: usize,
+    element_width: usize,
+    output: usize,
+    subtract: usize,
+    add: usize,
+    far_left: usize,
+    far_right: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let output_base = line_start + output * element_width;
+    let subtract_base = line_start + subtract * element_width;
+    let add_base = line_start + add * element_width;
+    let far_left_base = line_start + far_left * element_width;
+    let far_right_base = line_start + far_right * element_width;
+
+    for component in 0..element_width {
+        accumulator[component] = accumulator[component]
+            .wrapping_sub(source[subtract_base + component] as u32)
+            .wrapping_add(source[add_base + component] as u32);
+        let far = (source[far_left_base + component] as u32
+            + source[far_right_base + component] as u32)
+            .wrapping_mul(fractional_weight);
+        let bulk = accumulator[component]
+            .wrapping_mul(whole_weight)
+            .wrapping_add(far);
+        destination[output_base + component] = (bulk.wrapping_add(BOX_BLUR_BIAS) >> 24) as u8;
+    }
+}
+
+/// Blur one contiguous interleaved row using Pillow's four edge regions.
+///
+/// `src/libImaging/BoxBlur.c::ImagingLineBoxBlur{8,32}` initializes the
+/// accumulator for logical pixel `-1`, then advances it by exactly one
+/// entering and one leaving sample for every output pixel. Keeping the same
+/// regions avoids a radius-sized inner loop while preserving Pillow's edge
+/// replication and unsigned 24-bit fixed-point arithmetic.
+fn blur_line(
+    source: &[u8],
+    destination: &mut [u8],
+    line_start: usize,
+    line_length: usize,
+    element_width: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+    accumulator: &mut [u32],
+) {
+    debug_assert!(line_length > 0);
+    debug_assert!(element_width > 0);
+    debug_assert!(accumulator.len() >= element_width);
+
+    let last = line_length - 1;
+    let edge_a = (radius + 1).min(line_length);
+    let edge_b = line_length.saturating_sub(radius + 1);
+    let first_base = line_start;
+    let last_base = line_start + last * element_width;
+    accumulator[..element_width].fill(0);
+
+    // Pillow starts with the clamped window centered at x=-1. This lets the
+    // first MOVE_ACC produce the exact window centered at output x=0.
+    for component in 0..element_width {
+        accumulator[component] =
+            (source[first_base + component] as u32).wrapping_mul((radius + 1) as u32);
+    }
+    for position in 0..edge_a.saturating_sub(1) {
+        let base = line_start + position * element_width;
+        for component in 0..element_width {
+            accumulator[component] =
+                accumulator[component].wrapping_add(source[base + component] as u32);
+        }
+    }
+    let last_count = radius.saturating_add(1).saturating_sub(edge_a);
+    for component in 0..element_width {
+        accumulator[component] = accumulator[component]
+            .wrapping_add((source[last_base + component] as u32).wrapping_mul(last_count as u32));
+    }
+
+    if edge_a <= edge_b {
+        for output in 0..edge_a {
+            blur_line_step(
+                source,
+                destination,
+                accumulator,
+                line_start,
+                element_width,
+                output,
+                0,
+                output + radius,
+                0,
+                output + radius + 1,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+        for output in edge_a..edge_b {
+            blur_line_step(
+                source,
+                destination,
+                accumulator,
+                line_start,
+                element_width,
+                output,
+                output - radius - 1,
+                output + radius,
+                output - radius - 1,
+                output + radius + 1,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+        for output in edge_b..=last {
+            blur_line_step(
+                source,
+                destination,
+                accumulator,
+                line_start,
+                element_width,
+                output,
+                output - radius - 1,
+                last,
+                output - radius - 1,
+                last,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+    } else {
+        // The radius overlaps both edges. Pillow separates the overlap so no
+        // index ever leaves the row, even when radius exceeds its length.
+        for output in 0..edge_b {
+            blur_line_step(
+                source,
+                destination,
+                accumulator,
+                line_start,
+                element_width,
+                output,
+                0,
+                output + radius,
+                0,
+                output + radius + 1,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+        for output in edge_b..edge_a {
+            blur_line_step(
+                source,
+                destination,
+                accumulator,
+                line_start,
+                element_width,
+                output,
+                0,
+                last,
+                0,
+                last,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+        for output in edge_a..=last {
+            blur_line_step(
+                source,
+                destination,
+                accumulator,
+                line_start,
+                element_width,
+                output,
+                output - radius - 1,
+                last,
+                output - radius - 1,
+                last,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+    }
+}
+
+fn blur_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_length = width * channels;
+    let mut accumulator = [0u32; 4];
+    for row in 0..height {
+        blur_line(
+            source,
+            destination,
+            row * row_length,
+            width,
+            channels,
+            radius,
+            whole_weight,
+            fractional_weight,
+            &mut accumulator,
+        );
+    }
+}
+
+fn blur_columns(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+    accumulator: &mut [u32],
+) {
+    // Treat each complete image row as one wide line element. Every component
+    // gets the recurrence it would receive after Pillow's transpose, while
+    // both the input and output accesses remain contiguous in row-major order.
+    let row_length = width * channels;
+    blur_line(
+        source,
+        destination,
+        0,
+        height,
+        row_length,
+        radius,
+        whole_weight,
+        fractional_weight,
+        accumulator,
+    );
+}
+
 /// PIL-style box blur with fractional radius support.
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
 /// Matches PIL order: ALL horizontal passes first, then ALL vertical passes.
 fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
-    let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
-    let w = w_u32 as i32;
-    let h = h_u32 as i32;
+    if w_u32 == 0 || h_u32 == 0 || radius == 0.0 {
+        return Ok(img.clone());
+    }
+    let (width, height) = (w_u32 as usize, h_u32 as usize);
 
     // Integer part of radius (PIL: (int)floatRadius)
-    let r_int = radius as i32;
+    let integer_radius = radius as i32 as usize;
     // Number of pixels in the integer window
-    let window_pixels = (2 * r_int + 1) as u32;
+    let window_pixels = (2 * integer_radius + 1) as u32;
     // Fixed-point weight: PIL uses f32 precision for ww computation
     // (UINT32)((1 << 24) / (floatRadius * 2 + 1)) — all in f32
-    let ww = ((1u64 << 24) as f32 / (radius * 2.0 + 1.0)) as u32;
+    let whole_weight = (BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
     // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2)
-    let fw = ((1u64 << 24) - window_pixels as u64 * ww as u64) as u32 / 2;
-    let bias = 1u32 << 23;
+    let fractional_weight =
+        BOX_BLUR_SCALE.wrapping_sub(window_pixels.wrapping_mul(whole_weight)) / 2;
 
-    let mut work = raw.to_vec();
+    let mut work = img.as_bytes().to_vec();
+    let mut scratch = CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer();
 
     // PIL does ALL horizontal passes first (matching ImagingBoxBlur order)
-    for _pass in 0..passes {
-        let mut hpass = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
-        for y in 0..h {
-            for x in 0..w {
-                for c in 0..channels {
-                    let mut acc = 0u64;
-                    for dx in -r_int..=r_int {
-                        let sx = (x + dx).clamp(0, w - 1);
-                        let idx = (y * w + sx) as usize * channels + c;
-                        acc += work[idx] as u64;
-                    }
-                    let left_x = (x - r_int - 1).clamp(0, w - 1);
-                    let right_x = (x + r_int + 1).clamp(0, w - 1);
-                    let lv = work[(y * w + left_x) as usize * channels + c] as u64;
-                    let rv = work[(y * w + right_x) as usize * channels + c] as u64;
-                    let bulk = acc * ww as u64 + (lv + rv) * fw as u64 + bias as u64;
-                    hpass[(y * w + x) as usize * channels + c] = (bulk >> 24) as u8;
-                }
-            }
-        }
-        work = hpass;
+    for _ in 0..passes {
+        blur_rows(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            channels,
+            integer_radius,
+            whole_weight,
+            fractional_weight,
+        );
+        std::mem::swap(&mut work, &mut scratch);
     }
 
-    // PIL does ALL vertical passes after all horizontal passes
-    for _pass in 0..passes {
-        let mut vpass = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
-        for x in 0..w {
-            for y in 0..h {
-                for c in 0..channels {
-                    let mut acc = 0u64;
-                    for dy in -r_int..=r_int {
-                        let sy = (y + dy).clamp(0, h - 1);
-                        let idx = (sy * w + x) as usize * channels + c;
-                        acc += work[idx] as u64;
-                    }
-                    let top_y = (y - r_int - 1).clamp(0, h - 1);
-                    let bot_y = (y + r_int + 1).clamp(0, h - 1);
-                    let tv = work[(top_y * w + x) as usize * channels + c] as u64;
-                    let bv = work[(bot_y * w + x) as usize * channels + c] as u64;
-                    let bulk = acc * ww as u64 + (tv + bv) * fw as u64 + bias as u64;
-                    vpass[(y * w + x) as usize * channels + c] = (bulk >> 24) as u8;
-                }
-            }
-        }
-        work = vpass;
+    // Pillow transposes before its vertical passes. Processing each complete
+    // row as one vector is algebraically identical and keeps both sides of the
+    // recurrence contiguous without two extra full-image copies.
+    let mut vertical_accumulator = vec![0u32; width * channels];
+    for _ in 0..passes {
+        blur_columns(
+            &work,
+            &mut scratch,
+            width,
+            height,
+            channels,
+            integer_radius,
+            whole_weight,
+            fractional_weight,
+            &mut vertical_accumulator,
+        );
+        std::mem::swap(&mut work, &mut scratch);
     }
 
     let result = raw_bytes_to_image(w_u32, h_u32, work, channels)?;
@@ -665,49 +897,10 @@ pub fn execute_gaussian_blur(img: &DynamicImage, sigma: f32) -> Result<DynamicIm
 
 /// Execute a box blur with integer radius.
 pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage, PilError> {
-    let r = radius as i32;
-    if r <= 0 {
+    if radius == 0 {
         return Ok(img.clone());
     }
-    let channels = img.color().channel_count() as usize;
-    let raw = img.as_bytes();
-    let (w, h) = (img.width(), img.height());
-    let window = (2 * r + 1) as u32;
-    let ww: u32 = ((1u64 << 24) / window as u64) as u32;
-    let bias: u32 = 1u32 << 23;
-
-    let mut hpass = vec![0u8; (w * h) as usize * channels];
-    for y in 0..h {
-        for x in 0..w {
-            for c in 0..channels {
-                let mut acc: u64 = 0;
-                for dx in -r..=r {
-                    let sx = (x as i32 + dx).clamp(0, w as i32 - 1) as u32;
-                    let idx = (y * w + sx) as usize * channels + c;
-                    acc += raw[idx] as u64;
-                }
-                hpass[(y * w + x) as usize * channels + c] =
-                    ((acc * ww as u64 + bias as u64) >> 24) as u8;
-            }
-        }
-    }
-    let mut out = CheckedDims::new(w, h, channels as u8)?.alloc_buffer();
-    for y in 0..h {
-        for x in 0..w {
-            for c in 0..channels {
-                let mut acc: u64 = 0;
-                for dy in -r..=r {
-                    let sy = (y as i32 + dy).clamp(0, h as i32 - 1) as u32;
-                    let idx = (sy * w + x) as usize * channels + c;
-                    acc += hpass[idx] as u64;
-                }
-                out[(y * w + x) as usize * channels + c] =
-                    ((acc * ww as u64 + bias as u64) >> 24) as u8;
-            }
-        }
-    }
-    let result = raw_bytes_to_image(w, h, out, channels)?;
-    Ok(preserve_mode(img, result))
+    pil_box_blur(img, radius as f32, 1)
 }
 
 /// Execute a median filter with explicit mode.
