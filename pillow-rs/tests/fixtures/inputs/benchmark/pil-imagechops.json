@@ -14,6 +14,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -21,10 +29,8 @@
         "case_id": "PIL.ImageChops.add.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -35,6 +41,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -50,6 +67,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -57,10 +82,8 @@
         "case_id": "PIL.ImageChops.add_modulo.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -71,6 +94,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -86,6 +120,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -93,10 +135,8 @@
         "case_id": "PIL.ImageChops.blend.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -107,6 +147,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -122,6 +173,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -129,10 +188,8 @@
         "case_id": "PIL.ImageChops.composite.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -143,6 +200,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -158,6 +226,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -165,10 +241,8 @@
         "case_id": "PIL.ImageChops.constant.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -179,6 +253,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -194,6 +279,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -201,10 +294,8 @@
         "case_id": "PIL.ImageChops.darker.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -215,6 +306,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -230,6 +332,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -237,10 +347,8 @@
         "case_id": "PIL.ImageChops.difference.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -251,6 +359,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -266,6 +385,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -273,10 +400,8 @@
         "case_id": "PIL.ImageChops.duplicate.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -287,6 +412,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -302,6 +438,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -309,10 +453,8 @@
         "case_id": "PIL.ImageChops.hard_light.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -323,6 +465,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -338,6 +491,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -345,10 +506,8 @@
         "case_id": "PIL.ImageChops.invert.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -359,6 +518,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -374,6 +544,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -381,10 +559,8 @@
         "case_id": "PIL.ImageChops.lighter.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -395,6 +571,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -410,6 +597,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -417,10 +612,8 @@
         "case_id": "PIL.ImageChops.logical_and.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -431,6 +624,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -446,6 +650,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -453,10 +665,8 @@
         "case_id": "PIL.ImageChops.logical_or.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -467,6 +677,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -482,6 +703,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -489,10 +718,8 @@
         "case_id": "PIL.ImageChops.logical_xor.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -503,6 +730,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -518,16 +756,26 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
         "kind": "parity_case",
-        "case_id": "PIL.ImageChops.multiply.behavior.default"
+        "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024"
       },
       "measurement": {
         "boundary": "observed_steps",
         "step_ids": [
-          "call"
+          "pipeline-primary",
+          "pipeline-secondary",
+          "materialize"
         ],
         "metrics": [
           "latency",
@@ -539,6 +787,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          1024,
+          1024
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -554,6 +813,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -561,10 +828,8 @@
         "case_id": "PIL.ImageChops.offset.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -575,6 +840,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -590,6 +866,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -597,10 +881,8 @@
         "case_id": "PIL.ImageChops.overlay.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -611,6 +893,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -626,6 +919,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -633,10 +934,8 @@
         "case_id": "PIL.ImageChops.screen.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -647,6 +946,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -662,6 +972,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -669,10 +987,8 @@
         "case_id": "PIL.ImageChops.soft_light.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -683,6 +999,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -698,6 +1025,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -705,10 +1040,8 @@
         "case_id": "PIL.ImageChops.subtract.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -719,6 +1052,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -734,6 +1078,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -741,10 +1093,8 @@
         "case_id": "PIL.ImageChops.subtract_modulo.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -755,6 +1105,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     }
   ],

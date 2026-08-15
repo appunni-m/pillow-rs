@@ -38,7 +38,7 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let out_r = 255u - r;
     let out_g = select(g, 255u - g, mode_has_g(params.mode));
     let out_b = select(b, 255u - b, mode_has_b(params.mode));
-    let out_a = select(255u, a, mode_has_a(params.mode));
+    let out_a = select(255u, 255u - a, mode_has_a(params.mode));
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

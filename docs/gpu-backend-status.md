@@ -2,6 +2,37 @@
 
 2026-06-17
 
+## 2026-08-12 resolution
+
+The historical full-process hang is resolved in the active implementation.
+The old trace established that the process stopped inside wgpu's public
+`CommandEncoder::copy_buffer_to_buffer` call while recording a second,
+readback-only encoder. It did **not** establish that `vkCmdCopyBuffer` itself
+or command-pool exhaustion was the underlying native cause; wgpu performs
+locking, resource tracking, encoder opening, and barrier work before reaching
+the backend call.
+
+The active path now records the compute passes and the final storage-to-
+readback copy in one command encoder and submits that command buffer once.
+It also keeps mutable image buffers local to each lazy batch, bounds shader
+work, and places every GPU parity child in an isolated process group with a
+hard 300-second outer deadline. A native call that wedges cannot be recovered
+inside Rust, so the parent kills and reaps the complete child group.
+
+Managed adapter-backed verification now runs the complete corpus in one
+process, well beyond the old roughly 80-case failure point. The final run
+executed all 3,674 cases in 11.75 seconds with zero hangs, crashes, timeouts,
+not-run cases, or infrastructure errors. It passed 3,673 cases; the sole
+failure is the backend-independent
+`PIL.ImageFont.FreeTypeFont.set_variation_by_axes.nuanced.variable-font-positive-axis-overflow`
+parity mismatch. All GPU-specific cases pass, including the nonzero RGBA green
+band and fractional Gaussian/UnsharpMask regressions.
+
+The remainder of this document preserves the original investigation as
+historical evidence. Its driver-level explanation is a hypothesis, not a
+confirmed root cause, and batching tests into processes of 50 is no longer the
+maintained workaround.
+
 ## What We Achieved
 
 ### Architecture cleanup

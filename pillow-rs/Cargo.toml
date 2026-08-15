@@ -9,7 +9,7 @@ description = "Pure Rust image processing — Pillow reimplementation"
 name = "pillow_rs"
 
 [features]
-default = ["gpu", "image-codecs-all", "parallel", "fontdone-default"]
+default = ["gpu", "image-codecs-all", "parallel"]
 gpu = ["wgpu", "pollster"]
 parallel = ["rayon"]
 image-codecs-all = [
@@ -30,10 +30,6 @@ image-webp = ["image-slash-star/webp"]
 image-ico = ["image-slash-star/ico"]
 image-avif = ["image-slash-star/avif"]
 wasm-wide-font-internals = ["fontdone/wasm-wide-internals"]
-fontdone-default = ["fontdone-bzip2", "fontdone-color-layers", "fontdone-lzw"]
-fontdone-bzip2 = ["fontdone/bzip2"]
-fontdone-color-layers = ["fontdone/color-layers"]
-fontdone-lzw = ["fontdone/lzw"]
 fontdone-subpixel-rendering = ["fontdone/subpixel-rendering"]
 test-api = []
 
@@ -43,13 +39,14 @@ required-features = ["test-api"]
 
 [dependencies]
 image-slash-star = { git = "https://github.com/appunni-m/image-slash-star.git", rev = "d7e60df1cfa0c38b244d6513cf76eab29d1b9a0a", default-features = false }
-fontdone = { version = "=2.14.3-alpha.1", path = "../../fontdone", default-features = false }
+fontdone = { version = "=2.14.3-alpha.1", git = "https://github.com/appunni-m/fontdone.git", rev = "95dc33f12790c896f9a5c95571eec4360f22412e" }
 log = "0.4"
 thiserror = "2"
 csscolorparser = "0.8"
 wgpu = { version = "24", optional = true }
 pollster = { version = "0.3", optional = true }
 bytemuck = { version = "1", features = ["derive"] }
+wide = "1.6.1"
 
 # AS PER DESIGN — DO NOT REMOVE:
 # rayon provides safe parallelism for pixel loops via the par_rows!/par_pixels!

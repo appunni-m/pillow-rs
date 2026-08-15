@@ -2,6 +2,14 @@
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
 
+try:
+    # Keep the Rust image recognizable by consumers such as torchvision's
+    # PIL transforms when Pillow is present.  RSPIL itself remains usable
+    # without Pillow; the fallback preserves the Rust-only package surface.
+    from PIL.Image import Image as _PILImageBase
+except ImportError:
+    _PILImageBase = object
+
 from . import _core
 from ._core import Image as RustImage
 from .enums import Palette, Resampling, Transpose
@@ -55,10 +63,6 @@ class _ExifCompat:
         self.__dict__.update(_core.exif_compat_fields(raw, loaded_exif))
 
 
-class PyCapsule:
-    """Result-shape placeholder for the non-dereferenceable ``getim`` API."""
-
-
 class UnidentifiedImageError(OSError):
     """Pillow-compatible class for bytes that no registered decoder accepts."""
 
@@ -73,7 +77,7 @@ class _ClosedImage:
         raise ValueError("Operation on closed image")
 
 
-class Image:
+class Image(_PILImageBase):
     """A high-performance image class backed by Rust. Pillow-compatible API."""
 
     # Resampling constants matching PIL.Image.<name> access pattern
@@ -319,7 +323,9 @@ class Image:
         """Return pixel data through Pillow's ``ImagingCore`` sequence API."""
         if band is not None:
             values = self._rust_image.getdata_formatted(band)
-            return ImagingCore(values, "L", self.size)
+            # Pillow preserves the palette mode for a banded P read; other
+            # public band selections are exposed as a single L channel.
+            return ImagingCore(values, "P" if self.mode == "P" else "L", self.size)
         return ImagingCore(
             self._rust_image.getdata_formatted(None), self.mode, self.size
         )

@@ -8,7 +8,7 @@
 // 4-binding layout: input, output, params, lut.
 //
 // Mode-aware: L/LA only apply LUT to R channel; RGB apply to R,G,B; RGBA apply to R,G,B.
-// Alpha is always preserved unchanged.
+// Alpha is looked up for LA/RGBA and remains opaque for L/RGB.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 
 struct Params {
@@ -46,7 +46,8 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let out_g = select(g, out_g_raw, mode_has_g(params.mode));
     let out_b = select(b, out_b_raw, mode_has_b(params.mode));
-    // Alpha preserved unchanged
+    let out_a_raw = (lut[a] >> 24u) & 0xffu;
+    let out_a = select(255u, out_a_raw, mode_has_a(params.mode));
 
-    output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (a << 24u);
+    output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

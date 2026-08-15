@@ -19,8 +19,8 @@ and refreshed with `make repo-map-update`.
   installs as repository source.
 - Keep fixture generators and parity harnesses documented as maintained system
   components, not one-off scripts.
-- `../fontdone/freetype/` is a version-pinned C FreeType oracle for fixture
-  generation and diagnosis only. Runtime code must not call it.
+- `build/fontdone-src/freetype/` is a version-pinned C FreeType oracle for
+  fixture generation and diagnosis only. Runtime code must not call it.
 
 ## Primary Source Of Truth
 
@@ -45,47 +45,50 @@ and refreshed with `make repo-map-update`.
 - `pillow-rs-py/`: PyO3 binding crate. `src/lib.rs` exposes Rust to Python;
   `python/pillow_rs/` must stay a thin Python surface.
 - `pillow-rs-js/`: wasm-bindgen binding crate plus browser/node test runners.
-- `../fontdone/`: sibling standalone package for the pure Rust
+- `build/fontdone-src/`: pinned GitHub checkout for the standalone pure Rust
   FreeType-compatible implementation and parity harness. `pillow-rs` depends
-  on it through the `fontdone` crate.
+  on the same pinned `fontdone` revision through Cargo.
 
 ## FreeType Map
 
-- `../fontdone/PROJECT_GOALS.md`: project-level parity goal and
+- `build/fontdone-src/PROJECT_GOALS.md`: project-level parity goal and
   non-negotiable constraints.
-- `../fontdone/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
+- `build/fontdone-src/FTL.TXT`, `LICENSE`, and `NOTICE.md`: FreeType license
   text and migration attribution for the standalone package.
-- `../fontdone/src/font.rs`: public face/font API and high-level
+- `build/fontdone-src/src/font.rs`: public face/font API and high-level
   FreeType-compatible behavior.
-- `../fontdone/src/scaler.rs`: size scaling and glyph load pipeline.
-- `../fontdone/src/outline.rs`: outline geometry, bbox, cbox, and point
+- `build/fontdone-src/src/scaler.rs`: size scaling and glyph load pipeline.
+- `build/fontdone-src/src/outline.rs`: outline geometry, bbox, cbox, and point
   representation.
-- `../fontdone/src/render.rs` and `src/grays.rs`: bitmap render paths.
-- `../fontdone/src/tt/`: TrueType parsing, glyph loading, metrics, and
+- `build/fontdone-src/src/render.rs` and `src/grays.rs`: bitmap render paths.
+- `build/fontdone-src/src/tt/`: TrueType parsing, glyph loading, metrics, and
   native bytecode hinting.
-- `../fontdone/src/autohint/`: autohinter implementation and script
+- `build/fontdone-src/src/autohint/`: autohinter implementation and script
   coverage.
-- `../fontdone/tests/coverage_matrix_tests.rs`: fixture matrix parity
+- `build/fontdone-src/tests/coverage_matrix_tests.rs`: fixture matrix parity
   harness.
-- `../fontdone/tests/no_runtime_ffi.rs`: guard against runtime FFI
+- `build/fontdone-src/tests/no_runtime_ffi.rs`: guard against runtime FFI
   shortcuts.
-- `../fontdone/tests/fixtures/*_matrix.json`: versioned oracle matrices.
+- `build/fontdone-src/tests/fixtures/*_matrix.json`: versioned oracle matrices.
   Do not edit these to make tests pass.
-- `../fontdone/scripts/`: maintained generators, benchmark tools, and
+- `build/fontdone-src/scripts/`: maintained generators, benchmark tools, and
   failure classifiers.
-- `../fontdone/doc/GENERATOR_SYSTEM.md`: fixture generation contract.
-- `../fontdone/doc/FONT_FIXTURE_COVERAGE_PLAN.md`: maintained plan for
+- `build/fontdone-src/doc/GENERATOR_SYSTEM.md`: fixture generation contract.
+- `build/fontdone-src/doc/FONT_FIXTURE_COVERAGE_PLAN.md`: maintained plan for
   compact font fixtures, explicit public inputs, legacy-font retirement, and
   100% Rust structural coverage.
-- `../fontdone/doc/FONT_FIXTURE_INVENTORY.md`: content-deduplicated active
+- `build/fontdone-src/doc/FONT_FIXTURE_INVENTORY.md`: content-deduplicated active
   and deprecated font inventory with selected glyph and coverage ownership.
-- `../fontdone/doc/PARITY_FAILURE_CLASSIFICATION.md`: failure bucket
+- `build/fontdone-src/doc/PARITY_FAILURE_CLASSIFICATION.md`: failure bucket
   taxonomy.
-- `../fontdone/doc/PERFORMANCE_BENCHMARKING.md`: Rust-vs-C FreeType
+- `build/fontdone-src/doc/PERFORMANCE_BENCHMARKING.md`: Rust-vs-C FreeType
   benchmark method and reporting.
 
 ## Harness And Fixture Map
 
+- `scripts/run_all_backend_tests.py`: maintained CPU/SIMD/GPU/JS campaign
+  orchestrator. GPU children use bounded process groups, and full GPU parity
+  runs by default after the smoke gate.
 - `scripts/run_migration_parity.py`: live source/target runner for indexed
   input-only workflows.
 - `scripts/run_migration_coverage.py`: target coverage producer for indexed
@@ -97,7 +100,9 @@ and refreshed with `make repo-map-update`.
 - `deprecated/migration-parity-v0/`: read-only provenance archive for the
   retired fixture/oracle suites, old manifest, and old coverage/benchmark
   tooling. It is not an active test root.
-- `../fontdone/tests/coverage_matrix_tests.rs`: separate FreeType matrix
+- `docs/gpu-crash-audit-20260811.md`: current GPU loop, resource, lazy-pipeline,
+  watchdog, and adapter-backed verification record.
+- `build/fontdone-src/tests/coverage_matrix_tests.rs`: separate FreeType matrix
   runner.
 
 ## Cleanup Rules
@@ -111,7 +116,7 @@ before commit:
 - `pillow-rs-js/node_modules/`
 - `pillow-rs-js/pkg/`
 - `pillow-rs-js/pkg_node/`
-- `../fontdone/freetype/build*/`
+- `build/fontdone-src/freetype/build*/`
 
 Historical planning documents may be useful as archaeology, but implementation
 work should be guided by current Makefiles, `CLAUDE.md`, this map, and active
@@ -386,6 +391,12 @@ generated reports, build outputs, and package installs.
 |   |-- run_migration_benchmark.py
 |   |-- run_migration_coverage.py
 |   |-- run_migration_font_native_cases.py
+|   |-- run_migration_imagecolor_native_cases.py
+|   |-- run_migration_imagecore_native_cases.py
+|   |-- run_migration_imagedraw_native_cases.py
+|   |-- run_migration_imageops_native_cases.py
+|   |-- run_migration_imagepalette_native_cases.py
+|   |-- run_migration_imagesequence_native_cases.py
 |   |-- run_migration_parity.py
 |   |-- run_migration_rust_coverage.py
 |   |-- validate_migration_parity_contract.py

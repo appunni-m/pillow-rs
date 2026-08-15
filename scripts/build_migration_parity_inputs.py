@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import copy
 import hashlib
 import json
 import random
@@ -39,6 +40,746 @@ FIXTURE_ROOT = WORKSPACE_ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT_ROOT = FIXTURE_ROOT
 TARGET_PROFILE = "python-cpu"
+BENCHMARK_TARGET_PROFILES = ("python-cpu", "python-simd", "python-gpu")
+BENCHMARK_PIPELINE_WORKLOADS: dict[str, dict[str, Any]] = {
+    "pil-image-image.transpose.standard": {
+        "case_id": "PIL.Image.Image.transpose.benchmark.materialized-pipeline-1024",
+        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+    },
+    "pil-imagefilter.gaussianblur.standard": {
+        "case_id": "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024",
+        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+    },
+    "pil-imagechops.multiply.standard": {
+        "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
+        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+    },
+    "pil-imageops.invert.standard": {
+        "case_id": "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024",
+        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+    },
+}
+QUICK_PIPELINE_CASE_IDS: dict[str, str] = {
+    "pipeline.quick.transpose-twice.rgb-1024": (
+        "PIL.Image.Image.transpose.benchmark.materialized-pipeline-1024"
+    ),
+    "pipeline.quick.gaussianblur-invert.rgb-1024": (
+        "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024"
+    ),
+    "pipeline.quick.multiply-screen.rgb-1024": (
+        "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024"
+    ),
+    "pipeline.quick.invert-mirror.rgb-1024": (
+        "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024"
+    ),
+}
+
+
+@dataclass(frozen=True)
+class PipelineBenchmarkSpec:
+    """One public workflow selected to exercise a ``PipelineOp`` variant."""
+
+    surface: str
+    operation: str
+    case_id: str | None
+    materialize: str = "result"
+
+
+# This is an execution mapping, not a second public API inventory. Public
+# operation and requirement identities still come exclusively from the
+# manifest. Every variant must point to a public parity case; the one
+# operation without a generated case has an explicit public workflow below.
+PIPELINE_OP_BENCHMARK_SPECS: dict[str, PipelineBenchmarkSpec] = {
+    "Resize": PipelineBenchmarkSpec("PIL.Image.Image", "resize", "PIL.Image.Image.resize.behavior.default"),
+    "Crop": PipelineBenchmarkSpec("PIL.Image.Image", "crop", "PIL.Image.Image.crop.behavior.default"),
+    "Rotate": PipelineBenchmarkSpec("PIL.Image.Image", "rotate", "PIL.Image.Image.rotate.behavior.default"),
+    "Transpose": PipelineBenchmarkSpec("PIL.Image.Image", "transpose", "PIL.Image.Image.transpose.behavior.default"),
+    "Thumbnail": PipelineBenchmarkSpec("PIL.Image.Image", "thumbnail", "PIL.Image.Image.thumbnail.nuanced.rgb-reducing-downscale", "receiver"),
+    "Reduce": PipelineBenchmarkSpec("PIL.Image.Image", "reduce", "PIL.Image.Image.reduce.behavior.default"),
+    "Convert": PipelineBenchmarkSpec("PIL.Image.Image", "convert", "PIL.Image.Image.convert.behavior.default"),
+    "Quantize": PipelineBenchmarkSpec("PIL.Image.Image", "quantize", "PIL.Image.Image.quantize.behavior.default"),
+    "RemapPalette": PipelineBenchmarkSpec("PIL.Image.Image", "remap_palette", "PIL.Image.Image.remap_palette.mode.p"),
+    "Filter3x3": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-002"),
+    "Filter5x5": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.behavior.default"),
+    "GaussianBlur": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-011"),
+    "BoxBlur": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-012"),
+    "MedianFilter": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-016"),
+    "MaxFilter": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-014"),
+    "MinFilter": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.parameter-combination.legacy-015"),
+    "RankFilter": PipelineBenchmarkSpec("PIL.Image.Image", "filter", "PIL.Image.Image.filter.nuanced.f-mode-rank-filter"),
+    "Autocontrast": PipelineBenchmarkSpec("PIL.ImageOps", "autocontrast", "PIL.ImageOps.autocontrast.behavior.default"),
+    "Equalize": PipelineBenchmarkSpec("PIL.ImageOps", "equalize", "PIL.ImageOps.equalize.behavior.default"),
+    "Invert": PipelineBenchmarkSpec("PIL.ImageOps", "invert", "PIL.ImageOps.invert.behavior.default"),
+    "Flip": PipelineBenchmarkSpec("PIL.ImageOps", "flip", "PIL.ImageOps.flip.behavior.default"),
+    "Mirror": PipelineBenchmarkSpec("PIL.ImageOps", "mirror", "PIL.ImageOps.mirror.behavior.default"),
+    "Posterize": PipelineBenchmarkSpec("PIL.ImageOps", "posterize", "PIL.ImageOps.posterize.behavior.default"),
+    "Solarize": PipelineBenchmarkSpec("PIL.ImageOps", "solarize", "PIL.ImageOps.solarize.behavior.default"),
+    "Grayscale": PipelineBenchmarkSpec("PIL.ImageOps", "grayscale", "PIL.ImageOps.grayscale.behavior.default"),
+    "Colorize": PipelineBenchmarkSpec("PIL.ImageOps", "colorize", "PIL.ImageOps.colorize.nuanced.two-color"),
+    "Contain": PipelineBenchmarkSpec("PIL.ImageOps", "contain", "PIL.ImageOps.contain.behavior.default"),
+    "Cover": PipelineBenchmarkSpec("PIL.ImageOps", "cover", "PIL.ImageOps.cover.behavior.default"),
+    "Fit": PipelineBenchmarkSpec("PIL.ImageOps", "fit", "PIL.ImageOps.fit.behavior.default"),
+    "Pad": PipelineBenchmarkSpec("PIL.ImageOps", "pad", "PIL.ImageOps.pad.behavior.default"),
+    "Scale": PipelineBenchmarkSpec("PIL.ImageOps", "scale", "PIL.ImageOps.scale.behavior.default"),
+    "Expand": PipelineBenchmarkSpec("PIL.ImageOps", "expand", "PIL.ImageOps.expand.behavior.default"),
+    "CropBorder": PipelineBenchmarkSpec("PIL.ImageOps", "crop", "PIL.ImageOps.crop.behavior.default"),
+    "Add": PipelineBenchmarkSpec("PIL.ImageChops", "add", "PIL.ImageChops.add.behavior.default"),
+    "Subtract": PipelineBenchmarkSpec("PIL.ImageChops", "subtract", "PIL.ImageChops.subtract.behavior.default"),
+    "Multiply": PipelineBenchmarkSpec("PIL.ImageChops", "multiply", "PIL.ImageChops.multiply.behavior.default"),
+    "Screen": PipelineBenchmarkSpec("PIL.ImageChops", "screen", "PIL.ImageChops.screen.behavior.default"),
+    "Darker": PipelineBenchmarkSpec("PIL.ImageChops", "darker", "PIL.ImageChops.darker.behavior.default"),
+    "Lighter": PipelineBenchmarkSpec("PIL.ImageChops", "lighter", "PIL.ImageChops.lighter.behavior.default"),
+    "Difference": PipelineBenchmarkSpec("PIL.ImageChops", "difference", "PIL.ImageChops.difference.behavior.default"),
+    "Overlay": PipelineBenchmarkSpec("PIL.ImageChops", "overlay", "PIL.ImageChops.overlay.behavior.default"),
+    "HardLight": PipelineBenchmarkSpec("PIL.ImageChops", "hard_light", "PIL.ImageChops.hard_light.behavior.default"),
+    "SoftLight": PipelineBenchmarkSpec("PIL.ImageChops", "soft_light", "PIL.ImageChops.soft_light.behavior.default"),
+    "AddModulo": PipelineBenchmarkSpec("PIL.ImageChops", "add_modulo", "PIL.ImageChops.add_modulo.behavior.default"),
+    "SubtractModulo": PipelineBenchmarkSpec("PIL.ImageChops", "subtract_modulo", "PIL.ImageChops.subtract_modulo.behavior.default"),
+    "LogicalAnd": PipelineBenchmarkSpec("PIL.ImageChops", "logical_and", "PIL.ImageChops.logical_and.mode.1"),
+    "LogicalOr": PipelineBenchmarkSpec("PIL.ImageChops", "logical_or", "PIL.ImageChops.logical_or.mode.1"),
+    "LogicalXor": PipelineBenchmarkSpec("PIL.ImageChops", "logical_xor", "PIL.ImageChops.logical_xor.mode.1"),
+    "Constant": PipelineBenchmarkSpec("PIL.ImageChops", "constant", "PIL.ImageChops.constant.behavior.default"),
+    "Offset": PipelineBenchmarkSpec("PIL.ImageChops", "offset", "PIL.ImageChops.offset.behavior.default"),
+    "Blend": PipelineBenchmarkSpec("PIL.ImageChops", "blend", "PIL.ImageChops.blend.behavior.default"),
+    "Composite": PipelineBenchmarkSpec("PIL.ImageChops", "composite", "PIL.ImageChops.composite.mode.l"),
+    "Duplicate": PipelineBenchmarkSpec("PIL.ImageChops", "duplicate", "PIL.ImageChops.duplicate.behavior.default"),
+    "InvertChops": PipelineBenchmarkSpec("PIL.ImageChops", "invert", "PIL.ImageChops.invert.behavior.default"),
+    "Brightness": PipelineBenchmarkSpec("PIL.ImageEnhance.Brightness", "enhance", "PIL.ImageEnhance.Brightness.enhance.behavior.default"),
+    "Contrast": PipelineBenchmarkSpec("PIL.ImageEnhance.Contrast", "enhance", "PIL.ImageEnhance.Contrast.enhance.behavior.default"),
+    "ColorSaturation": PipelineBenchmarkSpec("PIL.ImageEnhance.Color", "enhance", "PIL.ImageEnhance.Color.enhance.behavior.default"),
+    "Sharpness": PipelineBenchmarkSpec("PIL.ImageEnhance.Sharpness", "enhance", "PIL.ImageEnhance.Sharpness.enhance.behavior.default"),
+    "EffectSpread": PipelineBenchmarkSpec("PIL.Image.Image", "effect_spread", "PIL.Image.Image.effect_spread.behavior.default"),
+    "Paste": PipelineBenchmarkSpec("PIL.Image.Image", "paste", "PIL.Image.Image.paste.behavior.default", "receiver"),
+    "AlphaComposite": PipelineBenchmarkSpec("PIL.Image.Image", "alpha_composite", "PIL.Image.Image.alpha_composite.nuanced.nonzero-rgba-blend", "receiver"),
+    "Merge": PipelineBenchmarkSpec("PIL.Image", "merge", "PIL.Image.merge.behavior.default"),
+    "BlendModule": PipelineBenchmarkSpec("PIL.Image", "blend", "PIL.Image.blend.behavior.default"),
+    "CompositeModule": PipelineBenchmarkSpec("PIL.Image", "composite", "PIL.Image.composite.mode.l"),
+    "Eval": PipelineBenchmarkSpec("PIL.Image", "eval", "PIL.Image.eval.nuanced.rgb-expanded-lut"),
+    "EffectNoise": PipelineBenchmarkSpec("PIL.Image", "effect_noise", "PIL.Image.effect_noise.behavior.default"),
+    "PointOp": PipelineBenchmarkSpec("PIL.Image.Image", "point", "PIL.Image.Image.point.mode.l"),
+    "Color3DLut": PipelineBenchmarkSpec("PIL.Image.Image", "filter", None),
+    "Transform": PipelineBenchmarkSpec("PIL.Image.Image", "transform", "PIL.Image.Image.transform.parameter.data"),
+    "PutPixel": PipelineBenchmarkSpec("PIL.Image.Image", "putpixel", "PIL.Image.Image.putpixel.nuanced.la-two-tuple", "receiver"),
+    "PutData": PipelineBenchmarkSpec("PIL.Image.Image", "putdata", "PIL.Image.Image.putdata.nuanced.l-bytes", "receiver"),
+    "PutAlpha": PipelineBenchmarkSpec("PIL.Image.Image", "putalpha", "PIL.Image.Image.putalpha.nuanced.rgb-scalar", "receiver"),
+    "PutAlphaData": PipelineBenchmarkSpec("PIL.Image.Image", "putalpha", "PIL.Image.Image.putalpha.nuanced.l-mask", "receiver"),
+    "ExtractBand": PipelineBenchmarkSpec("PIL.Image.Image", "getchannel", "PIL.Image.Image.getchannel.behavior.default"),
+    "LinearGradient": PipelineBenchmarkSpec("PIL.Image", "linear_gradient", "PIL.Image.linear_gradient.mode.l"),
+    "RadialGradient": PipelineBenchmarkSpec("PIL.Image", "radial_gradient", "PIL.Image.radial_gradient.mode.l"),
+    "EffectMandelbrot": PipelineBenchmarkSpec("PIL.Image", "effect_mandelbrot", "PIL.Image.effect_mandelbrot.nuanced.width-one"),
+    "DrawLine": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "line", "PIL.ImageDraw.ImageDraw.line.parameter-combination.legacy-001", "draw_receiver"),
+    "DrawRectangle": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "rectangle", "PIL.ImageDraw.ImageDraw.rectangle.parameter-combination.legacy-001", "draw_receiver"),
+    "DrawRoundedRect": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "rounded_rectangle", "PIL.ImageDraw.ImageDraw.rounded_rectangle.parameter-combination.legacy-001", "draw_receiver"),
+    "DrawEllipse": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "ellipse", "PIL.ImageDraw.ImageDraw.ellipse.parameter-combination.legacy-001", "draw_receiver"),
+    "DrawCircle": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "circle", "PIL.ImageDraw.ImageDraw.circle.nuanced.bbox", "draw_receiver"),
+    "DrawPolygon": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "polygon", "PIL.ImageDraw.ImageDraw.polygon.nuanced.paired-points", "draw_receiver"),
+    "DrawArc": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "arc", "PIL.ImageDraw.ImageDraw.arc.nuanced.fill-width", "draw_receiver"),
+    "DrawChord": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "chord", "PIL.ImageDraw.ImageDraw.chord.nuanced.fill-outline", "draw_receiver"),
+    "DrawPieslice": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "pieslice", "PIL.ImageDraw.ImageDraw.pieslice.nuanced.fill-outline-width", "draw_receiver"),
+    "DrawPoint": PipelineBenchmarkSpec("PIL.ImageDraw.ImageDraw", "point", "PIL.ImageDraw.ImageDraw.point.parameter.fill", "draw_receiver"),
+}
+
+# Reviewed public conversion workflows that are intentionally kept separate
+# from the 100-case color-varying matrix.  These inputs reach typed and
+# palette-aware branches through normal Image.convert calls; they are
+# benchmark-only workload additions and do not alter parity expectations.
+PIPELINE_REVIEWED_COMPOSITION_BENCHMARK_IDS: tuple[str, ...] = (
+    # Keep the first public composition templates as distinct benchmark
+    # workloads.  The 100-case matrix varies their inputs, but a separate
+    # workload preserves the reviewed graph shape and makes the operation
+    # ordering visible in the performance report.
+    "pipeline-composition.filter-invert-mirror",
+    "pipeline-composition.point-solarize-posterize",
+    "pipeline-composition.invert-solarize-posterize-point",
+    "pipeline-composition.resize-rotate-crop",
+    "pipeline-composition.quantize-remap-convert",
+    "pipeline-composition.multiply-screen-invert",
+    "pipeline-composition.transpose-flip-resize",
+    "pipeline-composition.crop-expand-mirror",
+    "pipeline-composition.equalize-autocontrast-invert",
+    "pipeline-composition.draw-filter-invert",
+    "pipeline-composition.radial-gradient-crop-resize",
+    "pipeline-composition.draw-batch-rgb-shapes",
+    "pipeline-composition.draw-batch-rgba-alpha",
+    "pipeline-composition.convert-palette-rgb",
+    "pipeline-composition.convert-p-no-palette-rgb",
+    "pipeline-composition.convert-cmyk-1-no-dither",
+    "pipeline-composition.convert-cmyk-1-dither",
+    "pipeline-composition.convert-cmyk-i",
+    "pipeline-composition.convert-cmyk-f",
+    "pipeline-composition.convert-one-cmyk",
+    "pipeline-composition.convert-cmyk-la",
+    "pipeline-composition.convert-rgba-cmyk-la",
+    "pipeline-composition.convert-cmyk-rgba",
+)
+
+# Large alpha-bearing resize workflows for the fused premultiply/resample path.
+# These are benchmark-only workload references to public generated inputs.
+PIPELINE_ALPHA_RESIZE_BENCHMARK_IDS: tuple[str, ...] = (
+    "pipeline-chain.resize.rgba-lanczos-256x256",
+    "pipeline-chain.resize.la-bicubic-256x256",
+    "pipeline-chain.resize.rgba-bilinear-mirror-256x256",
+    "pipeline-chain.resize.la-bilinear-mirror-256x256",
+    "pipeline-chain.resize.rgba-bicubic-512x512",
+    "pipeline-chain.resize.la-lanczos-512x512",
+    "pipeline-chain.resize.rgba-bilinear-upscale-128x128",
+    "pipeline-chain.resize.la-bicubic-upscale-128x128",
+)
+
+# These large alpha workloads are benchmark-only.  Keep them out of the
+# parity-case corpus: their purpose is to make the cache-local vertical pass
+# measurable at the same 1024×768 scale as the main pipeline benchmark.
+PIPELINE_ALPHA_RESIZE_EXTRA_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "rgba-lanczos-1024x768",
+        "mode": "RGBA",
+        "source_size": [1024, 768],
+        "color": [17, 83, 149, 191],
+        "target_size": [768, 512],
+        "resample": 1,
+    },
+    {
+        "name": "la-bicubic-1024x768",
+        "mode": "LA",
+        "source_size": [1024, 768],
+        "color": [173, 191],
+        "target_size": [768, 512],
+        "resample": 3,
+    },
+)
+
+# Material-sized alpha-composite workflows for the native LA/RGBA SIMD path.
+# These are benchmark-only projections of the public alpha_composite contract;
+# they add no parity cases or expected outputs.
+PIPELINE_ALPHA_COMPOSITE_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "la-256x256",
+        "mode": "LA",
+        "size": [256, 256],
+        "destination": [40, 64],
+        "source": [200, 192],
+    },
+    {
+        "name": "rgba-256x256",
+        "mode": "RGBA",
+        "size": [256, 256],
+        "destination": [30, 60, 90, 64],
+        "source": [200, 150, 100, 192],
+    },
+    {
+        "name": "la-1024x768",
+        "mode": "LA",
+        "size": [1024, 768],
+        "destination": [40, 64],
+        "source": [200, 192],
+    },
+    {
+        "name": "rgba-1024x768",
+        "mode": "RGBA",
+        "size": [1024, 768],
+        "destination": [30, 60, 90, 64],
+        "source": [200, 150, 100, 192],
+    },
+)
+
+# Typed resize workflows are retained as separate benchmark-only inputs so
+# the native F/I resize kernels are measured directly.  These cases already
+# belong to the public generated corpus; this list adds no parity cases and
+# does not change the PipelineOp operation denominator.
+PIPELINE_TYPED_RESIZE_BENCHMARK_IDS: tuple[str, ...] = (
+    "pipeline-composition.simd-f-resize-transpose",
+    "pipeline-composition.simd-i-resize-transform",
+)
+
+PIPELINE_GEOMETRY_BENCHMARK_IDS: tuple[str, ...] = (
+    "pipeline-chain.geometry.transpose-rgba-1024x768",
+    "pipeline-chain.geometry.transverse-rgb-1024x768",
+    "pipeline-chain.geometry.crop-rgb-1024x768",
+    "pipeline-chain.geometry.reduce-rgb-1024x768",
+    "pipeline-chain.geometry.reduce-rgba-1024x768",
+    "pipeline-chain.geometry.rotate-rgba-1024x768",
+)
+
+# Material-sized blur chains used to measure the rolling horizontal/vertical
+# implementation. These are benchmark-only workflows: they do not create
+# parity cases or expected outputs.
+PIPELINE_BLUR_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "gaussian-rgb-1024x1024",
+        "mode": "RGB",
+        "size": [1024, 1024],
+        "color": [23, 97, 181],
+        "filter": "GaussianBlur",
+        "radius": 2.0,
+    },
+    {
+        "name": "box-rgb-1024x1024",
+        "mode": "RGB",
+        "size": [1024, 1024],
+        "color": [31, 109, 197],
+        "filter": "BoxBlur",
+        "radius": 8.0,
+    },
+    {
+        "name": "gaussian-rgba-1024x768",
+        "mode": "RGBA",
+        "size": [1024, 768],
+        "color": [83, 149, 17, 191],
+        "filter": "GaussianBlur",
+        "radius": 7.5,
+    },
+    {
+        "name": "gaussian-l-1024x768",
+        "mode": "L",
+        "size": [1024, 768],
+        "color": 97,
+        "filter": "GaussianBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "gaussian-la-1024x768",
+        "mode": "LA",
+        "size": [1024, 768],
+        "color": [97, 191],
+        "filter": "GaussianBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "gaussian-l-256x256-radius-0.5",
+        "mode": "L",
+        "size": [256, 256],
+        "color": 97,
+        "filter": "GaussianBlur",
+        "radius": 0.5,
+    },
+    {
+        "name": "gaussian-rgb-256x256-radius-1",
+        "mode": "RGB",
+        "size": [256, 256],
+        "color": [23, 97, 181],
+        "filter": "GaussianBlur",
+        "radius": 1.0,
+    },
+    {
+        "name": "gaussian-rgb-1024x768-radius-4",
+        "mode": "RGB",
+        "size": [1024, 768],
+        "color": [23, 97, 181],
+        "filter": "GaussianBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "gaussian-rgba-256x256-radius-2",
+        "mode": "RGBA",
+        "size": [256, 256],
+        "color": [83, 149, 17, 191],
+        "filter": "GaussianBlur",
+        "radius": 2.0,
+    },
+    {
+        "name": "box-l-256x256-radius-0.5",
+        "mode": "L",
+        "size": [256, 256],
+        "color": 97,
+        "filter": "BoxBlur",
+        "radius": 0.5,
+    },
+    {
+        "name": "box-rgb-256x256-radius-1",
+        "mode": "RGB",
+        "size": [256, 256],
+        "color": [31, 109, 197],
+        "filter": "BoxBlur",
+        "radius": 1.0,
+    },
+    {
+        "name": "box-rgb-1024x768-radius-4",
+        "mode": "RGB",
+        "size": [1024, 768],
+        "color": [31, 109, 197],
+        "filter": "BoxBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "box-l-1024x768-radius-4",
+        "mode": "L",
+        "size": [1024, 768],
+        "color": 97,
+        "filter": "BoxBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "box-la-1024x768-radius-4",
+        "mode": "LA",
+        "size": [1024, 768],
+        "color": [97, 191],
+        "filter": "BoxBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "box-rgba-1024x768-radius-4",
+        "mode": "RGBA",
+        "size": [1024, 768],
+        "color": [83, 149, 17, 191],
+        "filter": "BoxBlur",
+        "radius": 4.0,
+    },
+    {
+        "name": "box-rgba-256x256-radius-2",
+        "mode": "RGBA",
+        "size": [256, 256],
+        "color": [83, 149, 17, 191],
+        "filter": "BoxBlur",
+        "radius": 2.0,
+    },
+)
+
+# I-mode convolution workflows exercise the native signed-32-bit kernel
+# boundary directly.  They are benchmark-only public workflows: the Kernel
+# object and Image.filter call are ordinary Pillow endpoints, and the output
+# is observed through tobytes rather than through a hand-authored oracle.
+PIPELINE_I_CONVOLUTION_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "3x3-1024x768",
+        "size": [1024, 768],
+        "color": 37,
+        "kernel_size": [3, 3],
+        "kernel": [0.0, 1.0, 0.0, 1.0, 4.0, 1.0, 0.0, 1.0, 0.0],
+        "scale": 8.0,
+        "offset": 0,
+    },
+    {
+        "name": "5x5-1024x768",
+        "size": [1024, 768],
+        "color": 37,
+        "kernel_size": [5, 5],
+        "kernel": [
+            1.0,
+            4.0,
+            6.0,
+            4.0,
+            1.0,
+            4.0,
+            16.0,
+            24.0,
+            16.0,
+            4.0,
+            6.0,
+            24.0,
+            36.0,
+            24.0,
+            6.0,
+            4.0,
+            16.0,
+            24.0,
+            16.0,
+            4.0,
+            1.0,
+            4.0,
+            6.0,
+            4.0,
+            1.0,
+        ],
+        "scale": 256.0,
+        "offset": 0,
+    },
+)
+
+# Material-sized rank pipelines used to measure the reusable F-mode scratch
+# path and the byte histogram path. These are benchmark-only workflows and do
+# not add parity or coverage cases.
+PIPELINE_RANK_FILTER_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "f-9x9-256x256",
+        "mode": "F",
+        "size": [256, 256],
+        "color": 37.0,
+        "size_filter": 9,
+        "rank": 40,
+    },
+    {
+        "name": "l-9x9-256x256",
+        "mode": "L",
+        "size": [256, 256],
+        "color": 137,
+        "size_filter": 9,
+        "rank": 40,
+    },
+)
+
+# Four deterministic size variants for each selected public operation give the
+# performance matrix enough shape diversity to expose tiny-image overhead,
+# cache-sized work, and a larger non-square frame.  These are benchmark-only
+# workflows cloned from the existing public operation inputs; they do not add
+# parity cases or expected outputs.  Keep this list explicit so the benchmark
+# denominator remains reviewable and stable.
+PIPELINE_EXPANDED_MATRIX_VARIANTS: tuple[str, ...] = (
+    "Resize",
+    "Crop",
+    "Rotate",
+    "Transpose",
+    "Reduce",
+    "Filter3x3",
+    "Filter5x5",
+    "GaussianBlur",
+    "BoxBlur",
+    "MedianFilter",
+    "MaxFilter",
+    "MinFilter",
+    "EffectSpread",
+    "Invert",
+    "Grayscale",
+    "Autocontrast",
+    "Equalize",
+    "Convert",
+    "Eval",
+    "PointOp",
+    "Multiply",
+    "Screen",
+    "Add",
+    "Darker",
+    "Brightness",
+)
+PIPELINE_EXPANDED_MATRIX_SIZES: tuple[tuple[int, int], ...] = (
+    (1, 1),
+    (32, 32),
+    (256, 256),
+    (1024, 768),
+)
+
+# Long public point chains used to measure append/flatten behavior without
+# changing the parity corpus.  The 10,000-operation case is intentionally
+# small (16x16 L) so every enabled backend can execute it in one benchmark
+# process while still exercising the deep-chain construction contract.
+PIPELINE_CHAIN_LENGTHS: tuple[int, ...] = (1, 8, 64, 1024, 10_000)
+
+# These are benchmark-only public workflows.  They deliberately exercise the
+# complete point/LUT chain used by FIL-23 and FIL-51 without adding synthetic
+# parity cases or hand-authored expected bytes.  L and RGB are the layouts for
+# which Pillow's public posterize/solarize contract accepts the complete
+# sequence; the isolated operation matrix covers the remaining mode-specific
+# endpoints separately.
+PIPELINE_POINT_FUSION_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "l-001",
+        "mode": "L",
+        "size": [31, 17],
+        "color": 29,
+        "threshold": 31,
+        "bits": 5,
+        "lut_variant": 1,
+    },
+    {
+        "name": "l-002",
+        "mode": "L",
+        "size": [32, 24],
+        "color": 137,
+        "threshold": 127,
+        "bits": 4,
+        "lut_variant": 2,
+    },
+    {
+        "name": "l-003",
+        "mode": "L",
+        "size": [47, 29],
+        "color": 83,
+        "threshold": 192,
+        "bits": 3,
+        "lut_variant": 3,
+    },
+    {
+        "name": "l-004",
+        "mode": "L",
+        "size": [63, 11],
+        "color": 211,
+        "threshold": 64,
+        "bits": 6,
+        "lut_variant": 4,
+    },
+    {
+        "name": "l-005",
+        "mode": "L",
+        "size": [19, 41],
+        "color": 7,
+        "threshold": 255,
+        "bits": 2,
+        "lut_variant": 5,
+    },
+    {
+        "name": "rgb-001",
+        "mode": "RGB",
+        "size": [31, 17],
+        "color": [17, 83, 149],
+        "threshold": 31,
+        "bits": 5,
+        "lut_variant": 6,
+    },
+    {
+        "name": "rgb-002",
+        "mode": "RGB",
+        "size": [32, 24],
+        "color": [211, 127, 43],
+        "threshold": 127,
+        "bits": 4,
+        "lut_variant": 7,
+    },
+    {
+        "name": "rgb-003",
+        "mode": "RGB",
+        "size": [47, 29],
+        "color": [191, 83, 17],
+        "threshold": 192,
+        "bits": 3,
+        "lut_variant": 8,
+    },
+    {
+        "name": "rgb-004",
+        "mode": "RGB",
+        "size": [63, 11],
+        "color": [3, 129, 251],
+        "threshold": 64,
+        "bits": 6,
+        "lut_variant": 9,
+    },
+    {
+        "name": "rgb-005",
+        "mode": "RGB",
+        "size": [19, 41],
+        "color": [7, 43, 101],
+        "threshold": 255,
+        "bits": 2,
+        "lut_variant": 10,
+    },
+)
+
+# PointOp/Eval accepts complete per-band LUTs for alpha-bearing byte layouts,
+# even though Pillow's ImageOps invert/solarize/posterize wrappers reject LA and
+# RGBA.  Keep these workflows separate from the ImageOps chain above so the
+# benchmark exercises a real public endpoint without inventing an unsupported
+# public input.
+PIPELINE_ALPHA_POINT_FUSION_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "la-001",
+        "mode": "LA",
+        "size": [31, 17],
+        "color": [29, 211],
+        "lut_variant": 11,
+    },
+    {
+        "name": "la-002",
+        "mode": "LA",
+        "size": [256, 256],
+        "color": [137, 191],
+        "lut_variant": 12,
+    },
+    {
+        "name": "rgba-001",
+        "mode": "RGBA",
+        "size": [31, 17],
+        "color": [17, 83, 149, 191],
+        "lut_variant": 13,
+    },
+    {
+        "name": "rgba-002",
+        "mode": "RGBA",
+        "size": [256, 256],
+        "color": [211, 127, 43, 127],
+        "lut_variant": 14,
+    },
+)
+
+# Size points for the advertised SIMD point/geometry crossover.  These are
+# benchmark-only public workflows: they use the same valid ImageOps calls as
+# the maintained quick pipeline, but keep the image size explicit so routing
+# evidence cannot infer a crossover from one 1024² sample.
+PIPELINE_SIMD_CROSSOVER_SIZES: tuple[tuple[int, int], ...] = (
+    (1, 1),
+    (32, 32),
+    (256, 256),
+    (1024, 768),
+    (1024, 1024),
+)
+PIPELINE_SIMD_VECTOR_MIRROR_MODES: tuple[tuple[str, Any], ...] = (
+    ("L", 47),
+    ("LA", [47, 131]),
+    ("RGBA", [47, 131, 223, 191]),
+)
+PIPELINE_SIMD_CHOPS_BENCHMARK_SPECS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "darker-rgb",
+        "operation": "darker",
+        "mode": "RGB",
+        "color1": [17, 83, 149],
+        "color2": [211, 127, 43],
+    },
+    {
+        "name": "lighter-rgb",
+        "operation": "lighter",
+        "mode": "RGB",
+        "color1": [17, 83, 149],
+        "color2": [211, 127, 43],
+    },
+    {
+        "name": "difference-rgb",
+        "operation": "difference",
+        "mode": "RGB",
+        "color1": [17, 83, 149],
+        "color2": [211, 127, 43],
+    },
+    {
+        "name": "add-modulo-rgb",
+        "operation": "add_modulo",
+        "mode": "RGB",
+        "color1": [17, 83, 149],
+        "color2": [211, 127, 43],
+    },
+    {
+        "name": "subtract-modulo-rgb",
+        "operation": "subtract_modulo",
+        "mode": "RGB",
+        "color1": [17, 83, 149],
+        "color2": [211, 127, 43],
+    },
+    {
+        "name": "logical-and-1",
+        "operation": "logical_and",
+        "mode": "1",
+        "color1": 1,
+        "color2": 0,
+    },
+    {
+        "name": "logical-xor-1",
+        "operation": "logical_xor",
+        "mode": "1",
+        "color1": 1,
+        "color2": 0,
+    },
+    {
+        "name": "logical-or-1",
+        "operation": "logical_or",
+        "mode": "1",
+        "color1": 1,
+        "color2": 0,
+    },
+)
+PIPELINE_SIMD_CONSTANT_SIZES: tuple[tuple[int, int], ...] = (
+    (32, 32),
+    (256, 256),
+    (1024, 768),
+    (1024, 1024),
+)
+PIPELINE_SIMD_LUT_SIZES: tuple[tuple[int, int], ...] = (
+    (32, 32),
+    (256, 256),
+    (1024, 768),
+    (1024, 1024),
+)
+PIPELINE_SIMD_RGB_LUT_SIZES: tuple[tuple[int, int], ...] = (
+    (32, 32),
+    (256, 256),
+    (1024, 768),
+    (1024, 1024),
+)
 CRASH_QUARANTINE_RELATIVE = (
     "inputs/quarantine/pil-imagefont-freetypefont.json"
 )
@@ -65,6 +806,40 @@ def slug(value: str) -> str:
 
 def literal(value: Any) -> dict[str, Any]:
     return {"kind": "literal", "value": value}
+
+
+def coverage_putpixel_value(mode: str, pattern: int) -> Any:
+    """Build a valid, mode-shaped value for public putpixel coverage cases."""
+
+    if mode == "1":
+        return pattern % 2 if pattern % 2 == 0 else [pattern % 2]
+    if mode in {"L", "P"}:
+        value = (pattern * 29 + 7) % 256
+        return value if pattern % 2 == 0 else [value]
+    if mode == "LA":
+        return [(pattern * 29 + 7) % 256, (pattern * 47 + 31) % 256]
+    if mode == "RGB":
+        return [
+            (pattern * 29 + 7) % 256,
+            (pattern * 47 + 31) % 256,
+            (pattern * 61 + 53) % 256,
+        ]
+    return [
+        (pattern * 29 + 7) % 256,
+        (pattern * 47 + 31) % 256,
+        (pattern * 61 + 53) % 256,
+        (pattern * 73 + 79) % 256,
+    ]
+
+
+def coverage_putpixel_initial_pixel(mode: str, pattern: int) -> Any:
+    """Keep Image.new colors scalar where Pillow's constructor requires it."""
+
+    if mode == "1":
+        return pattern % 2
+    if mode in {"L", "P"}:
+        return (pattern * 29 + 7) % 256
+    return coverage_putpixel_value(mode, pattern)
 
 
 def bytes_literal(value: list[int]) -> dict[str, Any]:
@@ -253,6 +1028,72 @@ def grayscale_16_png() -> bytes:
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", header)
         + chunk(b"IDAT", zlib.compress(scanline))
+        + chunk(b"IEND", b"")
+    )
+
+
+def _u16_pattern_samples(pattern: int, channels: int) -> list[list[int]]:
+    """Return four deterministic unsigned-16-bit pixels for typed probes."""
+
+    if pattern == 0:
+        return [[0] * channels for _ in range(4)]
+    if pattern == 1:
+        return [[65535] * channels for _ in range(4)]
+    if pattern == 2:
+        return [[65535] * channels] + [[0] * channels for _ in range(3)]
+    if pattern == 3:
+        return [[0] * channels for _ in range(3)] + [[65535] * channels]
+    return [
+        [
+            (pattern * 4099 + pixel * 8191 + channel * 257) & 0xFFFF
+            for channel in range(channels)
+        ]
+        for pixel in range(4)
+    ]
+
+
+def i16_pattern_bytes(mode: str, pattern: int) -> bytes:
+    """Return a valid 2x2 ``I;16*`` byte stream for a coverage stimulus."""
+
+    endian = ">" if mode == "I;16B" else "<"
+    return b"".join(
+        struct.pack(f"{endian}H", sample)
+        for pixel in _u16_pattern_samples(pattern, 1)
+        for sample in pixel
+    )
+
+
+def color_16_png(channels: int, pattern: int) -> bytes:
+    """Return a valid 2x2 16-bit RGB or RGBA PNG stimulus."""
+
+    if channels not in {3, 4}:
+        raise ValueError("16-bit PNG probes require RGB or RGBA channels")
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return (
+            struct.pack(">I", len(payload))
+            + kind
+            + payload
+            + struct.pack(">I", checksum)
+        )
+
+    pixels = _u16_pattern_samples(pattern, channels)
+    scanlines = b"".join(
+        bytes([0])
+        + b"".join(
+            struct.pack(">H", sample)
+            for pixel in pixels[row * 2 : row * 2 + 2]
+            for sample in pixel
+        )
+        for row in range(2)
+    )
+    color_type = 2 if channels == 3 else 6
+    header = struct.pack(">IIBBBBB", 2, 2, 16, color_type, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", header)
+        + chunk(b"IDAT", zlib.compress(scanlines))
         + chunk(b"IEND", b"")
     )
 
@@ -478,6 +1319,70 @@ def jpeg_with_exif_variant(base: bytes, variant: str) -> bytes:
         # beyond the payload. Pillow accepts the JPEG and treats orientation
         # as absent; this reaches the public ImageOps.exif_transpose parser.
         tiff = b"II\x2a\x00" + struct.pack("<I", 0x1000) + struct.pack("<H", 0)
+    elif variant.startswith("orientation-first-truncated-tail-"):
+        # Keep a valid Orientation entry first, then advertise one additional
+        # IFD entry without supplying its 12-byte record. The source JPEG
+        # reader still exposes the first orientation, so ImageOps.exif_transpose
+        # reaches the public metadata-retention path with an encoded input.
+        _, _, _, _, byte_order, orientation_text = variant.split("-")
+        if byte_order not in {"le", "be"}:
+            raise ValueError(f"unknown EXIF byte order: {byte_order}")
+        try:
+            orientation = int(orientation_text)
+        except ValueError as exc:
+            raise ValueError(f"invalid EXIF orientation: {orientation_text}") from exc
+        if orientation not in range(1, 9):
+            raise ValueError(f"invalid EXIF orientation: {orientation}")
+        if byte_order == "le":
+            tiff = (
+                b"II\x2a\x00"
+                + struct.pack("<I", 8)
+                + struct.pack("<H", 2)
+                + struct.pack("<HHI", 0x0112, 3, 1)
+                + struct.pack("<H", orientation)
+                + b"\x00\x00"
+            )
+        else:
+            tiff = (
+                b"MM\x00\x2a"
+                + struct.pack(">I", 8)
+                + struct.pack(">H", 2)
+                + struct.pack(">HHI", 0x0112, 3, 1)
+                + struct.pack(">H", orientation)
+                + b"\x00\x00"
+            )
+    elif variant.startswith("orientation-retained-truncated-tail-"):
+        # Keep one complete ImageWidth entry and one complete Orientation
+        # entry, then advertise a third entry without supplying its record.
+        # The public EXIF reader still observes Orientation, while
+        # exif_remove_orientation must serialize the retained ImageWidth
+        # record before returning the transformed JPEG.
+        _, _, _, _, byte_order, orientation_text, width_text = variant.split(
+            "-"
+        )
+        if byte_order not in {"le", "be"}:
+            raise ValueError(f"unknown EXIF byte order: {byte_order}")
+        try:
+            orientation = int(orientation_text)
+            width = int(width_text)
+        except ValueError as exc:
+            raise ValueError("invalid retained EXIF numeric value") from exc
+        if orientation not in range(2, 9):
+            raise ValueError(f"invalid EXIF orientation: {orientation}")
+        if width not in range(1, 65536):
+            raise ValueError(f"invalid EXIF width: {width}")
+        pack_u16 = "<H" if byte_order == "le" else ">H"
+        pack_u32 = "<I" if byte_order == "le" else ">I"
+        header = b"II\x2a\x00" if byte_order == "le" else b"MM\x00\x2a"
+        tiff = bytearray(header + struct.pack(pack_u32, 8))
+        tiff += struct.pack(pack_u16, 3)
+        tiff += struct.pack(pack_u16 + pack_u16[1:], 0x0100, 3)
+        tiff += struct.pack(pack_u32, 1)
+        tiff += struct.pack(pack_u16, width) + b"\x00\x00"
+        tiff += struct.pack(pack_u16 + pack_u16[1:], 0x0112, 3)
+        tiff += struct.pack(pack_u32, 1)
+        tiff += struct.pack(pack_u16, orientation) + b"\x00\x00"
+        tiff = bytes(tiff)
     elif variant == "truncated-entry":
         # The IFD advertises one entry but the payload ends before its 12-byte
         # record is available. Keep the container valid so this remains an
@@ -916,6 +1821,11 @@ class WorkflowBuilder:
             # image1.  Keep image1 valid and image2 invalid so the public
             # mode-check reaches its second operand branch.
             requested_mode = "1" if label == "image1" else "L"
+        if self.edge == "chops-logical-first-invalid":
+            # Exercise the short-circuit branch where image1 is invalid. Keep
+            # image2 valid so the public error is caused by the first operand,
+            # not by two simultaneous mode mismatches.
+            requested_mode = "L" if label == "image1" else "1"
         cache_key = f"{label}:{requested_mode}"
         if cache_key in self._image_steps:
             return self._image_steps[cache_key]
@@ -1020,23 +1930,43 @@ class WorkflowBuilder:
                 "i16n-frombytes",
                 "i16l-frombytes",
                 "i16b-frombytes",
-            }:
-                mode = {
+            } or any(
+                self.scenario_inline_image.startswith(f"{prefix}-pattern-")
+                for prefix in (
+                    "i16-frombytes",
+                    "i16n-frombytes",
+                    "i16l-frombytes",
+                    "i16b-frombytes",
+                )
+            ):
+                mode_by_prefix = {
                     "i16-frombytes": "I;16",
                     "i16n-frombytes": "I;16N",
                     "i16l-frombytes": "I;16L",
                     "i16b-frombytes": "I;16B",
-                }[self.scenario_inline_image]
-                data = (
-                    bytes([0, 0, 1, 0, 2, 0, 3, 0])
-                    if mode != "I;16B"
-                    else bytes([0, 0, 0, 1, 0, 2, 0, 3])
+                }
+                prefix = next(
+                    prefix
+                    for prefix in mode_by_prefix
+                    if self.scenario_inline_image == prefix
+                    or self.scenario_inline_image.startswith(f"{prefix}-pattern-")
                 )
-                asset_id = (
-                    f"{label}-i16n-data"
-                    if mode == "I;16N"
-                    else f"{label}-{self.scenario_inline_image}-data"
-                )
+                mode = mode_by_prefix[prefix]
+                if self.scenario_inline_image == prefix:
+                    data = (
+                        bytes([0, 0, 1, 0, 2, 0, 3, 0])
+                        if mode != "I;16B"
+                        else bytes([0, 0, 0, 1, 0, 2, 0, 3])
+                    )
+                    asset_id = (
+                        f"{label}-i16n-data"
+                        if mode == "I;16N"
+                        else f"{label}-{self.scenario_inline_image}-data"
+                    )
+                else:
+                    pattern = int(self.scenario_inline_image.rsplit("-", 1)[1])
+                    data = i16_pattern_bytes(mode, pattern)
+                    asset_id = f"{label}-{self.scenario_inline_image}-data"
                 data_descriptor = self.inline_bytes(
                     asset_id,
                     data,
@@ -1070,10 +2000,23 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id(f"setup-{label}"),
                 )
-            elif self.scenario_inline_image == "rgbx-frombytes":
+            elif self.scenario_inline_image == "rgbx-frombytes" or (
+                self.scenario_inline_image.startswith("rgbx-frombytes-pattern-")
+            ):
+                if self.scenario_inline_image == "rgbx-frombytes":
+                    pattern = 0
+                else:
+                    pattern = int(self.scenario_inline_image.rsplit("-", 1)[1])
                 data_descriptor = self.inline_bytes(
-                    f"{label}-rgbx-data",
-                    bytes([16, 32, 64, 128]),
+                    f"{label}-rgbx-pattern-{pattern}-data",
+                    bytes(
+                        [
+                            (16 + pattern * 17) % 256,
+                            (32 + pattern * 29) % 256,
+                            (64 + pattern * 43) % 256,
+                            (128 + pattern * 61) % 256,
+                        ]
+                    ),
                     "application/octet-stream",
                 )
                 step_id = self.add_step(
@@ -1130,6 +2073,27 @@ class WorkflowBuilder:
                 data_descriptor = self.inline_bytes(
                     f"{label}-l16-png",
                     grayscale_16_png(),
+                    "image/png",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "open",
+                    receiver=None,
+                    arguments={"fp": data_descriptor},
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image.startswith("rgb16-png-pattern-") or self.scenario_inline_image.startswith(
+                "rgba16-png-pattern-"
+            ):
+                channels = (
+                    3
+                    if self.scenario_inline_image.startswith("rgb16-png-pattern-")
+                    else 4
+                )
+                pattern = int(self.scenario_inline_image.rsplit("-", 1)[1])
+                data_descriptor = self.inline_bytes(
+                    f"{label}-{self.scenario_inline_image}",
+                    color_16_png(channels, pattern),
                     "image/png",
                 )
                 step_id = self.add_step(
@@ -1496,11 +2460,378 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "quantize-coverage-pattern":
+            # Keep quantization coverage input-driven while making the color
+            # distributions reproducible.  The cases intentionally mix
+            # repeated palettes, channel gradients, and a small LCG stream so
+            # median-cut, MAXCOVERAGE, and FASTOCTREE see different ordering,
+            # tie, and transparency patterns without embedding any result.
+            size = self.scenario_size or [32, 32]
+            width, height = size
+            n_pixels = width * height
+            seed = self.scenario_noise_seed or 0
+            kind = seed % 5
+            palette = (
+                (0, 0, 0),
+                (255, 255, 255),
+                (255, 0, 0),
+                (0, 255, 0),
+                (0, 0, 255),
+                (255, 255, 0),
+                (0, 255, 255),
+                (255, 0, 255),
+            )
+
+            def rgb_sample(index: int) -> tuple[int, int, int]:
+                x = index % width
+                y = index // width
+                if kind == 0:
+                    return palette[(index // (1 + seed % 7)) % len(palette)]
+                if kind == 1:
+                    return (
+                        (x * 37 + y * 11 + seed) % 256,
+                        (x * 13 + y * 47 + seed * 3) % 256,
+                        (x * 59 + y * 7 + seed * 5) % 256,
+                    )
+                if kind == 2:
+                    return (
+                        ((index * 17) ^ (index >> 3) ^ seed) & 255,
+                        ((index * 31) ^ (index >> 5) ^ (seed * 3)) & 255,
+                        ((index * 47) ^ (index >> 7) ^ (seed * 5)) & 255,
+                    )
+                if kind == 3:
+                    return (
+                        ((x % 16) * 17 + seed) % 256,
+                        ((y % 16) * 17 + seed * 3) % 256,
+                        (((x + y) % 16) * 17 + seed * 5) % 256,
+                    )
+                state = (seed ^ 0x9E3779B9 ^ index) & 0xFFFFFFFF
+                state = (state * 1664525 + 1013904223) & 0xFFFFFFFF
+                return ((state >> 0) & 255, (state >> 8) & 255, (state >> 16) & 255)
+
+            data = bytearray()
+            for index in range(n_pixels):
+                red, green, blue = rgb_sample(index)
+                if requested_mode == "RGB":
+                    data.extend((red, green, blue))
+                elif requested_mode == "RGBA":
+                    alpha_kind = seed % 4
+                    if alpha_kind == 0:
+                        alpha = 255
+                    elif alpha_kind == 1:
+                        alpha = 0
+                    elif alpha_kind == 2:
+                        alpha = (index * 29 + seed * 13) % 256
+                    else:
+                        alpha = 0 if index % 5 == 0 else (index * 43 + seed) % 256
+                    data.extend((red, green, blue, alpha))
+                else:
+                    raise ValueError(
+                        f"quantize-coverage-pattern edge unsupported for mode {requested_mode}"
+                    )
+            data_desc = self.inline_bytes(
+                f"{label}-quantize-coverage-pattern",
+                bytes(data),
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "convert-coverage-pattern" and label == "image":
+            # Keep conversion coverage input-driven while varying the source
+            # samples inside each public mode. Uniform Image.new values cover
+            # the dispatch arm but leave palette lookup, alpha propagation,
+            # numeric storage, and dither loops at their trivial branches.
+            # These are ordinary public Image.new/putpixel/putpalette calls;
+            # the conversion result remains generated by the parity oracle.
+            size = self.scenario_size or [8, 8]
+            width, height = size
+            seed = self.scenario_noise_seed or 0
+            base = seed % 256
+
+            def sample(index: int) -> Any:
+                value = (base + index * 37 + 11) % 256
+                alpha = (base * 3 + index * 53 + 29) % 256
+                if requested_mode in {"L", "P"}:
+                    return value
+                if requested_mode == "LA":
+                    return [value, alpha]
+                if requested_mode == "RGB":
+                    return [value, (value * 3 + 17) % 256, (value * 5 + 31) % 256]
+                if requested_mode == "RGBA":
+                    return [value, (value * 3 + 17) % 256, (value * 5 + 31) % 256, alpha]
+                if requested_mode == "CMYK":
+                    return [value, (value * 3 + 17) % 256, (value * 5 + 31) % 256, alpha]
+                if requested_mode == "HSV":
+                    return [value, (value * 3 + 17) % 256, (value * 5 + 31) % 256]
+                if requested_mode == "YCbCr":
+                    return [value, (value * 3 + 17) % 256, (value * 5 + 31) % 256]
+                if requested_mode == "I":
+                    return value * 257 - (index % 3) * 17
+                if requested_mode == "F":
+                    return (value / 17.0) - (index % 3) * 0.25
+                raise ValueError(
+                    f"convert-coverage-pattern edge unsupported for mode {requested_mode}"
+                )
+
+            if requested_mode in {"L", "P", "LA", "RGB", "RGBA", "CMYK", "HSV", "YCbCr"}:
+                initial: Any = 0 if requested_mode in {"L", "P"} else [0] * {
+                    "LA": 2,
+                    "RGB": 3,
+                    "RGBA": 4,
+                    "CMYK": 4,
+                    "HSV": 3,
+                    "YCbCr": 3,
+                }[requested_mode]
+            elif requested_mode == "I":
+                initial = 0
+            elif requested_mode == "F":
+                initial = 0.0
+            else:
+                raise ValueError(
+                    f"convert-coverage-pattern edge unsupported for mode {requested_mode}"
+                )
+
+            step_id = self.add_step(
+                "PIL.Image",
+                "new",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "color": literal(initial),
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            coordinates = (
+                (0, 0),
+                (width - 1, 0),
+                (0, height - 1),
+                (width - 1, height - 1),
+            )
+            for index, (x, y) in enumerate(coordinates):
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal([x, y]),
+                        "value": literal(sample(index)),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-pixel"),
+                )
+            if requested_mode == "P":
+                palette = [0] * 768
+                for index in range(16):
+                    palette[index * 3 : index * 3 + 3] = [
+                        (seed + index * 41) % 256,
+                        (seed + index * 67 + 13) % 256,
+                        (seed + index * 89 + 29) % 256,
+                    ]
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(step_id),
+                    arguments={
+                        "data": literal(palette),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-palette"),
+                )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "analysis-coverage-pattern":
+            # Keep analysis coverage input-driven while making every reduction
+            # see both zero and non-zero samples.  The four corner writes are
+            # ordinary public Image.new/putpixel calls; the remaining pixels
+            # retain the declared zero fill.  This exercises the native
+            # terminal loops without embedding a result or an oracle value.
+            size = self.scenario_size or [8, 7]
+            width, height = size
+            seed = self.scenario_noise_seed or 0
+
+            def sample(index: int) -> Any:
+                value = 17 + ((seed + index * 37) % 220)
+                alpha = 29 + ((seed * 3 + index * 53) % 220)
+                if requested_mode in {"1", "L", "P"}:
+                    return 0 if index == 0 else value
+                if requested_mode == "LA":
+                    return (
+                        [0, 0]
+                        if index == 0
+                        else [value, 0]
+                        if index == 1
+                        else [0, alpha]
+                        if index == 2
+                        else [value, alpha]
+                    )
+                if requested_mode == "RGB":
+                    return (
+                        [0, 0, 0]
+                        if index == 0
+                        else [value, 0, 0]
+                        if index == 1
+                        else [0, alpha, 0]
+                        if index == 2
+                        else [0, 0, value]
+                    )
+                if requested_mode == "RGBA":
+                    return (
+                        [0, 0, 0, 0]
+                        if index == 0
+                        else [value, 0, 0, 0]
+                        if index == 1
+                        else [0, alpha, 0, 0]
+                        if index == 2
+                        else [0, 0, value, alpha]
+                    )
+                if requested_mode in {"CMYK", "HSV", "YCbCr"}:
+                    band_count = 4 if requested_mode == "CMYK" else 3
+                    return [
+                        (value + channel * 31) % 256
+                        for channel in range(band_count)
+                    ]
+                if requested_mode == "I":
+                    return 0 if index == 0 else value * 257 - index * 11
+                if requested_mode == "F":
+                    return 0.0 if index == 0 else value / 17.0 - index * 0.25
+                raise ValueError(
+                    f"analysis-coverage-pattern edge unsupported for mode {requested_mode}"
+                )
+
+            if requested_mode in {"1", "L", "P", "I"}:
+                initial: Any = 0
+            elif requested_mode == "F":
+                initial = 0.0
+            else:
+                initial = [0] * (
+                    2
+                    if requested_mode == "LA"
+                    else 4
+                    if requested_mode in {"RGBA", "CMYK"}
+                    else 3
+                )
+
+            step_id = self.add_step(
+                "PIL.Image",
+                "new",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "color": literal(initial),
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            coordinates = (
+                (0, 0),
+                (width - 1, 0),
+                (0, height - 1),
+                (width - 1, height - 1),
+            )
+            for index, (x, y) in enumerate(coordinates):
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal([x, y]),
+                        "value": literal(sample(index)),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-pixel"),
+                )
+            if requested_mode == "P":
+                # Identity grayscale palette keeps the public palette image's
+                # visible values equal to its indices, so getbbox, extrema,
+                # and histogram all observe the same valid source samples.
+                palette = [channel for value in range(256) for channel in (value, value, value)]
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(step_id),
+                    arguments={
+                        "data": literal(palette),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id=self.next_step_id(f"setup-{label}-palette"),
+                )
+            self._image_steps[cache_key] = step_id
+            return step_id
+        if self.edge == "simd-campaign-pattern" and label == "image":
+            # The SIMD campaign's solarize replacements use public putdata
+            # with fixed boundary samples. Keep the construction declarative
+            # and input-only while making the native-byte remainder lengths
+            # explicit for the adapter measurement.
+            size = self.scenario_size or [16, 1]
+            if requested_mode == "L" and self.scenario_noise_seed == 104:
+                data: Any = [
+                    0,
+                    1,
+                    63,
+                    64,
+                    95,
+                    126,
+                    127,
+                    128,
+                    129,
+                    160,
+                    191,
+                    192,
+                    224,
+                    254,
+                    255,
+                ]
+                initial: Any = 0
+            elif requested_mode == "RGB" and self.scenario_noise_seed == 105:
+                data = [
+                    [0, 127, 128],
+                    [129, 254, 255],
+                    [32, 96, 160],
+                    [192, 224, 64],
+                    [1, 126, 129],
+                    [255, 128, 0],
+                ]
+                initial = [0, 0, 0]
+            else:
+                raise ValueError(
+                    "unknown SIMD campaign pattern for "
+                    f"mode={requested_mode!r}, seed={self.scenario_noise_seed!r}"
+                )
+            step_id = self.add_step(
+                "PIL.Image",
+                "new",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "color": literal(initial),
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self.add_step(
+                "PIL.Image.Image",
+                "putdata",
+                receiver=binding(step_id),
+                arguments={"data": literal(data)},
+                step_id=self.next_step_id(f"setup-{label}-data"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         size = self.scenario_size or [16, 16]
         if self.edge == "zero-width":
-            size = [0, 16]
+            size = [0, self.scenario_size[1] if self.scenario_size else 16]
         elif self.edge == "zero-height":
-            size = [16, 0]
+            size = [self.scenario_size[0] if self.scenario_size else 16, 0]
         elif self.edge == "zero-size":
             size = [0, 0]
         elif (
@@ -3354,6 +4685,45 @@ class WorkflowBuilder:
                     step_id="setup-pa-putpalette",
                 )
                 receiver_step = image_step
+            elif chain == "pa-putpalette-convert-coverage":
+                image_step = self.ensure_image(mode="PA")
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpalette",
+                    receiver=binding(image_step),
+                    arguments={
+                        "data": literal(
+                            [
+                                10,
+                                20,
+                                30,
+                                40,
+                                50,
+                                60,
+                                70,
+                                80,
+                                90,
+                                100,
+                                110,
+                                120,
+                            ]
+                        ),
+                        "rawmode": literal("RGB"),
+                    },
+                    step_id="setup-pa-putpalette-convert-coverage",
+                )
+                if self.scenario_pixel is not None:
+                    self.add_step(
+                        "PIL.Image.Image",
+                        "putpixel",
+                        receiver=binding(image_step),
+                        arguments={
+                            "xy": literal([2, 3]),
+                            "value": literal(self.scenario_pixel),
+                        },
+                        step_id="setup-pa-convert-coverage-pixel",
+                    )
+                receiver_step = image_step
             elif chain == "pa-putpalette-imageops":
                 image_step = self.ensure_image(mode="PA")
                 self.add_step(
@@ -4175,6 +5545,7 @@ class WorkflowBuilder:
                 "filter-f-mode-min",
                 "filter-f-mode-median",
                 "filter-f-mode-rank",
+                "filter-f-mode-large-rank",
             }:
                 image_step = self.ensure_image(mode="F")
                 self.add_step(
@@ -4184,6 +5555,11 @@ class WorkflowBuilder:
                     arguments={
                         "data": literal(
                             [
+                                float((index * 37 + 11) % 101)
+                                for index in range(81)
+                            ]
+                            if chain == "filter-f-mode-large-rank"
+                            else [
                                 1.0,
                                 9.0,
                                 3.0,
@@ -4203,10 +5579,15 @@ class WorkflowBuilder:
                     "filter-f-mode-min": "MinFilter",
                     "filter-f-mode-median": "MedianFilter",
                     "filter-f-mode-rank": "RankFilter",
+                    "filter-f-mode-large-rank": "RankFilter",
                 }[chain]
-                filter_arguments = {"size": literal(3)}
+                filter_arguments = {
+                    "size": literal(9 if chain == "filter-f-mode-large-rank" else 3)
+                }
                 if filter_name == "RankFilter":
-                    filter_arguments["rank"] = literal(0)
+                    filter_arguments["rank"] = literal(
+                        40 if chain == "filter-f-mode-large-rank" else 0
+                    )
                 filter_step = self.add_step(
                     "PIL.ImageFilter",
                     filter_name,
@@ -4570,7 +5951,11 @@ class WorkflowBuilder:
                     )
                 )
 
-        if self.scenario_observe_result is not None:
+        observe_filter_result = (
+            self.primary_surface == "PIL.ImageFilter"
+            and operation["kind"] == "type"
+        )
+        if self.scenario_observe_result is not None and not observe_filter_result:
             # Observe a returned public object through the declared public
             # operation. ``getdata`` uses ``bytes(ImagingCore)`` here; other
             # operations materialize returned images through an Image method.
@@ -4619,6 +6004,20 @@ class WorkflowBuilder:
                 step_id="apply-filter",
             )
             observations.append(filtered)
+            if self.scenario_observe_result is not None:
+                # ImageFilter constructors return filter objects, while the
+                # behavioral result is the image produced by Image.filter.
+                # Materialize that public image result rather than attempting
+                # an image terminal operation on the filter handle itself.
+                observations.append(
+                    self.add_step(
+                        "PIL.Image.Image",
+                        self.scenario_observe_result,
+                        receiver=binding(filtered),
+                        arguments={},
+                        step_id="observe-filter-result",
+                    )
+                )
 
         if self.primary_surface == "PIL.ImageEnhance" and operation["kind"] == "type":
             method_surface = f"PIL.ImageEnhance.{self.primary_operation}"
@@ -4733,6 +6132,4245 @@ def build_parity_case(
     }
 
 
+def benchmark_pipeline_cases(surface_id: str) -> list[dict[str, Any]]:
+    """Return large, public, materialized workflows used by the quick benchmark.
+
+    Setup creates deterministic images and filter objects before the measured
+    boundary.  Each measured chain then queues related public operations and
+    calls ``tobytes`` exactly once, allowing the target to retain a lazy
+    pipeline while still charging final materialization and GPU readback.
+    """
+
+    size = [1024, 1024]
+
+    def new_image(step_id: str, color: list[int]) -> dict[str, Any]:
+        return {
+            "step_id": step_id,
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("RGB"),
+                "size": literal(size),
+                "color": literal(color),
+            },
+        }
+
+    def new_mode_image(
+        step_id: str, mode: str, dimensions: list[int], color: list[int]
+    ) -> dict[str, Any]:
+        return {
+            "step_id": step_id,
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(dimensions),
+                "color": literal(color),
+            },
+        }
+
+    def materialize(receiver: str) -> dict[str, Any]:
+        return {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(receiver),
+            "arguments": {},
+        }
+
+    cases = [
+        {
+            "case_id": "PIL.Image.Image.transpose.benchmark.materialized-pipeline-1024",
+            "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "covers": ["PIL.Image.Image.transpose.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", [17, 83, 149]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"method": literal(0)},
+                },
+                {
+                    "step_id": "pipeline-secondary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding("pipeline-primary"),
+                    "arguments": {"method": literal(2)},
+                },
+                materialize("pipeline-secondary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "PIL.ImageFilter.GaussianBlur.benchmark.materialized-pipeline-1024",
+            "surface": "PIL.ImageFilter",
+            "operation": "GaussianBlur",
+            "covers": ["PIL.ImageFilter.GaussianBlur.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", [23, 97, 181]),
+                {
+                    "step_id": "setup-filter",
+                    "surface": "PIL.ImageFilter",
+                    "operation": "GaussianBlur",
+                    "receiver": None,
+                    "arguments": {"radius": literal(2.0)},
+                },
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"filter": binding("setup-filter")},
+                },
+                {
+                    "step_id": "pipeline-secondary",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("pipeline-primary")},
+                },
+                materialize("pipeline-secondary"),
+            ],
+            "observations": ["setup-filter", "materialize"],
+        },
+        {
+            "case_id": "PIL.ImageChops.multiply.benchmark.materialized-pipeline-1024",
+            "surface": "PIL.ImageChops",
+            "operation": "multiply",
+            "covers": ["PIL.ImageChops.multiply.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image-1", [31, 109, 197]),
+                new_image("setup-image-2", [211, 127, 43]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.ImageChops",
+                    "operation": "multiply",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("setup-image-1"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                {
+                    "step_id": "pipeline-secondary",
+                    "surface": "PIL.ImageChops",
+                    "operation": "screen",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("pipeline-primary"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                materialize("pipeline-secondary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024",
+            "surface": "PIL.ImageOps",
+            "operation": "invert",
+            "covers": ["PIL.ImageOps.invert.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", [47, 131, 223]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("setup-image")},
+                },
+                {
+                    "step_id": "pipeline-secondary",
+                    "surface": "PIL.ImageOps",
+                    "operation": "mirror",
+                    "receiver": None,
+                    "arguments": {"image": binding("pipeline-primary")},
+                },
+                materialize("pipeline-secondary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.rgba-lanczos-256x256",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [256, 256], [17, 83, 149, 191]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([192, 160]),
+                        "resample": literal(1),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.la-bicubic-256x256",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "LA", [256, 256], [173, 191]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([175, 129]),
+                        "resample": literal(3),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.rgba-bilinear-mirror-256x256",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [256, 256], [211, 127, 43, 127]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([320, 192]),
+                        "resample": literal(2),
+                    },
+                },
+                {
+                    "step_id": "pipeline-secondary",
+                    "surface": "PIL.ImageOps",
+                    "operation": "mirror",
+                    "receiver": None,
+                    "arguments": {"image": binding("pipeline-primary")},
+                },
+                materialize("pipeline-secondary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.la-bilinear-mirror-256x256",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "LA", [256, 256], [17, 191]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([320, 192]),
+                        "resample": literal(2),
+                    },
+                },
+                {
+                    "step_id": "pipeline-secondary",
+                    "surface": "PIL.ImageOps",
+                    "operation": "mirror",
+                    "receiver": None,
+                    "arguments": {"image": binding("pipeline-primary")},
+                },
+                materialize("pipeline-secondary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.rgba-bicubic-512x512",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [512, 512], [47, 131, 223, 83]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([320, 224]),
+                        "resample": literal(3),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.la-lanczos-512x512",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "LA", [512, 512], [143, 127]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([320, 224]),
+                        "resample": literal(1),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.rgba-bilinear-upscale-128x128",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [128, 128], [191, 83, 17, 191]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([256, 256]),
+                        "resample": literal(2),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.resize.la-bicubic-upscale-128x128",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": ["PIL.Image.Image.resize.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "LA", [128, 128], [211, 191]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([256, 256]),
+                        "resample": literal(3),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.geometry.transpose-rgba-1024x768",
+            "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "covers": ["PIL.Image.Image.transpose.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [1024, 768], [17, 83, 149, 191]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"method": literal(5)},
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.geometry.transverse-rgb-1024x768",
+            "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "covers": ["PIL.Image.Image.transpose.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "RGB", [1024, 768], [211, 127, 43]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"method": literal(6)},
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.geometry.crop-rgb-1024x768",
+            "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "covers": ["PIL.Image.Image.crop.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "RGB", [1024, 768], [31, 109, 197]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "crop",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"box": literal([96, 64, 928, 704])},
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.geometry.reduce-rgb-1024x768",
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "covers": ["PIL.Image.Image.reduce.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image("setup-image", "RGB", [1024, 768], [191, 83, 17]),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "reduce",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"factor": literal([3, 2])},
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.geometry.reduce-rgba-1024x768",
+            "surface": "PIL.Image.Image",
+            "operation": "reduce",
+            "covers": ["PIL.Image.Image.reduce.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [1024, 768], [191, 83, 17, 127]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "reduce",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"factor": literal([4, 3])},
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+        {
+            "case_id": "pipeline-chain.geometry.rotate-rgba-1024x768",
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "covers": ["PIL.Image.Image.rotate.performance.standard"],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_mode_image(
+                    "setup-image", "RGBA", [1024, 768], [83, 149, 17, 191]
+                ),
+                {
+                    "step_id": "pipeline-primary",
+                    "surface": "PIL.Image.Image",
+                    "operation": "rotate",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "angle": literal(37),
+                        "expand": literal(True),
+                    },
+                },
+                materialize("pipeline-primary"),
+            ],
+            "observations": ["pipeline-primary", "materialize"],
+        },
+    ]
+    return [case for case in cases if case["surface"] == surface_id]
+
+
+def pipeline_composition_cases(
+    surface_id: str,
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Return reviewed multi-operation public workflows.
+
+    These are parity inputs, not synthetic native probes.  Each workflow
+    queues several public image operations before one terminal ``tobytes``
+    observation so the lazy graph, mode propagation, secondary-image wiring,
+    and materialization boundary are exercised together.
+    """
+
+    def behavior(surface: str, operation: str) -> str:
+        definition = operations.get((surface, operation))
+        if definition is None:
+            raise ValueError(
+                f"pipeline composition references unknown operation: "
+                f"{surface}.{operation}"
+            )
+        prefix = operation_prefix(surface, operation)
+        requirement = next(
+            (
+                item["id"]
+                for item in definition["requirements"]
+                if item["id"] == f"{prefix}.behavior.default"
+            ),
+            None,
+        )
+        if requirement is None:
+            raise ValueError(
+                f"pipeline composition lacks default requirement: "
+                f"{surface}.{operation}"
+            )
+        return requirement
+
+    def new_image(step_id: str, mode: str, size: list[int], color: Any) -> dict[str, Any]:
+        return {
+            "step_id": step_id,
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(size),
+                "color": literal(color),
+            },
+        }
+
+    def materialize(receiver: str) -> dict[str, Any]:
+        return {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(receiver),
+            "arguments": {},
+        }
+
+    i16_pipeline_data = bytes(
+        [
+            0x01,
+            0x00,
+            0x20,
+            0x00,
+            0x40,
+            0x00,
+            0x60,
+            0x00,
+            0x80,
+            0x00,
+            0xA0,
+            0x00,
+            0xC0,
+            0x00,
+            0xE0,
+            0x00,
+            0x10,
+            0x01,
+            0x30,
+            0x01,
+            0x50,
+            0x01,
+            0x70,
+            0x01,
+        ]
+    )
+
+    cases = [
+        {
+            "case_id": "pipeline-composition.filter-invert-mirror",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "covers": [behavior("PIL.Image.Image", "filter")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "RGB", [24, 17], [17, 83, 149]),
+                {
+                    "step_id": "setup-filter",
+                    "surface": "PIL.ImageFilter",
+                    "operation": "GaussianBlur",
+                    "receiver": None,
+                    "arguments": {"radius": literal(1.5)},
+                },
+                {
+                    "step_id": "blurred",
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"filter": binding("setup-filter")},
+                },
+                {
+                    "step_id": "inverted",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("blurred")},
+                },
+                {
+                    "step_id": "mirrored",
+                    "surface": "PIL.ImageOps",
+                    "operation": "mirror",
+                    "receiver": None,
+                    "arguments": {"image": binding("inverted")},
+                },
+                materialize("mirrored"),
+            ],
+            "observations": ["blurred", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.point-solarize-posterize",
+            "surface": "PIL.ImageOps",
+            "operation": "posterize",
+            "covers": [behavior("PIL.ImageOps", "posterize")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "L", [29, 13], 173),
+                {
+                    "step_id": "pointed",
+                    "surface": "PIL.Image.Image",
+                    "operation": "point",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"lut": literal(list(range(256)))},
+                },
+                {
+                    "step_id": "solarized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "solarize",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("pointed"),
+                        "threshold": literal(127),
+                    },
+                },
+                {
+                    "step_id": "posterized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "posterize",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("solarized"),
+                        "bits": literal(4),
+                    },
+                },
+                materialize("posterized"),
+            ],
+            "observations": ["posterized", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.invert-solarize-posterize-point",
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "covers": [
+                behavior("PIL.ImageOps", "invert"),
+                behavior("PIL.ImageOps", "solarize"),
+                behavior("PIL.ImageOps", "posterize"),
+                behavior("PIL.Image.Image", "point"),
+            ],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "L", [31, 17], 37),
+                {
+                    "step_id": "inverted",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("setup-image")},
+                },
+                {
+                    "step_id": "solarized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "solarize",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("inverted"),
+                        "threshold": literal(127),
+                    },
+                },
+                {
+                    "step_id": "posterized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "posterize",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("solarized"),
+                        "bits": literal(4),
+                    },
+                },
+                {
+                    "step_id": "pointed",
+                    "surface": "PIL.Image.Image",
+                    "operation": "point",
+                    "receiver": binding("posterized"),
+                    "arguments": {
+                        "lut": literal(
+                            [(value * 5 + 13) % 256 for value in range(256)]
+                        )
+                    },
+                },
+                materialize("pointed"),
+            ],
+            "observations": [
+                "inverted",
+                "solarized",
+                "posterized",
+                "pointed",
+                "materialize",
+            ],
+        },
+        {
+            "case_id": "pipeline-composition.resize-rotate-crop",
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "covers": [behavior("PIL.Image.Image", "resize")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "RGBA", [31, 19], [17, 83, 149, 191]),
+                {
+                    "step_id": "resized",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([23, 27]),
+                        "resample": literal(2),
+                    },
+                },
+                {
+                    "step_id": "rotated",
+                    "surface": "PIL.Image.Image",
+                    "operation": "rotate",
+                    "receiver": binding("resized"),
+                    "arguments": {
+                        "angle": literal(90),
+                        "expand": literal(True),
+                    },
+                },
+                {
+                    "step_id": "cropped",
+                    "surface": "PIL.Image.Image",
+                    "operation": "crop",
+                    "receiver": binding("rotated"),
+                    "arguments": {"box": literal([1, 2, 20, 25])},
+                },
+                materialize("cropped"),
+            ],
+            "observations": ["resized", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.quantize-remap-convert",
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "covers": [behavior("PIL.Image.Image", "quantize")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "RGB", [27, 21], [191, 83, 17]),
+                {
+                    "step_id": "quantized",
+                    "surface": "PIL.Image.Image",
+                    "operation": "quantize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"colors": literal(8)},
+                },
+                {
+                    "step_id": "remapped",
+                    "surface": "PIL.Image.Image",
+                    "operation": "remap_palette",
+                    "receiver": binding("quantized"),
+                    "arguments": {"dest_map": literal([0, 1, 2, 3, 4, 5, 6, 7])},
+                },
+                {
+                    "step_id": "rgb",
+                    "surface": "PIL.Image.Image",
+                    "operation": "convert",
+                    "receiver": binding("remapped"),
+                    "arguments": {"mode": literal("RGB")},
+                },
+                materialize("rgb"),
+            ],
+            "observations": ["quantized", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.multiply-screen-invert",
+            "surface": "PIL.ImageChops",
+            "operation": "screen",
+            "covers": [behavior("PIL.ImageChops", "screen")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image-1", "RGB", [25, 23], [31, 109, 197]),
+                new_image("setup-image-2", "RGB", [25, 23], [211, 127, 43]),
+                {
+                    "step_id": "multiplied",
+                    "surface": "PIL.ImageChops",
+                    "operation": "multiply",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("setup-image-1"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                {
+                    "step_id": "screened",
+                    "surface": "PIL.ImageChops",
+                    "operation": "screen",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("multiplied"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                {
+                    "step_id": "inverted",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("screened")},
+                },
+                materialize("inverted"),
+            ],
+            "observations": ["screened", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.alpha-composite-grayscale-invert",
+            "surface": "PIL.Image.Image",
+            "operation": "alpha_composite",
+            "covers": [behavior("PIL.Image.Image", "alpha_composite")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image-1", "RGBA", [22, 18], [17, 83, 149, 191]),
+                new_image("setup-image-2", "RGBA", [22, 18], [211, 127, 43, 127]),
+                {
+                    "step_id": "composited",
+                    "surface": "PIL.Image.Image",
+                    "operation": "alpha_composite",
+                    "receiver": binding("setup-image-1"),
+                    "arguments": {"im": binding("setup-image-2")},
+                },
+                {
+                    "step_id": "grayscale",
+                    "surface": "PIL.ImageOps",
+                    "operation": "grayscale",
+                    "receiver": None,
+                    "arguments": {"image": binding("composited")},
+                },
+                {
+                    "step_id": "inverted",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("grayscale")},
+                },
+                materialize("inverted"),
+            ],
+            "observations": ["composited", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.transpose-flip-resize",
+            "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "covers": [behavior("PIL.Image.Image", "transpose")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "L", [18, 26], 211),
+                {
+                    "step_id": "transposed",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"method": literal(0)},
+                },
+                {
+                    "step_id": "flipped",
+                    "surface": "PIL.ImageOps",
+                    "operation": "flip",
+                    "receiver": None,
+                    "arguments": {"image": binding("transposed")},
+                },
+                {
+                    "step_id": "resized",
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding("flipped"),
+                    "arguments": {"size": literal([15, 17]), "resample": literal(0)},
+                },
+                materialize("resized"),
+            ],
+            "observations": ["transposed", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.crop-expand-mirror",
+            "surface": "PIL.ImageOps",
+            "operation": "expand",
+            "covers": [behavior("PIL.ImageOps", "expand")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "RGB", [28, 20], [191, 83, 17]),
+                {
+                    "step_id": "cropped",
+                    "surface": "PIL.Image.Image",
+                    "operation": "crop",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"box": literal([3, 2, 25, 18])},
+                },
+                {
+                    "step_id": "expanded",
+                    "surface": "PIL.ImageOps",
+                    "operation": "expand",
+                    "receiver": None,
+                    "arguments": {"image": binding("cropped"), "border": literal(2)},
+                },
+                {
+                    "step_id": "mirrored",
+                    "surface": "PIL.ImageOps",
+                    "operation": "mirror",
+                    "receiver": None,
+                    "arguments": {"image": binding("expanded")},
+                },
+                materialize("mirrored"),
+            ],
+            "observations": ["expanded", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.equalize-autocontrast-invert",
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "covers": [behavior("PIL.ImageOps", "equalize")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "L", [33, 15], 143),
+                {
+                    "step_id": "equalized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "equalize",
+                    "receiver": None,
+                    "arguments": {"image": binding("setup-image")},
+                },
+                {
+                    "step_id": "contrasted",
+                    "surface": "PIL.ImageOps",
+                    "operation": "autocontrast",
+                    "receiver": None,
+                    "arguments": {"image": binding("equalized"), "cutoff": literal(1)},
+                },
+                {
+                    "step_id": "inverted",
+                    "surface": "PIL.ImageOps",
+                    "operation": "invert",
+                    "receiver": None,
+                    "arguments": {"image": binding("contrasted")},
+                },
+                materialize("inverted"),
+            ],
+            "observations": ["equalized", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.boxblur-solarize-point",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "covers": [behavior("PIL.Image.Image", "filter")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "LA", [21, 21], [173, 191]),
+                {
+                    "step_id": "setup-filter",
+                    "surface": "PIL.ImageFilter",
+                    "operation": "BoxBlur",
+                    "receiver": None,
+                    "arguments": {"radius": literal(1)},
+                },
+                {
+                    "step_id": "blurred",
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"filter": binding("setup-filter")},
+                },
+                {
+                    "step_id": "solarized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "solarize",
+                    "receiver": None,
+                    "arguments": {"image": binding("blurred"), "threshold": literal(128)},
+                },
+                {
+                    "step_id": "pointed",
+                    "surface": "PIL.Image.Image",
+                    "operation": "point",
+                    "receiver": binding("solarized"),
+                    "arguments": {"lut": literal(list(range(256)) * 2)},
+                },
+                materialize("pointed"),
+            ],
+            "observations": ["blurred", "materialize"],
+        },
+    ]
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.linear-gradient-filter-autocontrast",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "covers": [behavior("PIL.Image", "linear_gradient")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "gradient",
+                        "surface": "PIL.Image",
+                        "operation": "linear_gradient",
+                        "receiver": None,
+                        "arguments": {"mode": literal("L")},
+                    },
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "BoxBlur",
+                        "receiver": None,
+                        "arguments": {"radius": literal(1)},
+                    },
+                    {
+                        "step_id": "blurred",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("gradient"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "contrasted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "autocontrast",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("blurred"),
+                            "cutoff": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("contrasted")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["gradient", "blurred", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.radial-gradient-crop-resize",
+                "surface": "PIL.Image",
+                "operation": "radial_gradient",
+                "covers": [behavior("PIL.Image", "radial_gradient")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "gradient",
+                        "surface": "PIL.Image",
+                        "operation": "radial_gradient",
+                        "receiver": None,
+                        "arguments": {"mode": literal("L")},
+                    },
+                    {
+                        "step_id": "cropped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": binding("gradient"),
+                        "arguments": {"box": literal([32, 32, 224, 224])},
+                    },
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("cropped"),
+                        "arguments": {
+                            "size": literal([64, 80]),
+                            "resample": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("resized")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["gradient", "resized", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.mandelbrot-invert-rotate",
+                "surface": "PIL.Image",
+                "operation": "effect_mandelbrot",
+                "covers": [behavior("PIL.Image", "effect_mandelbrot")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "fractal",
+                        "surface": "PIL.Image",
+                        "operation": "effect_mandelbrot",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([16, 16]),
+                            "extent": literal([-1.0, -1.0, 1.0, 1.0]),
+                            "quality": literal(32),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("fractal")},
+                    },
+                    {
+                        "step_id": "rotated",
+                        "surface": "PIL.Image.Image",
+                        "operation": "rotate",
+                        "receiver": binding("inverted"),
+                        "arguments": {
+                            "angle": literal(90),
+                            "expand": literal(True),
+                        },
+                    },
+                    materialize("rotated"),
+                ],
+                "observations": ["fractal", "inverted", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.rgba-putalpha-filter-convert",
+                "surface": "PIL.Image.Image",
+                "operation": "putalpha",
+                "covers": [behavior("PIL.Image.Image", "putalpha")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [24, 20], [17, 83, 149, 128]),
+                    {
+                        "step_id": "alpha-set",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putalpha",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"alpha": literal(192)},
+                    },
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "GaussianBlur",
+                        "receiver": None,
+                        "arguments": {"radius": literal(1.0)},
+                    },
+                    {
+                        "step_id": "blurred",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("blurred"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("rgb")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["alpha-set", "blurred", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.la-putpixel-convert-mirror",
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "covers": [behavior("PIL.Image.Image", "putpixel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [12, 10], [17, 128]),
+                    {
+                        "step_id": "pixel-set",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putpixel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "xy": literal([3, 4]),
+                            "value": literal([200, 64]),
+                        },
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("rgba")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["pixel-set", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.p-quantize-remap-autocontrast",
+                "surface": "PIL.Image.Image",
+                "operation": "quantize",
+                "covers": [behavior("PIL.Image.Image", "quantize")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [20, 16], 3),
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    {
+                        "step_id": "contrasted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "autocontrast",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("rgb"),
+                            "cutoff": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "quantized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "quantize",
+                        "receiver": binding("contrasted"),
+                        "arguments": {"colors": literal(8)},
+                    },
+                    {
+                        "step_id": "remapped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "remap_palette",
+                        "receiver": binding("quantized"),
+                        "arguments": {"dest_map": literal(list(range(8)))},
+                    },
+                    materialize("remapped"),
+                ],
+                "observations": ["quantized", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.chops-blend-difference-offset",
+                "surface": "PIL.ImageChops",
+                "operation": "blend",
+                "covers": [behavior("PIL.ImageChops", "blend")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image-1", "RGB", [18, 14], [31, 109, 197]),
+                    new_image("setup-image-2", "RGB", [18, 14], [211, 127, 43]),
+                    {
+                        "step_id": "blended",
+                        "surface": "PIL.ImageChops",
+                        "operation": "blend",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding("setup-image-1"),
+                            "image2": binding("setup-image-2"),
+                            "alpha": literal(0.5),
+                        },
+                    },
+                    {
+                        "step_id": "different",
+                        "surface": "PIL.ImageChops",
+                        "operation": "difference",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding("blended"),
+                            "image2": binding("setup-image-2"),
+                        },
+                    },
+                    {
+                        "step_id": "offset",
+                        "surface": "PIL.ImageChops",
+                        "operation": "offset",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("different"),
+                            "xoffset": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("offset")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["blended", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.rgba-composite-grayscale-resize",
+                "surface": "PIL.Image.Image",
+                "operation": "alpha_composite",
+                "covers": [behavior("PIL.Image.Image", "alpha_composite")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image-1", "RGBA", [22, 18], [17, 83, 149, 191]),
+                    new_image("setup-image-2", "RGBA", [22, 18], [211, 127, 43, 127]),
+                    {
+                        "step_id": "composited",
+                        "surface": "PIL.Image.Image",
+                        "operation": "alpha_composite",
+                        "receiver": binding("setup-image-1"),
+                        "arguments": {"im": binding("setup-image-2")},
+                    },
+                    {
+                        "step_id": "grayscale",
+                        "surface": "PIL.ImageOps",
+                        "operation": "grayscale",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image-1")},
+                    },
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("grayscale"),
+                        "arguments": {
+                            "size": literal([11, 9]),
+                            "resample": literal(2),
+                        },
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["composited", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.draw-filter-invert",
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "line",
+                "covers": [behavior("PIL.ImageDraw.ImageDraw", "line")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [32, 24], [17, 83, 149]),
+                    {
+                        "step_id": "setup-draw",
+                        "surface": "PIL.ImageDraw",
+                        "operation": "Draw",
+                        "receiver": None,
+                        "arguments": {"im": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "line",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "line",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([0, 0, 31, 23]),
+                            "fill": literal([211, 127, 43]),
+                            "width": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "rectangle",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "rectangle",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([4, 3, 27, 20]),
+                            "outline": literal([191, 17, 83]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "GaussianBlur",
+                        "receiver": None,
+                        "arguments": {"radius": literal(1.0)},
+                    },
+                    {
+                        "step_id": "blurred",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("blurred")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["line", "rectangle", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.draw-batch-rgb-shapes",
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "polygon",
+                "covers": [behavior("PIL.ImageDraw.ImageDraw", "polygon")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [256, 192], [17, 83, 149]),
+                    {
+                        "step_id": "setup-draw",
+                        "surface": "PIL.ImageDraw",
+                        "operation": "Draw",
+                        "receiver": None,
+                        "arguments": {"im": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "line",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "line",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([0, 0, 255, 191]),
+                            "fill": literal([211, 127, 43]),
+                            "width": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "rectangle",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "rectangle",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([8, 8, 248, 184]),
+                            "fill": literal([17, 83, 149]),
+                            "outline": literal([191, 17, 83]),
+                            "width": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "rounded",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "rounded_rectangle",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([24, 16, 232, 176]),
+                            "radius": literal(12),
+                            "fill": literal([83, 149, 17]),
+                            "outline": literal([255, 255, 255]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "ellipse",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "ellipse",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([48, 32, 208, 160]),
+                            "fill": literal([17, 149, 211]),
+                            "outline": literal([255, 255, 0]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "circle",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "circle",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([128, 96]),
+                            "radius": literal(32),
+                            "fill": literal([211, 43, 127]),
+                            "outline": literal([255, 255, 255]),
+                            "width": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "polygon",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "polygon",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([[16, 96], [128, 16], [240, 96], [128, 176]]),
+                            "fill": literal([43, 211, 127]),
+                            "outline": literal([255, 255, 255]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "arc",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "arc",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([32, 24, 224, 168]),
+                            "start": literal(0),
+                            "end": literal(270),
+                            "fill": literal([255, 255, 255]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "chord",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "chord",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([40, 40, 216, 152]),
+                            "start": literal(30),
+                            "end": literal(120),
+                            "fill": literal([127, 43, 211]),
+                            "outline": literal([255, 255, 255]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "pieslice",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "pieslice",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([56, 48, 200, 144]),
+                            "start": literal(180),
+                            "end": literal(300),
+                            "fill": literal([255, 127, 17]),
+                            "outline": literal([255, 255, 255]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "points",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "point",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([[4, 4], [251, 187], [128, 96]]),
+                            "fill": literal([255, 255, 255]),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["polygon", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.draw-batch-rgba-alpha",
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "rounded_rectangle",
+                "covers": [
+                    behavior("PIL.ImageDraw.ImageDraw", "rounded_rectangle")
+                ],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [192, 128], [17, 83, 149, 191]),
+                    {
+                        "step_id": "setup-draw",
+                        "surface": "PIL.ImageDraw",
+                        "operation": "Draw",
+                        "receiver": None,
+                        "arguments": {"im": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "rounded",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "rounded_rectangle",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([12, 12, 180, 116]),
+                            "radius": literal(9),
+                            "fill": literal([211, 127, 43, 128]),
+                            "outline": literal([255, 255, 255, 255]),
+                            "width": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "ellipse",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "ellipse",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([32, 24, 160, 104]),
+                            "fill": literal([43, 211, 127, 160]),
+                            "outline": literal([255, 255, 255, 200]),
+                            "width": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "line",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "line",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([0, 0, 191, 127]),
+                            "fill": literal([255, 17, 83, 96]),
+                            "width": literal(3),
+                        },
+                    },
+                    {
+                        "step_id": "points",
+                        "surface": "PIL.ImageDraw.ImageDraw",
+                        "operation": "point",
+                        "receiver": binding("setup-draw"),
+                        "arguments": {
+                            "xy": literal([[1, 1], [190, 126], [96, 64]]),
+                            "fill": literal([255, 255, 255, 255]),
+                        },
+                    },
+                    materialize("setup-image"),
+                ],
+                "observations": ["rounded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-resize-enhance",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [16, 16], [17, 83, 149, 191]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([12, 10]),
+                            "method": literal(0),
+                            "data": literal([1.0, 0.0, 1.0, 0.0, 1.0, 1.0]),
+                            "resample": literal(0),
+                            "fillcolor": literal([7, 8, 9, 10]),
+                        },
+                    },
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("transformed"),
+                        "arguments": {
+                            "size": literal([10, 8]),
+                            "resample": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "setup-enhancer",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Brightness",
+                        "receiver": None,
+                        "arguments": {"image": binding("resized")},
+                    },
+                    {
+                        "step_id": "enhanced",
+                        "surface": "PIL.ImageEnhance.Brightness",
+                        "operation": "enhance",
+                        "receiver": binding("setup-enhancer"),
+                        "arguments": {"factor": literal(1.25)},
+                    },
+                    materialize("enhanced"),
+                ],
+                "observations": ["transformed", "enhanced", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.p-resize-load",
+                "surface": "PIL.Image.Image",
+                "operation": "load",
+                "covers": [behavior("PIL.Image.Image", "load")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [12, 10], [10, 20, 30]),
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([9, 8]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "loaded",
+                        "surface": "PIL.Image.Image",
+                        "operation": "load",
+                        "receiver": binding("resized"),
+                        "arguments": {},
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["resized", "loaded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.p-resize-verify",
+                "surface": "PIL.Image.Image",
+                "operation": "verify",
+                "covers": [behavior("PIL.Image.Image", "verify")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [12, 10], [10, 20, 30]),
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([9, 8]),
+                            "resample": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "verified",
+                        "surface": "PIL.Image.Image",
+                        "operation": "verify",
+                        "receiver": binding("resized"),
+                        "arguments": {},
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["resized", "verified", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.pa-resize-load",
+                "surface": "PIL.Image.Image",
+                "operation": "load",
+                "covers": [behavior("PIL.Image.Image", "load")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "PA", [12, 10], [3, 128]),
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([10, 7]),
+                            "resample": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "loaded",
+                        "surface": "PIL.Image.Image",
+                        "operation": "load",
+                        "receiver": binding("resized"),
+                        "arguments": {},
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["resized", "loaded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.pa-resize-verify",
+                "surface": "PIL.Image.Image",
+                "operation": "verify",
+                "covers": [behavior("PIL.Image.Image", "verify")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "PA", [12, 10], [3, 128]),
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([10, 7]),
+                            "resample": literal(2),
+                        },
+                    },
+                    {
+                        "step_id": "verified",
+                        "surface": "PIL.Image.Image",
+                        "operation": "verify",
+                        "receiver": binding("resized"),
+                        "arguments": {},
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["resized", "verified", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.rgb-filter-verify",
+                "surface": "PIL.Image.Image",
+                "operation": "verify",
+                "covers": [behavior("PIL.Image.Image", "verify")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [17, 13], [17, 83, 149]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "BoxBlur",
+                        "receiver": None,
+                        "arguments": {"radius": literal(1)},
+                    },
+                    {
+                        "step_id": "blurred",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "verified",
+                        "surface": "PIL.Image.Image",
+                        "operation": "verify",
+                        "receiver": binding("blurred"),
+                        "arguments": {},
+                    },
+                    materialize("blurred"),
+                ],
+                "observations": ["blurred", "verified", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.l-crop-verify",
+                "surface": "PIL.Image.Image",
+                "operation": "verify",
+                "covers": [behavior("PIL.Image.Image", "verify")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [19, 15], 173),
+                    {
+                        "step_id": "cropped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"box": literal([2, 3, 17, 13])},
+                    },
+                    {
+                        "step_id": "verified",
+                        "surface": "PIL.Image.Image",
+                        "operation": "verify",
+                        "receiver": binding("cropped"),
+                        "arguments": {},
+                    },
+                    materialize("cropped"),
+                ],
+                "observations": ["cropped", "verified", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.p-chops-filter-verify",
+                "surface": "PIL.ImageChops",
+                "operation": "difference",
+                "covers": [behavior("PIL.ImageChops", "difference")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image-1", "L", [13, 11], 40),
+                    new_image("setup-image-2", "L", [13, 11], 120),
+                    {
+                        "step_id": "different",
+                        "surface": "PIL.ImageChops",
+                        "operation": "difference",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding("setup-image-1"),
+                            "image2": binding("setup-image-2"),
+                        },
+                    },
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "BoxBlur",
+                        "receiver": None,
+                        "arguments": {"radius": literal(1)},
+                    },
+                    {
+                        "step_id": "blurred",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("different"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    materialize("blurred"),
+                ],
+                "observations": ["different", "blurred", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.p-convert-resize-load",
+                "surface": "PIL.Image.Image",
+                "operation": "load",
+                "covers": [behavior("PIL.Image.Image", "load")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [14, 12], [17, 83, 149]),
+                    {
+                        "step_id": "converted",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("P")},
+                    },
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("converted"),
+                        "arguments": {
+                            "size": literal([10, 9]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "loaded",
+                        "surface": "PIL.Image.Image",
+                        "operation": "load",
+                        "receiver": binding("resized"),
+                        "arguments": {},
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["converted", "resized", "loaded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.p-convert-filter-verify",
+                "surface": "PIL.Image.Image",
+                "operation": "verify",
+                "covers": [behavior("PIL.Image.Image", "verify")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [14, 12], [17, 83, 149]),
+                    {
+                        "step_id": "converted",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "BoxBlur",
+                        "receiver": None,
+                        "arguments": {"radius": literal(1)},
+                    },
+                    {
+                        "step_id": "blurred",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("converted"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "verified",
+                        "surface": "PIL.Image.Image",
+                        "operation": "verify",
+                        "receiver": binding("blurred"),
+                        "arguments": {},
+                    },
+                    materialize("blurred"),
+                ],
+                "observations": ["converted", "blurred", "verified", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.frombytes-i16-transpose-getdata",
+                "surface": "PIL.Image.Image",
+                "operation": "getdata",
+                "covers": [behavior("PIL.Image.Image", "getdata")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [
+                    {
+                        "id": "pipeline-composition-i16-data",
+                        "kind": "inline",
+                        "encoding": "base64",
+                        "data": base64.b64encode(i16_pipeline_data).decode("ascii"),
+                        "sha256": hashlib.sha256(i16_pipeline_data).hexdigest(),
+                        "media_type": "application/octet-stream",
+                    }
+                ],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "frombytes",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("I;16"),
+                            "size": literal([4, 3]),
+                            "data": asset_value("pipeline-composition-i16-data"),
+                        },
+                    },
+                    {
+                        "step_id": "transposed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transpose",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"method": literal(2)},
+                    },
+                    {
+                        "step_id": "data",
+                        "surface": "PIL.Image.Image",
+                        "operation": "getdata",
+                        "receiver": binding("transposed"),
+                        "arguments": {},
+                    },
+                ],
+                "observations": ["transposed", "data"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-cmyk-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [10, 8], [17, 83, 149]),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("cmyk"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["cmyk", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-hsv-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [10, 8], [191, 83, 17]),
+                    {
+                        "step_id": "hsv",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("HSV")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("hsv"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["hsv", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-ycbcr-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [10, 8], [31, 109, 197]),
+                    {
+                        "step_id": "ycbcr",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("YCbCr")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("ycbcr"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["ycbcr", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-i-l",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [10, 8], [73, 137, 211]),
+                    {
+                        "step_id": "int32",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("I")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("int32"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["int32", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-f-l",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [10, 8], [211, 127, 43]),
+                    {
+                        "step_id": "float32",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("F")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("float32"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["float32", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-l-cmyk-l",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [10, 8], 173),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("cmyk"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["cmyk", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-la-cmyk-l",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [10, 8], [173, 191]),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("cmyk"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["cmyk", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-l-1-no-dither",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [10, 8], 129),
+                    {
+                        "step_id": "one",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "mode": literal("1"),
+                            "dither": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("one"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["one", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-1-dither",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "gradient",
+                        "surface": "PIL.Image",
+                        "operation": "linear_gradient",
+                        "receiver": None,
+                        "arguments": {"mode": literal("L")},
+                    },
+                    {
+                        "step_id": "one",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("gradient"),
+                        "arguments": {"mode": literal("1")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("one"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["one", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgba-la-alpha",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [10, 8], [17, 83, 149, 127]),
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("la"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["la", "materialize"],
+            },
+        ]
+    )
+    # Cover public mode-conversion branches that ordinary RGB/L pipelines do
+    # not reach.  These remain input-driven workflows: palette metadata and
+    # explicit source modes are attached through the public Image APIs, then
+    # one terminal observation makes the conversion execute in the target.
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.convert-palette-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [8, 6], 0),
+                    {
+                        "step_id": "palette",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putpalette",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "data": literal([10, 20, 30, 40, 50, 60]),
+                            "rawmode": literal("RGB"),
+                        },
+                    },
+                    {
+                        "step_id": "pixel",
+                        "surface": "PIL.Image.Image",
+                        "operation": "putpixel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "xy": literal([2, 3]),
+                            "value": literal(1),
+                        },
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["rgb", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-p-no-palette-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [8, 6], 1),
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["rgb", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-1-no-dither",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
+                    {
+                        "step_id": "one",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "mode": literal("1"),
+                            "dither": literal(0),
+                        },
+                    },
+                    materialize("one"),
+                ],
+                "observations": ["one", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-1-dither",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [9, 7], [211, 127, 43, 19]),
+                    {
+                        "step_id": "one",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("1")},
+                    },
+                    materialize("one"),
+                ],
+                "observations": ["one", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-i",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
+                    {
+                        "step_id": "int32",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("I")},
+                    },
+                    materialize("int32"),
+                ],
+                "observations": ["int32", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-f",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [8, 6], [211, 127, 43, 19]),
+                    {
+                        "step_id": "float32",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("F")},
+                    },
+                    materialize("float32"),
+                ],
+                "observations": ["float32", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-one-cmyk",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "1", [8, 6], 1),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    materialize("cmyk"),
+                ],
+                "observations": ["cmyk", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-la",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    materialize("la"),
+                ],
+                "observations": ["la", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgba-cmyk-la",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [8, 6], [17, 83, 149, 127]),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("cmyk"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    materialize("la"),
+                ],
+                "observations": ["cmyk", "la", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [8, 6], [211, 127, 43, 19]),
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["rgba", "materialize"],
+            },
+        ]
+    )
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.convert-one-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "1", [8, 6], 1),
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("rgba"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["rgba", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-pa-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [8, 6], [17, 83, 149]),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgba-pa-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [8, 6], [17, 83, 149, 127]),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-l-pa-la",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [8, 6], 173),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    materialize("la"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-p-pa-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [8, 6], 3),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-cmyk-pa-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [8, 6], [17, 83, 149, 31]),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-hsv-pa-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "HSV", [8, 6], [31, 109, 197]),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-ycbcr-pa-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "YCbCr", [8, 6], [31, 109, 197]),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-i-pa-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "I", [8, 6], 173),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-f-pa-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "F", [8, 6], 1.25),
+                    {
+                        "step_id": "pa",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("PA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("pa"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["pa", "materialize"],
+            },
+        ]
+    )
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.convert-rgba-la-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [9, 7], [17, 83, 149, 127]),
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("la"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["la", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-la-rgba",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    {
+                        "step_id": "rgba",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("la"),
+                        "arguments": {"mode": literal("RGBA")},
+                    },
+                    materialize("rgba"),
+                ],
+                "observations": ["la", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-l-rgb-la",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [9, 7], 173),
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    {
+                        "step_id": "la",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("rgb"),
+                        "arguments": {"mode": literal("LA")},
+                    },
+                    materialize("la"),
+                ],
+                "observations": ["rgb", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-l-cmyk-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [9, 7], 173),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("cmyk"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["cmyk", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-cmyk-l",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
+                    {
+                        "step_id": "cmyk",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("CMYK")},
+                    },
+                    {
+                        "step_id": "gray",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("cmyk"),
+                        "arguments": {"mode": literal("L")},
+                    },
+                    materialize("gray"),
+                ],
+                "observations": ["cmyk", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.convert-rgb-p-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "covers": [behavior("PIL.Image.Image", "convert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
+                    {
+                        "step_id": "palette",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"mode": literal("P")},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("palette"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["palette", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.remap-l-materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "remap_palette",
+                "covers": [behavior("PIL.Image.Image", "remap_palette")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [9, 7], 173),
+                    {
+                        "step_id": "remapped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "remap_palette",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"dest_map": literal([173, 0, 255])},
+                    },
+                    materialize("remapped"),
+                ],
+                "observations": ["remapped", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.getchannel-rgba-alpha-invert",
+                "surface": "PIL.Image.Image",
+                "operation": "getchannel",
+                "covers": [behavior("PIL.Image.Image", "getchannel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [9, 7], [17, 83, 149, 127]),
+                    {
+                        "step_id": "alpha",
+                        "surface": "PIL.Image.Image",
+                        "operation": "getchannel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"channel": literal(3)},
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("alpha")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["alpha", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.getchannel-la-alpha-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "getchannel",
+                "covers": [behavior("PIL.Image.Image", "getchannel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [9, 7], [173, 127]),
+                    {
+                        "step_id": "alpha",
+                        "surface": "PIL.Image.Image",
+                        "operation": "getchannel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"channel": literal(1)},
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("alpha"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["alpha", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-extent-crop",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [12, 10], [17, 83, 149]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([8, 8]),
+                            "method": literal(1),
+                            "data": literal([1, 1, 11, 9]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "cropped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": binding("transformed"),
+                        "arguments": {"box": literal([1, 1, 7, 7])},
+                    },
+                    materialize("cropped"),
+                ],
+                "observations": ["transformed", "materialize"],
+            },
+        ]
+    )
+    # Exercise public color parsing and every successful geometric transform
+    # method through one lazy graph each.  These cases are intentionally
+    # separate from the broad matrix so a coverage delta can be attributed to
+    # the specific public branches they target.
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.pad-rgb-named-color-invert",
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "covers": [behavior("PIL.ImageOps", "pad")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([12, 18]),
+                            "method": literal(0),
+                            "color": literal("red"),
+                            "centering": literal([0.25, 0.75]),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("padded")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["padded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.pad-l-named-color-crop",
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "covers": [behavior("PIL.ImageOps", "pad")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [9, 7], 173),
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([15, 11]),
+                            "method": literal(0),
+                            "color": literal("red"),
+                        },
+                    },
+                    {
+                        "step_id": "cropped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": binding("padded"),
+                        "arguments": {"box": literal([1, 1, 14, 10])},
+                    },
+                    materialize("cropped"),
+                ],
+                "observations": ["padded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.pad-la-named-color-convert",
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "covers": [behavior("PIL.ImageOps", "pad")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [9, 7], [173, 127]),
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([12, 12]),
+                            "method": literal(0),
+                            "color": literal("red"),
+                        },
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("padded"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["padded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.pad-rgba-alpha-name-mirror",
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "covers": [behavior("PIL.ImageOps", "pad")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [9, 7], [17, 83, 149, 127]),
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([15, 9]),
+                            "method": literal(0),
+                            "color": literal("#10203080"),
+                        },
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("padded")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["padded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.pad-p-named-color-convert",
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "covers": [behavior("PIL.ImageOps", "pad")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "P", [9, 7], 3),
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([12, 12]),
+                            "method": literal(0),
+                            "color": literal("red"),
+                        },
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("padded"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["padded", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-affine-la-invert",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [9, 7], [173, 127]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([9, 7]),
+                            "method": literal(0),
+                            "data": literal([1, 0, 0, 0, 1, 0]),
+                            "resample": literal(0),
+                            "fillcolor": literal([7, 8]),
+                        },
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("transformed")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["transformed", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-perspective-rgb-crop",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([8, 8]),
+                            "method": literal(2),
+                            "data": literal([1, 0, 0, 0, 1, 0, 0, 0]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "cropped",
+                        "surface": "PIL.Image.Image",
+                        "operation": "crop",
+                        "receiver": binding("transformed"),
+                        "arguments": {"box": literal([0, 0, 6, 6])},
+                    },
+                    materialize("cropped"),
+                ],
+                "observations": ["transformed", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-quad-rgb-mirror",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [9, 7], [17, 83, 149]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([8, 8]),
+                            "method": literal(3),
+                            "data": literal([0, 0, 8, 0, 8, 8, 0, 8]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("transformed")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["transformed", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-mesh-rgba-convert",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [8, 8], [17, 83, 149, 127]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([8, 8]),
+                            "method": literal(4),
+                            "data": literal([
+                                [[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]],
+                            ]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("transformed"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["transformed", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.transform-perspective-la-fill",
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "covers": [behavior("PIL.Image.Image", "transform")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [8, 8], [173, 127]),
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([4, 4]),
+                            "method": literal(2),
+                            "data": literal([1, 0, 100, 0, 1, 100, 0, 0]),
+                            "resample": literal(0),
+                            "fillcolor": literal([7, 8]),
+                        },
+                    },
+                    {
+                        "step_id": "rgb",
+                        "surface": "PIL.Image.Image",
+                        "operation": "convert",
+                        "receiver": binding("transformed"),
+                        "arguments": {"mode": literal("RGB")},
+                    },
+                    materialize("rgb"),
+                ],
+                "observations": ["transformed", "materialize"],
+            },
+        ]
+    )
+    # Exercise public mode/layout transitions that are easy to miss when the
+    # broad corpus observes each endpoint in isolation.  These workflows stay
+    # on the public Image/ImageOps/ImageChops/ImageEnhance surface; they are
+    # intentionally small so the CPU, SIMD, GPU, and binding lanes can run
+    # them in one process and attribute any coverage or parity delta to the
+    # same lazy graph.
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.simd-la-chops-invert-mirror",
+                "surface": "PIL.ImageChops",
+                "operation": "invert",
+                "covers": [behavior("PIL.ImageChops", "invert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [11, 9], [173, 127]),
+                    {
+                        "step_id": "chops-inverted",
+                        "surface": "PIL.ImageChops",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("chops-inverted")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["chops-inverted", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-rgba-chops-invert-transpose",
+                "surface": "PIL.ImageChops",
+                "operation": "invert",
+                "covers": [behavior("PIL.ImageChops", "invert")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [10, 8], [17, 83, 149, 127]),
+                    {
+                        "step_id": "chops-inverted",
+                        "surface": "PIL.ImageChops",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "transposed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transpose",
+                        "receiver": binding("chops-inverted"),
+                        "arguments": {"method": literal(6)},
+                    },
+                    materialize("transposed"),
+                ],
+                "observations": ["chops-inverted", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-f-resize-transpose",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "covers": [behavior("PIL.Image.Image", "resize")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "F", [13, 9], 1.5),
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([8, 6]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "transposed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transpose",
+                        "receiver": binding("resized"),
+                        "arguments": {"method": literal(2)},
+                    },
+                    materialize("transposed"),
+                ],
+                "observations": ["resized", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-i-resize-transform",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "covers": [behavior("PIL.Image.Image", "resize")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "I", [12, 10], -12345),
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "size": literal([7, 5]),
+                            "resample": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "transformed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transform",
+                        "receiver": binding("resized"),
+                        "arguments": {
+                            "size": literal([6, 4]),
+                            "method": literal(0),
+                            "data": literal([1, 0, 0, 0, 1, 0]),
+                            "resample": literal(0),
+                        },
+                    },
+                    materialize("transformed"),
+                ],
+                "observations": ["resized", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-f-contain-scale",
+                "surface": "PIL.ImageOps",
+                "operation": "contain",
+                "covers": [behavior("PIL.ImageOps", "contain")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "F", [13, 9], 1.5),
+                    {
+                        "step_id": "contained",
+                        "surface": "PIL.ImageOps",
+                        "operation": "contain",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([8, 6]),
+                            "method": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "scaled",
+                        "surface": "PIL.ImageOps",
+                        "operation": "scale",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("contained"),
+                            "factor": literal(1.5),
+                            "resample": literal("NEAREST"),
+                        },
+                    },
+                    materialize("scaled"),
+                ],
+                "observations": ["contained", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-i-cover-pad",
+                "surface": "PIL.ImageOps",
+                "operation": "cover",
+                "covers": [behavior("PIL.ImageOps", "cover")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "I", [12, 10], -12345),
+                    {
+                        "step_id": "covered",
+                        "surface": "PIL.ImageOps",
+                        "operation": "cover",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("setup-image"),
+                            "size": literal([8, 6]),
+                            "method": literal(0),
+                        },
+                    },
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("covered"),
+                            "size": literal([10, 8]),
+                            "method": literal(0),
+                            "color": literal(7),
+                        },
+                    },
+                    materialize("padded"),
+                ],
+                "observations": ["covered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-cmyk-contrast-color",
+                "surface": "PIL.ImageEnhance",
+                "operation": "Contrast",
+                "covers": [behavior("PIL.ImageEnhance", "Contrast")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [10, 8], [17, 83, 149, 31]),
+                    {
+                        "step_id": "setup-contrast",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Contrast",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "contrasted",
+                        "surface": "PIL.ImageEnhance.Contrast",
+                        "operation": "enhance",
+                        "receiver": binding("setup-contrast"),
+                        "arguments": {"factor": literal(1.25)},
+                    },
+                    {
+                        "step_id": "setup-color",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Color",
+                        "receiver": None,
+                        "arguments": {"image": binding("contrasted")},
+                    },
+                    {
+                        "step_id": "colored",
+                        "surface": "PIL.ImageEnhance.Color",
+                        "operation": "enhance",
+                        "receiver": binding("setup-color"),
+                        "arguments": {"factor": literal(0.75)},
+                    },
+                    materialize("colored"),
+                ],
+                "observations": ["setup-contrast", "contrasted", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-cmyk-brightness-sharpness",
+                "surface": "PIL.ImageEnhance",
+                "operation": "Brightness",
+                "covers": [behavior("PIL.ImageEnhance", "Brightness")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "CMYK", [10, 8], [211, 127, 43, 19]),
+                    {
+                        "step_id": "setup-brightness",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Brightness",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "brightened",
+                        "surface": "PIL.ImageEnhance.Brightness",
+                        "operation": "enhance",
+                        "receiver": binding("setup-brightness"),
+                        "arguments": {"factor": literal(1.1)},
+                    },
+                    {
+                        "step_id": "setup-sharpness",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Sharpness",
+                        "receiver": None,
+                        "arguments": {"image": binding("brightened")},
+                    },
+                    {
+                        "step_id": "sharpened",
+                        "surface": "PIL.ImageEnhance.Sharpness",
+                        "operation": "enhance",
+                        "receiver": binding("setup-sharpness"),
+                        "arguments": {"factor": literal(0.5)},
+                    },
+                    materialize("sharpened"),
+                ],
+                "observations": ["setup-brightness", "brightened", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-f-mirror-filter",
+                "surface": "PIL.ImageOps",
+                "operation": "mirror",
+                "covers": [behavior("PIL.ImageOps", "mirror")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "F", [11, 9], 1.5),
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("setup-image")},
+                    },
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "MaxFilter",
+                        "receiver": None,
+                        "arguments": {"size": literal(3)},
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("mirrored"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    materialize("filtered"),
+                ],
+                "observations": ["mirrored", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.simd-i-transpose-mirror",
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "covers": [behavior("PIL.Image.Image", "transpose")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "I", [11, 9], -12345),
+                    {
+                        "step_id": "transposed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transpose",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"method": literal(4)},
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("transposed")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["transposed", "materialize"],
+            },
+        ]
+    )
+    # Keep the public filter pipeline covered across the typed paths that the
+    # adapters dispatch specially.  Kernel is a public ImageFilter object;
+    # these cases deliberately materialize only after the filter is composed
+    # with a second public operation so coverage observes the same lazy graph
+    # shape as the benchmark workloads.
+    cases.extend(
+        [
+            {
+                "case_id": "pipeline-composition.filter-l-3x3-invert",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [11, 9], 83),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([3, 3]),
+                            "kernel": literal([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("filtered")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-rgb-3x3-mirror",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [11, 9], [17, 83, 149]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([3, 3]),
+                            "kernel": literal([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("filtered")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-rgba-3x3-transpose",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [11, 9], [17, 83, 149, 127]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([3, 3]),
+                            "kernel": literal([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "transposed",
+                        "surface": "PIL.Image.Image",
+                        "operation": "transpose",
+                        "receiver": binding("filtered"),
+                        "arguments": {"method": literal(2)},
+                    },
+                    materialize("transposed"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-la-3x3-alpha",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [11, 9], [173, 127]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([3, 3]),
+                            "kernel": literal([0.0, 1.0, 0.0, 1.0, 1.0, 1.0, 0.0, 1.0, 0.0]),
+                            "scale": literal(5.0),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageChops",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("filtered")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-i-3x3-resize",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "I", [11, 9], -12345),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([3, 3]),
+                            "kernel": literal([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "resized",
+                        "surface": "PIL.Image.Image",
+                        "operation": "resize",
+                        "receiver": binding("filtered"),
+                        "arguments": {
+                            "size": literal([8, 6]),
+                            "resample": literal(0),
+                        },
+                    },
+                    materialize("resized"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-f-3x3-contrast",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "F", [11, 9], 1.5),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([3, 3]),
+                            "kernel": literal([0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0]),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "setup-contrast",
+                        "surface": "PIL.ImageEnhance",
+                        "operation": "Contrast",
+                        "receiver": None,
+                        "arguments": {"image": binding("filtered")},
+                    },
+                    {
+                        "step_id": "contrasted",
+                        "surface": "PIL.ImageEnhance.Contrast",
+                        "operation": "enhance",
+                        "receiver": binding("setup-contrast"),
+                        "arguments": {"factor": literal(1.25)},
+                    },
+                    materialize("contrasted"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-l-5x5-scale",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "L", [13, 11], 127),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([5, 5]),
+                            "kernel": literal([1.0] * 25),
+                            "scale": literal(25.0),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "scaled",
+                        "surface": "PIL.ImageOps",
+                        "operation": "scale",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("filtered"),
+                            "factor": literal(1.5),
+                            "resample": literal("NEAREST"),
+                        },
+                    },
+                    materialize("scaled"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-rgb-5x5-pad",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGB", [13, 11], [17, 83, 149]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([5, 5]),
+                            "kernel": literal([1.0] * 25),
+                            "scale": literal(25.0),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "padded",
+                        "surface": "PIL.ImageOps",
+                        "operation": "pad",
+                        "receiver": None,
+                        "arguments": {
+                            "image": binding("filtered"),
+                            "size": literal([16, 14]),
+                            "method": literal(0),
+                            "color": literal([7, 8, 9]),
+                        },
+                    },
+                    materialize("padded"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-la-5x5-mirror",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "LA", [13, 11], [173, 127]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([5, 5]),
+                            "kernel": literal([1.0] * 25),
+                            "scale": literal(25.0),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "mirrored",
+                        "surface": "PIL.ImageOps",
+                        "operation": "mirror",
+                        "receiver": None,
+                        "arguments": {"image": binding("filtered")},
+                    },
+                    materialize("mirrored"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+            {
+                "case_id": "pipeline-composition.filter-rgba-5x5-invert",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "covers": [behavior("PIL.ImageFilter", "Kernel")],
+                "target_profiles": [TARGET_PROFILE],
+                "assets": [],
+                "steps": [
+                    new_image("setup-image", "RGBA", [13, 11], [17, 83, 149, 127]),
+                    {
+                        "step_id": "setup-filter",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Kernel",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal([5, 5]),
+                            "kernel": literal([1.0] * 25),
+                            "scale": literal(25.0),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-filter")},
+                    },
+                    {
+                        "step_id": "inverted",
+                        "surface": "PIL.ImageOps",
+                        "operation": "invert",
+                        "receiver": None,
+                        "arguments": {"image": binding("filtered")},
+                    },
+                    materialize("inverted"),
+                ],
+                "observations": ["setup-filter", "filtered", "materialize"],
+            },
+        ]
+    )
+    # Expand the reviewed workflows into a small public pipeline matrix.  The
+    # templates are all already parity-validated; varying only the public
+    # source colors keeps the graph shape and operation contracts identical
+    # while providing 100 additional input-driven executions in one campaign.
+    # These are deliberately ordinary Image/ImageOps/ImageFilter calls rather
+    # than native probes, so an unchanged coverage result remains honest.
+    matrix_cases: list[dict[str, Any]] = []
+    for index in range(100):
+        case = copy.deepcopy(cases[index % len(cases)])
+        case["case_id"] = f"pipeline-composition.matrix-{index:03d}"
+        seed = (index * 37 + 11) % 256
+        for step in case["steps"]:
+            if step.get("operation") != "new":
+                continue
+            arguments = step["arguments"]
+            mode = arguments["mode"]["value"]
+            if mode == "L":
+                arguments["color"] = literal(seed)
+            elif mode == "LA":
+                arguments["color"] = literal([seed, (seed * 3 + 17) % 256])
+            elif mode == "RGB":
+                arguments["color"] = literal(
+                    [seed, (seed * 3 + 17) % 256, (seed * 5 + 29) % 256]
+                )
+            elif mode == "RGBA":
+                arguments["color"] = literal(
+                    [seed, (seed * 3 + 17) % 256, (seed * 5 + 29) % 256, 127]
+                )
+        matrix_cases.append(case)
+    cases.extend(matrix_cases)
+    return [case for case in cases if case["surface"] == surface_id]
+
+
 def build_nuanced_cases(
     manifest: dict[str, Any],
     operations: dict[tuple[str, str], dict[str, Any]],
@@ -4749,7 +10387,2486 @@ def build_nuanced_cases(
     each requirement while parity executes these additional workflows.
     """
 
+    def packed_imageops_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid indexed-mode ImageOps geometry stimulus.
+
+        ``P`` and ``PA`` are represented by the core as one- and two-byte
+        native samples. The public ImageOps wrappers still reach the packed
+        SIMD adapter for these modes, so this matrix keeps that route visible
+        while varying source geometry, destination geometry, and public
+        argument forms. The operation split is fixed at 100 cases so input
+        retention can be checked after generation.
+        """
+
+        if pattern < 12:
+            operation = "contain"
+        elif pattern < 24:
+            operation = "cover"
+        elif pattern < 36:
+            operation = "fit"
+        elif pattern < 48:
+            operation = "pad"
+        elif pattern < 60:
+            operation = "scale"
+        elif pattern < 72:
+            operation = "expand"
+        elif pattern < 86:
+            operation = "flip"
+        else:
+            operation = "mirror"
+
+        mode = "PA" if pattern % 2 else "P"
+        source_size = [11 + pattern % 5, 7 + (pattern // 5) % 5]
+        destination_size = [7 + pattern % 4, 5 + (pattern // 3) % 4]
+        pixel = (
+            [1 + (pattern * 17) % 254, 32 + (pattern * 29) % 224]
+            if mode == "PA"
+            else 1 + (pattern * 17) % 254
+        )
+        values: dict[str, Any] = {}
+        if operation in {"contain", "cover"}:
+            values = {
+                "size": literal(destination_size),
+                "method": literal(0),
+            }
+        elif operation == "fit":
+            values = {
+                "size": literal(destination_size),
+                "method": literal(0),
+                "bleed": literal(0.1 * (pattern % 4)),
+                "centering": literal(
+                    [
+                        0.0 if pattern % 3 == 0 else 0.5,
+                        1.0 if pattern % 4 == 0 else 0.25,
+                    ]
+                ),
+            }
+        elif operation == "pad":
+            values = {
+                "size": literal(destination_size),
+                "method": literal(0),
+                "color": literal(
+                    [
+                        (pattern * 23) % 256,
+                        32 + (pattern * 31) % 224,
+                    ]
+                    if mode == "PA"
+                    else (pattern * 23) % 256
+                ),
+                "centering": literal(
+                    [
+                        0.0 if pattern % 3 == 0 else 0.5,
+                        1.0 if pattern % 4 == 0 else 0.25,
+                    ]
+                ),
+            }
+        elif operation == "scale":
+            values = {
+                "factor": literal((3 + pattern % 5) / 4.0),
+                "resample": literal(0),
+            }
+        elif operation == "expand":
+            values = {
+                "border": literal(1 + pattern % 3),
+                "fill": literal(
+                    [
+                        (pattern * 23) % 256,
+                        32 + (pattern * 31) % 224,
+                    ]
+                    if mode == "PA"
+                    else (pattern * 23) % 256
+                ),
+            }
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-imageops-packed-{operation}-{mode.lower()}-{pattern}",
+            "mode": mode,
+            "size": source_size,
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": values,
+            "observe_result": "tobytes",
+        }
+
+    def transposed_resize_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid resize stimulus for the cache-local vertical pass.
+
+        The resize implementation switches from row-major vertical reads to
+        its public two-pass transposed layout when source height multiplied by
+        output width reaches 512*512.  A 513x512 source and 513x3 result cross
+        that threshold without making the measured output unnecessarily large.
+        Every case remains an ordinary Image.new/resize/tobytes workflow; the
+        matrix varies native byte mode, filter, and source color.
+        """
+
+        mode, pixel = (
+            ("L", 17 + (pattern * 19) % 239)
+            if pattern % 4 == 0
+            else ("LA", [17 + (pattern * 19) % 239, 1 + (pattern * 23) % 255])
+            if pattern % 4 == 1
+            else (
+                "RGB",
+                [
+                    17 + (pattern * 19) % 239,
+                    31 + (pattern * 29) % 225,
+                    47 + (pattern * 37) % 209,
+                ],
+            )
+            if pattern % 4 == 2
+            else (
+                "RGBA",
+                [
+                    17 + (pattern * 19) % 239,
+                    31 + (pattern * 29) % 225,
+                    47 + (pattern * 37) % 209,
+                    1 + (pattern * 41) % 255,
+                ],
+            )
+        )
+        resample = (2, 3, 1, 5)[pattern % 4]
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "resize",
+            "requirement_suffix": "parameter.resample",
+            "name": f"coverage-batch-resize-transposed-{mode.lower()}-{pattern}",
+            "mode": mode,
+            "size": [513, 512],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": {
+                "size": literal([513, 3]),
+                "resample": literal(resample),
+            },
+            "observe_result": "tobytes",
+        }
+
+    def native_convolution_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid large byte-mode Kernel stimulus.
+
+        Native SIMD convolution is selected for ordinary byte layouts once the
+        source exceeds 64*64 pixels. A 513x9 frame crosses that public
+        threshold while keeping each parity case bounded; its width also
+        exercises both the eight-lane loop and the scalar tail. The 3x3
+        matrix excludes RGBA because that layout intentionally remains on its
+        exact CPU crossover on the maintained arm64 release host; the 5x5
+        matrix includes all four ordinary byte modes.
+        """
+
+        if pattern < 50:
+            mode, pixel = (
+                ("L", 17 + (pattern * 19) % 239)
+                if pattern % 3 == 0
+                else ("LA", [17 + (pattern * 19) % 239, 1 + (pattern * 23) % 255])
+                if pattern % 3 == 1
+                else (
+                    "RGB",
+                    [
+                        17 + (pattern * 19) % 239,
+                        31 + (pattern * 29) % 225,
+                        47 + (pattern * 37) % 209,
+                    ],
+                )
+            )
+            kernel_size = [3, 3]
+            kernels = (
+                [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                [0.0, -1.0, 0.0, -1.0, 5.0, -1.0, 0.0, -1.0, 0.0],
+                [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0],
+                [0.0, -1.0, 0.0, -1.0, 4.0, -1.0, 0.0, -1.0, 0.0],
+            )
+            scale = (1.0, 1.0, 9.0, 1.0)[pattern % 4]
+            offset = (0.0, 7.0, 0.0, 32.0)[pattern % 4]
+        else:
+            mode, pixel = (
+                ("L", 17 + (pattern * 19) % 239)
+                if pattern % 4 == 0
+                else ("LA", [17 + (pattern * 19) % 239, 1 + (pattern * 23) % 255])
+                if pattern % 4 == 1
+                else (
+                    "RGB",
+                    [
+                        17 + (pattern * 19) % 239,
+                        31 + (pattern * 29) % 225,
+                        47 + (pattern * 37) % 209,
+                    ],
+                )
+                if pattern % 4 == 2
+                else (
+                    "RGBA",
+                    [
+                        17 + (pattern * 19) % 239,
+                        31 + (pattern * 29) % 225,
+                        47 + (pattern * 37) % 209,
+                        1 + (pattern * 41) % 255,
+                    ],
+                )
+            )
+            kernel_size = [5, 5]
+            kernels = (
+                [
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                ],
+                [1.0] * 25,
+                [
+                    0.0,
+                    0.0,
+                    -1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    -1.0,
+                    -1.0,
+                    -1.0,
+                    0.0,
+                    -1.0,
+                    -1.0,
+                    13.0,
+                    -1.0,
+                    -1.0,
+                    0.0,
+                    -1.0,
+                    -1.0,
+                    -1.0,
+                    0.0,
+                    0.0,
+                    0.0,
+                    -1.0,
+                    0.0,
+                    0.0,
+                ],
+                [0.0, 0.0, 0.0, 0.0, 0.0] * 2
+                + [0.0, 0.0, 1.0, 0.0, 0.0]
+                + [0.0, 0.0, 0.0, 0.0, 0.0] * 2,
+            )
+            scale = (1.0, 25.0, 1.0, 1.0)[pattern % 4]
+            offset = (0.0, 0.0, 16.0, 3.0)[pattern % 4]
+
+        return {
+            "surface": "PIL.ImageFilter",
+            "operation": "Kernel",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-filter-native-convolution-{pattern}",
+            "mode": mode,
+            "size": [513, 9],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": {
+                "size": literal(kernel_size),
+                "kernel": literal(kernels[pattern % 4]),
+                "scale": literal(scale),
+                "offset": literal(offset),
+            },
+            "observe_result": "tobytes",
+        }
+
+    def equalize_histogram_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public equalize input with a non-trivial histogram.
+
+        The existing equalize cases deliberately cover the identity LUT paths
+        with blank and single-value images.  A 64x64 public ``frombytes`` image
+        gives the maintained SIMD adapter enough samples for ``step > 0`` and
+        therefore exercises the CDF/LUT loop without a native helper or a
+        hand-authored expected result.  L is intentional: the public SIMD
+        adapter delegates RGB equalization to the native CPU RGB implementation,
+        while L reaches the packed SIMD equalize scalar path directly.
+        """
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "equalize",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-equalize-histogram-l-{pattern}",
+            "mode": "L",
+            "size": [64, 64],
+            "edge": "noise-fill",
+            "seed": 20260814 + pattern * 17,
+            "observe_result": "tobytes",
+        }
+
+    def quantize_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public quantization distribution.
+
+        The matrix keeps the public method choices disjoint: median-cut RGB,
+        MAXCOVERAGE RGB, FASTOCTREE RGB, and FASTOCTREE RGBA. Each source is a
+        maintained frombytes payload generated from its seed, so palette
+        ordering, k-means convergence, and transparent-color normalization are
+        exercised without storing expected output data.
+        """
+
+        if pattern < 25:
+            mode, method = "RGB", 0
+            colors = (2, 4, 8, 16, 32)[pattern % 5]
+            kmeans = (0, 1, 2, 5, 1)[pattern % 5]
+        elif pattern < 50:
+            mode, method = "RGB", 1
+            colors = (2, 4, 8, 16, 32)[pattern % 5]
+            kmeans = (0, 1, 2, 5, 2)[pattern % 5]
+        elif pattern < 75:
+            mode, method, colors, kmeans = (
+                "RGB",
+                2,
+                (2, 4, 8, 16, 32)[pattern % 5],
+                0,
+            )
+        else:
+            mode, method, colors, kmeans = (
+                "RGBA",
+                2,
+                (2, 4, 8, 16, 32)[pattern % 5],
+                0,
+            )
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": f"coverage-batch-quantize-distribution-{mode.lower()}-{pattern}",
+            "mode": mode,
+            "size": [32, 32],
+            "edge": "quantize-coverage-pattern",
+            "seed": 20260814 + pattern * 97,
+            "values": {
+                "colors": literal(colors),
+                "method": literal(method),
+                "kmeans": literal(kmeans),
+            },
+            "observe_result": "tobytes",
+        }
+
+    def convert_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid non-uniform public Image.convert stimulus.
+
+        The matrix keeps source and destination modes explicit so every case
+        remains a normal Pillow conversion.  Source pixels are written through
+        Image.putpixel (and P images receive a real RGB palette), which makes
+        the conversion loops observe distinct samples instead of only the
+        uniform Image.new fast path.
+        """
+
+        targets = (
+            "RGB",
+            "RGBA",
+            "LA",
+            "CMYK",
+            "1",
+            "P",
+            "I",
+            "F",
+            "HSV",
+            "YCbCr",
+        )
+        sources = (
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+            "P",
+            "CMYK",
+            "HSV",
+            "YCbCr",
+            "I",
+            "F",
+        )
+        source = sources[pattern // len(targets)]
+        target = targets[pattern % len(targets)]
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": f"coverage-batch-convert-pattern-{source.lower()}-{target.lower()}-{pattern}",
+            "mode": source,
+            "size": [8 + pattern % 3, 7 + (pattern // 3) % 3],
+            "edge": "convert-coverage-pattern",
+            "seed": 20260814 + pattern * 131,
+            "observe_result": "tobytes",
+            "values": {
+                "mode": literal(target),
+                **(
+                    {"dither": literal(pattern % 2)}
+                    if target in {"1", "P"}
+                    else {}
+                ),
+            },
+        }
+
+    def convert_palette_alpha_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid RGBA-to-PA palette-reorder stimulus.
+
+        The public ``convert("PA")`` path quantizes RGBA samples and then
+        moves palette entries used only by transparent pixels after visible
+        entries.  Existing PA cases use uniform or one-pixel inputs, so they
+        do not reliably create separate transparent and visible palette
+        buckets.  This matrix uses the maintained non-uniform public image
+        builder with four distinct corner samples and varied alpha values;
+        palette bytes and output observations remain oracle-generated.
+        """
+
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": f"coverage-batch-convert-rgba-pa-reorder-{pattern:03d}",
+            "mode": "RGBA",
+            "size": [8 + pattern % 5, 7 + (pattern // 5) % 5],
+            "edge": "convert-coverage-pattern",
+            "seed": 20260814 + pattern * 197,
+            "observe_result": "tobytes",
+            "values": {
+                "mode": literal("PA"),
+                "dither": literal(pattern % 2),
+            },
+        }
+
+    def convert_pa_nonstandard_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid PA-to-nonstandard conversion stimulus.
+
+        PA is stored as an index/alpha pair and must expand through its public
+        RGB palette before conversion to another nonstandard mode.  The
+        maintained chain attaches a short RGB palette and writes one indexed
+        sample through ``putpixel``; all result bytes remain oracle-generated.
+        """
+
+        targets = ("HSV", "YCbCr", "P", "I", "F")
+        target = targets[pattern % len(targets)]
+        index = 1 + (pattern * 3) % 3
+        alpha = 32 + (pattern * 47) % 224
+        values: dict[str, Any] = {"mode": literal(target)}
+        if target == "P":
+            values["dither"] = literal(pattern % 2)
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": f"coverage-batch-convert-pa-nonstandard-{target.lower()}-{pattern:03d}",
+            "mode": "PA",
+            "size": [9 + pattern % 4, 7 + (pattern // 4) % 5],
+            "chain": "pa-putpalette-convert-coverage",
+            "pixel": [index, alpha],
+            "observe_result": "tobytes",
+            "values": values,
+        }
+
+    def convert_rgbx_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid RGBX conversion with an explicit unused channel.
+
+        Pillow stores RGBX as four bytes but the fourth byte is not an alpha
+        channel.  The existing conversion matrix exercises RGBA alpha
+        propagation, while no selected public input reaches the corresponding
+        RGBX false side.  ``Image.frombytes("RGBX", ...)`` is the maintained
+        public constructor for this representation; all result bytes remain
+        parity observations generated by the oracle.
+        """
+
+        targets = (
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+            "CMYK",
+            "1",
+            "P",
+            "I",
+            "F",
+            "HSV",
+            "YCbCr",
+            "PA",
+        )
+        target = targets[pattern % len(targets)]
+        values: dict[str, Any] = {"mode": literal(target)}
+        if target in {"1", "P", "PA"}:
+            values["dither"] = literal(pattern % 2)
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": f"coverage-batch-convert-rgbx-{target.lower()}-{pattern:03d}",
+            "mode": "RGBX",
+            "scenario_inline_image": f"rgbx-frombytes-pattern-{pattern}",
+            "values": values,
+            "observe_result": "tobytes",
+        }
+
+    def analysis_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid non-uniform public analysis input.
+
+        The matrix covers every public byte/scalar mode across the three
+        read-only reductions.  Histogram cases alternate unmasked, L-mask,
+        and 1-mask workflows so both the zero-mask skip and non-zero count
+        paths receive input-driven execution.
+        """
+
+        modes = (
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+            "P",
+            "CMYK",
+            "HSV",
+            "YCbCr",
+            "I",
+            "F",
+        )
+        operation_index = pattern // len(modes)
+        mode = modes[pattern % len(modes)]
+        if operation_index == 0:
+            operation = "getbbox"
+            requirement_suffix = "behavior.default"
+            values = {
+                "alpha_only": literal(
+                    mode in {"LA", "RGBA"} and pattern % 2 == 0
+                )
+            }
+            mask_mode = None
+        elif operation_index == 1:
+            operation = "getextrema"
+            requirement_suffix = "behavior.default"
+            values = {}
+            mask_mode = None
+        else:
+            operation = "histogram"
+            mask_mode = (None, "L", "1", "L")[pattern % 4]
+            requirement_suffix = (
+                "parameter.mask" if mask_mode is not None else "behavior.default"
+            )
+            values = {}
+        suffix = f"{operation}-{mode.lower()}-{pattern}"
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": operation,
+            "requirement_suffix": requirement_suffix,
+            "name": f"coverage-batch-analysis-pattern-{suffix}",
+            "mode": mode,
+            "size": [8 + pattern % 3, 7 + (pattern // 3) % 3],
+            "edge": "analysis-coverage-pattern",
+            "seed": 20260814 + pattern * 149,
+            "values": values,
+            **({"mask_mode": mask_mode} if mask_mode is not None else {}),
+        }
+
+    def analysis_float_histogram_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one unmasked public F-mode histogram input.
+
+        The general analysis matrix intentionally varies masks, but its F-mode
+        slots all land on a masked selector and therefore stop at Pillow's
+        byte-image validation.  Keep this matrix unmasked so the maintained
+        float histogram reducer receives real finite, non-uniform samples.
+        The source image is still assembled through public Image.new and
+        Image.putpixel steps; histogram bins remain parity observations.
+        """
+
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-analysis-float-histogram-{pattern:03d}",
+            "mode": "F",
+            "size": [5 + pattern % 5, 4 + (pattern // 5) % 5],
+            "edge": "analysis-coverage-pattern",
+            "seed": 20260814 + pattern * 173,
+        }
+
+    def analysis_scalar_degenerate_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid scalar histogram edge case.
+
+        The public ``I`` and ``F`` histogram reducers have ordinary early
+        returns for empty images and constant extrema.  The existing varied
+        scalar matrix deliberately exercises the scaling loop, so keep this
+        separate matrix input-driven and observe the reducer result without
+        storing expected bins.  A few F-mode cases also carry non-finite
+        samples, which are valid Pillow float pixels and exercise the
+        reducer's finite-value guard.
+        """
+
+        if pattern < 20:
+            mode = "I"
+            edge = "uniform-fill"
+            pixel: Any = 1000 + pattern * 7919
+            size = [3 + pattern % 4, 2 + (pattern // 4) % 4]
+        elif pattern < 40:
+            mode = "F"
+            edge = "uniform-fill"
+            pixel = (1 + pattern * 17) / 7.0
+            size = [3 + pattern % 4, 2 + (pattern // 4) % 4]
+        elif pattern == 40:
+            mode = "I"
+            edge = "zero-size"
+            pixel = 0
+            size = [0, 0]
+        elif pattern < 60:
+            mode = "I"
+            edge = "uniform-fill"
+            pixel = 100000 + pattern * 7919
+            size = [20 + pattern, 2 + pattern % 5]
+        elif pattern == 60:
+            mode = "F"
+            edge = "zero-size"
+            pixel = 0.0
+            size = [0, 0]
+        elif pattern < 80:
+            mode = "F"
+            edge = "uniform-fill"
+            pixel = (100 + pattern * 17) / 7.0
+            size = [20 + pattern, 3 + pattern % 5]
+        else:
+            mode = "F"
+            edge = "uniform-fill"
+            pixel = (float("nan"), float("inf"), float("-inf"))[pattern % 3]
+            size = [2 + pattern, 2 + pattern % 7]
+
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-analysis-scalar-degenerate-{mode.lower()}-{pattern:03d}",
+            "mode": mode,
+            "edge": edge,
+            "size": size,
+            "pixel": pixel,
+        }
+
+    def fromarray_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public array-interface conversion stimulus.
+
+        The array endpoint has three independent public layouts: scalar
+        samples, three-channel byte samples, and four-channel byte samples.
+        Keep the payloads small and deterministic while varying the declared
+        dtype, shape, and Pillow-compatible explicit color mode.  The target
+        receives the same array-interface record as the source; no expected
+        pixels or hashes are stored in the fixture.
+        """
+
+        width = 2 + pattern % 3
+        height = 2 + (pattern // 3) % 3
+        sample_count = width * height
+        if pattern < 40:
+            scalar_specs = (
+                ("|b1", lambda count: bytes(i % 2 for i in range(count))),
+                ("|u1", lambda count: bytes((17 + i * 29) % 256 for i in range(count))),
+                ("|i1", lambda count: struct.pack(f"<{count}b", *(((i * 13) % 127) - 63 for i in range(count)))),
+                ("<u2", lambda count: struct.pack(f"<{count}H", *((i * 257) % 65536 for i in range(count)))),
+                (">u2", lambda count: struct.pack(f">{count}H", *((i * 257) % 65536 for i in range(count)))),
+                ("<i2", lambda count: struct.pack(f"<{count}h", *(((i * 257) % 60000) - 30000 for i in range(count)))),
+                (">i2", lambda count: struct.pack(f">{count}h", *(((i * 257) % 60000) - 30000 for i in range(count)))),
+                ("<u4", lambda count: struct.pack(f"<{count}I", *((i * 65537) % 2**32 for i in range(count)))),
+                (">u4", lambda count: struct.pack(f">{count}I", *((i * 65537) % 2**32 for i in range(count)))),
+                ("<i4", lambda count: struct.pack(f"<{count}i", *(((i * 65537) % 200000) - 100000 for i in range(count)))),
+                (">i4", lambda count: struct.pack(f">{count}i", *(((i * 65537) % 200000) - 100000 for i in range(count)))),
+                ("<f4", lambda count: struct.pack(f"<{count}f", *((i * 0.75) - 2.5 for i in range(count)))),
+                (">f4", lambda count: struct.pack(f">{count}f", *((i * 0.75) - 2.5 for i in range(count)))),
+                ("<f8", lambda count: struct.pack(f"<{count}d", *((i * 0.75) - 2.5 for i in range(count)))),
+                (">f8", lambda count: struct.pack(f">{count}d", *((i * 0.75) - 2.5 for i in range(count)))),
+            )
+            typestr, make_data = scalar_specs[pattern % len(scalar_specs)]
+            data = make_data(sample_count)
+            explicit_mode = "P" if typestr == "|u1" and pattern % 4 == 0 else None
+            shape = [height, width]
+        elif pattern < 70:
+            shape = [height, width, 3]
+            typestr = "|u1"
+            explicit_mode = (None, "RGB", "YCbCr", "HSV")[pattern % 4]
+            data = bytes(
+                (17 + sample * 23 + channel * 71 + pattern * 3) % 256
+                for sample in range(sample_count)
+                for channel in range(3)
+            )
+        else:
+            shape = [height, width, 4]
+            typestr = "|u1"
+            explicit_mode = (None, "RGBA", "RGBa", "RGBX", "CMYK")[pattern % 5]
+            data = bytes(
+                (17 + sample * 23 + channel * 71 + pattern * 3) % 256
+                for sample in range(sample_count)
+                for channel in range(4)
+            )
+
+        array_value = {
+            "protocol": "numpy-array",
+            "shape": shape,
+            "typestr": typestr,
+            "data_base64": base64.b64encode(data).decode("ascii"),
+        }
+        values: dict[str, Any] = {"obj": literal(array_value)}
+        if explicit_mode is not None:
+            values["mode"] = literal(explicit_mode)
+        return {
+            "surface": "PIL.Image",
+            "operation": "fromarray",
+            "requirement_suffix": "parameter.obj",
+            "name": f"coverage-batch-fromarray-layout-{pattern}",
+            "values": values,
+            "observe_result": "tobytes",
+        }
+
+    def paste_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one public paste source/placement combination.
+
+        The paste wrapper has separate input-driven paths for scalar values,
+        clipped raw scalars, one/two/three/four-component colors, named
+        colors, image sources, and masks.  Keep one ten-case source matrix for
+        each native destination mode so the core sees those distinctions
+        through the maintained Python contract.  The receiver is materialized
+        by ``observe_receiver``; no expected pixels are embedded in the case.
+        """
+
+        modes = (
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+            "CMYK",
+            "YCbCr",
+            "HSV",
+            "I",
+            "F",
+            "P",
+        )
+        mode = modes[pattern // 10]
+        variant = pattern % 10
+        scalar = 37 + pattern
+        if variant == 0:
+            source = scalar
+        elif variant == 1:
+            source = -17
+        elif variant == 2:
+            source = 300
+        elif variant == 3:
+            source = [17]
+        elif variant == 4:
+            source = (
+                [17, 89]
+                if mode in {"LA"}
+                else [17, 89, 211]
+                if mode not in {"L", "I", "F", "P"}
+                else [17, 89]
+            )
+        elif variant == 5:
+            source = (
+                [17, 89]
+                if mode == "LA"
+                else [17, 89, 211, 143]
+                if mode in {"RGBA", "CMYK"}
+                else [17, 89, 211]
+            )
+        elif variant == 6:
+            source = (
+                [17, 89, 211, 143]
+                if mode in {"RGBA", "CMYK"}
+                else [17, 89, 211]
+            )
+        elif variant == 7:
+            source = (
+                "red"
+                if mode in {"LA", "RGB", "RGBA", "CMYK", "YCbCr", "HSV"}
+                else scalar
+            )
+        elif variant == 8:
+            source = None
+        else:
+            source = 99
+
+        values: dict[str, Any] = {
+            "box": literal([1, 1, 5, 5])
+            if variant != 8
+            else literal([1, 1]),
+        }
+        if source is not None:
+            values["im"] = literal(source)
+        else:
+            values["im"] = literal(None)
+        spec: dict[str, Any] = {
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "requirement_suffix": "parameter.im",
+            "name": f"coverage-batch-paste-source-{mode.lower()}-{pattern}",
+            "mode": mode,
+            "size": [10 + pattern % 7, 12 + (pattern * 5) % 7],
+            "observe_receiver": True,
+            "values": values,
+        }
+        if variant == 8:
+            spec["values"].pop("im")
+            spec["im_mode"] = mode
+        elif variant == 9:
+            spec["mask_mode"] = "L"
+            spec["values"]["box"] = literal([0, 0])
+        return spec
+
+    def transform_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one public transform input for typed fill and method paths.
+
+        The cases deliberately stay on ``Image.transform``.  They cover
+        palette tuple coercion, named colors for scalar/typed modes, scalar
+        and component fills, public resampling errors, empty meshes, and
+        extent transforms.  Successful calls observe bytes; error cases keep
+        Pillow's exception as the only oracle.
+        """
+
+        size = [4 + pattern % 3, 4 + (pattern // 3) % 3]
+        affine = [1, 0, 100 + pattern, 0, 1, 100 + pattern]
+
+        def base(mode: str, requirement_suffix: str) -> dict[str, Any]:
+            return {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": requirement_suffix,
+                "name": f"coverage-batch-transform-fill-methods-{pattern:03d}",
+                "mode": mode,
+                "values": {
+                    "size": literal(size),
+                    "method": literal(0),
+                    "data": literal(affine),
+                },
+            }
+
+        if pattern < 20:
+            spec = base("P", "parameter.fillcolor")
+            variant = pattern % 10
+            if variant < 4:
+                fill: Any = [17 + pattern, 89, 211]
+            elif variant < 8:
+                fill = [17 + pattern, 89, 211, 255]
+            elif variant < 9:
+                fill = [-1, 89, 211]
+            elif variant == 9:
+                fill = [17, 89, 211, 128]
+            if pattern in (18, 19):
+                fill = []
+            spec["values"]["fillcolor"] = literal(fill)
+            if pattern in (0, 1, 2, 3, 4, 5, 6, 7):
+                spec["observe_result"] = "tobytes"
+            return spec
+
+        if pattern < 40:
+            mode, fill = (
+                (
+                    (
+                        "L",
+                        "red",
+                    ),
+                    ("LA", "red"),
+                    ("RGB", "red"),
+                    ("RGBA", "red"),
+                    ("I", "red"),
+                    ("F", "red"),
+                    ("I;16", "red"),
+                    ("CMYK", "red"),
+                    ("YCbCr", "red"),
+                    ("HSV", "red"),
+                )[pattern - 20]
+                if pattern < 30
+                else (
+                    (
+                        "L",
+                        "not-a-color",
+                    ),
+                    ("LA", "not-a-color"),
+                    ("RGB", "not-a-color"),
+                    ("RGBA", "not-a-color"),
+                    ("I", "not-a-color"),
+                    ("F", "not-a-color"),
+                    ("I;16", "not-a-color"),
+                    ("CMYK", "not-a-color"),
+                    ("YCbCr", "not-a-color"),
+                    ("HSV", "not-a-color"),
+                )[pattern - 30]
+            )
+            spec = base(mode, "parameter.fillcolor")
+            spec["values"]["fillcolor"] = literal(fill)
+            if pattern < 30:
+                spec["observe_result"] = "tobytes"
+            return spec
+
+        if pattern < 60:
+            mode = (
+                "L",
+                "LA",
+                "RGB",
+                "RGBA",
+                "P",
+                "I",
+                "F",
+                "I;16",
+                "CMYK",
+                "YCbCr",
+            )[(pattern - 40) % 10]
+            spec = base(mode, "parameter.fillcolor")
+            spec["values"]["fillcolor"] = literal(17 + pattern)
+            spec["observe_result"] = "tobytes"
+            return spec
+
+        if pattern < 70:
+            mode, fill = (
+                ("LA", [17, 89]),
+                ("RGB", [17, 89, 211]),
+                ("RGBA", [17, 89, 211, 255]),
+                ("CMYK", [17, 89, 211, 143]),
+                ("YCbCr", [17, 89, 211]),
+                ("HSV", [17, 89, 211]),
+                ("P", [17, 89, 211]),
+                ("L", [17]),
+                ("RGB", [31, 61, 91, 255]),
+                ("RGBA", [31, 61, 91]),
+            )[pattern - 60]
+            spec = base(mode, "parameter.fillcolor")
+            spec["values"]["fillcolor"] = literal(fill)
+            spec["observe_result"] = "tobytes"
+            return spec
+
+        if pattern < 80:
+            mode = (
+                "L",
+                "LA",
+                "RGB",
+                "RGBA",
+                "P",
+                "I",
+                "F",
+                "I;16",
+                "CMYK",
+                "HSV",
+            )[(pattern - 70) % 10]
+            spec = base(mode, "parameter.resample")
+            spec["values"]["resample"] = literal(99 + pattern)
+            return spec
+
+        if pattern < 90:
+            mode, fill = (
+                ("L", 17),
+                ("LA", [17, 89]),
+                ("RGB", [17, 89, 211]),
+                ("RGBA", [17, 89, 211, 255]),
+                ("P", 17),
+                ("I", 17),
+                ("F", 17),
+                ("I;16", 17),
+                ("CMYK", [17, 89, 211, 143]),
+                ("YCbCr", [17, 89, 211]),
+            )[pattern - 80]
+            spec = base(mode, "parameter.data")
+            spec["values"]["method"] = literal(4)
+            spec["values"]["data"] = literal([])
+            spec["values"]["fillcolor"] = literal(fill)
+            spec["observe_result"] = "tobytes"
+            return spec
+
+        mode, fill = (
+            ("L", 17),
+            ("LA", [17, 89]),
+            ("RGB", [17, 89, 211]),
+            ("RGBA", [17, 89, 211, 255]),
+            ("P", 17),
+            ("L", "red"),
+            ("RGB", "red"),
+            ("I", "red"),
+            ("F", "red"),
+            ("I;16", "red"),
+        )[pattern - 90]
+        spec = base(mode, "parameter.data")
+        spec["values"]["method"] = literal(1)
+        spec["values"]["data"] = literal([-1, -1, 6, 6])
+        spec["values"]["fillcolor"] = literal(fill)
+        spec["observe_result"] = "tobytes"
+        return spec
+
+    def point_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid expanded LUT for a public ``Image.point`` call."""
+
+        mode, bands = (
+            ("L", 1),
+            ("LA", 2),
+            ("RGB", 3),
+            ("RGBA", 4),
+            ("P", 1),
+            ("CMYK", 4),
+            ("YCbCr", 3),
+            ("HSV", 3),
+        )[pattern % 8]
+        lut = [
+            (sample * 13 + band * 47 + pattern * 19) % 256
+            for band in range(bands)
+            for sample in range(256)
+        ]
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": f"coverage-batch-point-expanded-lut-{pattern:03d}",
+            "mode": mode,
+            "size": [4 + pattern % 3, 4 + (pattern // 3) % 3],
+            "observe_result": "tobytes",
+            "values": {"lut": literal(lut)},
+        }
+
+    def imageops_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one public ImageOps normalization and mode-contract case.
+
+        The matrix keeps every successful geometry call on a normal Pillow
+        image while varying the host-facing color and centering forms that are
+        normalized in ``ops/imageops.rs``.  The final mode cases are public
+        calls whose source contract intentionally rejects unsupported modes;
+        the error remains the parity observation rather than an exclusion.
+        """
+
+        if pattern < 20:
+            operation = "pad"
+            mode, pixel, color = (
+                ("L", 173, 7)
+                if pattern % 5 == 0
+                else ("LA", [173, 127], [7, 191])
+                if pattern % 5 == 1
+                else ("RGB", [173, 127, 31], [7, 83, 149])
+                if pattern % 5 == 2
+                else ("RGBA", [173, 127, 31, 191], [7, 83, 149, 191])
+                if pattern % 5 == 3
+                else ("P", 3, "red")
+            )
+            if pattern % 10 == 0:
+                color = literal(color)
+            elif pattern % 10 == 1:
+                color = literal([color] if isinstance(color, int) else color[:1])
+            else:
+                color = literal(color)
+            values = {
+                "size": literal([11 + pattern % 4, 9 + (pattern // 4) % 4]),
+                "method": literal(0),
+                "color": color,
+                "centering": literal(
+                    [0.5, 0.5]
+                    if pattern % 4 == 0
+                    else [0.0, 1.0]
+                    if pattern % 4 == 1
+                    else [0.25, 0.75]
+                ),
+            }
+        elif pattern < 40:
+            operation = "expand"
+            mode, pixel, fill = (
+                ("L", 97, 17)
+                if pattern % 5 == 0
+                else ("LA", [97, 211], [17, 191])
+                if pattern % 5 == 1
+                else ("RGB", [97, 211, 53], [17, 83, 149])
+                if pattern % 5 == 2
+                else ("RGBA", [97, 211, 53, 127], [17, 83, 149, 127])
+                if pattern % 5 == 3
+                else ("PA", [3, 191], [7, 211])
+            )
+            values = {
+                "border": literal(1 + pattern % 3),
+                "fill": literal(fill),
+            }
+        elif pattern < 60:
+            operation = "fit"
+            mode, pixel = (
+                ("L", 37)
+                if pattern % 4 == 0
+                else ("LA", [37, 211])
+                if pattern % 4 == 1
+                else ("RGB", [37, 211, 89])
+                if pattern % 4 == 2
+                else ("RGBA", [37, 211, 89, 173])
+            )
+            values = {
+                "size": literal([8 + pattern % 5, 7 + (pattern // 5) % 5]),
+                "method": literal(0 if pattern % 2 == 0 else 2),
+                "bleed": literal(0.05 * (pattern % 5)),
+                "centering": literal(
+                    [0.0, 1.0] if pattern % 3 == 0 else [0.5, 0.25]
+                ),
+            }
+        elif pattern < 70:
+            operation = "contain" if pattern % 2 == 0 else "cover"
+            mode, pixel = (
+                ("L", 211)
+                if pattern % 4 == 0
+                else ("LA", [211, 127])
+                if pattern % 4 == 1
+                else ("RGB", [211, 127, 31])
+                if pattern % 4 == 2
+                else ("RGBA", [211, 127, 31, 173])
+            )
+            values = {
+                "size": literal([9 + pattern % 4, 6 + (pattern // 2) % 4]),
+                "method": literal(0 if pattern % 3 else 2),
+            }
+        elif pattern < 80:
+            operation, mode, pixel, values = (
+                ("autocontrast", "LA", [173, 127], {"cutoff": literal(0)}),
+                ("equalize", "RGBA", [173, 127, 31, 191], {}),
+                ("invert", "P", 3, {}),
+                ("posterize", "RGBA", [173, 127, 31, 191], {"bits": literal(4)}),
+                ("solarize", "LA", [173, 127], {"threshold": literal(128)}),
+            )[pattern % 5]
+        elif pattern < 90:
+            operation = "colorize"
+            mode = "L"
+            pixel = 17 + (pattern * 19) % 220
+            values = {
+                "black": literal("black" if pattern % 2 else [0, 0, 0]),
+                "white": literal("white" if pattern % 3 else [255, 255, 255]),
+                "mid": literal("red") if pattern % 2 else literal([127, 63, 31]),
+                "blackpoint": literal(0),
+                "midpoint": literal(127),
+                "whitepoint": literal(255),
+            }
+        else:
+            operation = "pad"
+            mode = "RGB"
+            pixel = [17 + pattern % 31, 83 + pattern % 29, 149 + pattern % 23]
+            values = {
+                "size": literal([12, 10]),
+                "method": literal(2),
+                "color": literal("white" if pattern % 2 else [255, 255, 255]),
+                "centering": literal([0.5, 0.5]),
+            }
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-imageops-normalization-{pattern:03d}",
+            "mode": mode,
+            "size": [8 + pattern % 4, 7 + (pattern // 4) % 4],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": values,
+            "observe_result": "tobytes",
+        }
+
+    def imageops_contract_spec(pattern: int) -> dict[str, Any]:
+        """Build one public ImageOps contract-boundary workflow.
+
+        The existing ImageOps matrix reaches the ordinary geometry and color
+        success paths.  This separate 100-case matrix keeps the remaining
+        public boundary forms input-driven: unsupported modes, malformed
+        centering/method/color values, optional masks, and valid typed/palette
+        variants.  Error cases intentionally omit materialization; the parity
+        runner still compares the public exception class and message.
+        """
+
+        def pixel_for(mode: str, seed: int) -> Any:
+            value = 17 + (seed * 37) % 220
+            alpha = 31 + (seed * 53) % 220
+            if mode in {"1", "L", "I", "P"}:
+                return 1 if mode == "1" else value
+            if mode == "F":
+                return value / 17.0
+            if mode in {"LA", "PA"}:
+                return [value, alpha]
+            if mode == "RGBA":
+                return [value, (value * 3 + 11) % 256, (value * 5 + 23) % 256, alpha]
+            if mode == "CMYK":
+                return [value, (value * 3 + 11) % 256, (value * 5 + 23) % 256, alpha]
+            return [value, (value * 3 + 11) % 256, (value * 5 + 23) % 256]
+
+        if pattern < 20:
+            operation = "pad"
+            mode = (
+                ("L", 17)
+                if pattern == 0
+                else ("LA", [17, 191])
+                if pattern == 1
+                else ("RGB", [17, 83, 149])
+                if pattern == 2
+                else ("RGBA", [17, 83, 149, 191])
+                if pattern == 3
+                else ("P", 3)
+                if pattern == 4
+                else ("P", 3)
+                if pattern == 5
+                else ("P", 3)
+                if pattern == 6
+                else ("PA", [3, 191])
+                if pattern == 7
+                else ("RGB", "red")
+                if pattern == 8
+                else ("RGBA", "#10203080")
+                if pattern == 9
+                else ("L", [17])
+                if pattern == 10
+                else ("LA", [17])
+                if pattern == 11
+                else ("RGB", [17])
+                if pattern == 12
+                else ("RGBA", [17])
+                if pattern == 13
+                else ("RGB", [17, 83, 149, 255])
+                if pattern == 14
+                else ("RGBA", [17, 83, 149])
+                if pattern == 15
+                else ("F", [1, 2])
+                if pattern == 16
+                else ("I", [1, 2])
+                if pattern == 17
+                else ("CMYK", [1, 2, 3, 4, 5])
+                if pattern == 18
+                else ("RGB", None)
+            )
+            pixel = pixel_for(mode[0], pattern)
+            if pattern == 5:
+                color = [17, 83, 149]
+            elif pattern == 6:
+                color = [17, 83, 149, 255]
+            elif pattern == 19:
+                color = None
+            else:
+                color = mode[1]
+            values = {
+                "size": literal([11 + pattern % 4, 9 + (pattern // 4) % 4]),
+                "method": literal(0),
+                "color": literal(color) if pattern != 19 else None,
+                "centering": literal(
+                    0.5 if pattern == 18 else [0.0, 1.0] if pattern % 3 else [0.5, 0.5]
+                ),
+            }
+            if pattern == 19:
+                values.pop("color")
+            if pattern == 19:
+                return {
+                    "surface": "PIL.ImageOps",
+                    "operation": operation,
+                    "requirement_suffix": "parameter.color",
+                    "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                    "mode": mode[0],
+                    "size": [8, 7],
+                    "edge": "nonzero-pixel",
+                    "pixel": pixel,
+                    "chain": "image-color-input",
+                    "values": {
+                        "size": literal([11, 9]),
+                        "method": literal(0),
+                        "centering": literal([0.5, 0.5]),
+                    },
+                }
+        elif pattern < 40:
+            operation = "fit"
+            mode = "P" if pattern == 37 else "PA" if pattern == 38 else "RGB"
+            pixel = pixel_for(mode, pattern)
+            centering = (
+                0.5
+                if pattern < 25
+                else [0.25]
+                if pattern == 25
+                else [0.25, 0.75, 0.5]
+                if pattern == 26
+                else [0.0, 1.0]
+            )
+            if pattern == 27:
+                return {
+                    "surface": "PIL.ImageOps",
+                    "operation": operation,
+                    "requirement_suffix": "parameter.centering",
+                    "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                    "mode": mode,
+                    "size": [8, 7],
+                    "edge": "nonzero-pixel",
+                    "pixel": pixel,
+                    "chain": "none-centering-input",
+                    "values": {
+                        "size": literal([8, 8]),
+                        "method": literal(0),
+                        "bleed": literal(0.0),
+                    },
+                }
+            values = {
+                "size": literal([8 + pattern % 5, 7 + (pattern // 5) % 5]),
+                "method": literal(
+                    1
+                    if pattern == 30
+                    else 5
+                    if pattern == 31
+                    else 99
+                    if pattern == 32
+                    else 0
+                ),
+                "bleed": literal(
+                    -0.1
+                    if pattern == 33
+                    else 1.0
+                    if pattern == 34
+                    else 0.0
+                ),
+                "centering": literal(centering),
+            }
+            if pattern in {35, 36}:
+                return {
+                    "surface": "PIL.ImageOps",
+                    "operation": operation,
+                    "requirement_suffix": "parameter.centering",
+                    "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                    "mode": "RGB",
+                    "size": [0, 0] if pattern == 35 else [4, 0],
+                    "edge": "zero-size-frombytes",
+                    "pixel": None,
+                    "values": values,
+                }
+        elif pattern < 50:
+            operation = "contain" if pattern % 2 == 0 else "cover"
+            mode = "P" if pattern == 46 else "PA" if pattern == 47 else "RGB"
+            pixel = pixel_for(mode, pattern)
+            values = {
+                "size": literal([9 + pattern % 4, 6 + (pattern // 2) % 4]),
+                "method": literal(
+                    1
+                    if pattern == 40
+                    else 2
+                    if pattern == 41
+                    else 99
+                    if pattern in {42, 43}
+                    else 0
+                ),
+            }
+            if pattern in {44, 45}:
+                return {
+                    "surface": "PIL.ImageOps",
+                    "operation": "cover",
+                    "requirement_suffix": "behavior.default",
+                    "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                    "mode": "RGB",
+                    "size": [0, 0] if pattern == 44 else [4, 0],
+                    "edge": "zero-size-frombytes",
+                    "values": values,
+                }
+        elif pattern < 70:
+            unsupported = (
+                ("autocontrast", "P"),
+                ("autocontrast", "LA"),
+                ("autocontrast", "RGBA"),
+                ("autocontrast", "I"),
+                ("autocontrast", "CMYK"),
+                ("equalize", "LA"),
+                ("equalize", "RGBA"),
+                ("equalize", "CMYK"),
+                ("equalize", "I"),
+                ("equalize", "F"),
+                ("invert", "P"),
+                ("invert", "LA"),
+                ("invert", "RGBA"),
+                ("posterize", "LA"),
+                ("posterize", "RGBA"),
+                ("solarize", "LA"),
+                ("solarize", "RGBA"),
+                ("autocontrast", "1"),
+                ("equalize", "1"),
+                ("posterize", "CMYK"),
+            )
+            operation, mode = unsupported[pattern - 50]
+            pixel = pixel_for(mode, pattern)
+            values = {}
+            if operation == "autocontrast":
+                values["cutoff"] = literal(0)
+            elif operation == "posterize":
+                values["bits"] = literal(4)
+            elif operation == "solarize":
+                values["threshold"] = literal(128)
+        elif pattern < 80:
+            operation = "colorize"
+            mode = "RGB" if pattern < 72 else "L"
+            pixel = pixel_for(mode, pattern)
+            values = {
+                "black": literal("black"),
+                "white": literal("white"),
+                "blackpoint": literal(
+                    200 if pattern == 72 else 0 if pattern < 75 else 0
+                ),
+                "midpoint": literal(100 if pattern == 72 else 200 if pattern == 73 else 127),
+                "whitepoint": literal(255 if pattern < 74 else 100 if pattern == 74 else 255),
+            }
+            if pattern in {73, 74}:
+                values["mid"] = literal("red")
+            if pattern == 75:
+                values["mid"] = literal([127, 63, 31])
+            if pattern == 76:
+                values["mid"] = literal("red")
+            if pattern == 77:
+                values["black"] = literal([0, 0, 0])
+                values["white"] = literal([255, 255, 255, 255])
+            if pattern in {78, 79}:
+                values["black"] = literal([0, 0, 0])
+                values["white"] = literal([255, 255, 255])
+        elif pattern < 90:
+            operation = "autocontrast" if pattern % 2 == 0 else "equalize"
+            mode = "RGB"
+            pixel = [17, 83, 149]
+            if pattern in {80, 81}:
+                chain = "truthy-non-image-mask"
+                mask_mode = None
+            else:
+                chain = None
+                mask_mode = "RGB" if pattern in {82, 83} else "L" if pattern % 4 else "1"
+            return {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.mask",
+                "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                "mode": mode,
+                "size": [8 + pattern % 3, 7 + pattern % 2],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "mask_mode": mask_mode,
+                "chain": chain,
+                "values": {"cutoff": literal(0)} if operation == "autocontrast" else {},
+                "observe_result": "tobytes" if pattern >= 84 and pattern not in {86, 87} else None,
+            }
+        else:
+            operation = "pad"
+            mode = "RGB"
+            pixel = [17 + pattern, 83 + pattern, 149 + pattern]
+            if pattern == 90:
+                centering = 0.5
+            elif pattern == 91:
+                centering = []
+            elif pattern == 92:
+                centering = [0.25]
+            elif pattern == 93:
+                centering = [0.25, 0.75, 0.5]
+            elif pattern == 94:
+                centering = None
+            else:
+                centering = [0.5, 0.5]
+            values = {
+                "size": literal([12, 10]),
+                "method": literal(0),
+                "color": literal(
+                    [1, 2, 3, 4]
+                    if pattern == 97
+                    else [1, 2, 3, 255]
+                    if pattern == 98
+                    else [1, 2, 3, 4, 5]
+                    if pattern == 99
+                    else [17, 83, 149]
+                ),
+                "centering": literal(centering),
+            }
+            if pattern == 94:
+                values.pop("centering")
+                return {
+                    "surface": "PIL.ImageOps",
+                    "operation": operation,
+                    "requirement_suffix": "parameter.centering",
+                    "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                    "mode": mode,
+                    "size": [8, 7],
+                    "edge": "nonzero-pixel",
+                    "pixel": pixel,
+                    "chain": "none-centering-input",
+                    "values": values,
+                }
+            return {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.centering"
+                if pattern < 95
+                else "parameter.color",
+                "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+                "mode": mode,
+                "size": [8, 7],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": values,
+            }
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": operation,
+            "requirement_suffix": (
+                "parameter.mask"
+                if 80 <= pattern < 90
+                else "behavior.default"
+            ),
+            "name": f"coverage-batch-imageops-contract-{pattern:03d}",
+            "mode": mode[0] if pattern < 20 else mode,
+            "size": [8 + pattern % 4, 7 + (pattern // 4) % 4],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": values,
+            "observe_result": "tobytes"
+            if pattern in {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 28, 29, 33, 34, 46, 47, 48, 49, 75, 76, 77, 78, 79}
+            else None,
+        }
+
+    def imageops_edge_spec(pattern: int) -> dict[str, Any]:
+        """Build public ImageOps boundary cases for reachable CPU paths.
+
+        The autocontrast cases use the documented 100-percent cutoff boundary.
+        The expand cases use public zero-sized images, which exercise the
+        empty-source copy guard without constructing a private image value.
+        The scale cases pass an unknown public resampling code so the binding
+        reaches the core parser's error result.
+        """
+
+        if pattern < 2:
+            mode = "L" if pattern == 0 else "RGB"
+            pixel = 173 if mode == "L" else [173, 127, 31]
+            return {
+                "surface": "PIL.ImageOps",
+                "operation": "autocontrast",
+                "requirement_suffix": "parameter.cutoff",
+                "name": f"coverage-batch-imageops-edge-autocontrast-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "size": [9 + pattern, 7],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"cutoff": literal(100)},
+                "observe_result": "tobytes",
+            }
+
+        if pattern < 8:
+            mode = ("RGB", "RGB", "RGB", "L", "LA", "RGBA")[pattern - 2]
+            return {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
+                "requirement_suffix": "parameter.border",
+                "name": f"coverage-batch-imageops-edge-expand-empty-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "size": [0, 0] if pattern == 2 else [0, 4] if pattern == 3 else [4, 0] if pattern == 4 else [0, 0],
+                "edge": "zero-size" if pattern in {2, 5, 6, 7} else "zero-width" if pattern == 3 else "zero-height",
+                "values": {
+                    "border": literal(1 + pattern % 2),
+                    "fill": literal(
+                        17
+                        if mode == "L"
+                        else [17, 211]
+                        if mode == "LA"
+                        else [17, 83, 149, 127]
+                        if mode == "RGBA"
+                        else [17, 83, 149]
+                    ),
+                },
+                "observe_result": "tobytes",
+            }
+
+        mode = "L" if pattern == 8 else "RGB"
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.resample",
+            "name": f"coverage-batch-imageops-edge-scale-invalid-resample-{mode.lower()}-{pattern}",
+            "mode": mode,
+            "size": [8, 7],
+            "edge": "nonzero-pixel",
+            "pixel": 173 if mode == "L" else [173, 127, 31],
+            "values": {"factor": literal(1.25), "resample": literal(99)},
+        }
+
+    def exif_boundary_spec(pattern: int) -> dict[str, Any]:
+        """Build one public JPEG EXIF malformed-tail workflow.
+
+        The first IFD entry is a valid Orientation value, while the IFD count
+        advertises one additional entry whose bytes are absent.  Pillow still
+        exposes the first Orientation through ``Image.open``; the public
+        ``ImageOps.exif_transpose`` call therefore reaches the Rust metadata
+        retention path without calling the parser directly.  The cases vary
+        byte order, orientation, and in-place behavior so the generator keeps
+        ten distinct encoded inputs.
+        """
+
+        variants = (
+            "orientation-first-truncated-tail-le-2",
+            "orientation-first-truncated-tail-le-3",
+            "orientation-first-truncated-tail-le-4",
+            "orientation-first-truncated-tail-le-5",
+            "orientation-first-truncated-tail-le-6",
+            "orientation-first-truncated-tail-le-7",
+            "orientation-first-truncated-tail-le-8",
+            "orientation-first-truncated-tail-be-3",
+            "orientation-first-truncated-tail-be-6",
+            "orientation-first-truncated-tail-be-8",
+        )
+        in_place = False
+        values = {"in_place": literal(True)} if in_place else {}
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-exif-truncated-tail-{pattern}",
+            "exif_variant": variants[pattern],
+            "values": values,
+            "observe_result": "tobytes" if not in_place else None,
+            "observe_receiver": in_place,
+        }
+
+    def exif_retained_entry_spec(pattern: int) -> dict[str, Any]:
+        """Build one EXIF tail with a retained public IFD0 entry.
+
+        The existing truncated-tail matrix contains only Orientation before
+        the missing record. This matrix adds a complete ImageWidth entry
+        before Orientation, so Pillow's public ``exif_transpose`` serializer
+        retains one record while discarding the malformed tail. The input is
+        still an encoded JPEG workflow; no parser helper is called directly.
+        """
+
+        byte_order = "le" if pattern % 2 == 0 else "be"
+        orientation = 2 + (pattern // 2) % 7
+        width = 2 + (pattern // 14) % 8
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "exif_transpose",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-exif-retained-entry-{pattern:03d}",
+            "exif_variant": (
+                "orientation-retained-truncated-tail-"
+                f"{byte_order}-{orientation}-{width}"
+            ),
+            "observe_result": "tobytes",
+        }
+
+    def imageops_centering_edge_spec(pattern: int) -> dict[str, Any]:
+        """Build one public empty-centering ImageOps.pad error workflow."""
+
+        mode, pixel, color = (
+            ("L", 173, 7)
+            if pattern % 5 == 0
+            else ("LA", [173, 127], [7, 191])
+            if pattern % 5 == 1
+            else ("RGB", [173, 127, 31], [7, 83, 149])
+            if pattern % 5 == 2
+            else ("RGBA", [173, 127, 31, 191], [7, 83, 149, 191])
+            if pattern % 5 == 3
+            else ("P", 3, "red")
+        )
+        if pattern >= 5:
+            seed = (pattern * 37 + 13) % 256
+            if mode == "L":
+                pixel, color = seed, (seed + 7) % 256
+            elif mode == "LA":
+                pixel, color = [seed, (seed + 41) % 256], [(seed + 7) % 256, 191]
+            elif mode == "RGB":
+                pixel, color = (
+                    [seed, (seed + 41) % 256, (seed + 83) % 256],
+                    [(seed + 7) % 256, (seed + 29) % 256, (seed + 61) % 256],
+                )
+            elif mode == "RGBA":
+                pixel, color = (
+                    [seed, (seed + 41) % 256, (seed + 83) % 256, 191],
+                    [(seed + 7) % 256, (seed + 29) % 256, (seed + 61) % 256, 191],
+                )
+            else:
+                pixel, color = seed % 256, seed % 256
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.centering",
+            "name": f"coverage-batch-imageops-edge-empty-centering-{pattern}",
+            "mode": mode,
+            "size": [8, 7],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": {
+                "size": literal([13, 10]),
+                "method": literal(0),
+                "color": literal(color),
+                "centering": literal([]),
+            },
+        }
+
+    def imageops_posterize_palette_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid palette input for posterize's public error path.
+
+        Pillow rejects ``ImageOps.posterize`` on mode ``P`` with its named
+        ``NotImplementedError`` contract.  Keep the image and bit depth
+        values valid while varying the public inputs, so the branch is
+        exercised through the binding rather than through a direct core call.
+        """
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "posterize",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-imageops-posterize-p-{pattern:03d}",
+            "mode": "P",
+            "size": [5 + pattern % 7, 4 + (pattern // 7) % 6],
+            "edge": "nonzero-pixel",
+            "pixel": (pattern * 29 + 7) % 256,
+            "values": {"bits": literal(1 + pattern % 8)},
+        }
+
+    def imageops_pad_zero_dimension_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one public pad workflow for each zero-dimension short-circuit.
+
+        ``pad_containment_axes`` checks the source height and both requested
+        destination axes before doing an aspect-ratio division.  The existing
+        corpus covers only a zero-width source, so keep the other three
+        public dimension forms explicit here.  Zero-sized ``frombytes``
+        images and zero-sized requested outputs are ordinary Pillow inputs;
+        whether they produce bytes or a public exception remains parity-owned.
+        """
+
+        modes = ("L", "LA", "RGB", "RGBA")
+        mode = modes[pattern % len(modes)]
+        value = 17 + (pattern * 37) % 220
+        if mode == "L":
+            pixel: Any = value
+        elif mode == "LA":
+            pixel = [value, 31 + (pattern * 53) % 220]
+        elif mode == "RGB":
+            pixel = [value, 31 + (pattern * 53) % 220, 47 + (pattern * 71) % 208]
+        else:
+            pixel = [
+                value,
+                31 + (pattern * 53) % 220,
+                47 + (pattern * 71) % 208,
+                63 + (pattern * 43) % 192,
+            ]
+
+        if pattern < 34:
+            source_size = [2 + pattern % 4, 0]
+            destination_size = [2 + (pattern // 4) % 5, 2 + pattern % 3]
+            edge = "zero-size-frombytes"
+            source_pixel = None
+            label = "zero-height-source"
+        elif pattern < 67:
+            source_size = [2 + pattern % 4, 2 + (pattern // 4) % 4]
+            destination_size = [0, 2 + pattern % 3]
+            edge = "nonzero-pixel"
+            source_pixel = pixel
+            label = "zero-width-target"
+        else:
+            source_size = [2 + pattern % 4, 2 + (pattern // 4) % 4]
+            destination_size = [2 + (pattern // 4) % 5, 0]
+            edge = "nonzero-pixel"
+            source_pixel = pixel
+            label = "zero-height-target"
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": f"coverage-batch-imageops-pad-zero-dimension-{label}-{pattern:03d}",
+            "mode": mode,
+            "size": source_size,
+            "edge": edge,
+            "pixel": source_pixel,
+            "values": {
+                "size": literal(destination_size),
+                "method": literal(0),
+            },
+            "observe_result": "tobytes",
+        }
+
+    def effects_materialization_spec(pattern: int) -> dict[str, Any]:
+        """Build one public module-effect workflow that forces lazy output.
+
+        The canonical module cases intentionally observe the returned image
+        handle.  This matrix observes ``tobytes`` as well, so the maintained
+        CPU effect implementations execute rather than only validating and
+        queueing their ``PipelineOp``.  The source images are made with the
+        public ``new``/``putpixel`` endpoints through the reviewed
+        ``analysis-coverage-pattern`` stimulus; no expected output is stored.
+        """
+
+        mode_families = {
+            "alpha_composite": ("RGBA", "LA"),
+            "blend": ("L", "LA", "RGB", "RGBA", "CMYK"),
+            "merge": ("L", "LA", "RGB", "RGBA", "CMYK"),
+            "composite": ("L", "LA", "RGB", "RGBA", "CMYK", "P"),
+            "effect_spread": ("1", "L", "LA", "P", "RGB", "RGBA", "CMYK"),
+        }
+        if pattern < 20:
+            operation = "alpha_composite"
+            local = pattern
+        elif pattern < 40:
+            operation = "blend"
+            local = pattern - 20
+        elif pattern < 60:
+            operation = "merge"
+            local = pattern - 40
+        elif pattern < 80:
+            operation = "composite"
+            local = pattern - 60
+        else:
+            operation = "effect_spread"
+            local = pattern - 80
+        modes = mode_families[operation]
+        mode = modes[local % len(modes)]
+        surface = "PIL.Image.Image" if operation == "effect_spread" else "PIL.Image"
+        values: dict[str, Any] = {}
+        if operation == "blend":
+            values["alpha"] = literal(
+                (local % 5) / 4.0 if local % 7 else 1.25
+            )
+        elif operation == "effect_spread":
+            values["distance"] = literal(1 + local)
+        # A nontrivial spread consumes process-global rand() state.  The
+        # parity harness observes both the lazy handle and its bytes, so a
+        # multi-pixel workflow would legitimately produce different pixels on
+        # those two observations.  A one-pixel public image still executes
+        # the nonzero-distance loop and mode reconstruction, while keeping
+        # the observed bytes stable; deterministic materialized operations
+        # below carry the broader coverage matrix.
+        size = [1, 1] if operation == "effect_spread" else [3 + local % 5, 3 + (local // 5) % 4]
+        spec: dict[str, Any] = {
+            "surface": surface,
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-effects-materialized-{operation}-{pattern:03d}",
+            "mode": mode,
+            "edge": "analysis-coverage-pattern",
+            "size": size,
+            "values": values,
+            "observe_result": "tobytes",
+        }
+        if operation == "composite":
+            spec["mask_mode"] = ("L", "LA", "RGBA")[local % 3]
+        return spec
+
+    def effects_zero_dimension_spec(pattern: int) -> dict[str, Any]:
+        """Build valid empty-image module effects for the public early return.
+
+        ``apply_effect_rows`` is shared by the public alpha-composite, blend,
+        and merge implementations.  The ordinary materialization matrix
+        intentionally uses non-empty images, so it cannot exercise the
+        documented Pillow behavior for an image with a zero width or height.
+        These cases keep both operands/bands dimensionally compatible while
+        forcing the public operation to materialize an empty result.  No
+        private helper is called and no expected output is stored.
+        """
+
+        if pattern < 32:
+            operation = "alpha_composite"
+            local = pattern
+            modes = ("RGBA", "LA")
+        elif pattern < 66:
+            operation = "blend"
+            local = pattern - 32
+            modes = ("L", "LA", "RGB", "RGBA", "CMYK")
+        else:
+            operation = "merge"
+            local = pattern - 66
+            modes = ("L", "LA", "RGB", "RGBA", "CMYK")
+
+        mode = modes[local % len(modes)]
+        # Keep the dimensions explicit in the declarative input.  This lets
+        # the normalizer retain every case while the public setup still uses
+        # ordinary Image.new calls with a valid color.
+        edge = "uniform-fill"
+        values: dict[str, Any] = {}
+        if operation == "blend":
+            values["alpha"] = literal((local % 5) / 4.0)
+
+        pixel_base = 1 + pattern
+        if mode in {"L"}:
+            pixel: Any = pixel_base
+        elif mode == "LA":
+            pixel = [pixel_base, 255 - pixel_base]
+        elif mode == "RGB":
+            pixel = [pixel_base, 255 - pixel_base, (pixel_base * 3) % 256]
+        else:
+            pixel = [
+                pixel_base,
+                255 - pixel_base,
+                (pixel_base * 3) % 256,
+                (pixel_base * 5) % 256,
+            ]
+
+        return {
+            "surface": "PIL.Image",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-effects-empty-{operation}-{pattern:03d}",
+            "mode": mode,
+            "edge": edge,
+            "size": [0, 3 + local] if local % 2 == 0 else [3 + local, 0],
+            "pixel": pixel,
+            "values": values,
+            "observe_result": "tobytes",
+        }
+
+    def chops_empty_dimension_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid zero-dimension ImageChops workflow.
+
+        The existing Chops matrix exercises the row-parallel and serial
+        loops with non-empty images.  Pillow also accepts zero-width and
+        zero-height images as public inputs; pairing equal empty dimensions
+        lets the active binary dispatch take its bounded early-return path
+        without calling private compute helpers or storing output bytes.
+        Logical operations remain in mode ``1`` because that is their public
+        Pillow contract.  The matrix covers every active binary operation and
+        keeps the exact 100-case batch visible to the generated-input audit.
+        """
+
+        binary_operations = (
+            "add",
+            "subtract",
+            "multiply",
+            "screen",
+            "darker",
+            "lighter",
+            "difference",
+            "overlay",
+            "hard_light",
+            "soft_light",
+            "add_modulo",
+            "subtract_modulo",
+        )
+        dimensions = ("zero-width", "zero-height", "zero-size")
+        binary_case_count = len(binary_operations) * 7
+        if pattern < binary_case_count:
+            operation = binary_operations[pattern // 7]
+            local = pattern % 7
+            mode = ("L", "LA", "RGB", "RGBA", "P", "PA", "RGB")[local]
+            edge = dimensions[local % len(dimensions)]
+        elif pattern < binary_case_count + 12:
+            operation = ("logical_and", "logical_or", "logical_xor")[
+                (pattern - binary_case_count) // 4
+            ]
+            local = (pattern - binary_case_count) % 4
+            mode = "1"
+            edge = dimensions[local % len(dimensions)]
+        else:
+            extra_specs = (
+                ("add", "RGB", "zero-size"),
+                ("subtract", "RGBA", "zero-size"),
+                ("overlay", "P", "zero-size"),
+                ("soft_light", "LA", "zero-size"),
+                ("add", "LA", "zero-size"),
+                ("subtract", "L", "zero-size"),
+                ("overlay", "LA", "zero-size"),
+            )
+            operation, mode, edge = extra_specs[
+                pattern - binary_case_count - 12
+            ]
+        spec = {
+            "surface": "PIL.ImageChops",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-chops-empty-{operation}-{pattern:03d}",
+            "mode": mode,
+            "edge": edge,
+            "observe_result": "tobytes",
+        }
+        if pattern == binary_case_count + 3:
+            spec["size"] = [0, 8]
+        return spec
+
+    def public_generator_materialization_spec(pattern: int) -> dict[str, Any]:
+        """Build one distinct public generator workflow that observes bytes.
+
+        The module-level gradient and Mandelbrot functions are eager public
+        implementations in ``ops/module_fns.rs``; their similarly named
+        compute entries are legacy registry paths and are not reachable from
+        these facades.  Keep this matrix on the public routes and force the
+        returned image through ``tobytes`` so valid generation, decoding, and
+        materialization code is charged by coverage.
+        """
+
+        if pattern < 5:
+            return {
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-generators-materialized-linear-{pattern:03d}",
+                "values": {"mode": literal(("1", "L", "P", "I", "F")[pattern])},
+                "observe_result": "tobytes",
+            }
+        if pattern < 10:
+            local = pattern - 5
+            return {
+                "surface": "PIL.Image",
+                "operation": "radial_gradient",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-generators-materialized-radial-{local:03d}",
+                "values": {"mode": literal(("1", "L", "P", "I", "F")[local])},
+                "observe_result": "tobytes",
+            }
+        if pattern < 55:
+            local = pattern - 10
+            sizes = (
+                (1, 1),
+                (2, 1),
+                (1, 2),
+                (2, 3),
+                (3, 2),
+                (4, 4),
+                (5, 3),
+                (3, 5),
+                (7, 6),
+            )
+            sigmas = (0.0, 1.0, 10.0, 1000.0, 1_000_000.0)
+            return {
+                "surface": "PIL.Image",
+                "operation": "effect_noise",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-generators-materialized-noise-{local:03d}",
+                "values": {
+                    "size": literal(list(sizes[local % len(sizes)])),
+                    "sigma": literal(sigmas[local // len(sizes)]),
+                },
+                "observe_result": "tobytes",
+            }
+
+        local = pattern - 55
+        sizes = (
+            (1, 1),
+            (1, 4),
+            (4, 1),
+            (2, 3),
+            (3, 2),
+            (4, 4),
+            (5, 3),
+            (3, 5),
+            (8, 8),
+        )
+        qualities = (2, 3, 10, 32, 200)
+        return {
+            "surface": "PIL.Image",
+            "operation": "effect_mandelbrot",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-generators-materialized-mandelbrot-{local:03d}",
+            "values": {
+                "size": literal(list(sizes[local % len(sizes)])),
+                "extent": literal([-2.5, -1.5, 2.5, 1.5]),
+                "quality": literal(qualities[local // len(sizes)]),
+            },
+            "observe_result": "tobytes",
+        }
+
+    def draw_geometry_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public ImageDraw geometry workflow.
+
+        The existing draw batch exercises the common RGB/L shapes and bitmap
+        masks.  This matrix is deliberately organized around the native draw
+        implementation's remaining public decisions: zero-length and wide
+        lines, clipped/degenerate boxes, rounded-corner diameter classes,
+        angle normalization and clip-tree combinations, outline-only shapes,
+        and the typed image layouts that use the native-canvas fallback.  All
+        values are ordinary ImageDraw arguments; the receiver is materialized
+        through ``tobytes`` so these cases are coverage evidence rather than
+        signature-only inputs.
+        """
+
+        operations = (
+            "line",
+            "rectangle",
+            "rounded_rectangle",
+            "ellipse",
+            "circle",
+            "polygon",
+            "arc",
+            "chord",
+            "pieslice",
+            "point",
+        )
+        operation = operations[pattern // 10]
+        local = pattern % 10
+        mode = (
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+            "P",
+            "I",
+            "F",
+            "CMYK",
+            "YCbCr",
+            "1",
+        )[local]
+
+        def color(seed: int) -> Any:
+            red = 17 + (seed * 37) % 220
+            green = 31 + (seed * 53) % 220
+            blue = 47 + (seed * 71) % 208
+            alpha = 63 + (seed * 43) % 192
+            if mode in {"1", "L", "I", "P"}:
+                return 1 if mode == "1" else red
+            if mode == "F":
+                return red / 17.0
+            if mode in {"LA", "PA"}:
+                return [red, alpha]
+            if mode in {"RGB", "HSV", "YCbCr"}:
+                return [red, green, blue]
+            return [red, green, blue, alpha]
+
+        boxes = (
+            [-4, 2, 25, 8],
+            [2, -4, 8, 25],
+            [0, 0, 0, 0],
+            [3, 3, 3, 18],
+            [3, 3, 18, 3],
+            [1, 1, 18, 18],
+            [-3, -2, 20, 20],
+            [6, 2, 22, 15],
+            [2, 7, 21, 22],
+            [0, 0, 23, 23],
+        )
+        box = boxes[local]
+        fill = color(pattern + 11)
+        outline = color(pattern + 47)
+        width = (0, 1, 2, 3, 4, 1, 2, 5, 0, 3)[local]
+        values: dict[str, Any]
+
+        if operation == "line":
+            points = (
+                [[4, 4], [4, 4]],
+                [[1, 1], [22, 1]],
+                [[2, 2], [2, 21]],
+                [[-4, 5], [25, 18]],
+                [[20, 2], [2, 20]],
+                [[2, 20], [20, 2]],
+                [[1, 1], [8, 14], [20, 3]],
+                [[-4, 22], [10, -3], [27, 18]],
+                [[22, 22], [2, 22]],
+                [[2, 2], [21, 19]],
+            )[local]
+            values = {
+                "xy": literal(points),
+                "fill": literal(fill),
+                "width": literal(width),
+            }
+        elif operation == "rectangle":
+            values = {
+                "xy": literal(box),
+                "fill": literal(fill) if local % 3 else literal(None),
+                "outline": literal(outline),
+                "width": literal(width),
+            }
+        elif operation == "rounded_rectangle":
+            radius = (0, 1, 2, 3, 8, 20, 100, 1, 4, 7)[local]
+            values = {
+                "xy": literal(box),
+                "radius": literal(radius),
+                "fill": literal(fill) if local not in {1, 8} else literal(None),
+                "outline": literal(outline),
+                "width": literal(width),
+            }
+        elif operation == "ellipse":
+            values = {
+                "xy": literal(box),
+                "fill": literal(fill) if local % 4 else literal(None),
+                "outline": literal(outline),
+                "width": literal(width),
+            }
+        elif operation == "circle":
+            centers = (
+                [12, 12],
+                [0, 0],
+                [23, 23],
+                [-2, 12],
+                [12, -2],
+                [12, 12],
+                [4, 19],
+                [19, 4],
+                [12, 12],
+                [2, 22],
+            )
+            values = {
+                "xy": literal(centers[local]),
+                "radius": literal((0, 1, 2, 4, 8, 12, 20, 3, 5, 9)[local]),
+                "fill": literal(fill) if local % 3 else literal(None),
+                "outline": literal(outline),
+                "width": literal(width),
+            }
+        elif operation == "polygon":
+            points = (
+                [[1, 1], [21, 1], [21, 21], [1, 21]],
+                [[2, 2], [12, 1], [20, 7], [15, 13], [4, 20]],
+                [[2, 18], [12, 2], [21, 18]],
+                [[-4, 4], [10, -3], [27, 6], [20, 22], [3, 27]],
+                [[2, 5], [8, 5], [8, 5], [18, 5], [18, 18], [2, 18]],
+                [[1, 8], [22, 8], [17, 12], [4, 12]],
+                [[8, 1], [12, 1], [12, 22], [8, 22]],
+                [[1, 2], [21, 4], [18, 18], [11, 21], [3, 15]],
+                [[4, 3], [19, 4], [21, 12], [14, 21], [3, 16]],
+                [[3, 3], [20, 3], [20, 20], [3, 20]],
+            )[local]
+            values = {
+                "xy": literal(points),
+                "fill": literal(fill),
+                "outline": literal(outline),
+                "width": literal(width),
+            }
+        elif operation == "point":
+            points = (
+                [[2, 2], [2, 2]],
+                [[0, 0], [23, 23]],
+                [[-2, 4], [25, 19]],
+                [[4, -2], [18, 25]],
+                [[1, 1], [2, 3], [4, 5], [6, 7]],
+                [[22, 1], [1, 22]],
+                [[12, 12]],
+                [[-10, -10], [30, 30]],
+                [[3, 20], [20, 3]],
+                [[0, 12], [23, 12]],
+            )[local]
+            values = {"xy": literal(points), "fill": literal(fill)}
+        else:
+            angles = (
+                (0, 360),
+                (30, 30),
+                (-45, 45),
+                (300, 60),
+                (0, 90),
+                (90, 270),
+                (45, 225),
+                (120, 200),
+                (200, 100),
+                (270, 630),
+            )
+            start, end = angles[local]
+            values = {
+                "xy": literal(box),
+                "start": literal(start),
+                "end": literal(end),
+                "fill": literal(fill) if local not in {1, 8} else literal(None),
+                "width": literal(width),
+            }
+            if operation in {"chord", "pieslice"}:
+                values["outline"] = literal(outline)
+
+        return {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-draw-geometry-{operation}-{mode.lower()}-{pattern:03d}",
+            "mode": mode,
+            "size": [24, 24],
+            "observe_receiver": True,
+            "values": values,
+        }
+
+    def stat_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid ImageStat.Stat reduction across native modes.
+
+        Each case observes every public Stat property, so the matrix drives
+        one image through the complete reduction in one parity process.  The
+        values are ordinary Image.new/putpixel inputs; no statistic or output
+        is authored in the generator.
+        """
+
+        mode, pixel = (
+            ("L", 17 + (pattern * 19) % 239)
+            if pattern % 10 == 0
+            else ("LA", [17 + (pattern * 19) % 239, 1 + (pattern * 23) % 255])
+            if pattern % 10 == 1
+            else (
+                "RGB",
+                [
+                    17 + (pattern * 19) % 239,
+                    31 + (pattern * 29) % 225,
+                    47 + (pattern * 37) % 209,
+                ],
+            )
+            if pattern % 10 == 2
+            else (
+                "RGBA",
+                [
+                    17 + (pattern * 19) % 239,
+                    31 + (pattern * 29) % 225,
+                    47 + (pattern * 37) % 209,
+                    1 + (pattern * 41) % 255,
+                ],
+            )
+            if pattern % 10 == 3
+            else ("P", 1 + (pattern * 17) % 254)
+            if pattern % 10 == 4
+            else (
+                "CMYK",
+                [
+                    1 + (pattern * 13) % 254,
+                    17 + (pattern * 17) % 238,
+                    33 + (pattern * 23) % 222,
+                    49 + (pattern * 29) % 206,
+                ],
+            )
+            if pattern % 10 == 5
+            else (
+                "YCbCr",
+                [
+                    17 + (pattern * 19) % 239,
+                    31 + (pattern * 29) % 225,
+                    47 + (pattern * 37) % 209,
+                ],
+            )
+            if pattern % 10 == 6
+            else (
+                "HSV",
+                [
+                    (pattern * 23) % 256,
+                    32 + (pattern * 31) % 224,
+                    64 + (pattern * 37) % 192,
+                ],
+            )
+            if pattern % 10 == 7
+            else ("PA", [1 + (pattern * 17) % 254, 1 + (pattern * 29) % 255])
+            if pattern % 10 == 8
+            else ("I", 17 + (pattern * 193) % 10000)
+        )
+        return {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-stat-modes-{mode.lower()}-{pattern:03d}",
+            "mode": mode,
+            "size": [4 + pattern % 5, 3 + (pattern // 2) % 4],
+            "edge": "uniform-fill" if pattern % 3 == 0 else "nonzero-pixel",
+            "pixel": pixel,
+            "observe_stat_properties": True,
+        }
+
+    def getchannel_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public ``Image.getchannel`` extraction.
+
+        The channel reducer has distinct native paths for one-band, alpha,
+        RGB-like, palette, and scalar images. Keep every selector within the
+        mode's public band count and observe the returned image bytes; no
+        expected pixels or implementation-specific metadata are authored.
+        """
+
+        modes = (
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+            "P",
+            "PA",
+            "CMYK",
+            "YCbCr",
+            "HSV",
+            "I",
+            "F",
+        )
+        mode = modes[pattern % len(modes)]
+        value = 17 + (pattern * 37) % 220
+        alpha = 31 + (pattern * 53) % 220
+        if mode in {"L", "P", "I"}:
+            pixel: Any = value if mode != "I" else 1000 + pattern * 7919
+            channel = 0
+        elif mode == "F":
+            pixel = value / 17.0
+            channel = 0
+        elif mode in {"LA", "PA"}:
+            pixel = [value, alpha]
+            channel = (pattern // len(modes)) % 2
+        else:
+            bands = 4 if mode in {"RGBA", "CMYK"} else 3
+            pixel = [
+                (value + component * 71 + pattern * 11) % 256
+                for component in range(bands)
+            ]
+            channel = (pattern // len(modes)) % bands
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "parameter.channel",
+            "name": f"coverage-batch-getchannel-extract-{mode.lower()}-{pattern:03d}",
+            "mode": mode,
+            "size": [5 + pattern % 4, 4 + (pattern // 4) % 4],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": {"channel": literal(channel)},
+            "observe_result": "tobytes",
+        }
+
+    def getdata_typed_band_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid explicit-band read for non-native byte modes.
+
+        The ordinary byte layouts are already covered by the Image.getdata
+        matrix. These modes are public Pillow images whose decoded storage is
+        represented through a different DynamicImage layout, so an explicit
+        valid band selection reaches the core's documented RGBA fallback. I,
+        F, and I;16 are intentionally absent: Pillow rejects explicit bands
+        for those scalar modes before the fallback is entered.
+        """
+
+        mode, band_count, pixel = (
+            ("P", 1, 7),
+            ("PA", 2, [7, 191]),
+            ("CMYK", 4, [7, 31, 89, 191]),
+            ("HSV", 3, [7, 31, 89]),
+            ("YCbCr", 3, [127, 131, 137]),
+        )[pattern % 5]
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "getdata",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-getdata-typed-band-{mode.lower()}-{pattern:03d}",
+            "mode": mode,
+            "size": [3 + pattern % 10, 2 + pattern // 10],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": {"band": literal((pattern // 5) % band_count)},
+        }
+
+    def stat_float_coverage_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public ``ImageStat.Stat`` F-mode reduction.
+
+        The general Stat matrix intentionally covers the native byte families
+        and integer ``I`` samples.  F-mode uses a separate four-byte reducer
+        in the core, including a uniform-image branch and a scaled histogram
+        branch.  Alternate those two ordinary ``Image.new``/``putpixel``
+        stimuli so both paths are reached without storing statistical output.
+        """
+
+        value = (1 + (pattern * 17) % 251) / 7.0
+        return {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-stat-float-{pattern:03d}",
+            "mode": "F",
+            "size": [4 + pattern % 5, 3 + (pattern // 3) % 4],
+            "edge": "uniform-fill" if pattern % 2 == 0 else "nonzero-pixel",
+            "pixel": value,
+            "observe_stat_properties": True,
+        }
+
     specs: tuple[dict[str, Any], ...] = (
+        # Coverage batch 2026-08-14y: exercise every public ImageStat.Stat
+        # property over native one-, two-, three-, and four-band modes. The
+        # matrix is exactly 100 valid input workflows and keeps all reductions
+        # in one managed process per coverage plan.
+        *(stat_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ap: exercise the public F-mode Stat
+        # reducer's equal-extrema and scaled-histogram paths with valid
+        # float32 images. No statistic or expected output is authored here.
+        *(stat_float_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ao: exercise the unmasked public F-mode
+        # histogram reducer. The existing mixed analysis matrix masks every
+        # F-mode slot, so those valid calls stop at Pillow's wrong-mode guard.
+        *(analysis_float_histogram_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ap: exercise valid scalar histogram
+        # early-return paths for constant/empty I and F images, plus the
+        # reducer's finite-value guard. These are public Image.new inputs and
+        # the histogram result remains an observation rather than authored
+        # oracle data.
+        *(analysis_scalar_degenerate_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14an: exercise the public Image.getchannel
+        # reducer across scalar, alpha, palette, typed, and multi-band modes.
+        # Every selector is valid for its source image and the result is
+        # materialized through the maintained parity observation.
+        *(getchannel_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14av: exercise valid explicit-band reads for
+        # public P/PA/CMYK/HSV/YCbCr images. These are the supported
+        # non-native byte layouts that enter Image.getdata's RGBA fallback;
+        # scalar I/F/I;16 band rejection remains a separate public contract.
+        *(getdata_typed_band_coverage_spec(pattern) for pattern in range(100)),
         {
             "surface": "PIL.Image",
             "operation": "fromarray",
@@ -4782,6 +12899,64 @@ def build_nuanced_cases(
                 )
             },
         },
+        *(
+            {
+                "surface": "PIL.Image",
+                "operation": "fromarray",
+                "requirement_suffix": "parameter.obj",
+                "name": f"buffer-backed-{name}",
+                "values": {
+                    "obj": literal(
+                        {
+                            "protocol": "numpy-array",
+                            "shape": [2, 2],
+                            "typestr": typestr,
+                            "data_base64": base64.b64encode(
+                                struct.pack(pack_format, *values)
+                            ).decode("ascii"),
+                        }
+                    )
+                },
+            }
+            for name, typestr, pack_format, values in (
+                ("uint16-little-endian", "<u2", "<4H", (0, 257, 32768, 65535)),
+                ("uint16-big-endian", ">u2", ">4H", (0, 257, 32768, 65535)),
+                ("int16-little-endian", "<i2", "<4h", (-32768, -1, 1, 32767)),
+                ("int16-big-endian", ">i2", ">4h", (-32768, -1, 1, 32767)),
+                ("uint32-little-endian", "<u4", "<4I", (0, 257, 65535, 100000)),
+                ("uint32-big-endian", ">u4", ">4I", (0, 257, 65535, 100000)),
+                ("int32-little-endian", "<i4", "<4i", (-100000, -1, 1, 100000)),
+                ("int32-big-endian", ">i4", ">4i", (-100000, -1, 1, 100000)),
+                ("float32-little-endian", "<f4", "<4f", (-1.5, 0.0, 1.25, 3.5)),
+                ("float32-big-endian", ">f4", ">4f", (-1.5, 0.0, 1.25, 3.5)),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image",
+                "operation": "fromarray",
+                "requirement_suffix": "parameter.obj",
+                "name": f"buffer-backed-{name}",
+                "values": {
+                    "obj": literal(
+                        {
+                            "protocol": "numpy-array",
+                            "shape": shape,
+                            "typestr": typestr,
+                            "data_base64": base64.b64encode(
+                                struct.pack(pack_format, *values)
+                            ).decode("ascii"),
+                        }
+                    )
+                },
+            }
+            for name, shape, typestr, pack_format, values in (
+                ("int8", [2, 2], "|i1", "<4b", (-128, -1, 1, 127)),
+                ("int8-1d", [4], "|i1", "<4b", (-128, -1, 1, 127)),
+                ("float64-little-endian", [2, 2], "<f8", "<4d", (-1.5, 0.0, 1.25, 3.5)),
+                ("float64-big-endian", [2, 2], ">f8", ">4d", (-1.5, 0.0, 1.25, 3.5)),
+            )
+        ),
         {
             "surface": "PIL.Image",
             "operation": "fromarray",
@@ -14439,6 +22614,100 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "convert",
             "requirement_suffix": "parameter.mode",
+            "name": "p-same-mode-no-palette",
+            "mode": "P",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "p-same-mode-nonzero-index",
+            "mode": "P",
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "p-same-mode-attached-rgb-palette",
+            "mode": "P",
+            "chain": "p-putpalette-convert",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "p-same-mode-attached-alpha-palette",
+            "mode": "P",
+            "chain": "palette-transparency-convert",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "opened-p-same-mode-png",
+            "scenario_asset": "image/p-small.png",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "opened-p-same-mode-transparency",
+            "scenario_asset": "image/p-transparency.png",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "opened-p-same-mode-gif",
+            "scenario_asset": "image/p-small.gif",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
+            "name": "one-same-mode",
+            "mode": "1",
+            "edge": "nonzero-pixel",
+            "pixel": 1,
+            "values": {"mode": literal("1")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.la",
+            "name": "one-to-la",
+            "mode": "1",
+            "values": {"mode": literal("LA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.p",
+            "name": "one-to-p",
+            "mode": "1",
+            "values": {"mode": literal("P")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "mode.f",
+            "name": "one-to-f",
+            "mode": "1",
+            "values": {"mode": literal("F")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "parameter.mode",
             "name": "l-to-la",
             "mode": "L",
             "values": {"mode": literal("LA")},
@@ -15245,6 +23514,1795 @@ def build_nuanced_cases(
             "mask_mode": "L",
             "edge": "mask-nonzero-pixel",
         },
+        # Coverage batch 2026-08-14c: exercise typed public image storage that
+        # cannot be reached through Image.new's byte-backed mode constructors.
+        # The I;16* cases use the maintained frombytes endpoint, while the RGB
+        # and RGBA cases use valid 16-bit PNG decodes.  Each pattern is a real
+        # source byte stream; no expected output or coverage metadata is edited.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getbbox",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-analysis-i16-getbbox-{prefix}-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+                "values": {"alpha_only": literal(pattern % 2 == 0)},
+            }
+            for prefix in (
+                "i16-frombytes",
+                "i16n-frombytes",
+                "i16l-frombytes",
+                "i16b-frombytes",
+            )
+            for pattern in range(10)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getbbox",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-analysis-{prefix}-getbbox-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+                "values": {"alpha_only": literal(pattern % 2 == 0)},
+            }
+            for prefix, mode in (("rgb16-png", "RGB"), ("rgba16-png", "RGBA"))
+            for pattern in range(10)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getextrema",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-analysis-{prefix}-getextrema-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+            }
+            for prefix, mode in (("rgb16-png", "RGB"), ("rgba16-png", "RGBA"))
+            for pattern in range(10)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "histogram",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-analysis-{prefix}-histogram-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+            }
+            for prefix, mode in (("rgb16-png", "RGB"), ("rgba16-png", "RGBA"))
+            for pattern in range(10)
+        ),
+        # Coverage batch 2026-08-14d: exercise the public band extraction
+        # endpoint across every byte-backed channel family.  The indices are
+        # all valid for the selected mode, and the cases observe the real
+        # returned data without embedding expected outputs.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getdata",
+                "requirement_suffix": "parameter.band",
+                "name": f"coverage-batch-imagedata-band-{mode.lower()}-{band}-{pattern}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": (
+                    (pattern * 29 + 1) % 256
+                    if mode == "L"
+                    else [
+                        (pattern * 29 + channel * 47 + 1) % 256
+                        for channel in range(band_count)
+                    ]
+                ),
+                "values": {"band": literal(band)},
+            }
+            for pattern in range(10)
+            for mode, band_count in (("L", 1), ("LA", 2), ("RGB", 3), ("RGBA", 4))
+            for band in range(band_count)
+        ),
+        # Coverage batch 2026-08-14aw: exercise explicit-band reads on valid
+        # 16-bit RGB/RGBA PNG decodes. Unlike Image.new's byte layouts, these
+        # public source streams retain typed DynamicImage storage and are the
+        # remaining input-driven route to Image.getdata's typed fallback.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getdata",
+                "requirement_suffix": "parameter.band",
+                "name": f"coverage-batch-getdata-typed-png-{prefix}-{pattern:03d}",
+                "mode": mode,
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+                "values": {"band": literal(pattern % band_count)},
+            }
+            for prefix, mode, band_count in (
+                ("rgb16-png", "RGB", 3),
+                ("rgba16-png", "RGBA", 4),
+            )
+            for pattern in range(50)
+        ),
+        # Coverage batch 2026-08-14e: exercise the public putpixel value
+        # coercion across the declared scalar, indexed, luma/alpha, RGB, and
+        # RGBA mode families.  Coordinates and components stay in range; the
+        # receiver observation forces the real mutation to materialize.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-putpixel-modes-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": coverage_putpixel_initial_pixel(mode, pattern),
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal([pattern % 16, (pattern * 3) % 16]),
+                    "value": literal(coverage_putpixel_value(mode, pattern)),
+                },
+            }
+            for pattern in range(10)
+            for mode in ("1", "L", "LA", "P", "RGB", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "putpixel",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-putpixel-extra-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": coverage_putpixel_initial_pixel(mode, pattern + 10),
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal([(pattern * 5 + 1) % 16, (pattern * 7 + 2) % 16]),
+                    "value": literal(coverage_putpixel_value(mode, pattern + 10)),
+                },
+            }
+            for pattern in range(10)
+            for mode in ("LA", "P", "RGB", "RGBA")
+        ),
+        # Coverage batch 2026-08-14f: exercise the public reduce() factor and
+        # optional-box normalization through real image workflows.  The first
+        # group materializes valid cropped reductions across byte-backed mode
+        # families; the remaining groups keep invalid factors and oversized
+        # coordinates as ordinary public calls so their exact Pillow errors
+        # remain parity-checked rather than being synthesized.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-reduce-valid-box-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": (
+                    (pattern * 23 + 5) % 256
+                    if mode == "L"
+                    else [
+                        (pattern * 23 + channel * 41 + 5) % 256
+                        for channel in range({"LA": 2, "RGB": 3, "RGBA": 4}[mode])
+                    ]
+                ),
+                "observe_result": "tobytes",
+                "values": {
+                    "factor": literal([2, 2]),
+                    "box": literal([1, 1, 15, 15]),
+                },
+            }
+            for pattern in range(10)
+            for mode in ("L", "LA", "RGB", "RGBA")
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-reduce-scalar-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [17, 11],
+                "edge": "uniform-fill",
+                "pixel": (
+                    (pattern * 31 + 9) % 256
+                    if mode == "L"
+                    else [(pattern * 31 + channel * 37 + 9) % 256 for channel in range(3)]
+                ),
+                "observe_result": "tobytes",
+                "values": {"factor": literal(1 + pattern)},
+            }
+            for pattern in range(10)
+            for mode in ("L", "RGB")
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "parameter.factor",
+                "name": f"coverage-batch-reduce-zero-y-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": (
+                    (pattern * 19 + 3) % 256
+                    if mode == "L"
+                    else [(pattern * 19 + channel * 43 + 3) % 256 for channel in range(3)]
+                ),
+                "values": {"factor": literal([2, 0])},
+            }
+            for pattern in range(10)
+            for mode in ("L", "RGB")
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "parameter.factor",
+                "name": f"coverage-batch-reduce-zero-x-l-{pattern}",
+                "mode": "L",
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": (pattern * 23 + 11) % 256,
+                "values": {"factor": literal([0, 2])},
+            }
+            for pattern in range(10)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "parameter.box",
+                "name": f"coverage-batch-reduce-box-overflow-{pattern}",
+                "mode": "RGB",
+                "scenario_size": [16, 16],
+                "values": {
+                    "factor": literal([2, 2]),
+                    "box": literal([0, 0, 2_147_483_648 + pattern, 4]),
+                },
+            }
+            for pattern in range(10)
+        ),
+        # Coverage batch 2026-08-14g: exercise the public crop_float path with
+        # ordinary in-bounds, fractional, padded, disjoint, and zero-area
+        # boxes across the byte-backed and palette mode families.  Every box
+        # is a valid Pillow call and the result is materialized through the
+        # public receiver; no output oracle or coverage metadata is authored.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "requirement_suffix": "parameter.box",
+                "name": f"coverage-batch-crop-normalization-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": (
+                    (pattern * 17 + 7) % 256
+                    if mode in {"L", "P"}
+                    else [
+                        (pattern * 17 + channel * 43 + 7) % 256
+                        for channel in range({"LA": 2, "RGB": 3, "RGBA": 4}[mode])
+                    ]
+                ),
+                "observe_result": "tobytes",
+                "values": {"box": literal(box)},
+            }
+            for mode in ("L", "LA", "RGB", "RGBA", "P")
+            for pattern, box in enumerate(
+                (
+                    [0.0, 0.0, 15.0, 15.0],
+                    [0.5, 1.5, 14.5, 15.5],
+                    [1.25, 2.75, 12.5, 13.25],
+                    [-2.0, 1.0, 12.0, 14.0],
+                    [1.0, -2.0, 14.0, 13.0],
+                    [3.0, 2.0, 20.0, 15.0],
+                    [2.0, 3.0, 13.0, 20.0],
+                    [-8.0, -6.0, -1.0, -1.0],
+                    [20.0, 1.0, 25.0, 14.0],
+                    [1.0, 20.0, 14.0, 25.0],
+                    [5.0, 2.0, 5.0, 14.0],
+                    [2.0, 5.0, 14.0, 5.0],
+                    [0.0, 0.0, 16.0, 16.0],
+                    [1.0, 1.0, 8.0, 8.0],
+                    [0.5, 0.5, 2.5, 2.5],
+                    [-1.5, -0.5, 5.5, 6.5],
+                    [0.0, 0.0, 1.0, 1.0],
+                    [7.5, 7.5, 15.5, 15.5],
+                    [0.0, 4.0, 16.0, 12.0],
+                    [4.0, 0.0, 12.0, 16.0],
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14h: exercise public transform method 2/3
+        # length validation with otherwise well-typed coefficient sequences,
+        # plus the negative checked-coordinate arm of reduce().  These are
+        # ordinary Pillow calls whose errors remain source/target parity
+        # assertions; no expected output or coverage metadata is authored.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-perspective-extra-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(2),
+                    "data": literal([
+                        1,
+                        0,
+                        pattern,
+                        0,
+                        1,
+                        pattern,
+                        0,
+                        0,
+                        pattern + 1,
+                    ]),
+                },
+            }
+            for mode in ("L", "LA", "RGB", "RGBA", "P")
+            for pattern in range(4)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-quad-extra-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(3),
+                    "data": literal([
+                        0,
+                        0,
+                        8,
+                        0,
+                        8,
+                        8,
+                        0,
+                        8,
+                        pattern + 1,
+                    ]),
+                },
+            }
+            for mode in ("L", "LA", "RGB", "RGBA", "P")
+            for pattern in range(4)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-perspective-too-many-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(2),
+                    "data": literal([
+                        1,
+                        0,
+                        pattern,
+                        0,
+                        1,
+                        pattern,
+                        0,
+                        0,
+                        pattern + 1,
+                        pattern + 2,
+                    ]),
+                },
+            }
+            for mode in ("L", "LA", "RGB", "RGBA", "P")
+            for pattern in range(4)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-quad-too-many-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(3),
+                    "data": literal([
+                        0,
+                        0,
+                        8,
+                        0,
+                        8,
+                        8,
+                        0,
+                        8,
+                        pattern + 1,
+                        pattern + 2,
+                    ]),
+                },
+            }
+            for mode in ("L", "LA", "RGB", "RGBA", "P")
+            for pattern in range(4)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "parameter.box",
+                "name": f"coverage-batch-reduce-box-underflow-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "uniform-fill",
+                "pixel": (
+                    (pattern * 29 + 7) % 256
+                    if mode == "L"
+                    else [
+                        (pattern * 29 + channel * 47 + 7) % 256
+                        for channel in range({"LA": 2, "RGB": 3, "RGBA": 4}[mode])
+                    ]
+                ),
+                "values": {
+                    "factor": literal([2, 2]),
+                    "box": literal([-2_147_483_649 - pattern, 0, 4, 4]),
+                },
+            }
+            for mode in ("L", "LA", "RGB", "RGBA")
+            for pattern in range(5)
+        ),
+        # Coverage batch 2026-08-14i: exercise valid public conversion inputs
+        # that vary the source representation, destination mode, dither enum,
+        # and matrix shape.  The cases deliberately materialize through the
+        # public receiver so deferred I/F and palette conversions are observed
+        # by the managed coverage lane; no output, oracle, or denominator data
+        # is authored here.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-convert-public-{source.lower()}-{target.lower()}-{index}",
+                "mode": source,
+                "size": [8 + index % 5, 7 + (index // 5) % 4],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "mode": literal(target),
+                    **(
+                        {"dither": literal(dither)}
+                        if dither is not None
+                        else {}
+                    ),
+                },
+            }
+            for index, (source, pixel, target, dither) in enumerate(
+                (
+                    ("L", 32, "RGB", None),
+                    ("L", 64, "RGBA", None),
+                    ("L", 96, "LA", None),
+                    ("L", 128, "CMYK", None),
+                    ("L", 160, "1", 0),
+                    ("L", 192, "P", 0),
+                    ("L", 224, "PA", 0),
+                    ("LA", [32, 192], "L", None),
+                    ("LA", [64, 176], "RGB", None),
+                    ("LA", [96, 160], "RGBA", None),
+                    ("LA", [128, 144], "CMYK", None),
+                    ("LA", [160, 128], "1", 1),
+                    ("LA", [192, 112], "P", 1),
+                    ("LA", [224, 96], "PA", 1),
+                    ("RGB", [32, 128, 224], "L", None),
+                    ("RGB", [48, 144, 208], "LA", None),
+                    ("RGB", [64, 160, 192], "RGBA", None),
+                    ("RGB", [80, 176, 176], "CMYK", None),
+                    ("RGB", [96, 192, 160], "HSV", None),
+                    ("RGB", [112, 208, 144], "YCbCr", None),
+                    ("RGB", [128, 224, 128], "I", None),
+                    ("RGB", [144, 240, 112], "F", None),
+                    ("RGB", [160, 224, 96], "1", 0),
+                    ("RGB", [176, 208, 80], "P", 1),
+                    ("RGB", [192, 192, 64], "PA", 0),
+                    ("RGBA", [32, 128, 224, 192], "L", None),
+                    ("RGBA", [48, 144, 208, 176], "LA", None),
+                    ("RGBA", [64, 160, 192, 160], "RGB", None),
+                    ("RGBA", [80, 176, 176, 144], "CMYK", None),
+                    ("RGBA", [96, 192, 160, 128], "1", 1),
+                    ("RGBA", [112, 208, 144, 112], "P", 0),
+                    ("RGBA", [128, 224, 128, 96], "PA", 1),
+                    ("P", 7, "L", None),
+                    ("P", 19, "RGB", None),
+                    ("P", 31, "RGBA", None),
+                    ("P", 43, "CMYK", None),
+                    ("P", 55, "HSV", None),
+                    ("P", 67, "I", None),
+                    ("P", 79, "F", None),
+                    ("P", 91, "1", 0),
+                    ("P", 103, "PA", 1),
+                    ("CMYK", [16, 32, 48, 64], "RGB", None),
+                    ("CMYK", [32, 48, 64, 80], "L", None),
+                    ("CMYK", [48, 64, 80, 96], "LA", None),
+                    ("CMYK", [64, 80, 96, 112], "RGBA", None),
+                    ("CMYK", [80, 96, 112, 128], "1", 1),
+                    ("CMYK", [96, 112, 128, 144], "I", None),
+                    ("CMYK", [112, 128, 144, 160], "F", None),
+                    ("CMYK", [128, 144, 160, 176], "PA", 0),
+                    ("HSV", [40, 220, 180], "RGB", None),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14aq: exercise the public RGBA->PA
+        # transparent-palette reorder with distinct valid corner samples.
+        *(convert_palette_alpha_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14at: exercise the public RGBX source
+        # conversion path. RGBX carries an unused fourth byte, so these valid
+        # frombytes workflows cover the non-alpha side of conversion without
+        # fabricating an internal mode or expected output.
+        *(convert_rgbx_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14au: exercise the reachable PA source
+        # expansion before conversion to another nonstandard mode.
+        *(convert_pa_nonstandard_coverage_spec(pattern) for pattern in range(100)),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-convert-nonstandard-{source.lower()}-{target.lower()}-{index}",
+                "mode": source,
+                "size": [9 + index % 4, 6 + (index // 4) % 5],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "mode": literal(target),
+                    **(
+                        {"dither": literal(dither)}
+                        if dither is not None
+                        else {}
+                    ),
+                },
+            }
+            for index, (source, pixel, target, dither) in enumerate(
+                (
+                    ("YCbCr", [120, 160, 100], "RGB", None),
+                    ("YCbCr", [140, 140, 120], "L", None),
+                    ("YCbCr", [160, 120, 140], "1", 0),
+                    ("YCbCr", [180, 100, 160], "PA", 1),
+                    ("HSV", [40, 220, 180], "CMYK", None),
+                    ("HSV", [80, 180, 140], "L", None),
+                    ("HSV", [120, 140, 100], "LA", None),
+                    ("HSV", [160, 100, 60], "1", 0),
+                    ("I", 32, "RGB", None),
+                    ("I", 4096, "CMYK", None),
+                    ("I", 8192, "1", 1),
+                    ("I", 16384, "PA", 0),
+                    ("F", 12.5, "RGB", None),
+                    ("F", 64.25, "L", None),
+                    ("F", 128.5, "CMYK", None),
+                    ("F", 192.75, "1", 0),
+                    ("PA", [7, 255], "RGB", None),
+                    ("PA", [19, 192], "RGBA", None),
+                    ("PA", [31, 128], "1", 1),
+                    ("PA", [43, 64], "LA", None),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-convert-palette-alpha-{source.lower()}-{dither}-{index}",
+                "mode": source,
+                "size": [10 + index % 3, 8 + (index // 3) % 4],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "mode": literal("PA"),
+                    "dither": literal(dither),
+                },
+            }
+            for index, (source, pixel, dither) in enumerate(
+                (
+                    ("1", 1, 0),
+                    ("1", 1, 1),
+                    ("L", 37, 0),
+                    ("L", 211, 1),
+                    ("LA", [37, 211], 0),
+                    ("LA", [211, 37], 1),
+                    ("RGB", [37, 111, 211], 0),
+                    ("RGB", [211, 111, 37], 1),
+                    ("RGBA", [37, 111, 211, 173], 0),
+                    ("RGBA", [211, 111, 37, 83], 1),
+                    ("P", 37, 0),
+                    ("P", 211, 1),
+                    ("I", 37, 0),
+                    ("I", 211, 1),
+                    ("F", 37.5, 0),
+                    ("F", 211.5, 1),
+                    ("CMYK", [37, 111, 211, 83], 0),
+                    ("CMYK", [211, 111, 37, 173], 1),
+                    ("HSV", [37, 211, 111], 0),
+                    ("HSV", [211, 111, 37], 1),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.matrix",
+                "name": f"coverage-batch-convert-matrix-{target.lower()}-{index}",
+                "mode": "RGB",
+                "size": [11 + index % 3, 9 + (index // 3) % 3],
+                "edge": "nonzero-pixel",
+                "pixel": [37 + index * 3, 111 + index * 2, 211 - index * 3],
+                "observe_result": "tobytes",
+                "values": {
+                    "mode": literal(target),
+                    "matrix": literal(matrix),
+                },
+            }
+            for index, (target, matrix) in enumerate(
+                (
+                    ("L", [1, 0, 0, 0]),
+                    ("L", [0, 1, 0, 7]),
+                    ("L", [0, 0, 1, 13]),
+                    ("L", [0.25, 0.5, 0.25, 3]),
+                    ("L", [1.2, -0.2, 0.0, 5]),
+                    ("RGB", [1, 0, 0, 4, 0, 1, 0, 5, 0, 0, 1, 6]),
+                    ("RGB", [0, 1, 0, 7, 0, 0, 1, 8, 1, 0, 0, 9]),
+                    ("RGB", [0.5, 0.25, 0.25, 1, 0.25, 0.5, 0.25, 2, 0.25, 0.25, 0.5, 3]),
+                    ("RGB", [1.1, -0.1, 0, 0, 0, 1.1, -0.1, 0, -0.1, 0, 1.1, 0]),
+                    ("RGB", [0, 0, 1, 11, 0, 1, 0, 17, 1, 0, 0, 23]),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14j: exercise the public ImageDraw geometry
+        # and bitmap paths with materialized receivers.  These are deliberately
+        # input-only cases; expected bytes remain generated by the parity
+        # harness rather than being embedded in the corpus.
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "line",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-draw-line-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [24, 24],
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal(points),
+                    "fill": literal(color),
+                    "width": literal(width),
+                },
+            }
+            for index, (points, width) in enumerate(
+                (
+                    ([[1, 1], [20, 1]], 1),
+                    ([[1, 2], [1, 21]], 2),
+                    ([[2, 2], [20, 20]], 3),
+                    ([[20, 2], [2, 20]], 4),
+                    ([[0, 23], [23, 0]], 1),
+                    ([[-5, 4], [28, 18]], 2),
+                    ([[4, -3], [18, 28]], 3),
+                    ([[22, 2], [2, 6]], 5),
+                    ([[2, 22], [22, 18]], 2),
+                    ([[6, 6], [6, 6]], 1),
+                )
+            )
+            for mode, color in (
+                ("RGB", [211, 37, 89]),
+                ("RGBA", [211, 37, 89, 173]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "polygon",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-draw-polygon-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [24, 24],
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal(points),
+                    "fill": literal(
+                        201 if mode == "L" else [37, 211, 89]
+                    ),
+                    "outline": literal(
+                        73 if mode == "L" else [255, 255, 255]
+                    ),
+                    "width": literal(width),
+                },
+            }
+            for index, (points, width) in enumerate(
+                (
+                    ([[1, 1], [20, 1], [20, 20], [1, 20]], 1),
+                    ([[2, 2], [12, 1], [20, 7], [15, 13], [4, 20]], 2),
+                    ([[2, 18], [12, 2], [21, 18]], 3),
+                    ([[12, 1], [15, 8], [22, 8], [17, 13], [19, 21], [12, 16], [5, 21], [7, 13], [2, 8], [9, 8]], 1),
+                    ([[2, 5], [8, 5], [8, 5], [18, 5], [18, 18], [2, 18]], 2),
+                    ([[-4, 4], [10, -3], [27, 6], [20, 22], [3, 27]], 3),
+                    ([[1, 8], [22, 8], [17, 12], [4, 12]], 4),
+                    ([[8, 1], [12, 1], [12, 22], [8, 22]], 1),
+                    ([[1, 2], [21, 4], [18, 18], [11, 21], [3, 15]], 2),
+                    ([[4, 3], [19, 4], [21, 12], [14, 21], [3, 16]], 4),
+                )
+            )
+            for mode in ("L", "RGB")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "rectangle",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-draw-rectangle-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [24, 24],
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal(box),
+                    "fill": literal(fill),
+                    "outline": literal(outline),
+                    "width": literal(width),
+                },
+            }
+            for index, (box, width) in enumerate(
+                (
+                    ([[1, 1], [14, 12]], 1),
+                    ([0, 0, 23, 23], 2),
+                    ([3, 2, 3, 19], 3),
+                    ([2, 4, 20, 4], 4),
+                    ([-3, 3, 18, 20], 2),
+                )
+            )
+            for mode, fill, outline in (
+                ("RGB", [211, 37, 89], [255, 255, 255]),
+                ("LA", [211, 173], [73, 255]),
+                ("RGBA", [211, 37, 89, 173], [255, 255, 255, 255]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "regular_polygon",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-draw-regular-polygon-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [24, 24],
+                "observe_receiver": True,
+                "values": {
+                    "bounding_circle": literal(circle),
+                    "n_sides": literal(n_sides),
+                    "rotation": literal(rotation),
+                    "fill": literal(
+                        201 if mode == "L" else [37, 211, 89]
+                        if mode == "RGB"
+                        else [37, 211]
+                    ),
+                    "outline": literal(
+                        73 if mode == "L" else [255, 255, 255]
+                        if mode == "RGB"
+                        else [255, 255]
+                    ),
+                },
+            }
+            for index, (circle, n_sides, rotation) in enumerate(
+                (
+                    ([12, 12, 9], 3, 0),
+                    ([[12, 12], 8], 4, 15),
+                    ([12, 12, 7], 5, 30),
+                    ([10, 13, 10], 7, -20),
+                    ([14, 10, 6], 8, 400),
+                )
+            )
+            for mode in ("L", "RGB", "LA")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "bitmap",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-draw-bitmap-{canvas_mode.lower()}-{bitmap_mode.lower()}-{index}-{mask_index}",
+                "mode": canvas_mode,
+                "size": [24, 24],
+                "bitmap_mode": bitmap_mode,
+                "bitmap_color": bitmap_color,
+                "observe_receiver": True,
+                "values": {
+                    "xy": literal(xy),
+                    "fill": literal(fill),
+                },
+            }
+            for index, (canvas_mode, fill) in enumerate(
+                (
+                    ("RGB", [211, 37, 89]),
+                    ("RGBA", [211, 37, 89, 173]),
+                    ("L", 211),
+                    ("LA", [211, 173]),
+                    ("P", 37),
+                )
+            )
+            for mask_index, (bitmap_mode, bitmap_color, xy) in enumerate(
+                (
+                ("1", 1, [0, 0]),
+                ("L", 128, [2, 3]),
+                ("RGBA", 255, [-3, 4]),
+                ("RGBa", [16, 32, 64, 128], [5, -2]),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageDraw.ImageDraw",
+                "operation": "shape",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-draw-shape-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [24, 24],
+                "outline_curve": curve,
+                "observe_receiver": True,
+                "values": {
+                    "fill": literal(fill),
+                    "outline": literal(outline),
+                },
+            }
+            for index, (mode, curve, fill, outline) in enumerate(
+                (
+                    ("RGB", False, [211, 37, 89], [255, 255, 255]),
+                    ("RGB", True, [37, 211, 89], [255, 255, 255]),
+                    ("RGBA", False, [211, 37, 89, 173], [255, 255, 255, 255]),
+                    ("RGBA", True, [37, 211, 89, 173], [255, 255, 255, 255, 255]),
+                    ("LA", False, [211, 173], [73, 255]),
+                    ("LA", True, [37, 211], [255, 255]),
+                    ("L", False, 201, 73),
+                    ("P", False, 37, 73),
+                    ("I", False, 201, 73),
+                    ("F", True, 201.5, 73.5),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14v: exercise the remaining public geometry
+        # decisions in the native draw implementation.  The helper keeps the
+        # 100-case matrix input-driven and materializes the mutated receiver;
+        # it does not add expected pixels, hashes, or coverage metadata.
+        *(draw_geometry_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14k: exercise the public geometry paths at
+        # material sizes so their maintained parallel/tiled branches are
+        # reached by ordinary Pillow inputs.  The affine, transpose, rotate,
+        # thumbnail, and crop cases all observe their result through the
+        # public receiver; no expected bytes or coverage metadata are authored
+        # here.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.resample",
+                "name": f"coverage-batch-geometry-affine-large-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [512, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([512, 512]),
+                    "method": literal(0),
+                    "data": literal(matrix),
+                    "resample": literal(resample),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (matrix, resample) in enumerate(
+                (
+                    ([1.0, 0.0, 0.0, 0.0, 1.0, 0.0], 0),
+                    ([1.0, 0.0, 3.0, 0.0, 1.0, 5.0], 0),
+                    ([0.75, 0.1, 4.0, -0.1, 0.75, 6.0], 0),
+                    ([1.2, 0.0, -8.0, 0.0, 1.2, -4.0], 2),
+                    ([0.5, 0.2, 2.0, -0.2, 0.5, 3.0], 0),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "parameter.method",
+                "name": f"coverage-batch-geometry-transpose-large-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [512, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"method": literal(method)},
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, method in enumerate((0, 1, 2, 3, 4))
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "rotate",
+                "requirement_suffix": "parameter.resample",
+                "name": f"coverage-batch-geometry-rotate-large-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [512, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "angle": literal(angle),
+                    "resample": literal(resample),
+                    "expand": literal(expand),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (angle, resample, expand) in enumerate(
+                (
+                    (13.5, 0, False),
+                    (33.5, 0, False),
+                    (90.0, 0, False),
+                    (270.0, 0, False),
+                    (123.25, 2, True),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "parameter.resample",
+                "name": f"coverage-batch-geometry-thumbnail-large-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [1024, 768],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_receiver": True,
+                "values": {
+                    "size": literal(target_size),
+                    "resample": literal(resample),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (target_size, resample) in enumerate(
+                (
+                    ([256, 256], 0),
+                    ([256, 256], 2),
+                    ([128, 256], 3),
+                    ([63, 47], 4),
+                    ([32, 128], 2),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-geometry-crop-large-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": list(source_size),
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"box": literal(box)},
+            }
+            for index, (source_size, box) in enumerate(
+                (
+                    ([1024, 1024], [0, 0, 1024, 1024]),
+                    ([1024, 1025], [0, 0, 1024, 1025]),
+                    ([1025, 1024], [0, 0, 1025, 1024]),
+                    ([1024, 1030], [0, 0, 1024, 1030]),
+                    ([1030, 1024], [0, 0, 1030, 1024]),
+                )
+            )
+            for mode, pixel in (
+                ("RGBA", [180, 120, 60, 128]),
+                ("RGB", [180, 120, 60]),
+                ("LA", [180, 128]),
+                ("L", 180),
+            )
+        ),
+        # Coverage batch 2026-08-14l: materialize every public ImageChops
+        # family on frames large enough to cross the maintained row-parallel
+        # threshold.  These are ordinary Pillow inputs; the larger frame is
+        # intentional because the small existing corpus cannot enter those
+        # branches.  The second binary slice varies the frame shape while
+        # keeping the same operation family in one batch.
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-chops-large-{operation}-{mode.lower()}",
+                "mode": mode,
+                "size": [520, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for operation in (
+                "add",
+                "subtract",
+                "multiply",
+                "screen",
+                "darker",
+                "lighter",
+                "difference",
+                "overlay",
+                "hard_light",
+                "soft_light",
+                "add_modulo",
+                "subtract_modulo",
+            )
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-chops-large-wide-{operation}-{mode.lower()}",
+                "mode": mode,
+                "size": [513, 520],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for operation in (
+                "add",
+                "subtract",
+                "multiply",
+                "screen",
+                "darker",
+                "lighter",
+            )
+            for mode, pixel in (
+                ("L", 37),
+                ("LA", [37, 211]),
+                ("RGB", [37, 211, 89]),
+                ("RGBA", [37, 211, 89, 173]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-chops-large-{operation}",
+                "mode": "1",
+                "size": [520, 512],
+                "edge": "nonzero-pixel",
+                "pixel": 1,
+                "observe_result": "tobytes",
+            }
+            for operation in ("logical_and", "logical_or", "logical_xor")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-chops-large-{operation}-{mode.lower()}",
+                "mode": mode,
+                "size": [520, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for operation in ("blend", "composite", "constant", "duplicate", "offset", "invert")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-chops-large-blend-alpha-high",
+            "mode": "RGB",
+            "size": [520, 512],
+            "edge": "nonzero-pixel",
+            "pixel": [37, 211, 89],
+            "values": {"alpha": literal(1.5)},
+            "observe_result": "tobytes",
+        },
+        # Coverage batch 2026-08-14m: materialize all ImageEnhance classes on
+        # a frame large enough to enter their maintained row-processing path.
+        # Sharpness is included explicitly because its constructor coverage
+        # does not prove the deferred filter/blend implementation executed.
+        *(
+            {
+                "surface": f"PIL.ImageEnhance.{class_name}",
+                "operation": "enhance",
+                "requirement_suffix": "parameter.factor",
+                "name": (
+                    f"coverage-batch-enhance-large-{class_name.lower()}-"
+                    f"{mode.lower()}-{index}"
+                ),
+                "mode": mode,
+                "size": [520, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"factor": literal(factor)},
+                "observe_result": "tobytes",
+            }
+            for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("CMYK", [16, 32, 48, 64]),
+            )
+            for index, factor in enumerate((0.0, 0.5, 1.0, 1.5, 2.0))
+        ),
+        # Coverage batch 2026-08-14n: drive the public statistics endpoints
+        # with every maintained unsigned-16-bit byte order.  Image.new("I;16*")
+        # and frombytes("I;16*") retain L16 storage, so these cases reach the
+        # input-driven typed branches in ImageStat and getextrema.  Histogram
+        # remains included to keep the public I;16 contract exercised through
+        # its dedicated 256-bin path.  The bytes and expected observations are
+        # generated from the declarative pattern helper; no oracle data is
+        # embedded here.
+        *(
+            {
+                "surface": "PIL.ImageStat.Stat",
+                "operation": "extrema",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-stat-i16-{prefix}-pattern-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+            }
+            for prefix in (
+                "i16-frombytes",
+                "i16n-frombytes",
+                "i16l-frombytes",
+                "i16b-frombytes",
+            )
+            for pattern in range(10)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getextrema",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-getextrema-i16-{prefix}-pattern-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+            }
+            for prefix in (
+                "i16-frombytes",
+                "i16n-frombytes",
+                "i16l-frombytes",
+                "i16b-frombytes",
+            )
+            for pattern in range(10)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "histogram",
+                "requirement_suffix": "mode.i16",
+                "name": f"coverage-batch-histogram-i16-{prefix}-pattern-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+            }
+            for prefix in (
+                "i16-frombytes",
+                "i16n-frombytes",
+                "i16l-frombytes",
+                "i16b-frombytes",
+            )
+            for pattern in range(5)
+        ),
+        # Coverage batch 2026-08-14o: exercise the public reduce contract on
+        # both the no-box and valid-box paths.  The scalar factors and crop
+        # boxes are all valid Pillow inputs; each result is materialized so the
+        # deferred reduce and crop operations are measured by the managed
+        # coverage lane without authoring output or denominator data.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "parameter.factor",
+                "name": f"coverage-batch-reduce-scalar-v2-{mode.lower()}-{factor}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"factor": literal(factor)},
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for factor in range(1, 11)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "parameter.box",
+                "name": f"coverage-batch-reduce-box-v2-{mode.lower()}-{index}",
+                "mode": mode,
+                "scenario_size": [16, 16],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "factor": literal([2, 2]),
+                    "box": literal(box),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for index, box in enumerate(
+                (
+                    [0, 0, 16, 16],
+                    [1, 1, 15, 15],
+                    [0, 0, 12, 16],
+                    [2, 0, 16, 12],
+                    [0, 2, 14, 16],
+                    [3, 3, 13, 13],
+                    [0, 4, 16, 12],
+                    [4, 0, 12, 16],
+                    [1, 0, 15, 8],
+                    [0, 1, 8, 15],
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14p: exercise the remaining successful public
+        # transform input families in one lazy graph per case.  The fillcolor
+        # values use Pillow-accepted scalar, tuple, and named-color forms for
+        # each mode; the perspective, quad, and mesh coefficients are all
+        # well-formed public data.  Results are materialized through the
+        # declarative harness, so no expected bytes or coverage metadata are
+        # authored here.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.fillcolor",
+                "name": f"coverage-batch-transform-fill-v2-{mode.lower()}-{index}",
+                "mode": mode,
+                "scenario_size": [8, 8],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(0),
+                    "data": literal([1, 0, 0, 0, 1, 0]),
+                    "resample": literal(0),
+                    "fillcolor": literal(fill),
+                },
+            }
+            for mode, pixel, fills in (
+                (
+                    "L",
+                    173,
+                    (0, [1], "black", 17, [31], "white", 64, [95], "red", 128),
+                ),
+                (
+                    "LA",
+                    [173, 127],
+                    (0, [1], [17, 31], "black", 64, [95], "white", [128, 200], "red", [240, 12]),
+                ),
+                (
+                    "RGB",
+                    [17, 83, 149],
+                    (0, [1], [17, 31, 47], "black", 64, [95, 127, 159], "white", [128, 200, 240], "red", 240),
+                ),
+                (
+                    "RGBA",
+                    [17, 83, 149, 127],
+                    (0, [1], [17, 31, 47], [17, 31, 47, 63], "black", 64, [95, 127, 159], [128, 200, 240, 255], "red", [240, 12, 34, 128]),
+                ),
+                (
+                    "P",
+                    3,
+                    (0, [1], "black", 3, [17], "white", 64, [95], "red", 128),
+                ),
+            )
+            for index, fill in enumerate(fills)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-perspective-v2-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [8, 8],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(2),
+                    "data": literal([1, 0, 0, 0, 1, 0, 0, 0]),
+                    "resample": literal(0),
+                    "fillcolor": literal(fill),
+                },
+            }
+            for pattern, (mode, pixel, fill) in enumerate(
+                (
+                    ("L", 173, 0),
+                    ("L", 97, [17]),
+                    ("LA", [173, 127], [17, 31]),
+                    ("LA", [97, 211], "black"),
+                    ("RGB", [17, 83, 149], [7, 8, 9]),
+                    ("RGB", [97, 53, 211], "white"),
+                    ("RGBA", [17, 83, 149, 127], [7, 8, 9, 10]),
+                    ("RGBA", [97, 53, 211, 191], "red"),
+                    ("P", 3, 7),
+                    ("P", 11, [13]),
+                    ("L", 31, "red"),
+                    ("LA", [31, 61], [41]),
+                    ("RGB", [31, 61, 91], 31),
+                    ("RGBA", [31, 61, 91, 121], [41, 51, 61]),
+                    ("P", 19, "white"),
+                    ("L", 211, [221]),
+                    ("LA", [211, 181], [221, 231]),
+                    ("RGB", [211, 181, 151], [221, 231, 241]),
+                    ("RGBA", [211, 181, 151, 121], [221, 231, 241, 251]),
+                    ("P", 23, [29]),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-quad-v2-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [8, 8],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(3),
+                    "data": literal(
+                        [
+                            0,
+                            0,
+                            8,
+                            0,
+                            8,
+                            8,
+                            0,
+                            8,
+                        ]
+                    ),
+                    "resample": literal(0),
+                    "fillcolor": literal(fill),
+                },
+            }
+            for pattern, (mode, pixel, fill) in enumerate(
+                (
+                    ("L", 173, 0),
+                    ("L", 97, [17]),
+                    ("LA", [173, 127], [17, 31]),
+                    ("LA", [97, 211], "black"),
+                    ("RGB", [17, 83, 149], [7, 8, 9]),
+                    ("RGB", [97, 53, 211], "white"),
+                    ("RGBA", [17, 83, 149, 127], [7, 8, 9, 10]),
+                    ("RGBA", [97, 53, 211, 191], "red"),
+                    ("P", 3, 7),
+                    ("P", 11, [13]),
+                    ("L", 31, "red"),
+                    ("LA", [31, 61], [41]),
+                    ("RGB", [31, 61, 91], 31),
+                    ("RGBA", [31, 61, 91, 121], [41, 51, 61]),
+                    ("P", 19, "white"),
+                    ("L", 211, [221]),
+                    ("LA", [211, 181], [221, 231]),
+                    ("RGB", [211, 181, 151], [221, 231, 241]),
+                    ("RGBA", [211, 181, 151, 121], [221, 231, 241, 251]),
+                    ("P", 23, [29]),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transform",
+                "requirement_suffix": "parameter.data",
+                "name": f"coverage-batch-transform-mesh-v2-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [8, 8],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal([8, 8]),
+                    "method": literal(4),
+                    "data": literal(mesh),
+                    "resample": literal(0),
+                    "fillcolor": literal(fill),
+                },
+            }
+            for pattern, (mode, pixel, fill, mesh) in enumerate(
+                (
+                    ("L", 173, 0, [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("L", 97, [17], [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("RGBA", [173, 127, 31, 255], [17, 31, 47, 63], [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("RGBA", [97, 211, 151, 191], "black", [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("RGB", [17, 83, 149], [7, 8, 9], [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("RGB", [97, 53, 211], "white", [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("RGBA", [17, 83, 149, 127], [7, 8, 9, 10], [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("RGBA", [97, 53, 211, 191], "red", [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("P", 3, 7, [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                    ("P", 11, [13], [[[0, 0, 8, 8], [0, 0, 8, 0, 8, 8, 0, 8]]]),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14q: exercise the valid small-frame ImageChops
+        # path.  Existing large-frame cases intentionally cross the maintained
+        # row-parallel threshold; these 8x8 frames keep the same public binary
+        # operations on the serial row path and observe each result through
+        # tobytes.  The final four cases cover small unary/offset operations in
+        # the same process without authoring expected bytes.
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-chops-small-{operation}-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "size": [8, 8],
+                "edge": "nonzero-pixel",
+                "pixel": (
+                    (base_pixel + pattern * 19) % 256
+                    if mode == "L"
+                    else [
+                        (component + pattern * (19 + channel * 7)) % 256
+                        for channel, component in enumerate(base_pixel)
+                    ]
+                ),
+                "observe_result": "tobytes",
+            }
+            for operation in (
+                "add",
+                "subtract",
+                "multiply",
+                "screen",
+                "darker",
+                "lighter",
+                "difference",
+                "overlay",
+                "hard_light",
+                "soft_light",
+                "add_modulo",
+                "subtract_modulo",
+            )
+            for pattern in range(2)
+            for mode, base_pixel in (
+                ("L", 37),
+                ("LA", [37, 211]),
+                ("RGB", [37, 211, 89]),
+                ("RGBA", [37, 211, 89, 173]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-chops-small-unary-{operation}-{index}",
+                "mode": mode,
+                "size": [8, 8],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": (
+                    {"value": literal(17)}
+                    if operation == "constant"
+                    else {"xoffset": literal(1), "yoffset": literal(-1)}
+                    if operation == "offset"
+                    else {}
+                ),
+            }
+            for index, (operation, mode, pixel) in enumerate(
+                (
+                    ("constant", "L", 37),
+                    ("duplicate", "RGB", [37, 211, 89]),
+                    ("invert", "RGBA", [37, 211, 89, 173]),
+                    ("offset", "LA", [37, 211]),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14r: exercise the public LA getbbox path
+        # with a non-zero luma component while alpha_only remains false. The
+        # existing LA cases are alpha-only or zero-luma inputs, so they do not
+        # evaluate the second operand of the native `luma != 0 || alpha != 0`
+        # predicate. Every case is a valid Image.new/getbbox workflow and
+        # varies both dimensions and pixel values so the declarative generator
+        # retains all 100 signatures.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getbbox",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-getbbox-la-luma-nonzero-{pattern}",
+                "mode": "LA",
+                "size": [8 + pattern % 4, 8 + (pattern // 4) % 4],
+                "edge": "nonzero-pixel",
+                "pixel": [
+                    1 + (pattern * 37) % 254,
+                    1 + (pattern * 53) % 254,
+                ],
+                "values": {"alpha_only": literal(False)},
+                "observe_result": "tobytes",
+            }
+            for pattern in range(100)
+        ),
+        # Coverage batch 2026-08-14s: exercise the public ImageOps.crop
+        # oversized-border error contract. The existing border-8 case is the
+        # valid exact-half-size boundary and therefore returns an empty image;
+        # these inputs are the adjacent public invalid range. Keep the values
+        # distinct so the generator retains all 100 cases and let both
+        # implementations produce the error result.
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "crop",
+                "requirement_suffix": "parameter.border",
+                "name": f"coverage-batch-crop-oversized-border-{border}",
+                "mode": "RGB",
+                "size": [16, 16],
+                "values": {"border": literal(border)},
+            }
+            for border in range(9, 109)
+        ),
+        # Coverage batch 2026-08-14t: exercise the maintained row-parallel
+        # paths with public ImageOps inputs at the 512×512 threshold. The
+        # existing large workloads are benchmark-only, so they must not be
+        # treated as coverage evidence. Keep this as one mixed operation batch
+        # so all cases execute through one parity process per backend.
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-imageops-parallel-{operation}-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "size": [512, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": values,
+            }
+            for pattern in range(100)
+            for operation, mode, pixel, values in (
+                (
+                    "autocontrast",
+                    "L",
+                    (17 + pattern * 7) % 256,
+                    {"cutoff": literal((pattern % 10) * 2)},
+                )
+                if pattern % 10 == 0
+                else (
+                    "autocontrast",
+                    "RGB",
+                    [
+                        (17 + pattern * 7) % 256,
+                        (83 + pattern * 11) % 256,
+                        (149 + pattern * 13) % 256,
+                    ],
+                    {"cutoff": literal((pattern % 10) * 2)},
+                )
+                if pattern % 10 == 1
+                else (
+                    "equalize",
+                    "L",
+                    (17 + pattern * 7) % 256,
+                    {},
+                )
+                if pattern % 10 == 2
+                else (
+                    "equalize",
+                    "RGB",
+                    [
+                        (17 + pattern * 7) % 256,
+                        (83 + pattern * 11) % 256,
+                        (149 + pattern * 13) % 256,
+                    ],
+                    {},
+                )
+                if pattern % 10 == 3
+                else (
+                    "invert",
+                    "L",
+                    (17 + pattern * 7) % 256,
+                    {},
+                )
+                if pattern % 10 == 4
+                else (
+                    "posterize",
+                    "RGB",
+                    [
+                        (17 + pattern * 7) % 256,
+                        (83 + pattern * 11) % 256,
+                        (149 + pattern * 13) % 256,
+                    ],
+                    {"bits": literal(1 + pattern % 8)},
+                )
+                if pattern % 10 == 5
+                else (
+                    "solarize",
+                    "L",
+                    (17 + pattern * 7) % 256,
+                    {"threshold": literal((pattern % 10) * 28)},
+                )
+                if pattern % 10 == 6
+                else (
+                    "pad",
+                    "RGB",
+                    [
+                        (17 + pattern * 7) % 256,
+                        (83 + pattern * 11) % 256,
+                        (149 + pattern * 13) % 256,
+                    ],
+                    {"size": literal([768, 512] if pattern % 2 == 0 else [512, 768])},
+                )
+                if pattern % 10 == 7
+                else (
+                    "pad",
+                    "RGBA",
+                    [
+                        (17 + pattern * 7) % 256,
+                        (83 + pattern * 11) % 256,
+                        (149 + pattern * 13) % 256,
+                        127,
+                    ],
+                    {"size": literal([768, 512] if pattern % 2 == 0 else [512, 768])},
+                )
+                if pattern % 10 == 8
+                else (
+                    "expand",
+                    "RGB",
+                    [
+                        (17 + pattern * 7) % 256,
+                        (83 + pattern * 11) % 256,
+                        (149 + pattern * 13) % 256,
+                    ],
+                    {"border": literal(1 + pattern % 3)},
+                ),
+            )
+        ),
+        # Coverage batch 2026-08-14u: exercise every public ImageOps geometry
+        # endpoint through indexed P/PA inputs. These are valid palette-index
+        # and palette-alpha workflows, not synthetic native probes. Keep the
+        # matrix at exactly 100 cases so generated input retention remains
+        # observable after deduplication and coverage selection.
+        *(packed_imageops_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14v: exercise the public resize vertical
+        # transpose path with native L/LA/RGB/RGBA samples and every
+        # convolution filter that the public API accepts. The source/output
+        # dimensions cross the maintained 512x512 decision boundary while
+        # keeping the result narrow, so the batch stays bounded and still
+        # observes the complete lazy resize pipeline through tobytes.
+        *(transposed_resize_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14w: exercise the public SIMD native-byte
+        # convolution rows. Width 513 observes both vector blocks and the
+        # scalar tail while the 513x9 frame stays bounded for parity runs.
+        *(native_convolution_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14x: exercise the public equalize histogram
+        # CDF/LUT path with enough valid L samples for step > 0. The existing
+        # cases retain the identity-LUT behavior; these 100 noise-filled
+        # frombytes workflows add the reachable non-identity branch.
+        *(equalize_histogram_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14y: exercise valid quantizer distributions
+        # across median-cut, MAXCOVERAGE, and FASTOCTREE RGB/RGBA paths.
+        *(quantize_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14aa: exercise non-uniform public terminal
+        # analysis inputs across every maintained source mode. The generator
+        # writes only public pixels and masks; returned extrema, histograms,
+        # and bounding boxes remain parity observations.
+        *(analysis_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14z: exercise non-uniform public conversion
+        # inputs across the byte, palette, CMYK, HSV/YCbCr, integer, and float
+        # source families. The samples are created through maintained public
+        # Image APIs; parity remains the only oracle for the observed result.
+        *(convert_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ab: exercise the public array-interface
+        # decoder across scalar dtypes and Pillow-compatible RGB/RGBA layouts.
+        # Payloads are generated bytes, not expected-output fixtures.
+        *(fromarray_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ac: exercise the public paste input matrix
+        # across scalar, tuple, string, image, and masked sources for every
+        # maintained native destination mode.
+        *(paste_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ad: exercise reachable public transform
+        # fill coercions, typed named colors, resampling errors, empty meshes,
+        # and extent transforms through one declarative 100-case matrix.
+        *(transform_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ae: exercise expanded public point LUTs
+        # across the native one-, two-, three-, and four-band mode families.
+        *(point_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14af: exercise public ImageOps color,
+        # centering, geometry, and mode-contract normalization paths.
+        *(imageops_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14am: exercise the remaining public ImageOps
+        # contract branches: typed color coercions, centering/method errors,
+        # unsupported modes, optional mask validation, and palette/typed
+        # geometry success paths. Keep this as exactly 100 retained cases.
+        *(imageops_contract_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ar: exercise the reachable public
+        # ImageOps.posterize mode-P NotImplementedError branch with exactly
+        # 100 valid palette images and bit-depth inputs.
+        *(imageops_posterize_palette_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14as: exercise the remaining public
+        # ImageOps.pad zero-dimension short-circuit sides with exactly 100
+        # valid source/target dimension inputs.
+        *(imageops_pad_zero_dimension_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ag: exercise reachable ImageOps cutoff,
+        # empty-source expand, and scale resampling error paths.
+        *(imageops_edge_spec(pattern) for pattern in range(10)),
+        # Coverage batch 2026-08-14ah: exercise the public encoded-image EXIF
+        # path where Orientation is valid but a later advertised IFD entry is
+        # truncated. These are real JPEG inputs and do not call parser APIs.
+        *(exif_boundary_spec(pattern) for pattern in range(10)),
+        # Coverage batch 2026-08-14at: retain one valid non-Orientation IFD0
+        # entry while the next advertised entry is truncated. These 100
+        # encoded JPEG workflows exercise the public serializer loop without
+        # invoking the EXIF parser as a unit test.
+        *(exif_retained_entry_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ai: exercise Pillow's public IndexError for
+        # an empty ImageOps.pad centering sequence across native image modes.
+        *(imageops_centering_edge_spec(pattern) for pattern in range(10)),
+        # Coverage batch 2026-08-14aj: force the public module effects to
+        # materialize their lazy pipelines across native mode families.  The
+        # exact 100-case count is retained by the generated input audit.
+        *(effects_materialization_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14au: exercise the public empty-image early
+        # return shared by alpha_composite, blend, and merge.  Inputs are
+        # valid zero-width/zero-height images, and the result is observed
+        # through tobytes so the lazy operation is actually evaluated.
+        *(effects_zero_dimension_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-14ak: exercise the active public ImageChops
+        # binary early-return path with valid equal zero dimensions. The
+        # legacy Blend/Composite dispatch is intentionally not targeted.
+        *(chops_empty_dimension_spec(pattern) for pattern in range(103)),
+        # Coverage batch 2026-08-14al: materialize the reachable public
+        # generator facades. The exact 100-case matrix varies valid modes,
+        # dimensions, sigma values, and iteration quality without targeting
+        # legacy compute entries that have no public constructor.
+        *(public_generator_materialization_spec(pattern) for pattern in range(100)),
         {
             "surface": "PIL.Image.Image",
             "operation": "entropy",
@@ -15270,6 +25328,17 @@ def build_nuanced_cases(
                 "name": "valid-first-invalid-second-mode",
                 "mode": "1",
                 "edge": "chops-logical-second-invalid",
+            }
+            for operation in ("logical_and", "logical_or", "logical_xor")
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": "invalid-first-valid-second-mode",
+                "mode": "1",
+                "edge": "chops-logical-first-invalid",
             }
             for operation in ("logical_and", "logical_or", "logical_xor")
         ),
@@ -18206,6 +28275,16 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "filter",
+            "requirement_suffix": "behavior.default",
+            "name": "f-mode-large-rank-filter",
+            "mode": "F",
+            "size": [9, 9],
+            "chain": "filter-f-mode-large-rank",
+            "observe_result": "tobytes",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
             "requirement_suffix": "mode.la",
             "name": "la-max-filter-simd-alpha",
             "mode": "LA",
@@ -18707,6 +28786,20 @@ def build_nuanced_cases(
             "seed": 2,
             "values": {
                 "colors": literal(4),
+                "method": literal(1),
+                "kmeans": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": "maxcoverage-single-color",
+            "mode": "RGB",
+            "edge": "uniform-fill",
+            "pixel": [10, 20, 30],
+            "values": {
+                "colors": literal(16),
                 "method": literal(1),
                 "kmeans": literal(0),
             },
@@ -19574,6 +29667,124 @@ def build_nuanced_cases(
             "values": {
                 "xy": literal([0, 0]),
                 "value": literal([0x1234]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16-frombytes-scalar",
+            "scenario_inline_image": "i16-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(0x1234),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16-frombytes-singleton-tuple",
+            "scenario_inline_image": "i16-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([0x1234]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16n-frombytes-scalar",
+            "scenario_inline_image": "i16n-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(0x1234),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16n-frombytes-singleton-tuple",
+            "scenario_inline_image": "i16n-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([0x1234]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16l-frombytes-scalar",
+            "scenario_inline_image": "i16l-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(0x1234),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16l-frombytes-singleton-tuple",
+            "scenario_inline_image": "i16l-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([0x1234]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16b-frombytes-scalar",
+            "scenario_inline_image": "i16b-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal(0x1234),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16b-frombytes-singleton-tuple",
+            "scenario_inline_image": "i16b-frombytes",
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0]),
+                "value": literal([0x1234]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16-frombytes-x-out-of-bounds",
+            "scenario_inline_image": "i16-frombytes",
+            "values": {
+                "xy": literal([2, 0]),
+                "value": literal(1),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putpixel",
+            "requirement_suffix": "behavior.default",
+            "name": "i16-frombytes-y-out-of-bounds",
+            "scenario_inline_image": "i16-frombytes",
+            "values": {
+                "xy": literal([0, 2]),
+                "value": literal(1),
             },
         },
         {
@@ -20758,6 +30969,17 @@ def build_nuanced_cases(
             "name": "named-rgba-alpha",
             "mode": "RGBA",
             "values": {"channel": literal("A")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "getchannel",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-green-nonzero",
+            "mode": "RGBA",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30, 40],
+            "observe_result": "tobytes",
+            "values": {"channel": literal(1)},
         },
         {
             "surface": "PIL.Image.Image",
@@ -23497,6 +33719,30 @@ def build_nuanced_cases(
                 "color": literal(None),
             },
         },
+        *(
+            {
+                "surface": "PIL.Image",
+                "operation": "new",
+                "requirement_suffix": "parameter.size",
+                "name": name,
+                "values": {
+                    "mode": literal(mode),
+                    "size": literal(size),
+                },
+            }
+            for name, mode, size in (
+                ("zero-width-rgb", "RGB", [0, 2]),
+                ("zero-height-rgb", "RGB", [2, 0]),
+                ("zero-both-l", "L", [0, 0]),
+                ("zero-width-rgba", "RGBA", [0, 2]),
+                ("zero-height-la", "LA", [2, 0]),
+                ("zero-width-p", "P", [0, 2]),
+                ("zero-height-i", "I", [2, 0]),
+                ("zero-width-f", "F", [0, 2]),
+                ("zero-height-cmyk", "CMYK", [2, 0]),
+                ("zero-width-one", "1", [0, 2]),
+            )
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "paste",
@@ -24420,7 +34666,1423 @@ def build_nuanced_cases(
                 "data": literal([float("nan")]),
             },
         },
+        # Coverage batch 2026-08-11: materialize public image-operation
+        # results that otherwise remain deferred after the endpoint call.
+        # These are input-only parity workflows; no expected output is stored.
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "blend",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"alpha": literal(0.5)},
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "blend",
+                "requirement_suffix": "parameter.alpha",
+                "name": f"coverage-batch-high-low-alpha-{str(alpha).replace('.', '_').replace('-', 'n')}",
+                "mode": "RGB",
+                "edge": "chops-binary-high-low",
+                "pixel": [200, 100, 50],
+                "observe_result": "tobytes",
+                "values": {"alpha": literal(alpha)},
+            }
+            for alpha in (0.0, 1.0, 1.5)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "composite",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{operation}-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for operation in ("overlay", "hard_light", "soft_light")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": "invert",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{operation}-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for operation in (
+                "add_modulo",
+                "subtract_modulo",
+                "multiply",
+                "screen",
+                "difference",
+            )
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{operation}-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"scale": literal(2), "offset": literal(1)},
+            }
+            for operation in ("add", "subtract")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": f"PIL.ImageEnhance.{class_name}",
+                "operation": "enhance",
+                "requirement_suffix": "parameter.factor",
+                "name": f"coverage-batch-materialized-{class_name.lower()}-{mode.lower()}-{str(factor).replace('.', '_')}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"factor": literal(factor)},
+                "observe_result": "tobytes",
+            }
+            for class_name in ("Brightness", "Color", "Contrast")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("CMYK", [16, 32, 48, 64]),
+            )
+            for factor in (0.0, 1.5)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{source.lower()}-to-{target.lower()}",
+                "mode": source,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"mode": literal(target)},
+            }
+            for source, pixel, target in (
+                ("RGB", [180, 120, 60], "LA"),
+                ("RGBA", [180, 120, 60, 128], "LA"),
+                ("L", 180, "LA"),
+                ("CMYK", [16, 32, 48, 64], "LA"),
+                ("RGB", [180, 120, 60], "1"),
+                ("CMYK", [16, 32, 48, 64], "1"),
+                ("L", 180, "1"),
+                ("RGBA", [180, 120, 60, 128], "1"),
+                ("RGB", [180, 120, 60], "P"),
+                ("L", 180, "P"),
+                ("P", 180, "I"),
+                ("P", 180, "F"),
+                ("CMYK", [16, 32, 48, 64], "I"),
+                ("CMYK", [16, 32, 48, 64], "F"),
+                ("L", 180, "CMYK"),
+                ("LA", [180, 128], "CMYK"),
+                ("RGB", [180, 120, 60], "CMYK"),
+                ("1", 1, "CMYK"),
+                ("RGB", [180, 120, 60], "HSV"),
+                ("HSV", [40, 220, 180], "RGB"),
+                ("RGB", [180, 120, 60], "YCbCr"),
+                ("YCbCr", [120, 160, 100], "RGB"),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "quantize",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}-{colors}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "colors": literal(colors),
+                    "method": literal(0),
+                    "kmeans": literal(0),
+                },
+            }
+            for mode, pixel, colors in (
+                ("RGB", [180, 120, 60], 4),
+                ("RGB", [180, 120, 60], 16),
+                ("RGB", [180, 120, 60], 256),
+                ("L", 180, 4),
+                ("L", 180, 16),
+                ("RGBA", [180, 120, 60, 128], 4),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "remap_palette",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-p-{index}",
+                "mode": "P",
+                "chain": "p-putpalette-pipeline-remap",
+                "observe_result": "tobytes",
+                "values": {"dest_map": literal(dest_map)},
+            }
+            for index, dest_map in enumerate(([0, 1], [1, 0], [3, 1, 0]))
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "getchannel",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}-{index}",
+                "mode": mode,
+                "values": {"channel": literal(index)},
+                "observe_result": "tobytes",
+            }
+            for mode, index in (("L", 0), ("LA", 1), ("RGB", 1), ("RGBA", 3), ("CMYK", 3))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "expand",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{mode.lower()}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"border": literal(2), "fill": literal(fill)},
+            }
+            for mode, pixel, fill in (
+                ("L", 180, 7),
+                ("LA", [180, 128], [7, 9]),
+                ("RGB", [180, 120, 60], [7, 9, 11]),
+                ("RGBA", [180, 120, 60, 128], [7, 9, 11, 64]),
+                ("P", 3, 7),
+                ("PA", [3, 128], 7),
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "pad",
+                "requirement_suffix": "parameter.size",
+                "name": f"coverage-batch-materialized-{mode.lower()}-{size[0]}x{size[1]}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal(size),
+                    "centering": literal([0.25, 0.75]),
+                },
+            }
+            for mode, pixel in (
+                ("P", 3),
+                ("PA", [3, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for size in ([20, 12], [12, 20])
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "parameter.size",
+                "name": f"coverage-batch-materialized-{operation}-{size[0]}x{size[1]}",
+                "mode": "RGB",
+                "edge": "nonzero-pixel",
+                "pixel": [180, 120, 60],
+                "observe_result": "tobytes",
+                "values": {"size": literal(size)},
+            }
+            for operation in ("contain", "cover", "fit")
+            for size in ([20, 12], [12, 20])
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "crop",
+                "requirement_suffix": "parameter.border",
+                "name": f"coverage-batch-materialized-border-{border}",
+                "mode": "RGB",
+                "edge": "nonzero-pixel",
+                "pixel": [180, 120, 60],
+                "observe_result": "tobytes",
+                "values": {"border": literal(border)},
+            }
+            for border in (0, 1, 7)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "colorize",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-materialized-{name}",
+                "mode": "L",
+                "edge": "nonzero-pixel",
+                "pixel": 180,
+                "observe_result": "tobytes",
+                "values": values,
+            }
+            for name, values in (
+                (
+                    "blackpoint-whitepoint",
+                    {
+                        "black": literal([10, 20, 30]),
+                        "white": literal([220, 230, 240]),
+                        "blackpoint": literal(32),
+                        "whitepoint": literal(224),
+                    },
+                ),
+                (
+                    "midpoint-negative-delta",
+                    {
+                        "black": literal([240, 220, 200]),
+                        "white": literal([20, 40, 60]),
+                        "mid": literal([128, 100, 80]),
+                        "blackpoint": literal(16),
+                        "midpoint": literal(128),
+                        "whitepoint": literal(240),
+                    },
+                ),
+                (
+                    "midpoint-low",
+                    {
+                        "black": literal("black"),
+                        "white": literal("white"),
+                        "mid": literal("blue"),
+                        "blackpoint": literal(0),
+                        "midpoint": literal(32),
+                        "whitepoint": literal(255),
+                    },
+                ),
+                (
+                    "midpoint-high",
+                    {
+                        "black": literal("white"),
+                        "white": literal("black"),
+                        "mid": literal("red"),
+                        "blackpoint": literal(64),
+                        "midpoint": literal(224),
+                        "whitepoint": literal(255),
+                    },
+                ),
+            )
+        ),
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-to-pa-unsupported-source",
+            "mode": "RGB",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "one-to-pa-unsupported-source",
+            "mode": "1",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "la-to-pa-unsupported-source",
+            "mode": "LA",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "rgba-to-pa-unsupported-source",
+            "mode": "RGBA",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "cmyk-to-pa-unsupported-source",
+            "mode": "CMYK",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "hsv-to-pa-unsupported-source",
+            "mode": "HSV",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "ycbcr-to-pa-unsupported-source",
+            "mode": "YCbCr",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "i-to-pa-unsupported-source",
+            "mode": "I",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "f-to-pa-unsupported-source",
+            "mode": "F",
+            "values": {"mode": literal("PA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "requirement_suffix": "behavior.default",
+            "name": "p-to-pa-unsupported-source",
+            "mode": "P",
+            "values": {"mode": literal("PA")},
+        },
     )
+
+    # Coverage batch 2026-08-11: keep the public CPU image pipeline moving
+    # through distinct mode, geometry, resampling, and conversion combinations.
+    # These are valid input-only workflows; they reuse existing requirements
+    # and deliberately do not add manifest entries, expected outputs, or
+    # coverage exclusions.
+    specs = specs + (
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-core-crop-{mode.lower()}-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"box": literal(box)},
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for index, box in enumerate(
+                (
+                    [0, 0, 15, 15],
+                    [1, 1, 14, 15],
+                    [2, 0, 16, 13],
+                    [0, 3, 12, 16],
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "requirement_suffix": "parameter.resample",
+                "name": f"coverage-batch-core-resize-{mode.lower()}-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "size": literal(size),
+                    "resample": literal(resample),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for index, (size, resample) in enumerate(
+                (
+                    ([7, 9], 0),
+                    ([17, 11], 2),
+                    ([5, 13], 3),
+                    ([19, 6], 4),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "rotate",
+                "requirement_suffix": "parameter.angle",
+                "name": f"coverage-batch-core-rotate-{mode.lower()}-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {
+                    "angle": literal(angle),
+                    "resample": literal(2),
+                    "expand": literal(expand),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for index, (angle, expand) in enumerate(
+                (
+                    (17.5, True),
+                    (17.5, False),
+                    (143.25, True),
+                    (143.25, False),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "parameter.method",
+                "name": f"coverage-batch-core-transpose-{mode.lower()}-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"method": literal(method)},
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for index, method in enumerate((0, 1, 2, 3))
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-core-convert-{source.lower()}-{index}",
+                "mode": source,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"mode": literal(target)},
+            }
+            for source, pixel, targets in (
+                (
+                    "L",
+                    180,
+                    ("RGB", "LA", "RGBA", "CMYK"),
+                ),
+                (
+                    "LA",
+                    [180, 128],
+                    ("L", "RGB", "RGBA", "CMYK"),
+                ),
+                (
+                    "RGB",
+                    [180, 120, 60],
+                    ("L", "LA", "RGBA", "CMYK"),
+                ),
+                (
+                    "RGBA",
+                    [180, 120, 60, 128],
+                    ("L", "LA", "RGB", "CMYK"),
+                ),
+                (
+                    "P",
+                    3,
+                    ("L", "RGB", "RGBA", "CMYK"),
+                ),
+            )
+            for index, target in enumerate(targets)
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-core-convert-extra-{source.lower()}-{index}",
+                "mode": source,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"mode": literal(target)},
+            }
+            for index, (source, pixel, target) in enumerate(
+                (
+                    ("CMYK", [16, 32, 48, 64], "RGB"),
+                    ("CMYK", [16, 32, 48, 64], "L"),
+                    ("CMYK", [16, 32, 48, 64], "LA"),
+                    ("CMYK", [16, 32, 48, 64], "RGBA"),
+                    ("HSV", [40, 220, 180], "RGB"),
+                    ("YCbCr", [120, 160, 100], "RGB"),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-core-convert-final-{source.lower()}-{index}",
+                "mode": source,
+                "size": [9, 7],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "observe_result": "tobytes",
+                "values": {"mode": literal(target)},
+            }
+            for index, (source, pixel, target) in enumerate(
+                (
+                    ("CMYK", [17, 31, 47, 63], "RGB"),
+                    ("HSV", [41, 219, 179], "LA"),
+                    ("YCbCr", [121, 159, 99], "L"),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-11: exercise the public thumbnail aspect
+        # selection and reducing-gap decisions across non-square source and
+        # target boxes.  These are valid input-only workflows and reuse the
+        # existing thumbnail requirement; no denominator or expected-output
+        # data is authored here.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "thumbnail",
+                "requirement_suffix": "parameter.resample",
+                "name": f"coverage-batch-thumbnail-{mode.lower()}-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "size": list(source_size),
+                "observe_receiver": True,
+                "values": {
+                    "size": literal(list(target_size)),
+                    "resample": literal(resample),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+                ("P", 3),
+            )
+            for index, (source_size, target_size, resample) in enumerate(
+                (
+                    ([17, 11], [7, 7], 0),
+                    ([17, 11], [7, 7], 2),
+                    ([17, 11], [7, 7], 3),
+                    ([17, 11], [7, 7], 4),
+                    ([19, 13], [11, 5], 0),
+                    ([19, 13], [11, 5], 2),
+                    ([19, 13], [11, 5], 3),
+                    ([19, 13], [11, 5], 4),
+                    ([23, 7], [5, 11], 0),
+                    ([23, 7], [5, 11], 2),
+                    ([23, 7], [5, 11], 3),
+                    ([23, 7], [5, 11], 4),
+                    ([31, 17], [4, 3], 0),
+                    ([31, 17], [4, 3], 2),
+                    ([31, 17], [4, 3], 3),
+                    ([31, 17], [4, 3], 4),
+                    ([9, 27], [7, 7], 0),
+                    ([9, 27], [7, 7], 2),
+                    ([9, 27], [7, 7], 3),
+                    ([9, 27], [7, 7], 4),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-11: exercise the public filter constructors
+        # with the supported L/LA/RGB/RGBA mode families and valid boundary
+        # parameters.  Each workflow is input-only; the maintained parity
+        # runner remains the oracle for the resulting pixels and errors.
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-{mode.lower()}-radius-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"radius": literal(radius)},
+            }
+            for filter_name in ("BoxBlur", "GaussianBlur")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, radius in enumerate((0, 1, 2, 4))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-{mode.lower()}-size-{size}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"size": literal(size)},
+            }
+            for filter_name in ("MaxFilter", "MinFilter", "MedianFilter", "ModeFilter")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for size in (1, 3, 5)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "RankFilter",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-rank-{mode.lower()}-size-{size}-rank-{rank}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {
+                    "size": literal(size),
+                    "rank": literal(rank),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for size, rank in ((1, 0), (3, 0), (3, 8), (5, 24), (9, 40))
+        ),
+        # Coverage batch 2026-08-13: drive the public large-window extrema
+        # path.  MaxFilter and MinFilter use the same valid Pillow endpoints,
+        # but the native-byte separable implementation is selected only for a
+        # window of at least 5x5 on a frame whose larger dimension exceeds
+        # 512.  Keep all four supported byte layouts and two aspect/height
+        # shapes so both horizontal and vertical replicated-edge work is
+        # observed through normal input-driven parity cases.
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": (
+                    f"coverage-batch-filter-large-extreme-"
+                    f"{filter_name.lower()}-{mode.lower()}-{index}"
+                ),
+                "mode": mode,
+                "size": list(size),
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"size": literal(5)},
+            }
+            for filter_name in ("MaxFilter", "MinFilter")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, size in enumerate(([513, 3], [513, 16]))
+        ),
+        # Coverage batch 2026-08-14: exercise the remaining public filter
+        # geometry combinations in one input-driven slice.  The first eight
+        # cases cross the maintained parallel blur transpose threshold; the
+        # next 32 cases force Pillow's radius-overlaps-both-edges recurrence;
+        # the rank and kernel cases cover narrow/tall valid images without
+        # introducing internal-only dimensions or synthetic oracle data.
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-large-blur-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [512, 512],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"radius": literal(2.0)},
+            }
+            for filter_name in ("BoxBlur", "GaussianBlur")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index in range(1)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-overlap-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [3, 3],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"radius": literal(radius)},
+            }
+            for filter_name in ("BoxBlur", "GaussianBlur")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, radius in enumerate((8, 16, 32, 64))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-edge-rank-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": image_size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": (
+                    {"size": literal(window), "rank": literal(rank)}
+                    if filter_name == "RankFilter"
+                    else {"size": literal(window)}
+                ),
+            }
+            for filter_name in ("MedianFilter", "RankFilter")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (image_size, window, rank) in enumerate(
+                (
+                    ([1, 9], 7, 24),
+                    ([9, 1], 9, 40),
+                    ([3, 11], 11, 60),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-edge-extreme-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": image_size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"size": literal(9)},
+            }
+            for filter_name in ("MaxFilter", "MinFilter")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, image_size in enumerate(([1, 9], [9, 1]))
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-edge-kernel-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": image_size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {
+                    "size": literal([3, 3]),
+                    "kernel": literal([0, 0, 0, 0, 1, 0, 0, 0, 0]),
+                },
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, image_size in enumerate(
+                ([1, 1], [1, 2], [2, 1], [2, 7], [7, 2])
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "UnsharpMask",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-unsharp-{mode.lower()}-{index}",
+                "mode": mode,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {
+                    "radius": literal(radius),
+                    "percent": literal(percent),
+                    "threshold": literal(threshold),
+                },
+            }
+            for index, (mode, pixel, radius, percent, threshold) in enumerate(
+                (
+                    ("L", 180, 0, 0, 0),
+                    ("LA", [180, 128], 1, 100, 0),
+                    ("RGB", [180, 120, 60], 2, 200, 10),
+                    ("RGBA", [180, 120, 60, 128], 3, 50, 128),
+                )
+            )
+        ),
+        # Coverage batch 2026-08-14b: the prior 3x3/high-radius inputs hit
+        # only the middle overlap loop because the radius consumed the whole
+        # line.  These ordinary public dimensions keep left, middle, and
+        # right overlap regions live while also covering the documented
+        # radius-zero no-op and the large byte rank implementations.
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-overlap-wide-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": image_size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"radius": literal(radius)},
+            }
+            for filter_name in ("BoxBlur", "GaussianBlur")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (image_size, radius) in enumerate(
+                (([9, 9], 4.0), ([15, 15], 7.0), ([21, 21], 10.0), ([12, 8], 5.0))
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-zero-radius-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": [7, 5],
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"radius": literal(0.0)},
+            }
+            for filter_name in ("BoxBlur", "GaussianBlur")
+            for index, (mode, pixel) in enumerate(
+                (
+                    ("L", 180),
+                    ("LA", [180, 128]),
+                    ("RGB", [180, 120, 60]),
+                    ("RGBA", [180, 120, 60, 128]),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-histogram-{filter_name.lower()}-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": image_size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": (
+                    {"size": literal(window), "rank": literal(rank)}
+                    if filter_name == "RankFilter"
+                    else {"size": literal(window)}
+                ),
+            }
+            for filter_name in ("MedianFilter", "RankFilter")
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (image_size, window, rank) in enumerate(
+                (
+                    ([17, 17], 9, 40),
+                    ([19, 13], 11, 60),
+                    ([23, 23], 9, 1),
+                    ([11, 25], 11, 100),
+                    ([31, 9], 9, 70),
+                    ([9, 31], 11, 5),
+                )
+            )
+        ),
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": "RankFilter",
+                "requirement_suffix": f"mode.{mode.lower()}",
+                "name": f"coverage-batch-filter-histogram-rankfilter-extra-{mode.lower()}-{index}",
+                "mode": mode,
+                "size": image_size,
+                "edge": "nonzero-pixel",
+                "pixel": pixel,
+                "values": {"size": literal(window), "rank": literal(rank)},
+            }
+            for mode, pixel in (
+                ("L", 180),
+                ("LA", [180, 128]),
+                ("RGB", [180, 120, 60]),
+                ("RGBA", [180, 120, 60, 128]),
+            )
+            for index, (image_size, window, rank) in enumerate(
+                (
+                    ([27, 15], 13, 84),
+                    ([15, 27], 15, 112),
+                    ([33, 11], 13, 1),
+                )
+            )
+        ),
+    )
+
+    # Coverage campaign 2026-08-14: exactly 100 deterministic, public-input
+    # candidates in ten families of ten.  These are deliberately expressed as
+    # ordinary fixture workflows so the campaign can measure SIMD routing and
+    # public reachability without adding native probes or expected outputs.
+    def simd_campaign_spec(
+        family: int,
+        case: int,
+        surface: str,
+        operation: str,
+        *,
+        mode: str,
+        size: list[int] | None = None,
+        pixel: Any | None = None,
+        values: dict[str, Any] | None = None,
+        edge: str = "nonzero-pixel",
+        inline_image: str | None = None,
+        seed: int | None = None,
+        requirement_suffix: str = "behavior.default",
+    ) -> dict[str, Any]:
+        spec: dict[str, Any] = {
+            "surface": surface,
+            "operation": operation,
+            "requirement_suffix": requirement_suffix,
+            "name": f"simd-cov-f{family:02d}-c{case:02d}",
+            "mode": mode,
+            "size": size or [3 + case, 2 + family],
+            "edge": edge,
+        }
+        if pixel is not None:
+            spec["pixel"] = pixel
+        if values:
+            spec["values"] = values
+        if inline_image is not None:
+            spec["scenario_inline_image"] = inline_image
+        if seed is not None:
+            spec["seed"] = seed
+        spec["observe_result"] = "tobytes"
+        return spec
+
+    simd_campaign_specs: list[dict[str, Any]] = []
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            1,
+            case,
+            "PIL.ImageOps",
+            operation,
+            mode=mode,
+            size=(
+                [15, 1]
+                if seed == 104
+                else [6, 1]
+                if seed == 105
+                else [3 + case, 1 + case % 3]
+            ),
+            pixel=pixel,
+            values=values,
+            edge=edge,
+            seed=seed,
+        )
+        for case, (operation, mode, pixel, values, edge, seed) in enumerate(
+            (
+                ("invert", "P", 3, None, "nonzero-pixel", None),
+                ("invert", "PA", [3, 191], None, "nonzero-pixel", None),
+                ("invert", "RGB", [17, 83, 149], None, "nonzero-pixel", None),
+                ("solarize", "L", 0, {"threshold": literal(128)}, "simd-campaign-pattern", 104),
+                ("solarize", "RGB", [0, 0, 0], {"threshold": literal(128)}, "simd-campaign-pattern", 105),
+                ("solarize", "RGB", [17, 83, 149], {"threshold": literal(127)}, "nonzero-pixel", None),
+                ("posterize", "P", 11, {"bits": literal(4)}, "nonzero-pixel", None),
+                ("posterize", "PA", [11, 191], {"bits": literal(7)}, "nonzero-pixel", None),
+                ("posterize", "RGB", [17, 83, 149], {"bits": literal(8)}, "nonzero-pixel", None),
+                ("posterize", "RGBA", [17, 83, 149, 127], {"bits": literal(1)}, "nonzero-pixel", None),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            2,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[4 + case, 2 + case % 3],
+            pixel=pixel,
+            values=values,
+            requirement_suffix=requirement_suffix,
+        )
+        for case, (surface, operation, mode, pixel, values, requirement_suffix) in enumerate(
+            (
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [16, 32, 48, 64], {"factor": literal(0.0)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [17, 33, 49, 65], {"factor": literal(0.5)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [18, 34, 50, 66], {"factor": literal(2.0)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "P", 7, {"factor": literal(0.75)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "PA", [7, 191], {"factor": literal(1.25)}, "parameter.factor"),
+                ("PIL.ImageOps", "flip", "P", 7, None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "PA", [7, 191], None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "CMYK", [17, 33, 49, 65], None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "I", 100001, None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "F", 12.5, None, "behavior.default"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            3,
+            case,
+            "PIL.ImageChops",
+            operation,
+            mode=mode,
+            size=[3 + case, 2 + case % 4],
+            pixel=pixel,
+        )
+        for case, (operation, mode, pixel) in enumerate(
+            (
+                ("invert", "P", 3),
+                ("invert", "PA", [3, 191]),
+                ("multiply", "RGB", [17, 83, 149]),
+                ("multiply", "LA", [17, 191]),
+                ("screen", "RGBA", [17, 83, 149, 127]),
+                ("lighter", "P", 7),
+                ("difference", "PA", [7, 191]),
+                ("multiply", "L", 37),
+                ("screen", "RGB", [37, 211, 89]),
+                ("difference", "RGBA", [37, 211, 89, 173]),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            4,
+            case,
+            "PIL.ImageChops",
+            operation,
+            mode=mode,
+            size=[3 + case, 2 + case % 4],
+            pixel=pixel,
+            edge=edge,
+        )
+        for case, (operation, mode, pixel, edge) in enumerate(
+            (
+                ("add_modulo", "L", 37, "nonzero-pixel"),
+                ("add_modulo", "LA", [37, 211], "nonzero-pixel"),
+                ("add_modulo", "RGBA", [37, 211, 89, 173], "nonzero-pixel"),
+                ("subtract_modulo", "P", 7, "nonzero-pixel"),
+                ("subtract_modulo", "PA", [7, 191], "nonzero-pixel"),
+                ("logical_and", "1", 1, "nonzero-pixel"),
+                ("logical_or", "1", 1, "nonzero-pixel"),
+                ("logical_xor", "1", 1, "nonzero-pixel"),
+                ("logical_and", "L", 1, "chops-logical-first-invalid"),
+                ("logical_or", "RGB", [17, 83, 149], "chops-logical-second-invalid"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            5,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+            values=values,
+            requirement_suffix=requirement_suffix,
+        )
+        for case, (surface, operation, mode, pixel, values, requirement_suffix) in enumerate(
+            (
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("1")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("LA")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("CMYK")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("YCbCr")}, "behavior.default"),
+                ("PIL.ImageOps", "solarize", "RGB", [17, 83, 149], {"threshold": literal(127)}, "behavior.default"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "LA", [17, 191], {"factor": literal(0.5)}, "parameter.factor"),
+                ("PIL.ImageOps", "posterize", "RGBA", [17, 83, 149, 127], {"bits": literal(7)}, "behavior.default"),
+                ("PIL.ImageOps", "invert", "RGB", [17, 83, 149], None, "behavior.default"),
+                ("PIL.ImageOps", "posterize", "RGB", [17, 83, 149], {"bits": literal(4)}, "behavior.default"),
+                ("PIL.ImageOps", "solarize", "RGB", [37, 211, 89], {"threshold": literal(128)}, "behavior.default"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            6,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+            values=values,
+        )
+        for case, (surface, operation, mode, pixel, values) in enumerate(
+            (
+                ("PIL.ImageOps", "colorize", "L", 128, {"black": literal("black"), "white": literal("white")}),
+                ("PIL.ImageOps", "colorize", "L", 64, {"black": literal([10, 20, 30]), "white": literal([220, 230, 240]), "blackpoint": literal(32), "whitepoint": literal(224)}),
+                ("PIL.ImageOps", "colorize", "RGB", [17, 83, 149], {"black": literal("black"), "white": literal("white")}),
+                ("PIL.ImageOps", "colorize", "LA", [17, 191], {"black": literal("black"), "white": literal("white")}),
+                ("PIL.ImageOps", "colorize", "P", 7, {"black": literal("black"), "white": literal("white")}),
+                ("PIL.ImageChops", "offset", "L", 37, {"xoffset": literal(9), "yoffset": literal(-11)}),
+                ("PIL.ImageChops", "offset", "RGBA", [37, 211, 89, 173], {"xoffset": literal(-17), "yoffset": literal(14)}),
+                ("PIL.ImageChops", "offset", "PA", [7, 191], {"xoffset": literal(3), "yoffset": literal(-1)}),
+                ("PIL.ImageChops", "offset", "RGB", [37, 211, 89], {"xoffset": literal(5), "yoffset": literal(-3)}),
+                ("PIL.ImageChops", "offset", "L", 37, {"xoffset": literal(1), "yoffset": literal(1)}),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            7,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+            values=values,
+            requirement_suffix=requirement_suffix,
+        )
+        for case, (surface, operation, mode, pixel, values, requirement_suffix) in enumerate(
+            (
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("CMYK")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("YCbCr")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("HSV")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "L", 173, {"mode": literal("I")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "L", 173, {"mode": literal("F")}, "behavior.default"),
+                ("PIL.Image.Image", "quantize", "RGB", [17, 83, 149], {"colors": literal(4)}, "behavior.default"),
+                ("PIL.Image.Image", "putdata", "1", 1, None, "behavior.default"),
+                ("PIL.Image.Image", "putalpha", "CMYK", [17, 83, 149, 31], None, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("P")}, "behavior.default"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("F")}, "behavior.default"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            8,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+            values=values,
+            requirement_suffix=requirement_suffix,
+        )
+        for case, (surface, operation, mode, pixel, values, requirement_suffix) in enumerate(
+            (
+                ("PIL.Image.Image", "resize", "RGB", [17, 83, 149], {"size": literal([5, 4]), "resample": literal(2)}, "parameter.resample"),
+                ("PIL.Image.Image", "resize", "RGBA", [17, 83, 149, 127], {"size": literal([6, 5]), "resample": literal(3)}, "parameter.resample"),
+                ("PIL.Image.Image", "convert", "RGB", [17, 83, 149], {"mode": literal("RGBA")}, "behavior.default"),
+                ("PIL.ImageOps", "invert", "RGB", [17, 83, 149], None, "behavior.default"),
+                ("PIL.ImageChops", "multiply", "RGB", [17, 83, 149], None, "behavior.default"),
+                ("PIL.ImageOps", "contain", "RGB", [17, 83, 149], {"size": literal([7, 5]), "method": literal(0)}, "behavior.default"),
+                ("PIL.ImageOps", "scale", "RGB", [17, 83, 149], {"factor": literal(1.25), "resample": literal(0)}, "behavior.default"),
+                ("PIL.ImageOps", "pad", "RGB", [17, 83, 149], {"size": literal([7, 5]), "method": literal(0), "color": literal(0), "centering": literal([0.5, 0.5])}, "behavior.default"),
+                ("PIL.ImageOps", "colorize", "L", 128, {"black": literal("black"), "white": literal("white")}, "behavior.default"),
+                ("PIL.ImageChops", "screen", "RGB", [37, 211, 89], None, "behavior.default"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            9,
+            case,
+            "PIL.Image.Image",
+            "resize",
+            mode=mode,
+            size=[2, 2],
+            pixel=pixel,
+            values={"size": literal(target_size), "resample": literal(resample)},
+            inline_image=inline_image,
+            requirement_suffix="parameter.resample",
+        )
+        for case, (mode, pixel, target_size, resample, inline_image) in enumerate(
+            (
+                ("I;16L", None, [5, 4], 0, "i16l-frombytes-pattern-1"),
+                ("I;16B", None, [7, 5], 2, "i16b-frombytes-pattern-2"),
+                ("I;16N", None, [6, 3], 3, "i16n-frombytes-pattern-3"),
+                ("F", 12.5, [5, 4], 2, None),
+                ("I", 100001, [5, 4], 3, None),
+                ("F", 0.5, [7, 5], 5, None),
+                ("RGB", [17, 83, 149], [5, 4], 1, None),
+                ("LA", [17, 191], [6, 5], 2, None),
+                ("RGBA", [17, 83, 149, 127], [7, 5], 3, None),
+                ("I;16L", None, [4, 7], 5, "i16l-frombytes-pattern-4"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_specs.extend(
+        simd_campaign_spec(
+            10,
+            case,
+            "PIL.Image.Image",
+            "convert",
+            mode=source_mode,
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+            values={"mode": literal(target_mode)},
+        )
+        for case, (source_mode, target_mode, pixel) in enumerate(
+            (
+                ("F", "L", 0.5),
+                ("F", "RGB", 0.25),
+                ("I", "L", 100001),
+                ("L", "F", 173),
+                ("L", "I", 173),
+                ("RGB", "L", [17, 83, 149]),
+                ("RGBA", "LA", [17, 83, 149, 127]),
+                ("RGB", "YCbCr", [37, 211, 89]),
+                ("LA", "RGB", [37, 191]),
+                ("RGB", "F", [37, 211, 89]),
+            ),
+            1,
+        )
+    )
+    if len(simd_campaign_specs) != 100:
+        raise ValueError(
+            "SIMD coverage campaign must contain exactly 100 candidates"
+        )
+    specs = specs + tuple(simd_campaign_specs)
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:
@@ -24482,6 +36144,8 @@ def build_nuanced_cases(
                 scenario_outline_empty=spec.get("outline_empty", False),
             )
         )
+    cases.extend(benchmark_pipeline_cases(surface_id))
+    cases.extend(pipeline_composition_cases(surface_id, operations))
     return cases
 
 
@@ -24543,6 +36207,3884 @@ def write_json(path: Path, payload: dict[str, Any]) -> None:
     )
 
 
+def benchmark_subjects() -> list[dict[str, str]]:
+    return [
+        {"kind": "oracle", "id": "pillow"},
+        *(
+            {"kind": "target_profile", "id": profile}
+            for profile in BENCHMARK_TARGET_PROFILES
+        ),
+    ]
+
+
+def _pipeline_materialization_receiver(
+    case: dict[str, Any], spec: PipelineBenchmarkSpec
+) -> str:
+    call = next(
+        (step for step in case["steps"] if step["step_id"] == "call"),
+        None,
+    )
+    if call is None:
+        raise ValueError(f"{case['case_id']}: pipeline case has no call step")
+    if spec.materialize == "result":
+        return "call"
+    receiver = call.get("receiver")
+    if not isinstance(receiver, dict) or receiver.get("kind") != "binding":
+        raise ValueError(
+            f"{case['case_id']}: {spec.materialize} materialization needs a bound receiver"
+        )
+    receiver_step = receiver["step_id"]
+    if spec.materialize == "receiver":
+        return receiver_step
+    if spec.materialize == "draw_receiver":
+        draw_step = next(
+            step for step in case["steps"] if step["step_id"] == receiver_step
+        )
+        image = draw_step.get("arguments", {}).get("im")
+        if not isinstance(image, dict) or image.get("kind") != "binding":
+            raise ValueError(
+                f"{case['case_id']}: draw receiver does not bind a public image"
+            )
+        return image["step_id"]
+    raise ValueError(
+        f"{case['case_id']}: unknown materialization strategy {spec.materialize!r}"
+    )
+
+
+def _color3dlut_pipeline_workflow() -> dict[str, Any]:
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("RGB"),
+                    "size": literal([16, 16]),
+                    "color": literal([17, 83, 149]),
+                },
+            },
+            {
+                "step_id": "setup-lut",
+                "surface": "PIL.ImageFilter",
+                "operation": "Color3DLUT",
+                "receiver": None,
+                "arguments": {
+                    "size": literal(2),
+                    "table": literal([0.0] * 24),
+                },
+            },
+            {
+                "step_id": "call",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding("setup-image"),
+                "arguments": {"filter": binding("setup-lut")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("call"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["call", "materialize"],
+    }
+
+
+def _point_fusion_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build one valid public point/LUT composition benchmark workload."""
+
+    mode = spec["mode"]
+    bands = 1 if mode == "L" else 3
+    variant = spec["lut_variant"]
+    lut = [
+        (value * (variant + band + 1) + variant * 13 + band * 17) % 256
+        for band in range(bands)
+        for value in range(256)
+    ]
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["color"]),
+                },
+            },
+            {
+                "step_id": "inverted",
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding("setup-image")},
+            },
+            {
+                "step_id": "solarized",
+                "surface": "PIL.ImageOps",
+                "operation": "solarize",
+                "receiver": None,
+                "arguments": {
+                    "image": binding("inverted"),
+                    "threshold": literal(spec["threshold"]),
+                },
+            },
+            {
+                "step_id": "posterized",
+                "surface": "PIL.ImageOps",
+                "operation": "posterize",
+                "receiver": None,
+                "arguments": {
+                    "image": binding("solarized"),
+                    "bits": literal(spec["bits"]),
+                },
+            },
+            {
+                "step_id": "pointed",
+                "surface": "PIL.Image.Image",
+                "operation": "point",
+                "receiver": binding("posterized"),
+                "arguments": {"lut": literal(lut)},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("pointed"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["pointed", "materialize"],
+    }
+
+
+def _alpha_point_fusion_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build a valid public Image.point chain for LA/RGBA byte layouts."""
+
+    mode = spec["mode"]
+    bands = 2 if mode == "LA" else 4
+    variant = spec["lut_variant"]
+
+    def lut(seed: int) -> list[int]:
+        return [
+            (value * (seed + band + 1) + seed * 7 + band * 19) % 256
+            for band in range(bands)
+            for value in range(256)
+        ]
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["color"]),
+                },
+            },
+            {
+                "step_id": "pointed-one",
+                "surface": "PIL.Image.Image",
+                "operation": "point",
+                "receiver": binding("setup-image"),
+                "arguments": {"lut": literal(lut(variant))},
+            },
+            {
+                "step_id": "pointed-two",
+                "surface": "PIL.Image.Image",
+                "operation": "point",
+                "receiver": binding("pointed-one"),
+                "arguments": {"lut": literal(lut(variant + 1))},
+            },
+            {
+                "step_id": "pointed-three",
+                "surface": "PIL.Image.Image",
+                "operation": "point",
+                "receiver": binding("pointed-two"),
+                "arguments": {"lut": literal(lut(variant + 2))},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("pointed-three"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["pointed-three", "materialize"],
+    }
+
+
+def _alpha_composite_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build one material-sized public LA/RGBA alpha-composite workflow."""
+
+    mode = spec["mode"]
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-destination",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["destination"]),
+                },
+            },
+            {
+                "step_id": "setup-source",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["source"]),
+                },
+            },
+            {
+                "step_id": "composite",
+                "surface": "PIL.Image",
+                "operation": "alpha_composite",
+                "receiver": None,
+                "arguments": {
+                    "im1": binding("setup-destination"),
+                    "im2": binding("setup-source"),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("composite"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["composite", "materialize"],
+    }
+
+
+def _simd_crossover_pipeline_workflow(
+    width: int,
+    height: int,
+    mode: str = "RGB",
+    color: Any = None,
+    invert_surface: str = "PIL.ImageOps",
+) -> dict[str, Any]:
+    """Build one public invert→mirror workload at an explicit size."""
+
+    if color is None:
+        color = [47, 131, 223]
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal([width, height]),
+                    "color": literal(color),
+                },
+            },
+            {
+                "step_id": "inverted",
+                "surface": invert_surface,
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding("setup-image")},
+            },
+            {
+                "step_id": "mirrored",
+                "surface": "PIL.ImageOps",
+                "operation": "mirror",
+                "receiver": None,
+                "arguments": {"image": binding("inverted")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("mirrored"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["mirrored", "materialize"],
+    }
+
+
+def _simd_chops_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build one material-sized public byte-wise ImageChops workload."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image-1",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(spec["mode"]),
+                    "size": literal([1024, 1024]),
+                    "color": literal(spec["color1"]),
+                },
+            },
+            {
+                "step_id": "setup-image-2",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(spec["mode"]),
+                    "size": literal([1024, 1024]),
+                    "color": literal(spec["color2"]),
+                },
+            },
+            {
+                "step_id": "combined",
+                "surface": "PIL.ImageChops",
+                "operation": spec["operation"],
+                "receiver": None,
+                "arguments": {
+                    "image1": binding("setup-image-1"),
+                    "image2": binding("setup-image-2"),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("combined"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["combined", "materialize"],
+    }
+
+
+def _fused_multiply_screen_pipeline_workflow(
+    spec: dict[str, Any], *, reuse_secondary: bool = True
+) -> dict[str, Any]:
+    """Build a public secondary-image chain for fused Chops timing.
+
+    ``reuse_secondary`` deliberately controls source identity, not pixel
+    contents.  The negative case uses a separately constructed image with the
+    same pixels so the executor must preserve the unfused public operation
+    sequence instead of treating equal values as an alias.
+    """
+
+    mode = spec["mode"]
+    steps = [
+        {
+            "step_id": "setup-image-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(spec["size"]),
+                "color": literal(spec["color1"]),
+            },
+        },
+        {
+            "step_id": "setup-image-2",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal(spec["size"]),
+                "color": literal(spec["color2"]),
+            },
+        },
+    ]
+    secondary_step = "setup-image-2"
+    if not reuse_secondary:
+        secondary_step = "setup-image-3"
+        steps.append(
+            {
+                "step_id": secondary_step,
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(mode),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["color2"]),
+                },
+            }
+        )
+    steps.extend(
+        [
+            {
+                "step_id": "multiplied",
+                "surface": "PIL.ImageChops",
+                "operation": "multiply",
+                "receiver": None,
+                "arguments": {
+                    "image1": binding("setup-image-1"),
+                    "image2": binding("setup-image-2"),
+                },
+            },
+            {
+                "step_id": "screened",
+                "surface": "PIL.ImageChops",
+                "operation": "screen",
+                "receiver": None,
+                "arguments": {
+                    "image1": binding("multiplied"),
+                    "image2": binding(secondary_step),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("screened"),
+                "arguments": {},
+            },
+        ]
+    )
+    return {
+        "assets": [],
+        "steps": steps,
+        "observations": ["screened", "materialize"],
+    }
+
+
+def _simd_constant_pipeline_workflow(width: int, height: int) -> dict[str, Any]:
+    """Build one material-sized public ImageChops.constant workload."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("RGB"),
+                    "size": literal([width, height]),
+                    "color": literal([17, 83, 149]),
+                },
+            },
+            {
+                "step_id": "constant",
+                "surface": "PIL.ImageChops",
+                "operation": "constant",
+                "receiver": None,
+                "arguments": {
+                    "image": binding("setup-image"),
+                    "value": literal(173),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("constant"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["constant", "materialize"],
+    }
+
+
+def _simd_lut_pipeline_workflow(width: int, height: int) -> dict[str, Any]:
+    """Build one material-sized public L point/LUT composition workload."""
+
+    return _point_fusion_pipeline_workflow(
+        {
+            "name": f"l-{width}x{height}",
+            "mode": "L",
+            "size": [width, height],
+            "color": 83,
+            "threshold": 127,
+            "bits": 4,
+            "lut_variant": 3,
+        }
+    )
+
+
+def _simd_rgb_lut_pipeline_workflow(width: int, height: int) -> dict[str, Any]:
+    """Build one material-sized public RGB point/LUT composition workload."""
+
+    return _point_fusion_pipeline_workflow(
+        {
+            "name": f"rgb-{width}x{height}",
+            "mode": "RGB",
+            "size": [width, height],
+            "color": [17, 83, 149],
+            "threshold": 127,
+            "bits": 4,
+            "lut_variant": 7,
+        }
+    )
+
+
+def _long_auxiliary_pipeline_workflow() -> dict[str, Any]:
+    """Build a public chain that crosses the GPU submission chunk boundary."""
+
+    steps: list[dict[str, Any]] = [
+        {
+            "step_id": "setup-image-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("RGB"),
+                "size": literal([16, 16]),
+                "color": literal([17, 83, 149]),
+            },
+        },
+        {
+            "step_id": "setup-image-2",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("RGB"),
+                "size": literal([16, 16]),
+                "color": literal([211, 127, 43]),
+            },
+        },
+    ]
+    previous = "setup-image-1"
+    for index in range(260):
+        operation = "multiply" if index % 2 == 0 else "screen"
+        step_id = f"long-{index:03d}"
+        steps.append(
+            {
+                "step_id": step_id,
+                "surface": "PIL.ImageChops",
+                "operation": operation,
+                "receiver": None,
+                "arguments": {
+                    "image1": binding(previous),
+                    "image2": binding("setup-image-2"),
+                },
+            }
+        )
+        previous = step_id
+    steps.append(
+        {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(previous),
+            "arguments": {},
+        }
+    )
+    return {
+        "assets": [],
+        "steps": steps,
+        "observations": [previous, "materialize"],
+    }
+
+
+def _long_point_pipeline_workflow(length: int) -> dict[str, Any]:
+    """Build a public lazy point chain with a reviewable operation count."""
+
+    steps: list[dict[str, Any]] = [
+        {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal("L"),
+                "size": literal([16, 16]),
+                "color": literal(37),
+            },
+        }
+    ]
+    previous = "setup-image"
+    for index in range(length):
+        step_id = f"invert-{index:05d}"
+        steps.append(
+            {
+                "step_id": step_id,
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding(previous)},
+            }
+        )
+        previous = step_id
+    steps.append(
+        {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(previous),
+            "arguments": {},
+        }
+    )
+    return {
+        "assets": [],
+        "steps": steps,
+        "observations": [previous, "materialize"],
+    }
+
+
+def _metadata_pipeline_workflow(length: int, mode: str) -> dict[str, Any]:
+    """Build a public lazy chain that repeatedly reads shape and mode metadata."""
+
+    steps: list[dict[str, Any]] = [
+        {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal([256, 256]),
+                "color": literal(37),
+            },
+        }
+    ]
+    previous = "setup-image"
+    for index in range(length):
+        step_id = f"invert-{index:03d}"
+        steps.append(
+            {
+                "step_id": step_id,
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding(previous)},
+            }
+        )
+        previous = step_id
+
+    observations: list[str] = []
+    for index in range(3):
+        mode_id = f"mode-{index}"
+        size_id = f"size-{index}"
+        steps.extend(
+            [
+                {
+                    "step_id": mode_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "mode",
+                    "receiver": binding(previous),
+                    "arguments": {},
+                },
+                {
+                    "step_id": size_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "size",
+                    "receiver": binding(previous),
+                    "arguments": {},
+                },
+            ]
+        )
+        observations.extend([mode_id, size_id])
+    steps.append(
+        {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(previous),
+            "arguments": {},
+        }
+    )
+    observations.append("materialize")
+    return {"assets": [], "steps": steps, "observations": observations}
+
+
+def _resize_coeff_cache_workflow() -> dict[str, Any]:
+    """Build two public resize branches with identical coefficient geometry.
+
+    The second branch must reuse the first branch's validated coefficient
+    tables within one benchmark process.  Both branches remain ordinary public
+    ``Image.new`` -> ``resize`` -> ``tobytes`` workflows; no expected bytes or
+    implementation-only probe is introduced.
+    """
+
+    steps: list[dict[str, Any]] = []
+    for index, color in enumerate(([17, 83, 149], [211, 127, 43]), start=1):
+        image_id = f"setup-image-{index}"
+        resize_id = f"resized-{index}"
+        materialize_id = f"materialize-{index}"
+        steps.extend(
+            [
+                {
+                    "step_id": image_id,
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal([1024, 768]),
+                        "color": literal(color),
+                    },
+                },
+                {
+                    "step_id": resize_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding(image_id),
+                    "arguments": {"size": literal([256, 256])},
+                },
+                {
+                    "step_id": materialize_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding(resize_id),
+                    "arguments": {},
+                },
+            ]
+        )
+    return {
+        "assets": [],
+        "steps": steps,
+        "observations": [
+            "resized-1",
+            "materialize-1",
+            "resized-2",
+            "materialize-2",
+        ],
+    }
+
+
+def _resize_f64_coeff_cache_workflow() -> dict[str, Any]:
+    """Build repeated public F-mode resizes for the double-precision table cache."""
+
+    steps: list[dict[str, Any]] = []
+    for index, color in enumerate((37.0, 113.0), start=1):
+        image_id = f"setup-f-image-{index}"
+        resize_id = f"resized-f-{index}"
+        materialize_id = f"materialize-f-{index}"
+        steps.extend(
+            [
+                {
+                    "step_id": image_id,
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("F"),
+                        "size": literal([333, 257]),
+                        "color": literal(color),
+                    },
+                },
+                {
+                    "step_id": resize_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "resize",
+                    "receiver": binding(image_id),
+                    "arguments": {"size": literal([73, 61])},
+                },
+                {
+                    "step_id": materialize_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding(resize_id),
+                    "arguments": {},
+                },
+            ]
+        )
+    return {
+        "assets": [],
+        "steps": steps,
+        "observations": [
+            "resized-f-1",
+            "materialize-f-1",
+            "resized-f-2",
+            "materialize-f-2",
+        ],
+    }
+
+
+def build_pipeline_workflow(
+    variant: str,
+    spec: PipelineBenchmarkSpec,
+    cases_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    if variant == "Color3DLut":
+        workflow = _color3dlut_pipeline_workflow()
+    else:
+        if spec.case_id is None or spec.case_id not in cases_by_id:
+            raise ValueError(
+                f"{variant}: missing selected public parity case {spec.case_id!r}"
+            )
+        case = copy.deepcopy(cases_by_id[spec.case_id])
+        call_index = next(
+            index
+            for index, step in enumerate(case["steps"])
+            if step["step_id"] == "call"
+        )
+        receiver_step = _pipeline_materialization_receiver(case, spec)
+        workflow = {
+            "assets": case["assets"],
+            "steps": case["steps"][: call_index + 1],
+            "observations": ["call", "materialize"],
+        }
+        workflow["steps"].append(
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding(receiver_step),
+                "arguments": {},
+            }
+        )
+    return workflow
+
+
+def build_pipeline_parity_case(
+    variant: str,
+    spec: PipelineBenchmarkSpec,
+    cases_by_id: dict[str, dict[str, Any]],
+    operations: dict[tuple[str, str], dict[str, Any]],
+) -> dict[str, Any]:
+    requirement_id = _performance_requirement(operations, spec.surface, spec.operation)
+    workflow = build_pipeline_workflow(variant, spec, cases_by_id)
+    return {
+        "case_id": f"pipeline-case.{slug(variant)}.materialized-smoke",
+        "surface": spec.surface,
+        "operation": spec.operation,
+        "covers": [requirement_id],
+        "target_profiles": [TARGET_PROFILE],
+        "assets": workflow["assets"],
+        "steps": workflow["steps"],
+        "observations": workflow["observations"],
+    }
+
+
+def _performance_requirement(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    surface: str,
+    operation: str,
+) -> str:
+    operation_definition = operations.get((surface, operation))
+    if operation_definition is None:
+        raise ValueError(
+            f"pipeline benchmark maps unknown operation: {surface}.{operation}"
+        )
+    requirement_id = f"{surface}.{operation}.performance.standard"
+    if requirement_id not in {
+        item["id"] for item in operation_definition["requirements"]
+    }:
+        raise ValueError(f"pipeline benchmark lacks requirement: {requirement_id}")
+    return requirement_id
+
+
+def _literal_workflow_value(descriptor: dict[str, Any] | None) -> Any:
+    """Return a literal workflow value without resolving runtime bindings."""
+
+    if isinstance(descriptor, dict) and descriptor.get("kind") == "literal":
+        return descriptor.get("value")
+    return None
+
+
+def _pipeline_operation_class(variant: str, surface: str, operation: str) -> str:
+    """Classify a benchmark workload for operation-class performance gates."""
+
+    if variant.startswith("Draw") or surface == "PIL.ImageDraw.ImageDraw":
+        return "draw"
+    if variant in {"pipeline-invert-mirror", "pipeline-transpose-twice"}:
+        return "geometry"
+    if variant == "pipeline-gaussianblur-invert":
+        return "neighborhood"
+    if variant == "pipeline-multiply-screen":
+        return "multi_image"
+    if variant.startswith(("convolution-", "blur-", "rank-filter-")) or variant in {
+        "Filter3x3",
+        "Filter5x5",
+        "GaussianBlur",
+        "BoxBlur",
+        "MedianFilter",
+        "MaxFilter",
+        "MinFilter",
+        "RankFilter",
+        "EffectSpread",
+    }:
+        return "neighborhood"
+    if variant == "long-auxiliary" or variant in {
+        "Add",
+        "Subtract",
+        "Multiply",
+        "Screen",
+        "Darker",
+        "Lighter",
+        "Difference",
+        "Overlay",
+        "HardLight",
+        "SoftLight",
+        "AddModulo",
+        "SubtractModulo",
+        "LogicalAnd",
+        "LogicalOr",
+        "LogicalXor",
+        "Constant",
+        "Offset",
+        "Blend",
+        "Composite",
+        "Duplicate",
+        "InvertChops",
+        "BlendModule",
+        "CompositeModule",
+    }:
+        return "multi_image"
+    if variant in {"LinearGradient", "RadialGradient", "EffectMandelbrot", "EffectNoise"}:
+        return "generator"
+    if variant in {"Resize", "Crop", "Rotate", "Transpose", "Thumbnail", "Reduce", "Expand", "CropBorder", "Transform", "Scale", "Contain", "Cover", "Fit", "Pad"}:
+        return "geometry"
+    if variant.startswith("terminal-") or variant in {
+        "PutPixel",
+        "PutData",
+        "PutAlpha",
+        "PutAlphaData",
+        "DrawPoint",
+        "getdata-band",
+    }:
+        return "terminal"
+    return "point"
+
+
+def _composition_operation_class(
+    workflow: dict[str, Any], surface: str, operation: str
+) -> str:
+    """Classify a mixed composition by its highest-cost declared family."""
+
+    if surface == "PIL.ImageDraw.ImageDraw":
+        return "draw"
+    operations = {
+        str(step.get("operation", "")).lower().replace("-", "_")
+        for step in workflow.get("steps", [])
+        if step.get("operation") not in {"new", "tobytes"}
+        and not str(step.get("step_id", "")).startswith("setup")
+    }
+    if any(name.startswith("draw") for name in operations):
+        return "draw"
+    if any(
+        name in {
+            "filter",
+            "filter3x3",
+            "filter5x5",
+            "gaussianblur",
+            "boxblur",
+            "medianfilter",
+            "maxfilter",
+            "minfilter",
+            "rankfilter",
+            "effect_spread",
+        }
+        or "blur" in name
+        or "filter" in name
+        for name in operations
+    ):
+        return "neighborhood"
+    if any(
+        name
+        in {
+            "add",
+            "add_modulo",
+            "alpha_composite",
+            "blend",
+            "composite",
+            "darker",
+            "difference",
+            "hardlight",
+            "lighter",
+            "logical_and",
+            "logical_or",
+            "logical_xor",
+            "multiply",
+            "overlay",
+            "screen",
+            "softlight",
+            "subtract",
+            "subtract_modulo",
+        }
+        for name in operations
+    ):
+        return "multi_image"
+    if any(
+        name in {"constant", "effect_mandelbrot", "effect_noise", "linear_gradient", "radial_gradient"}
+        for name in operations
+    ):
+        return "generator"
+    if any(
+        name
+        in {
+            "contain",
+            "cover",
+            "crop",
+            "crop_border",
+            "expand",
+            "fit",
+            "flip",
+            "mirror",
+            "offset",
+            "pad",
+            "reduce",
+            "resize",
+            "rotate",
+            "scale",
+            "thumbnail",
+            "transform",
+            "transpose",
+        }
+        for name in operations
+    ):
+        return "geometry"
+    if any(name in {"getbbox", "getdata", "getextrema", "histogram", "tobytes"} for name in operations):
+        return "terminal"
+    return _pipeline_operation_class("composition", surface, operation)
+
+
+def _workflow_benchmark_context(
+    workflow: dict[str, Any],
+    *,
+    variant: str,
+    surface: str,
+    operation: str,
+    cache_state: str = "warm",
+) -> dict[str, Any]:
+    """Describe the measured stimulus without duplicating expected outputs."""
+
+    width, height = 0, 0
+    mode = "unknown"
+    for step in workflow.get("steps", []):
+        if step.get("operation") != "new":
+            continue
+        arguments = step.get("arguments", {})
+        size = _literal_workflow_value(arguments.get("size"))
+        if isinstance(size, list) and len(size) == 2 and all(
+            isinstance(value, int) and not isinstance(value, bool) for value in size
+        ):
+            width, height = size
+        candidate_mode = _literal_workflow_value(arguments.get("mode"))
+        if isinstance(candidate_mode, str):
+            mode = candidate_mode
+        break
+
+    if width == 0 or height == 0 or mode == "unknown":
+        for step in workflow.get("steps", []):
+            arguments = step.get("arguments", {})
+            size = _literal_workflow_value(arguments.get("size"))
+            if (width == 0 or height == 0) and isinstance(size, list) and len(size) == 2:
+                if all(isinstance(value, int) and not isinstance(value, bool) for value in size):
+                    width, height = size
+            candidate_mode = _literal_workflow_value(arguments.get("mode"))
+            if mode == "unknown" and isinstance(candidate_mode, str):
+                mode = candidate_mode
+    if mode == "unknown":
+        mode = "L" if operation in {"effect_noise", "linear_gradient", "radial_gradient", "effect_mandelbrot"} else mode
+    if width == 0 or height == 0:
+        if operation in {"linear_gradient", "radial_gradient"}:
+            width, height = 256, 256
+
+    chain_length = sum(
+        1
+        for step in workflow.get("steps", [])
+        if step.get("step_id") != "materialize"
+        and not str(step.get("step_id", "")).startswith("setup")
+        and step.get("operation") not in {"new", "tobytes"}
+    )
+    operation_class = _pipeline_operation_class(variant, surface, operation)
+    if variant in {"composition", "reviewed-composition"}:
+        operation_class = _composition_operation_class(workflow, surface, operation)
+    return {
+        "size": [width, height],
+        "mode": mode,
+        "chain_length": chain_length,
+        "operation_class": operation_class,
+        "cache_state": cache_state,
+        "build_profile": "release",
+    }
+
+
+def _resize_source_images(
+    workflow: dict[str, Any], width: int, height: int
+) -> dict[str, Any]:
+    """Create a benchmark-only size variant by changing public Image.new inputs."""
+
+    resized = copy.deepcopy(workflow)
+    for step in resized.get("steps", []):
+        if step.get("operation") != "new":
+            continue
+        size = step.get("arguments", {}).get("size")
+        if isinstance(size, dict) and size.get("kind") == "literal":
+            size["value"] = [width, height]
+    return resized
+
+
+def _alpha_resize_benchmark_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build a large alpha resize workload without adding a parity case."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(spec["mode"]),
+                    "size": literal(spec["source_size"]),
+                    "color": literal(spec["color"]),
+                },
+            },
+            {
+                "step_id": "pipeline-primary",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("setup-image"),
+                "arguments": {
+                    "size": literal(spec["target_size"]),
+                    "resample": literal(spec["resample"]),
+                },
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("pipeline-primary"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["pipeline-primary", "materialize"],
+    }
+
+
+def _blur_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build one material-sized public blur workflow for benchmark timing."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(spec["mode"]),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["color"]),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": spec["filter"],
+                "receiver": None,
+                "arguments": {"radius": literal(spec["radius"])},
+            },
+            {
+                "step_id": "blurred",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding("setup-image"),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("blurred"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["blurred", "materialize"],
+    }
+
+
+def _i_convolution_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build one public I-mode Kernel -> filter -> tobytes workflow."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("I"),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["color"]),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": "Kernel",
+                "receiver": None,
+                "arguments": {
+                    "size": literal(spec["kernel_size"]),
+                    "kernel": literal(spec["kernel"]),
+                    "scale": literal(spec["scale"]),
+                    "offset": literal(spec["offset"]),
+                },
+            },
+            {
+                "step_id": "filtered",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding("setup-image"),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("filtered"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["filtered", "materialize"],
+    }
+
+
+def _rank_filter_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
+    """Build one material-sized public rank-filter workflow."""
+
+    return {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal(spec["mode"]),
+                    "size": literal(spec["size"]),
+                    "color": literal(spec["color"]),
+                },
+            },
+            {
+                "step_id": "setup-filter",
+                "surface": "PIL.ImageFilter",
+                "operation": "RankFilter",
+                "receiver": None,
+                "arguments": {
+                    "size": literal(spec["size_filter"]),
+                    "rank": literal(spec["rank"]),
+                },
+            },
+            {
+                "step_id": "ranked",
+                "surface": "PIL.Image.Image",
+                "operation": "filter",
+                "receiver": binding("setup-image"),
+                "arguments": {"filter": binding("setup-filter")},
+            },
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding("ranked"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["ranked", "materialize"],
+    }
+
+
+def _quick_pipeline_workloads(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    policy = {
+        "boundary": "observed_steps",
+        "step_ids": ["pipeline-primary", "pipeline-secondary", "materialize"],
+        "metrics": ["latency", "throughput"],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "source_target_match",
+    }
+    definitions = [
+        (
+            "pipeline.quick.transpose-twice.rgb-1024",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.transpose-twice.rgb-1024"],
+            [_performance_requirement(operations, "PIL.Image.Image", "transpose")],
+            "pipeline-transpose-twice",
+        ),
+        (
+            "pipeline.quick.gaussianblur-invert.rgb-1024",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.gaussianblur-invert.rgb-1024"],
+            [
+                _performance_requirement(operations, "PIL.Image.Image", "filter"),
+                _performance_requirement(operations, "PIL.ImageOps", "invert"),
+            ],
+            "pipeline-gaussianblur-invert",
+        ),
+        (
+            "pipeline.quick.multiply-screen.rgb-1024",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.multiply-screen.rgb-1024"],
+            [
+                _performance_requirement(operations, "PIL.ImageChops", "multiply"),
+                _performance_requirement(operations, "PIL.ImageChops", "screen"),
+            ],
+            "pipeline-multiply-screen",
+        ),
+        (
+            "pipeline.quick.invert-mirror.rgb-1024",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.invert-mirror.rgb-1024"],
+            [
+                _performance_requirement(operations, "PIL.ImageOps", "invert"),
+                _performance_requirement(operations, "PIL.ImageOps", "mirror"),
+            ],
+            "pipeline-invert-mirror",
+        ),
+    ]
+    workloads: list[dict[str, Any]] = []
+    for workload_id, case_id, covers, variant in definitions:
+        if case_id not in cases_by_id:
+            raise ValueError(
+                f"quick pipeline workload references missing parity case: {case_id}"
+            )
+        workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": covers,
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "parity_case",
+                    "case_id": case_id,
+                },
+                "measurement": copy.deepcopy(policy),
+                "context": _workflow_benchmark_context(
+                    cases_by_id[case_id],
+                    variant=variant,
+                    surface="PIL.Image.Image",
+                    operation="pipeline",
+                ),
+            }
+        )
+    return workloads
+
+
+def _lifecycle_pipeline_workloads(
+    cases_by_id: dict[str, dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Build benchmark-only cold and resident variants of the base pipelines.
+
+    These inputs deliberately use workflow payloads instead of parity-case
+    references.  The cold lane can therefore launch one fresh adapter process
+    per sample, while the resident lane can construct the lazy graph once and
+    repeat only its terminal observation.  Neither lane expands the public
+    parity or source-coverage denominator.
+    """
+
+    definitions = (
+        (
+            "transpose-twice",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.transpose-twice.rgb-1024"],
+            ["PIL.Image.Image.transpose.performance.standard"],
+            "pipeline-transpose-twice",
+        ),
+        (
+            "gaussianblur-invert",
+            QUICK_PIPELINE_CASE_IDS[
+                "pipeline.quick.gaussianblur-invert.rgb-1024"
+            ],
+            [
+                "PIL.Image.Image.filter.performance.standard",
+                "PIL.ImageOps.invert.performance.standard",
+            ],
+            "pipeline-gaussianblur-invert",
+        ),
+        (
+            "multiply-screen",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.multiply-screen.rgb-1024"],
+            [
+                "PIL.ImageChops.multiply.performance.standard",
+                "PIL.ImageChops.screen.performance.standard",
+            ],
+            "pipeline-multiply-screen",
+        ),
+        (
+            "invert-mirror",
+            QUICK_PIPELINE_CASE_IDS["pipeline.quick.invert-mirror.rgb-1024"],
+            [
+                "PIL.ImageOps.invert.performance.standard",
+                "PIL.ImageOps.mirror.performance.standard",
+            ],
+            "pipeline-invert-mirror",
+        ),
+    )
+    workloads: list[dict[str, Any]] = []
+    policies = {
+        "cold": {
+            "boundary": "whole_workflow",
+            "step_ids": [],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 0,
+            "measurement_iterations": 1,
+            "samples": 3,
+            "concurrency": 1,
+            "cache_state": "cold",
+            "correctness_gate": "successful_execution",
+        },
+        "resident": {
+            "boundary": "whole_workflow",
+            "step_ids": [],
+            "metrics": ["latency", "throughput"],
+            "warmup_iterations": 1,
+            "measurement_iterations": 7,
+            "samples": 1,
+            "concurrency": 1,
+            "cache_state": "resident",
+            "correctness_gate": "successful_execution",
+        },
+    }
+    for state, policy in policies.items():
+        for name, case_id, covers, variant in definitions:
+            case = cases_by_id.get(case_id)
+            if case is None:
+                raise ValueError(
+                    f"lifecycle workload references missing case: {case_id}"
+                )
+            workloads.append(
+                {
+                    "workload_id": f"pipeline-lifecycle.{state}.{name}.rgb-1024",
+                    "covers": covers,
+                    "subjects": benchmark_subjects(),
+                    "input": {
+                        "kind": "workflow",
+                        "assets": copy.deepcopy(case.get("assets", [])),
+                        "steps": copy.deepcopy(case["steps"]),
+                        "observations": copy.deepcopy(case.get("observations", [])),
+                    },
+                    "measurement": copy.deepcopy(policy),
+                    "context": _workflow_benchmark_context(
+                        case,
+                        variant=variant,
+                        surface=case["surface"],
+                        operation=case["operation"],
+                        cache_state=state,
+                    ),
+                }
+            )
+    return workloads
+
+
+def build_pipeline_benchmark_document(
+    operations: dict[tuple[str, str], dict[str, Any]],
+    cases_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    policy = {
+        "boundary": "observed_steps",
+        "step_ids": ["call", "materialize"],
+        "metrics": ["latency", "throughput"],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "source_target_match",
+    }
+    operation_workloads: list[dict[str, Any]] = []
+    for variant, spec in PIPELINE_OP_BENCHMARK_SPECS.items():
+        workflow = build_pipeline_workflow(variant, spec, cases_by_id)
+        operation_workloads.append(
+            {
+                "workload_id": f"pipeline-op.{slug(variant)}.benchmark-materialized",
+                "covers": [_performance_requirement(operations, spec.surface, spec.operation)],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(workflow["assets"]),
+                    "steps": copy.deepcopy(workflow["steps"]),
+                    "observations": copy.deepcopy(workflow["observations"]),
+                },
+                "measurement": {
+                    **copy.deepcopy(policy),
+                    "correctness_gate": "successful_execution",
+                },
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant=variant,
+                    surface=spec.surface,
+                    operation=spec.operation,
+                ),
+            }
+        )
+
+    # Add one non-square size variant for every ordinary byte-image workflow
+    # that has a public Image.new source. These remain benchmark-only inputs:
+    # the isolated PipelineOp registry coverage stays exactly one workload per
+    # variant, while the matrix measures dimension-sensitive kernels and
+    # routing at a second shape without inflating parity or coverage plans.
+    matrix_workloads: list[dict[str, Any]] = []
+    for base in operation_workloads:
+        context = base["context"]
+        if context["size"] != [16, 16] or context["mode"] not in {
+            "L",
+            "LA",
+            "RGB",
+            "RGBA",
+        }:
+            continue
+        if not any(
+            step.get("operation") == "new"
+            for step in base["input"].get("steps", [])
+        ):
+            continue
+        if context["mode"] in {"LA", "RGBA"} and base["workload_id"].endswith(
+            ("putpixel.benchmark-materialized", "putdata.benchmark-materialized")
+        ):
+            continue
+        input_spec = base["input"]
+        workflow = {
+            "assets": input_spec["assets"],
+            "steps": input_spec["steps"],
+            "observations": input_spec["observations"],
+        }
+        matrix_workflow = _resize_source_images(workflow, 32, 24)
+        matrix_id = base["workload_id"].replace(
+            ".benchmark-materialized", ".matrix-32x24"
+        )
+        matrix_context = _workflow_benchmark_context(
+            matrix_workflow,
+            variant="matrix",
+            surface="PIL.Image.Image",
+            operation="matrix",
+        )
+        matrix_context["operation_class"] = context["operation_class"]
+        matrix_workloads.append(
+            {
+                "workload_id": matrix_id,
+                "covers": copy.deepcopy(base["covers"]),
+                "subjects": copy.deepcopy(base["subjects"]),
+                "input": {
+                    "kind": "workflow",
+                    "assets": matrix_workflow["assets"],
+                    "steps": matrix_workflow["steps"],
+                    "observations": matrix_workflow["observations"],
+                },
+                "measurement": copy.deepcopy(base["measurement"]),
+                "context": matrix_context,
+            }
+        )
+
+    expanded_matrix_workloads: list[dict[str, Any]] = []
+    operation_workloads_by_variant = {
+        item["workload_id"]
+        .removeprefix("pipeline-op.")
+        .removesuffix(".benchmark-materialized"): item
+        for item in operation_workloads
+    }
+    for variant in PIPELINE_EXPANDED_MATRIX_VARIANTS:
+        base = operation_workloads_by_variant.get(slug(variant))
+        if base is None:
+            raise ValueError(
+                f"expanded matrix references missing operation workload: {variant}"
+            )
+        for width, height in PIPELINE_EXPANDED_MATRIX_SIZES:
+            input_spec = base["input"]
+            workflow = _resize_source_images(
+                {
+                    "assets": copy.deepcopy(input_spec["assets"]),
+                    "steps": copy.deepcopy(input_spec["steps"]),
+                    "observations": copy.deepcopy(input_spec["observations"]),
+                },
+                width,
+                height,
+            )
+            matrix_context = _workflow_benchmark_context(
+                workflow,
+                variant=f"expanded-matrix-{slug(variant)}-{width}x{height}",
+                surface="PIL.Image.Image",
+                operation=slug(variant),
+            )
+            matrix_context["operation_class"] = base["context"]["operation_class"]
+            expanded_measurement = copy.deepcopy(base["measurement"])
+            expanded_measurement["boundary"] = "whole_workflow"
+            expanded_measurement["step_ids"] = []
+            expanded_measurement["correctness_gate"] = "successful_execution"
+            expanded_matrix_workloads.append(
+                {
+                    "workload_id": (
+                        f"pipeline-matrix.expanded.{slug(variant)}.{width}x{height}"
+                    ),
+                    "covers": copy.deepcopy(base["covers"]),
+                    "subjects": copy.deepcopy(base["subjects"]),
+                    "input": {
+                        "kind": "workflow",
+                        "assets": workflow["assets"],
+                        "steps": workflow["steps"],
+                        "observations": workflow["observations"],
+                    },
+                    "measurement": expanded_measurement,
+                    "context": matrix_context,
+                }
+            )
+
+    # The operation matrix above gives every PipelineOp variant one isolated
+    # materialization.  Keep the existing reviewed composition matrix in the
+    # benchmark lane as workflow inputs as well.  These are deliberately not
+    # copied into the parity lane: this benchmark measures successful source
+    # and target execution of already-generated public workflows, while the
+    # operation matrix remains the exact parity-backed contract gate.
+    chain_policy = {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": ["latency", "throughput"],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution",
+    }
+    chain_workloads: list[dict[str, Any]] = []
+    for case_id in sorted(cases_by_id):
+        if not case_id.startswith("pipeline-composition.matrix-"):
+            continue
+        case = cases_by_id[case_id]
+        requirement = _performance_requirement(
+            operations,
+            case["surface"],
+            case["operation"],
+        )
+        workload_id = f"pipeline-chain.{slug(case_id.removeprefix('pipeline-composition.'))}"
+        chain_workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": [requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(case.get("assets", [])),
+                    "steps": copy.deepcopy(case["steps"]),
+                    "observations": copy.deepcopy(case.get("observations", [])),
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant="composition",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
+    # Keep a banded terminal read in the performance lane. This is a valid
+    # public workflow rather than an internal probe: the lazy point operation
+    # is built first, then Image.getdata(band=0) observes one native channel.
+    # The workflow is benchmark-only so it does not add a parity-case
+    # denominator entry or hand-authored expected bytes.
+    terminal_read_workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("RGB"),
+                    "size": literal([512, 512]),
+                    "color": literal([31, 109, 197]),
+                },
+            },
+            {
+                "step_id": "inverted",
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding("setup-image")},
+            },
+            {
+                "step_id": "band-data",
+                "surface": "PIL.Image.Image",
+                "operation": "getdata",
+                "receiver": binding("inverted"),
+                "arguments": {"band": literal(0)},
+            },
+        ],
+        "observations": ["band-data"],
+    }
+    terminal_read_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.rgb-band0",
+            "covers": [_performance_requirement(operations, "PIL.Image.Image", "getdata")],
+            "subjects": benchmark_subjects(),
+            "input": {"kind": "workflow", **copy.deepcopy(terminal_read_workflow)},
+            "measurement": copy.deepcopy(chain_policy),
+            "context": _workflow_benchmark_context(
+                terminal_read_workflow,
+                variant="getdata-band",
+                surface="PIL.Image.Image",
+                operation="getdata",
+            ),
+        }
+    ]
+
+    # Batch related read-only reductions behind one public lazy pipeline so
+    # the benchmark charges their terminal work without starting one process
+    # per operation. The observations are deliberately ordinary Pillow APIs;
+    # this remains a successful-execution benchmark workload, not a hand-made
+    # expected-output fixture.
+    terminal_analysis_workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "setup-image",
+                "surface": "PIL.Image",
+                "operation": "new",
+                "receiver": None,
+                "arguments": {
+                    "mode": literal("RGB"),
+                    "size": literal([256, 192]),
+                    "color": literal([31, 109, 197]),
+                },
+            },
+            {
+                "step_id": "inverted",
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "receiver": None,
+                "arguments": {"image": binding("setup-image")},
+            },
+            {
+                "step_id": "bbox",
+                "surface": "PIL.Image.Image",
+                "operation": "getbbox",
+                "receiver": binding("inverted"),
+                "arguments": {},
+            },
+            {
+                "step_id": "extrema",
+                "surface": "PIL.Image.Image",
+                "operation": "getextrema",
+                "receiver": binding("inverted"),
+                "arguments": {},
+            },
+            {
+                "step_id": "histogram",
+                "surface": "PIL.Image.Image",
+                "operation": "histogram",
+                "receiver": binding("inverted"),
+                "arguments": {},
+            },
+            {
+                "step_id": "projection",
+                "surface": "PIL.Image.Image",
+                "operation": "getprojection",
+                "receiver": binding("inverted"),
+                "arguments": {},
+            },
+            {
+                "step_id": "entropy",
+                "surface": "PIL.Image.Image",
+                "operation": "entropy",
+                "receiver": binding("inverted"),
+                "arguments": {},
+            },
+        ],
+        "observations": ["bbox", "extrema", "histogram", "projection", "entropy"],
+    }
+    terminal_analysis_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.analysis-suite.rgb",
+            "covers": [
+                _performance_requirement(operations, "PIL.Image.Image", operation)
+                for operation in ("getbbox", "getextrema", "histogram", "getprojection", "entropy")
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {"kind": "workflow", **copy.deepcopy(terminal_analysis_workflow)},
+            "measurement": copy.deepcopy(chain_policy),
+            "context": _workflow_benchmark_context(
+                terminal_analysis_workflow,
+                variant="terminal-analysis-suite",
+                surface="PIL.Image.Image",
+                operation="histogram",
+            ),
+        }
+    ]
+
+    # Exercise the packed scalar reduction paths on a materially sized frame.
+    # I and F are created through public conversion steps and all terminal
+    # observations share one workflow process; this is benchmark-only input,
+    # not a hand-authored parity oracle.
+    terminal_scalar_analysis_workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "gradient",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "receiver": None,
+                "arguments": {"mode": literal("L")},
+            },
+            {
+                "step_id": "resized",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("gradient"),
+                "arguments": {
+                    "size": literal([1024, 768]),
+                    "resample": literal(0),
+                },
+            },
+            {
+                "step_id": "integer",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("resized"),
+                "arguments": {"mode": literal("I")},
+            },
+            {
+                "step_id": "float",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("resized"),
+                "arguments": {"mode": literal("F")},
+            },
+        ],
+        "observations": [],
+    }
+    scalar_observations = []
+    scalar_covers = []
+    for image_step, label in (("integer", "i"), ("float", "f")):
+        for operation in (
+            "getbbox",
+            "getcolors",
+            "getextrema",
+            "getpixel",
+            "getprojection",
+        ):
+            step_id = f"{label}-{operation}"
+            terminal_scalar_analysis_workflow["steps"].append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": operation,
+                    "receiver": binding(image_step),
+                    "arguments": {
+                        "maxcolors": literal(1_000_000)
+                    }
+                    if operation == "getcolors"
+                    else {"xy": literal([512, 384])}
+                    if operation == "getpixel"
+                    else {},
+                }
+            )
+            scalar_observations.append(step_id)
+            requirement = _performance_requirement(
+                operations, "PIL.Image.Image", operation
+            )
+            if requirement not in scalar_covers:
+                scalar_covers.append(requirement)
+    terminal_scalar_analysis_workflow["observations"] = scalar_observations
+    terminal_scalar_analysis_context = _workflow_benchmark_context(
+        terminal_scalar_analysis_workflow,
+        variant="terminal-scalar-analysis",
+        surface="PIL.Image.Image",
+        operation="getprojection",
+    )
+    terminal_scalar_analysis_context.update(size=[1024, 768], mode="I+F")
+    terminal_scalar_analysis_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.analysis-scalar-if-1024x768",
+            "covers": scalar_covers,
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "workflow",
+                **terminal_scalar_analysis_workflow,
+            },
+            "measurement": copy.deepcopy(chain_policy),
+            "context": terminal_scalar_analysis_context,
+        }
+    ]
+
+    # Exercise the public mask parameter on terminal reductions after both
+    # source and mask have gone through lazy resize pipelines. The benchmark
+    # observes the real Pillow APIs and uses successful execution as its gate;
+    # it does not embed an expected histogram or entropy value.
+    terminal_masked_analysis_workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "source-gradient",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "receiver": None,
+                "arguments": {"mode": literal("L")},
+            },
+            {
+                "step_id": "source-resized",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("source-gradient"),
+                "arguments": {
+                    "size": literal([1024, 768]),
+                    "resample": literal(0),
+                },
+            },
+            {
+                "step_id": "source-rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("source-resized"),
+                "arguments": {"mode": literal("RGB")},
+            },
+            {
+                "step_id": "mask-gradient",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "receiver": None,
+                "arguments": {"mode": literal("L")},
+            },
+            {
+                "step_id": "mask-resized",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("mask-gradient"),
+                "arguments": {
+                    "size": literal([1024, 768]),
+                    "resample": literal(0),
+                },
+            },
+            {
+                "step_id": "masked-histogram",
+                "surface": "PIL.Image.Image",
+                "operation": "histogram",
+                "receiver": binding("source-rgb"),
+                "arguments": {"mask": binding("mask-resized")},
+            },
+            {
+                "step_id": "masked-entropy",
+                "surface": "PIL.Image.Image",
+                "operation": "entropy",
+                "receiver": binding("source-rgb"),
+                "arguments": {"mask": binding("mask-resized")},
+            },
+        ],
+        "observations": ["masked-histogram", "masked-entropy"],
+    }
+    terminal_masked_analysis_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.analysis-masked-rgb-1024x768",
+            "covers": [
+                _performance_requirement(operations, "PIL.Image.Image", "histogram"),
+                _performance_requirement(operations, "PIL.Image.Image", "entropy"),
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "workflow",
+                **terminal_masked_analysis_workflow,
+            },
+            "measurement": copy.deepcopy(chain_policy),
+            "context": _workflow_benchmark_context(
+                terminal_masked_analysis_workflow,
+                variant="terminal-masked-analysis",
+                surface="PIL.Image.Image",
+                operation="histogram",
+            ),
+        }
+    ]
+
+    # Keep a materially sized RGB color-count workload in the terminal suite.
+    # The source is generated through public Pillow APIs, so this exercises
+    # the real lazy resize/convert pipeline before getcolors without embedding
+    # a hand-authored pixel oracle. A large frame is intentional here: the
+    # hot loop must be large enough for fixed-width color keys to be measured
+    # independently of the small endpoint matrix.
+    terminal_color_count_workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "gradient",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "receiver": None,
+                "arguments": {"mode": literal("L")},
+            },
+            {
+                "step_id": "resized",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("gradient"),
+                "arguments": {
+                    "size": literal([1024, 768]),
+                    "resample": literal(0),
+                },
+            },
+            {
+                "step_id": "rgb",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("resized"),
+                "arguments": {"mode": literal("RGB")},
+            },
+            {
+                "step_id": "colors",
+                "surface": "PIL.Image.Image",
+                "operation": "getcolors",
+                "receiver": binding("rgb"),
+                "arguments": {"maxcolors": literal(1_000_000)},
+            },
+        ],
+        "observations": ["colors"],
+    }
+    terminal_color_count_context = _workflow_benchmark_context(
+        terminal_color_count_workflow,
+        variant="terminal-color-count",
+        surface="PIL.Image.Image",
+        operation="getcolors",
+    )
+    terminal_color_count_context.update(size=[1024, 768], mode="RGB")
+    terminal_color_count_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.getcolors.rgb-1024x768",
+            "covers": [
+                _performance_requirement(
+                    operations, "PIL.Image.Image", "getcolors"
+                )
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "workflow",
+                **copy.deepcopy(terminal_color_count_workflow),
+            },
+            "measurement": copy.deepcopy(chain_policy),
+            "context": terminal_color_count_context,
+        }
+    ]
+
+    # Exercise the typed histogram fallback through one public terminal
+    # workflow.  ImageStat.Stat computes its fixed properties eagerly, so the
+    # property reads are grouped after construction to keep one materially
+    # sized I-mode pipeline in one benchmark process.  This is a successful
+    # execution workload only; it does not add parity cases or expected data.
+    terminal_stat_workflow = {
+        "assets": [],
+        "steps": [
+            {
+                "step_id": "gradient",
+                "surface": "PIL.Image",
+                "operation": "linear_gradient",
+                "receiver": None,
+                "arguments": {"mode": literal("L")},
+            },
+            {
+                "step_id": "resized",
+                "surface": "PIL.Image.Image",
+                "operation": "resize",
+                "receiver": binding("gradient"),
+                "arguments": {
+                    "size": literal([1024, 768]),
+                    "resample": literal(0),
+                },
+            },
+            {
+                "step_id": "typed",
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "receiver": binding("resized"),
+                "arguments": {"mode": literal("I")},
+            },
+            {
+                "step_id": "stat",
+                "surface": "PIL.ImageStat",
+                "operation": "Stat",
+                "receiver": None,
+                "arguments": {"image_or_list": binding("typed")},
+            },
+        ],
+    }
+    stat_observations = []
+    for operation in (
+        "count",
+        "extrema",
+        "mean",
+        "median",
+        "rms",
+        "stddev",
+        "sum",
+        "sum2",
+        "var",
+    ):
+        step_id = f"stat-{operation}"
+        terminal_stat_workflow["steps"].append(
+            {
+                "step_id": step_id,
+                "surface": "PIL.ImageStat.Stat",
+                "operation": operation,
+                "receiver": binding("stat"),
+                "arguments": {},
+            }
+        )
+        stat_observations.append(step_id)
+    terminal_stat_workflow["observations"] = stat_observations
+    terminal_stat_context = _workflow_benchmark_context(
+        terminal_stat_workflow,
+        variant="terminal-typed-stat",
+        surface="PIL.ImageStat.Stat",
+        operation="var",
+    )
+    terminal_stat_context.update(size=[1024, 768], mode="I")
+    stat_operations = ("count", "extrema", "mean", "median", "rms", "stddev", "sum", "sum2", "var")
+    terminal_stat_workloads = [
+        {
+            "workload_id": "pipeline-chain.terminal-read.imagestat.i-1024x768",
+            "covers": [
+                _performance_requirement(operations, "PIL.ImageStat", "Stat"),
+                *[
+                    _performance_requirement(operations, "PIL.ImageStat.Stat", operation)
+                    for operation in stat_operations
+                ],
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "workflow",
+                **copy.deepcopy(terminal_stat_workflow),
+            },
+            "measurement": copy.deepcopy(chain_policy),
+            "context": terminal_stat_context,
+        }
+    ]
+    terminal_generic_stat_workflow = copy.deepcopy(terminal_stat_workflow)
+    for step in terminal_generic_stat_workflow["steps"]:
+        if step["step_id"] == "typed":
+            step["arguments"] = {"mode": literal("CMYK")}
+    terminal_generic_stat_context = _workflow_benchmark_context(
+        terminal_generic_stat_workflow,
+        variant="terminal-generic-stat",
+        surface="PIL.ImageStat.Stat",
+        operation="var",
+    )
+    terminal_generic_stat_context.update(size=[1024, 768], mode="CMYK")
+    terminal_stat_workloads.append(
+        {
+            "workload_id": "pipeline-chain.terminal-read.imagestat.cmyk-1024x768",
+            "covers": [
+                _performance_requirement(operations, "PIL.ImageStat", "Stat"),
+                *[
+                    _performance_requirement(operations, "PIL.ImageStat.Stat", operation)
+                    for operation in stat_operations
+                ],
+            ],
+            "subjects": benchmark_subjects(),
+            "input": {
+                "kind": "workflow",
+                **terminal_generic_stat_workflow,
+            },
+            "measurement": copy.deepcopy(chain_policy),
+            "context": terminal_generic_stat_context,
+        }
+    )
+
+    # Exercise valid public color-mode branches with benchmark-only workflows.
+    # The isolated operation matrix intentionally uses one canonical input per
+    # PipelineOp; these additional inputs keep conversion, quantization, palette
+    # remapping, and native band extraction from being represented only by the
+    # default RGB path. They are successful-execution measurements, not parity
+    # cases and do not alter the public input corpus.
+    color_case_ids = (
+        "PIL.Image.Image.convert.mode.l",
+        "PIL.Image.Image.convert.mode.la",
+        "PIL.Image.Image.convert.mode.1",
+        "PIL.Image.Image.convert.mode.p",
+        "PIL.Image.Image.convert.mode.cmyk",
+        "PIL.Image.Image.convert.mode.ycbcr",
+        "PIL.Image.Image.convert.mode.hsv",
+        "PIL.Image.Image.convert.mode.i",
+        "PIL.Image.Image.convert.mode.f",
+        "PIL.Image.Image.quantize.mode.l",
+        "PIL.Image.Image.quantize.mode.rgba",
+        "PIL.Image.Image.remap_palette.mode.l",
+        "PIL.Image.Image.remap_palette.mode.p",
+        "PIL.Image.Image.getchannel.mode.la",
+        "PIL.Image.Image.getchannel.mode.rgba",
+        "PIL.Image.Image.getchannel.mode.cmyk",
+        "PIL.Image.Image.getchannel.mode.ycbcr",
+    )
+    color_workloads: list[dict[str, Any]] = []
+    for case_id in color_case_ids:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"color benchmark references missing case: {case_id}")
+        workflow = {
+            "assets": copy.deepcopy(case.get("assets", [])),
+            "steps": copy.deepcopy(case["steps"]),
+            "observations": copy.deepcopy(case.get("observations", [])),
+        }
+        color_workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-chain.color.{slug(case_id.removeprefix('PIL.Image.Image.'))}"
+                ),
+                "covers": [
+                    _performance_requirement(
+                        operations, case["surface"], case["operation"]
+                    )
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="color-review",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
+    # Keep the median-cut path observable on non-uniform public images as well
+    # as the solid constructor used by the isolated operation workload. These
+    # are benchmark-only workflows: the source and target must execute them,
+    # but no hand-authored expected bytes or parity denominator is introduced.
+    quantize_workloads: list[dict[str, Any]] = []
+    quantize_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "quantize"
+    )
+    for name, case_id, colors in (
+        ("linear-gradient", "pipeline-composition.linear-gradient-filter-autocontrast", 16),
+        ("radial-gradient", "pipeline-composition.radial-gradient-crop-resize", 32),
+    ):
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"quantize benchmark references missing case: {case_id}")
+        gradient = copy.deepcopy(case["steps"][0])
+        quantized = {
+            "step_id": "quantized",
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "receiver": binding("gradient"),
+            "arguments": {"colors": literal(colors)},
+        }
+        materialized = {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding("quantized"),
+            "arguments": {},
+        }
+        workflow = {
+            "assets": copy.deepcopy(case.get("assets", [])),
+            "steps": [gradient, quantized, materialized],
+            "observations": ["quantized", "materialize"],
+        }
+        quantize_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.quantize.{name}",
+                "covers": [
+                    quantize_requirement,
+                    _performance_requirement(
+                        operations, case["surface"], case["operation"]
+                    ),
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="quantize-gradient",
+                    surface="PIL.Image.Image",
+                    operation="quantize",
+                ),
+            }
+        )
+
+    # Keep algorithm selection and k-means refinement visible in the release
+    # pipeline. The small operation matrix is useful for endpoint coverage,
+    # but it is too small to expose histogram/hash and palette-mapping costs.
+    # These are valid public ``frombytes`` workflows with deterministic inline
+    # bytes; they are benchmark workloads, not new parity expectations.
+    quantize_algorithm_workloads: list[dict[str, Any]] = []
+    quantize_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "quantize"
+    )
+    quantize_width, quantize_height = 256, 256
+    quantize_pixels = quantize_width * quantize_height
+    for name, method, colors, kmeans, seed in (
+        ("median-cut", 0, 16, 0, 101),
+        ("median-cut-kmeans", 0, 16, 2, 102),
+        ("maxcoverage", 1, 16, 0, 103),
+        ("maxcoverage-kmeans", 1, 16, 2, 104),
+        ("fast-octree", 2, 32, 0, 105),
+    ):
+        rng = random.Random(seed)
+        raw = bytes(rng.randrange(256) for _ in range(quantize_pixels * 3))
+        asset_id = f"pipeline-quantize-{slug(name)}-rgb-data"
+        workflow = {
+            "assets": [
+                {
+                    "id": asset_id,
+                    "kind": "inline",
+                    "encoding": "base64",
+                    "data": base64.b64encode(raw).decode("ascii"),
+                    "sha256": hashlib.sha256(raw).hexdigest(),
+                    "media_type": "application/octet-stream",
+                }
+            ],
+            "steps": [
+                {
+                    "step_id": "setup-image",
+                    "surface": "PIL.Image",
+                    "operation": "frombytes",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal("RGB"),
+                        "size": literal([quantize_width, quantize_height]),
+                        "data": asset_value(asset_id),
+                    },
+                },
+                {
+                    "step_id": "quantized",
+                    "surface": "PIL.Image.Image",
+                    "operation": "quantize",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "colors": literal(colors),
+                        "method": literal(method),
+                        "kmeans": literal(kmeans),
+                    },
+                },
+                {
+                    "step_id": "materialize",
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding("quantized"),
+                    "arguments": {},
+                },
+            ],
+            "observations": ["quantized", "materialize"],
+        }
+        quantize_algorithm_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.quantize.algorithm.{slug(name)}",
+                "covers": [quantize_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="quantize-algorithm",
+                    surface="PIL.Image.Image",
+                    operation="quantize",
+                ),
+            }
+        )
+
+    metadata_workloads: list[dict[str, Any]] = []
+    metadata_policy = copy.deepcopy(chain_policy)
+    # Keep metadata workflows on the maintained benchmark contract.  The
+    # observations are still recorded before materialization, but the timing
+    # boundary remains the complete public workflow rather than an
+    # implementation-specific subset.
+    metadata_policy["boundary"] = "whole_workflow"
+    metadata_policy["step_ids"] = []
+    for length, mode in ((1, "RGB"), (8, "L"), (64, "RGB")):
+        workflow = _metadata_pipeline_workflow(length, mode)
+        metadata_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.metadata-cache.invert-{length}.{mode.lower()}",
+                "covers": [
+                    _performance_requirement(operations, "PIL.Image.Image", "mode"),
+                    _performance_requirement(operations, "PIL.Image.Image", "size"),
+                    _performance_requirement(operations, "PIL.ImageOps", "invert"),
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(metadata_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="metadata-cache",
+                    surface="PIL.Image.Image",
+                    operation="mode",
+                ),
+            }
+        )
+
+    # Exercise the newly classified unary metadata paths directly.  These are
+    # benchmark-only workflows: observations happen before ``tobytes`` so the
+    # timing boundary records metadata planning separately from pixel work.
+    metadata_shape_workflows = [
+        (
+            "color3dlut-rgb",
+            {
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGB"),
+                            "size": literal([256, 256]),
+                            "color": literal([17, 83, 149]),
+                        },
+                    },
+                    {
+                        "step_id": "setup-lut",
+                        "surface": "PIL.ImageFilter",
+                        "operation": "Color3DLUT",
+                        "receiver": None,
+                        "arguments": {
+                            "size": literal(2),
+                            "table": literal([0.0] * 24),
+                        },
+                    },
+                    {
+                        "step_id": "filtered",
+                        "surface": "PIL.Image.Image",
+                        "operation": "filter",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"filter": binding("setup-lut")},
+                    },
+                ],
+            },
+            "filter",
+        ),
+        (
+            "extractband-rgba",
+            {
+                "assets": [],
+                "steps": [
+                    {
+                        "step_id": "setup-image",
+                        "surface": "PIL.Image",
+                        "operation": "new",
+                        "receiver": None,
+                        "arguments": {
+                            "mode": literal("RGBA"),
+                            "size": literal([256, 256]),
+                            "color": literal([17, 83, 149, 211]),
+                        },
+                    },
+                    {
+                        "step_id": "extracted",
+                        "surface": "PIL.Image.Image",
+                        "operation": "getchannel",
+                        "receiver": binding("setup-image"),
+                        "arguments": {"channel": literal(1)},
+                    },
+                ],
+            },
+            "getchannel",
+        ),
+    ]
+    for name, workflow, operation in metadata_shape_workflows:
+        previous = workflow["steps"][-1]["step_id"]
+        for index in range(3):
+            mode_id = f"mode-{index}"
+            size_id = f"size-{index}"
+            workflow["steps"].extend(
+                [
+                    {
+                        "step_id": mode_id,
+                        "surface": "PIL.Image.Image",
+                        "operation": "mode",
+                        "receiver": binding(previous),
+                        "arguments": {},
+                    },
+                    {
+                        "step_id": size_id,
+                        "surface": "PIL.Image.Image",
+                        "operation": "size",
+                        "receiver": binding(previous),
+                        "arguments": {},
+                    },
+                ]
+            )
+        workflow["steps"].append(
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "tobytes",
+                "receiver": binding(previous),
+                "arguments": {},
+            }
+        )
+        workflow["observations"] = [
+            f"{kind}-{index}"
+            for index in range(3)
+            for kind in ("mode", "size")
+        ] + ["materialize"]
+        metadata_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.metadata-cache.{name}",
+                "covers": [
+                    _performance_requirement(
+                        operations,
+                        "PIL.Image.Image",
+                        operation,
+                    ),
+                    _performance_requirement(operations, "PIL.Image.Image", "mode"),
+                    _performance_requirement(operations, "PIL.Image.Image", "size"),
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(metadata_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="metadata-cache",
+                    surface="PIL.Image.Image",
+                    operation=operation,
+                ),
+            }
+        )
+
+    rank_filter_workloads: list[dict[str, Any]] = []
+    for workload_id, case_id in (
+        (
+            "pipeline-chain.rank-filter.large-f-9x9",
+            "PIL.Image.Image.filter.nuanced.f-mode-large-rank-filter",
+        ),
+        (
+            "pipeline-chain.rank-filter.large-l-9x9",
+            "PIL.ImageFilter.RankFilter.nuanced.coverage-batch-rank-l-size-9-rank-40",
+        ),
+    ):
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"rank-filter benchmark references missing case: {case_id}")
+        rank_filter_workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": [
+                    _performance_requirement(
+                        operations,
+                        case["surface"],
+                        case["operation"],
+                    )
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(case.get("assets", [])),
+                    "steps": copy.deepcopy(case["steps"]),
+                    "observations": copy.deepcopy(case.get("observations", [])),
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant="rank-filter-large-window",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+    rank_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "filter"
+    )
+    for spec in PIPELINE_RANK_FILTER_BENCHMARK_SPECS:
+        workflow = _rank_filter_pipeline_workflow(spec)
+        rank_filter_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.rank-filter.material.{spec['name']}",
+                "covers": [rank_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="rank-filter-material",
+                    surface="PIL.Image.Image",
+                    operation="filter",
+                ),
+            }
+        )
+
+    # Keep the convolution kernels visible in a materially sized lazy
+    # pipeline. The isolated operation matrix exercises construction and
+    # dispatch; these benchmark-only workflows exercise the row-specialized
+    # kernels over enough output rows for the parallel path to be observable.
+    convolution_workloads: list[dict[str, Any]] = []
+    def add_convolution_workload(
+        name: str,
+        case_id: str,
+        width: int,
+        height: int,
+        workload_prefix: str,
+    ) -> None:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(f"convolution benchmark references missing case: {case_id}")
+        workflow = _resize_source_images(
+            {
+                "assets": copy.deepcopy(case.get("assets", [])),
+                "steps": copy.deepcopy(case["steps"]),
+                "observations": copy.deepcopy(case.get("observations", [])),
+            },
+            width,
+            height,
+        )
+        if name == "rgba-5x5-invert" and workload_prefix == "native":
+            # Pillow rejects ImageOps.invert for RGBA, so retain only the
+            # valid public Kernel -> Image.filter -> tobytes chain here. This
+            # is a benchmark-only projection of the maintained filter case,
+            # not an invented unsupported alpha input.
+            workflow["steps"] = [
+                step
+                for step in workflow["steps"]
+                if step["step_id"] != "inverted"
+            ]
+            for step in workflow["steps"]:
+                if step["step_id"] == "materialize":
+                    step["receiver"] = binding("filtered")
+            workflow["observations"] = ["setup-filter", "filtered", "materialize"]
+        convolution_workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-chain.convolution.{workload_prefix}.{name}."
+                    f"{width}x{height}"
+                ),
+                "covers": [
+                    _performance_requirement(
+                        operations,
+                        case["surface"],
+                        case["operation"],
+                    )
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant=f"convolution-{workload_prefix}-{name}",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
+    for name, case_id in (
+        ("l-3x3-invert", "pipeline-composition.filter-l-3x3-invert"),
+        ("rgb-3x3-mirror", "pipeline-composition.filter-rgb-3x3-mirror"),
+        ("la-3x3-alpha", "pipeline-composition.filter-la-3x3-alpha"),
+        ("l-5x5-scale", "pipeline-composition.filter-l-5x5-scale"),
+        ("rgb-5x5-pad", "pipeline-composition.filter-rgb-5x5-pad"),
+        ("rgba-3x3-transpose", "pipeline-composition.filter-rgba-3x3-transpose"),
+    ):
+        add_convolution_workload(name, case_id, 256, 256, "material")
+
+    # The medium-size lane brackets the point at which the SIMD convolution
+    # setup amortizes on this host without turning the benchmark corpus into a
+    # collection of one-workload processes.
+    for name, case_id in (
+        ("l-3x3-invert", "pipeline-composition.filter-l-3x3-invert"),
+        ("rgb-3x3-mirror", "pipeline-composition.filter-rgb-3x3-mirror"),
+        ("la-3x3-alpha", "pipeline-composition.filter-la-3x3-alpha"),
+        ("l-5x5-scale", "pipeline-composition.filter-l-5x5-scale"),
+    ):
+        add_convolution_workload(name, case_id, 512, 512, "crossover")
+
+    # The large lane is benchmark-only and reuses the maintained public
+    # convolution compositions. It covers every native byte layout at the
+    # size where the SIMD row kernel is expected to amortize its setup.
+    for name, case_id in (
+        ("l-3x3-invert", "pipeline-composition.filter-l-3x3-invert"),
+        ("rgb-3x3-mirror", "pipeline-composition.filter-rgb-3x3-mirror"),
+        ("la-3x3-alpha", "pipeline-composition.filter-la-3x3-alpha"),
+        ("rgba-3x3-transpose", "pipeline-composition.filter-rgba-3x3-transpose"),
+        ("l-5x5-scale", "pipeline-composition.filter-l-5x5-scale"),
+        ("rgb-5x5-pad", "pipeline-composition.filter-rgb-5x5-pad"),
+        ("la-5x5-mirror", "pipeline-composition.filter-la-5x5-mirror"),
+        ("rgba-5x5-invert", "pipeline-composition.filter-rgba-5x5-invert"),
+    ):
+        add_convolution_workload(name, case_id, 1024, 768, "native")
+
+    i_convolution_workloads: list[dict[str, Any]] = []
+    i_filter_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "filter"
+    )
+    for spec in PIPELINE_I_CONVOLUTION_BENCHMARK_SPECS:
+        workflow = _i_convolution_pipeline_workflow(spec)
+        i_convolution_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.convolution-i.{spec['name']}",
+                "covers": [i_filter_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant=f"convolution-i-{spec['name']}",
+                    surface="PIL.Image.Image",
+                    operation="filter",
+                ),
+            }
+        )
+
+    reviewed_workloads: list[dict[str, Any]] = []
+    for case_id in PIPELINE_REVIEWED_COMPOSITION_BENCHMARK_IDS:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"reviewed pipeline benchmark references missing case: {case_id}"
+            )
+        requirement = _performance_requirement(
+            operations,
+            case["surface"],
+            case["operation"],
+        )
+        workload_id = f"pipeline-chain.reviewed.{slug(case_id.removeprefix('pipeline-composition.'))}"
+        reviewed_workloads.append(
+            {
+                "workload_id": workload_id,
+                "covers": [requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(case.get("assets", [])),
+                    "steps": copy.deepcopy(case["steps"]),
+                    "observations": copy.deepcopy(case.get("observations", [])),
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant="reviewed-composition",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
+    alpha_resize_workloads: list[dict[str, Any]] = []
+    for case_id in PIPELINE_ALPHA_RESIZE_BENCHMARK_IDS:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"alpha resize benchmark references missing case: {case_id}"
+            )
+        requirement = _performance_requirement(
+            operations,
+            case["surface"],
+            case["operation"],
+        )
+        alpha_resize_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.resize-alpha.{slug(case_id.removeprefix('pipeline-chain.resize.'))}",
+                "covers": [requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(case.get("assets", [])),
+                    "steps": copy.deepcopy(case["steps"]),
+                    "observations": copy.deepcopy(case.get("observations", [])),
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant="resize-alpha",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+    alpha_resize_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "resize"
+    )
+    for spec in PIPELINE_ALPHA_RESIZE_EXTRA_BENCHMARK_SPECS:
+        workflow = _alpha_resize_benchmark_workflow(spec)
+        alpha_resize_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.resize-alpha.{spec['name']}",
+                "covers": [alpha_resize_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="resize-alpha",
+                    surface="PIL.Image.Image",
+                    operation="resize",
+                ),
+            }
+        )
+
+    typed_resize_workloads: list[dict[str, Any]] = []
+    for case_id in PIPELINE_TYPED_RESIZE_BENCHMARK_IDS:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"typed resize benchmark references missing case: {case_id}"
+            )
+        requirement = _performance_requirement(
+            operations, case["surface"], case["operation"]
+        )
+        typed_resize_workloads.append(
+            {
+                "workload_id": (
+                    "pipeline-chain.resize-typed."
+                    f"{slug(case_id.removeprefix('pipeline-composition.'))}"
+                ),
+                "covers": [requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(case.get("assets", [])),
+                    "steps": copy.deepcopy(case["steps"]),
+                    "observations": copy.deepcopy(case.get("observations", [])),
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant="typed-resize",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
+    geometry_workloads: list[dict[str, Any]] = []
+    for case_id in PIPELINE_GEOMETRY_BENCHMARK_IDS:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            raise ValueError(
+                f"geometry benchmark references missing case: {case_id}"
+            )
+        requirement = _performance_requirement(
+            operations,
+            case["surface"],
+            case["operation"],
+        )
+        geometry_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.geometry-material.{slug(case_id.removeprefix('pipeline-chain.geometry.'))}",
+                "covers": [requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": copy.deepcopy(case.get("assets", [])),
+                    "steps": copy.deepcopy(case["steps"]),
+                    "observations": copy.deepcopy(case.get("observations", [])),
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    case,
+                    variant="geometry-material",
+                    surface=case["surface"],
+                    operation=case["operation"],
+                ),
+            }
+        )
+
+    # Keep copy-only geometry visible across the native byte layouts used by
+    # the public API. These are benchmark-only workflows: they use ordinary
+    # Image.crop/ImageOps.crop calls, retain successful-execution correctness
+    # gates, and do not add parity cases or expected output data. The two
+    # chained variants make the automatic copy-only routing policy measurable
+    # without conflating it with arithmetic SIMD work.
+    copy_geometry_workloads: list[dict[str, Any]] = []
+    copy_geometry_specs = (
+        ("crop", "L", 180),
+        ("crop", "LA", [180, 128]),
+        ("crop", "RGB", [180, 120, 60]),
+        ("crop", "RGBA", [180, 120, 60, 128]),
+        ("cropborder", "L", 180),
+        ("cropborder", "LA", [180, 128]),
+        ("cropborder", "RGB", [180, 120, 60]),
+        ("cropborder", "RGBA", [180, 120, 60, 128]),
+        ("crop-chain", "RGB", [180, 120, 60]),
+        ("cropborder-chain", "RGBA", [180, 120, 60, 128]),
+    )
+    crop_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "crop"
+    )
+    cropborder_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "crop"
+    )
+
+    def terminal(receiver: str) -> dict[str, Any]:
+        return {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": binding(receiver),
+            "arguments": {},
+        }
+
+    for name, mode, color in copy_geometry_specs:
+        is_cropborder = name.startswith("cropborder")
+        operation_requirement = (
+            cropborder_requirement if is_cropborder else crop_requirement
+        )
+        image_step = {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": None,
+            "arguments": {
+                "mode": literal(mode),
+                "size": literal([1024, 768]),
+                "color": literal(color),
+            },
+        }
+        if name.endswith("-chain"):
+            if is_cropborder:
+                first = {
+                    "step_id": "crop-first",
+                    "surface": "PIL.ImageOps",
+                    "operation": "crop",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("setup-image"),
+                        "border": literal(48),
+                    },
+                }
+                second = {
+                    "step_id": "crop-second",
+                    "surface": "PIL.ImageOps",
+                    "operation": "crop",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("crop-first"),
+                        "border": literal(24),
+                    },
+                }
+            else:
+                first = {
+                    "step_id": "crop-first",
+                    "surface": "PIL.Image.Image",
+                    "operation": "crop",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"box": literal([64, 48, 960, 720])},
+                }
+                second = {
+                    "step_id": "crop-second",
+                    "surface": "PIL.Image.Image",
+                    "operation": "crop",
+                    "receiver": binding("crop-first"),
+                    "arguments": {"box": literal([32, 24, 864, 648])},
+                }
+            workflow = {
+                "assets": [],
+                "steps": [image_step, first, second, terminal("crop-second")],
+                "observations": ["crop-first", "crop-second", "materialize"],
+            }
+        elif is_cropborder:
+            crop = {
+                "step_id": "cropped",
+                "surface": "PIL.ImageOps",
+                "operation": "crop",
+                "receiver": None,
+                "arguments": {
+                    "image": binding("setup-image"),
+                    "border": literal(64),
+                },
+            }
+            workflow = {
+                "assets": [],
+                "steps": [image_step, crop, terminal("cropped")],
+                "observations": ["cropped", "materialize"],
+            }
+        else:
+            crop = {
+                "step_id": "cropped",
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "receiver": binding("setup-image"),
+                "arguments": {"box": literal([96, 64, 928, 704])},
+            }
+            workflow = {
+                "assets": [],
+                "steps": [image_step, crop, terminal("cropped")],
+                "observations": ["cropped", "materialize"],
+            }
+        workflow_surface = "PIL.ImageOps" if is_cropborder else "PIL.Image.Image"
+        copy_geometry_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.geometry-copy.{name}-{mode.lower()}-1024x768",
+                "covers": [operation_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {"kind": "workflow", **workflow},
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="geometry-copy",
+                    surface=workflow_surface,
+                    operation="crop",
+                ),
+            }
+        )
+
+    blur_workloads: list[dict[str, Any]] = []
+    blur_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "filter"
+    )
+    for spec in PIPELINE_BLUR_BENCHMARK_SPECS:
+        workflow = _blur_pipeline_workflow(spec)
+        blur_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.blur-material.{spec['name']}",
+                "covers": [blur_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="blur-material",
+                    surface="PIL.Image.Image",
+                    operation="filter",
+                ),
+            }
+        )
+
+    point_fusion_workloads: list[dict[str, Any]] = []
+    point_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "point"
+    )
+    invert_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "invert"
+    )
+    solarize_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "solarize"
+    )
+    posterize_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "posterize"
+    )
+    for spec in PIPELINE_POINT_FUSION_BENCHMARK_SPECS:
+        workflow = _point_fusion_pipeline_workflow(spec)
+        point_fusion_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.point-fusion.{spec['name']}",
+                "covers": [
+                    point_requirement,
+                    invert_requirement,
+                    solarize_requirement,
+                    posterize_requirement,
+                ],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="point-fusion",
+                    surface="PIL.Image.Image",
+                    operation="point",
+                ),
+            }
+        )
+
+    alpha_point_fusion_workloads: list[dict[str, Any]] = []
+    for spec in PIPELINE_ALPHA_POINT_FUSION_BENCHMARK_SPECS:
+        workflow = _alpha_point_fusion_pipeline_workflow(spec)
+        alpha_point_fusion_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.point-fusion.{spec['name']}",
+                "covers": [point_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="alpha-point-fusion",
+                    surface="PIL.Image.Image",
+                    operation="point",
+                ),
+            }
+        )
+
+    alpha_composite_workloads: list[dict[str, Any]] = []
+    alpha_composite_requirement = _performance_requirement(
+        operations, "PIL.Image.Image", "alpha_composite"
+    )
+    for spec in PIPELINE_ALPHA_COMPOSITE_BENCHMARK_SPECS:
+        workflow = _alpha_composite_pipeline_workflow(spec)
+        alpha_composite_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.alpha-composite.{spec['name']}",
+                "covers": [alpha_composite_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="alpha-composite-native",
+                    surface="PIL.Image.Image",
+                    operation="alpha_composite",
+                ),
+            }
+        )
+
+    simd_crossover_workloads: list[dict[str, Any]] = []
+    mirror_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "mirror"
+    )
+    invert_chops_requirement = _performance_requirement(
+        operations, "PIL.ImageChops", "invert"
+    )
+    for width, height in PIPELINE_SIMD_CROSSOVER_SIZES:
+        workflow = _simd_crossover_pipeline_workflow(width, height)
+        simd_crossover_workloads.append(
+            {
+                "workload_id": (
+                    f"pipeline-chain.simd-crossover.invert-mirror.{width}x{height}"
+                ),
+                "covers": [invert_requirement, mirror_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="simd-crossover-invert-mirror",
+                    surface="PIL.ImageOps",
+                    operation="invert",
+                ),
+            }
+        )
+    for mode, color in PIPELINE_SIMD_VECTOR_MIRROR_MODES:
+        for width, height in ((32, 32), (1024, 1024)):
+            workflow = _simd_crossover_pipeline_workflow(
+                width,
+                height,
+                mode,
+                color,
+                "PIL.ImageChops",
+            )
+            simd_crossover_workloads.append(
+                {
+                    "workload_id": (
+                        "pipeline-chain.simd-vector-mirror."
+                        f"{mode.lower()}.{width}x{height}"
+                    ),
+                    "covers": [invert_chops_requirement, mirror_requirement],
+                    "subjects": benchmark_subjects(),
+                    "input": {
+                        "kind": "workflow",
+                        "assets": workflow["assets"],
+                        "steps": workflow["steps"],
+                        "observations": workflow["observations"],
+                    },
+                    "measurement": copy.deepcopy(chain_policy),
+                    "context": _workflow_benchmark_context(
+                        workflow,
+                        variant="simd-vector-mirror",
+                        surface="PIL.ImageChops",
+                        operation="invert",
+                    ),
+                }
+            )
+    simd_chops_workloads: list[dict[str, Any]] = []
+    for spec in PIPELINE_SIMD_CHOPS_BENCHMARK_SPECS:
+        workflow = _simd_chops_pipeline_workflow(spec)
+        requirement = _performance_requirement(
+            operations, "PIL.ImageChops", spec["operation"]
+        )
+        simd_chops_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.simd-chops.{spec['name']}",
+                "covers": [requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="simd-chops",
+                    surface="PIL.ImageChops",
+                    operation=spec["operation"],
+                ),
+            }
+        )
+    fused_chops_workloads: list[dict[str, Any]] = []
+    fused_chops_requirements = [
+        _performance_requirement(operations, "PIL.ImageChops", "multiply"),
+        _performance_requirement(operations, "PIL.ImageChops", "screen"),
+    ]
+    fused_chops_specs = (
+        ("l", "L", 31, 211),
+        ("la", "LA", [31, 211], [211, 127]),
+        ("rgb", "RGB", [31, 109, 197], [211, 127, 43]),
+        ("rgba", "RGBA", [31, 109, 197, 211], [211, 127, 43, 173]),
+    )
+    for name, mode, color1, color2 in fused_chops_specs:
+        for width, height in ((256, 256), (1024, 1024)):
+            spec = {
+                "mode": mode,
+                "size": [width, height],
+                "color1": color1,
+                "color2": color2,
+            }
+            workflow = _fused_multiply_screen_pipeline_workflow(spec)
+            fused_chops_workloads.append(
+                {
+                    "workload_id": (
+                        "pipeline-chain.fused-chops.multiply-screen."
+                        f"{name}.{width}x{height}"
+                    ),
+                    "covers": fused_chops_requirements,
+                    "subjects": benchmark_subjects(),
+                    "input": {
+                        "kind": "workflow",
+                        "assets": workflow["assets"],
+                        "steps": workflow["steps"],
+                        "observations": workflow["observations"],
+                    },
+                    "measurement": copy.deepcopy(chain_policy),
+                    "context": _workflow_benchmark_context(
+                        workflow,
+                        variant="fused-chops-multiply-screen",
+                        surface="PIL.ImageChops",
+                        operation="multiply",
+                    ),
+                }
+            )
+    fused_chops_identity_workloads: list[dict[str, Any]] = []
+    for name, mode, color1, color2 in fused_chops_specs:
+        spec = {
+            "mode": mode,
+            "size": [1024, 1024],
+            "color1": color1,
+            "color2": color2,
+        }
+        workflow = _fused_multiply_screen_pipeline_workflow(
+            spec, reuse_secondary=False
+        )
+        fused_chops_identity_workloads.append(
+            {
+                "workload_id": (
+                    "pipeline-chain.fused-chops.multiply-screen-distinct-secondary."
+                    f"{name}.1024x1024"
+                ),
+                "covers": fused_chops_requirements,
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="fused-chops-distinct-secondary",
+                    surface="PIL.ImageChops",
+                    operation="multiply",
+                ),
+            }
+        )
+    simd_constant_workloads: list[dict[str, Any]] = []
+    constant_requirement = _performance_requirement(
+        operations, "PIL.ImageChops", "constant"
+    )
+    for width, height in PIPELINE_SIMD_CONSTANT_SIZES:
+        workflow = _simd_constant_pipeline_workflow(width, height)
+        simd_constant_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.simd-constant.{width}x{height}",
+                "covers": [constant_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="simd-constant",
+                    surface="PIL.ImageChops",
+                    operation="constant",
+                ),
+            }
+        )
+    simd_lut_workloads: list[dict[str, Any]] = []
+    lut_requirements = [
+        _performance_requirement(operations, "PIL.ImageOps", "invert"),
+        _performance_requirement(operations, "PIL.ImageOps", "solarize"),
+        _performance_requirement(operations, "PIL.ImageOps", "posterize"),
+        _performance_requirement(operations, "PIL.Image.Image", "point"),
+    ]
+    for width, height in PIPELINE_SIMD_LUT_SIZES:
+        workflow = _simd_lut_pipeline_workflow(width, height)
+        simd_lut_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.simd-lut.l.{width}x{height}",
+                "covers": lut_requirements,
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="simd-lut",
+                    surface="PIL.Image.Image",
+                    operation="point",
+                ),
+            }
+        )
+    simd_rgb_lut_workloads: list[dict[str, Any]] = []
+    for width, height in PIPELINE_SIMD_RGB_LUT_SIZES:
+        workflow = _simd_rgb_lut_pipeline_workflow(width, height)
+        simd_rgb_lut_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.simd-lut.rgb.{width}x{height}",
+                "covers": lut_requirements,
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant="simd-rgb-lut",
+                    surface="PIL.Image.Image",
+                    operation="point",
+                ),
+            }
+        )
+    resize_cache_workflow = _resize_coeff_cache_workflow()
+    resize_cache_workload = {
+        "workload_id": "pipeline-chain.resize-cache.identical-geometry",
+        "covers": [
+            _performance_requirement(
+                operations, "PIL.Image.Image", "resize"
+            )
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {
+            "kind": "workflow",
+            "assets": resize_cache_workflow["assets"],
+            "steps": resize_cache_workflow["steps"],
+            "observations": resize_cache_workflow["observations"],
+        },
+        "measurement": copy.deepcopy(chain_policy),
+        "context": _workflow_benchmark_context(
+            resize_cache_workflow,
+            variant="resize-coefficient-cache",
+            surface="PIL.Image.Image",
+            operation="resize",
+        ),
+    }
+    resize_f64_cache_workflow = _resize_f64_coeff_cache_workflow()
+    resize_f64_cache_workload = {
+        "workload_id": "pipeline-chain.resize-cache.f64-identical-geometry",
+        "covers": [
+            _performance_requirement(
+                operations, "PIL.Image.Image", "resize"
+            )
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {
+            "kind": "workflow",
+            "assets": resize_f64_cache_workflow["assets"],
+            "steps": resize_f64_cache_workflow["steps"],
+            "observations": resize_f64_cache_workflow["observations"],
+        },
+        "measurement": copy.deepcopy(chain_policy),
+        "context": _workflow_benchmark_context(
+            resize_f64_cache_workflow,
+            variant="resize-f64-coefficient-cache",
+            surface="PIL.Image.Image",
+            operation="resize",
+        ),
+    }
+    long_auxiliary_workflow = _long_auxiliary_pipeline_workflow()
+    long_auxiliary_workload = {
+        "workload_id": "pipeline-chain.long-auxiliary.multiply-screen-260",
+        "covers": [
+            _performance_requirement(
+                operations, "PIL.ImageChops", "multiply"
+            ),
+            _performance_requirement(operations, "PIL.ImageChops", "screen"),
+        ],
+        "subjects": benchmark_subjects(),
+        "input": {
+            "kind": "workflow",
+            "assets": long_auxiliary_workflow["assets"],
+            "steps": long_auxiliary_workflow["steps"],
+            "observations": long_auxiliary_workflow["observations"],
+        },
+        "measurement": copy.deepcopy(chain_policy),
+        "context": _workflow_benchmark_context(
+            long_auxiliary_workflow,
+            variant="long-auxiliary",
+            surface="PIL.ImageChops",
+            operation="multiply",
+        ),
+    }
+    long_chain_workloads: list[dict[str, Any]] = []
+    long_chain_policy = copy.deepcopy(chain_policy)
+    long_chain_policy.update(
+        warmup_iterations=0,
+        measurement_iterations=1,
+        samples=1,
+    )
+    invert_requirement = _performance_requirement(
+        operations, "PIL.ImageOps", "invert"
+    )
+    for length in PIPELINE_CHAIN_LENGTHS:
+        workflow = _long_point_pipeline_workflow(length)
+        long_chain_workloads.append(
+            {
+                "workload_id": f"pipeline-chain.long-point.invert-{length}",
+                "covers": [invert_requirement],
+                "subjects": benchmark_subjects(),
+                "input": {
+                    "kind": "workflow",
+                    "assets": workflow["assets"],
+                    "steps": workflow["steps"],
+                    "observations": workflow["observations"],
+                },
+                "measurement": copy.deepcopy(long_chain_policy),
+                "context": _workflow_benchmark_context(
+                    workflow,
+                    variant=f"long-point-invert-{length}",
+                    surface="PIL.ImageOps",
+                    operation="invert",
+                ),
+            }
+        )
+    quick_workloads = _quick_pipeline_workloads(operations, cases_by_id)
+    lifecycle_workloads = _lifecycle_pipeline_workloads(cases_by_id)
+    return {
+        "schema": "migration-parity/benchmark-input@1",
+        "workloads": [
+            *operation_workloads,
+            *matrix_workloads,
+            *expanded_matrix_workloads,
+            *chain_workloads,
+            *terminal_read_workloads,
+            *terminal_analysis_workloads,
+            *terminal_scalar_analysis_workloads,
+            *terminal_masked_analysis_workloads,
+            *terminal_color_count_workloads,
+            *terminal_stat_workloads,
+            *color_workloads,
+            *quantize_workloads,
+            *quantize_algorithm_workloads,
+            *metadata_workloads,
+            *rank_filter_workloads,
+            *convolution_workloads,
+            *i_convolution_workloads,
+            *reviewed_workloads,
+            *alpha_resize_workloads,
+            *typed_resize_workloads,
+            *geometry_workloads,
+            *copy_geometry_workloads,
+            *blur_workloads,
+            *point_fusion_workloads,
+            *alpha_point_fusion_workloads,
+            *alpha_composite_workloads,
+            *simd_crossover_workloads,
+            *simd_chops_workloads,
+            *fused_chops_workloads,
+            *fused_chops_identity_workloads,
+            *simd_constant_workloads,
+            *simd_lut_workloads,
+            *simd_rgb_lut_workloads,
+            resize_cache_workload,
+            resize_f64_cache_workload,
+            long_auxiliary_workload,
+            *long_chain_workloads,
+            *quick_workloads,
+            *lifecycle_workloads,
+        ],
+        "suites": [
+            {
+                "suite_id": "pipeline-operations.materialized-smoke-suite",
+                "description": "One correctness-gated public workflow for every PipelineOp variant.",
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in operation_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.composition-matrix-suite",
+                "description": (
+                    "Existing public multi-operation workflows measured as "
+                    "benchmark-only execution inputs."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in chain_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.terminal-read-suite",
+                "description": (
+                    "Benchmark-only public terminal reads over a lazy native "
+                    "pipeline, including banded getdata without RGBA widening."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in [
+                        *terminal_read_workloads,
+                        *terminal_analysis_workloads,
+                        *terminal_color_count_workloads,
+                        *terminal_stat_workloads,
+                    ]
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.filter-window-suite",
+                "description": (
+                    "Large-window byte and float rank-filter pipelines used to "
+                    "measure the optimized neighborhood paths."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in rank_filter_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.convolution-suite",
+                "description": (
+                    "Material-sized public byte and I-mode 3x3 and 5x5 "
+                    "convolution pipelines used to measure specialized row "
+                    "execution."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in [*convolution_workloads, *i_convolution_workloads]
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.size-matrix-suite",
+                "description": "Non-square 32x24 variants for ordinary byte-image operations.",
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in matrix_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.expanded-size-matrix-suite",
+                "description": (
+                    "Four additional public size variants for selected geometry, "
+                    "neighborhood, point, multi-image, and enhancement operations."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in expanded_matrix_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.point-fusion-suite",
+                "description": (
+                    "Benchmark-only public invert, solarize, posterize, and "
+                    "point chains across L, LA, RGB, and RGBA layouts."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in [
+                        *point_fusion_workloads,
+                        *alpha_point_fusion_workloads,
+                    ]
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.alpha-composite-suite",
+                "description": (
+                    "Material-sized public LA and RGBA alpha-composite workflows "
+                    "used to measure native SIMD alpha arithmetic."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in alpha_composite_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.simd-crossover-suite",
+                "description": (
+                    "Explicit-size public invert→mirror workloads used to "
+                    "measure the SIMD crossover instead of assuming one."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in simd_crossover_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.simd-chops-suite",
+                "description": (
+                    "Material-sized public byte-wise ImageChops workloads "
+                    "used to measure exact native SIMD lanes."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in simd_chops_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.simd-constant-suite",
+                "description": (
+                    "Explicit-size public ImageChops.constant workloads used "
+                    "to measure the direct native L-result path."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in simd_constant_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.fused-chops-suite",
+                "description": (
+                    "Public multiply→screen chains across L, LA, RGB, and "
+                    "RGBA layouts used to measure secondary-image reuse and "
+                    "row-parallel fused execution."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in fused_chops_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.fused-chops-identity-suite",
+                "description": (
+                    "Public multiply→screen chains whose secondary images have "
+                    "equal pixels but distinct source identities; these verify "
+                    "the fusion guard does not alias by value."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in fused_chops_identity_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.simd-lut-suite",
+                "description": (
+                    "Explicit-size public L point/LUT compositions used to "
+                    "measure arbitrary nibble-table lookup on SIMD."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in simd_lut_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.simd-rgb-lut-suite",
+                "description": (
+                    "Explicit-size public RGB point/LUT compositions used "
+                    "to measure per-band SIMD lookup."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in simd_rgb_lut_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.resize-alpha-suite",
+                "description": (
+                    "Material-sized LA and RGBA resize workflows for fused "
+                    "alpha resampling."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in alpha_resize_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.resize-typed-suite",
+                "description": (
+                    "Public F-mode and I-mode resize workflows used to measure "
+                    "typed native row execution."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in typed_resize_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.resize-coefficient-cache-suite",
+                "description": (
+                    "Repeated public RGB and F-mode resize workflows with "
+                    "identical coefficient geometry."
+                ),
+                "members": [
+                    {"workload_id": resize_cache_workload["workload_id"], "weight": 1},
+                    {
+                        "workload_id": resize_f64_cache_workload["workload_id"],
+                        "weight": 1,
+                    },
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.geometry-material-suite",
+                "description": (
+                    "Material-sized transpose, crop, reduce, and rotate "
+                    "workflows for geometry kernels."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in geometry_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.geometry-copy-routing-suite",
+                "description": (
+                    "Native-layout Crop and CropBorder workflows used to "
+                    "measure copy-only backend routing across L/LA/RGB/RGBA."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in copy_geometry_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.blur-material-suite",
+                "description": (
+                    "Material-sized Gaussian and box blur workflows used to "
+                    "measure the rolling vertical path across RGB and RGBA."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in blur_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.long-auxiliary-suite",
+                "description": (
+                    "A 260-operation public multiply/screen chain that crosses "
+                    "the GPU submission chunk boundary."
+                ),
+                "members": [
+                    {"workload_id": long_auxiliary_workload["workload_id"], "weight": 1}
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.color-review-suite",
+                "description": (
+                    "Benchmark-only valid color-mode conversion, quantization, "
+                    "palette, and band-extraction workflows."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in color_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.quantize-suite",
+                "description": (
+                    "Non-uniform public gradient inputs for median-cut "
+                    "quantization performance."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in quantize_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.metadata-cache-suite",
+                "description": (
+                    "Repeated public mode and size observations over lazy "
+                    "invert chains."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in metadata_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.long-point-chain-suite",
+                "description": (
+                    "Public lazy invert chains at 1, 8, 64, 1,024, and "
+                    "10,000 operations for append and flatten measurements."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in long_chain_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.quick-suite",
+                "description": "Representative warm 1024x1024 RGB two-operation pipelines.",
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in quick_workloads
+                ],
+            },
+            {
+                "suite_id": "pipeline-operations.lifecycle-suite",
+                "description": (
+                    "Cold-process and already-resident terminal observations "
+                    "for the four representative public pipelines."
+                ),
+                "members": [
+                    {"workload_id": item["workload_id"], "weight": 1}
+                    for item in lifecycle_workloads
+                ],
+            },
+        ],
+    }
+
+
 def build_inputs(
     manifest: dict[str, Any],
     output_root: Path,
@@ -24555,6 +40097,7 @@ def build_inputs(
     }
     generated = {"parity": set(), "coverage": set(), "benchmark": set()}
     case_by_requirement: dict[str, str] = {}
+    all_cases_by_id: dict[str, dict[str, Any]] = {}
     counts = {
         "parity_cases": 0,
         "coverage_plans": 0,
@@ -24584,6 +40127,7 @@ def build_inputs(
         parity_cases: list[dict[str, Any]] = []
         parity_candidates: list[dict[str, Any]] = []
         coverage_requirements: list[str] = []
+        pipeline_case_ids: list[str] = []
         benchmark_requirements: list[
             tuple[dict[str, Any], dict[str, Any]]
         ] = []
@@ -24634,6 +40178,29 @@ def build_inputs(
         counts.setdefault("nuanced_parity_cases", 0)
         counts["nuanced_parity_cases"] += added_nuanced_cases
 
+        pipeline_case_pool = {
+            **all_cases_by_id,
+            **{case["case_id"]: case for case in parity_cases},
+        }
+        for variant, spec in PIPELINE_OP_BENCHMARK_SPECS.items():
+            if spec.surface != surface_id:
+                continue
+            pipeline_case = build_pipeline_parity_case(
+                variant,
+                spec,
+                pipeline_case_pool,
+                operations,
+            )
+            parity_cases.append(pipeline_case)
+            pipeline_case_pool[pipeline_case["case_id"]] = pipeline_case
+            pipeline_case_ids.append(pipeline_case["case_id"])
+
+        for case in parity_cases:
+            case_id = case["case_id"]
+            if case_id in all_cases_by_id:
+                raise ValueError(f"parity case mapped twice: {case_id}")
+            all_cases_by_id[case_id] = case
+
         parity_relative = f"inputs/parity/{storage_slug}.json"
         parity_path = output_root / parity_relative
         write_json(
@@ -24661,6 +40228,9 @@ def build_inputs(
             )
         )
         selected_cases = list(dict.fromkeys(selected_cases))
+        selected_cases.extend(
+            case_id for case_id in pipeline_case_ids if case_id not in selected_cases
+        )
         # Coverage is intentionally input-only: do not add direct native
         # probes to compensate for paths that lack a public parity workflow.
         # Those paths remain visible as uncovered until a real public input
@@ -24702,21 +40272,38 @@ def build_inputs(
             workload_id = (
                 f"{storage_slug}.{slug(operation['id'])}.standard"
             )
+            pipeline_workload = BENCHMARK_PIPELINE_WORKLOADS.get(workload_id)
+            if pipeline_workload is not None:
+                case_id = pipeline_workload["case_id"]
             workloads.append(
                 {
                     "workload_id": workload_id,
                     "covers": [requirement["id"]],
                     "subjects": [
                         {"kind": "oracle", "id": "pillow"},
-                        {"kind": "target_profile", "id": TARGET_PROFILE},
+                        *(
+                            {
+                                "kind": "target_profile",
+                                "id": profile,
+                            }
+                            for profile in BENCHMARK_TARGET_PROFILES
+                        ),
                     ],
                     "input": {
                         "kind": "parity_case",
                         "case_id": case_id,
                     },
                     "measurement": {
-                        "boundary": "observed_steps",
-                        "step_ids": ["call"],
+                        "boundary": (
+                            "observed_steps"
+                            if pipeline_workload is not None
+                            else "whole_workflow"
+                        ),
+                        "step_ids": (
+                            pipeline_workload["step_ids"]
+                            if pipeline_workload is not None
+                            else []
+                        ),
                         "metrics": operation["benchmark"]["metrics"],
                         "warmup_iterations": 5,
                         "measurement_iterations": 20,
@@ -24725,6 +40312,12 @@ def build_inputs(
                         "cache_state": "warm",
                         "correctness_gate": "parity_pass",
                     },
+                    "context": _workflow_benchmark_context(
+                        all_cases_by_id[case_id],
+                        variant=operation["id"],
+                        surface=surface_id,
+                        operation=operation["id"],
+                    ),
                 }
             )
             members.append({"workload_id": workload_id, "weight": 1})
@@ -24754,6 +40347,16 @@ def build_inputs(
         generated["benchmark"].add(benchmark_relative)
         counts["benchmark_workloads"] += len(workloads)
         counts["benchmark_suites"] += len(suites)
+
+    pipeline_relative = "inputs/benchmark/pipeline-operations.json"
+    pipeline_document = build_pipeline_benchmark_document(
+        operations,
+        all_cases_by_id,
+    )
+    write_json(output_root / pipeline_relative, pipeline_document)
+    generated["benchmark"].add(pipeline_relative)
+    counts["benchmark_workloads"] += len(pipeline_document["workloads"])
+    counts["benchmark_suites"] += len(pipeline_document["suites"])
 
     for lane in ("parity", "coverage", "benchmark"):
         if generated[lane] != indexed[lane]:

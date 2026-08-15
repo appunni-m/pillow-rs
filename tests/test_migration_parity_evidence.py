@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.aggregate_migration_parity import aggregate
+from scripts.aggregate_migration_parity import aggregate, load_inputs
 from scripts.report_migration_parity_region_coverage import operation_surface_coverage
 from scripts.run_migration_coverage import (
     coverage_case_failed,
@@ -16,6 +16,7 @@ from scripts.run_migration_coverage import (
     scope_coverage_plans,
 )
 from scripts.run_migration_rust_coverage import llvm_shape, merged_file_data
+from scripts.run_migration_parity import load_manifest
 from scripts.validate_migration_parity_result import status_report
 
 
@@ -209,7 +210,15 @@ class MigrationParityEvidenceTests(unittest.TestCase):
             )
             status_report(result)
             self.assertEqual(result["schema"], "migration-parity/status-report@1")
-            self.assertEqual(len(result["operations"]), 209)
+            manifest = load_manifest(MANIFEST)
+            operation_count = sum(
+                len(surface["operations"])
+                for surface in manifest["surfaces"]
+            )
+            self.assertEqual(
+                len(result["operations"]),
+                operation_count * len(manifest["target_profiles"]),
+            )
             self.assertEqual(result["evidence"], [])
             parity = next(
                 item
@@ -217,8 +226,19 @@ class MigrationParityEvidenceTests(unittest.TestCase):
                 if item["dimension"] == "parity_outcome"
             )
             self.assertEqual(parity["numerator"], 0)
-            self.assertEqual(parity["denominator"], 3169)
-            self.assertTrue(all(item["parity"]["outcome"] == "not_proven" for item in result["operations"]))
+            active_inputs = load_inputs(load_manifest(MANIFEST))
+            self.assertEqual(parity["denominator"], len(active_inputs["cases"]))
+            self.assertTrue(
+                all(
+                    item["parity"]["outcome"]
+                    == (
+                        "not_proven"
+                        if item["parity"]["applicability"] == "required"
+                        else "not_applicable"
+                    )
+                    for item in result["operations"]
+                )
+            )
 
     def test_unknown_status_field_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory(prefix="migration-status-test-") as directory:

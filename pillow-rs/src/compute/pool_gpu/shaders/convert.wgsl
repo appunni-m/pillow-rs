@@ -27,9 +27,10 @@ fn target_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 fn source_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
-// BT.601 luma: (299*R + 587*G + 114*B + 500) / 1000
+// Pillow's exact rounded BT.601 luma. The decimal 299/587/114 form differs
+// from PIL's fixed-point conversion at boundary values.
 fn bt601_luma(r: u32, g: u32, b: u32) -> u32 {
-    return (299u * r + 587u * g + 114u * b + 500u) / 1000u;
+    return (19595u * r + 38470u * g + 7471u * b + 32768u) >> 16u;
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;

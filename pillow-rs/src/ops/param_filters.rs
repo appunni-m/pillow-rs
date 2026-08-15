@@ -371,13 +371,14 @@ impl Image {
     /// materialization failures.
     pub fn max_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("MaxFilter")?;
-        let size = size.max(3) | 1; // ensure odd, at least 3
+        // Pillow accepts a one-pixel rank window as an identity filter.
+        let size = if size == 1 { 1 } else { size.max(3) | 1 };
         Ok(Image::push_op(self, PipelineOp::MaxFilter { size }))
     }
 
     /// Applies a minimum filter over an odd neighborhood.
     ///
-    /// `size` is rounded up to an odd value of at least `3`.
+    /// `size` is rounded up to an odd value; `1` is an identity filter.
     ///
     /// # Errors
     ///
@@ -385,20 +386,20 @@ impl Image {
     /// materialization failures.
     pub fn min_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("MinFilter")?;
-        let size = size.max(3) | 1; // ensure odd, at least 3
+        let size = if size == 1 { 1 } else { size.max(3) | 1 };
         Ok(Image::push_op(self, PipelineOp::MinFilter { size }))
     }
 
     /// Applies a median filter over an odd neighborhood.
     ///
-    /// `size` is rounded up to an odd value of at least `3`.
+    /// `size` is rounded up to an odd value; `1` is an identity filter.
     ///
     /// # Errors
     ///
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn median_filter(&self, size: u32) -> Result<Image, PilError> {
-        let size = size.max(3) | 1; // ensure odd, at least 3
+        let size = if size == 1 { 1 } else { size.max(3) | 1 };
         Ok(Image::push_op(self, PipelineOp::MedianFilter { size }))
     }
 
@@ -421,7 +422,7 @@ impl Image {
     /// reconstruction fails.
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("Mode")?;
-        let size = size.max(3) | 1; // ensure odd, at least 3
+        let size = if size == 1 { 1 } else { size.max(3) | 1 };
 
         // For palette images: extract palette before materialize
         let palette = self.palette();
@@ -503,7 +504,7 @@ impl Image {
     /// materialization failures.
     pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
         self.validate_filter("RankFilter")?;
-        let size = size.max(3) | 1; // ensure odd, at least 3
+        let size = if size == 1 { 1 } else { size.max(3) | 1 };
         Ok(Image::push_op(self, PipelineOp::RankFilter { size, rank }))
     }
 
@@ -552,7 +553,7 @@ impl Image {
             self,
             PipelineOp::Color3DLut {
                 size,
-                table,
+                table: table.into(),
                 channels,
                 source_mode,
                 target_mode: target,

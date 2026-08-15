@@ -14,7 +14,9 @@ MANIFEST     := pillow-rs/tests/fixtures/manifest.yaml
 PY_SRC       := pillow-rs-py
 JS_SRC       := pillow-rs-js
 CORE_SRC     := pillow-rs
-FONTDONE_SRC := ../fontdone
+FONTDONE_REPO ?= https://github.com/appunni-m/fontdone.git
+FONTDONE_REF ?= 95dc33f12790c896f9a5c95571eec4360f22412e
+FONTDONE_SRC ?= build/fontdone-src
 IMAGE_SLASH_STAR_SRC := $(abspath ../image-slash-star)
 IMAGE_SLASH_STAR_AVIF_LIB_DIR ?= $(shell p="$$(find "$(IMAGE_SLASH_STAR_SRC)/.oracle-venv" -name 'libavif*' -type f -print -quit 2>/dev/null)"; if [ -n "$$p" ]; then dirname "$$p"; fi)
 FIXTURES_DIR := pillow-rs/tests/fixtures
@@ -28,12 +30,46 @@ MIGRATION_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result.json
 MIGRATION_RUST_COVERAGE_OUTPUT ?= build/migration-parity/coverage-result-rust.json
 MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
 MIGRATION_COVERAGE_OPERATION ?=
+MIGRATION_COVERAGE_EXCLUDE_CASE_IDS ?=
+MIGRATION_COVERAGE_EXCLUDE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_EXCLUDE_CASE_IDS),--exclude-case-id '$(case_id)')
+MIGRATION_COVERAGE_CASE_IDS ?=
+MIGRATION_COVERAGE_CASE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_CASE_IDS),--case-id '$(case_id)')
+MIGRATION_ALL_BACKENDS_OUTPUT ?= build/migration-parity/all-backends-test-result.json
+MIGRATION_ALL_BACKENDS_TIMEOUT ?= 7200
+MIGRATION_GPU_FULL ?= 1
+MIGRATION_GPU_FULL_ARG := $(if $(filter 0 false no,$(MIGRATION_GPU_FULL)),--no-gpu-full,--gpu-full)
 MIGRATION_OPERATION_COVERAGE_OUTPUT ?= build/migration-parity/coverage-operation-rust.json
 MIGRATION_OPERATION_COVERAGE_REPORT ?= target/coverage/migration-parity-operation-python.json
 MIGRATION_OPERATION_LLVM_REPORT ?= target/coverage/migration-parity-operation-rust.json
 MIGRATION_BENCHMARK_OUTPUT ?= build/migration-parity/benchmark-result.json
 MIGRATION_BENCHMARK_PARITY_OUTPUT ?= build/migration-parity/benchmark-parity-result.json
 MIGRATION_BENCHMARK_ARGS ?=
+MIGRATION_BENCHMARK_COVERAGE_RESULT ?= $(MIGRATION_BENCHMARK_OUTPUT)
+MIGRATION_BENCHMARK_COVERAGE_OUTPUT ?= build/migration-parity/pipeline-benchmark-coverage.json
+MIGRATION_BENCHMARK_REPORT_OUTPUT ?= build/migration-parity/pipeline-performance-report.json
+MIGRATION_BENCHMARK_BASELINE ?=
+MIGRATION_BENCHMARK_ROADMAP_STATUS_OUTPUT ?= build/migration-parity/pipeline-roadmap-status.json
+MIGRATION_BENCHMARK_BUDGET_OUTPUT ?= build/migration-parity/pipeline-budget-check.json
+MIGRATION_BENCHMARK_BUDGET_BASELINE ?=
+MIGRATION_BENCHMARK_PROFILE ?= standard
+MIGRATION_PROFILE_WORKLOAD_ID ?= pipeline.quick.gaussianblur-invert.rgb-1024
+MIGRATION_PROFILE_BACKEND ?= cpu
+MIGRATION_PROFILE_REPEAT ?= 40
+MIGRATION_PROFILE_TIMEOUT ?= 180
+MIGRATION_PROFILE_OUTPUT_DIR ?= build/migration-parity/profiles
+MIGRATION_CORE_BENCHMARK_ARGS ?=
+MIGRATION_CORE_BENCHMARK_OUTPUT ?= build/migration-parity/pipeline-core-benchmark.json
+PILLOW_RS_PY_BENCHMARK_ARGS ?=
+PILLOW_RS_PY_BENCHMARK_OUTPUT ?= build/migration-parity/pillow-rs-py-binding-benchmark.json
+MIGRATION_BENCHMARK_QUICK_WORKLOADS := \
+	pipeline.quick.transpose-twice.rgb-1024 \
+	pipeline.quick.gaussianblur-invert.rgb-1024 \
+	pipeline.quick.multiply-screen.rgb-1024 \
+	pipeline.quick.invert-mirror.rgb-1024
+MIGRATION_BENCHMARK_PROFILE_ARGS_standard :=
+MIGRATION_BENCHMARK_PROFILE_ARGS_quick := $(foreach workload,$(MIGRATION_BENCHMARK_QUICK_WORKLOADS),--workload-id $(workload))
+MIGRATION_BENCHMARK_PROFILE_ARGS_pipeline := --pipeline
+MIGRATION_BENCHMARK_PROFILE_ARGS := $(MIGRATION_BENCHMARK_PROFILE_ARGS_$(MIGRATION_BENCHMARK_PROFILE))
 MIGRATION_STATUS_OUTPUT ?= build/migration-parity/status-report.json
 
 ifneq ($(strip $(IMAGE_SLASH_STAR_AVIF_LIB_DIR)),)
@@ -62,14 +98,19 @@ help: ## Show this help
 	@printf "  $(CYAN)make build-wasm-release$(NC) Build WASM package (release)\n"
 	@printf "  $(CYAN)make build-all$(NC)      Build Python + WASM\n"
 	@printf "\n$(BOLD)Test$(NC)\n"
-	@printf "  $(CYAN)make test$(NC)           Run the canonical live source/target parity lane\n"
+	@printf "  $(CYAN)make test$(NC)           Run CPU + SIMD + bounded full GPU + Python + JS/WASM\n"
+	@printf "  $(CYAN)MIGRATION_GPU_FULL=0 make test$(NC) Keep the GPU smoke gate but mark full GPU parity not proven\n"
 	@printf "  $(CYAN)make test-core$(NC)      Run Rust core unit tests\n"
 	@printf "  $(CYAN)make test-wasm$(NC)      Run WASM/JS tests\n"
 	@printf "  $(CYAN)make migration-parity-fixtures-check$(NC) Verify the fixed manifest and indexed inputs\n"
 	@printf "  $(CYAN)make migration-parity-crash-quarantine-check$(NC) Verify isolated crash inputs without executing them\n"
 	@printf "  $(CYAN)make migration-parity-case-review$(NC) Verify duplicate selection and nuanced cases\n"
 	@printf "  $(CYAN)make migration-parity-evidence-check$(NC) Validate strict result interfaces\n"
-	@printf "  $(CYAN)make test-all$(NC)       Run core + Python + WASM tests\n"
+	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Compare Pillow vs CPU, SIMD, and GPU\n"
+	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=quick make migration-parity-benchmark$(NC) Run the representative four-workload smoke benchmark\n"
+	@printf "  $(CYAN)MIGRATION_BENCHMARK_PROFILE=pipeline make migration-parity-benchmark$(NC) Run every PipelineOp and public composition workload\n"
+	@printf "  $(CYAN)make migration-parity-gpu-watchdog-check$(NC) Verify bounded GPU process-group handling\n"
+	@printf "  $(CYAN)make test-all$(NC)       Run Rust core plus the all-backend test campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
 	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
@@ -85,6 +126,13 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-imagecolor-native-coverage$(NC) Run the image-color native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-imagepalette-native-coverage$(NC) Run the image-palette native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-region-coverage$(NC) Report region coverage per public operation\n"
+	@printf "  $(CYAN)make migration-parity-pipeline-benchmark-coverage$(NC) Check every PipelineOp has a benchmark workload\n"
+	@printf "  $(CYAN)make migration-parity-pipeline-report$(NC) Generate benchmark timing/backend/resource evidence\n"
+	@printf "  $(CYAN)make migration-parity-pipeline-roadmap-status$(NC) Generate per-FIL roadmap status and denominator evidence\n"
+	@printf "  $(CYAN)make migration-parity-pipeline-budget-check$(NC) Compare compatible benchmark lineages against guarded budgets\n"
+	@printf "  $(CYAN)make migration-parity-profile$(NC) Capture a bounded CPU/SIMD/GPU adapter profile\n"
+	@printf "  $(CYAN)make migration-parity-profile-all$(NC) Capture profiles for CPU, SIMD, and GPU\n"
+	@printf "  $(CYAN)make migration-parity-pipeline-core-benchmark$(NC) Measure the direct pure-Rust pipeline boundary\n"
 	@printf "  $(CYAN)make migration-parity-benchmark$(NC) Run correctness-gated benchmark workloads\n"
 	@printf "  $(CYAN)make migration-parity-aggregate$(NC) Join compatible parity, coverage, and benchmark evidence\n"
 	@printf "  $(CYAN)make migration-parity-docs$(NC) Generate specification and evidence documentation\n"
@@ -97,7 +145,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make pillow-rs-lint$(NC) Run pillow-rs fmt + clippy\n"
 	@printf "  $(CYAN)make pillow-rs-ci$(NC)   Run pillow-rs CI sequence\n"
 	@printf "\n$(BOLD)fontdone / FreeType parity$(NC)\n"
-	@printf "  $(CYAN)make fontdone-help$(NC)  Show crate-local fontdone targets\n"
+	@printf "  $(CYAN)make fontdone-help$(NC)  Show crate-local fontdone targets (pinned Git checkout)\n"
 	@printf "  $(CYAN)make fontdone-ci$(NC)    Run fontdone docs, lint, tests, parity, FFI, bench contracts\n"
 	@printf "  $(CYAN)make fontdone-test$(NC)  Run fontdone non-oracle tests and all-target checks\n"
 	@printf "  $(CYAN)make fontdone-parity$(NC) Run the FreeType parity matrix harness\n"
@@ -147,6 +195,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make bench$(NC)          Full benchmark suite (166 functions, ~20 min)\n"
 	@printf "  $(CYAN)make bench-incr$(NC)     Incremental (only changed functions)\n"
 	@printf "  $(CYAN)make bench-priority$(NC) Priority tier only (12 ops)\n"
+	@printf "  $(CYAN)make pillow-rs-py-binding-benchmark$(NC) Release-only PyO3 GIL/concurrency benchmark\n"
 	@printf "\n$(BOLD)CI$(NC)\n"
 	@printf "  $(CYAN)make ci$(NC)             Full CI pipeline (fmt → clippy → test → coverage)\n"
 	@printf "  $(CYAN)make verify$(NC)         Full workspace CI plus FreeType CI\n"
@@ -197,10 +246,10 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-core test-wasm test-all
+.PHONY: test test-core test-wasm test-all migration-parity-test-all-backends
 .PHONY: backend-support-matrix
 
-test: migration-parity-fixtures-check migration-parity-test ## Run the complete live source/target parity lane
+test: migration-parity-fixtures-check migration-parity-test-all-backends ## Run CPU + SIMD + safe GPU + Python + JS/WASM
 
 test-core: ## Run Rust core unit tests
 	$(MAKE) -C $(CORE_SRC) test-core
@@ -211,13 +260,13 @@ backend-support-matrix: ## Emit registry-derived CPU/SIMD/GPU support JSON
 test-wasm: build-wasm-core build-wasm-extra ## Build the declared WASM packages and validate their package boundary
 	cd $(JS_SRC) && npm run test:package
 
-test-all: test-core test test-wasm ## Run core + live parity + WASM package checks
+test-all: test-core test ## Run Rust core plus the all-backend test campaign
 
 .PHONY: parity
 parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified parity
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
-.PHONY: fontdone-help fontdone-build fontdone-doc fontdone-doc-test
+.PHONY: fontdone-source fontdone-help fontdone-build fontdone-doc fontdone-doc-test
 .PHONY: fontdone-test fontdone-parity fontdone-ffi fontdone-ffi-compat fontdone-lint
 .PHONY: fontdone-fmt fontdone-fmt-fix fontdone-clippy
 .PHONY: fontdone-bench fontdone-bench-quick fontdone-bench-self-test
@@ -234,7 +283,7 @@ parity: font-tests fontdone-parity ## Run pillow-rs Font + fontdone unified pari
 # ── pillow-rs / core crate ──────────────────────────────────────────────────
 .PHONY: pillow-rs-help pillow-rs-test pillow-rs-test-core
 .PHONY: image-backend-test image-backend-migration-test image-backend-parity-test image-backend-feature-test
-.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-benchmark migration-parity-aggregate migration-parity-docs
+.PHONY: migration-parity-test migration-parity-case migration-parity-oracle-identity migration-parity-target-identity migration-parity-coverage migration-parity-coverage-rust migration-parity-operation-coverage migration-parity-font-native-coverage migration-parity-region-coverage migration-parity-pipeline-benchmark-coverage migration-parity-pipeline-report migration-parity-pipeline-roadmap-status migration-parity-pipeline-budget-check migration-parity-profile migration-parity-profile-all migration-parity-benchmark migration-parity-pipeline-core-benchmark migration-parity-aggregate migration-parity-docs migration-parity-gpu-watchdog-check pillow-rs-py-binding-benchmark
 .PHONY: font-tests font-tests-release imagingft-tests imagingft-tests-release pillow-rs-imagingft pillow-rs-imagingft-release
 .PHONY: pillow-rs-fixtures-clean
 .PHONY: pillow-rs-public-api-boundary pillow-rs-fmt pillow-rs-fmt-fix pillow-rs-clippy pillow-rs-lint
@@ -264,6 +313,21 @@ migration-parity-test: ## Run canonical input-only parity against live Pillow
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
 
+migration-parity-test-all-backends: build-dev ## Build once, then run CPU, SIMD, bounded full GPU, Python, and JS/WASM together
+	set +e; \
+	$(PYTHON) scripts/run_all_backend_tests.py \
+		--output "$(MIGRATION_ALL_BACKENDS_OUTPUT)" \
+		--timeout "$(MIGRATION_ALL_BACKENDS_TIMEOUT)" \
+		$(MIGRATION_GPU_FULL_ARG); \
+	status=$$?; \
+	$(PYTHON) scripts/validate_migration_parity_result.py all_backends "$(MIGRATION_ALL_BACKENDS_OUTPUT)"; \
+	validator=$$?; \
+	if [ $$status -ne 0 ]; then exit $$status; fi; \
+	exit $$validator
+
+migration-parity-gpu-watchdog-check: ## Verify bounded GPU child-process handling
+	$(PYTHON) -m unittest tests.test_migration_parity_contract
+
 migration-parity-case: ## Run one public parity case without replacing the full-suite artifact
 	@test -n "$(MIGRATION_PARITY_CASE)" || { \
 		printf "Set MIGRATION_PARITY_CASE to an active case_id.\n" >&2; \
@@ -291,7 +355,8 @@ migration-parity-coverage: ## Run target coverage from indexed coverage plans
 	set +e; \
 	$(PYTHON) scripts/run_migration_coverage.py \
 		--output $(MIGRATION_COVERAGE_OUTPUT) \
-		--coverage-report $(MIGRATION_COVERAGE_REPORT); \
+		--coverage-report $(MIGRATION_COVERAGE_REPORT) \
+		$(MIGRATION_COVERAGE_EXCLUDE_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py coverage $(MIGRATION_COVERAGE_OUTPUT); \
 	validator=$$?; \
@@ -301,7 +366,9 @@ migration-parity-coverage: ## Run target coverage from indexed coverage plans
 migration-parity-coverage-rust: ## Run merged Python+Rust coverage with a temporary instrumented extension
 	set +e; \
 	$(PYTHON) scripts/run_migration_rust_coverage.py \
-		--output $(MIGRATION_RUST_COVERAGE_OUTPUT); \
+		--output $(MIGRATION_RUST_COVERAGE_OUTPUT) \
+		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
+		$(MIGRATION_COVERAGE_CASE_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py coverage $(MIGRATION_RUST_COVERAGE_OUTPUT); \
 	validator=$$?; \
@@ -318,7 +385,8 @@ migration-parity-operation-coverage: ## Run merged coverage for one manifest pub
 		--operation "$(MIGRATION_COVERAGE_OPERATION)" \
 		--output $(MIGRATION_OPERATION_COVERAGE_OUTPUT) \
 		--python-report $(MIGRATION_OPERATION_COVERAGE_REPORT) \
-		--llvm-report $(MIGRATION_OPERATION_LLVM_REPORT); \
+		--llvm-report $(MIGRATION_OPERATION_LLVM_REPORT) \
+		$(MIGRATION_COVERAGE_EXCLUDE_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py coverage $(MIGRATION_OPERATION_COVERAGE_OUTPUT); \
 	validator=$$?; \
@@ -349,17 +417,67 @@ migration-parity-imagepalette-native-coverage: ## Run the image-palette native c
 migration-parity-region-coverage: ## Report region coverage per public operation
 	$(PYTHON) scripts/report_migration_parity_region_coverage.py
 
-migration-parity-benchmark: ## Run correctness-gated benchmark workloads
+migration-parity-pipeline-benchmark-coverage: ## Check the complete PipelineOp benchmark matrix
+	$(PYTHON) scripts/report_pipeline_benchmark_coverage.py \
+		--result "$(MIGRATION_BENCHMARK_COVERAGE_RESULT)" \
+		--output "$(MIGRATION_BENCHMARK_COVERAGE_OUTPUT)"
+
+migration-parity-pipeline-report: ## Generate benchmark timing/backend/resource evidence
+	$(PYTHON) scripts/report_pipeline_performance.py \
+		--result "$(MIGRATION_BENCHMARK_OUTPUT)" \
+		--output "$(MIGRATION_BENCHMARK_REPORT_OUTPUT)" \
+		$(if $(strip $(MIGRATION_BENCHMARK_BASELINE)),--baseline "$(MIGRATION_BENCHMARK_BASELINE)",)
+
+migration-parity-pipeline-roadmap-status: ## Generate per-FIL roadmap status and denominator evidence
+	$(PYTHON) scripts/report_pipeline_roadmap_status.py \
+		--result "$(MIGRATION_BENCHMARK_OUTPUT)" \
+		--output "$(MIGRATION_BENCHMARK_ROADMAP_STATUS_OUTPUT)" \
+		--check
+
+migration-parity-pipeline-budget-check: ## Compare compatible benchmark lineages against guarded budgets
+	$(PYTHON) scripts/check_pipeline_benchmark_budgets.py \
+		--current "$(MIGRATION_BENCHMARK_OUTPUT)" \
+		--baseline "$(MIGRATION_BENCHMARK_BUDGET_BASELINE)" \
+		--output "$(MIGRATION_BENCHMARK_BUDGET_OUTPUT)" \
+		--check
+
+migration-parity-profile: build ## Capture one bounded adapter profile without running unit tests
+	$(PYTHON) scripts/profile_migration_benchmark.py \
+		--workload-id "$(MIGRATION_PROFILE_WORKLOAD_ID)" \
+		--backend "$(MIGRATION_PROFILE_BACKEND)" \
+		--repeat "$(MIGRATION_PROFILE_REPEAT)" \
+		--timeout "$(MIGRATION_PROFILE_TIMEOUT)" \
+		--output-dir "$(MIGRATION_PROFILE_OUTPUT_DIR)"
+
+migration-parity-profile-all: ## Capture bounded CPU, SIMD, and GPU adapter profiles
+	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=cpu
+	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=simd
+	$(MAKE) migration-parity-profile MIGRATION_PROFILE_BACKEND=gpu
+
+migration-parity-benchmark: build ## Build release, then run correctness-gated benchmark workloads
+	@test "$(MIGRATION_BENCHMARK_PROFILE)" = standard -o "$(MIGRATION_BENCHMARK_PROFILE)" = quick -o "$(MIGRATION_BENCHMARK_PROFILE)" = pipeline || { \
+		printf "MIGRATION_BENCHMARK_PROFILE must be 'standard', 'quick', or 'pipeline'.\n" >&2; \
+		exit 2; \
+	}
 	set +e; \
 	$(PYTHON) scripts/run_migration_benchmark.py \
 		--output $(MIGRATION_BENCHMARK_OUTPUT) \
 		--parity-output $(MIGRATION_BENCHMARK_PARITY_OUTPUT) \
+		$(MIGRATION_BENCHMARK_PROFILE_ARGS) \
 		$(MIGRATION_BENCHMARK_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py benchmark $(MIGRATION_BENCHMARK_OUTPUT); \
 	validator=$$?; \
 	if [ $$status -ne 0 ]; then exit $$status; fi; \
 	exit $$validator
+
+migration-parity-pipeline-core-benchmark: ## Run the direct pure-Rust pipeline boundary benchmark
+	@mkdir -p "$(dir $(MIGRATION_CORE_BENCHMARK_OUTPUT))"
+	$(CARGO) run --manifest-path $(CORE_SRC)/Cargo.toml --release --locked --example pipeline_layers -- $(MIGRATION_CORE_BENCHMARK_ARGS) > "$(MIGRATION_CORE_BENCHMARK_OUTPUT)"
+
+pillow-rs-py-binding-benchmark: build ## Run the release-only PyO3 boundary benchmark
+	@mkdir -p "$(dir $(PILLOW_RS_PY_BENCHMARK_OUTPUT))"
+	$(PYTHON) pillow-rs-py/bench/release_benchmark.py $(PILLOW_RS_PY_BENCHMARK_ARGS) > "$(PILLOW_RS_PY_BENCHMARK_OUTPUT)"
 
 migration-parity-aggregate: ## Join compatible parity, coverage, and benchmark evidence
 	@coverage_evidence="$(MIGRATION_COVERAGE_OUTPUT)"; \
@@ -420,55 +538,88 @@ pillow-rs-clean: ## Clean pillow-rs artifacts
 	$(MAKE) -C $(CORE_SRC) clean
 
 # ── fontdone / FreeType parity ───────────────────────────────────────────────
+fontdone-source: ## Ensure the pinned GitHub fontdone checkout exists
+	@if test -d "$(FONTDONE_SRC)/.git"; then \
+		actual="$$(git -C "$(FONTDONE_SRC)" rev-parse HEAD 2>/dev/null || true)"; \
+		if test "$$actual" != "$(FONTDONE_REF)"; then \
+			printf "fontdone checkout at %s is %s, expected %s; use another FONTDONE_SRC or update it explicitly.\n" "$(FONTDONE_SRC)" "$$actual" "$(FONTDONE_REF)" >&2; \
+			exit 2; \
+		fi; \
+	elif test -e "$(FONTDONE_SRC)"; then \
+		printf "fontdone source path exists but is not a Git checkout: %s\n" "$(FONTDONE_SRC)" >&2; \
+		exit 2; \
+	else \
+		mkdir -p "$$(dirname "$(FONTDONE_SRC)")"; \
+		git clone --filter=blob:none --no-checkout "$(FONTDONE_REPO)" "$(FONTDONE_SRC)"; \
+		git -C "$(FONTDONE_SRC)" checkout --detach "$(FONTDONE_REF)"; \
+	fi
+
 fontdone-help: ## Show fontdone targets
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) help
 
 fontdone-build: ## Build fontdone
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) build
 
 fontdone-doc: ## Build strict fontdone rustdoc
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) doc
 
 fontdone-doc-test: ## Run fontdone doctests
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) doc-test
 
 fontdone-test: ## Run fontdone non-oracle tests and all-target checks
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) test-fast
 
 fontdone-parity: ## Run FreeType parity matrix tests
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) test-parity
 
 fontdone-ffi: ## Run no-runtime-FFI guard
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) test-ffi
 
 fontdone-ffi-compat: ## Run FreeType-shaped API/ABI facade audit
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) api-abi-check
 
 fontdone-fmt: ## Check fontdone formatting
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) fmt
 
 fontdone-fmt-fix: ## Apply fontdone formatting
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) fmt
 
 fontdone-clippy: ## Run strict fontdone clippy
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) clippy
 
 fontdone-lint: ## Run fontdone fmt + clippy
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) lint
 
 fontdone-bench: ## Run Rust vs C FreeType benchmark report
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) bench
 
 fontdone-bench-quick: ## Run short FreeType benchmark smoke comparison
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) bench-quick
 
 fontdone-bench-self-test: ## Run benchmark tooling self-test
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) bench-self-test
 
 fontdone-fixtures: ## Regenerate all FreeType fixture families
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) font-fixtures
 
 fontdone-ci: ## Run required fontdone local CI sequence
+	@$(MAKE) fontdone-source
 	$(MAKE) -C $(FONTDONE_SRC) ci
 
 fontdone-clean: ## Clean fontdone artifacts

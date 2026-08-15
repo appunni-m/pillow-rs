@@ -36,7 +36,9 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from run_migration_parity import (  # noqa: E402
     AssetStore,
     ENCODED_INPUTS,
+    TARGET_BACKEND,
     build_operation_index,
+    configure_target_backend,
     git_dirty,
     git_revision,
     load_cases,
@@ -76,6 +78,7 @@ def scope_coverage_plans(
     *,
     case_ids: set[str] | None = None,
     operation: str | None = None,
+    exclude_case_ids: set[str] | None = None,
 ) -> tuple[list[dict[str, Any]], set[str]]:
     """Restrict plans to an input-only operation or explicit case selection.
 
@@ -87,18 +90,24 @@ def scope_coverage_plans(
     are component exercises, not attributable to one public operation.
     """
 
+    exclude_case_ids = exclude_case_ids or set()
     available_ids = {
         case_id
         for plan in plans
         for case_id in plan["selectors"]["parity_case_ids"]
     }
+    missing_excluded = exclude_case_ids - cases_by_id.keys()
+    if missing_excluded:
+        raise ValueError(
+            f"coverage excludes missing parity cases: {sorted(missing_excluded)[:5]}"
+        )
     if case_ids is not None:
         missing = case_ids - cases_by_id.keys()
         if missing:
             raise ValueError(f"coverage selects missing parity cases: {sorted(missing)[:5]}")
 
-    selected_ids = available_ids
-    scoped = operation is not None or case_ids is not None
+    selected_ids = available_ids - exclude_case_ids
+    scoped = operation is not None or case_ids is not None or bool(exclude_case_ids)
     if operation is not None:
         prefix = f"{operation}."
         selected_ids = {case_id for case_id in selected_ids if case_id.startswith(prefix)}
@@ -210,7 +219,7 @@ def coverage_identity(
                 "revision": git_revision(),
                 "dirty": git_dirty(),
                 "runtime": platform.python_version(),
-                "backend": "cpu",
+                "backend": TARGET_BACKEND,
                 "features": ["all-features"],
             }
         ],
@@ -430,6 +439,7 @@ def run(args: argparse.Namespace) -> int:
         cases_by_id,
         case_ids=set(args.case_id) if args.case_id else None,
         operation=args.operation,
+        exclude_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
     )
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
     operation_index = build_operation_index(manifest)
@@ -445,10 +455,17 @@ def run(args: argparse.Namespace) -> int:
         tempdir = Path(temporary)
         cov.start()
         try:
+            configure_target_backend()
             for case_id in sorted(selected_ids):
-                case_results[case_id] = run_case(
-                    "target", cases_by_id[case_id], operation_index, tempdir
-                )
+                try:
+                    case_results[case_id] = run_case(
+                        "target", cases_by_id[case_id], operation_index, tempdir
+                    )
+                except BaseException as exc:
+                    raise RuntimeError(
+                        f"target coverage case crashed: {case_id}: "
+                        f"{type(exc).__name__}: {exc}"
+                    ) from exc
             command_totals: dict[str, tuple[int, int]] = {}
             for plan in plans:
                 for command_id in plan["selectors"]["command_ids"]:
@@ -504,7 +521,8 @@ def run(args: argparse.Namespace) -> int:
     )
     command = {
         "command_id": "coverage",
-        "argv": ["make", "migration-parity-coverage"]
+        "argv": ([f"MIGRATION_TARGET_BACKEND={TARGET_BACKEND}"] if TARGET_BACKEND != "cpu" else [])
+        + ["make", "migration-parity-coverage"]
         + ([f"MIGRATION_COVERAGE_OPERATION={args.operation}"] if args.operation else []),
         "cwd": ".",
         "timeout_seconds": 3600,
@@ -564,6 +582,7 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--operation")
     parser.add_argument("--case-id", action="append")
+    parser.add_argument("--exclude-case-id", action="append")
     parser.add_argument("--output", type=Path, default=DEFAULT_RESULT)
     parser.add_argument("--coverage-report", type=Path, default=DEFAULT_REPORT)
     parser.add_argument(

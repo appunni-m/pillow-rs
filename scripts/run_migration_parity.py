@@ -26,6 +26,7 @@ import math
 import os
 from pathlib import Path
 import platform
+import signal
 import subprocess
 import sys
 import tempfile
@@ -48,10 +49,103 @@ ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = ROOT / "pillow-rs" / "tests" / "fixtures"
 DEFAULT_MANIFEST = FIXTURE_ROOT / "manifest.yaml"
 DEFAULT_OUTPUT = ROOT / "build" / "migration-parity" / "parity-result.json"
-TARGET_PROFILE = "python-cpu"
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
 ORACLE_VERSION = "12.2.0"
+TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
+STRICT_TARGET_BACKEND = os.environ.get(
+    "MIGRATION_STRICT_TARGET_BACKEND", "0"
+).strip().lower() in {"1", "true", "yes"}
+DEFAULT_GPU_TIMEOUT_SECONDS = 120
+MAX_GPU_TIMEOUT_SECONDS = 300
+PROCESS_REAP_TIMEOUT_SECONDS = 10
+GIT_COMMAND_TIMEOUT_SECONDS = 10
+
+
+def target_profile_for_backend(backend: str) -> str:
+    """Return the manifest profile that identifies one compute backend."""
+
+    if backend not in {"cpu", "simd", "gpu"}:
+        raise ValueError(f"unsupported target backend: {backend}")
+    return f"python-{backend}"
+
+
+def effective_adapter_timeout(requested_seconds: int) -> int:
+    """Return a bounded adapter deadline for the selected target backend.
+
+    A GPU driver failure must not inherit the parity lane's multi-hour default
+    timeout. The parent process owns this deadline and kills the complete
+    adapter process group when it expires, including native children spawned by
+    the Python extension.
+    """
+    if requested_seconds <= 0:
+        raise ValueError("adapter timeout must be positive")
+    if TARGET_BACKEND != "gpu":
+        return requested_seconds
+    raw_limit = os.environ.get(
+        "MIGRATION_GPU_TIMEOUT_SECONDS", str(DEFAULT_GPU_TIMEOUT_SECONDS)
+    )
+    try:
+        configured_limit = int(raw_limit)
+    except ValueError as exc:
+        raise ValueError("MIGRATION_GPU_TIMEOUT_SECONDS must be an integer") from exc
+    if configured_limit <= 0:
+        raise ValueError("MIGRATION_GPU_TIMEOUT_SECONDS must be positive")
+    return min(requested_seconds, configured_limit, MAX_GPU_TIMEOUT_SECONDS)
+
+
+def process_group_options() -> dict[str, Any]:
+    """Return platform options that isolate an adapter and its descendants."""
+
+    if os.name == "nt":
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}
+
+
+def kill_process_group(process: subprocess.Popen[str]) -> None:
+    """Hard-stop the child process and every descendant in its group."""
+
+    if os.name == "nt":
+        try:
+            killer = subprocess.Popen(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                cwd=ROOT,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                **process_group_options(),
+            )
+        except OSError:
+            process.kill()
+            return
+        try:
+            killer.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired:
+            killer.kill()
+            killer.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+        return
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+
+def reap_timed_out_process(
+    process: subprocess.Popen[str],
+) -> tuple[str, str]:
+    """Kill an isolated process group and reap its direct child."""
+
+    kill_process_group(process)
+    try:
+        return process.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        try:
+            return process.communicate(timeout=PROCESS_REAP_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            raise RuntimeError(
+                "timed-out process group did not exit after hard termination"
+            ) from exc
 
 # These are fixed stimuli, not generated oracle outputs.  The builtin asset
 # names in parity inputs intentionally identify a format without storing an
@@ -527,6 +621,8 @@ def call_workflow_step(
     opdef: dict[str, Any],
     bindings: dict[str, Any],
     assets: AssetStore,
+    *,
+    lock_backend: bool = True,
 ) -> Any:
     receiver_desc = step.get("receiver")
     receiver = (
@@ -556,6 +652,14 @@ def call_workflow_step(
         # result contract while invoking the receiver's actual public bytes
         # protocol on both oracle and target.
         return bytes(receiver)
+    if (
+        side == "target"
+        and STRICT_TARGET_BACKEND
+        and lock_backend
+        and operation == "tobytes"
+        and receiver is not None
+    ):
+        receiver = lock_target_image_pipeline(receiver)
     if receiver is not None:
         callable_value = getattr(receiver, operation)
     else:
@@ -579,6 +683,16 @@ def call_workflow_step(
     return callable_value(*positional, **keywords)
 
 
+def lock_target_image_pipeline(value: Any) -> Any:
+    """Force benchmark materialization through the sole active backend."""
+
+    rust_image = getattr(value, "_rust_image", None)
+    lock = getattr(rust_image, "lock_active_backend", None)
+    if callable(lock):
+        value._rust_image = lock()
+    return value
+
+
 def _metadata(value: Any, name: str) -> Any:
     try:
         return json_safe(getattr(value, name))
@@ -597,6 +711,8 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
             # `ImageOps.exif_transpose` with `in_place=True`) serialize as
             # null; the comparison policy still applies to non-null values.
             return None
+        if side == "target" and STRICT_TARGET_BACKEND:
+            value = lock_target_image_pipeline(value)
         try:
             raw = bytes(value.tobytes())
         except Exception:
@@ -695,6 +811,22 @@ def public_error(exc: BaseException) -> dict[str, Any]:
     }
 
 
+def normalized_public_error(
+    exc: BaseException, *, side: str, step: dict[str, Any], tempdir: Path
+) -> dict[str, Any]:
+    """Normalize an error raised by either a workflow call or observation."""
+
+    error = public_error(exc)
+    error["message"] = error["message"].replace(str(tempdir), "<temporary>")
+    if (
+        side == "target"
+        and step["surface"].startswith("PIL.ImageDraw")
+        and error["message"].startswith("Draw.")
+    ):
+        error["message"] = "ImageDraw." + error["message"][len("Draw.") :]
+    return error
+
+
 def run_case(
     side: str,
     case: dict[str, Any],
@@ -703,12 +835,29 @@ def run_case(
     *,
     timing_steps: set[str] | None = None,
     timing_sink: list[int] | None = None,
+    telemetry_sink: list[dict[str, int]] | None = None,
+    timing_boundary: str = "observed_steps",
+    serialize_observations: bool = True,
 ) -> dict[str, Any]:
+    case_started_ns = time.perf_counter_ns()
+    step_receipts: list[dict[str, int]] = []
     assets = AssetStore(case.get("assets", []), FIXTURE_ROOT / "assets", tempdir)
     bindings: dict[str, Any] = {}
     step_results: dict[str, dict[str, Any]] = {}
     blocked_reason: str | None = None
-    for step in case["steps"]:
+    selected_indices = [
+        index
+        for index, step in enumerate(case["steps"])
+        if timing_steps and step["step_id"] in timing_steps
+    ]
+    first_timed_index = selected_indices[0] if selected_indices else None
+    last_timed_index = selected_indices[-1] if selected_indices else None
+    group_started_ns = (
+        time.perf_counter_ns()
+        if timing_sink is not None and timing_boundary == "whole_workflow"
+        else None
+    )
+    for step_index, step in enumerate(case["steps"]):
         step_id = step["step_id"]
         if blocked_reason is not None:
             step_results[step_id] = {
@@ -718,41 +867,75 @@ def run_case(
             }
             continue
         try:
+            step_started_ns = time.perf_counter_ns()
             opdef = operation_definition(
                 operation_index, step["surface"], step["operation"]
             )
-            started_ns = (
-                time.perf_counter_ns()
-                if timing_steps and step_id in timing_steps
-                else None
-            )
+            if (
+                timing_sink is not None
+                and timing_boundary == "observed_steps"
+                and step_index == first_timed_index
+            ):
+                group_started_ns = time.perf_counter_ns()
             value = call_workflow_step(
                 side, step, opdef, bindings, assets
             )
-            if started_ns is not None and timing_sink is not None:
-                timing_sink.append(time.perf_counter_ns() - started_ns)
+            step_elapsed_ns = time.perf_counter_ns() - step_started_ns
+            if telemetry_sink is not None:
+                step_receipts.append(
+                    {"step_id": step_id, "duration_ns": step_elapsed_ns}
+                )
+            if (
+                group_started_ns is not None
+                and timing_sink is not None
+                and timing_boundary == "observed_steps"
+                and step_index == last_timed_index
+            ):
+                timing_sink.append(time.perf_counter_ns() - group_started_ns)
+                group_started_ns = None
             bindings[step_id] = value
             step_results[step_id] = {"step_id": step_id, "status": "ok", "_value": value}
         except BaseException as exc:  # public failures are part of the contract
-            error = public_error(exc)
-            # Both adapters receive equivalent temporary assets, but each
-            # side runs in an isolated directory. Normalize that harness
-            # detail before comparing public I/O errors.
-            error["message"] = error["message"].replace(str(tempdir), "<temporary>")
-            if (
-                side == "target"
-                and step["surface"].startswith("PIL.ImageDraw")
-                and error["message"].startswith("Draw.")
-            ):
-                # Keep target-facade class names from leaking into the shared
-                # Pillow public error contract.
-                error["message"] = "ImageDraw." + error["message"][len("Draw.") :]
+            error = normalized_public_error(
+                exc, side=side, step=step, tempdir=tempdir
+            )
             step_results[step_id] = {
                 "step_id": step_id,
                 "status": "error",
                 "error": error,
             }
             blocked_reason = f"dependency step {step_id} failed"
+
+    if (
+        group_started_ns is not None
+        and timing_sink is not None
+        and timing_boundary == "whole_workflow"
+    ):
+        timing_sink.append(time.perf_counter_ns() - group_started_ns)
+
+    phase_totals = _phase_totals(case, step_receipts, case_started_ns)
+    if telemetry_sink is not None:
+        telemetry_sink.append(phase_totals)
+
+    if not serialize_observations:
+        execution_errors = [
+            {
+                "step_id": step_id,
+                "error": result.get("error"),
+            }
+            for step_id, result in step_results.items()
+            if result.get("status") == "error"
+        ]
+        return {
+            "case_id": case["case_id"],
+            # Timing receipts are also the execution gate for benchmark-only
+            # workflows.  Keep parity result serialization unchanged while
+            # exposing a bounded failure state to the benchmark runner.
+            "status": "completed" if blocked_reason is None else "not_run",
+            "observations": [],
+            "execution_errors": execution_errors,
+            "phase_totals_ns": phase_totals,
+        }
 
     observations: list[dict[str, Any]] = []
     for observation_id in case.get("observations", []):
@@ -772,23 +955,63 @@ def run_case(
         step = next(item for item in case["steps"] if item["step_id"] == observation_id)
         opdef = operation_definition(operation_index, step["surface"], step["operation"])
         shape = opdef["source"]["result"]["shape"]
+        try:
+            value = serialize_value(
+                result["_value"],
+                shape,
+                side=side,
+                surface=step["surface"],
+                operation=step["operation"],
+            )
+        except BaseException as exc:  # materialization is a public observation
+            observations.append(
+                {
+                    "step_id": observation_id,
+                    "status": "error",
+                    "error": normalized_public_error(
+                        exc, side=side, step=step, tempdir=tempdir
+                    ),
+                }
+            )
+            continue
         observations.append(
-            {
-                "step_id": observation_id,
-                "status": "ok",
-                "value": serialize_value(
-                    result["_value"],
-                    shape,
-                    side=side,
-                    surface=step["surface"],
-                    operation=step["operation"],
-                ),
-            }
+            {"step_id": observation_id, "status": "ok", "value": value}
         )
     return {
         "case_id": case["case_id"],
         "status": "completed",
         "observations": observations,
+    }
+
+
+def _phase_totals(
+    case: dict[str, Any],
+    step_receipts: list[dict[str, int]] | None,
+    case_started_ns: int,
+) -> dict[str, int]:
+    """Aggregate adapter-visible setup, pipeline, terminal, and total phases."""
+
+    durations = {
+        item["step_id"]: int(item["duration_ns"])
+        for item in (step_receipts or [])
+    }
+    setup = 0
+    pipeline = 0
+    terminal = 0
+    for step in case.get("steps", []):
+        step_id = step["step_id"]
+        duration = durations.get(step_id, 0)
+        if step_id == "materialize" or step.get("operation") == "tobytes":
+            terminal += duration
+        elif str(step_id).startswith("setup") or step.get("operation") == "new":
+            setup += duration
+        else:
+            pipeline += duration
+    return {
+        "setup_ns": setup,
+        "pipeline_ns": pipeline,
+        "terminal_ns": terminal,
+        "total_ns": max(0, time.perf_counter_ns() - case_started_ns),
     }
 
 
@@ -827,13 +1050,41 @@ def build_operation_index(manifest: dict[str, Any]) -> dict[tuple[str, str], dic
     }
 
 
-def side_identity(side: str) -> dict[str, str]:
+def configure_target_backend() -> dict[str, Any]:
+    """Select one backend for a target-only parity or coverage process.
+
+    The public target facade owns backend state; the harness only performs the
+    process-local setup needed to collect a separate backend observation.  The
+    CPU pool remains the implementation fallback for operations that the
+    selected backend does not advertise.
+    """
+
+    target = importlib.import_module("pillow_rs")
+    available = {str(name).lower() for name in target.available_backends()}
+    if TARGET_BACKEND not in available:
+        raise RuntimeError(
+            f"requested target backend {TARGET_BACKEND!r} is not compiled; "
+            f"available backends: {sorted(available)}"
+        )
+    for name in ("cpu", "simd", "gpu"):
+        target.disable_backend(name)
+    if not target.enable_backend(TARGET_BACKEND):
+        raise RuntimeError(f"failed to activate target backend {TARGET_BACKEND!r}")
+    return {
+        "requested": TARGET_BACKEND,
+        "available": sorted(available),
+        "active": list(target.active_backends()),
+    }
+
+
+def side_identity(side: str) -> dict[str, Any]:
     if side == "source":
         pil = importlib.import_module("PIL")
         version = str(getattr(pil, "__version__", ""))
         if version != ORACLE_VERSION:
             raise RuntimeError(f"Pillow oracle version {version!r}, expected {ORACLE_VERSION}")
         return {"side": "source", "implementation": "Pillow", "version": version}
+    backend_state = configure_target_backend()
     target = importlib.import_module("pillow_rs")
     target_path = Path(target.__file__).resolve()
     expected_root = (ROOT / "pillow-rs-py" / "python").resolve()
@@ -844,6 +1095,8 @@ def side_identity(side: str) -> dict[str, str]:
         "implementation": "pillow-rs",
         "version": str(getattr(target, "__version__", "unknown")),
         "path": str(target_path),
+        "backend": TARGET_BACKEND,
+        "backend_state": backend_state,
     }
 
 
@@ -865,24 +1118,30 @@ def run_side_subprocess(
     env = os.environ.copy()
     target_python = str(ROOT / "pillow-rs-py" / "python")
     env["PYTHONPATH"] = target_python + os.pathsep + env.get("PYTHONPATH", "")
+    popen_kwargs: dict[str, Any] = {
+        "stdin": subprocess.PIPE,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.PIPE,
+        "text": True,
+        "env": env,
+        "cwd": ROOT,
+    }
+    popen_kwargs.update(process_group_options())
+    process = subprocess.Popen(command, **popen_kwargs)
     try:
-        process = subprocess.run(
-            command,
-            input=payload,
-            text=True,
-            capture_output=True,
-            env=env,
-            cwd=ROOT,
-            timeout=timeout_seconds,
-            check=False,
-        )
+        stdout, stderr = process.communicate(input=payload, timeout=timeout_seconds)
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"{side} adapter timed out") from exc
+        stdout, stderr = reap_timed_out_process(process)
+        detail = (stderr or stdout or "").strip().replace("\n", " ")[-800:]
+        suffix = f": {detail}" if detail else ""
+        raise RuntimeError(
+            f"{side} adapter timed out after {timeout_seconds}s{suffix}"
+        ) from exc
     if process.returncode != 0:
-        detail = process.stderr.strip().replace("\n", " ")[-800:]
+        detail = (stderr or "").strip().replace("\n", " ")[-800:]
         raise RuntimeError(f"{side} adapter exited {process.returncode}: {detail}")
     try:
-        result = json.loads(process.stdout)
+        result = json.loads(stdout)
     except json.JSONDecodeError as exc:
         raise RuntimeError(f"{side} adapter emitted malformed JSON") from exc
     if set(result) != {"identity", "results"}:
@@ -1062,23 +1321,41 @@ def build_identity(
         ],
         "assets": assets,
         "oracles": [{"oracle_id": ORACLE_ID, "name": "Pillow", "version": ORACLE_VERSION, "runtime": "CPython 3.12"}],
-        "targets": [{"target_profile": TARGET_PROFILE, "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": "cpu", "features": ["all-features"]}],
+        "targets": [{"target_profile": target_profile_for_backend(TARGET_BACKEND), "target_id": TARGET_ID, "revision": git_revision(), "dirty": target_dirty, "runtime": platform.python_version(), "backend": TARGET_BACKEND, "features": ["all-features"]}],
         "command": command,
     }
 
 
-def git_revision() -> str:
+def git_output(arguments: list[str]) -> str | None:
+    """Run a bounded Git identity query in its own process group."""
+
     try:
-        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
-    except (OSError, subprocess.CalledProcessError):
-        return "unknown"
+        process = subprocess.Popen(
+            ["git", *arguments],
+            cwd=ROOT,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            **process_group_options(),
+        )
+    except OSError:
+        return None
+    try:
+        stdout, _stderr = process.communicate(timeout=GIT_COMMAND_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        reap_timed_out_process(process)
+        return None
+    return stdout.strip() if process.returncode == 0 else None
+
+
+def git_revision() -> str:
+    return git_output(["rev-parse", "HEAD"]) or "unknown"
 
 
 def git_dirty() -> bool:
-    try:
-        return bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip())
-    except (OSError, subprocess.CalledProcessError):
-        return True
+    status = git_output(["status", "--porcelain"])
+    return True if status is None else bool(status)
 
 
 def run_orchestrator(args: argparse.Namespace) -> int:
@@ -1092,7 +1369,8 @@ def run_orchestrator(args: argparse.Namespace) -> int:
     if not cases:
         raise ValueError("no active parity cases selected")
     operation_index = build_operation_index(manifest)
-    command = {"command_id": "parity", "argv": ["make", "migration-parity-test"], "cwd": ".", "timeout_seconds": args.timeout}
+    target_timeout = effective_adapter_timeout(args.timeout)
+    command = {"command_id": "parity", "argv": ["make", "migration-parity-test"], "cwd": ".", "timeout_seconds": target_timeout}
     identity = build_identity(
         manifest_path,
         sorted(set(case_inputs.values())),
@@ -1113,7 +1391,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
                 run_side_subprocess, "source", manifest_path, cases, args.timeout
             )
             target_future = executor.submit(
-                run_side_subprocess, "target", manifest_path, cases, args.timeout
+                run_side_subprocess, "target", manifest_path, cases, target_timeout
             )
             source_handshake, source_results = source_future.result()
             target_handshake, target_results = target_future.result()
@@ -1141,7 +1419,7 @@ def run_orchestrator(args: argparse.Namespace) -> int:
             failed += 1
         else:
             not_run += 1
-        comparisons.append({"case_id": case["case_id"], "target_profile": TARGET_PROFILE, "requirements": case.get("covers", []), "source": source_results[case["case_id"]], "target": target_results[case["case_id"]], "outcome": outcome, "diffs": diffs})
+        comparisons.append({"case_id": case["case_id"], "target_profile": target_profile_for_backend(TARGET_BACKEND), "requirements": case.get("covers", []), "source": source_results[case["case_id"]], "target": target_results[case["case_id"]], "outcome": outcome, "diffs": diffs})
     identity["started_at"] = started
     identity["finished_at"] = now_rfc3339()
     result = {
@@ -1163,6 +1441,148 @@ def write_result(path: Path, result: dict[str, Any]) -> None:
     path.write_text(json.dumps(result, indent=2, sort_keys=False) + "\n", encoding="utf-8")
 
 
+def run_resident_case(
+    side: str,
+    case: dict[str, Any],
+    operation_index: dict[tuple[str, str], dict[str, Any]],
+    tempdir: Path,
+    *,
+    repeat: int,
+    timing_steps: set[str],
+    timing_sink: list[int],
+    telemetry_sink: list[dict[str, int]],
+    execution_sink: list[dict[str, Any]],
+    timing_boundary: str,
+    telemetry_api: Any | None,
+) -> dict[str, Any]:
+    """Construct one lazy graph, then repeat only its terminal observation.
+
+    The regular side runner rebuilds a workflow for every sample.  That is the
+    correct warm-process model, but it cannot measure a resident graph/cache.
+    This benchmark-only path executes all non-terminal steps once and keeps the
+    bindings alive while the selected terminal steps are observed repeatedly.
+    """
+
+    assets = AssetStore(case.get("assets", []), FIXTURE_ROOT / "assets", tempdir)
+    bindings: dict[str, Any] = {}
+    setup_errors: list[dict[str, Any]] = []
+
+    def normalized_error(step: dict[str, Any], exc: BaseException) -> dict[str, Any]:
+        error = public_error(exc)
+        error["message"] = error["message"].replace(str(tempdir), "<temporary>")
+        if (
+            side == "target"
+            and step["surface"].startswith("PIL.ImageDraw")
+            and error["message"].startswith("Draw.")
+        ):
+            error["message"] = "ImageDraw." + error["message"][len("Draw.") :]
+        return {"step_id": step["step_id"], "error": error}
+
+    terminal_steps = [
+        step
+        for step in case["steps"]
+        if step["step_id"] in timing_steps
+        or step.get("operation") in {"tobytes", "save"}
+    ]
+    for step in case["steps"]:
+        if any(step["step_id"] == terminal["step_id"] for terminal in terminal_steps):
+            continue
+        try:
+            opdef = operation_definition(
+                operation_index, step["surface"], step["operation"]
+            )
+            bindings[step["step_id"]] = call_workflow_step(
+                side, step, opdef, bindings, assets
+            )
+        except BaseException as exc:  # public setup failures are benchmark data
+            setup_errors.append(normalized_error(step, exc))
+            break
+
+    if setup_errors or not terminal_steps:
+        return {
+            "case_id": case["case_id"],
+            "status": "not_run",
+            "observations": [],
+            "execution_errors": setup_errors
+            or [{"step_id": None, "error": {"message": "no resident terminal step"}}],
+        }
+
+    # Lock the resident graph once, before its first observation.  Re-locking
+    # a Rust pipeline clones the handle and intentionally invalidates its
+    # materialization cache so an explicit backend change is observable.  That
+    # is correct for ordinary parity observations, but it would turn this
+    # benchmark's resident lifecycle into repeated cold execution.  The
+    # terminal calls below therefore skip the lock after this one setup.
+    if side == "target" and STRICT_TARGET_BACKEND:
+        locked_receivers: set[int] = set()
+        for terminal in terminal_steps:
+            receiver_desc = terminal.get("receiver")
+            if receiver_desc is None:
+                continue
+            receiver = resolve_descriptor(
+                receiver_desc, bindings, assets, side=side
+            )
+            receiver_identity = id(receiver)
+            if receiver_identity in locked_receivers:
+                continue
+            lock_target_image_pipeline(receiver)
+            locked_receivers.add(receiver_identity)
+
+    execution_errors: list[dict[str, Any]] = []
+    observed_execution = False
+    for _ in range(repeat):
+        for step in terminal_steps:
+            if telemetry_api is not None:
+                telemetry_api.take_pipeline_telemetry()
+            started_ns = time.perf_counter_ns()
+            try:
+                opdef = operation_definition(
+                    operation_index, step["surface"], step["operation"]
+                )
+                bindings[step["step_id"]] = call_workflow_step(
+                    side,
+                    step,
+                    opdef,
+                    bindings,
+                    assets,
+                    lock_backend=False,
+                )
+            except BaseException as exc:  # public terminal failures are benchmark data
+                execution_errors.append(normalized_error(step, exc))
+                if telemetry_api is not None:
+                    telemetry_api.take_pipeline_telemetry()
+                continue
+            elapsed_ns = time.perf_counter_ns() - started_ns
+            timing_sink.append(elapsed_ns)
+            telemetry_sink.append(
+                {
+                    "setup_ns": 0,
+                    "pipeline_ns": 0,
+                    "terminal_ns": elapsed_ns,
+                    "total_ns": elapsed_ns,
+                }
+            )
+            if telemetry_api is None:
+                execution_sink.append({"status": "not_applicable"})
+            else:
+                receipt = telemetry_api.take_pipeline_telemetry()
+                if receipt is None:
+                    execution_sink.append(
+                        {"status": "cached" if observed_execution else "not_recorded"}
+                    )
+                else:
+                    receipt["status"] = "completed"
+                    execution_sink.append(receipt)
+                    observed_execution = True
+
+    return {
+        "case_id": case["case_id"],
+        "status": "completed" if not execution_errors else "not_run",
+        "observations": [],
+        "execution_errors": execution_errors,
+    }
+
+
 def run_side(args: argparse.Namespace) -> int:
     manifest = load_manifest(args.manifest.resolve())
     cases = json.loads(sys.stdin.read())
@@ -1170,27 +1590,68 @@ def run_side(args: argparse.Namespace) -> int:
     handshake = side_identity(args.side)
     results: list[dict[str, Any]] = []
     timings: dict[str, list[int]] = {}
+    telemetry: dict[str, list[dict[str, int]]] = {}
+    execution: dict[str, list[dict[str, Any]]] = {}
+    telemetry_api = None
+    if args.timings and args.side == "target":
+        telemetry_api = importlib.import_module("pillow_rs._core")
+        telemetry_api.set_pipeline_telemetry(True)
     with tempfile.TemporaryDirectory(prefix=f"migration-parity-{args.side}-") as temporary:
         tempdir = Path(temporary)
         for case in cases:
             sink: list[int] = []
+            phase_sink: list[dict[str, int]] = []
+            execution_sink: list[dict[str, Any]] = []
             result: dict[str, Any] | None = None
-            for _ in range(args.repeat):
-                result = run_case(
+            if args.lifecycle == "resident":
+                result = run_resident_case(
                     args.side,
                     case,
                     operation_index,
                     tempdir,
+                    repeat=args.repeat,
                     timing_steps=set(args.timing_step),
-                    timing_sink=sink if args.timings else None,
+                    timing_sink=sink,
+                    telemetry_sink=phase_sink,
+                    execution_sink=execution_sink,
+                    timing_boundary=args.timing_boundary,
+                    telemetry_api=telemetry_api,
                 )
+            else:
+                for _ in range(args.repeat):
+                    if telemetry_api is not None:
+                        telemetry_api.take_pipeline_telemetry()
+                    result = run_case(
+                        args.side,
+                        case,
+                        operation_index,
+                        tempdir,
+                        timing_steps=set(args.timing_step),
+                        timing_sink=sink if args.timings else None,
+                        telemetry_sink=phase_sink if args.timings else None,
+                        timing_boundary=args.timing_boundary,
+                        serialize_observations=not args.timings,
+                    )
+                    if telemetry_api is not None:
+                        receipt = telemetry_api.take_pipeline_telemetry()
+                        if receipt is None:
+                            execution_sink.append({"status": "not_recorded"})
+                        else:
+                            receipt["status"] = "completed"
+                            execution_sink.append(receipt)
+                    elif args.timings:
+                        execution_sink.append({"status": "not_applicable"})
             assert result is not None
             results.append(result)
             if args.timings:
                 timings[case["case_id"]] = sink
+                telemetry[case["case_id"]] = phase_sink
+                execution[case["case_id"]] = execution_sink
     envelope: dict[str, Any] = {"identity": handshake, "results": results}
     if args.timings:
         envelope["timings_ns"] = timings
+        envelope["telemetry"] = telemetry
+        envelope["execution"] = execution
     sys.stdout.write(json.dumps(envelope, separators=(",", ":")) + "\n")
     return 0
 
@@ -1207,6 +1668,17 @@ def main() -> int:
     parser.add_argument("--identity", choices=("source", "target"))
     parser.add_argument("--repeat", type=int, default=1)
     parser.add_argument("--timings", action="store_true")
+    parser.add_argument(
+        "--lifecycle",
+        choices=("warm", "cold", "resident"),
+        default="warm",
+        help="benchmark lifecycle semantics for timing mode",
+    )
+    parser.add_argument(
+        "--timing-boundary",
+        choices=("observed_steps", "whole_workflow"),
+        default="observed_steps",
+    )
     parser.add_argument("--timing-step", action="append", default=["call"])
     args = parser.parse_args()
     if args.side:

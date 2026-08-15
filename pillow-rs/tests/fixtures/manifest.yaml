@@ -44,6 +44,16 @@ target_profiles:
   backend: cpu
   features:
   - all-features
+- id: python-simd
+  target_id: pillow-rs-python
+  backend: simd
+  features:
+  - all-features
+- id: python-gpu
+  target_id: pillow-rs-python
+  backend: gpu
+  features:
+  - all-features
 commands:
 - id: inventory
   argv:
@@ -243,6 +253,7 @@ input_index:
   - inputs/benchmark/pil-imagesequence-iterator.json
   - inputs/benchmark/pil-imagestat.json
   - inputs/benchmark/pil-imagestat-stat.json
+  - inputs/benchmark/pipeline-operations.json
 coverage_components:
 - id: image-core
   target_profile: python-cpu

@@ -17,6 +17,7 @@ coverage/report.json
 .report.json
 .python-version
 .codex-subagents/
+.worktrees/
 venv/
 .venv/
 .oracle-venv/

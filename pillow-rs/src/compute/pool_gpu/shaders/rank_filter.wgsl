@@ -44,7 +44,11 @@ fn sort_arr(arr: ptr<function, array<u32, MAX_WINDOW>>, len: u32) {
 fn rank_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let h = params.height;
-    let size = params.size;
+    let size = min(params.size, 9u);
+    let idx = y * w + x;
+    if size == 0u || size % 2u == 0u {
+        return input[idx];
+    }
     let rank = params.rank;
     let half = i32(size) / 2i;
     let area = size * size;

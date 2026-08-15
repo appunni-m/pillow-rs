@@ -40,6 +40,7 @@ DEFAULT_OUTPUT = (
 )
 PYTHON_FACADE_ROOT = WORKSPACE_ROOT / "pillow-rs-py" / "python"
 TARGET_PROFILE = "python-cpu"
+BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
 
@@ -1135,11 +1136,12 @@ def build_manifest() -> dict[str, Any]:
         ],
         "target_profiles": [
             {
-                "id": TARGET_PROFILE,
+                "id": f"python-{backend}",
                 "target_id": TARGET_ID,
-                "backend": "cpu",
+                "backend": backend,
                 "features": ["all-features"],
             }
+            for backend in BENCHMARK_BACKENDS
         ],
         "commands": [
             command("inventory", "migration-parity-inventory", 60),

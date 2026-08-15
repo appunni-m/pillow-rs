@@ -18,6 +18,8 @@ struct Params {
     radius: u32,
 }
 
+const MAX_RADIUS: u32 = 16u;
+
 fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
@@ -29,7 +31,7 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 fn box_blur_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let h = params.height;
-    let radius = params.radius;
+    let radius = min(params.radius, MAX_RADIUS);
     let mode = params.mode;
     let window = 2u * radius + 1u;
     let window_sq = window * window;

@@ -22,6 +22,6 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let dy = f32(gid.y) - cy;
     let max_dist = sqrt(cx * cx + cy * cy);
     let dist = sqrt(dx * dx + dy * dy);
-    let value = u32(clamp(dist / max_dist, 0.0, 1.0) * 255.0);
+    let value = u32(clamp(dist / max(max_dist, 1.0), 0.0, 1.0) * 255.0);
     output[idx] = value | (value << 8u) | (value << 16u) | 0xff000000u;
 }

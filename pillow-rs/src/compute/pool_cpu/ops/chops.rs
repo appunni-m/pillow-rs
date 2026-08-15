@@ -3,8 +3,11 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::{Image, preserve_mode};
-use crate::raster::{DynamicImage, GenericImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
+use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 use std::sync::Arc;
+
+#[cfg(feature = "parallel")]
+const CHOPS_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
 
 // ── Blend mode lookup tables (generated from PIL C implementation) ──
 
@@ -52,11 +55,296 @@ fn materialize_chops_other(other: &Arc<Image>) -> Result<DynamicImage, PilError>
     }
 }
 
+#[inline]
+fn apply_binary_row<F>(left: &[u8], right: &[u8], output: &mut [u8], op: &F)
+where
+    F: Fn(u8, u8) -> u8,
+{
+    for ((destination, &left), &right) in output.iter_mut().zip(left).zip(right) {
+        *destination = op(left, right);
+    }
+}
+
+/// Apply a byte-wise binary operation by complete output rows.
+///
+/// The two input images may have different widths; the caller supplies the
+/// source row strides and the already-clipped output width.  Keeping the
+/// destination as the only mutable capture lets `par_rows_mut!` prove that
+/// concurrent workers own disjoint rows while all source reads remain shared.
+fn apply_binary_rows<F>(
+    left: &[u8],
+    right: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    left_stride: usize,
+    right_stride: usize,
+    op: F,
+) where
+    F: Fn(u8, u8) -> u8 + Send + Sync,
+{
+    let output_stride = width.saturating_mul(channels);
+    if width == 0 || height == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[inline]
+    fn apply_row<F>(
+        left: &[u8],
+        right: &[u8],
+        output: &mut [u8],
+        y: usize,
+        output_stride: usize,
+        left_stride: usize,
+        right_stride: usize,
+        op: &F,
+    ) where
+        F: Fn(u8, u8) -> u8,
+    {
+        let left_start = y * left_stride;
+        let right_start = y * right_stride;
+        apply_binary_row(
+            &left[left_start..left_start + output_stride],
+            &right[right_start..right_start + output_stride],
+            output,
+            op,
+        );
+    }
+
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= CHOPS_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            output,
+            output_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                apply_row(
+                    left,
+                    right,
+                    row,
+                    y as usize,
+                    output_stride,
+                    left_stride,
+                    right_stride,
+                    &op,
+                );
+            }
+        );
+    } else {
+        for (y, row) in output
+            .chunks_exact_mut(output_stride)
+            .take(height)
+            .enumerate()
+        {
+            apply_row(
+                left,
+                right,
+                row,
+                y,
+                output_stride,
+                left_stride,
+                right_stride,
+                &op,
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in output
+        .chunks_exact_mut(output_stride)
+        .take(height)
+        .enumerate()
+    {
+        apply_row(
+            left,
+            right,
+            row,
+            y,
+            output_stride,
+            left_stride,
+            right_stride,
+            &op,
+        );
+    }
+}
+
+fn apply_composite_row(left: &[u8], right: &[u8], mask: &[u8], output: &mut [u8], width: usize) {
+    for x in 0..width {
+        let left_start = x * 3;
+        let right_start = x * 3;
+        let mask_value = mask[x] as f64 / 255.0;
+        let inverse = 1.0 - mask_value;
+        for channel in 0..3 {
+            output[left_start + channel] = (left[left_start + channel] as f64 * mask_value
+                + right[right_start + channel] as f64 * inverse)
+                .round() as u8;
+        }
+    }
+}
+
+fn apply_composite_rows(
+    left: &[u8],
+    right: &[u8],
+    mask: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    left_stride: usize,
+    right_stride: usize,
+    mask_stride: usize,
+) {
+    let output_stride = width.saturating_mul(3);
+    if width == 0 || height == 0 || output_stride == 0 {
+        return;
+    }
+
+    #[inline]
+    fn apply_row(
+        left: &[u8],
+        right: &[u8],
+        mask: &[u8],
+        output: &mut [u8],
+        y: usize,
+        width: usize,
+        left_stride: usize,
+        right_stride: usize,
+        mask_stride: usize,
+    ) {
+        let left_start = y * left_stride;
+        let right_start = y * right_stride;
+        let mask_start = y * mask_stride;
+        apply_composite_row(
+            &left[left_start..left_start + width * 3],
+            &right[right_start..right_start + width * 3],
+            &mask[mask_start..mask_start + width],
+            output,
+            width,
+        );
+    }
+
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= CHOPS_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            output,
+            output_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                apply_row(
+                    left,
+                    right,
+                    mask,
+                    row,
+                    y as usize,
+                    width,
+                    left_stride,
+                    right_stride,
+                    mask_stride,
+                );
+            }
+        );
+    } else {
+        for (y, row) in output
+            .chunks_exact_mut(output_stride)
+            .take(height)
+            .enumerate()
+        {
+            apply_row(
+                left,
+                right,
+                mask,
+                row,
+                y,
+                width,
+                left_stride,
+                right_stride,
+                mask_stride,
+            );
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in output
+        .chunks_exact_mut(output_stride)
+        .take(height)
+        .enumerate()
+    {
+        apply_row(
+            left,
+            right,
+            mask,
+            row,
+            y,
+            width,
+            left_stride,
+            right_stride,
+            mask_stride,
+        );
+    }
+}
+
+fn apply_offset_rows(
+    source: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    offset_x: i32,
+    offset_y: i32,
+) {
+    let row_stride = width.saturating_mul(4);
+    if width == 0 || height == 0 || row_stride == 0 {
+        return;
+    }
+    let source_x = (-(offset_x as i64)).rem_euclid(width as i64) as usize;
+    let source_y = (-(offset_y as i64)).rem_euclid(height as i64) as usize;
+
+    #[inline]
+    fn apply_row(
+        source: &[u8],
+        output: &mut [u8],
+        width: usize,
+        row_stride: usize,
+        source_x: usize,
+        source_y: usize,
+        destination_y: usize,
+    ) {
+        let source_row = (source_y + destination_y) % (source.len() / row_stride);
+        let source_start = source_row * row_stride;
+        let source_row = &source[source_start..source_start + row_stride];
+        let first_pixels = width - source_x;
+        let first_bytes = first_pixels * 4;
+        output[..first_bytes].copy_from_slice(&source_row[source_x * 4..]);
+        if source_x != 0 {
+            output[first_bytes..].copy_from_slice(&source_row[..source_x * 4]);
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= CHOPS_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            output,
+            row_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                apply_row(
+                    source, row, width, row_stride, source_x, source_y, y as usize,
+                );
+            }
+        );
+    } else {
+        for (y, row) in output.chunks_exact_mut(row_stride).take(height).enumerate() {
+            apply_row(source, row, width, row_stride, source_x, source_y, y);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in output.chunks_exact_mut(row_stride).take(height).enumerate() {
+        apply_row(source, row, width, row_stride, source_x, source_y, y);
+    }
+}
+
 /// Per-channel binary operation.
 fn channel_op_binary(
     img: &DynamicImage,
     other: &Arc<Image>,
-    op: impl Fn(u8, u8) -> u8,
+    op: impl Fn(u8, u8) -> u8 + Send + Sync,
 ) -> Result<DynamicImage, PilError> {
     let other_img = materialize_chops_other(other)?;
     let channels = img.color().channel_count() as usize;
@@ -71,20 +359,18 @@ fn channel_op_binary(
     let b_bytes = other_img.as_bytes();
     let stride_a = img.width() as usize * ch;
     let stride_b = other_img.width() as usize * ch;
-    let stride_out = w as usize * ch;
+    // Pillow returns a valid empty image when both operands share a zero
+    // dimension. Keep the ordinary CheckedDims gate for non-empty work while
+    // allowing this public boundary case to take the no-pixel early return.
+    let mut out = if w == 0 || h == 0 {
+        CheckedDims::new_allow_empty(w, h, ch as u8)?.alloc_buffer()
+    } else {
+        CheckedDims::new(w, h, ch as u8)?.alloc_buffer()
+    };
 
-    let mut out = CheckedDims::new(w, h, ch as u8)?.alloc_buffer();
-
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            for c in 0..ch {
-                let a_idx = y * stride_a + x * ch + c;
-                let b_idx = y * stride_b + x * ch + c;
-                let o_idx = y * stride_out + x * ch + c;
-                out[o_idx] = op(a_bytes[a_idx], b_bytes[b_idx]);
-            }
-        }
-    }
+    apply_binary_rows(
+        a_bytes, b_bytes, &mut out, w as usize, h as usize, ch, stride_a, stride_b, op,
+    );
 
     let result = match ch {
         1 => DynamicImage::ImageLuma8(
@@ -134,20 +420,24 @@ fn channel_op_binary_lut(
     let b_bytes = other_img.as_bytes();
     let stride_a = img.width() as usize * ch;
     let stride_b = other_img.width() as usize * ch;
-    let stride_out = w as usize * ch;
 
-    let mut out = CheckedDims::new(w, h, ch as u8)?.alloc_buffer();
+    let mut out = if w == 0 || h == 0 {
+        CheckedDims::new_allow_empty(w, h, ch as u8)?.alloc_buffer()
+    } else {
+        CheckedDims::new(w, h, ch as u8)?.alloc_buffer()
+    };
 
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            for c in 0..ch {
-                let a_idx = y * stride_a + x * ch + c;
-                let b_idx = y * stride_b + x * ch + c;
-                let o_idx = y * stride_out + x * ch + c;
-                out[o_idx] = lut[a_bytes[a_idx] as usize * 256 + b_bytes[b_idx] as usize];
-            }
-        }
-    }
+    apply_binary_rows(
+        a_bytes,
+        b_bytes,
+        &mut out,
+        w as usize,
+        h as usize,
+        ch,
+        stride_a,
+        stride_b,
+        |a, b| lut[a as usize * 256 + b as usize],
+    );
 
     let result =
         match ch {
@@ -295,16 +585,10 @@ pub fn op_chops_constant(img: &DynamicImage, value: u8) -> DynamicImage {
 
 pub fn op_chops_offset(img: &DynamicImage, x: i32, y: i32) -> DynamicImage {
     let (w, h) = (img.width(), img.height());
-    let mut result = DynamicImage::new_rgba8(w, h);
     let src_rgba = img.to_rgba8();
-    for py in 0..h {
-        for px in 0..w {
-            let sx = (px as i32 - x).rem_euclid(w as i32) as u32;
-            let sy = (py as i32 - y).rem_euclid(h as i32) as u32;
-            result.put_pixel(px, py, *src_rgba.get_pixel(sx, sy));
-        }
-    }
-    preserve_mode(img, result)
+    let mut result = RgbaImage::new(w, h);
+    apply_offset_rows(&src_rgba, &mut result, w as usize, h as usize, x, y);
+    preserve_mode(img, DynamicImage::ImageRgba8(result))
 }
 
 pub fn op_chops_blend(
@@ -320,23 +604,19 @@ pub fn op_chops_blend(
         rgb1.height().min(rgb2.height()),
     );
     let mut out = RgbImage::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let p1 = rgb1.get_pixel(x, y);
-            let p2 = rgb2.get_pixel(x, y);
-            out.put_pixel(
-                x,
-                y,
-                crate::raster::Rgb([
-                    // Pillow 12.2.0 `Blend.c::ImagingBlend` interpolates for alpha in
-                    // [0, 1] and clips extrapolation results to [0, 255] otherwise.
-                    (p1[0] as f64 * (1.0 - alpha) + p2[0] as f64 * alpha).clamp(0.0, 255.0) as u8,
-                    (p1[1] as f64 * (1.0 - alpha) + p2[1] as f64 * alpha).clamp(0.0, 255.0) as u8,
-                    (p1[2] as f64 * (1.0 - alpha) + p2[2] as f64 * alpha).clamp(0.0, 255.0) as u8,
-                ]),
-            );
-        }
-    }
+    // Pillow 12.2.0 `Blend.c::ImagingBlend` interpolates for alpha in
+    // [0, 1] and clips extrapolation results to [0, 255] otherwise.
+    apply_binary_rows(
+        &rgb1,
+        &rgb2,
+        &mut out,
+        w as usize,
+        h as usize,
+        3,
+        rgb1.width() as usize * 3,
+        rgb2.width() as usize * 3,
+        |left, right| (left as f64 * (1.0 - alpha) + right as f64 * alpha).clamp(0.0, 255.0) as u8,
+    );
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
@@ -355,22 +635,17 @@ pub fn op_chops_composite(
         rgb1.height().min(rgb2.height()).min(mask_gray.height()),
     );
     let mut out = RgbImage::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let p1 = rgb1.get_pixel(x, y);
-            let p2 = rgb2.get_pixel(x, y);
-            let m = mask_gray.get_pixel(x, y)[0] as f64 / 255.0;
-            out.put_pixel(
-                x,
-                y,
-                crate::raster::Rgb([
-                    ((p1[0] as f64 * m + p2[0] as f64 * (1.0 - m)).round()) as u8,
-                    ((p1[1] as f64 * m + p2[1] as f64 * (1.0 - m)).round()) as u8,
-                    ((p1[2] as f64 * m + p2[2] as f64 * (1.0 - m)).round()) as u8,
-                ]),
-            );
-        }
-    }
+    apply_composite_rows(
+        &rgb1,
+        &rgb2,
+        &mask_gray,
+        &mut out,
+        w as usize,
+        h as usize,
+        rgb1.width() as usize * 3,
+        rgb2.width() as usize * 3,
+        mask_gray.width() as usize,
+    );
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 

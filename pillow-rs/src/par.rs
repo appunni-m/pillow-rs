@@ -63,6 +63,67 @@ macro_rules! par_rows {
     }};
 }
 
+/// Parallelize writes to independent image rows.
+///
+/// The destination is split with Rayon at row boundaries so each closure gets
+/// exclusive access to one complete output row. Shared source data may be
+/// captured by the closure for read-only neighborhood operations whose output
+/// rows do not depend on one another.
+#[macro_export]
+macro_rules! par_rows_mut {
+    ($data:expr, $stride:expr, $height:expr,
+     |$row_start:ident, $row_end:ident, $y:ident, $row:ident| $body:block) => {{
+        let _data: &mut [u8] = $data;
+        let _stride: usize = $stride;
+        let _height: usize = $height;
+        use rayon::iter::IndexedParallelIterator;
+        use rayon::iter::ParallelIterator;
+        use rayon::slice::ParallelSliceMut;
+        _data
+            .par_chunks_mut(_stride)
+            .take(_height)
+            .enumerate()
+            .for_each(|(_y_idx, _row)| {
+                let $row_start: usize = _y_idx * _stride;
+                let $row_end: usize = $row_start + _stride;
+                let $y: u32 = _y_idx as u32;
+                let $row: &mut [u8] = _row;
+                $body
+            });
+    }};
+}
+
+/// Parallelize writes to independent rows for any plain Rust slice type.
+///
+/// This is the typed counterpart to [`par_rows_mut!`].  It is used by native
+/// `I`/`F` kernels whose row storage is `i32`, `f32`, or `f64` rather than
+/// byte-oriented image storage.  The same row ownership proof applies: each
+/// closure receives one exclusive destination row and may read shared
+/// immutable source data.
+#[macro_export]
+macro_rules! par_rows_mut_typed {
+    ($data:expr, $stride:expr, $height:expr,
+     |$row_start:ident, $row_end:ident, $y:ident, $row:ident| $body:block) => {{
+        let _data = $data;
+        let _stride: usize = $stride;
+        let _height: usize = $height;
+        use rayon::iter::IndexedParallelIterator;
+        use rayon::iter::ParallelIterator;
+        use rayon::slice::ParallelSliceMut;
+        _data
+            .par_chunks_mut(_stride)
+            .take(_height)
+            .enumerate()
+            .for_each(|(_y_idx, _row)| {
+                let $row_start: usize = _y_idx * _stride;
+                let $row_end: usize = $row_start + _stride;
+                let $y: u32 = _y_idx as u32;
+                let $row = _row;
+                $body
+            });
+    }};
+}
+
 /// Parallelize pixel iteration over independent pixels.
 ///
 /// Each pixel is processed independently. The closure receives the pixel's
@@ -115,7 +176,7 @@ macro_rules! par_pixels {
 macro_rules! par_tiles {
     ($data:expr, $width:expr, $height:expr, $tile_w:expr, $tile_h:expr,
      |$tile:ident, $tx:ident, $ty:ident| $body:block) => {{
-        use rayon::iter::IntoParallelRefIterator;
+        use rayon::iter::IntoParallelIterator;
         use rayon::iter::ParallelIterator;
         let _width: usize = $width;
         let _height: usize = $height;
@@ -123,10 +184,10 @@ macro_rules! par_tiles {
         let _tile_h: usize = $tile_h;
         let _tiles_x = (_width + _tile_w - 1) / _tile_w;
         let _tiles_y = (_height + _tile_h - 1) / _tile_h;
-        let _tile_indices: Vec<(usize, usize)> = (0.._tiles_y)
-            .flat_map(|ty| (0.._tiles_x).map(move |tx| (tx, ty)))
-            .collect();
-        _tile_indices.par_iter().for_each(|&($tx, $ty)| {
+        let _tile_count = _tiles_x.saturating_mul(_tiles_y);
+        (0.._tile_count).into_par_iter().for_each(|_tile_index| {
+            let $tx = _tile_index % _tiles_x;
+            let $ty = _tile_index / _tiles_x;
             let $tx = $tx;
             let $ty = $ty;
             let $tile = ();

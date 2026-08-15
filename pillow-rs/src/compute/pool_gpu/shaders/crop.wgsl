@@ -28,14 +28,21 @@ fn crop_pixel(dx: u32, dy: u32) -> u32 {
     let src_w = params.width;
     let src_h = params.height;
 
-    // Map output position (dx, dy) to source position
-    let src_x = params.left + dx;
-    let src_y = params.top + dy;
-
-    // Bounds check: if source coordinate is out of bounds, return transparent black
-    if src_x >= src_w || src_y >= src_h {
+    // Validate before addition so malformed uniforms cannot wrap a source
+    // coordinate and turn an out-of-bounds crop into an unrelated in-range
+    // storage read. Public Image::crop normalizes this box on the host; this
+    // is the shader-side totality guard for direct/hostile pipeline inputs.
+    if params.left > src_w || params.top > src_h {
         return 0u;
     }
+    if dx >= src_w - params.left || dy >= src_h - params.top {
+        return 0u;
+    }
+
+    // Map output position (dx, dy) to source position after the checked
+    // extent tests above.
+    let src_x = params.left + dx;
+    let src_y = params.top + dy;
 
     let pixel = input[src_y * src_w + src_x];
     let src_r = pixel & 0xffu;

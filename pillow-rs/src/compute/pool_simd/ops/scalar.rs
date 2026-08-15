@@ -106,8 +106,40 @@ pub fn posterize(pixels: &mut [u32], mode: u32, bits: u32) {
 }
 
 /// Brightness: multiply active channels by factor (fixed-point: factor * 1000).
+/// Mode 4 is CMYK, stored as C/M/Y/K in the packed RGBA lanes.
 #[inline]
 pub fn brightness(pixels: &mut [u32], mode: u32, factor_fp: u32) {
+    let has_gb = mode >= 2;
+    let has_a = mode == 1 || mode == 3;
+    let has_cmyk = mode == 4;
+
+    for p in pixels.iter_mut() {
+        let r = *p & 0xFF;
+        let g = (*p >> 8) & 0xFF;
+        let b = (*p >> 16) & 0xFF;
+        let a = (*p >> 24) & 0xFF;
+
+        let out_r = (r * factor_fp / 1000).min(255);
+        let out_g_raw = (g * factor_fp / 1000).min(255);
+        let out_b_raw = (b * factor_fp / 1000).min(255);
+
+        let out_g = if has_gb { out_g_raw } else { g };
+        let out_b = if has_gb { out_b_raw } else { b };
+        let out_a = if has_a {
+            a << 24
+        } else if has_cmyk {
+            (a * factor_fp / 1000).min(255) << 24
+        } else {
+            0xFF00_0000
+        };
+
+        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
+    }
+}
+
+/// Contrast with the rounded Pillow image mean as its midpoint.
+#[inline]
+pub fn contrast(pixels: &mut [u32], mode: u32, factor: f64, mean: f64) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
 
@@ -117,38 +149,13 @@ pub fn brightness(pixels: &mut [u32], mode: u32, factor_fp: u32) {
         let b = (*p >> 16) & 0xFF;
         let a = *p & 0xFF00_0000;
 
-        let out_r = (r * factor_fp / 1000).min(255);
-        let out_g_raw = (g * factor_fp / 1000).min(255);
-        let out_b_raw = (b * factor_fp / 1000).min(255);
-
-        let out_g = if has_gb { out_g_raw } else { g };
-        let out_b = if has_gb { out_b_raw } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
-    }
-}
-
-/// Contrast: adjust contrast for active channels.
-#[inline]
-pub fn contrast(pixels: &mut [u32], mode: u32, factor_fp: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-
-    for p in pixels.iter_mut() {
-        let r = (*p & 0xFF) as i32;
-        let g = ((*p >> 8) & 0xFF) as i32;
-        let b = ((*p >> 16) & 0xFF) as i32;
-        let a = *p & 0xFF00_0000;
-
-        let adjust = |c: i32| -> u32 {
-            let v = ((c - 128) * factor_fp as i32 / 1000 + 128).clamp(0, 255);
-            v as u32
+        let adjust = |c: u32| -> u32 {
+            (mean * (1.0 - factor) + c as f64 * factor).clamp(0.0, 255.0) as u32
         };
 
         let out_r = adjust(r);
-        let out_g = if has_gb { adjust(g) } else { g as u32 };
-        let out_b = if has_gb { adjust(b) } else { b as u32 };
+        let out_g = if has_gb { adjust(g) } else { g };
+        let out_b = if has_gb { adjust(b) } else { b };
         let out_a = if has_a { a } else { 0xFF00_0000 };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
@@ -642,14 +649,17 @@ pub fn color_saturation(pixels: &mut [u32], mode: u32, factor_fp: u32) {
         let b = (*p >> 16) & 0xFF;
         let a = *p & 0xFF00_0000;
 
-        // BT.601: (299*R + 587*G + 114*B + 500) / 1000
-        let luma = ((299 * r + 587 * g + 114 * b + 500) / 1000) as i32;
-        let factor = factor_fp as i32;
+        // Keep the same rounded BT.601 conversion as `pil_grayscale`.
+        let luma = ((19595 * r + 38470 * g + 7471 * b + 32768) >> 16) as f64;
+        let factor = factor_fp as f64 / 1000.0;
 
-        // out = luma + (channel - luma) * factor / 1000, clamped 0..255
-        let out_r = (luma + ((r as i32 - luma) * factor / 1000)).clamp(0, 255) as u32;
-        let out_g = (luma + ((g as i32 - luma) * factor / 1000)).clamp(0, 255) as u32;
-        let out_b = (luma + ((b as i32 - luma) * factor / 1000)).clamp(0, 255) as u32;
+        // Pillow evaluates this blend in floating point before truncating to u8.
+        // Integer division toward zero is one byte too high for negative blends.
+        let adjust =
+            |channel: u32| (luma + factor * (channel as f64 - luma)).clamp(0.0, 255.0) as u32;
+        let out_r = adjust(r);
+        let out_g = adjust(g);
+        let out_b = adjust(b);
         let out_a = if has_a { a } else { 0xFF00_0000 };
 
         *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
@@ -874,14 +884,16 @@ pub fn soft_light(pixels: &mut [u32], mode: u32, other: &[u32]) {
 }
 
 /// Blend: linear interpolation between two images.
-/// `out = a * (1.0 - alpha) + b * alpha`, alpha in 0.0..1.0.
+/// `out = a * (1.0 - alpha) + b * alpha`; Pillow permits extrapolation.
 /// Math done in f32, result clamped to 0..255.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn blend(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
-    let a_f = alpha.clamp(0.0, 1.0) as f32;
+    // Pillow's ImagingBlend does not clamp alpha before interpolation. The
+    // final channel clamp below handles extrapolated values such as 1.5.
+    let a_f = alpha as f32;
     let inv_a = 1.0 - a_f;
     for (p, o) in pixels.iter_mut().zip(other.iter()) {
         let ar = *p & 0xFF;
@@ -917,7 +929,7 @@ pub fn blend(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
 }
 
 /// Blend module: identical formula to `blend`.
-/// `out = a * (1.0 - alpha) + b * alpha`, alpha in 0.0..1.0.
+/// `out = a * (1.0 - alpha) + b * alpha`; Pillow permits extrapolation.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
 pub fn blend_module(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
@@ -976,10 +988,11 @@ pub fn rank_filter_f32(pixels: &mut [u32], w: u32, h: u32, size: u32, rank: u32)
     let area = (size * size) as usize;
     let rank = rank.min((area - 1) as u32) as usize;
     let src = pixels.to_vec();
+    let mut values = Vec::with_capacity(area);
 
     for y in 0..h_i {
         for x in 0..w_i {
-            let mut values = Vec::with_capacity(area);
+            values.clear();
             for dy in -half..=half {
                 for dx in -half..=half {
                     let sx = (x + dx).clamp(0, w_i - 1);
@@ -1109,16 +1122,21 @@ pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 
     // Copy source since we read from neighbors while writing
     let src = pixels.to_vec();
+    let mut r_vals = Vec::with_capacity(area);
+    let mut a_vals = if has_a {
+        Vec::with_capacity(area)
+    } else {
+        Vec::new()
+    };
+    let mut g_vals = Vec::with_capacity(area);
+    let mut b_vals = Vec::with_capacity(area);
 
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
             // Collect R channel values from window
-            let mut r_vals = Vec::with_capacity(area);
-            let mut a_vals = Vec::new();
-            if has_a {
-                a_vals.reserve(area);
-            }
+            r_vals.clear();
+            a_vals.clear();
             for dy in -half..=half {
                 for dx in -half..=half {
                     let sx = (x + dx).clamp(0, w_i - 1);
@@ -1140,8 +1158,8 @@ pub fn median_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
             };
 
             if has_gb {
-                let mut g_vals = Vec::with_capacity(area);
-                let mut b_vals = Vec::with_capacity(area);
+                g_vals.clear();
+                b_vals.clear();
                 for dy in -half..=half {
                     for dx in -half..=half {
                         let sx = (x + dx).clamp(0, w_i - 1);
@@ -1305,6 +1323,18 @@ pub fn min_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32) {
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
+fn select_rank_histogram(histogram: &[usize; 256], rank: usize) -> u32 {
+    let mut seen = 0usize;
+    for (value, count) in histogram.iter().enumerate() {
+        seen += *count;
+        if seen > rank {
+            return value as u32;
+        }
+    }
+    255
+}
+
+#[inline]
 pub fn rank_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32, rank: u32) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
@@ -1318,53 +1348,61 @@ pub fn rank_filter(pixels: &mut [u32], w: u32, h: u32, mode: u32, size: u32, ran
     let src = pixels.to_vec();
 
     for y in 0..h_i {
-        for x in 0..w_i {
-            let idx = (y * w_i + x) as usize;
-            // Collect R channel values from window
-            let mut r_vals = Vec::with_capacity(area);
-            let mut a_vals = Vec::new();
-            if has_a {
-                a_vals.reserve(area);
-            }
-            for dy in -half..=half {
-                for dx in -half..=half {
-                    let sx = (x + dx).clamp(0, w_i - 1);
-                    let sy = (y + dy).clamp(0, h_i - 1);
-                    let sp = src[(sy * w_i + sx) as usize];
-                    r_vals.push((sp & 0xFF) as u8);
-                    if has_a {
-                        a_vals.push((sp >> 24) as u8);
-                    }
+        let mut histogram = [[0usize; 256]; 4];
+        for dy in -half..=half {
+            let sy = (y + dy).clamp(0, h_i - 1);
+            for dx in -half..=half {
+                let sx = dx.clamp(0, w_i - 1);
+                let pixel = src[(sy * w_i + sx) as usize];
+                histogram[0][(pixel & 0xFF) as usize] += 1;
+                if has_gb {
+                    histogram[1][((pixel >> 8) & 0xFF) as usize] += 1;
+                    histogram[2][((pixel >> 16) & 0xFF) as usize] += 1;
+                }
+                if has_a {
+                    histogram[3][(pixel >> 24) as usize] += 1;
                 }
             }
-            r_vals.sort_unstable();
-            let out_r = r_vals[rank] as u32;
+        }
+
+        for x in 0..w_i {
+            let idx = (y * w_i + x) as usize;
+            let out_r = select_rank_histogram(&histogram[0], rank);
             let out_a = if has_a {
-                a_vals.sort_unstable();
-                (a_vals[rank] as u32) << 24
+                select_rank_histogram(&histogram[3], rank) << 24
             } else {
                 0xFF00_0000
             };
+            pixels[idx] = if has_gb {
+                let out_g = select_rank_histogram(&histogram[1], rank);
+                let out_b = select_rank_histogram(&histogram[2], rank);
+                out_r | (out_g << 8) | (out_b << 16) | out_a
+            } else {
+                out_r | (out_r << 8) | (out_r << 16) | out_a
+            };
 
-            if has_gb {
-                let mut g_vals = Vec::with_capacity(area);
-                let mut b_vals = Vec::with_capacity(area);
+            if x + 1 < w_i {
+                let remove_x = (x - half).clamp(0, w_i - 1);
+                let add_x = (x + half + 1).clamp(0, w_i - 1);
                 for dy in -half..=half {
-                    for dx in -half..=half {
-                        let sx = (x + dx).clamp(0, w_i - 1);
-                        let sy = (y + dy).clamp(0, h_i - 1);
-                        let sp = src[(sy * w_i + sx) as usize];
-                        g_vals.push(((sp >> 8) & 0xFF) as u8);
-                        b_vals.push(((sp >> 16) & 0xFF) as u8);
+                    let sy = (y + dy).clamp(0, h_i - 1);
+                    let remove_pixel = src[(sy * w_i + remove_x) as usize];
+                    let add_pixel = src[(sy * w_i + add_x) as usize];
+                    let remove_r = (remove_pixel & 0xFF) as usize;
+                    let add_r = (add_pixel & 0xFF) as usize;
+                    histogram[0][remove_r] -= 1;
+                    histogram[0][add_r] += 1;
+                    if has_gb {
+                        histogram[1][((remove_pixel >> 8) & 0xFF) as usize] -= 1;
+                        histogram[1][((add_pixel >> 8) & 0xFF) as usize] += 1;
+                        histogram[2][((remove_pixel >> 16) & 0xFF) as usize] -= 1;
+                        histogram[2][((add_pixel >> 16) & 0xFF) as usize] += 1;
+                    }
+                    if has_a {
+                        histogram[3][(remove_pixel >> 24) as usize] -= 1;
+                        histogram[3][(add_pixel >> 24) as usize] += 1;
                     }
                 }
-                g_vals.sort_unstable();
-                b_vals.sort_unstable();
-                let out_g = g_vals[rank] as u32;
-                let out_b = b_vals[rank] as u32;
-                pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
-            } else {
-                pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | out_a;
             }
         }
     }
@@ -1563,83 +1601,104 @@ pub fn filter_5x5(
 ///
 /// CPU reference: pool_cpu/ops/enhance.rs op_enhance_sharpness
 ///
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA, 4=CMYK
 #[inline]
 pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) {
     let has_gb = mode >= 2;
     let has_a = mode == 1 || mode == 3;
+    let is_cmyk = mode == 4;
     let src = pixels.to_vec();
     let w_i = w as i32;
     let h_i = h as i32;
-    let half = 1i32;
     // SMOOTH kernel pre-divided: [1,1,1, 1,5,1, 1,1,1] / 13
     let inv_scale = 1.0f32 / 13.0f32;
     let k_edges = inv_scale; // edges = 1/13
     let k_center = 5.0f32 * inv_scale; // center = 5/13
     let rounding_bias = 0.5f32; // offset=0 => 0.0 + 0.5
-    // Blend weight: factor_fp / 1000
-    let t = factor_fp as f32 / 1000.0;
+    // Blend weight: factor_fp / 1000. Pillow blends the integer-filtered
+    // samples in double precision and truncates to u8; keeping this separate
+    // from the f32 convolution is required for exact parity at half factors.
+    let t = factor_fp as f64 / 1000.0;
     let one_minus_t = 1.0 - t;
 
-    for y in 0..h_i {
-        for x in 0..w_i {
-            let idx = (y * w_i + x) as usize;
-            let orig = src[idx];
-            let orig_r = orig & 0xFF;
-            let orig_g = (orig >> 8) & 0xFF;
-            let orig_b = (orig >> 16) & 0xFF;
-            let orig_a = orig & 0xFF00_0000;
+    // Pillow's ImageFilter.filter leaves the one-pixel border unchanged. A
+    // clamped convolution over the complete frame is a tempting SIMD
+    // shortcut, but it changes every edge pixel for non-identity factors.
+    let mut blurred = src.clone();
+    if w_i >= 3 && h_i >= 3 {
+        for y in 1..(h_i - 1) {
+            for x in 1..(w_i - 1) {
+                let idx = (y * w_i + x) as usize;
 
-            // Convolve with SMOOTH kernel
-            let mut sum_r: f32 = 0.0;
-            let mut sum_g: f32 = 0.0;
-            let mut sum_b: f32 = 0.0;
+                // Convolve with SMOOTH kernel
+                let mut sum_r: f32 = 0.0;
+                let mut sum_g: f32 = 0.0;
+                let mut sum_b: f32 = 0.0;
+                let mut sum_a: f32 = 0.0;
 
-            for ky in -half..=half {
-                for kx in -half..=half {
-                    let sx = (x + kx).clamp(0, w_i - 1);
-                    let sy = (y + ky).clamp(0, h_i - 1);
-                    let sp = src[(sy * w_i + sx) as usize];
-                    // Kernel position: center (1,1) gets 5/13, edges get 1/13
-                    let k = if ky == 0 && kx == 0 {
-                        k_center
-                    } else {
-                        k_edges
-                    };
-                    sum_r += (sp & 0xFF) as f32 * k;
-                    sum_g += ((sp >> 8) & 0xFF) as f32 * k;
-                    sum_b += ((sp >> 16) & 0xFF) as f32 * k;
+                for ky in -1..=1 {
+                    for kx in -1..=1 {
+                        let sx = x + kx;
+                        let sy = y + ky;
+                        let sp = src[(sy * w_i + sx) as usize];
+                        // Kernel position: center (1,1) gets 5/13, edges get 1/13
+                        let k = if ky == 0 && kx == 0 {
+                            k_center
+                        } else {
+                            k_edges
+                        };
+                        sum_r += (sp & 0xFF) as f32 * k;
+                        sum_g += ((sp >> 8) & 0xFF) as f32 * k;
+                        sum_b += ((sp >> 16) & 0xFF) as f32 * k;
+                        if is_cmyk {
+                            sum_a += ((sp >> 24) & 0xFF) as f32 * k;
+                        }
+                    }
                 }
+
+                // Apply rounding bias and clamp to [0, 255]
+                let blur_r = ((sum_r + rounding_bias) as i32).clamp(0, 255) as u32;
+                let blur_g = ((sum_g + rounding_bias) as i32).clamp(0, 255) as u32;
+                let blur_b = ((sum_b + rounding_bias) as i32).clamp(0, 255) as u32;
+                let blur_a = ((sum_a + rounding_bias) as i32).clamp(0, 255) as u32;
+
+                blurred[idx] = blur_r
+                    | ((if has_gb { blur_g } else { blur_r }) << 8)
+                    | ((if has_gb { blur_b } else { blur_r }) << 16)
+                    | if is_cmyk {
+                        blur_a << 24
+                    } else {
+                        src[idx] & 0xFF00_0000
+                    };
             }
-
-            // Apply rounding bias and clamp to [0, 255]
-            let blur_r = ((sum_r + rounding_bias) as i32).clamp(0, 255) as u32;
-            let blur_g_raw = ((sum_g + rounding_bias) as i32).clamp(0, 255) as u32;
-            let blur_b_raw = ((sum_b + rounding_bias) as i32).clamp(0, 255) as u32;
-
-            let blur_g = if has_gb { blur_g_raw } else { blur_r };
-            let blur_b = if has_gb { blur_b_raw } else { blur_r };
-
-            // Blend: out = blurred * (1.0 - t) + original * t
-            let out_r = ((blur_r as f32 * one_minus_t + orig_r as f32 * t) + 0.5) as u32;
-            let out_g = if has_gb {
-                ((blur_g as f32 * one_minus_t + orig_g as f32 * t) + 0.5) as u32
-            } else {
-                out_r
-            };
-            let out_b = if has_gb {
-                ((blur_b as f32 * one_minus_t + orig_b as f32 * t) + 0.5) as u32
-            } else {
-                out_r
-            };
-
-            let out_r = out_r.min(255);
-            let out_g = out_g.min(255);
-            let out_b = out_b.min(255);
-            let out_a = if has_a { orig_a } else { 0xFF00_0000 };
-
-            pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | out_a;
         }
+    }
+
+    for (idx, pixel) in pixels.iter_mut().enumerate() {
+        let orig = src[idx];
+        let blur = blurred[idx];
+        let blend = |filtered: u32, original: u32| {
+            (filtered as f64 * one_minus_t + original as f64 * t).clamp(0.0, 255.0) as u32
+        };
+        let out_r = blend(blur & 0xFF, orig & 0xFF);
+        let out_g = if has_gb {
+            blend((blur >> 8) & 0xFF, (orig >> 8) & 0xFF)
+        } else {
+            out_r
+        };
+        let out_b = if has_gb {
+            blend((blur >> 16) & 0xFF, (orig >> 16) & 0xFF)
+        } else {
+            out_r
+        };
+        let out_a = if is_cmyk {
+            blend((blur >> 24) & 0xFF, (orig >> 24) & 0xFF) << 24
+        } else if has_a {
+            orig & 0xFF00_0000
+        } else {
+            0xFF00_0000
+        };
+        *pixel = out_r | (out_g << 8) | (out_b << 16) | out_a;
     }
 }
 
@@ -1901,37 +1960,51 @@ pub fn box_blur(pixels: &mut [u32], w: u32, h: u32, mode: u32, radius: u32) {
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
-            let sp = pixels[idx];
 
             if has_gb {
-                // RGB/RGBA: separate R, G, B accumulation
+                // RGB/RGBA: separate R, G, B, A accumulation
                 let mut acc_r = 0u64;
                 let mut acc_g = 0u64;
                 let mut acc_b = 0u64;
+                let mut acc_a = 0u64;
                 for dx in -r..=r {
                     let sx = (x + dx).clamp(0, w_i - 1);
                     let sp2 = pixels[(y * w_i + sx) as usize];
                     acc_r += (sp2 & 0xFF) as u64;
                     acc_g += ((sp2 >> 8) & 0xFF) as u64;
                     acc_b += ((sp2 >> 16) & 0xFF) as u64;
+                    if has_a {
+                        acc_a += ((sp2 >> 24) & 0xFF) as u64;
+                    }
                 }
                 let out_r = ((acc_r * ww as u64 + bias as u64) >> 24) as u32;
                 let out_g = ((acc_g * ww as u64 + bias as u64) >> 24) as u32;
                 let out_b = ((acc_b * ww as u64 + bias as u64) >> 24) as u32;
-                let a = sp & 0xFF00_0000;
-                hpass[idx] =
-                    out_r | (out_g << 8) | (out_b << 16) | if has_a { a } else { 0xFF00_0000 };
+                let out_a = if has_a {
+                    ((acc_a * ww as u64 + bias as u64) >> 24) as u32
+                } else {
+                    0xFF
+                };
+                hpass[idx] = out_r | (out_g << 8) | (out_b << 16) | (out_a << 24);
             } else {
-                // L/LA: only R channel matters, G=B=R
+                // L/LA: R carries luma, with alpha accumulated separately.
                 let mut acc_r = 0u64;
+                let mut acc_a = 0u64;
                 for dx in -r..=r {
                     let sx = (x + dx).clamp(0, w_i - 1);
-                    acc_r += (pixels[(y * w_i + sx) as usize] & 0xFF) as u64;
+                    let sp2 = pixels[(y * w_i + sx) as usize];
+                    acc_r += (sp2 & 0xFF) as u64;
+                    if has_a {
+                        acc_a += ((sp2 >> 24) & 0xFF) as u64;
+                    }
                 }
                 let out_r = ((acc_r * ww as u64 + bias as u64) >> 24) as u32;
-                let a = sp & 0xFF00_0000;
-                hpass[idx] =
-                    out_r | (out_r << 8) | (out_r << 16) | if has_a { a } else { 0xFF00_0000 };
+                let out_a = if has_a {
+                    ((acc_a * ww as u64 + bias as u64) >> 24) as u32
+                } else {
+                    0xFF
+                };
+                hpass[idx] = out_r | (out_r << 8) | (out_r << 16) | (out_a << 24);
             }
         }
     }
@@ -1940,35 +2013,49 @@ pub fn box_blur(pixels: &mut [u32], w: u32, h: u32, mode: u32, radius: u32) {
     for y in 0..h_i {
         for x in 0..w_i {
             let idx = (y * w_i + x) as usize;
-            let sp = hpass[idx];
 
             if has_gb {
                 let mut acc_r = 0u64;
                 let mut acc_g = 0u64;
                 let mut acc_b = 0u64;
+                let mut acc_a = 0u64;
                 for dy in -r..=r {
                     let sy = (y + dy).clamp(0, h_i - 1);
                     let sp2 = hpass[(sy * w_i + x) as usize];
                     acc_r += (sp2 & 0xFF) as u64;
                     acc_g += ((sp2 >> 8) & 0xFF) as u64;
                     acc_b += ((sp2 >> 16) & 0xFF) as u64;
+                    if has_a {
+                        acc_a += ((sp2 >> 24) & 0xFF) as u64;
+                    }
                 }
                 let out_r = ((acc_r * ww as u64 + bias as u64) >> 24) as u32;
                 let out_g = ((acc_g * ww as u64 + bias as u64) >> 24) as u32;
                 let out_b = ((acc_b * ww as u64 + bias as u64) >> 24) as u32;
-                let a = sp & 0xFF00_0000;
-                pixels[idx] =
-                    out_r | (out_g << 8) | (out_b << 16) | if has_a { a } else { 0xFF00_0000 };
+                let out_a = if has_a {
+                    ((acc_a * ww as u64 + bias as u64) >> 24) as u32
+                } else {
+                    0xFF
+                };
+                pixels[idx] = out_r | (out_g << 8) | (out_b << 16) | (out_a << 24);
             } else {
                 let mut acc_r = 0u64;
+                let mut acc_a = 0u64;
                 for dy in -r..=r {
                     let sy = (y + dy).clamp(0, h_i - 1);
-                    acc_r += (hpass[(sy * w_i + x) as usize] & 0xFF) as u64;
+                    let sp2 = hpass[(sy * w_i + x) as usize];
+                    acc_r += (sp2 & 0xFF) as u64;
+                    if has_a {
+                        acc_a += ((sp2 >> 24) & 0xFF) as u64;
+                    }
                 }
                 let out_r = ((acc_r * ww as u64 + bias as u64) >> 24) as u32;
-                let a = sp & 0xFF00_0000;
-                pixels[idx] =
-                    out_r | (out_r << 8) | (out_r << 16) | if has_a { a } else { 0xFF00_0000 };
+                let out_a = if has_a {
+                    ((acc_a * ww as u64 + bias as u64) >> 24) as u32
+                } else {
+                    0xFF
+                };
+                pixels[idx] = out_r | (out_r << 8) | (out_r << 16) | (out_a << 24);
             }
         }
     }
@@ -2056,13 +2143,39 @@ fn resize_box(
 
     if filter == 0 {
         // ── Nearest-neighbor ──
+        // Pillow's ImagingScaleAffine builds integer coordinate tables with
+        // a cumulative floating-point position (x0 + scale / 2, then one
+        // scale increment per output pixel). Recomputing `(x + 0.5) * scale`
+        // changes exact-boundary samples, notably for 14 -> 21 scaling where
+        // Pillow repeats a source index across two output columns.
+        let scale_x = sw_f / dw_f;
+        let scale_y = sh_f / dh_f;
+        let full_source_box = box_left == 0.0
+            && box_top == 0.0
+            && box_right == src_w as f64
+            && box_bottom == src_h as f64;
+        let mut x_positions = Vec::with_capacity(dst_w as usize);
+        if full_source_box {
+            let mut x_position = box_left + scale_x * 0.5;
+            for _ in 0..dst_w {
+                x_positions.push(x_position as u32);
+                x_position += scale_x;
+            }
+        } else {
+            for dx in 0..dst_w {
+                x_positions.push((box_left + (dx as f64 + 0.5) * scale_x) as u32);
+            }
+        }
+        let mut y_position = box_top + scale_y * 0.5;
         for dy in 0..dst_h {
-            // PIL: floor((dy + 0.5) * src_h / dst_h)
-            let sy = (box_top + (dy as f64 + 0.5) * sh_f / dh_f) as u32;
+            let sy = if full_source_box {
+                y_position as u32
+            } else {
+                (box_top + (dy as f64 + 0.5) * scale_y) as u32
+            };
             let sy = sy.min(src_h_max);
             for dx in 0..dst_w {
-                // PIL: floor((dx + 0.5) * src_w / dst_w)
-                let sx = (box_left + (dx as f64 + 0.5) * sw_f / dw_f) as u32;
+                let sx = x_positions[dx as usize];
                 let sx = sx.min(src_w_max);
 
                 let sp = pixels[(sy * src_w + sx) as usize];
@@ -2077,6 +2190,9 @@ fn resize_box(
                 let out_a = if has_a { a } else { 0xFF00_0000 };
 
                 output[(dy * dst_w + dx) as usize] = out_r | (out_g << 8) | (out_b << 16) | out_a;
+            }
+            if full_source_box {
+                y_position += scale_y;
             }
         }
     } else {
@@ -2209,6 +2325,8 @@ pub fn scale(
     factor: f64,
     filter: u32,
 ) -> (Vec<u32>, u32, u32) {
+    // ImageOps.scale follows Python's round(width * factor), including
+    // ties-to-even at half-pixel products (13 * 1.5 -> 20, 11 * 1.5 -> 16).
     let dst_w = round_positive_ties_even(w as f64 * factor).max(1);
     let dst_h = round_positive_ties_even(h as f64 * factor).max(1);
     resize(pixels, w, h, dst_w, dst_h, mode, filter)
@@ -2597,6 +2715,72 @@ mod tests {
     /// Helper: extract A channel from packed u32.
     fn a_of(pixel: u32) -> u8 {
         ((pixel >> 24) & 0xFF) as u8
+    }
+
+    fn box_blur_plane(input: &[u8], w: usize, h: usize, radius: usize) -> Vec<u8> {
+        let radius = radius as isize;
+        let window = (2 * radius + 1) as u64;
+        let weight = (1u64 << 24) / window;
+        let bias = 1u64 << 23;
+        let mut horizontal = vec![0; input.len()];
+
+        for y in 0..h {
+            for x in 0..w {
+                let sum = (-radius..=radius)
+                    .map(|offset| {
+                        let source_x = (x as isize + offset).clamp(0, w as isize - 1) as usize;
+                        u64::from(input[y * w + source_x])
+                    })
+                    .sum::<u64>();
+                horizontal[y * w + x] = ((sum * weight + bias) >> 24) as u8;
+            }
+        }
+
+        let mut output = vec![0; input.len()];
+        for y in 0..h {
+            for x in 0..w {
+                let sum = (-radius..=radius)
+                    .map(|offset| {
+                        let source_y = (y as isize + offset).clamp(0, h as isize - 1) as usize;
+                        u64::from(horizontal[source_y * w + x])
+                    })
+                    .sum::<u64>();
+                output[y * w + x] = ((sum * weight + bias) >> 24) as u8;
+            }
+        }
+        output
+    }
+
+    #[test]
+    fn box_blur_blurs_la_and_rgba_alpha_for_radii_one_through_three() {
+        const WIDTH: usize = 7;
+        const HEIGHT: usize = 5;
+        let source: Vec<u32> = (0..WIDTH * HEIGHT)
+            .map(|index| {
+                let x = index % WIDTH;
+                let y = index / WIDTH;
+                p(
+                    (x * 31 + y * 7) as u8,
+                    (x * 13 + y * 29) as u8,
+                    (x * 3 + y * 47) as u8,
+                    (x * 37 + y * 41) as u8,
+                )
+            })
+            .collect();
+        let source_alpha: Vec<u8> = source.iter().copied().map(a_of).collect();
+
+        for mode in [1, 3] {
+            for radius in 1..=3 {
+                let mut actual = source.clone();
+                box_blur(&mut actual, WIDTH as u32, HEIGHT as u32, mode, radius);
+                let actual_alpha: Vec<u8> = actual.iter().copied().map(a_of).collect();
+                let expected_alpha = box_blur_plane(&source_alpha, WIDTH, HEIGHT, radius as usize);
+                assert_eq!(
+                    actual_alpha, expected_alpha,
+                    "mode={mode}, radius={radius} must blur alpha exactly like every other channel"
+                );
+            }
+        }
     }
 
     // ── Nearest-neighbor tests ──
@@ -3357,12 +3541,13 @@ pub fn equalize(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
 
 /// Affine transform with configurable filter (0=Nearest, 1=Bilinear+).
 ///
-/// Maps each destination pixel (dx,dy) back to source (sx,sy) via the
-/// matrix [a,b,c,d,e,f] where:
-///   sx = a*dx + b*dy + c
-///   sy = d*dx + e*dy + f
+/// Maps each destination pixel center (dx+0.5,dy+0.5) back to source
+/// (sx,sy) via the matrix [a,b,c,d,e,f] where:
+///   sx = a*(dx+0.5) + b*(dy+0.5) + c
+///   sy = d*(dx+0.5) + e*(dy+0.5) + f
 ///
-/// filter=0 (Nearest): round to nearest integer source coordinate, clamp to bounds.
+/// filter=0 (Nearest): truncate non-negative source coordinates, matching
+/// Pillow's `COORD` macro, and reject negative/out-of-bounds coordinates.
 /// filter>=1 (Bilinear): fractional source position, 4-neighbor weighted blend with
 /// f64 precision, mode-aware channel output.
 ///
@@ -3451,12 +3636,16 @@ pub fn transform(
     if nearest {
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let sx = aff_a * dx as f64 + aff_b * dy as f64 + aff_c;
-                let sy = aff_d * dx as f64 + aff_e * dy as f64 + aff_f;
+                // Geometry.c's affine_transform() evaluates destination
+                // pixel centers. Its nearest filter then applies COORD(),
+                // which rejects negative values and truncates non-negative
+                // values toward zero.
+                let sx = aff_a * (dx as f64 + 0.5) + aff_b * (dy as f64 + 0.5) + aff_c;
+                let sy = aff_d * (dx as f64 + 0.5) + aff_e * (dy as f64 + 0.5) + aff_f;
                 let out_idx = (dy * dst_w + dx) as usize;
 
-                let ix = (sx + 0.5).floor() as i64;
-                let iy = (sy + 0.5).floor() as i64;
+                let ix = if sx < 0.0 { -1 } else { sx as i64 };
+                let iy = if sy < 0.0 { -1 } else { sy as i64 };
                 if ix >= 0 && ix < w as i64 && iy >= 0 && iy < h as i64 {
                     let sp = pixels[(iy as u32 * w + ix as u32) as usize];
                     let r = sp & 0xFF;
@@ -3476,17 +3665,24 @@ pub fn transform(
         // Bilinear interpolation
         for dy in 0..dst_h {
             for dx in 0..dst_w {
-                let sx = aff_a * dx as f64 + aff_b * dy as f64 + aff_c;
-                let sy = aff_d * dx as f64 + aff_e * dy as f64 + aff_f;
+                // The bilinear filter performs its own half-pixel shift after
+                // the center-space bounds check, matching BILINEAR_HEAD() in
+                // Geometry.c.
+                let sx = aff_a * (dx as f64 + 0.5) + aff_b * (dy as f64 + 0.5) + aff_c;
+                let sy = aff_d * (dx as f64 + 0.5) + aff_e * (dy as f64 + 0.5) + aff_f;
                 let out_idx = (dy * dst_w + dx) as usize;
 
                 if sx >= 0.0 && sx < w_f && sy >= 0.0 && sy < h_f {
-                    let x0 = sx.floor() as u32;
-                    let y0 = sy.floor() as u32;
-                    let x1 = (x0 + 1).min(w_max);
-                    let y1 = (y0 + 1).min(h_max);
-                    let fx = sx - x0 as f64;
-                    let fy = sy - y0 as f64;
+                    let sample_x = sx - 0.5;
+                    let sample_y = sy - 0.5;
+                    let x_floor = sample_x.floor() as i64;
+                    let y_floor = sample_y.floor() as i64;
+                    let x0 = x_floor.clamp(0, w_max as i64) as u32;
+                    let y0 = y_floor.clamp(0, h_max as i64) as u32;
+                    let x1 = (x_floor + 1).clamp(0, w_max as i64) as u32;
+                    let y1 = (y_floor + 1).clamp(0, h_max as i64) as u32;
+                    let fx = sample_x - x_floor as f64;
+                    let fy = sample_y - y_floor as f64;
 
                     let p00 = pixels[(y0 * w + x0) as usize];
                     let p10 = pixels[(y0 * w + x1) as usize];
@@ -4041,8 +4237,9 @@ pub fn alpha_composite(
 ///   [512..768) -> B channel
 ///   [768..1024) -> A channel
 ///
-/// For L/LA mode (mode < 2): only the first 256 entries are used (R channel LUT)
-/// and applied to both R and A (for LA). G and B mirror the R output.
+/// For L mode, only the first 256 entries are used and G/B mirror the L
+/// output.  LA uses the first segment for L and the second segment for A;
+/// Pillow's public `Image.point` contract supplies one table per band.
 ///
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
 #[inline]
@@ -4068,10 +4265,12 @@ pub fn eval(pixels: &mut [u32], mode: u32, lut: &[u8; 1024]) {
             };
             *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
         } else {
-            // L/LA: only the first 256 entries; G = B = R
+            // L: first segment; LA: first segment for luma and second for
+            // alpha. G = B = R in the packed representation.
             let out_r = lut[r] as u32;
             let out_a = if has_a {
-                (lut[a] as u32) << 24
+                let alpha_offset = if mode == 1 { 256 } else { 768 };
+                (lut[alpha_offset + a] as u32) << 24
             } else {
                 0xFF00_0000
             };
@@ -4329,9 +4528,29 @@ pub fn thumbnail(
         return (Vec::new(), 0, 0);
     }
 
-    // Compute aspect-ratio-preserving size
-    let scale = (dst_w as f64 / w as f64).min(dst_h as f64 / h as f64);
-    if scale >= 1.0 {
+    // Match Pillow's round_aspect rule used by the CPU thumbnail executor.
+    // Truncating `w * scale` is not equivalent: for example, a 17x11 image
+    // bounded by 7x7 must become 7x5, not 7x4.  The SIMD nearest path used to
+    // take the truncating route and returned a different image shape from the
+    // CPU/Pillow path.
+    let aspect = w as f64 / h as f64;
+    let (new_w, new_h) = if dst_w as f64 / dst_h as f64 >= aspect {
+        let adjusted = thumbnail_round_aspect(dst_h as f64 * aspect, |candidate| {
+            (aspect - candidate / dst_h as f64).abs()
+        });
+        (adjusted, dst_h)
+    } else {
+        let adjusted = thumbnail_round_aspect(dst_w as f64 / aspect, |candidate| {
+            if candidate == 0.0 {
+                0.0
+            } else {
+                (aspect - dst_w as f64 / candidate).abs()
+            }
+        });
+        (dst_w, adjusted)
+    };
+
+    if new_w >= w && new_h >= h {
         // No shrink needed — return a copy with alpha clamping
         let has_a = mode == 1 || mode == 3;
         let out: Vec<u32> = pixels
@@ -4345,10 +4564,18 @@ pub fn thumbnail(
         return (out, w, h);
     }
 
-    let new_w = (w as f64 * scale).max(1.0) as u32;
-    let new_h = (h as f64 * scale).max(1.0) as u32;
-
     resize(pixels, w, h, new_w, new_h, mode, filter)
+}
+
+#[inline]
+fn thumbnail_round_aspect(number: f64, key: impl Fn(f64) -> f64) -> u32 {
+    let floor = number.trunc();
+    if number == floor {
+        return floor as u32;
+    }
+    let ceil = floor + 1.0;
+    let best = if key(floor) <= key(ceil) { floor } else { ceil };
+    (best as u32).max(1)
 }
 
 /// Reduce: downsample by `factor` using block averaging.
@@ -4413,9 +4640,23 @@ pub fn reduce(
                         break;
                     }
                     let p = pixels[(row + sx) as usize];
-                    sum_r += (p & 0xFF) as u64;
-                    sum_g += ((p >> 8) & 0xFF) as u64;
-                    sum_b += ((p >> 16) & 0xFF) as u64;
+                    let alpha = (p >> 24) & 0xFF;
+                    let premultiply = |value: u32| (value * alpha + 127) / 255;
+                    sum_r += u64::from(if has_a {
+                        premultiply(p & 0xFF)
+                    } else {
+                        p & 0xFF
+                    });
+                    sum_g += u64::from(if has_a {
+                        premultiply((p >> 8) & 0xFF)
+                    } else {
+                        (p >> 8) & 0xFF
+                    });
+                    sum_b += u64::from(if has_a {
+                        premultiply((p >> 16) & 0xFF)
+                    } else {
+                        (p >> 16) & 0xFF
+                    });
                     sum_a += (p >> 24) as u64;
                     count += 1;
                 }
@@ -4429,10 +4670,17 @@ pub fn reduce(
                 let multiplier = (1u128 << 32) / (u128::from(count) * 256);
                 (((u128::from(sum) + u128::from(count / 2)) * multiplier) >> 24) as u32
             };
-            let out_r = block_average(sum_r);
-            let out_g_raw = block_average(sum_g);
-            let out_b_raw = block_average(sum_b);
             let out_a_raw = block_average(sum_a);
+            let unpremultiply = |value: u32| {
+                if has_a && out_a_raw != 0 {
+                    value.saturating_mul(255) / out_a_raw
+                } else {
+                    value
+                }
+            };
+            let out_r = unpremultiply(block_average(sum_r));
+            let out_g_raw = unpremultiply(block_average(sum_g));
+            let out_b_raw = unpremultiply(block_average(sum_b));
 
             let out_g = if has_gb { out_g_raw } else { out_r };
             let out_b = if has_gb { out_b_raw } else { out_r };

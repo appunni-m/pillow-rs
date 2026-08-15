@@ -72,7 +72,9 @@
           "PIL.ImageEnhance.Color.nuanced.mode-rgba",
           "PIL.ImageEnhance.Contrast.nuanced.mode-rgba",
           "PIL.ImageEnhance.Sharpness.nuanced.mode-rgba",
-          "PIL.ImageEnhance.Brightness.nuanced.pa-putpalette-pipeline-expansion"
+          "PIL.ImageEnhance.Brightness.nuanced.pa-putpalette-pipeline-expansion",
+          "pipeline-composition.simd-cmyk-contrast-color",
+          "pipeline-composition.simd-cmyk-brightness-sharpness"
         ],
         "command_ids": []
       },

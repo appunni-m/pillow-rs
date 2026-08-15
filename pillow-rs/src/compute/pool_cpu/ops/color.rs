@@ -72,13 +72,28 @@ pub fn op_convert(
             }
             Ok(DynamicImage::ImageRgb8(img.to_rgb8()))
         }
-        ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
+        ColorMode::RGBA => {
+            if explicit_mode == Some("RGBX") {
+                // RGBX uses the same four-byte storage as RGBA, but its X byte
+                // is padding rather than opacity. Pillow expands it to an
+                // opaque RGBA pixel during conversion.
+                let rgb = img.to_rgb8();
+                let (w, h) = rgb.dimensions();
+                let mut out = crate::raster::RgbaImage::new(w, h);
+                for (output, input) in out.pixels_mut().zip(rgb.pixels()) {
+                    *output = crate::raster::Rgba([input[0], input[1], input[2], 255]);
+                }
+                Ok(DynamicImage::ImageRgba8(out))
+            } else {
+                Ok(DynamicImage::ImageRgba8(img.to_rgba8()))
+            }
+        }
         ColorMode::Mode1 => {
             // PIL uses TRUNCATED grayscale for convert("1") (dither or no dither)
             // while convert("L") uses ROUNDED grayscale.
             // CMYK mode: proper CMYK→RGB→L conversion before thresholding.
             let gray = if explicit_mode == Some("CMYK") {
-                crate::color::cmyk_to_grayscale(img)?
+                crate::color::cmyk_to_grayscale_truncate(img)?
             } else {
                 pil_grayscale_truncate(img)?
             };
@@ -144,7 +159,15 @@ pub fn op_convert(
         ColorMode::I => {
             // Convert to int32 mode: PIL stores rounded grayscale as int32 LE in RGBA.
             // Use the luma formula directly (no intermediate u8 truncation).
-            let rgb = img.to_rgb8();
+            // CMYK is stored in the RGBA container as C/M/Y/K, not as an
+            // ordinary RGBA pixel. Convert it through Pillow's CMYK->RGB
+            // path before deriving luma; otherwise a zero CMYK sample is
+            // incorrectly treated as black instead of white.
+            let rgb = if explicit_mode == Some("CMYK") {
+                crate::color::cmyk_to_rgb(img).to_rgb8()
+            } else {
+                img.to_rgb8()
+            };
             let (w, h) = rgb.dimensions();
             let mut out = crate::raster::RgbaImage::new(w, h);
             for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
@@ -163,7 +186,11 @@ pub fn op_convert(
             //   v = (r*299 + g*587 + b*114) / 1000.0F
             // This computes the sum in integer arithmetic (matching PIL's `L` macro)
             // then divides by 1000.0F as float, matching PIL pixel-for-pixel.
-            let rgb = img.to_rgb8();
+            let rgb = if explicit_mode == Some("CMYK") {
+                crate::color::cmyk_to_rgb(img).to_rgb8()
+            } else {
+                img.to_rgb8()
+            };
             let (w, h) = rgb.dimensions();
             let mut out = crate::raster::RgbaImage::new(w, h);
             for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
@@ -223,7 +250,17 @@ pub fn op_convert(
         ColorMode::YCbCr => {
             // Convert to YCbCr: RGB→YCbCr using PIL's BT.601 fixed-point.
             // YCbCr is stored in an Rgb8 container (Y→R, Cb→G, Cr→B).
-            Ok(crate::color::rgb_to_ycbcr(img))
+            // Pillow's l2ycbcr/la2ycbcr converters copy the luma byte and
+            // install neutral chroma; routing L through the RGB lookup table
+            // would turn some grayscale values (for example 11) into 10.
+            if matches!(
+                img.color(),
+                crate::raster::ColorType::L8 | crate::raster::ColorType::La8
+            ) {
+                Ok(crate::color::luma_to_ycbcr(img))
+            } else {
+                Ok(crate::color::rgb_to_ycbcr(img))
+            }
         }
     }
 }

@@ -14,6 +14,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -21,10 +29,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.font_variant.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -35,6 +41,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -50,6 +67,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -57,10 +82,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_axes.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -71,6 +94,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -86,6 +120,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -93,10 +135,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.get_variation_names.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -107,6 +147,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -122,6 +173,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -129,10 +188,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getbbox.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -143,6 +200,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -158,6 +226,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -165,10 +241,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getlength.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -179,6 +253,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -194,6 +279,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -201,10 +294,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getmask.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -215,6 +306,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -230,6 +332,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -237,10 +347,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getmask2.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -251,6 +359,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -266,6 +385,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -273,10 +400,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getmetrics.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -287,6 +412,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -302,6 +438,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -309,10 +453,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.getname.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -323,6 +465,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -338,6 +491,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -345,10 +506,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_axes.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -359,6 +518,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     },
     {
@@ -374,6 +544,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -381,10 +559,8 @@
         "case_id": "PIL.ImageFont.FreeTypeFont.set_variation_by_name.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -395,6 +571,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     }
   ],

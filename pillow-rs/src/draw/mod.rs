@@ -87,7 +87,13 @@ pub enum DrawColorInput {
 
 /// Normalize Pillow's optional draw width at the core boundary.
 pub fn normalize_draw_width(width: Option<u32>) -> u32 {
-    width.filter(|value| *value > 0).unwrap_or(1)
+    // An omitted width defaults to one, but an explicit zero is preserved.
+    // Pillow forwards that distinction to the C primitive: line-like paths
+    // handle zero as their own default while outline paths treat it as a
+    // no-op.  Collapsing `Some(0)` here makes those public contracts
+    // indistinguishable before the backend can apply the operation-specific
+    // rule.
+    width.unwrap_or(1)
 }
 
 /// Normalizes a flat or nested ImageDraw bounding box.
@@ -400,13 +406,7 @@ impl Draw {
     pub fn color_with_input(&self, input: DrawColorInput) -> Result<(u8, u8, u8, u8), PilError> {
         let mode = self.effective_mode();
         match input {
-            DrawColorInput::None => {
-                if mode == "PA" {
-                    Ok((255, 255, 255, 255))
-                } else {
-                    Ok((0, 0, 0, 255))
-                }
-            }
+            DrawColorInput::None => Ok(self.default_shape_ink().unwrap_or((0, 0, 0, 255))),
             DrawColorInput::String(value) => crate::color::parse_color_str(&value),
             DrawColorInput::Integer(value) => resolve_integer_color(&mode, value),
             DrawColorInput::Float(value) if mode == "F" => {
@@ -481,11 +481,17 @@ impl Draw {
         fill: Option<(u8, u8, u8, u8)>,
         outline: Option<(u8, u8, u8, u8)>,
     ) -> (Option<(u8, u8, u8, u8)>, Option<(u8, u8, u8, u8)>) {
-        if fill.is_none() && outline.is_none() && self.orig_mode.as_deref() == Some("PA") {
-            (None, Some((255, 255, 255, 255)))
-        } else {
-            (fill, outline)
+        if fill.is_none() && outline.is_none() {
+            if self.orig_mode.as_deref() == Some("PA") {
+                return (None, Some((255, 255, 255, 255)));
+            }
+            // ImageDraw geometric primitives default to the context's outline
+            // ink, not a filled interior.  Rectangle/ellipse/polygon and
+            // their relatives therefore retain a one-pixel white outline on
+            // RGB-family images when both color arguments are omitted.
+            return (None, self.default_shape_ink());
         }
+        (fill, outline)
     }
 
     /// Return the ink Pillow's experimental `Outline` API uses when both
@@ -713,7 +719,7 @@ impl Draw {
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawPolygon {
-                points: points.to_vec(),
+                points: points.to_vec().into(),
                 fill,
                 outline,
                 width: _width,
@@ -825,7 +831,7 @@ impl Draw {
         self.image = Image::push_op(
             &self.image,
             PipelineOp::DrawPoint {
-                points: points.to_vec(),
+                points: points.to_vec().into(),
                 fill,
                 alpha_blend_rgb: self.alpha_blend_rgb(),
             },
@@ -861,7 +867,9 @@ impl Draw {
     /// The bitmap acts as a transparency mask. Valid bitmap modes:
     /// - "1": binary mask (non-zero → fill)
     /// - "L": alpha mask (0-255 opacity)
-    /// - "RGBA"/"RGBa": alpha channel at byte offset +3
+    /// - "RGBA": alpha channel at byte offset +3
+    /// - "RGBa": an opaque bitmap mask; Pillow's lowercase-alpha mode is
+    ///   accepted as a mask but does not use its stored alpha byte here.
     ///
     /// # Errors
     ///
@@ -905,10 +913,14 @@ impl Draw {
                     }
                 }
                 "L" => data[idx],
-                "RGBA" | "RGBa" => {
+                "RGBA" => {
                     let pixel_idx = idx * bmp_stride;
                     data[pixel_idx + 3]
                 }
+                // Pillow's ImagingDrawBitmap passes RGBa through the same
+                // binary-mask path as a fully opaque bitmap.  Its lowercase
+                // alpha is not consulted by _imaging.c::ImagingFill2.
+                "RGBa" => 255,
                 _ => unreachable!("bitmap mode was validated before mask iteration"),
             }
         };
@@ -939,9 +951,23 @@ impl Draw {
                         let dy = y + py as i32;
                         if dx >= 0 && dy >= 0 && (dx as u32) < img_w && (dy as u32) < img_h {
                             let existing = canvas.get_pixel(dx as u32, dy as u32);
-                            let r = pil_blend(existing[0], color.0, m);
-                            let g = pil_blend(existing[1], color.1, m);
-                            let b = pil_blend(existing[2], color.2, m);
+                            // Pillow's RGBA bitmap path uses the tuple-ink
+                            // paste rule: RGB channels are replaced by the
+                            // ink when the destination is fully transparent,
+                            // while partially opaque destinations use the
+                            // ordinary channel blend.  Alpha is always
+                            // blended by the mask.  This mirrors
+                            // src/libImaging/ImagingPaste.c's RGBA/L path.
+                            let blend_rgb = |background: u8, foreground: u8| {
+                                if existing[3] == 0 {
+                                    foreground
+                                } else {
+                                    pil_blend(background, foreground, m)
+                                }
+                            };
+                            let r = blend_rgb(existing[0], color.0);
+                            let g = blend_rgb(existing[1], color.1);
+                            let b = blend_rgb(existing[2], color.2);
                             let a = pil_blend(existing[3], color.3, m);
                             canvas.put_pixel(
                                 dx as u32,
@@ -1480,9 +1506,25 @@ impl Draw {
     ) -> Result<(), PilError> {
         let (fill, outline) = self.shape_inks(fill, outline);
         let r = radius.round() as i32;
-        let d = r * 2;
-        if d <= 0 || x1 <= x0 + 1 || y1 <= y0 + 1 {
-            // No corner curve, just draw rectangle
+        let mut d = r * 2;
+        // ImagingDrawRoundedRectangle joins the corners before deciding
+        // whether the shape is an ellipse or a rectangle.  This matters for
+        // zero-height/zero-width boxes: both joined axes dispatch to the
+        // ellipse primitive, while a single joined axis keeps rectangle
+        // outline width semantics.
+        let full_x = d >= x1 - x0 - 1;
+        if full_x {
+            d = x1 - x0;
+        }
+        let full_y = d >= y1 - y0 - 1;
+        if full_y {
+            d = y1 - y0;
+        }
+        if full_x && full_y {
+            return self.ellipse(x0, y0, x1, y1, fill, outline, _width);
+        }
+        if d <= 0 {
+            // No corner curve, just draw a rectangle.
             self.image = Image::push_op(
                 &self.image,
                 PipelineOp::DrawRectangle {
@@ -1492,7 +1534,7 @@ impl Draw {
                     y1,
                     fill,
                     outline,
-                    width: 1,
+                    width: _width,
                     alpha_blend_rgb: self.alpha_blend_rgb(),
                 },
             );

@@ -2,8 +2,26 @@
 
 use crate::error::PilError;
 use crate::image::Image;
-use crate::ops::resize::{parse_resample_input, ResampleInput};
 use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+
+const TRANSFORM_RESAMPLE_GUIDANCE: &str = concat!(
+    "Use Image.Resampling.NEAREST (0), Image.Resampling.BILINEAR (2) or ",
+    "Image.Resampling.BICUBIC (3)"
+);
+
+fn parse_transform_resample(code: i32) -> Result<ResampleFilter, PilError> {
+    match code {
+        0 => Ok(ResampleFilter::Nearest),
+        2 => Ok(ResampleFilter::Bilinear),
+        3 => Ok(ResampleFilter::Bicubic),
+        // Image.transform has a narrower public filter contract than resize;
+        // Pillow reports only its three accepted filters here.
+        other => Err(PilError::ValueError(format!(
+            "Unknown resampling filter ({}). {}",
+            other, TRANSFORM_RESAMPLE_GUIDANCE
+        ))),
+    }
+}
 
 /// Host-neutral transform data after the binding has performed only Python
 /// sequence extraction.
@@ -208,6 +226,12 @@ impl Image {
                 factors.len()
             )));
         }
+        if self.has_palette_mode() && (box_coords.is_some() || factors.as_slice() != [1, 1]) {
+            // Pillow permits the indexed-image no-op P.reduce(1), but
+            // ImagingReduce rejects actual indexed reduction and every
+            // optional-box form before constructing a result image.
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
         let x_factor = u32::try_from(factors[0])
             .ok()
             .filter(|&value| value > 0)
@@ -226,7 +250,21 @@ impl Image {
                     .into_iter()
                     .map(|value| {
                         i32::try_from(value)
-                            .map_err(|_| PilError::ValueError("box coordinate overflow".into()))
+                            // Pillow converts the Python coordinate through a C
+                            // long before entering ImagingReduce; an out-of-range
+                            // value is therefore an OverflowError, not a generic
+                            // value-shape failure.
+                            .map_err(|_| {
+                                if value > i64::from(i32::MAX) {
+                                    PilError::OverflowError(
+                                        "signed integer is greater than maximum".into(),
+                                    )
+                                } else {
+                                    PilError::OverflowError(
+                                        "signed integer is less than minimum".into(),
+                                    )
+                                }
+                            })
                     })
                     .collect::<Result<Vec<_>, _>>()?;
                 // Pillow's imaging core rejects reversed reduce boxes before
@@ -408,8 +446,7 @@ impl Image {
         _fill: i32,
         fillcolor: Option<TransformFill>,
     ) -> Result<Image, PilError> {
-        let requested_filter =
-            parse_resample_input(Some(ResampleInput::Code(i64::from(resample))))?;
+        let requested_filter = parse_transform_resample(resample)?;
         // Pillow's indexed affine transform keeps the raw palette index and
         // therefore uses nearest-neighbor sampling regardless of the public
         // filter code. Keep the operation palette-safe so materialization does
@@ -504,7 +541,17 @@ impl Image {
                         if let Some(index) = palette_fill {
                             return Ok(Image::new_palette_index(size.0, size.1, index));
                         }
-                        return Image::new(size.0, size.1, &mode, fill);
+                        // The transform fill tuple is normalized for raster
+                        // kernels as `(luma, alpha, 0, 0)`, while Image.new
+                        // stores LA/PA alpha in the fourth slot. Preserve the
+                        // public two-component fill when an empty mesh uses
+                        // Image.new directly.
+                        let image_fill = if matches!(mode.as_str(), "LA" | "PA") {
+                            (fill.0, 0, 0, fill.1)
+                        } else {
+                            fill
+                        };
+                        return Image::new(size.0, size.1, &mode, image_fill);
                     }
                     Some(TransformData::Affine(_)) => {
                         return Err(PilError::TypeError(
@@ -632,7 +679,7 @@ impl Image {
                 w: dst_w,
                 h: dst_h,
                 method: TransformMethod::Affine,
-                data,
+                data: data.into(),
                 filter,
                 fill,
                 palette_fill,
@@ -657,7 +704,7 @@ impl Image {
                 w: size.0,
                 h: size.1,
                 method: TransformMethod::Perspective,
-                data: data.to_vec(),
+                data: data.to_vec().into(),
                 filter,
                 fill: Some(fillcolor),
                 palette_fill,
@@ -682,7 +729,7 @@ impl Image {
                 w: size.0,
                 h: size.1,
                 method: TransformMethod::Quad,
-                data: data.to_vec(),
+                data: data.to_vec().into(),
                 filter,
                 fill: Some(fillcolor),
                 palette_fill,
@@ -734,7 +781,7 @@ impl Image {
                 w: size.0,
                 h: size.1,
                 method: TransformMethod::Mesh,
-                data,
+                data: data.into(),
                 filter,
                 fill: Some(fillcolor),
                 palette_fill: None,

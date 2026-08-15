@@ -30,6 +30,12 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 @compute @workgroup_size(16, 16)
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let b = params.border;
+    // Keep the dimension arithmetic total even if a malformed uniform is
+    // submitted without the host's checked output-dimension preflight.
+    if b > (0xffffffffu - params.width) / 2u
+        || b > (0xffffffffu - params.height) / 2u {
+        return;
+    }
     let out_w = params.width + 2u * b;
     let out_h = params.height + 2u * b;
     if gid.x >= out_w || gid.y >= out_h { return; }

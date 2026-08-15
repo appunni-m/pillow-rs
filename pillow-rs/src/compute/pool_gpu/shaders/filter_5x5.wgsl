@@ -54,6 +54,13 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     let h = params.height;
     let idx = y * w + x;
 
+    // No interior pixel exists in a smaller image. This guard must precede
+    // the w-2/h-2 expressions below, so malformed dimensions cannot rely on
+    // unsigned underflow to decide whether neighborhood loads are reached.
+    if w < 5u || h < 5u {
+        return input[idx];
+    }
+
     // Border: 2-pixel edge copied verbatim
     if x < 2u || x >= w - 2u || y < 2u || y >= h - 2u {
         return input[idx];

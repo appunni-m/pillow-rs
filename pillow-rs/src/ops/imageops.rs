@@ -7,6 +7,7 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::ops::resize::{ResampleInput, parse_resample, parse_resample_input};
 use crate::pipeline::PipelineOp;
+use std::sync::Arc;
 
 /// Host-neutral centering input for `ImageOps.fit` and `ImageOps.pad`.
 #[derive(Debug, Clone)]
@@ -58,10 +59,9 @@ pub fn validate_imageops_mask(image: &Image, mask: ImageOpsMask) -> Result<(), P
     }
 }
 
-fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), PilError> {
+fn resolve_centering(input: CenteringInput) -> Result<(f64, f64), PilError> {
     match input {
         CenteringInput::Default => Ok((0.5, 0.5)),
-        CenteringInput::Scalar(_) if pad => Ok((0.5, 0.5)),
         CenteringInput::Scalar(_) => Err(PilError::TypeError(
             "cannot unpack non-iterable float object".into(),
         )),
@@ -77,6 +77,89 @@ fn resolve_centering(input: CenteringInput, pad: bool) -> Result<(f64, f64), Pil
             "cannot unpack non-iterable NoneType object".into(),
         )),
     }
+}
+
+/// Resolve `ImageOps.pad` centering only after `contain` has determined that
+/// padding is needed.
+///
+/// Pillow indexes only the coordinate for the axis that receives padding. A
+/// one-element sequence is therefore valid when width is padded, and extra
+/// sequence values are ignored. This is deliberately separate from
+/// `ImageOps.fit`, which unpacks both coordinates before doing any work.
+fn resolve_pad_centering(
+    input: CenteringInput,
+    width_padded: bool,
+    height_padded: bool,
+) -> Result<(f64, f64), PilError> {
+    match input {
+        CenteringInput::Default => Ok((0.5, 0.5)),
+        CenteringInput::Scalar(_) => Err(PilError::TypeError(
+            "'float' object is not subscriptable".into(),
+        )),
+        CenteringInput::Invalid => Err(PilError::TypeError(
+            "'NoneType' object is not subscriptable".into(),
+        )),
+        CenteringInput::Values(values) => {
+            let x = if width_padded {
+                values
+                    .first()
+                    .copied()
+                    .ok_or_else(|| PilError::IndexError("tuple index out of range".into()))?
+            } else {
+                0.5
+            };
+            let y = if height_padded {
+                values
+                    .get(1)
+                    .copied()
+                    .ok_or_else(|| PilError::IndexError("tuple index out of range".into()))?
+            } else {
+                0.5
+            };
+            Ok((x, y))
+        }
+    }
+}
+
+/// Python's `round()` for the positive dimensions used by `ImageOps.contain`.
+fn round_positive_ties_even(value: f64) -> u32 {
+    let floor = value.floor();
+    let fraction = value - floor;
+    let rounded = if fraction < 0.5 {
+        floor
+    } else if fraction > 0.5 || (floor as u64) % 2 == 1 {
+        floor + 1.0
+    } else {
+        floor
+    };
+    rounded.max(0.0).min(f64::from(u32::MAX)) as u32
+}
+
+/// Return which axes `ImageOps.pad` will fill after its `contain` step.
+/// `None` preserves deferred error handling for zero-sized inputs, where
+/// Pillow evaluates the aspect-ratio division before it can inspect color or
+/// centering.
+fn pad_containment_axes(image: &Image, w: u32, h: u32) -> Result<Option<(bool, bool)>, PilError> {
+    let (iw, ih) = image.size()?;
+    if iw == 0 || ih == 0 || w == 0 || h == 0 {
+        return Ok(None);
+    }
+    let source_ratio = f64::from(iw) / f64::from(ih);
+    let destination_ratio = f64::from(w) / f64::from(h);
+    let (new_w, new_h) = if (source_ratio - destination_ratio).abs() < 1e-10 {
+        (w, h)
+    } else if source_ratio > destination_ratio {
+        (
+            w,
+            round_positive_ties_even(f64::from(ih) / f64::from(iw) * f64::from(w)),
+        )
+    } else {
+        (
+            round_positive_ties_even(f64::from(iw) / f64::from(ih) * f64::from(h)),
+            h,
+        )
+    };
+    Ok(Some((new_w != w, new_h != h)))
 }
 
 pub(crate) fn resolve_imageops_color(
@@ -117,6 +200,14 @@ pub(crate) fn resolve_imageops_color(
             // these bytes as the final pixel, so repeated grayscale bytes
             // would turn a valid scalar fill into a bogus RGBA sample.
             let [a, b, c, d] = (value as f32).to_le_bytes();
+            return (a, b, c, d);
+        }
+        if mode == "I" {
+            // Pillow stores an I-mode fill as one signed little-endian int32
+            // sample. ImageOps.pad carries the sample through the four-byte
+            // RGBA-compatible pipeline storage, so repeating the low byte in
+            // all channels would produce a different integer at materialize.
+            let [a, b, c, d] = (value as i32).to_le_bytes();
             return (a, b, c, d);
         }
         let value = clamp(value);
@@ -218,6 +309,10 @@ fn parse_imageops_filter(
     input: Option<ResampleInput>,
 ) -> Result<crate::pipeline::ResampleFilter, PilError> {
     match input {
+        // Pillow's ImageOps ``method=`` parameter does not accept a string;
+        // the parity adapter only materializes enum names for ``resample=``.
+        // Keep this distinction visible instead of making the four method
+        // error cases accidentally succeed.
         Some(ResampleInput::Name(name)) => Err(PilError::ValueError(format!(
             "Unknown resampling filter ({name}). Use Image.Resampling.NEAREST (0), \
              Image.Resampling.LANCZOS (1), Image.Resampling.BILINEAR (2), \
@@ -236,13 +331,7 @@ pub fn validate_deform_resample(input: Option<ResampleInput>) -> Result<(), PilE
     parse_resample_input(input).map(|_| ())
 }
 
-/// Normalizes image contrast by clipping darkest and lightest values.
-///
-/// # Errors
-///
-/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
-/// or another [`PilError`] when mode detection fails.
-pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
+fn validate_autocontrast_mode(image: &Image) -> Result<(), PilError> {
     let mode = image.mode()?;
     // Pillow 12.2.0 `ImageOps._lut` accepts only "L" and "RGB"; "P" raises
     // NotImplementedError and every other mode raises the OSError below.
@@ -254,7 +343,24 @@ pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
     if mode != "L" && mode != "RGB" {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
-    Ok(Image::push_op(image, PipelineOp::Autocontrast { cutoff }))
+    Ok(())
+}
+
+/// Normalizes image contrast by clipping darkest and lightest values.
+///
+/// # Errors
+///
+/// Returns [`PilError::OsError`] for alpha modes that Pillow does not support,
+/// or another [`PilError`] when mode detection fails.
+pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
+    validate_autocontrast_mode(image)?;
+    Ok(Image::push_op(
+        image,
+        PipelineOp::Autocontrast {
+            cutoff,
+            mask: None,
+        },
+    ))
 }
 
 /// Normalizes contrast after validating an optional Pillow mask.
@@ -263,11 +369,25 @@ pub fn autocontrast_with_mask(
     cutoff: f64,
     mask: ImageOpsMask,
 ) -> Result<Image, PilError> {
-    if matches!(&mask, ImageOpsMask::None) {
-        return autocontrast(image, cutoff);
+    match mask {
+        ImageOpsMask::None => autocontrast(image, cutoff),
+        ImageOpsMask::Invalid(type_name) => validate_imageops_mask(
+            image,
+            ImageOpsMask::Invalid(type_name),
+        )
+        .and_then(|_| autocontrast(image, cutoff)),
+        ImageOpsMask::Image(mask) => {
+            validate_imageops_mask(image, ImageOpsMask::Image(mask.clone()))?;
+            validate_autocontrast_mode(image)?;
+            Ok(Image::push_op(
+                image,
+                PipelineOp::Autocontrast {
+                    cutoff,
+                    mask: Some(Arc::new(mask)),
+                },
+            ))
+        }
     }
-    validate_imageops_mask(image, mask)?;
-    autocontrast(image, cutoff)
 }
 
 /// Equalizes the image histogram.
@@ -357,7 +477,15 @@ pub fn mirror(image: &Image) -> Result<Image, PilError> {
 /// or another [`PilError`] when mode detection fails.
 pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
     let mode = image.mode()?;
-    if mode == "LA" || mode == "RGBA" {
+    // ImageOps.posterize delegates to `_lut`, whose public contract is the
+    // same as autocontrast: P is a named unsupported path and all other modes
+    // outside L/RGB raise OSError before a pipeline is created.
+    if mode == "P" {
+        return Err(PilError::NotImplementedError(
+            "mode P support coming soon".into(),
+        ));
+    }
+    if mode != "L" && mode != "RGB" {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
     Ok(Image::push_op(
@@ -557,7 +685,7 @@ pub fn fit_with_input(
         }
         centering => centering,
     };
-    let centering = resolve_centering(centering, false)?;
+    let centering = resolve_centering(centering)?;
     if filter_was_none && centering == (0.5, 0.5) {
         return fit(image, w, h, None, bleed, centering);
     }
@@ -642,7 +770,39 @@ pub fn pad_with_input(
     let filter_was_none = filter.is_none();
     let color_was_none = matches!(&color, ImageOpsColor::None);
     let filter = parse_imageops_filter(filter)?;
-    let centering = resolve_centering(centering, true)?;
+
+    // Pillow's `pad` calls `contain` before touching either optional boundary
+    // argument. If the resized image already has the requested dimensions,
+    // malformed color/centering values are intentionally ignored.
+    let containment_axes = pad_containment_axes(image, w, h)?;
+    // Pillow evaluates ``contain`` before constructing the padded canvas. A
+    // zero-height source or destination therefore raises division by zero at
+    // the public call boundary, while a zero-width destination reaches
+    // ``Image.new`` and raises its non-positive-dimension ValueError. Keep
+    // these checks after ``pad_containment_axes`` so the aspect-ratio guard
+    // remains exercised by valid public zero-dimension inputs.
+    let (_, source_height) = image.size()?;
+    if source_height == 0 || h == 0 {
+        return Err(PilError::ZeroDivisionError("division by zero".into()));
+    }
+    if w == 0 {
+        return Err(PilError::ValueError("height and width must be > 0".into()));
+    }
+    if containment_axes == Some((false, false)) {
+        return Ok(Image::push_op(
+            image,
+            PipelineOp::Pad {
+                w,
+                h,
+                filter,
+                color: None,
+                centering: (0.5, 0.5),
+            },
+        ));
+    }
+
+    let (width_padded, height_padded) = containment_axes.unwrap_or((true, true));
+    let centering = resolve_pad_centering(centering, width_padded, height_padded)?;
     let color = resolve_imageops_color(color, &image.mode()?)?;
     if filter_was_none && color_was_none && centering == (0.5, 0.5) {
         return pad(image, w, h, None, color, centering);
@@ -666,6 +826,21 @@ pub fn pad_with_input(
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
 pub fn scale(image: &Image, factor: f64, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
+    Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
+}
+
+/// `ImageOps.scale` with the integer/enum resampling value exposed by Pillow.
+pub fn scale_with_input(
+    image: &Image,
+    factor: f64,
+    filter: Option<ResampleInput>,
+) -> Result<Image, PilError> {
+    // The input language records Image.Resampling enum members by name. The
+    // Python source side materializes that name as an IntEnum; normalize the
+    // equivalent target-facade representation here for this `resample=`
+    // parameter only. ImageOps method parameters intentionally use the
+    // stricter parser above.
+    let filter = parse_resample_input(filter)?;
     Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
 }
 
@@ -851,37 +1026,69 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
     let Some(entries_end) = entry_count_end.checked_add(entries_len) else {
         return raw.to_vec();
     };
-    let Some(entries) = data.get(entry_count_end..entries_end) else {
-        return raw.to_vec();
+    let retain_entries = |entries: &[u8]| {
+        entries
+            .chunks_exact(12)
+            .filter(|entry| read_u16(&entry[..2]) != 0x0112)
+            .map(|entry| {
+                let mut entry = entry.to_vec();
+                // Pillow's Exif serializer emits ImageWidth's integer value
+                // as a LONG even when the source IFD used an inline SHORT.
+                if read_u16(&entry[..2]) == 0x0100
+                    && read_u16(&entry[2..4]) == 3
+                    && read_u32(&entry[4..8]) == 1
+                {
+                    let value = u32::from(read_u16(&entry[8..10]));
+                    let type_bytes = if le {
+                        4u16.to_le_bytes()
+                    } else {
+                        4u16.to_be_bytes()
+                    };
+                    entry[2..4].copy_from_slice(&type_bytes);
+                    let value_bytes = if le {
+                        value.to_le_bytes()
+                    } else {
+                        value.to_be_bytes()
+                    };
+                    entry[8..12].copy_from_slice(&value_bytes);
+                }
+                entry
+            })
+            .collect::<Vec<_>>()
     };
-    let retained: Vec<Vec<u8>> = entries
-        .chunks_exact(12)
-        .filter(|entry| read_u16(&entry[..2]) != 0x0112)
-        .map(|entry| {
-            let mut entry = entry.to_vec();
-            // Pillow's Exif serializer emits ImageWidth's integer value as a
-            // LONG even when the source IFD used an inline SHORT.
-            if read_u16(&entry[..2]) == 0x0100
-                && read_u16(&entry[2..4]) == 3
-                && read_u32(&entry[4..8]) == 1
-            {
-                let value = u32::from(read_u16(&entry[8..10]));
-                let type_bytes = if le {
-                    4u16.to_le_bytes()
-                } else {
-                    4u16.to_be_bytes()
-                };
-                entry[2..4].copy_from_slice(&type_bytes);
-                let value_bytes = if le {
-                    value.to_le_bytes()
-                } else {
-                    value.to_be_bytes()
-                };
-                entry[8..12].copy_from_slice(&value_bytes);
-            }
-            entry
-        })
-        .collect();
+    let Some(entries) = data.get(entry_count_end..entries_end) else {
+        // Pillow rebuilds an Exif mapping when a valid Orientation entry is
+        // followed by an incomplete advertised entry.  Preserve every
+        // complete non-Orientation record and emit the serializer's zero next
+        // IFD pointer instead of retaining the malformed raw tail.
+        let available_entries = data.len().saturating_sub(entry_count_end) / 12;
+        let partial_end = entry_count_end.saturating_add(available_entries * 12);
+        let Some(partial_entries) = data.get(entry_count_end..partial_end) else {
+            return raw.to_vec();
+        };
+        let retained = retain_entries(partial_entries);
+        let mut output = Vec::with_capacity(
+            prefix_len
+                .saturating_add(ifd_offset)
+                .saturating_add(2)
+                .saturating_add(retained.len().saturating_mul(12))
+                .saturating_add(4),
+        );
+        output.extend_from_slice(&raw[..prefix_len]);
+        output.extend_from_slice(&data[..ifd_offset]);
+        let retained_count = retained.len() as u16;
+        if le {
+            output.extend_from_slice(&retained_count.to_le_bytes());
+        } else {
+            output.extend_from_slice(&retained_count.to_be_bytes());
+        }
+        for entry in retained {
+            output.extend_from_slice(&entry);
+        }
+        output.extend_from_slice(&[0u8; 4]);
+        return output;
+    };
+    let retained = retain_entries(entries);
     if retained.len() == entry_count {
         return raw.to_vec();
     }

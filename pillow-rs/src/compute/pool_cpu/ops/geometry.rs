@@ -163,14 +163,27 @@ fn resize_f(
             xintab.push(sx.min(sw - 1));
             source_x += scale_x;
         }
-        let mut out_floats = Vec::with_capacity((dst_w * dst_h) as usize);
-        let mut source_y = scale_y * 0.5;
-        for _ in 0..dst_h {
-            let sy = (source_y as u32).min(sh - 1);
-            for &sx in &xintab {
-                out_floats.push(src_floats[(sy * sw + sx) as usize]);
+        let mut out_floats = vec![0.0f32; (dst_w * dst_h) as usize];
+        #[cfg(feature = "parallel")]
+        crate::par_rows_mut_typed!(
+            &mut out_floats,
+            dst_w as usize,
+            dst_h as usize,
+            |_row_start, _row_end, y, row| {
+                let source_y = (f64::from(y) + 0.5) * scale_y;
+                let sy = (source_y as u32).min(sh - 1);
+                for (out, &sx) in row.iter_mut().zip(&xintab) {
+                    *out = src_floats[(sy * sw + sx) as usize];
+                }
             }
-            source_y += scale_y;
+        );
+        #[cfg(not(feature = "parallel"))]
+        for (y, row) in out_floats.chunks_mut(dst_w as usize).enumerate() {
+            let source_y = (y as f64 + 0.5) * scale_y;
+            let sy = (source_y as u32).min(sh - 1);
+            for (out, &sx) in row.iter_mut().zip(&xintab) {
+                *out = src_floats[(sy * sw + sx) as usize];
+            }
         }
         let rgba_bytes: Vec<u8> = out_floats.iter().flat_map(|f| f.to_le_bytes()).collect();
         // The loop emits exactly four bytes per checked output pixel, so a
@@ -193,42 +206,89 @@ fn resize_f(
     let mut intermediate = vec![0.0f32; (sh * dst_w) as usize];
     if needs_horizontal {
         let h_coeffs = precompute_coeffs_f64(dst_w, sw, kernel, support);
-        for sy in 0..sh {
-            let src_row_base = (sy * sw) as usize;
-            for dx in 0..dst_w {
-                let x0 = h_coeffs.xmin[dx as usize];
+        #[cfg(feature = "parallel")]
+        crate::par_rows_mut_typed!(
+            &mut intermediate,
+            dst_w as usize,
+            sh as usize,
+            |_row_start, _row_end, sy, row| {
+                let src_row_base = (sy * sw) as usize;
+                for (dx, output) in row.iter_mut().enumerate() {
+                    let x0 = h_coeffs.xmin[dx];
+                    let mut acc = 0.0f64;
+                    for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
+                        let sx = (x0 + offset as i64) as usize;
+                        acc += weight * f64::from(src_floats[src_row_base + sx]);
+                    }
+                    *output = acc as f32;
+                }
+            }
+        );
+        #[cfg(not(feature = "parallel"))]
+        for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
+            let src_row_base = sy * sw as usize;
+            for (dx, output) in row.iter_mut().enumerate() {
+                let x0 = h_coeffs.xmin[dx];
                 let mut acc = 0.0f64;
-                for (offset, &weight) in h_coeffs.weights[dx as usize].iter().enumerate() {
+                for (offset, &weight) in h_coeffs.weights[dx].iter().enumerate() {
                     let sx = (x0 + offset as i64) as usize;
                     acc += weight * f64::from(src_floats[src_row_base + sx]);
                 }
-                intermediate[(sy * dst_w + dx) as usize] = acc as f32;
+                *output = acc as f32;
             }
         }
     } else {
-        for sy in 0..sh {
-            let source_start = (sy * sw) as usize;
-            let target_start = (sy * dst_w) as usize;
-            intermediate[target_start..target_start + dst_w as usize]
-                .copy_from_slice(&src_floats[source_start..source_start + sw as usize]);
+        #[cfg(feature = "parallel")]
+        crate::par_rows_mut_typed!(
+            &mut intermediate,
+            dst_w as usize,
+            sh as usize,
+            |_row_start, _row_end, sy, row| {
+                let source_start = (sy * sw) as usize;
+                row.copy_from_slice(&src_floats[source_start..source_start + sw as usize]);
+            }
+        );
+        #[cfg(not(feature = "parallel"))]
+        for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
+            let source_start = sy * sw as usize;
+            row.copy_from_slice(&src_floats[source_start..source_start + sw as usize]);
         }
     }
 
     let out_floats: Vec<f32> = if needs_vertical {
         let v_coeffs = precompute_coeffs_f64(dst_h, sh, kernel, support);
-        let mut output = Vec::with_capacity((dst_w * dst_h) as usize);
-        for dy in 0..dst_h {
-            let y0 = v_coeffs.xmin[dy as usize];
-            for dx in 0..dst_w {
-                let mut acc = 0.0f64;
-                for (offset, &weight) in v_coeffs.weights[dy as usize].iter().enumerate() {
-                    let sy = (y0 + offset as i64) as usize;
-                    acc += weight * f64::from(intermediate[sy * dst_w as usize + dx as usize]);
+        let mut output = vec![0.0f32; (dst_w * dst_h) as usize];
+        #[cfg(feature = "parallel")]
+        crate::par_rows_mut_typed!(
+            &mut output,
+            dst_w as usize,
+            dst_h as usize,
+            |_row_start, _row_end, dy, row| {
+                let y0 = v_coeffs.xmin[dy as usize];
+                for (dx, output) in row.iter_mut().enumerate() {
+                    let mut acc = 0.0f64;
+                    for (offset, &weight) in v_coeffs.weights[dy as usize].iter().enumerate() {
+                        let sy = (y0 + offset as i64) as usize;
+                        acc += weight * f64::from(intermediate[sy * dst_w as usize + dx]);
+                    }
+                    // Pillow serializes exact zeroes as positive zero. Preserve
+                    // that byte-level detail for symmetric kernels.
+                    let value = acc as f32;
+                    *output = if value == 0.0 { 0.0 } else { value };
                 }
-                // Pillow serializes exact zeroes as positive zero. Preserve
-                // that byte-level detail for symmetric kernels.
+            }
+        );
+        #[cfg(not(feature = "parallel"))]
+        for (dy, row) in output.chunks_mut(dst_w as usize).enumerate() {
+            let y0 = v_coeffs.xmin[dy];
+            for (dx, output) in row.iter_mut().enumerate() {
+                let mut acc = 0.0f64;
+                for (offset, &weight) in v_coeffs.weights[dy].iter().enumerate() {
+                    let sy = (y0 + offset as i64) as usize;
+                    acc += weight * f64::from(intermediate[sy * dst_w as usize + dx]);
+                }
                 let value = acc as f32;
-                output.push(if value == 0.0 { 0.0 } else { value });
+                *output = if value == 0.0 { 0.0 } else { value };
             }
         }
         output
@@ -279,19 +339,41 @@ fn resize_i(
 
     let n = (dst_w * dst_h) as usize;
 
-    // NEAREST: PIL uses ImagingTransform (AFFINE) with formula:
-    //   sx = (int)((dx + 1.0) * sw/dw - 0.5)
-    //   sy = (int)((dy + 1.0) * sh/dh - 0.5)
+    // NEAREST: Pillow's mode-I path uses the same half-destination-pixel
+    // point samples as its native point resampler:
+    //   sx = (int)((dx + 0.5) * sw/dw)
+    //   sy = (int)((dy + 0.5) * sh/dh)
+    //
+    // The older affine-style formula shifts a downsampled I image by one
+    // source row/column at the leading edge.  That only becomes visible when
+    // a public pipeline composes a typed filter with a non-integral resize,
+    // so keep the correction in the native I branch rather than changing the
+    // byte-image transform contract.
     if matches!(filter, ResampleFilter::Nearest) {
-        let mut out_ints: Vec<i32> = Vec::with_capacity(n);
-        for dy in 0..dst_h {
-            for dx in 0..dst_w {
-                let sx = ((dx as f64 + 1.0) * sw_f / dw_f - 0.5).floor() as i64;
-                let sy = ((dy as f64 + 1.0) * sh_f / dh_f - 0.5).floor() as i64;
-                let sx = sx.clamp(0, sw as i64 - 1) as u32;
+        let mut out_ints = vec![0i32; n];
+        #[cfg(feature = "parallel")]
+        crate::par_rows_mut_typed!(
+            &mut out_ints,
+            dst_w as usize,
+            dst_h as usize,
+            |_row_start, _row_end, dy, row| {
+                let sy = ((f64::from(dy) + 0.5) * sh_f / dh_f).floor() as i64;
                 let sy = sy.clamp(0, sh as i64 - 1) as u32;
-                let idx = (sy * sw + sx) as usize;
-                out_ints.push(src_ints[idx]);
+                for (dx, output) in row.iter_mut().enumerate() {
+                    let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
+                    let sx = sx.clamp(0, sw as i64 - 1) as u32;
+                    *output = src_ints[(sy * sw + sx) as usize];
+                }
+            }
+        );
+        #[cfg(not(feature = "parallel"))]
+        for (dy, row) in out_ints.chunks_mut(dst_w as usize).enumerate() {
+            let sy = ((dy as f64 + 0.5) * sh_f / dh_f).floor() as i64;
+            let sy = sy.clamp(0, sh as i64 - 1) as u32;
+            for (dx, output) in row.iter_mut().enumerate() {
+                let sx = ((dx as f64 + 0.5) * sw_f / dw_f).floor() as i64;
+                let sx = sx.clamp(0, sw as i64 - 1) as u32;
+                *output = src_ints[(sy * sw + sx) as usize];
             }
         }
         let rgba_bytes: Vec<u8> = out_ints.iter().flat_map(|v| v.to_le_bytes()).collect();
@@ -309,31 +391,67 @@ fn resize_i(
     let mut intermediate: Vec<f64> = vec![0.0f64; (sh * dst_w) as usize];
 
     // Horizontal pass: f64 accumulation, matching PIL's double-precision path
-    for sy in 0..sh {
-        let src_row_base = (sy * sw) as usize;
-        for dx in 0..dst_w {
-            let x0 = h_coeffs_f64.xmin[dx as usize];
-            let mut acc: f64 = 0.0;
-            for (cix, &w) in h_coeffs_f64.weights[dx as usize].iter().enumerate() {
-                let sx = (x0 + cix as i64) as usize;
-                acc += w * src_ints[src_row_base + sx] as f64;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        &mut intermediate,
+        dst_w as usize,
+        sh as usize,
+        |_row_start, _row_end, sy, row| {
+            let src_row_base = (sy * sw) as usize;
+            for (dx, output) in row.iter_mut().enumerate() {
+                let x0 = h_coeffs_f64.xmin[dx];
+                let mut acc: f64 = 0.0;
+                for (cix, &weight) in h_coeffs_f64.weights[dx].iter().enumerate() {
+                    let sx = (x0 + cix as i64) as usize;
+                    acc += weight * src_ints[src_row_base + sx] as f64;
+                }
+                *output = round_up(acc);
             }
-            // PIL: ROUND_UP(ss)
-            intermediate[(sy * dst_w + dx) as usize] = round_up(acc);
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (sy, row) in intermediate.chunks_mut(dst_w as usize).enumerate() {
+        let src_row_base = sy * sw as usize;
+        for (dx, output) in row.iter_mut().enumerate() {
+            let x0 = h_coeffs_f64.xmin[dx];
+            let mut acc: f64 = 0.0;
+            for (cix, &weight) in h_coeffs_f64.weights[dx].iter().enumerate() {
+                let sx = (x0 + cix as i64) as usize;
+                acc += weight * src_ints[src_row_base + sx] as f64;
+            }
+            *output = round_up(acc);
         }
     }
 
     // Vertical pass
-    let mut out_ints: Vec<i32> = Vec::with_capacity(n);
-    for dy in 0..dst_h {
-        let y0 = v_coeffs_f64.xmin[dy as usize];
-        for dx in 0..dst_w {
-            let mut acc: f64 = 0.0;
-            for (cix, &w) in v_coeffs_f64.weights[dy as usize].iter().enumerate() {
-                let sy = (y0 + cix as i64) as usize;
-                acc += w * intermediate[(sy * dst_w as usize) + dx as usize];
+    let mut out_ints = vec![0i32; n];
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut_typed!(
+        &mut out_ints,
+        dst_w as usize,
+        dst_h as usize,
+        |_row_start, _row_end, dy, row| {
+            let y0 = v_coeffs_f64.xmin[dy as usize];
+            for (dx, output) in row.iter_mut().enumerate() {
+                let mut acc: f64 = 0.0;
+                for (cix, &weight) in v_coeffs_f64.weights[dy as usize].iter().enumerate() {
+                    let sy = (y0 + cix as i64) as usize;
+                    acc += weight * intermediate[(sy * dst_w as usize) + dx];
+                }
+                *output = round_up(acc) as i32;
             }
-            out_ints.push(round_up(acc) as i32);
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for (dy, row) in out_ints.chunks_mut(dst_w as usize).enumerate() {
+        let y0 = v_coeffs_f64.xmin[dy];
+        for (dx, output) in row.iter_mut().enumerate() {
+            let mut acc: f64 = 0.0;
+            for (cix, &weight) in v_coeffs_f64.weights[dy].iter().enumerate() {
+                let sy = (y0 + cix as i64) as usize;
+                acc += weight * intermediate[(sy * dst_w as usize) + dx];
+            }
+            *output = round_up(acc) as i32;
         }
     }
 
@@ -369,14 +487,17 @@ fn affine_nearest_fixed(
     let origin_y = fixed(f + d * 0.5 + e * 0.5);
     let (source_width, source_height) = source_size;
     let (destination_width, destination_height) = destination_size;
+    if destination_width == 0 || destination_height == 0 {
+        return;
+    }
 
-    for y in 0..destination_height {
+    let process_row = |y: u32, row: &mut [u8]| {
         let mut source_x = origin_x + i64::from(y) * step_y_x;
         let mut source_y = origin_y + i64::from(y) * step_y_y;
         for x in 0..destination_width {
             let input_x = source_x >> 16;
             let input_y = source_y >> 16;
-            let output_index = (y * destination_width + x) as usize * channels;
+            let output_index = x as usize * channels;
             if input_x >= 0
                 && input_x < i64::from(source_width)
                 && input_y >= 0
@@ -384,11 +505,11 @@ fn affine_nearest_fixed(
             {
                 let input_index =
                     (input_y as u32 * source_width + input_x as u32) as usize * channels;
-                output[output_index..output_index + channels]
+                row[output_index..output_index + channels]
                     .copy_from_slice(&source[input_index..input_index + channels]);
             } else {
                 for channel in 0..channels.min(4) {
-                    output[output_index + channel] = if channels == 2 && channel == 1 {
+                    row[output_index + channel] = if channels == 2 && channel == 1 {
                         // LA/PA normalize their second sample as alpha in
                         // fill.3; fill.1 is only the duplicated luma/index
                         // component used by the host-neutral color record.
@@ -406,6 +527,39 @@ fn affine_nearest_fixed(
             source_x += step_x_x;
             source_y += step_x_y;
         }
+    };
+
+    #[cfg(feature = "parallel")]
+    const PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+    let output_stride = destination_width as usize * channels;
+    #[cfg(feature = "parallel")]
+    if (destination_width as usize).saturating_mul(destination_height as usize)
+        >= PARALLEL_PIXEL_THRESHOLD
+    {
+        crate::par_rows_mut!(
+            output,
+            output_stride,
+            destination_height as usize,
+            |_row_start, _row_end, y, row| {
+                process_row(y, row);
+            }
+        );
+    } else {
+        for (y, row) in output
+            .chunks_exact_mut(output_stride)
+            .take(destination_height as usize)
+            .enumerate()
+        {
+            process_row(y as u32, row);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in output
+        .chunks_exact_mut(output_stride)
+        .take(destination_height as usize)
+        .enumerate()
+    {
+        process_row(y as u32, row);
     }
 }
 
@@ -821,6 +975,52 @@ pub fn execute_crop(
     let height = bottom.checked_sub(top).ok_or_else(|| {
         PilError::InternalError("crop pipeline height underflow after normalization".into())
     })?;
+
+    // Native byte layouts can copy complete rows directly.  Keep the image
+    // crate path for typed samples such as I;16, whose byte stride is wider
+    // than its logical channel count and therefore needs its own layout
+    // handling.
+    let channels = img.color().channel_count() as usize;
+    if matches!(
+        img.color(),
+        crate::raster::ColorType::L8
+            | crate::raster::ColorType::La8
+            | crate::raster::ColorType::Rgb8
+            | crate::raster::ColorType::Rgba8
+    ) {
+        let source = img.as_bytes();
+        let source_stride = iw as usize * channels;
+        let output_stride = width as usize * channels;
+        let mut output = CheckedDims::new(width, height, channels as u8)?.alloc_buffer();
+        #[cfg(feature = "parallel")]
+        if output.len() >= 4 * 1024 * 1024 && output_stride != 0 {
+            crate::par_rows_mut!(
+                &mut output,
+                output_stride,
+                height as usize,
+                |_row_start, _row_end, y, row| {
+                    let source_start =
+                        (top as usize + y as usize) * source_stride + left as usize * channels;
+                    row.copy_from_slice(&source[source_start..source_start + output_stride]);
+                }
+            );
+        } else {
+            for y in 0..height as usize {
+                let source_start = (top as usize + y) * source_stride + left as usize * channels;
+                let output_start = y * output_stride;
+                output[output_start..output_start + output_stride]
+                    .copy_from_slice(&source[source_start..source_start + output_stride]);
+            }
+        }
+        #[cfg(not(feature = "parallel"))]
+        for y in 0..height as usize {
+            let source_start = (top as usize + y) * source_stride + left as usize * channels;
+            let output_start = y * output_stride;
+            output[output_start..output_start + output_stride]
+                .copy_from_slice(&source[source_start..source_start + output_stride]);
+        }
+        return raw_bytes_to_image(width, height, output, channels);
+    }
     Ok(img.crop_imm(left, top, width, height))
 }
 
@@ -969,6 +1169,96 @@ pub fn execute_rotate(
 }
 
 /// Execute a Transpose operation.
+const TRANSPOSE_TILE_SIZE: u32 = 32;
+const TRANSPOSE_TILE_THRESHOLD_PIXELS: usize = 256 * 1024;
+
+#[inline]
+fn should_tile_transpose(width: u32, height: u32) -> bool {
+    width >= TRANSPOSE_TILE_SIZE
+        && height >= TRANSPOSE_TILE_SIZE
+        && (width as usize).saturating_mul(height as usize) >= TRANSPOSE_TILE_THRESHOLD_PIXELS
+}
+
+/// Transpose a large byte image in bounded output-row tiles.
+///
+/// A full output row fixes one source column, so the old row-oriented loop
+/// reads the source with a `width * channels` stride for its entire lifetime.
+/// Grouping output rows into small tiles lets the inner loop visit a compact
+/// source-row span before moving to the next tile.  Each Rayon chunk owns a
+/// complete group of output rows, so the write proof remains the same as
+/// `par_rows_mut!`; the small-image path deliberately keeps its old order.
+fn transpose_bytes_tiled(
+    source: &[u8],
+    output: &mut [u8],
+    width: u32,
+    height: u32,
+    channels: usize,
+    method: &TransposeMethod,
+) {
+    let output_stride = height as usize * channels;
+    #[cfg(feature = "parallel")]
+    let tile_stride = output_stride * TRANSPOSE_TILE_SIZE as usize;
+    let tile_rows = (width as usize).div_ceil(TRANSPOSE_TILE_SIZE as usize);
+
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        output,
+        tile_stride,
+        tile_rows,
+        |_row_start, _row_end, tile_index, rows| {
+            let output_y_start = tile_index as usize * TRANSPOSE_TILE_SIZE as usize;
+            let output_y_end = (output_y_start + TRANSPOSE_TILE_SIZE as usize).min(width as usize);
+            for output_x in 0..height as usize {
+                for output_y in output_y_start..output_y_end {
+                    let (source_x, source_y) = match method {
+                        TransposeMethod::Transpose => (output_y, output_x),
+                        TransposeMethod::Transverse => (
+                            width as usize - 1 - output_y,
+                            height as usize - 1 - output_x,
+                        ),
+                        TransposeMethod::Rotate90 => (width as usize - 1 - output_y, output_x),
+                        TransposeMethod::Rotate270 => (output_y, height as usize - 1 - output_x),
+                        _ => unreachable!("unsupported tiled transpose method"),
+                    };
+                    let source_index = (source_y * width as usize + source_x) * channels;
+                    let output_index =
+                        (output_y - output_y_start) * output_stride + output_x * channels;
+                    rows[output_index..output_index + channels]
+                        .copy_from_slice(&source[source_index..source_index + channels]);
+                }
+            }
+        }
+    );
+
+    #[cfg(not(feature = "parallel"))]
+    for tile_index in 0..tile_rows {
+        let output_y_start = tile_index * TRANSPOSE_TILE_SIZE as usize;
+        let output_y_end = (output_y_start + TRANSPOSE_TILE_SIZE as usize).min(width as usize);
+        let row_start = output_y_start * output_stride;
+        let row_end = output_y_end * output_stride;
+        let rows = &mut output[row_start..row_end];
+        for output_x in 0..height as usize {
+            for output_y in output_y_start..output_y_end {
+                let (source_x, source_y) = match method {
+                    TransposeMethod::Transpose => (output_y, output_x),
+                    TransposeMethod::Transverse => (
+                        width as usize - 1 - output_y,
+                        height as usize - 1 - output_x,
+                    ),
+                    TransposeMethod::Rotate90 => (width as usize - 1 - output_y, output_x),
+                    TransposeMethod::Rotate270 => (output_y, height as usize - 1 - output_x),
+                    _ => unreachable!("unsupported tiled transpose method"),
+                };
+                let source_index = (source_y * width as usize + source_x) * channels;
+                let output_index =
+                    (output_y - output_y_start) * output_stride + output_x * channels;
+                rows[output_index..output_index + channels]
+                    .copy_from_slice(&source[source_index..source_index + channels]);
+            }
+        }
+    }
+}
+
 pub fn execute_transpose(
     img: &DynamicImage,
     method: &TransposeMethod,
@@ -979,15 +1269,96 @@ pub fn execute_transpose(
         // PIL rotates counter-clockwise; image crate rotates clockwise.
         // PIL ROTATE_90 (CCW) = image crate rotate270 (CW)
         // PIL ROTATE_270 (CCW) = image crate rotate90 (CW)
-        TransposeMethod::Rotate90 => Ok(img.rotate270()),
+        TransposeMethod::Rotate90 => {
+            if matches!(
+                img.color(),
+                crate::raster::ColorType::L8
+                    | crate::raster::ColorType::La8
+                    | crate::raster::ColorType::Rgb8
+                    | crate::raster::ColorType::Rgba8
+            ) {
+                let (width, height) = img.dimensions();
+                if should_tile_transpose(width, height) {
+                    let channels = img.color().channel_count() as usize;
+                    let mut output =
+                        CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
+                    transpose_bytes_tiled(
+                        img.as_bytes(),
+                        &mut output,
+                        width,
+                        height,
+                        channels,
+                        method,
+                    );
+                    return raw_bytes_to_image(height, width, output, channels);
+                }
+            }
+            Ok(img.rotate270())
+        }
         TransposeMethod::Rotate180 => Ok(img.rotate180()),
-        TransposeMethod::Rotate270 => Ok(img.rotate90()),
+        TransposeMethod::Rotate270 => {
+            if matches!(
+                img.color(),
+                crate::raster::ColorType::L8
+                    | crate::raster::ColorType::La8
+                    | crate::raster::ColorType::Rgb8
+                    | crate::raster::ColorType::Rgba8
+            ) {
+                let (width, height) = img.dimensions();
+                if should_tile_transpose(width, height) {
+                    let channels = img.color().channel_count() as usize;
+                    let mut output =
+                        CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
+                    transpose_bytes_tiled(
+                        img.as_bytes(),
+                        &mut output,
+                        width,
+                        height,
+                        channels,
+                        method,
+                    );
+                    return raw_bytes_to_image(height, width, output, channels);
+                }
+            }
+            Ok(img.rotate90())
+        }
         TransposeMethod::Transpose | TransposeMethod::Transverse => {
             let (width, height) = img.dimensions();
             let channels = img.color().channel_count() as usize;
             let source = img.as_bytes();
             let mut output = CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
+            let output_stride = height as usize * channels;
+
+            if should_tile_transpose(width, height) {
+                transpose_bytes_tiled(source, &mut output, width, height, channels, method);
+                return raw_bytes_to_image(height, width, output, channels);
+            }
+
+            #[cfg(feature = "parallel")]
+            crate::par_rows_mut!(
+                &mut output,
+                output_stride,
+                width as usize,
+                |_row_start, _row_end, output_y, row| {
+                    let output_y = output_y as u32;
+                    for output_x in 0..height {
+                        let (source_x, source_y) = if matches!(method, TransposeMethod::Transpose) {
+                            (output_y, output_x)
+                        } else {
+                            (width - 1 - output_y, height - 1 - output_x)
+                        };
+                        let source_index = (source_y * width + source_x) as usize * channels;
+                        let output_index = output_x as usize * channels;
+                        row[output_index..output_index + channels]
+                            .copy_from_slice(&source[source_index..source_index + channels]);
+                    }
+                }
+            );
+
+            #[cfg(not(feature = "parallel"))]
             for output_y in 0..width {
+                let output_start = output_y as usize * output_stride;
+                let row = &mut output[output_start..output_start + output_stride];
                 for output_x in 0..height {
                     let (source_x, source_y) = if matches!(method, TransposeMethod::Transpose) {
                         (output_y, output_x)
@@ -995,8 +1366,8 @@ pub fn execute_transpose(
                         (width - 1 - output_y, height - 1 - output_x)
                     };
                     let source_index = (source_y * width + source_x) as usize * channels;
-                    let output_index = (output_y * height + output_x) as usize * channels;
-                    output[output_index..output_index + channels]
+                    let output_index = output_x as usize * channels;
+                    row[output_index..output_index + channels]
                         .copy_from_slice(&source[source_index..source_index + channels]);
                 }
             }
@@ -1253,105 +1624,101 @@ pub fn execute_reduce(
     let (w, h) = (img.width(), img.height());
     let new_w = w.div_ceil(fx);
     let new_h = h.div_ceil(fy);
-    let raw = img.as_bytes().to_vec();
+    let raw = img.as_bytes();
+    let premultiplied_alpha = matches!(
+        img.color(),
+        crate::raster::ColorType::La8 | crate::raster::ColorType::Rgba8
+    );
     let mut out = CheckedDims::new(new_w, new_h, channels as u8)?.alloc_buffer();
+    if new_w == 0 || new_h == 0 {
+        return raw_bytes_to_image(new_w, new_h, out, channels);
+    }
 
     let division_multiplier = |divider: u32| -> u64 {
         // division_UINT32(divider, 8): 2^32 / (256 * divider), truncated.
         ((1u128 << 32) / (u128::from(divider) * 256)) as u64
     };
-    let block_average = |sum: u64, divider: u32, amend: u32| -> u8 {
-        let m = division_multiplier(divider);
-        (((sum + u64::from(amend)) * m) >> 24) as u8
-    };
 
-    // Main region: complete fx×fy blocks (floor division loop bounds).
+    // Every reduced output row reads immutable source pixels and owns a
+    // disjoint destination slice. Keep the partial right/bottom blocks in the
+    // same row function as the full blocks so the parallel and serial lanes
+    // share one exact rounding order.
     let main_w = w / fx;
     let main_h = h / fy;
-    let block_area = fx * fy;
-    let amend = block_area / 2;
-    for y in 0..main_h {
-        for x in 0..main_w {
-            let mut sums = vec![0u64; channels];
-            for dy in 0..fy {
-                for dx in 0..fx {
-                    let src_idx = ((y * fy + dy) * w + x * fx + dx) as usize * channels;
+    let right_width = w % fx;
+    let bottom_height = h % fy;
+    let full_divider = fx * fy;
+    let full_multiplier = division_multiplier(full_divider);
+    let full_amend = full_divider / 2;
+    let right_divider = right_width * fy;
+    let right_multiplier = division_multiplier(right_divider.max(1));
+    let right_amend = right_divider / 2;
+    let bottom_divider = fx * bottom_height;
+    let bottom_multiplier = division_multiplier(bottom_divider.max(1));
+    let bottom_amend = bottom_divider / 2;
+    let corner_divider = right_width * bottom_height;
+    let corner_multiplier = division_multiplier(corner_divider.max(1));
+    let corner_amend = corner_divider / 2;
+    let process_row = |y: u32, row: &mut [u8]| {
+        let full_y = y < main_h;
+        let y_count = if full_y { fy } else { bottom_height };
+        let source_y = if y < main_h { y * fy } else { main_h * fy };
+        for x in 0..new_w {
+            let full_x = x < main_w;
+            let x_count = if full_x { fx } else { right_width };
+            let source_x = if x < main_w { x * fx } else { main_w * fx };
+            let (multiplier, amend) = match (full_x, full_y) {
+                (true, true) => (full_multiplier, full_amend),
+                (false, true) => (right_multiplier, right_amend),
+                (true, false) => (bottom_multiplier, bottom_amend),
+                (false, false) => (corner_multiplier, corner_amend),
+            };
+            let mut sums = [0u64; 4];
+            for dy in 0..y_count {
+                for dx in 0..x_count {
+                    let src_idx = ((source_y + dy) * w + source_x + dx) as usize * channels;
                     for c in 0..channels {
-                        sums[c] += raw[src_idx + c] as u64;
+                        let sample = if premultiplied_alpha && c + 1 < channels {
+                            ((u16::from(raw[src_idx + c]) * u16::from(raw[src_idx + channels - 1])
+                                + 127)
+                                / 255) as u8
+                        } else {
+                            raw[src_idx + c]
+                        };
+                        sums[c] += u64::from(sample);
                     }
                 }
             }
-            let dst_idx = (y * new_w + x) as usize * channels;
+            let dst_idx = x as usize * channels;
             for c in 0..channels {
-                out[dst_idx + c] = block_average(sums[c], block_area, amend);
-            }
-        }
-    }
-
-    // Right column (partial x): scale = (w % fx) * fy.
-    if w % fx != 0 {
-        let scale = (w % fx) * fy;
-        let m = division_multiplier(scale);
-        let amend = scale / 2;
-        let x = main_w;
-        for y in 0..main_h {
-            let mut sums = vec![0u64; channels];
-            for dy in 0..fy {
-                for dx in 0..(w % fx) {
-                    let src_idx = ((y * fy + dy) * w + main_w * fx + dx) as usize * channels;
-                    for c in 0..channels {
-                        sums[c] += raw[src_idx + c] as u64;
+                let mut value = (((sums[c] + u64::from(amend)) * multiplier) >> 24) as u8;
+                if premultiplied_alpha && c + 1 < channels {
+                    let alpha =
+                        (((sums[channels - 1] + u64::from(amend)) * multiplier) >> 24) as u8;
+                    if alpha != 0 {
+                        value = (u16::from(value) * 255 / u16::from(alpha)) as u8;
                     }
                 }
-            }
-            let dst_idx = (y * new_w + x) as usize * channels;
-            for c in 0..channels {
-                out[dst_idx + c] = (((sums[c] + u64::from(amend)) * m) >> 24) as u8;
+                row[dst_idx + c] = value;
             }
         }
-    }
+    };
 
-    // Bottom row (partial y): scale = fx * (h % fy).
-    if h % fy != 0 {
-        let scale = fx * (h % fy);
-        let m = division_multiplier(scale);
-        let amend = scale / 2;
-        let y = main_h;
-        for x in 0..main_w {
-            let mut sums = vec![0u64; channels];
-            for dy in 0..(h % fy) {
-                for dx in 0..fx {
-                    let src_idx = ((main_h * fy + dy) * w + x * fx + dx) as usize * channels;
-                    for c in 0..channels {
-                        sums[c] += raw[src_idx + c] as u64;
-                    }
-                }
-            }
-            let dst_idx = (y * new_w + x) as usize * channels;
-            for c in 0..channels {
-                out[dst_idx + c] = (((sums[c] + u64::from(amend)) * m) >> 24) as u8;
-            }
+    let output_stride = new_w as usize * channels;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        &mut out,
+        output_stride,
+        new_h as usize,
+        |_row_start, _row_end, y, row| {
+            process_row(y, row);
         }
-    }
+    );
 
-    // Bottom-right corner: scale = (w % fx) * (h % fy).
-    if w % fx != 0 && h % fy != 0 {
-        let scale = (w % fx) * (h % fy);
-        let m = division_multiplier(scale);
-        let amend = scale / 2;
-        let mut sums = vec![0u64; channels];
-        for dy in 0..(h % fy) {
-            for dx in 0..(w % fx) {
-                let src_idx = ((main_h * fy + dy) * w + main_w * fx + dx) as usize * channels;
-                for c in 0..channels {
-                    sums[c] += raw[src_idx + c] as u64;
-                }
-            }
-        }
-        let dst_idx = (main_h * new_w + main_w) as usize * channels;
-        for c in 0..channels {
-            out[dst_idx + c] = (((sums[c] + u64::from(amend)) * m) >> 24) as u8;
-        }
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..new_h {
+        let start = y as usize * output_stride;
+        process_row(y, &mut out[start..start + output_stride]);
     }
 
     let result = raw_bytes_to_image(new_w, new_h, out, channels)?;

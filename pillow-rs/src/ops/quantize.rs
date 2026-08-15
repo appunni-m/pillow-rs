@@ -16,7 +16,7 @@ use crate::raster::DynamicImage;
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::{Image, PalettedData};
+use crate::image::{Image, PalettedData, PipelineOps};
 
 /// Host-neutral palette argument for the public quantize entry point.
 #[derive(Debug, Clone)]
@@ -236,6 +236,15 @@ pub fn median_cut_quantize_rgb(pixels: &[u8], n_colors: usize) -> (Vec<u8>, Vec<
     }
 
     let n_colors = n_colors.clamp(1, 256);
+
+    // A solid RGB image has exactly one median-cut leaf. Avoid constructing
+    // the full 131,072-slot adaptive hash table for this common public path;
+    // the ordinary algorithm pads its one centroid to `n_colors` and maps
+    // every sample to index zero, so this is the same observable result.
+    let first = [pixels[0], pixels[1], pixels[2]];
+    if pixels[..n * 3].chunks_exact(3).all(|pixel| pixel == first) {
+        return (vec![0u8; n], vec![first; n_colors]);
+    }
 
     // Step 1: Build PIL-style adaptive hash histogram
     let mut qh = QuantHash::new();
@@ -493,39 +502,36 @@ fn maxcoverage_find_prime(start: u32, dir: i32) -> u32 {
             s = s.wrapping_add(dir as u32);
             continue;
         }
-        let root = (s as f64).sqrt();
-        let mut t = 2u32;
-        let mut prime = true;
-        while f64::from(t) < root {
-            if s % t == 0 {
-                prime = false;
-                break;
-            }
-            t += 1;
-        }
-        if prime {
-            return s;
-        }
-        s = s.wrapping_add(dir as u32);
+        // Keep the observable behavior of Pillow 12.2.0's QuantHash.c.
+        // Its `if (!start % t)` expression is parsed as `(!start) % t`,
+        // which is always zero for the positive candidates reaching this
+        // helper.  Consequently the loop accepts the first candidate whose
+        // low-nibble sieve entry is set; replacing this with a mathematically
+        // correct primality test changes hash bucket order and quantizer
+        // palette/index output.
+        return s;
     }
     s
 }
 
 /// Exact port of Pillow's QuantHash.c table used by MAXCOVERAGE.
-struct MaxCoverageHash {
+struct MaxCoverageHash<'a> {
     table: Vec<Vec<(u32, u32)>>, // bucket -> sorted chain of (pixel_v, distance)
     length: u32,
     count: u32,
-    pixels: Vec<[u8; 3]>,
+    pixels: &'a [[u8; 3]],
 }
 
-impl MaxCoverageHash {
-    fn new(pixels: &[[u8; 3]]) -> Self {
+impl<'a> MaxCoverageHash<'a> {
+    fn new(pixels: &'a [[u8; 3]]) -> Self {
         Self {
             table: vec![Vec::new(); 11],
             length: 11,
             count: 0,
-            pixels: pixels.to_vec(),
+            // QuantHash only needs an indexed read of the source colors. The
+            // old owned copy doubled the color-list memory and copied every
+            // pixel before the first MAXCOVERAGE phase.
+            pixels,
         }
     }
 
@@ -631,6 +637,14 @@ pub fn maxcoverage_quantize_rgb(
     let n_quant = n_colors.clamp(1, 256);
     if n_pixels == 0 {
         return (Vec::new(), vec![[0u8; 3]; 1]);
+    }
+
+    // MAXCOVERAGE's palette loop emits the same furthest pixel for every
+    // requested slot when the source has one color. Preserve that observable
+    // result without building the hash or distance tables.
+    let first = pixel_list[0];
+    if pixel_list.iter().all(|pixel| *pixel == first) {
+        return (vec![0u8; n_pixels], vec![first; n_quant]);
     }
 
     // Collect unique colors and the RGB mean (Quant.c quantize2 setup).
@@ -1317,7 +1331,7 @@ fn map_pixels_to_palette(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ── Octree quantization (FASTOCTREE) — PIL's algorithm for RGBA images ──
+// ── Octree quantization (FASTOCTREE) — PIL's algorithm for RGB/RGBA images ──
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // PIL's Quantize.FASTOCTREE (method=2) uses a multi-dimensional color cube
@@ -1325,7 +1339,7 @@ fn map_pixels_to_palette(
 //   - Fine cube:   higher resolution  (e.g., 4×4×4×0 = 4096 buckets for RGB)
 //   - Coarse cube: lower resolution   (e.g., 2×2×2×0 = 64 buckets for RGB)
 //
-// With alpha, a 4th dimension is added:
+// RGB uses a 3-dimensional cube. With alpha, a 4th dimension is added:
 //   - Fine:   3×4×3×3 = 8192 buckets
 //   - Coarse: 2×2×2×2 = 256 buckets
 //
@@ -1339,6 +1353,7 @@ fn map_pixels_to_palette(
 //   7. Map each pixel to its palette index via lookup cube
 
 /// Bit depths for fine and coarse cubes — RGBA mode (with alpha).
+const CUBE_LEVELS_RGB: [u32; 8] = [4, 4, 4, 0, 2, 2, 2, 0];
 const CUBE_LEVELS_RGBA: [u32; 8] = [3, 4, 3, 3, 2, 2, 2, 2];
 
 // Behavioral port of Pillow 12.2.0 src/libImaging/QuantOctree.c. In
@@ -1676,6 +1691,7 @@ fn quantize_octree_rgba(
     w: u32,
     h: u32,
     n_colors: usize,
+    with_alpha: bool,
 ) -> Result<(Vec<u8>, Vec<u8>), PilError> {
     if w == 0 || h == 0 {
         // Pillow returns an empty P image for an empty FASTOCTREE input; there
@@ -1683,18 +1699,13 @@ fn quantize_octree_rgba(
         return Ok((Vec::new(), Vec::new()));
     }
     let dimensions = CheckedDims::new(w, h, 1)?;
-    let fine_bits = [
-        CUBE_LEVELS_RGBA[0],
-        CUBE_LEVELS_RGBA[1],
-        CUBE_LEVELS_RGBA[2],
-        CUBE_LEVELS_RGBA[3],
-    ];
-    let coarse_bits = [
-        CUBE_LEVELS_RGBA[4],
-        CUBE_LEVELS_RGBA[5],
-        CUBE_LEVELS_RGBA[6],
-        CUBE_LEVELS_RGBA[7],
-    ];
+    let cube_levels = if with_alpha {
+        CUBE_LEVELS_RGBA
+    } else {
+        CUBE_LEVELS_RGB
+    };
+    let fine_bits = [cube_levels[0], cube_levels[1], cube_levels[2], cube_levels[3]];
+    let coarse_bits = [cube_levels[4], cube_levels[5], cube_levels[6], cube_levels[7]];
     let mut colors = pixels
         .chunks_exact(4)
         .take(dimensions.total_pixels())
@@ -2179,7 +2190,7 @@ impl Image {
             // FASTOCTREE (octree) algorithm for RGBA.
             let rgba = img.to_rgba8();
             let rgba_raw = rgba.into_raw();
-            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors)?;
+            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors, true)?;
             // Pillow's FASTOCTREE result owns an RGBA palette. Core represents
             // that interleaved layout as RGB triples plus an alpha sidecar.
             let pal_rgb = pal
@@ -2192,7 +2203,7 @@ impl Image {
             // Pillow's FASTOCTREE also accepts RGB (alpha forced opaque).
             let rgba = img.to_rgba8();
             let rgba_raw = rgba.into_raw();
-            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors)?;
+            let (idx, pal) = quantize_octree_rgba(&rgba_raw, w, h, n_colors, false)?;
             let pal_rgb = pal
                 .chunks_exact(4)
                 .flat_map(|color| [color[0], color[1], color[2]])
@@ -2233,13 +2244,15 @@ impl Image {
                 DynamicImage::ImageLuma8(out),
                 Some("P".to_string()),
             )),
-            ops: vec![],
+            ops: PipelineOps::empty(),
             format: None,
             explicit_mode: Some("P".to_string()),
             backend: None,
             palette: Some(palette_bytes),
             palette_alpha,
             materialized: crate::image::materialization_cache(),
+            shape: crate::image::pipeline_shape_cache(),
+            mode: crate::image::pipeline_mode_cache(),
         })
     }
 }

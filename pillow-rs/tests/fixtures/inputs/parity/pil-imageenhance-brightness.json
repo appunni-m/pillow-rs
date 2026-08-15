@@ -69,6 +69,4324 @@
       "observations": [
         "call"
       ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-l-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-l-1",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-l-2",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-l-3",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-l-4",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-la-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-la-1",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-la-2",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-la-3",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-la-4",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgb-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgb-1",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgb-2",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgb-3",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgb-4",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgba-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgba-1",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgba-2",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgba-3",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-rgba-4",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-cmyk-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-cmyk-1",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-cmyk-2",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-cmyk-3",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-enhance-large-brightness-cmyk-4",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                520,
+                512
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-l-0-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-l-1-5",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-la-0-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-la-1-5",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-rgb-0-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-rgb-1-5",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-rgba-0-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-rgba-1-5",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGBA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                180,
+                120,
+                60,
+                128
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-cmyk-0-0",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.coverage-batch-materialized-brightness-cmyk-1-5",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f02-c01",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                16,
+                32,
+                48,
+                64
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f02-c02",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                6,
+                4
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                17,
+                33,
+                49,
+                65
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f02-c03",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                7,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                18,
+                34,
+                50,
+                66
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 2.0
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f02-c04",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "P"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 7
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.75
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f02-c05",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "PA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                4
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                7,
+                191
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.25
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageEnhance.Brightness.enhance.nuanced.simd-cov-f05-c06",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.parameter.factor"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "LA"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                9,
+                2
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                1
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                17,
+                191
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-3",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-3"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
+      "case_id": "pipeline-case.brightness.materialized-smoke",
+      "surface": "PIL.ImageEnhance.Brightness",
+      "operation": "enhance",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.enhance.performance.standard"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness-2",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness-2"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.0
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "materialize"
+      ]
     }
   ]
 }

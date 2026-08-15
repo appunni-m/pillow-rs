@@ -1,4 +1,6 @@
-// Blend: (a * alpha + b * (255 - alpha)) / 255 per channel
+// ImageChops.blend: (a * (255 - alpha) + b * alpha) / 255 per channel.
+// The public operation returns an RGB result and makes non-RGB source modes
+// preserve their mode through the host conversion, so output alpha is opaque.
 // alpha param as u32 (0-255)
 // Mode-aware: only processes channels present in the image mode.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
@@ -45,13 +47,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let alpha = params.alpha;
     let inv_alpha = 255u - alpha;
 
-    let out_r = (ar * alpha + br * inv_alpha) / 255u;
-    let out_g_raw = (ag * alpha + bg * inv_alpha) / 255u;
-    let out_b_raw = (ab * alpha + bb * inv_alpha) / 255u;
+    let out_r = (ar * inv_alpha + br * alpha) / 255u;
+    let out_g_raw = (ag * inv_alpha + bg * alpha) / 255u;
+    let out_b_raw = (ab * inv_alpha + bb * alpha) / 255u;
 
     let out_g = select(ag, out_g_raw, mode_has_g(params.mode));
     let out_b = select(ab, out_b_raw, mode_has_b(params.mode));
-    let out_a = select(255u, aa, mode_has_a(params.mode));
+    let out_a = 255u;
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

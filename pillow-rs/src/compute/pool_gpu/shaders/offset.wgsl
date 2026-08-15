@@ -28,12 +28,54 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
 
     let w = params.width;
     let h = params.height;
-    let dx = params.dx;
-    let dy = params.dy;
-
-    // Source: read from (x-dx, y-dy) with wrapping
-    let sx = (gid.x + w - dx) % w;
-    let sy = (gid.y + h - dy) % h;
+    // Source: read from (x-dx, y-dy) with wrapping. Keep the host's complete
+    // signed i32 value in the uniform and reduce its magnitude only after
+    // converting to unsigned. This handles both negative offsets and values
+    // larger than 65535 without signed overflow or unsigned underflow.
+    let dx_bits = params.dx;
+    let dy_bits = params.dy;
+    let dx_negative = bitcast<i32>(dx_bits) < 0i;
+    let dy_negative = bitcast<i32>(dy_bits) < 0i;
+    var dx_magnitude = dx_bits;
+    var dy_magnitude = dy_bits;
+    if dx_negative {
+        dx_magnitude = 0u - dx_bits;
+    }
+    if dy_negative {
+        dy_magnitude = 0u - dy_bits;
+    }
+    dx_magnitude = dx_magnitude % w;
+    dy_magnitude = dy_magnitude % h;
+    // ImageChops.offset reads `(x - offset) mod width`. A positive offset
+    // therefore wraps toward the previous source pixel; a negative offset
+    // wraps toward the next one. Keep each addition bounded by reducing the
+    // magnitude before combining it with the invocation coordinate.
+    var sx: u32;
+    if gid.x >= dx_magnitude {
+        sx = gid.x - dx_magnitude;
+    } else {
+        sx = w - (dx_magnitude - gid.x);
+    }
+    var sy: u32;
+    if gid.y >= dy_magnitude {
+        sy = gid.y - dy_magnitude;
+    } else {
+        sy = h - (dy_magnitude - gid.y);
+    }
+    if dx_negative {
+        if gid.x >= w - dx_magnitude {
+            sx = gid.x - (w - dx_magnitude);
+        } else {
+            sx = gid.x + dx_magnitude;
+        }
+    }
+    if dy_negative {
+        if gid.y >= h - dy_magnitude {
+            sy = gid.y - (h - dy_magnitude);
+        } else {
+            sy = gid.y + dy_magnitude;
+        }
+    }
     let src_idx = sy * w + sx;
     let dst_idx = gid.y * w + gid.x;
 

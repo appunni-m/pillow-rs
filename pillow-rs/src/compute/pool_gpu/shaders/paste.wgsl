@@ -61,18 +61,50 @@ fn blend_pixel(src: u32, dst: u32, mask: u32, mode: u32) -> u32 {
 fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     if gid.x >= params.width || gid.y >= params.height { return; }
 
-    let dx = i32(gid.x);
-    let dy = i32(gid.y);
     let dst_idx = gid.y * params.width + gid.x;
     let dst_pixel = input_dst[dst_idx];
 
-    // Compute corresponding source pixel coordinate
-    let sx = dx - params.paste_x;
-    let sy = dy - params.paste_y;
+    // Compute corresponding source pixel coordinates without signed
+    // subtraction. A public paste offset may be i32::MIN, for which
+    // `gid - paste_x` would overflow before the overlap check.
+    var inside_x = true;
+    var inside_y = true;
+    var sx: u32 = 0u;
+    var sy: u32 = 0u;
+    if params.paste_x >= 0i {
+        let paste_x = u32(params.paste_x);
+        if gid.x < paste_x {
+            inside_x = false;
+        } else {
+            sx = gid.x - paste_x;
+        }
+    } else {
+        let distance_x = 0u - bitcast<u32>(params.paste_x);
+        if distance_x > 0xffffffffu - gid.x {
+            inside_x = false;
+        } else {
+            sx = gid.x + distance_x;
+        }
+    }
+    if params.paste_y >= 0i {
+        let paste_y = u32(params.paste_y);
+        if gid.y < paste_y {
+            inside_y = false;
+        } else {
+            sy = gid.y - paste_y;
+        }
+    } else {
+        let distance_y = 0u - bitcast<u32>(params.paste_y);
+        if distance_y > 0xffffffffu - gid.y {
+            inside_y = false;
+        } else {
+            sy = gid.y + distance_y;
+        }
+    }
 
     // Check if this destination pixel overlaps the source rectangle
-    if sx >= 0 && sy >= 0 && u32(sx) < params.src_w && u32(sy) < params.src_h {
-        let src_idx = u32(sy) * params.src_w + u32(sx);
+    if inside_x && inside_y && sx < params.src_w && sy < params.src_h {
+        let src_idx = sy * params.src_w + sx;
         let src_pixel = input_src[src_idx];
 
         var mask_val: u32 = 255u;

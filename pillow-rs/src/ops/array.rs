@@ -227,7 +227,104 @@ pub fn from_resolved_array_interface(layout: &ArrayLayout, data: &[u8]) -> Resul
         .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
     let height = u32::try_from(layout.height)
         .map_err(|_| PilError::OverflowError("signed integer is greater than maximum".into()))?;
+
+    if layout.mode == "1" && layout.raw_mode == "1;8" {
+        // Pillow's ``|b1`` array typemap is a byte-per-pixel source decoder,
+        // not the packed bitmap layout accepted by Image.frombytes("1").
+        // Pack each nonzero source byte into the public mode-1 scanline before
+        // entering the ordinary core decoder.
+        let samples = layout
+            .width
+            .checked_mul(layout.height)
+            .ok_or_else(|| PilError::OverflowError("array dimensions overflow".into()))?;
+        let input = data
+            .get(..samples)
+            .ok_or_else(|| PilError::ValueError("not enough image data".into()))?;
+        let row_bytes = layout.width.div_ceil(8);
+        let output_len = row_bytes
+            .checked_mul(layout.height)
+            .ok_or_else(|| PilError::OverflowError("array buffer size overflow".into()))?;
+        let mut packed = vec![0u8; output_len];
+        for (index, &sample) in input.iter().enumerate() {
+            if sample != 0 {
+                let row = index / layout.width;
+                let column = index % layout.width;
+                packed[row * row_bytes + column / 8] |= 0x80 >> (column % 8);
+            }
+        }
+        return Image::frombytes("1", (width, height), &packed);
+    }
+
+    if let Some(normalized) = normalize_scalar_array(layout, data)? {
+        // Pillow's array typemap exposes several raw scalar encodings while
+        // the resulting public image remains mode I or F.  Normalize those
+        // encodings to the native four-byte representation before entering
+        // the ordinary Image::frombytes mode path.
+        return Image::frombytes(&layout.mode, (width, height), &normalized);
+    }
     Image::frombytes(&layout.raw_mode, (width, height), data)
+}
+
+fn normalize_scalar_array(layout: &ArrayLayout, data: &[u8]) -> Result<Option<Vec<u8>>, PilError> {
+    let samples = layout
+        .width
+        .checked_mul(layout.height)
+        .ok_or_else(|| PilError::OverflowError("array dimensions overflow".into()))?;
+
+    let bytes_per_sample = match layout.raw_mode.as_str() {
+        "I;8" => Some(1),
+        "I;16S" | "I;16BS" => Some(2),
+        "I;32" | "I;32B" | "I;32BS" | "F;32BF" => Some(4),
+        "F;64F" | "F;64BF" => Some(8),
+        _ => None,
+    };
+    let Some(bytes_per_sample) = bytes_per_sample else {
+        return Ok(None);
+    };
+    let required = samples
+        .checked_mul(bytes_per_sample)
+        .ok_or_else(|| PilError::OverflowError("array buffer size overflow".into()))?;
+    let input = data
+        .get(..required)
+        .ok_or_else(|| PilError::ValueError("not enough image data".into()))?;
+    let output_capacity = samples
+        .checked_mul(4)
+        .ok_or_else(|| PilError::OverflowError("array buffer size overflow".into()))?;
+    let mut output = Vec::with_capacity(output_capacity);
+
+    if layout.mode == "I" {
+        for sample in input.chunks_exact(bytes_per_sample) {
+            let value = match layout.raw_mode.as_str() {
+                // Pillow's I;8 raw decoder widens the byte as unsigned even
+                // when the NumPy descriptor is signed |i1.
+                "I;8" => i32::from(sample[0]),
+                "I;16S" => i32::from(i16::from_le_bytes([sample[0], sample[1]])),
+                "I;16BS" => i32::from(i16::from_be_bytes([sample[0], sample[1]])),
+                "I;32" => u32::from_le_bytes(sample.try_into().unwrap()) as i32,
+                "I;32B" => u32::from_be_bytes(sample.try_into().unwrap()) as i32,
+                "I;32BS" => i32::from_be_bytes(sample.try_into().unwrap()),
+                _ => return Ok(None),
+            };
+            output.extend_from_slice(&value.to_ne_bytes());
+        }
+    } else if layout.mode == "F" {
+        for sample in input.chunks_exact(bytes_per_sample) {
+            // Pillow stores F images as float32, so f64 array inputs must
+            // intentionally narrow to the public image representation.
+            #[allow(clippy::cast_possible_truncation)]
+            let value = match layout.raw_mode.as_str() {
+                "F;32BF" => f32::from_be_bytes(sample.try_into().unwrap()),
+                "F;64F" => f64::from_le_bytes(sample.try_into().unwrap()) as f32,
+                "F;64BF" => f64::from_be_bytes(sample.try_into().unwrap()) as f32,
+                _ => return Ok(None),
+            };
+            output.extend_from_slice(&value.to_ne_bytes());
+        }
+    } else {
+        return Ok(None);
+    }
+
+    Ok(Some(output))
 }
 
 fn format_typekey_shape(shape_tail: &[usize]) -> String {

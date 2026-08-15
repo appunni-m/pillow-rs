@@ -36,14 +36,16 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let br = pb & 0xffu;
     let bg = (pb >> 8u) & 0xffu;
     let bb = (pb >> 16u) & 0xffu;
+    let ba = (pb >> 24u) & 0xffu;
 
     let out_r = (ar * br) / 255u;
     let out_g_raw = (ag * bg) / 255u;
     let out_b_raw = (ab * bb) / 255u;
+    let out_a_raw = (aa * ba) / 255u;
 
     let out_g = select(ag, out_g_raw, mode_has_g(params.mode));
     let out_b = select(ab, out_b_raw, mode_has_b(params.mode));
-    let out_a = select(255u, aa, mode_has_a(params.mode));
+    let out_a = select(255u, out_a_raw, mode_has_a(params.mode));
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

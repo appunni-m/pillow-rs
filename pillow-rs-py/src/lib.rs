@@ -695,14 +695,17 @@ impl PyImage {
             .as_deref()
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
         if let Some(path) = host_path_from_python(fp)? {
-            let bytes =
-                std::fs::read(&path).map_err(|error| map_open_path_error(py, fp, &path, error))?;
-            let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
+            let bytes = py
+                .allow_threads(|| std::fs::read(&path))
+                .map_err(|error| map_open_path_error(py, fp, &path, error))?;
+            let img = py
+                .allow_threads(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })
         } else {
             let bytes = fp.call_method0("read")?.extract::<Vec<u8>>()?;
-            let img = RsImage::open_bytes_with_formats(bytes, format_refs.as_deref())
+            let img = py
+                .allow_threads(|| RsImage::open_bytes_with_formats(bytes, format_refs.as_deref()))
                 .map_err(map_error)?;
             Ok(PyImage { inner: img })
         }
@@ -730,7 +733,12 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    fn save(&mut self, fp: &Bound<'_, PyAny>, format: Option<String>) -> PyResult<()> {
+    fn save(
+        &mut self,
+        fp: &Bound<'_, PyAny>,
+        format: Option<String>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
         let path = host_path_from_python(fp)?;
         if let Some(path) = path.as_deref() {
             if path.is_dir() {
@@ -754,9 +762,12 @@ impl PyImage {
             .and_then(|extension| extension.to_str());
         let format = pillow_rs::Image::resolve_save_format(format.as_deref(), extension)
             .map_err(map_error)?;
-        let encoded = self.inner.encode(&format).map_err(map_error)?;
+        let encoded = py
+            .allow_threads(|| self.inner.encode(&format))
+            .map_err(map_error)?;
         if let Some(path) = path {
-            std::fs::write(path, encoded).map_err(|error| map_error(error.into()))
+            py.allow_threads(|| std::fs::write(path, &encoded))
+                .map_err(|error| map_error(error.into()))
         } else {
             fp.call_method1("write", (PyBytes::new(fp.py(), &encoded),))?;
             Ok(())
@@ -769,17 +780,19 @@ impl PyImage {
         size: (i64, i64),
         resample: Option<&Bound<'_, PyAny>>,
         box_coords: Option<(i32, i32, i32, i32)>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let resample = resample_input_from_python(resample)?;
-        let rs = self
-            .inner
-            .resize(size, resample, box_coords)
+        let rs = py
+            .allow_threads(|| self.inner.resize(size, resample, box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn crop(&self, box_coords: Option<(f64, f64, f64, f64)>) -> PyResult<PyImage> {
-        let rs = self.inner.crop_float(box_coords).map_err(map_error)?;
+    fn crop(&self, box_coords: Option<(f64, f64, f64, f64)>, py: Python<'_>) -> PyResult<PyImage> {
+        let rs = py
+            .allow_threads(|| self.inner.crop_float(box_coords))
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -792,27 +805,27 @@ impl PyImage {
         center: Option<&Bound<'_, PyAny>>,
         translate: Option<&Bound<'_, PyAny>>,
         fillcolor: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let center = rotate_point_input_from_python(center)?;
         let translate = rotate_point_input_from_python(translate)?;
         let expand = rotate_expand_input_from_python(expand)?;
-        let rs = self
-            .inner
-            .rotate_with_input(
-                angle,
-                rotate_resample_input_from_python(resample)?,
-                expand,
-                center,
-                translate,
-                imageops_color_from_python(fillcolor),
-            )
+        let resample = rotate_resample_input_from_python(resample)?;
+        let fillcolor = imageops_color_from_python(fillcolor);
+        let rs = py
+            .allow_threads(|| {
+                self.inner
+                    .rotate_with_input(angle, resample, expand, center, translate, fillcolor)
+            })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn transpose(&self, method: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    fn transpose(&self, method: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let input = transpose_input_from_python(method)?;
-        let rs = self.inner.transpose_with_input(input).map_err(map_error)?;
+        let rs = py
+            .allow_threads(|| self.inner.transpose_with_input(input))
+            .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
@@ -824,6 +837,7 @@ impl PyImage {
         dither: Option<&Bound<'_, PyAny>>,
         palette: Option<&Bound<'_, PyAny>>,
         colors: Option<u32>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let dither = match dither {
             None => pillow_rs::PythonDitherInput::None,
@@ -837,15 +851,13 @@ impl PyImage {
                 }
             }
         };
-        let rs = self
-            .inner
-            .convert_with_input(
-                convert_mode_input_from_python(mode)?,
-                matrix,
-                dither,
-                convert_palette_input_from_python(palette)?,
-                colors,
-            )
+        let mode = convert_mode_input_from_python(mode)?;
+        let palette = convert_palette_input_from_python(palette)?;
+        let rs = py
+            .allow_threads(|| {
+                self.inner
+                    .convert_with_input(mode, matrix, dither, palette, colors)
+            })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -856,18 +868,17 @@ impl PyImage {
         im: &Bound<'_, PyAny>,
         box_coords: Option<&Bound<'_, PyAny>>,
         mask: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<()> {
-        self.inner
-            .paste_with_input(
-                paste_source_from_python(im),
-                paste_box_from_python(box_coords)?,
-                paste_mask_from_python(mask)?,
-            )
+        let source = paste_source_from_python(im);
+        let box_coords = paste_box_from_python(box_coords)?;
+        let mask = paste_mask_from_python(mask)?;
+        py.allow_threads(|| self.inner.paste_with_input(source, box_coords, mask))
             .map_err(map_error)
     }
 
-    fn split(&self) -> PyResult<Vec<PyImage>> {
-        let bands = self.inner.split().map_err(map_error)?;
+    fn split(&self, py: Python<'_>) -> PyResult<Vec<PyImage>> {
+        let bands = py.allow_threads(|| self.inner.split()).map_err(map_error)?;
         Ok(bands
             .into_iter()
             .map(|img| PyImage { inner: img })
@@ -907,9 +918,9 @@ impl PyImage {
         })
     }
 
-    fn filter_name(&self, filter_type: &str) -> PyResult<PyImage> {
-        self.inner
-            .filter(filter_type)
+    fn filter_name(&self, filter_type: &str, py: Python<'_>) -> PyResult<PyImage> {
+        let filter_type = filter_type.to_owned();
+        py.allow_threads(|| self.inner.filter(&filter_type))
             .map(|inner| PyImage { inner })
             .map_err(map_error)
     }
@@ -924,10 +935,10 @@ impl PyImage {
         scale: Option<f64>,
         offset: f64,
         size: (u32, u32),
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .kernel_filter(kernel, scale, offset, size)
+        let rs = py
+            .allow_threads(|| self.inner.kernel_filter(kernel, scale, offset, size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -938,26 +949,45 @@ impl PyImage {
         }
     }
 
-    fn tobytes(&self) -> PyResult<Vec<u8>> {
-        self.inner.tobytes().map_err(map_error)
+    fn tobytes(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
+        py.allow_threads(|| self.inner.tobytes()).map_err(map_error)
     }
 
-    fn tobytes_unpacked(&self) -> PyResult<Vec<u8>> {
-        self.inner.tobytes_unpacked().map_err(map_error)
+    fn tobytes_unpacked(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
+        py.allow_threads(|| self.inner.tobytes_unpacked())
+            .map_err(map_error)
     }
 
-    fn tobytes_formatted(&self, mode: &str) -> PyResult<Vec<u8>> {
-        self.inner.tobytes_formatted(mode).map_err(map_error)
+    fn tobytes_formatted(&self, mode: &str, py: Python<'_>) -> PyResult<Vec<u8>> {
+        let mode = mode.to_owned();
+        py.allow_threads(|| self.inner.tobytes_formatted(&mode))
+            .map_err(map_error)
     }
     fn tobytes_encoded(
         &self,
         mode: &str,
         encoder_name: &str,
         args: Vec<String>,
+        py: Python<'_>,
     ) -> PyResult<Vec<u8>> {
-        self.inner
-            .tobytes_encoded(mode, encoder_name, &args)
+        let mode = mode.to_owned();
+        let encoder_name = encoder_name.to_owned();
+        py.allow_threads(|| self.inner.tobytes_encoded(&mode, &encoder_name, &args))
             .map_err(map_error)
+    }
+
+    /// Lock a lazy image pipeline to the sole active compute backend.
+    ///
+    /// This keeps an explicitly selected SIMD or GPU process from silently
+    /// benchmarking CPU fallback. Ordinary multi-backend routing is unchanged.
+    fn lock_active_backend(&self) -> PyResult<PyImage> {
+        let active = pillow_rs::active_backends().map_err(map_error)?;
+        let inner = if active.len() == 1 {
+            self.inner.clone().use_backend(active[0])
+        } else {
+            self.inner.clone()
+        };
+        Ok(PyImage { inner })
     }
 
     /// Return palette data (RGB triples) for P-mode quantized images.
@@ -1019,13 +1049,16 @@ impl PyImage {
         self.inner.has_transparency_data()
     }
 
-    fn apply_transparency(&mut self) -> PyResult<()> {
-        self.inner.apply_transparency().map_err(map_error)
+    fn apply_transparency(&mut self, py: Python<'_>) -> PyResult<()> {
+        py.allow_threads(|| self.inner.apply_transparency())
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (data, rawmode="RGB"))]
-    fn putpalette(&mut self, data: Vec<u8>, rawmode: &str) -> PyResult<()> {
-        self.inner.putpalette(&data, rawmode).map_err(map_error)
+    fn putpalette(&mut self, data: Vec<u8>, rawmode: &str, py: Python<'_>) -> PyResult<()> {
+        let rawmode = rawmode.to_owned();
+        py.allow_threads(|| self.inner.putpalette(&data, &rawmode))
+            .map_err(map_error)
     }
 
     fn get_child_images(&self) -> Vec<PyImage> {
@@ -1055,9 +1088,15 @@ impl PyImage {
     }
 
     #[pyo3(signature = (size, resample=None))]
-    fn thumbnail(&mut self, size: (i64, i64), resample: Option<&Bound<'_, PyAny>>) -> PyResult<()> {
+    fn thumbnail(
+        &mut self,
+        size: (i64, i64),
+        resample: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<()> {
         let resample = resample_input_from_python(resample)?;
-        self.inner.thumbnail(size, resample).map_err(map_error)
+        py.allow_threads(|| self.inner.thumbnail(size, resample))
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (colors=None, method=None, kmeans=None, dither=None, palette=None))]
@@ -1068,6 +1107,7 @@ impl PyImage {
         kmeans: Option<i32>,
         dither: Option<bool>,
         palette: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let palette = match palette {
             None => pillow_rs::QuantizePalette::None,
@@ -1075,25 +1115,34 @@ impl PyImage {
                 .map(pillow_rs::QuantizePalette::Image)
                 .unwrap_or(pillow_rs::QuantizePalette::Other),
         };
-        let rs = self
-            .inner
-            .quantize_with_input(colors, method, kmeans, palette, dither)
+        let rs = py
+            .allow_threads(|| {
+                self.inner
+                    .quantize_with_input(colors, method, kmeans, palette, dither)
+            })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn getbbox(&self, alpha_only: Option<bool>) -> PyResult<Option<(u32, u32, u32, u32)>> {
-        self.inner
-            .getbbox(alpha_only.unwrap_or(true))
+    fn getbbox(
+        &self,
+        alpha_only: Option<bool>,
+        py: Python<'_>,
+    ) -> PyResult<Option<(u32, u32, u32, u32)>> {
+        let alpha_only = alpha_only.unwrap_or(true);
+        py.allow_threads(|| self.inner.getbbox(alpha_only))
             .map_err(map_error)
     }
 
-    fn getextrema(&self) -> PyResult<Vec<(u8, u8)>> {
-        self.inner.getextrema().map_err(map_error)
+    fn getextrema(&self, py: Python<'_>) -> PyResult<Vec<(u8, u8)>> {
+        py.allow_threads(|| self.inner.getextrema())
+            .map_err(map_error)
     }
     /// Return extrema formatted as PIL expects.
-    fn getextrema_formatted(&self) -> PyResult<PyObject> {
-        let formatted = self.inner.getextrema_formatted().map_err(map_error)?;
+    fn getextrema_formatted(&self, py: Python<'_>) -> PyResult<PyObject> {
+        let formatted = py
+            .allow_threads(|| self.inner.getextrema_formatted())
+            .map_err(map_error)?;
         Python::with_gil(|py| match formatted {
             pillow_rs::FormattedExtrema::Empty => Ok(py.None()),
             pillow_rs::FormattedExtrema::EmptyMultiple(bands) => {
@@ -1127,42 +1176,53 @@ impl PyImage {
         })
     }
 
-    fn stat(&self) -> PyResult<Vec<Vec<f64>>> {
-        self.inner.stat().map_err(map_error)
+    fn stat(&self, py: Python<'_>) -> PyResult<Vec<Vec<f64>>> {
+        py.allow_threads(|| self.inner.stat()).map_err(map_error)
     }
 
     #[pyo3(signature = (mask=None))]
-    fn stat_formatted(&self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<PyObject> {
+    fn stat_formatted(
+        &self,
+        mask: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<PyObject> {
         let mask = imageops_mask_from_python(mask)?;
-        let result = self
-            .inner
-            .stat_formatted_with_mask(mask)
+        let result = py
+            .allow_threads(|| self.inner.stat_formatted_with_mask(mask))
             .map_err(map_error)?;
         stat_result_to_python(&result)
     }
 
-    fn histogram(&self) -> PyResult<Vec<u32>> {
-        self.inner.histogram().map_err(map_error)
+    fn histogram(&self, py: Python<'_>) -> PyResult<Vec<u32>> {
+        py.allow_threads(|| self.inner.histogram())
+            .map_err(map_error)
     }
 
     #[pyo3(signature = (mask=None))]
-    fn histogram_with_input(&self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<Vec<u32>> {
-        self.inner
-            .histogram_with_input(image_analysis_mask_from_python(mask)?)
+    fn histogram_with_input(
+        &self,
+        mask: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<Vec<u32>> {
+        let mask = image_analysis_mask_from_python(mask)?;
+        py.allow_threads(|| self.inner.histogram_with_input(mask))
             .map_err(map_error)
     }
 
-    fn histogram_with_mask(&self, mask: Option<&Bound<'_, PyImage>>) -> PyResult<Vec<u32>> {
+    fn histogram_with_mask(
+        &self,
+        mask: Option<&Bound<'_, PyImage>>,
+        py: Python<'_>,
+    ) -> PyResult<Vec<u32>> {
         let mask_inner = mask.map(|m| m.borrow().inner.clone());
-        self.inner
-            .histogram_with_mask(mask_inner.as_ref())
+        py.allow_threads(|| self.inner.histogram_with_mask(mask_inner.as_ref()))
             .map_err(map_error)
     }
 
-    fn gaussian_blur(&self, radius: Option<f64>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .gaussian_blur(radius.unwrap_or(2.0) as f32)
+    fn gaussian_blur(&self, radius: Option<f64>, py: Python<'_>) -> PyResult<PyImage> {
+        let radius = radius.unwrap_or(2.0) as f32;
+        let rs = py
+            .allow_threads(|| self.inner.gaussian_blur(radius))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1172,62 +1232,67 @@ impl PyImage {
         radius: Option<f64>,
         percent: Option<i32>,
         threshold: Option<u8>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .unsharp_mask(
-                radius.unwrap_or(2.0) as f32,
-                percent.unwrap_or(150),
-                threshold.unwrap_or(3),
-            )
+        let radius = radius.unwrap_or(2.0) as f32;
+        let percent = percent.unwrap_or(150);
+        let threshold = threshold.unwrap_or(3);
+        let rs = py
+            .allow_threads(|| self.inner.unsharp_mask(radius, percent, threshold))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn max_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .max_filter(size.unwrap_or(3))
+    fn max_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = size.unwrap_or(3);
+        let rs = py
+            .allow_threads(|| self.inner.max_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn min_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .min_filter(size.unwrap_or(3))
+    fn min_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = size.unwrap_or(3);
+        let rs = py
+            .allow_threads(|| self.inner.min_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn median_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .median_filter(size.unwrap_or(3))
+    fn median_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = size.unwrap_or(3);
+        let rs = py
+            .allow_threads(|| self.inner.median_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn box_blur(&self, radius: Option<f64>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .box_blur(radius.unwrap_or(2.0) as f32)
+    fn box_blur(&self, radius: Option<f64>, py: Python<'_>) -> PyResult<PyImage> {
+        let radius = radius.unwrap_or(2.0) as f32;
+        let rs = py
+            .allow_threads(|| self.inner.box_blur(radius))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn mode_filter(&self, size: Option<u32>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .mode_filter(size.unwrap_or(3))
+    fn mode_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = size.unwrap_or(3);
+        let rs = py
+            .allow_threads(|| self.inner.mode_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn rank_filter(&self, size: Option<u32>, rank: Option<u32>) -> PyResult<PyImage> {
-        let rs = self
-            .inner
-            .rank_filter(size.unwrap_or(3), rank.unwrap_or(0))
+    fn rank_filter(
+        &self,
+        size: Option<u32>,
+        rank: Option<u32>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
+        let size = size.unwrap_or(3);
+        let rank = rank.unwrap_or(0);
+        let rs = py
+            .allow_threads(|| self.inner.rank_filter(size, rank))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1238,17 +1303,18 @@ impl PyImage {
         table: Vec<f64>,
         channels: Option<u32>,
         target_mode: Option<&str>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let input =
             pillow_rs::prepare_color3dlut(table, size, channels.unwrap_or(3)).map_err(map_error)?;
-        let rs = self
-            .inner
-            .color3dlut(input, target_mode)
+        let target_mode = target_mode.map(str::to_owned);
+        let rs = py
+            .allow_threads(|| self.inner.color3dlut(input, target_mode.as_deref()))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn getchannel(&mut self, channel: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    fn getchannel(&mut self, channel: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let selector = if let Ok(channel) = channel.extract::<i32>() {
             pillow_rs::ChannelSelector::Index(channel)
         } else if let Ok(channel) = channel.extract::<String>() {
@@ -1256,22 +1322,22 @@ impl PyImage {
         } else {
             pillow_rs::ChannelSelector::Invalid(channel.get_type().name()?.to_string())
         };
-        let rs = self
-            .inner
-            .getchannel_selector(selector)
+        let rs = py
+            .allow_threads(|| self.inner.getchannel_selector(selector))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn load(&mut self) -> PyResult<()> {
-        self.inner.load().map_err(map_error)
+    fn load(&mut self, py: Python<'_>) -> PyResult<()> {
+        py.allow_threads(|| self.inner.load()).map_err(map_error)
     }
 
-    fn putalpha(&mut self, alpha: u8) -> PyResult<()> {
-        self.inner.putalpha(alpha).map_err(map_error)
+    fn putalpha(&mut self, alpha: u8, py: Python<'_>) -> PyResult<()> {
+        py.allow_threads(|| self.inner.putalpha(alpha))
+            .map_err(map_error)
     }
 
-    fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         let input = if let Some(mask) = image_from_python(alpha) {
             pillow_rs::PutAlphaInput::Image(mask)
         } else if let Ok(value) = alpha.extract::<i64>() {
@@ -1279,26 +1345,28 @@ impl PyImage {
         } else {
             pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
         };
-        self.inner.putalpha_with_input(input).map_err(map_error)
+        py.allow_threads(|| self.inner.putalpha_with_input(input))
+            .map_err(map_error)
     }
 
-    fn putalpha_data(&mut self, mask: &Bound<'_, PyImage>) -> PyResult<()> {
+    fn putalpha_data(&mut self, mask: &Bound<'_, PyImage>, py: Python<'_>) -> PyResult<()> {
         let mask_inner = mask.borrow().inner.clone();
-        self.inner.putalpha_data(&mask_inner).map_err(map_error)
+        py.allow_threads(|| self.inner.putalpha_data(&mask_inner))
+            .map_err(map_error)
     }
 
     fn reduce(
         &self,
         factor: &Bound<'_, PyAny>,
         box_coords: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let factor = reduce_factor_from_python(factor)?;
         let box_coords = box_coords
             .map(|value| reduce_box_from_python(Some(value)))
             .transpose()?;
-        let rs = self
-            .inner
-            .reduce_public(factor, box_coords)
+        let rs = py
+            .allow_threads(|| self.inner.reduce_public(factor, box_coords))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1309,6 +1377,7 @@ impl PyImage {
         im: &Bound<'_, PyImage>,
         dest: Option<&Bound<'_, PyAny>>,
         source: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<()> {
         let source_image = im.borrow().inner.clone();
         let dest = dest.map_or_else(
@@ -1329,19 +1398,25 @@ impl PyImage {
                     .unwrap_or(pillow_rs::AlphaCompositeBox::Invalid)
             },
         );
-        self.inner
-            .alpha_composite_public(&source_image, dest, source_box)
-            .map_err(map_error)
+        py.allow_threads(|| {
+            self.inner
+                .alpha_composite_public(&source_image, dest, source_box)
+        })
+        .map_err(map_error)
     }
 
-    fn getcolors(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
-        self.getcolors_formatted(maxcolors)
+    fn getcolors(&mut self, maxcolors: Option<u32>, py: Python<'_>) -> PyResult<Option<PyObject>> {
+        self.getcolors_formatted(maxcolors, py)
     }
     /// Return getcolors formatted as PIL expects.
-    fn getcolors_formatted(&mut self, maxcolors: Option<u32>) -> PyResult<Option<PyObject>> {
-        let formatted = self
-            .inner
-            .getcolors_formatted(maxcolors.unwrap_or(256))
+    fn getcolors_formatted(
+        &mut self,
+        maxcolors: Option<u32>,
+        py: Python<'_>,
+    ) -> PyResult<Option<PyObject>> {
+        let maxcolors = maxcolors.unwrap_or(256);
+        let formatted = py
+            .allow_threads(|| self.inner.getcolors_formatted(maxcolors))
             .map_err(map_error)?;
         Python::with_gil(|py| match formatted {
             None => Ok(None),
@@ -1364,12 +1439,15 @@ impl PyImage {
         })
     }
 
-    fn getdata(&mut self, band: Option<i32>) -> PyResult<Vec<u8>> {
-        self.inner.getdata(band).map_err(map_error)
+    fn getdata(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<Vec<u8>> {
+        py.allow_threads(|| self.inner.getdata(band))
+            .map_err(map_error)
     }
     /// Return getdata formatted as PIL expects.
-    fn getdata_formatted(&mut self, band: Option<i32>) -> PyResult<PyObject> {
-        let formatted = self.inner.getdata_formatted(band).map_err(map_error)?;
+    fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<PyObject> {
+        let formatted = py
+            .allow_threads(|| self.inner.getdata_formatted(band))
+            .map_err(map_error)?;
         Python::with_gil(|py| match formatted {
             pillow_rs::FormattedImageData::Scalars(values) if band.is_some() => {
                 let out = pyo3::types::PyList::empty(py);
@@ -1391,30 +1469,39 @@ impl PyImage {
         })
     }
 
-    fn getprojection(&mut self) -> PyResult<(Vec<u32>, Vec<u32>)> {
-        self.inner.getprojection().map_err(map_error)
+    fn getprojection(&mut self, py: Python<'_>) -> PyResult<(Vec<u32>, Vec<u32>)> {
+        py.allow_threads(|| self.inner.getprojection())
+            .map_err(map_error)
     }
 
-    fn entropy(&mut self) -> PyResult<f64> {
-        self.inner.entropy().map_err(map_error)
+    fn entropy(&mut self, py: Python<'_>) -> PyResult<f64> {
+        py.allow_threads(|| self.inner.entropy()).map_err(map_error)
     }
 
     #[pyo3(signature = (mask=None))]
-    fn entropy_with_input(&mut self, mask: Option<&Bound<'_, PyAny>>) -> PyResult<f64> {
-        self.inner
-            .entropy_with_input(image_analysis_mask_from_python(mask)?)
+    fn entropy_with_input(
+        &mut self,
+        mask: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<f64> {
+        let mask = image_analysis_mask_from_python(mask)?;
+        py.allow_threads(|| self.inner.entropy_with_input(mask))
             .map_err(map_error)
     }
 
-    fn entropy_with_mask(&mut self, mask: Option<&Bound<'_, PyImage>>) -> PyResult<f64> {
+    fn entropy_with_mask(
+        &mut self,
+        mask: Option<&Bound<'_, PyImage>>,
+        py: Python<'_>,
+    ) -> PyResult<f64> {
         let mask_inner = mask.map(|m| m.borrow().inner.clone());
-        self.inner
-            .entropy_with_mask(mask_inner.as_ref())
+        py.allow_threads(|| self.inner.entropy_with_mask(mask_inner.as_ref()))
             .map_err(map_error)
     }
 
-    fn seek(&mut self, frame: u32) -> PyResult<()> {
-        self.inner.seek(frame).map_err(map_error)
+    fn seek(&mut self, frame: u32, py: Python<'_>) -> PyResult<()> {
+        py.allow_threads(|| self.inner.seek(frame))
+            .map_err(map_error)
     }
 
     fn tell(&self) -> u32 {
@@ -1422,7 +1509,7 @@ impl PyImage {
     }
 
     /// Applies a sequence or callable LUT through the Rust-owned public path.
-    fn point(&self, input: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    fn point(&self, input: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
         let input_kind = if input.is_instance_of::<PyString>() {
             pillow_rs::EvalInputKind::String
         } else {
@@ -1445,13 +1532,13 @@ impl PyImage {
         }
 
         let lut = input.extract::<Vec<u8>>()?;
-        pillow_rs::image_eval_validated(&self.inner, &lut)
+        py.allow_threads(|| pillow_rs::image_eval_validated(&self.inner, &lut))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
 
-    fn effect_spread(&self, distance: u32) -> PyResult<PyImage> {
-        pillow_rs::image_effect_spread(&self.inner, distance)
+    fn effect_spread(&self, distance: u32, py: Python<'_>) -> PyResult<PyImage> {
+        py.allow_threads(|| pillow_rs::image_effect_spread(&self.inner, distance))
             .map(|i| PyImage { inner: i })
             .map_err(map_error)
     }
@@ -1465,20 +1552,18 @@ impl PyImage {
         resample: Option<i32>,
         fill: Option<i32>,
         fillcolor: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
         let data = transform_data_from_python(data)?;
         let fillcolor = transform_fill_from_python(fillcolor)?;
-        self.inner
-            .transform_public(
-                size,
-                method,
-                data,
-                resample.unwrap_or(0),
-                fill.unwrap_or(1),
-                fillcolor,
-            )
-            .map(|i| PyImage { inner: i })
-            .map_err(map_error)
+        let resample = resample.unwrap_or(0);
+        let fill = fill.unwrap_or(1);
+        py.allow_threads(|| {
+            self.inner
+                .transform_public(size, method, data, resample, fill, fillcolor)
+        })
+        .map(|i| PyImage { inner: i })
+        .map_err(map_error)
     }
 
     #[staticmethod]
@@ -1488,8 +1573,11 @@ impl PyImage {
         size: (u32, u32),
         data: Vec<u8>,
         decoder_name: &str,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
-        pillow_rs::image_frombytes(mode, size, &data, decoder_name)
+        let mode = mode.to_owned();
+        let decoder_name = decoder_name.to_owned();
+        py.allow_threads(|| pillow_rs::image_frombytes(&mode, size, &data, &decoder_name))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -1499,24 +1587,28 @@ impl PyImage {
         &mut self,
         dest_map: Vec<u8>,
         source_palette: Option<Vec<u8>>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let remapped = match source_palette.as_deref() {
-            None => self.inner.remap_palette(&dest_map),
-            Some(source_palette) => self
-                .inner
-                .remap_palette_with_source(&dest_map, Some(source_palette)),
-        }
-        .map(|i| PyImage { inner: i })
-        .map_err(map_error)?;
+        let remapped = py
+            .allow_threads(|| match source_palette.as_deref() {
+                None => self.inner.remap_palette(&dest_map),
+                Some(source_palette) => self
+                    .inner
+                    .remap_palette_with_source(&dest_map, Some(source_palette)),
+            })
+            .map(|i| PyImage { inner: i })
+            .map_err(map_error)?;
         Ok(remapped)
     }
 
-    fn tobitmap(&mut self) -> PyResult<Vec<u8>> {
-        self.inner.tobitmap().map_err(map_error)
+    fn tobitmap(&mut self, py: Python<'_>) -> PyResult<Vec<u8>> {
+        py.allow_threads(|| self.inner.tobitmap())
+            .map_err(map_error)
     }
 
-    fn effect_noise(&self, sigma: Option<f64>) -> PyResult<PyImage> {
-        pillow_rs::image_effect_noise(&self.inner, sigma.unwrap_or(10.0))
+    fn effect_noise(&self, sigma: Option<f64>, py: Python<'_>) -> PyResult<PyImage> {
+        let sigma = sigma.unwrap_or(10.0);
+        py.allow_threads(|| pillow_rs::image_effect_noise(&self.inner, sigma))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -1527,10 +1619,11 @@ impl PyImage {
         image1: &Bound<'_, PyImage>,
         image2: &Bound<'_, PyImage>,
         alpha: f64,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let im1 = image1.borrow();
-        let im2 = image2.borrow();
-        pillow_rs::image_blend(&im1.inner, &im2.inner, alpha)
+        let im1 = image1.borrow().inner.clone();
+        let im2 = image2.borrow().inner.clone();
+        py.allow_threads(|| pillow_rs::image_blend(&im1, &im2, alpha))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -1541,19 +1634,26 @@ impl PyImage {
         image1: &Bound<'_, PyImage>,
         image2: &Bound<'_, PyImage>,
         mask: &Bound<'_, PyImage>,
+        py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let im1 = image1.borrow();
-        let im2 = image2.borrow();
-        let m = mask.borrow();
-        pillow_rs::image_composite(&im1.inner, &im2.inner, &m.inner)
+        let im1 = image1.borrow().inner.clone();
+        let im2 = image2.borrow().inner.clone();
+        let m = mask.borrow().inner.clone();
+        py.allow_threads(|| pillow_rs::image_composite(&im1, &im2, &m))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
 
     #[classmethod]
-    fn merge(_cls: &Bound<'_, PyType>, mode: &str, bands: &Bound<'_, PyAny>) -> PyResult<PyImage> {
+    fn merge(
+        _cls: &Bound<'_, PyType>,
+        mode: &str,
+        bands: &Bound<'_, PyAny>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let inputs = merge_inputs_from_python(bands)?;
-        pillow_rs::image_merge_inputs(mode, &inputs)
+        let mode = mode.to_owned();
+        py.allow_threads(|| pillow_rs::image_merge_inputs(&mode, &inputs))
             .map(|img| PyImage { inner: img })
             .map_err(map_error)
     }
@@ -1563,8 +1663,8 @@ impl PyImage {
         Ok(())
     }
 
-    fn verify(&self) -> PyResult<()> {
-        self.inner.verify().map_err(map_error)
+    fn verify(&self, py: Python<'_>) -> PyResult<()> {
+        py.allow_threads(|| self.inner.verify()).map_err(map_error)
     }
 
     fn enhance_brightness(&self, factor: f64) -> PyResult<PyImage> {
@@ -1595,14 +1695,14 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn getpixel(&mut self, xy: (u32, u32)) -> PyResult<(u8, u8, u8, u8)> {
-        self.inner.getpixel(xy.0, xy.1).map_err(map_error)
+    fn getpixel(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<(u8, u8, u8, u8)> {
+        py.allow_threads(|| self.inner.getpixel(xy.0, xy.1))
+            .map_err(map_error)
     }
 
-    fn getpixel_formatted(&mut self, xy: (u32, u32)) -> PyResult<PyObject> {
-        let value = self
-            .inner
-            .getpixel_formatted(xy.0, xy.1)
+    fn getpixel_formatted(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<PyObject> {
+        let value = py
+            .allow_threads(|| self.inner.getpixel_formatted(xy.0, xy.1))
             .map_err(map_error)?;
         Python::with_gil(|py| match value {
             pillow_rs::FormattedPixelValue::Scalar(value) => Ok(value.to_object(py)),
@@ -1999,6 +2099,76 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
     }
 }
 
+/// Enable or disable bounded image-pipeline execution telemetry.
+#[pyfunction]
+fn set_pipeline_telemetry(enabled: bool) -> bool {
+    pillow_rs::Backend::set_pipeline_telemetry_enabled(enabled)
+}
+
+/// Return whether image-pipeline execution telemetry is enabled.
+#[pyfunction]
+fn pipeline_telemetry_enabled() -> bool {
+    pillow_rs::Backend::pipeline_telemetry_enabled()
+}
+
+/// Take the most recent completed image-pipeline telemetry sample for this
+/// thread, or return ``None`` when no sample is available.
+#[pyfunction]
+fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<PyObject>> {
+    let Some((
+        requested_backend,
+        actual_backend,
+        operation_count,
+        route_ns,
+        validation_ns,
+        backend_ns,
+        dispatch_count,
+        fallback_reason,
+        resource,
+        resize_coeff_cache_hits,
+        resize_coeff_cache_misses,
+    )) = pillow_rs::Backend::take_pipeline_telemetry()
+    else {
+        return Ok(None);
+    };
+
+    let result = PyDict::new(py);
+    result.set_item(
+        "requested_backend",
+        requested_backend.map(|backend| format!("{:?}", backend).to_lowercase()),
+    )?;
+    result.set_item(
+        "actual_backend",
+        format!("{:?}", actual_backend).to_lowercase(),
+    )?;
+    result.set_item("operation_count", operation_count)?;
+    result.set_item("route_ns", route_ns)?;
+    result.set_item("validation_ns", validation_ns)?;
+    result.set_item("backend_ns", backend_ns)?;
+    result.set_item("dispatch_count", dispatch_count)?;
+    result.set_item("fallback_reason", fallback_reason)?;
+    result.set_item("resize_coeff_cache_hits", resize_coeff_cache_hits)?;
+    result.set_item("resize_coeff_cache_misses", resize_coeff_cache_misses)?;
+    if let Some(resource) = resource {
+        let resource_dict = PyDict::new(py);
+        resource_dict.set_item("upload_bytes", resource.upload_bytes)?;
+        resource_dict.set_item("readback_bytes", resource.readback_bytes)?;
+        resource_dict.set_item("auxiliary_bytes", resource.auxiliary_bytes)?;
+        resource_dict.set_item("parameter_bytes", resource.parameter_bytes)?;
+        resource_dict.set_item("retained_cache_bytes", resource.retained_cache_bytes)?;
+        resource_dict.set_item("full_frame_copy_count", resource.full_frame_copy_count)?;
+        resource_dict.set_item("mode_conversion_count", resource.mode_conversion_count)?;
+        resource_dict.set_item("host_buffer_count", resource.host_buffer_count)?;
+        resource_dict.set_item("host_buffer_bytes", resource.host_buffer_bytes)?;
+        resource_dict.set_item("peak_live_host_bytes", resource.peak_live_host_bytes)?;
+        resource_dict.set_item("fused_operation_count", resource.fused_operation_count)?;
+        result.set_item("resource", resource_dict)?;
+    } else {
+        result.set_item("resource", py.None())?;
+    }
+    Ok(Some(result.into()))
+}
+
 // --- Utility functions (moved from Python to satisfy "thin wrapper" rule) ---
 
 /// Align each scanline to a 4-byte boundary (Qt/BMP compatibility).
@@ -2273,6 +2443,9 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(available_backends, m)?)?;
     m.add_function(wrap_pyfunction!(active_backends, m)?)?;
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
+    m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
+    m.add_function(wrap_pyfunction!(pipeline_telemetry_enabled, m)?)?;
+    m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;
 
     // ImageFilter helper functions
     m.add_function(wrap_pyfunction!(color3dlut_check_size, m)?)?;
@@ -3969,10 +4142,15 @@ fn ops_pad(
 }
 
 #[pyfunction]
-fn ops_scale(image: &Bound<'_, PyImage>, factor: f64, filter: Option<String>) -> PyResult<PyImage> {
+fn ops_scale(
+    image: &Bound<'_, PyImage>,
+    factor: f64,
+    filter: Option<&Bound<'_, PyAny>>,
+) -> PyResult<PyImage> {
+    let filter = resample_input_from_python(filter)?;
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
-        py.allow_threads(|| pillow_rs::imageops_scale(&inner, factor, filter.as_deref()))
+        py.allow_threads(|| pillow_rs::imageops_scale_with_input(&inner, factor, filter))
     })
     .map_err(map_error)?;
     Ok(PyImage { inner: rs })
@@ -3995,9 +4173,13 @@ fn ops_expand(
         ));
     };
 
-    // Resolve fill: int -> (v, 0, 0, 0), 3-tuple -> (v0, v1, v2, 0), 4-tuple as-is
+    // Resolve fill: int -> (v, 0, 0, 0), 2-tuple -> (v, v, v, alpha),
+    // 3-tuple -> (v0, v1, v2, 0), 4-tuple as-is. The pair form is the
+    // public LA/PA fill representation; the core selects the native bands.
     let fill_val: (u8, u8, u8, u8) = if let Ok(i) = fill.extract::<u8>() {
         (i, 0, 0, 0)
+    } else if let Ok((value, alpha)) = fill.extract::<(u8, u8)>() {
+        (value, value, value, alpha)
     } else if let Ok((r, g, b)) = fill.extract::<(u8, u8, u8)>() {
         (r, g, b, 0)
     } else if let Ok((r, g, b, a)) = fill.extract::<(u8, u8, u8, u8)>() {

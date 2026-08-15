@@ -2605,6 +2605,228 @@
         "apply-enhance",
         "observe-result"
       ]
+    },
+    {
+      "case_id": "pipeline-composition.simd-cmyk-contrast-color",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Contrast",
+      "covers": [
+        "PIL.ImageEnhance.Contrast.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                10,
+                8
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                17,
+                83,
+                149,
+                31
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-contrast",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Contrast",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            }
+          }
+        },
+        {
+          "step_id": "contrasted",
+          "surface": "PIL.ImageEnhance.Contrast",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-contrast"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.25
+            }
+          }
+        },
+        {
+          "step_id": "setup-color",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Color",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "contrasted"
+            }
+          }
+        },
+        {
+          "step_id": "colored",
+          "surface": "PIL.ImageEnhance.Color",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-color"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.75
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "colored"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "setup-contrast",
+        "contrasted",
+        "materialize"
+      ]
+    },
+    {
+      "case_id": "pipeline-composition.simd-cmyk-brightness-sharpness",
+      "surface": "PIL.ImageEnhance",
+      "operation": "Brightness",
+      "covers": [
+        "PIL.ImageEnhance.Brightness.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "CMYK"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                10,
+                8
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": [
+                211,
+                127,
+                43,
+                19
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-brightness",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Brightness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            }
+          }
+        },
+        {
+          "step_id": "brightened",
+          "surface": "PIL.ImageEnhance.Brightness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-brightness"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 1.1
+            }
+          }
+        },
+        {
+          "step_id": "setup-sharpness",
+          "surface": "PIL.ImageEnhance",
+          "operation": "Sharpness",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "brightened"
+            }
+          }
+        },
+        {
+          "step_id": "sharpened",
+          "surface": "PIL.ImageEnhance.Sharpness",
+          "operation": "enhance",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-sharpness"
+          },
+          "arguments": {
+            "factor": {
+              "kind": "literal",
+              "value": 0.5
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "sharpened"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "setup-brightness",
+        "brightened",
+        "materialize"
+      ]
     }
   ]
 }

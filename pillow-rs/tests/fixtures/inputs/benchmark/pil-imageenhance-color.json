@@ -14,6 +14,14 @@
         {
           "kind": "target_profile",
           "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
         }
       ],
       "input": {
@@ -21,10 +29,8 @@
         "case_id": "PIL.ImageEnhance.Color.enhance.behavior.default"
       },
       "measurement": {
-        "boundary": "observed_steps",
-        "step_ids": [
-          "call"
-        ],
+        "boundary": "whole_workflow",
+        "step_ids": [],
         "metrics": [
           "latency",
           "throughput"
@@ -35,6 +41,17 @@
         "concurrency": 1,
         "cache_state": "warm",
         "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
       }
     }
   ],

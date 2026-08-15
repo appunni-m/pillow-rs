@@ -36,5 +36,6 @@ dev = ["pytest>=7.0", "pytest-benchmark>=4.0", "pytest-json-report", "pytest-tim
 
 [tool.maturin]
 python-source = "python"
+python-packages = ["pillow_rs", "RSPIL"]
 module-name = "pillow_rs._core"
 features = ["pyo3/extension-module"]
