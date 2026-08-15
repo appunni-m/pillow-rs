@@ -37,8 +37,466 @@ use crate::checked_dims::CheckedDims;
 use crate::color::color_type_to_mode;
 use crate::error::PilError;
 use crate::format::parse_format_str;
-use crate::pipeline::{PipelineOp, ResampleFilter, TransformMethod};
+use crate::pipeline::{
+    ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
+};
 use crate::raster::{DynamicImage, GenericImageView};
+
+/// Persistent operation list used by lazy image nodes.
+///
+/// Appending to an existing `Image::Pipeline` keeps an immutable parent link
+/// instead of cloning the complete operation vector. The first execution of a
+/// node flattens the chain once and shares that immutable slice with every
+/// subsequent route, metadata query, or backend execution. This keeps graph
+/// construction linear for long lazy chains while preserving the existing
+/// slice-based backend contract at the execution boundary.
+#[derive(Debug, Clone)]
+pub struct PipelineOps {
+    chain: Arc<PipelineOpChain>,
+    prefix_cache: Option<PipelinePrefixCache>,
+}
+
+#[derive(Debug)]
+struct PipelineOpChain {
+    parent: Option<Arc<PipelineOpChain>>,
+    op: Option<PipelineOp>,
+    len: usize,
+    mode_preserving: bool,
+    flattened: OnceLock<Arc<[PipelineOp]>>,
+}
+
+impl PipelineOps {
+    pub(crate) fn empty() -> Self {
+        Self {
+            chain: Arc::new(PipelineOpChain {
+                parent: None,
+                op: None,
+                len: 0,
+                mode_preserving: true,
+                flattened: OnceLock::new(),
+            }),
+            prefix_cache: None,
+        }
+    }
+
+    pub(crate) fn one(op: PipelineOp) -> Self {
+        Self::empty().append(op)
+    }
+
+    pub(crate) fn append(&self, op: PipelineOp) -> Self {
+        Self {
+            chain: Arc::new(PipelineOpChain {
+                parent: Some(Arc::clone(&self.chain)),
+                mode_preserving: self.chain.mode_preserving && op_preserves_mode(&op),
+                op: Some(op),
+                len: self.chain.len + 1,
+                flattened: OnceLock::new(),
+            }),
+            prefix_cache: self.prefix_cache.clone(),
+        }
+    }
+
+    pub(crate) fn from_vec(ops: Vec<PipelineOp>) -> Self {
+        ops.into_iter()
+            .fold(Self::empty(), |pipeline, op| pipeline.append(op))
+    }
+
+    pub(crate) fn as_slice(&self) -> &[PipelineOp] {
+        self.chain
+            .flattened
+            .get_or_init(|| {
+                let mut reversed = Vec::with_capacity(self.chain.len);
+                let mut cursor = Some(Arc::clone(&self.chain));
+                while let Some(node) = cursor {
+                    if let Some(op) = node.op.as_ref() {
+                        reversed.push(op.clone());
+                    }
+                    cursor = node.parent.as_ref().map(Arc::clone);
+                }
+                reversed.reverse();
+                Arc::<[PipelineOp]>::from(reversed)
+            })
+            .as_ref()
+    }
+
+    pub(crate) fn to_vec(&self) -> Vec<PipelineOp> {
+        self.as_slice().to_vec()
+    }
+
+    pub(crate) fn mode_preserving(&self) -> bool {
+        self.chain.mode_preserving
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.chain.len
+    }
+
+    pub(crate) fn prefix_cache(&self) -> Option<&PipelinePrefixCache> {
+        self.prefix_cache.as_ref()
+    }
+
+    fn with_prefix_cache(mut self, prefix_cache: Option<PipelinePrefixCache>) -> Self {
+        self.prefix_cache = prefix_cache;
+        self
+    }
+}
+
+/// Whether an operation leaves the logical Pillow mode unchanged.
+///
+/// This metadata is deliberately conservative.  Returning `false` only
+/// means that a later mode query may materialize; it never changes execution
+/// semantics.  The fast path is important for lazy native-mode chains such as
+/// repeated `ImageOps.invert`, whose validation needs the source mode but not
+/// the pixels.
+fn op_preserves_mode(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::Resize { .. }
+            | PipelineOp::Crop { .. }
+            | PipelineOp::Rotate { .. }
+            | PipelineOp::Transpose { .. }
+            | PipelineOp::Thumbnail { .. }
+            | PipelineOp::Reduce { .. }
+            | PipelineOp::Filter3x3 { .. }
+            | PipelineOp::Filter5x5 { .. }
+            | PipelineOp::GaussianBlur { .. }
+            | PipelineOp::BoxBlur { .. }
+            | PipelineOp::MedianFilter { .. }
+            | PipelineOp::MaxFilter { .. }
+            | PipelineOp::MinFilter { .. }
+            | PipelineOp::RankFilter { .. }
+            | PipelineOp::Autocontrast { .. }
+            | PipelineOp::Invert
+            | PipelineOp::Flip
+            | PipelineOp::Mirror
+            | PipelineOp::Posterize { .. }
+            | PipelineOp::Solarize { .. }
+            | PipelineOp::Contain { .. }
+            | PipelineOp::Cover { .. }
+            | PipelineOp::Fit { .. }
+            | PipelineOp::Pad { .. }
+            | PipelineOp::Scale { .. }
+            | PipelineOp::Expand { .. }
+            | PipelineOp::CropBorder { .. }
+            | PipelineOp::Add { .. }
+            | PipelineOp::Subtract { .. }
+            | PipelineOp::Multiply { .. }
+            | PipelineOp::Screen { .. }
+            | PipelineOp::Darker { .. }
+            | PipelineOp::Lighter { .. }
+            | PipelineOp::Difference { .. }
+            | PipelineOp::Overlay { .. }
+            | PipelineOp::HardLight { .. }
+            | PipelineOp::SoftLight { .. }
+            | PipelineOp::AddModulo { .. }
+            | PipelineOp::SubtractModulo { .. }
+            | PipelineOp::LogicalAnd { .. }
+            | PipelineOp::LogicalOr { .. }
+            | PipelineOp::LogicalXor { .. }
+            | PipelineOp::Offset { .. }
+            | PipelineOp::Blend { .. }
+            | PipelineOp::Composite { .. }
+            | PipelineOp::Duplicate
+            | PipelineOp::InvertChops
+            | PipelineOp::Brightness { .. }
+            | PipelineOp::Contrast { .. }
+            | PipelineOp::ColorSaturation { .. }
+            | PipelineOp::Sharpness { .. }
+            | PipelineOp::EffectSpread { .. }
+            | PipelineOp::Paste { .. }
+            | PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. }
+            | PipelineOp::PutPixel { .. }
+            | PipelineOp::PutData { .. }
+            | PipelineOp::Eval { .. }
+            | PipelineOp::PointOp { .. }
+    )
+}
+
+fn color_mode_name(mode: &ColorMode) -> &'static str {
+    match mode {
+        ColorMode::L => "L",
+        ColorMode::LA => "LA",
+        ColorMode::RGB => "RGB",
+        ColorMode::RGBA => "RGBA",
+        ColorMode::CMYK => "CMYK",
+        ColorMode::YCbCr => "YCbCr",
+        ColorMode::HSV => "HSV",
+        ColorMode::I => "I",
+        ColorMode::F => "F",
+        ColorMode::P => "P",
+        ColorMode::Mode1 => "1",
+    }
+}
+
+fn pixel_mode_name(mode: PixelMode) -> &'static str {
+    match mode {
+        PixelMode::L => "L",
+        PixelMode::LA => "LA",
+        PixelMode::RGB => "RGB",
+        PixelMode::RGBA => "RGBA",
+        PixelMode::P => "P",
+        PixelMode::PA => "PA",
+        PixelMode::CMYK => "CMYK",
+        PixelMode::Mode1 => "1",
+        PixelMode::YCbCr => "YCbCr",
+        PixelMode::HSV => "HSV",
+        PixelMode::I => "I",
+        PixelMode::F => "F",
+    }
+}
+
+fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
+    Some(match mode {
+        PixelMode::Mode1 | PixelMode::I | PixelMode::F => "LA",
+        PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => "RGBA",
+        PixelMode::L | PixelMode::LA => "LA",
+        PixelMode::RGBA => "RGBA",
+        PixelMode::P | PixelMode::PA => "PA",
+        PixelMode::CMYK => return None,
+    })
+}
+
+/// Computes a statically known logical mode for one pipeline operation.
+///
+/// This is intentionally conservative: `None` retains the existing
+/// materialization fallback and therefore cannot change public behavior. The
+/// mode cache is separate from the pixel cache because metadata reads must not
+/// publish or expose a partially executed image.
+fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
+    if let PipelineOp::PutData { mode, .. } = op {
+        return Some(pixel_mode_name(*mode).to_owned());
+    }
+    if op_preserves_mode(op) {
+        return Some(current.to_owned());
+    }
+    Some(
+        match op {
+            PipelineOp::Equalize if matches!(current, "P" | "PA") => "RGB",
+            PipelineOp::Equalize => current,
+            PipelineOp::Convert { mode, .. } => color_mode_name(mode),
+            PipelineOp::Quantize { .. } => "P",
+            PipelineOp::Grayscale => "L",
+            PipelineOp::Colorize { .. } => "RGB",
+            PipelineOp::Constant { .. } => "L",
+            PipelineOp::Color3DLut { target_mode, .. } => pixel_mode_name(*target_mode),
+            PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
+                known_putalpha_mode(*mode)?
+            }
+            PipelineOp::ExtractBand { .. } => "L",
+            PipelineOp::Merge { mode, .. } => color_mode_name(mode),
+            PipelineOp::LinearGradient { mode } | PipelineOp::RadialGradient { mode } => {
+                color_mode_name(mode)
+            }
+            PipelineOp::EffectNoise { .. } | PipelineOp::EffectMandelbrot { .. } => "L",
+            _ => return None,
+        }
+        .to_owned(),
+    )
+}
+
+/// Rounds a non-negative dimension using Python's ties-to-even rule.
+///
+/// Metadata propagation must never manufacture a dimension for an invalid or
+/// overflowing operation.  Returning `None` lets the normal materialization
+/// path preserve the operation's existing error behavior.
+fn round_dimension(value: f64) -> Option<u32> {
+    if !value.is_finite() || value < 0.0 || value > f64::from(u32::MAX) {
+        return None;
+    }
+    let lower = value.floor();
+    let fraction = value - lower;
+    let rounded = if fraction < 0.5 {
+        lower
+    } else if fraction > 0.5 || (lower as u64) % 2 == 1 {
+        lower + 1.0
+    } else {
+        lower
+    };
+    (rounded <= f64::from(u32::MAX)).then_some(rounded as u32)
+}
+
+/// Computes the output shape for a lazy operation without touching pixels.
+///
+/// The match is intentionally conservative: operations with secondary images,
+/// validation that currently occurs during execution, or mode-specific storage
+/// transitions return `None` and retain the existing materialization fallback.
+fn known_pipeline_op_dimensions(
+    op: &PipelineOp,
+    (width, height): (u32, u32),
+) -> Option<(u32, u32)> {
+    match op {
+        PipelineOp::Resize { w, h, .. }
+        | PipelineOp::Thumbnail { w, h, .. }
+        | PipelineOp::Pad { w, h, .. }
+        | PipelineOp::Transform { w, h, .. }
+        | PipelineOp::EffectMandelbrot { w, h, .. } => Some((*w, *h)),
+        PipelineOp::Crop {
+            left,
+            top,
+            right,
+            bottom,
+        } => Some((right.checked_sub(*left)?, bottom.checked_sub(*top)?)),
+        PipelineOp::Expand { border, .. } => {
+            let border = border.checked_mul(2)?;
+            Some((width.checked_add(border)?, height.checked_add(border)?))
+        }
+        PipelineOp::CropBorder { border } => {
+            let border = border.checked_mul(2)?;
+            Some((width.checked_sub(border)?, height.checked_sub(border)?))
+        }
+        PipelineOp::Transpose { method } => Some(match method {
+            TransposeMethod::Rotate90
+            | TransposeMethod::Rotate270
+            | TransposeMethod::Transpose
+            | TransposeMethod::Transverse => (height, width),
+            TransposeMethod::FlipLeftRight
+            | TransposeMethod::FlipTopBottom
+            | TransposeMethod::Rotate180 => (width, height),
+        }),
+        PipelineOp::Rotate {
+            angle,
+            expand,
+            center,
+            translate,
+            ..
+        } => {
+            if !expand {
+                return Some((width, height));
+            }
+            let sw = f64::from(width);
+            let sh = f64::from(height);
+            let radians = -angle.to_radians();
+            let round_15 =
+                |value: f64| (value * 1_000_000_000_000_000.0).round() / 1_000_000_000_000_000.0;
+            let affine_a = round_15(radians.cos());
+            let affine_b = round_15(radians.sin());
+            let affine_d = round_15(-radians.sin());
+            let affine_e = affine_a;
+            let (center_x, center_y) = center.unwrap_or((sw / 2.0, sh / 2.0));
+            let (translate_x, translate_y) = translate.unwrap_or((0.0, 0.0));
+            let affine_c = affine_a * (-center_x - translate_x)
+                + affine_b * (-center_y - translate_y)
+                + center_x;
+            let affine_f = affine_d * (-center_x - translate_x)
+                + affine_e * (-center_y - translate_y)
+                + center_y;
+            let transform = |x: f64, y: f64| {
+                (
+                    affine_a * x + affine_b * y + affine_c,
+                    affine_d * x + affine_e * y + affine_f,
+                )
+            };
+            let corners = [(0.0, 0.0), (sw, 0.0), (sw, sh), (0.0, sh)];
+            let (mut min_x, mut min_y, mut max_x, mut max_y) =
+                (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+            for &(x, y) in &corners {
+                let (rotated_x, rotated_y) = transform(x, y);
+                min_x = min_x.min(rotated_x);
+                max_x = max_x.max(rotated_x);
+                min_y = min_y.min(rotated_y);
+                max_y = max_y.max(rotated_y);
+            }
+            Some((
+                round_dimension(max_x.ceil() - min_x.floor())?,
+                round_dimension(max_y.ceil() - min_y.floor())?,
+            ))
+        }
+        PipelineOp::Reduce { x_factor, y_factor } => Some((
+            width.div_ceil((*x_factor).max(1)),
+            height.div_ceil((*y_factor).max(1)),
+        )),
+        PipelineOp::Scale { factor, .. } => Some((
+            round_dimension(f64::from(width) * *factor)?.max(1),
+            round_dimension(f64::from(height) * *factor)?.max(1),
+        )),
+        PipelineOp::Contain { w, h, .. } | PipelineOp::Cover { w, h, .. } => {
+            if width == 0 || height == 0 || *w == 0 || *h == 0 {
+                return None;
+            }
+            let image_ratio = f64::from(width) / f64::from(height);
+            let destination_ratio = f64::from(*w) / f64::from(*h);
+            if (image_ratio - destination_ratio).abs() < 1e-10 {
+                return Some((*w, *h));
+            }
+            let cover = matches!(op, PipelineOp::Cover { .. });
+            if (image_ratio > destination_ratio) != cover {
+                let new_height =
+                    round_dimension(f64::from(height) / f64::from(width) * f64::from(*w))?;
+                Some((*w, if cover { new_height.max(1) } else { new_height }))
+            } else {
+                let new_width =
+                    round_dimension(f64::from(width) / f64::from(height) * f64::from(*h))?;
+                Some((if cover { new_width.max(1) } else { new_width }, *h))
+            }
+        }
+        PipelineOp::LinearGradient { .. } | PipelineOp::RadialGradient { .. } => Some((256, 256)),
+        // These operations are unary and have no deferred dimension or
+        // secondary-image validation.  Keeping them here is what makes long
+        // point/filter/draw chains answer `size()` without replaying pixels.
+        PipelineOp::Convert { .. }
+        | PipelineOp::Quantize { .. }
+        | PipelineOp::RemapPalette { .. }
+        | PipelineOp::Color3DLut { .. }
+        | PipelineOp::ExtractBand { .. }
+        | PipelineOp::Filter3x3 { .. }
+        | PipelineOp::Filter5x5 { .. }
+        | PipelineOp::GaussianBlur { .. }
+        | PipelineOp::BoxBlur { .. }
+        | PipelineOp::MedianFilter { .. }
+        | PipelineOp::MaxFilter { .. }
+        | PipelineOp::MinFilter { .. }
+        | PipelineOp::RankFilter { .. }
+        | PipelineOp::Autocontrast { .. }
+        | PipelineOp::Equalize
+        | PipelineOp::Invert
+        | PipelineOp::Flip
+        | PipelineOp::Mirror
+        | PipelineOp::Posterize { .. }
+        | PipelineOp::Solarize { .. }
+        | PipelineOp::Grayscale
+        | PipelineOp::Colorize { .. }
+        | PipelineOp::Constant { .. }
+        | PipelineOp::Offset { .. }
+        | PipelineOp::Duplicate
+        | PipelineOp::InvertChops
+        | PipelineOp::Brightness { .. }
+        | PipelineOp::Contrast { .. }
+        | PipelineOp::ColorSaturation { .. }
+        | PipelineOp::Sharpness { .. }
+        | PipelineOp::EffectSpread { .. }
+        | PipelineOp::Eval { .. }
+        | PipelineOp::EffectNoise { .. }
+        | PipelineOp::PointOp { .. }
+        | PipelineOp::DrawLine { .. }
+        | PipelineOp::DrawRectangle { .. }
+        | PipelineOp::DrawRoundedRect { .. }
+        | PipelineOp::DrawEllipse { .. }
+        | PipelineOp::DrawCircle { .. }
+        | PipelineOp::DrawPolygon { .. }
+        | PipelineOp::DrawArc { .. }
+        | PipelineOp::DrawChord { .. }
+        | PipelineOp::DrawPieslice { .. }
+        | PipelineOp::DrawPoint { .. } => Some((width, height)),
+        _ => None,
+    }
+}
+
+impl std::ops::Deref for PipelineOps {
+    type Target = [PipelineOp];
+
+    fn deref(&self) -> &Self::Target {
+        self.as_slice()
+    }
+}
 
 /// Host-neutral input for converting Pillow's scalar `ImagingCore` view to bytes.
 #[derive(Debug, Clone)]
@@ -668,7 +1126,7 @@ pub enum Image {
         /// Input image feeding the operation pipeline.
         source: Arc<Image>,
         /// Operations to execute in order.
-        ops: Vec<PipelineOp>,
+        ops: PipelineOps,
         /// Output format inherited from the source when known.
         format: Option<ImageFormat>,
         /// Explicit Pillow mode preserved across lazy operations.
@@ -681,14 +1139,92 @@ pub enum Image {
         palette_alpha: Option<Vec<u8>>,
         /// Pipeline output initialized by the first implicit or explicit load.
         materialized: MaterializationCache,
+        /// Shape metadata initialized by the first property query.
+        shape: PipelineShapeCache,
+        /// Logical output mode initialized by the first mode query.
+        mode: PipelineModeCache,
     },
 }
 
 /// Shared once-initialized operation-ready pixel result for lazy image nodes.
 pub type MaterializationCache = Arc<OnceLock<Result<Arc<DynamicImage>, PilError>>>;
 
+/// A materialized prefix that can be shared by flattened sibling pipelines.
+///
+/// This cache is intentionally limited to a prefix of a mode-preserving,
+/// non-palette pipeline. Palette transitions and mode-changing operations
+/// retain the ordinary full-chain evaluator because their representation and
+/// metadata are part of the operation boundary.
+#[derive(Debug, Clone)]
+pub struct PipelinePrefixCache {
+    /// Number of operations represented by the cached image.
+    ops_len: usize,
+    /// Shared result for the prefix node.
+    materialized: MaterializationCache,
+}
+
+/// Shared once-initialized shape metadata for a lazy pipeline node.
+///
+/// `None` means that the operation list is valid but contains a dimension or
+/// validation transition that cannot be determined without materialization.
+/// The error case is cached as well so repeated metadata queries do not repeat
+/// a failing source-header lookup.
+pub type PipelineShapeCache = Arc<OnceLock<Result<Option<(u32, u32)>, PilError>>>;
+
+/// Shared once-initialized logical output mode for a lazy pipeline node.
+///
+/// `None` means that the operation list contains a mode transition whose
+/// representation cannot be described without materializing pixels.
+pub type PipelineModeCache = Arc<OnceLock<Result<Option<String>, PilError>>>;
+
 pub(crate) fn materialization_cache() -> MaterializationCache {
     Arc::new(OnceLock::new())
+}
+
+pub(crate) fn pipeline_shape_cache() -> PipelineShapeCache {
+    Arc::new(OnceLock::new())
+}
+
+pub(crate) fn pipeline_mode_cache() -> PipelineModeCache {
+    Arc::new(OnceLock::new())
+}
+
+impl Image {
+    /// Return whether two cloned handles refer to the same immutable source
+    /// node for execution-resource reuse.
+    ///
+    /// Public wrappers intentionally create a fresh `Arc<Image>` for each
+    /// operation argument, so comparing those outer handles would miss the
+    /// fact that the underlying loaded pixels or lazy materialization cache is
+    /// shared. This identity is narrower than pixel equality: independently
+    /// created images with equal bytes must not be treated as one secondary.
+    pub(crate) fn shares_execution_source(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Loaded(left), Self::Loaded(right)) => Arc::ptr_eq(&left.image, &right.image),
+            (Self::Paletted(left), Self::Paletted(right)) => {
+                Arc::ptr_eq(&left.materialized, &right.materialized)
+            }
+            (
+                Self::Bytes {
+                    materialized: left, ..
+                },
+                Self::Bytes {
+                    materialized: right,
+                    ..
+                },
+            )
+            | (
+                Self::Pipeline {
+                    materialized: left, ..
+                },
+                Self::Pipeline {
+                    materialized: right,
+                    ..
+                },
+            ) => Arc::ptr_eq(left, right),
+            _ => false,
+        }
+    }
 }
 
 /// PIL-compatible statistics result. Every statistic is a per-band list.
@@ -901,6 +1437,7 @@ impl Image {
             )),
             _ => return Err(PilError::ValueError("unrecognized image mode".into())),
         };
+        crate::compute::record_pipeline_allocation(img.as_bytes().len());
         let explicit = if matches!(
             mode,
             "CMYK"
@@ -1244,6 +1781,7 @@ impl Image {
             // observable.
             PipelineOp::Duplicate
             | PipelineOp::Crop { .. }
+            | PipelineOp::Reduce { .. }
             | PipelineOp::Transpose { .. }
             | PipelineOp::Flip
             | PipelineOp::Mirror
@@ -1385,6 +1923,12 @@ impl Image {
     /// accepted.
     fn is_palette_safe_op_for_source(source: &Image, op: &PipelineOp) -> bool {
         Self::is_palette_safe_op(op)
+            // PA.putpixel writes the native index/alpha sample pair. The
+            // operation does not depend on the RGB palette, but a later
+            // conversion does, so keep the palette attached to the lazy
+            // pipeline while the raw PA samples are updated.
+            || (source.explicit_mode() == Some("PA")
+                && matches!(op, PipelineOp::PutPixel { .. }))
             || (source.explicit_mode() == Some("PA")
                 && matches!(
                     op,
@@ -1405,10 +1949,10 @@ impl Image {
             || (source.explicit_mode() == Some("P")
                 && matches!(op, PipelineOp::Rotate { .. }))
             // Pillow's ImagingTransform applies affine/projective sampling to
-            // the native PA index/alpha pair and preserves PA. Keep this
+            // native P/PA samples and preserves the indexed mode. Keep this
             // channel-wise operation indexed so a retained RGB palette is not
             // expanded to RGBA before the transform runs.
-            || (source.explicit_mode() == Some("PA")
+            || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
                 && matches!(op, PipelineOp::Transform { .. }))
             // Pillow's ImageOps.fit keeps P/PA images indexed through the
             // boxed resize. P uses nearest-neighbour samples regardless of
@@ -1421,22 +1965,6 @@ impl Image {
             // the resize implementation).
             || (matches!(source.explicit_mode(), Some("P") | Some("PA"))
                 && matches!(op, PipelineOp::Contain { .. } | PipelineOp::Cover { .. }))
-    }
-
-    fn is_dimension_preserving_draw(op: &PipelineOp) -> bool {
-        matches!(
-            op,
-            PipelineOp::DrawLine { .. }
-                | PipelineOp::DrawRectangle { .. }
-                | PipelineOp::DrawRoundedRect { .. }
-                | PipelineOp::DrawEllipse { .. }
-                | PipelineOp::DrawCircle { .. }
-                | PipelineOp::DrawPolygon { .. }
-                | PipelineOp::DrawArc { .. }
-                | PipelineOp::DrawChord { .. }
-                | PipelineOp::DrawPieslice { .. }
-                | PipelineOp::DrawPoint { .. }
-        )
     }
 
     /// Whether this value currently represents palette indices rather than
@@ -1517,7 +2045,7 @@ impl Image {
 
     /// Returns shared operation-ready pixels, persistently initializing lazy
     /// source or pipeline state when necessary.
-    fn materialized_shared(&self) -> Result<Arc<DynamicImage>, PilError> {
+    pub(crate) fn materialized_shared(&self) -> Result<Arc<DynamicImage>, PilError> {
         match self {
             Image::Loaded(data) => Ok(Arc::clone(&data.image)),
             Image::Paletted(data) => data
@@ -1547,11 +2075,12 @@ impl Image {
                 .get_or_init(|| {
                     Self::evaluate_pipeline(
                         source,
-                        ops,
+                        ops.as_slice(),
                         explicit_mode,
                         *backend,
                         palette,
                         palette_alpha,
+                        ops.prefix_cache(),
                     )
                 })
                 .clone(),
@@ -1567,18 +2096,46 @@ impl Image {
         backend: Option<crate::compute::Backend>,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
+        prefix_cache: Option<&PipelinePrefixCache>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        let selected = match backend {
-            Some(backend) => backend,
-            None => crate::compute::route(ops, None)?,
-        };
-        crate::compute::validate_backend_support(selected, ops)?;
+        if let Some(prefix_cache) =
+            prefix_cache.filter(|cache| cache.ops_len > 0 && cache.ops_len < ops.len())
+        {
+            let prefix_ops = &ops[..prefix_cache.ops_len];
+            let prefix_image = prefix_cache
+                .materialized
+                .get_or_init(|| {
+                    let prepared = crate::compute::prepare_execution(prefix_ops, backend)?;
+                    let source_image = source.materialized_shared()?;
+                    Self::evaluate_pipeline_with_image(
+                        source,
+                        source_image.as_ref(),
+                        prefix_ops,
+                        explicit_mode,
+                        &prepared,
+                        &None,
+                        &None,
+                    )
+                })
+                .clone()?;
+            let suffix_ops = &ops[prefix_cache.ops_len..];
+            let prepared = crate::compute::prepare_execution(suffix_ops, backend)?;
+            let result = crate::compute::execute_prepared(
+                &prepared,
+                suffix_ops,
+                prefix_image.as_ref(),
+                explicit_mode.as_deref(),
+            )?;
+            return Ok(Arc::new(result));
+        }
+        let prepared = crate::compute::prepare_execution(ops, backend)?;
+        let source_image = source.materialized_shared()?;
         Self::evaluate_pipeline_with_image(
             source,
-            source.materialize()?,
+            source_image.as_ref(),
             ops,
             explicit_mode,
-            Some(selected),
+            &prepared,
             palette,
             palette_alpha,
         )
@@ -1592,17 +2149,14 @@ impl Image {
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
-        let selected = match backend {
-            Some(backend) => backend,
-            None => crate::compute::route(ops, None)?,
-        };
-        crate::compute::validate_backend_support(selected, ops)?;
+        let prepared = crate::compute::prepare_execution(ops, backend)?;
+        let source_image = source.materialize_uncached()?;
         Self::evaluate_pipeline_with_image(
             source,
-            source.materialize_uncached()?,
+            &source_image,
             ops,
             explicit_mode,
-            Some(selected),
+            &prepared,
             palette,
             palette_alpha,
         )
@@ -1610,10 +2164,10 @@ impl Image {
 
     fn evaluate_pipeline_with_image(
         source: &Image,
-        mut img: DynamicImage,
+        img: &DynamicImage,
         ops: &[PipelineOp],
         explicit_mode: &Option<String>,
-        backend: Option<crate::compute::Backend>,
+        prepared: &crate::compute::PreparedExecution,
         palette: &Option<Vec<u8>>,
         palette_alpha: &Option<Vec<u8>>,
     ) -> Result<Arc<DynamicImage>, PilError> {
@@ -1622,10 +2176,6 @@ impl Image {
                 .iter()
                 .all(|op| Self::is_palette_safe_op_for_source(source, op));
             if all_safe {
-                let selected = match backend {
-                    Some(backend) => backend,
-                    None => crate::compute::route(ops, None)?,
-                };
                 let palette_mode = if explicit_mode.as_deref() == Some("PA")
                     || source.explicit_mode() == Some("PA")
                 {
@@ -1633,8 +2183,9 @@ impl Image {
                 } else {
                     "P"
                 };
-                img = crate::compute::execute_batch(selected, ops, &img, Some(palette_mode))?;
-                return Ok(Arc::new(img));
+                let result =
+                    crate::compute::execute_prepared(prepared, ops, img, Some(palette_mode))?;
+                return Ok(Arc::new(result));
             }
 
             let palette_mode = if source.explicit_mode() == Some("PA") {
@@ -1648,7 +2199,7 @@ impl Image {
                     .clone()
                     .or_else(|| source.palette_alpha())
                     .unwrap_or_default();
-                img = if palette_mode == "PA" {
+                let expanded = if palette_mode == "PA" {
                     // PIL's Convert.c PA path takes RGB from the palette and
                     // alpha exclusively from each PA sample. Any RGBA palette
                     // alpha is intentionally ignored.
@@ -1656,15 +2207,29 @@ impl Image {
                 } else {
                     expand_palette(&img.to_luma8(), &palette, &palette_alpha)
                 };
+                let result = crate::compute::execute_prepared(
+                    prepared,
+                    ops,
+                    &expanded,
+                    explicit_mode.as_deref(),
+                )?;
+                return Ok(Arc::new(result));
             }
         }
 
-        let selected = match backend {
-            Some(backend) => backend,
-            None => crate::compute::route(ops, None)?,
+        // A one-step conversion still needs the source-only mode tag at the
+        // executor boundary. RGBX and RGBa share RGBA storage, but their fourth
+        // byte has different Pillow semantics; the pipeline output tag is the
+        // destination and cannot stand in for that source tag.
+        let execution_mode = if ops.len() == 1
+            && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
+        {
+            source.explicit_mode().or(explicit_mode.as_deref())
+        } else {
+            explicit_mode.as_deref()
         };
-        img = crate::compute::execute_batch(selected, ops, &img, explicit_mode.as_deref())?;
-        Ok(Arc::new(img))
+        let result = crate::compute::execute_prepared(prepared, ops, img, execution_mode)?;
+        Ok(Arc::new(result))
     }
 
     fn materialize_uncached(&self) -> Result<DynamicImage, PilError> {
@@ -1809,7 +2374,7 @@ impl Image {
             {
                 Image::Pipeline {
                     source: Arc::new(source.clone()),
-                    ops: vec![op],
+                    ops: PipelineOps::one(op),
                     // Pillow derived images (resize, crop, getchannel,
                     // convert, rotate, ...) report format None; only the
                     // originally opened image carries the container format.
@@ -1819,16 +2384,39 @@ impl Image {
                     palette: source_palette,
                     palette_alpha: source_palette_alpha,
                     materialized: materialization_cache(),
+                    shape: pipeline_shape_cache(),
+                    mode: pipeline_mode_cache(),
                 }
             }
             Image::Pipeline {
                 source: pipeline_source,
                 ops,
                 backend,
+                materialized: pipeline_materialized,
                 ..
             } => {
-                let mut new_ops = ops.clone();
-                new_ops.push(op);
+                let can_reuse_prefix = !source_is_paletted
+                    && ops.len() > 0
+                    && ops.mode_preserving()
+                    && op_preserves_mode(&op);
+                let ancestor_cache = if can_reuse_prefix {
+                    if pipeline_materialized.get().is_some() {
+                        Some(PipelinePrefixCache {
+                            ops_len: ops.len(),
+                            materialized: Arc::clone(pipeline_materialized),
+                        })
+                    } else if let Some(prefix_cache) = ops.prefix_cache().cloned() {
+                        Some(prefix_cache)
+                    } else {
+                        Some(PipelinePrefixCache {
+                            ops_len: ops.len(),
+                            materialized: Arc::clone(pipeline_materialized),
+                        })
+                    }
+                } else {
+                    None
+                };
+                let new_ops = ops.append(op).with_prefix_cache(ancestor_cache);
                 Image::Pipeline {
                     source: Arc::clone(pipeline_source),
                     ops: new_ops,
@@ -1838,17 +2426,21 @@ impl Image {
                     palette: source_palette,
                     palette_alpha: source_palette_alpha,
                     materialized: materialization_cache(),
+                    shape: pipeline_shape_cache(),
+                    mode: pipeline_mode_cache(),
                 }
             }
             other => Image::Pipeline {
                 source: Arc::new(other.clone()),
-                ops: vec![op],
+                ops: PipelineOps::one(op),
                 format: None,
                 explicit_mode,
                 backend: other.backend(),
                 palette: source_palette,
                 palette_alpha: source_palette_alpha,
                 materialized: materialization_cache(),
+                shape: pipeline_shape_cache(),
+                mode: pipeline_mode_cache(),
             },
         }
     }
@@ -1865,13 +2457,15 @@ impl Image {
     ) -> Image {
         Image::Pipeline {
             source: Arc::new(source.clone()),
-            ops: vec![op],
+            ops: PipelineOps::one(op),
             format: None,
             explicit_mode: Some(output_mode.to_owned()),
             backend: source.backend(),
             palette: None,
             palette_alpha: None,
             materialized: materialization_cache(),
+            shape: pipeline_shape_cache(),
+            mode: pipeline_mode_cache(),
         }
     }
 
@@ -1926,18 +2520,23 @@ impl Image {
                 .checked_mul(width as usize)
                 .and_then(|row| row.checked_add(x as usize))
                 .ok_or_else(|| PilError::InternalError("pixel index overflow".into()))?;
-            return match Self::scalar_samples_from_materialized(&img, &mode) {
-                ScalarImageSamples::Integer(values) => values
-                    .get(index)
-                    .copied()
-                    .map(FormattedPixelValue::Integer)
-                    .ok_or_else(|| PilError::InternalError("I pixel index out of bounds".into())),
-                ScalarImageSamples::Float(values) => values
-                    .get(index)
-                    .copied()
-                    .map(FormattedPixelValue::Float)
-                    .ok_or_else(|| PilError::InternalError("F pixel index out of bounds".into())),
-            };
+            let offset = index
+                .checked_mul(4)
+                .ok_or_else(|| PilError::InternalError("scalar pixel offset overflow".into()))?;
+            let end = offset
+                .checked_add(4)
+                .ok_or_else(|| PilError::InternalError("scalar pixel offset overflow".into()))?;
+            let sample = img.as_bytes().get(offset..end).ok_or_else(|| {
+                PilError::InternalError("scalar pixel index out of bounds".into())
+            })?;
+            if mode == "I" {
+                return Ok(FormattedPixelValue::Integer(i32::from_le_bytes([
+                    sample[0], sample[1], sample[2], sample[3],
+                ])));
+            }
+            return Ok(FormattedPixelValue::Float(f32::from_le_bytes([
+                sample[0], sample[1], sample[2], sample[3],
+            ]) as f64));
         }
 
         let (r, g, b, a) = self.getpixel(x, y)?;
@@ -2273,20 +2872,31 @@ impl Image {
                 // rejects an empty image before constructing ImageStat.Stat.
                 return Err(PilError::ValueError("min/max not given".into()));
             }
-            let mut values: Vec<f64> = Vec::with_capacity(n_pixels);
-            for i in 0..n_pixels {
-                let base = i * 4;
-                let bytes: [u8; 4] = [rgba[base], rgba[base + 1], rgba[base + 2], rgba[base + 3]];
+            // The histogram pass only needs the extrema and then a second
+            // read of each packed sample. Avoid retaining both a pixel-sized
+            // value vector and its sorted clone; this path is commonly used
+            // as a terminal read on large F/I images.
+            let decode = |bytes: &[u8]| {
+                let bytes: [u8; 4] = [bytes[0], bytes[1], bytes[2], bytes[3]];
                 if is_f {
-                    values.push(f32::from_le_bytes(bytes) as f64);
+                    f32::from_le_bytes(bytes) as f64
                 } else {
-                    values.push(i32::from_le_bytes(bytes) as f64);
+                    i32::from_le_bytes(bytes) as f64
+                }
+            };
+            let mut samples = rgba.chunks_exact(4);
+            let first = decode(samples.next().expect("n_pixels guarantees one sample"));
+            let mut min_val = first;
+            let mut max_val = first;
+            for bytes in samples {
+                let value = decode(bytes);
+                if value.partial_cmp(&min_val) == Some(std::cmp::Ordering::Less) {
+                    min_val = value;
+                }
+                if value.partial_cmp(&max_val) == Some(std::cmp::Ordering::Greater) {
+                    max_val = value;
                 }
             }
-            let mut sorted = values.clone();
-            sorted.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-            let min_val = sorted[0];
-            let max_val = sorted[sorted.len() - 1];
             if (max_val - min_val).abs() < f64::EPSILON {
                 // Pillow's I/F histogram is empty when every value is equal
                 // (max == min), so its Stat min/max fall back to the histogram
@@ -2304,21 +2914,37 @@ impl Image {
                     0.0,
                 ]]);
             }
-            let scale = 255.0 / (max_val - min_val);
             let mut hist = [0i64; 256];
-            for &v in &values {
-                // Pillow assigns the maximum sample to histogram bin 255.
-                // Avoid letting a representationally-tiny floating error turn
-                // the endpoint into bin 254.
-                let bin = if (v - max_val).abs() < f64::EPSILON {
-                    255
-                } else {
-                    ((v - min_val) * scale).clamp(0.0, 255.0) as usize
-                };
-                // `clamp` bounds every finite value to the histogram domain;
-                // Rust's float-to-`usize` conversion also maps NaN to zero.
-                // The index is therefore always one of the 256 slots.
-                hist[bin] += 1;
+            if is_f {
+                // Pillow's F-mode histogram keeps the sample, range, and
+                // reciprocal in float32. Widening those values before the
+                // multiply can move an endpoint from bin 254 to 255, so keep
+                // this operation order in the source sample type. In
+                // particular, Pillow does not force the maximum into bin 255
+                // after the multiply; its reciprocal rounding is observable.
+                let min_f = min_val as f32;
+                let max_f = max_val as f32;
+                let scale = 255.0_f32 / (max_f - min_f);
+                for bytes in rgba.chunks_exact(4) {
+                    let value = f32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+                    let bin = ((value - min_f) * scale).clamp(0.0, 255.0) as usize;
+                    hist[bin] += 1;
+                }
+            } else {
+                let scale = 255.0 / (max_val - min_val);
+                for bytes in rgba.chunks_exact(4) {
+                    let value = decode(bytes);
+                    // Integer samples have an exact endpoint. Preserve the
+                    // existing Pillow-compatible rule that their maximum is
+                    // represented by bin 255; only F-mode observes source
+                    // float reciprocal rounding above.
+                    let bin = if value == max_val {
+                        255
+                    } else {
+                        ((value - min_val) * scale).clamp(0.0, 255.0) as usize
+                    };
+                    hist[bin] += 1;
+                }
             }
             let count = n_pixels as f64;
             let sum: f64 = hist
@@ -2369,61 +2995,144 @@ impl Image {
         }
 
         let img = self.materialized_shared()?;
-        let n_bands = img.color().channel_count() as usize;
-        let (w, h) = (img.width() as usize, img.height() as usize);
-        let n_pixels = w * h;
+        let is_l16_stat = img.color() == crate::raster::ColorType::L16
+            && matches!(explicit_mode, Some(mode) if is_l16_mode(mode));
+        if is_l16_stat
+            || matches!(
+                img.color(),
+                crate::raster::ColorType::L8
+                    | crate::raster::ColorType::La8
+                    | crate::raster::ColorType::Rgb8
+                    | crate::raster::ColorType::Rgba8
+            )
+        {
+            // Byte-oriented ImageStat is fully described by the fixed
+            // 256-bin histogram. For I;16* this deliberately reuses the
+            // legacy byte histogram dispatch before reducing the bins, just
+            // as Pillow's ImageStat.Stat does. Reusing it avoids one Vec<u8>
+            // per band and the pixel-sized sort that the old path used for
+            // every read.
+            let histogram = self.histogram()?;
+            let mut results = Vec::with_capacity(histogram.len() / 256);
+            for band in histogram.chunks_exact(256) {
+                let count_u64: u64 = band.iter().map(|&value| u64::from(value)).sum();
+                let count = count_u64 as f64;
+                if count == 0.0 {
+                    results.push(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
+                    continue;
+                }
+                let sum: f64 = band
+                    .iter()
+                    .enumerate()
+                    .map(|(value, &frequency)| value as f64 * frequency as f64)
+                    .sum();
+                let sum2: f64 = band
+                    .iter()
+                    .enumerate()
+                    .map(|(value, &frequency)| {
+                        let value = value as f64;
+                        value * value * frequency as f64
+                    })
+                    .sum();
+                let mean = sum / count;
+                let rms = (sum2 / count).sqrt();
+                let var = (sum2 - sum * sum / count) / count;
+                let stddev = var.sqrt();
+                let half = count_u64 / 2;
+                let mut cumulative = 0u64;
+                let mut median = None;
+                let mut min: f64 = 255.0;
+                let mut max: f64 = 0.0;
+                for (value, &frequency) in band.iter().enumerate() {
+                    if frequency > 0 {
+                        min = min.min(value as f64);
+                        max = max.max(value as f64);
+                    }
+                    cumulative += u64::from(frequency);
+                    if median.is_none() && cumulative > half {
+                        median = Some(value as f64);
+                    }
+                }
+                results.push(vec![
+                    count,
+                    sum,
+                    sum2,
+                    mean,
+                    median.unwrap_or(255.0),
+                    rms,
+                    var,
+                    stddev,
+                    min,
+                    max,
+                ]);
+            }
+            return Ok(results);
+        }
 
-        // Extract bands correctly for each image type
-        let mut bands: Vec<Vec<u8>> = vec![Vec::with_capacity(n_pixels); n_bands];
+        let n_bands = img.color().channel_count() as usize;
+
+        // The fallback conversions below preserve the existing public mode
+        // semantics, but the reduction itself only needs fixed 8-bit
+        // histograms. Keep memory independent of pixel count and avoid
+        // sorting a full value vector for every converted band.
+        let mut histograms = vec![[0u64; 256]; n_bands];
 
         match n_bands {
             1 => {
                 let gray = img.to_luma8();
                 for px in gray.pixels() {
-                    bands[0].push(px[0]);
+                    histograms[0][px[0] as usize] += 1;
                 }
             }
             2 => {
                 // LA mode: channel 0 = L (from R), channel 1 = A (from A)
                 let rgba = img.to_rgba8();
                 for px in rgba.pixels() {
-                    bands[0].push(px[0]); // L = R
-                    bands[1].push(px[3]); // A = A
+                    histograms[0][px[0] as usize] += 1; // L = R
+                    histograms[1][px[3] as usize] += 1; // A = A
                 }
             }
             3 => {
                 let rgb = img.to_rgb8();
                 for px in rgb.pixels() {
-                    bands[0].push(px[0]);
-                    bands[1].push(px[1]);
-                    bands[2].push(px[2]);
+                    histograms[0][px[0] as usize] += 1;
+                    histograms[1][px[1] as usize] += 1;
+                    histograms[2][px[2] as usize] += 1;
                 }
             }
             _ => {
                 let rgba = img.to_rgba8();
                 for px in rgba.pixels() {
                     for b in 0..4 {
-                        bands[b].push(px[b]);
+                        histograms[b][px[b] as usize] += 1;
                     }
                 }
             }
         }
 
-        for b in bands.iter_mut() {
-            b.sort_unstable();
-        }
-
         let mut results = Vec::with_capacity(n_bands);
-        for band in &bands {
-            let count = band.len() as f64;
-            if count == 0.0 {
+        for histogram in &histograms {
+            let count_u64: u64 = histogram.iter().sum();
+            let count = count_u64 as f64;
+            if count_u64 == 0 {
                 // Pillow's byte-oriented histogram starts an empty band at
                 // extrema (255, 0), while all aggregate statistics remain 0.
                 results.push(vec![0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 255.0, 0.0]);
                 continue;
             }
-            let sum: f64 = band.iter().map(|&x| x as f64).sum();
-            let sum2: f64 = band.iter().map(|&x| (x as f64) * (x as f64)).sum();
+            let sum: f64 = histogram
+                .iter()
+                .enumerate()
+                .map(|(value, &frequency)| value as f64 * frequency as f64)
+                .sum();
+            let sum2: f64 = histogram
+                .iter()
+                .enumerate()
+                .map(|(value, &frequency)| {
+                    let value = value as f64;
+                    value * value * frequency as f64
+                })
+                .sum();
             let mean = sum / count;
             let rms = (sum2 / count).sqrt();
             // Pillow 12.2 returns the raw floating-point expression here. It
@@ -2432,11 +3141,37 @@ impl Image {
             // -4.184729342258356e-12), so do not clamp the result.
             let var = (sum2 - sum * sum / count) / count;
             let stddev = var.sqrt();
-            let min = band[0] as f64;
-            let max = band[band.len() - 1] as f64;
-            let median = band[band.len() / 2] as f64;
+            let half = count_u64 / 2;
+            let mut cumulative = 0u64;
+            let mut median = None;
+            let mut min = 255.0;
+            let mut max = 0.0;
+            for (value, &frequency) in histogram.iter().enumerate() {
+                if frequency > 0 {
+                    min = value as f64;
+                    break;
+                }
+            }
+            for (value, &frequency) in histogram.iter().enumerate() {
+                if frequency > 0 {
+                    max = value as f64;
+                }
+                cumulative += frequency;
+                if median.is_none() && cumulative > half {
+                    median = Some(value as f64);
+                }
+            }
             results.push(vec![
-                count, sum, sum2, mean, median, rms, var, stddev, min, max,
+                count,
+                sum,
+                sum2,
+                mean,
+                median.unwrap_or(255.0),
+                rms,
+                var,
+                stddev,
+                min,
+                max,
             ]);
         }
         Ok(results)
@@ -2554,7 +3289,7 @@ impl Image {
     /// Returns [`PilError`] when the image cannot be materialized.
     pub fn tobytes_unpacked(&self) -> Result<Vec<u8>, PilError> {
         if self.mode()? == "1" {
-            return Ok(self.materialize()?.to_luma8().into_raw());
+            return Ok(self.materialized_shared()?.to_luma8().into_raw());
         }
         self.tobytes()
     }
@@ -2701,9 +3436,11 @@ impl Image {
         };
 
         Arc::make_mut(source).lock_backend_recursive(b);
-        for op in ops {
+        let mut flattened_ops = ops.to_vec();
+        for op in &mut flattened_ops {
             Self::lock_op_backend_recursive(op, b);
         }
+        *ops = PipelineOps::from_vec(flattened_ops);
         *backend = Some(b);
         // A previously inspected/materialized pipeline must execute again
         // under the newly forced backend, including nested pipeline nodes.
@@ -2746,9 +3483,12 @@ impl Image {
                 Arc::make_mut(source).lock_backend_recursive(b);
             }
             PipelineOp::Merge { bands, .. } => {
-                for band in bands {
+                for band in Arc::make_mut(bands).iter_mut() {
                     band.lock_backend_recursive(b);
                 }
+            }
+            PipelineOp::Autocontrast { mask: Some(mask), .. } => {
+                Arc::make_mut(mask).lock_backend_recursive(b);
             }
             _ => {}
         }
@@ -3541,10 +4281,22 @@ impl Image {
             Image::Bytes {
                 info: Some(info), ..
             } => return Ok((info.width, info.height)),
-            Image::Pipeline { source, ops, .. }
-                if ops.iter().all(Self::is_dimension_preserving_draw) =>
-            {
-                return source.size();
+            Image::Pipeline {
+                source, ops, shape, ..
+            } => {
+                let planned = shape.get_or_init(|| {
+                    let mut dimensions = source.size()?;
+                    for op in ops.iter() {
+                        let Some(next) = known_pipeline_op_dimensions(op, dimensions) else {
+                            return Ok(None);
+                        };
+                        dimensions = next;
+                    }
+                    Ok(Some(dimensions))
+                });
+                if let Some(dimensions) = planned.as_ref().map_err(Clone::clone)? {
+                    return Ok(*dimensions);
+                }
             }
             _ => {}
         }
@@ -3574,6 +4326,30 @@ impl Image {
                 explicit_mode: Some(mode),
                 ..
             } => return Ok(mode.clone()),
+            Image::Pipeline {
+                source,
+                ops,
+                explicit_mode: None,
+                mode,
+                ..
+            } => {
+                let planned = mode.get_or_init(|| {
+                    let mut current = source.mode()?;
+                    if ops.mode_preserving() {
+                        return Ok(Some(current));
+                    }
+                    for op in ops.iter() {
+                        let Some(next) = known_pipeline_op_mode(op, &current) else {
+                            return Ok(None);
+                        };
+                        current = next;
+                    }
+                    Ok(Some(current))
+                });
+                if let Some(mode) = planned.as_ref().map_err(Clone::clone)? {
+                    return Ok(mode.clone());
+                }
+            }
             _ => {}
         }
         let img = self.materialized_shared()?;
@@ -3769,9 +4545,28 @@ impl Image {
             if band < 0 || band as usize >= band_count {
                 return Err(PilError::ValueError("band index out of range".into()));
             }
+            let band = band as usize;
+            // Keep ordinary byte layouts narrow for banded reads. The old
+            // fallback widened the complete frame to RGBA before selecting a
+            // single channel, which made a read-only terminal operation pay
+            // for an avoidable full-frame allocation and conversion.
+            match img.as_ref() {
+                DynamicImage::ImageLuma8(image) if band == 0 => {
+                    return Ok(image.pixels().map(|pixel| pixel[0]).collect());
+                }
+                DynamicImage::ImageLumaA8(image) if band < 2 => {
+                    return Ok(image.pixels().map(|pixel| pixel[band]).collect());
+                }
+                DynamicImage::ImageRgb8(image) if band < 3 => {
+                    return Ok(image.pixels().map(|pixel| pixel[band]).collect());
+                }
+                DynamicImage::ImageRgba8(image) if band < 4 => {
+                    return Ok(image.pixels().map(|pixel| pixel[band]).collect());
+                }
+                _ => {}
+            }
             let rgba = img.to_rgba8();
-            let b = band as usize;
-            return Ok(rgba.pixels().map(|p| p[b]).collect());
+            return Ok(rgba.pixels().map(|p| p[band]).collect());
         }
         match img.color() {
             crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => {
@@ -3867,7 +4662,7 @@ impl Image {
         let new_self = Image::push_op(
             self,
             PipelineOp::PutData {
-                data: data.to_vec(),
+                data: data.to_vec().into(),
                 mode,
             },
         );
@@ -4157,6 +4952,13 @@ impl Image {
     /// Returns [`PilError::ValueError`] when `channel` is out of range, or
     /// another [`PilError`] when materialization fails.
     pub fn getchannel(&self, channel: i32) -> Result<Image, PilError> {
+        let mode = self.mode()?;
+        // Pillow's ImagingCore getchannel entry point rejects scalar I/F
+        // storage before band extraction; it does not expose those four-byte
+        // samples through the byte-oriented ExtractBand operation.
+        if matches!(mode.as_str(), "I" | "F") {
+            return Err(PilError::ValueError("image has wrong mode".into()));
+        }
         // Validate channel index (requires materialized image for band count)
         let img = self.materialized_shared()?;
         let bands = img.color().channel_count();
@@ -4313,22 +5115,67 @@ impl Image {
             crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
             _ => 4,
         };
-        let mut counts: std::collections::HashMap<Vec<u8>, u32> = std::collections::HashMap::new();
-        match n_bands {
-            2 => {
+        // Pack fixed-width byte tuples into one integer instead of allocating
+        // a temporary Vec for every pixel. The packed order is identical to
+        // Pillow's lexicographic byte order, so the public result ordering is
+        // preserved while the hot loop performs only one hash lookup.
+        let mut counts: std::collections::HashMap<u32, u32> = std::collections::HashMap::new();
+        let mut count_pixel = |key: u32| {
+            *counts.entry(key).or_insert(0) += 1;
+        };
+        match (n_bands, img.as_ref()) {
+            (2, crate::raster::DynamicImage::ImageLumaA8(image)) => {
+                for pixel in image.pixels() {
+                    count_pixel((u32::from(pixel[0]) << 8) | u32::from(pixel[1]));
+                }
+            }
+            (3, crate::raster::DynamicImage::ImageRgb8(image)) => {
+                for pixel in image.pixels() {
+                    count_pixel(
+                        (u32::from(pixel[0]) << 16)
+                            | (u32::from(pixel[1]) << 8)
+                            | u32::from(pixel[2]),
+                    );
+                }
+            }
+            (4, crate::raster::DynamicImage::ImageRgba8(image)) => {
+                for pixel in image.pixels() {
+                    count_pixel(
+                        (u32::from(pixel[0]) << 24)
+                            | (u32::from(pixel[1]) << 16)
+                            | (u32::from(pixel[2]) << 8)
+                            | u32::from(pixel[3]),
+                    );
+                }
+            }
+            (2, _) => {
                 let la = img.to_luma_alpha8();
-                for p in la.pixels() {
-                    let key = vec![p[0], p[1]];
-                    *counts.entry(key).or_insert(0) += 1;
+                for pixel in la.pixels() {
+                    count_pixel((u32::from(pixel[0]) << 8) | u32::from(pixel[1]));
                 }
             }
-            _ => {
+            (3, _) => {
+                let rgb = img.to_rgb8();
+                for pixel in rgb.pixels() {
+                    count_pixel(
+                        (u32::from(pixel[0]) << 16)
+                            | (u32::from(pixel[1]) << 8)
+                            | u32::from(pixel[2]),
+                    );
+                }
+            }
+            (4, _) => {
                 let rgba = img.to_rgba8();
-                for p in rgba.pixels() {
-                    let key: Vec<u8> = p.0[..n_bands].to_vec();
-                    *counts.entry(key).or_insert(0) += 1;
+                for pixel in rgba.pixels() {
+                    count_pixel(
+                        (u32::from(pixel[0]) << 24)
+                            | (u32::from(pixel[1]) << 16)
+                            | (u32::from(pixel[2]) << 8)
+                            | u32::from(pixel[3]),
+                    );
                 }
             }
+            _ => unreachable!("getcolors only supports one through four bands"),
         }
         if counts.len() > maxcolors as usize {
             return Ok(None);
@@ -4340,8 +5187,8 @@ impl Image {
         if n_bands == 2 {
             result.sort_by(|a, b| {
                 // Primary: parity of first byte (odd first = 1 before 0)
-                let a_odd = a.1[0] & 1;
-                let b_odd = b.1[0] & 1;
+                let a_odd = ((a.1 >> 8) as u8) & 1;
+                let b_odd = ((b.1 >> 8) as u8) & 1;
                 if a_odd != b_odd {
                     return b_odd.cmp(&a_odd);
                 }
@@ -4354,7 +5201,20 @@ impl Image {
         Ok(Some(
             result
                 .into_iter()
-                .map(|(count, color)| (count, FormattedPixelValue::Components(color)))
+                .map(|(count, color)| {
+                    let components = match n_bands {
+                        2 => vec![(color >> 8) as u8, color as u8],
+                        3 => vec![(color >> 16) as u8, (color >> 8) as u8, color as u8],
+                        4 => vec![
+                            (color >> 24) as u8,
+                            (color >> 16) as u8,
+                            (color >> 8) as u8,
+                            color as u8,
+                        ],
+                        _ => unreachable!("getcolors only supports one through four bands"),
+                    };
+                    (count, FormattedPixelValue::Components(components))
+                })
                 .collect(),
         ))
     }
@@ -4385,9 +5245,11 @@ impl Image {
 
         let mode = self.mode()?;
         if mode == "I" {
-            let values = self.scalar_integer_samples()?;
-            let (minimum, maximum) = values
-                .into_iter()
+            let image = self.materialized_shared()?;
+            let (minimum, maximum) = image
+                .as_bytes()
+                .chunks_exact(4)
+                .map(|sample| i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
                 .fold(None, |extrema: Option<(i32, i32)>, value| {
                     Some(match extrema {
                         Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
@@ -4396,6 +5258,12 @@ impl Image {
                 })
                 .ok_or_else(|| PilError::InternalError("I image has no scalar samples".into()))?;
             return Ok(FormattedExtrema::Integer((minimum, maximum)));
+        }
+        if matches!(mode.as_str(), "I;16L" | "I;16B" | "I;16N") {
+            // Pillow exposes the native I;16 mode to getextrema, but the
+            // explicit byte-order variants are rejected by ImagingCore with
+            // the public wrong-mode error.
+            return Err(PilError::ValueError("image has wrong mode".into()));
         }
         if is_l16_mode(&mode) {
             let image = self.materialized_shared()?;
@@ -4412,9 +5280,13 @@ impl Image {
             return Ok(FormattedExtrema::Integer((minimum, maximum)));
         }
         if mode == "F" {
-            let values = self.scalar_float_samples()?;
-            let (minimum, maximum) = values
-                .into_iter()
+            let image = self.materialized_shared()?;
+            let (minimum, maximum) = image
+                .as_bytes()
+                .chunks_exact(4)
+                .map(|sample| {
+                    f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) as f64
+                })
                 .fold(None, |extrema: Option<(f64, f64)>, value| {
                     Some(match extrema {
                         Some((minimum, maximum)) => (minimum.min(value), maximum.max(value)),
@@ -4468,53 +5340,48 @@ impl Image {
         mode: &str,
         img: &DynamicImage,
     ) -> Result<Option<Vec<(u32, FormattedPixelValue)>>, PilError> {
-        match Self::scalar_samples_from_materialized(img, mode) {
-            ScalarImageSamples::Integer(values) => {
-                let mut counts = std::collections::HashMap::<i32, u32>::new();
-                for value in values {
-                    *counts.entry(value).or_insert(0) += 1;
-                }
-                if counts.len() > maxcolors as usize {
-                    return Ok(None);
-                }
-                let mut result: Vec<_> = counts.into_iter().collect();
-                // Pillow's scalar ImagingCore colors are returned in descending
-                // sample order for the deterministic values used by this API.
-                result.sort_by(|a, b| b.0.cmp(&a.0));
-                Ok(Some(
-                    result
-                        .into_iter()
-                        .map(|(value, count)| (count, FormattedPixelValue::Integer(value)))
-                        .collect(),
-                ))
+        if mode == "I" {
+            let mut counts = std::collections::HashMap::<i32, u32>::new();
+            for sample in img.as_bytes().chunks_exact(4) {
+                let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                *counts.entry(value).or_insert(0) += 1;
             }
-            ScalarImageSamples::Float(values) => {
-                let mut counts = std::collections::HashMap::<u32, u32>::new();
-                for value in values {
-                    // C float equality treats positive and negative zero as equal.
-                    let key = if value == 0.0 {
-                        0
-                    } else {
-                        (value as f32).to_bits()
-                    };
-                    *counts.entry(key).or_insert(0) += 1;
-                }
-                if counts.len() > maxcolors as usize {
-                    return Ok(None);
-                }
-                let mut result: Vec<_> = counts
+            if counts.len() > maxcolors as usize {
+                return Ok(None);
+            }
+            let mut result: Vec<_> = counts.into_iter().collect();
+            // Pillow's scalar ImagingCore colors are returned in descending
+            // sample order for the deterministic values used by this API.
+            result.sort_by(|a, b| b.0.cmp(&a.0));
+            return Ok(Some(
+                result
                     .into_iter()
-                    .map(|(bits, count)| (f32::from_bits(bits) as f64, count))
-                    .collect();
-                result.sort_by(|a, b| b.0.total_cmp(&a.0));
-                Ok(Some(
-                    result
-                        .into_iter()
-                        .map(|(value, count)| (count, FormattedPixelValue::Float(value)))
-                        .collect(),
-                ))
-            }
+                    .map(|(value, count)| (count, FormattedPixelValue::Integer(value)))
+                    .collect(),
+            ));
         }
+
+        let mut counts = std::collections::HashMap::<u32, u32>::new();
+        for sample in img.as_bytes().chunks_exact(4) {
+            let bits = u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+            // C float equality treats positive and negative zero as equal.
+            let key = if f32::from_bits(bits) == 0.0 { 0 } else { bits };
+            *counts.entry(key).or_insert(0) += 1;
+        }
+        if counts.len() > maxcolors as usize {
+            return Ok(None);
+        }
+        let mut result: Vec<_> = counts
+            .into_iter()
+            .map(|(bits, count)| (f32::from_bits(bits) as f64, count))
+            .collect();
+        result.sort_by(|a, b| b.0.total_cmp(&a.0));
+        Ok(Some(
+            result
+                .into_iter()
+                .map(|(value, count)| (count, FormattedPixelValue::Float(value)))
+                .collect(),
+        ))
     }
 
     /// Reads the retained four-byte scalar storage for `I` and `F` modes.
@@ -4526,27 +5393,6 @@ impl Image {
         }
         self.read_scalar_storage(mode, decode_float_samples)
             .map(ScalarImageSamples::Float)
-    }
-
-    /// Decodes scalar samples from a buffer that `Image::materialize` has
-    /// already validated for the requested scalar mode.
-    pub(crate) fn scalar_samples_from_materialized(
-        image: &DynamicImage,
-        mode: &str,
-    ) -> ScalarImageSamples {
-        if mode == "I" {
-            ScalarImageSamples::Integer(decode_integer_samples(image.as_bytes()))
-        } else {
-            ScalarImageSamples::Float(decode_float_samples(image.as_bytes()))
-        }
-    }
-
-    fn scalar_integer_samples(&self) -> Result<Vec<i32>, PilError> {
-        self.read_scalar_storage("I", decode_integer_samples)
-    }
-
-    fn scalar_float_samples(&self) -> Result<Vec<f64>, PilError> {
-        self.read_scalar_storage("F", decode_float_samples)
     }
 
     fn read_scalar_storage<T>(
@@ -4591,13 +5437,13 @@ impl Image {
         } else {
             None
         };
-        let mask_px = mask_luma.as_ref();
-        let masked = |x: u32, y: u32| -> bool {
-            match mask_px {
-                Some(m) => {
-                    let px = m.get_pixel(x, y);
-                    px[0] != 0
-                }
+        let mask_raw = mask_luma
+            .as_ref()
+            .map(|mask_img| mask_img.as_raw().as_slice());
+        let width = img.width() as usize;
+        let masked = |index: usize| -> bool {
+            match mask_raw {
+                Some(mask) => mask[index] != 0,
                 None => true,
             }
         };
@@ -4614,7 +5460,7 @@ impl Image {
                 let la = img.to_luma_alpha8();
                 for (y, row) in la.rows().enumerate() {
                     for (x, px) in row.enumerate() {
-                        if !masked(x as u32, y as u32) {
+                        if !masked(y * width + x) {
                             continue;
                         }
                         hists[0][px[0] as usize] += 1;
@@ -4626,7 +5472,7 @@ impl Image {
                 let luma = img.to_luma8();
                 for (y, row) in luma.rows().enumerate() {
                     for (x, px) in row.enumerate() {
-                        if !masked(x as u32, y as u32) {
+                        if !masked(y * width + x) {
                             continue;
                         }
                         hists[0][px[0] as usize] += 1;
@@ -4637,7 +5483,7 @@ impl Image {
                 let rgba = img.to_rgba8();
                 for (y, row) in rgba.rows().enumerate() {
                     for (x, px) in row.enumerate() {
-                        if !masked(x as u32, y as u32) {
+                        if !masked(y * width + x) {
                             continue;
                         }
                         for b in 0..n_bands {
@@ -4693,52 +5539,91 @@ impl Image {
         // samples. Converting RGB/RGBA to luma first loses low red/blue and
         // alpha-only pixels, even though Pillow projects those pixels.
         if matches!(mode.as_str(), "I" | "F") {
-            match Self::scalar_samples_from_materialized(&img, &mode) {
-                ScalarImageSamples::Integer(values) => {
-                    for (index, value) in values.into_iter().enumerate() {
-                        if value != 0 {
-                            mark(index);
-                        }
+            // Materialization validates scalar storage, so decode each sample
+            // from the retained frame while marking the result-sized vectors.
+            if mode == "I" {
+                for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
+                    let value = i32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                    if value != 0 {
+                        mark(index);
                     }
                 }
-                ScalarImageSamples::Float(values) => {
-                    for (index, value) in values.into_iter().enumerate() {
-                        if value != 0.0 {
-                            mark(index);
-                        }
+            } else {
+                for (index, sample) in img.as_bytes().chunks_exact(4).enumerate() {
+                    let value = f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]);
+                    if value != 0.0 {
+                        mark(index);
                     }
                 }
             }
         } else {
-            match mode.as_str() {
-                "L" | "1" | "P" => {
-                    for (index, pixel) in img.to_luma8().pixels().enumerate() {
+            match img.as_ref() {
+                crate::raster::DynamicImage::ImageLuma8(image)
+                    if matches!(mode.as_str(), "L" | "1" | "P") =>
+                {
+                    for (index, pixel) in image.pixels().enumerate() {
                         if pixel[0] != 0 {
                             mark(index);
                         }
                     }
                 }
-                "LA" | "PA" => {
-                    for (index, pixel) in img.to_luma_alpha8().pixels().enumerate() {
+                crate::raster::DynamicImage::ImageLumaA8(image)
+                    if matches!(mode.as_str(), "LA" | "PA") =>
+                {
+                    for (index, pixel) in image.pixels().enumerate() {
                         if pixel[0] != 0 || pixel[1] != 0 {
                             mark(index);
                         }
                     }
                 }
-                "RGB" | "HSV" | "YCbCr" => {
-                    for (index, pixel) in img.to_rgb8().pixels().enumerate() {
+                crate::raster::DynamicImage::ImageRgb8(image)
+                    if matches!(mode.as_str(), "RGB" | "HSV" | "YCbCr") =>
+                {
+                    for (index, pixel) in image.pixels().enumerate() {
                         if pixel.0.iter().any(|value| *value != 0) {
                             mark(index);
                         }
                     }
                 }
-                _ => {
-                    for (index, pixel) in img.to_rgba8().pixels().enumerate() {
+                crate::raster::DynamicImage::ImageRgba8(image)
+                    if matches!(mode.as_str(), "RGBA" | "RGBa" | "RGBX") =>
+                {
+                    for (index, pixel) in image.pixels().enumerate() {
                         if pixel.0.iter().any(|value| *value != 0) {
                             mark(index);
                         }
                     }
                 }
+                _ => match mode.as_str() {
+                    "L" | "1" | "P" => {
+                        for (index, pixel) in img.to_luma8().pixels().enumerate() {
+                            if pixel[0] != 0 {
+                                mark(index);
+                            }
+                        }
+                    }
+                    "LA" | "PA" => {
+                        for (index, pixel) in img.to_luma_alpha8().pixels().enumerate() {
+                            if pixel[0] != 0 || pixel[1] != 0 {
+                                mark(index);
+                            }
+                        }
+                    }
+                    "RGB" | "HSV" | "YCbCr" => {
+                        for (index, pixel) in img.to_rgb8().pixels().enumerate() {
+                            if pixel.0.iter().any(|value| *value != 0) {
+                                mark(index);
+                            }
+                        }
+                    }
+                    _ => {
+                        for (index, pixel) in img.to_rgba8().pixels().enumerate() {
+                            if pixel.0.iter().any(|value| *value != 0) {
+                                mark(index);
+                            }
+                        }
+                    }
+                },
             }
         }
         Ok((h_proj, v_proj))
@@ -4910,7 +5795,7 @@ impl Image {
         let mut result = Image::push_op(
             self,
             PipelineOp::RemapPalette {
-                dest_map: dest_map.to_vec(),
+                dest_map: dest_map.to_vec().into(),
             },
         );
         if let Image::Pipeline {
@@ -5352,6 +6237,7 @@ pub(crate) fn execute_op(
 #[cfg(test)]
 mod tests {
     use super::Image;
+    use crate::pipeline::PipelineOp;
 
     #[test]
     fn new_p_scalar_fills_indices_without_synthesizing_palette_entries() {
@@ -5365,6 +6251,42 @@ mod tests {
             ),
             ("P".to_owned(), vec![7; 6], Some(Vec::new()))
         );
+    }
+
+    #[test]
+    fn pipeline_ops_remain_lazy_and_flatten_into_one_ordered_batch() {
+        let source = Image::new(2, 2, "RGB", (10, 20, 30, 255)).expect("source image");
+        let first = Image::push_op(&source, PipelineOp::Invert);
+        let second = Image::push_op(&first, PipelineOp::Flip);
+
+        match second {
+            Image::Pipeline {
+                ops, materialized, ..
+            } => {
+                assert_eq!(ops.len(), 2);
+                assert!(matches!(ops[0], PipelineOp::Invert));
+                assert!(matches!(ops[1], PipelineOp::Flip));
+                assert!(materialized.get().is_none());
+            }
+            other => panic!("expected a lazy pipeline, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn long_pipeline_append_is_iterative_and_preserves_order() {
+        let source = Image::new(2, 2, "L", (10, 20, 30, 255)).expect("source image");
+        let mut image = source;
+        for _ in 0..10_000 {
+            image = Image::push_op(&image, PipelineOp::Invert);
+        }
+
+        let Image::Pipeline { ops, .. } = &image else {
+            panic!("expected a lazy pipeline");
+        };
+        assert_eq!(ops.len(), 10_000);
+        assert!(ops.iter().all(|op| matches!(op, PipelineOp::Invert)));
+        let materialized = image.materialize().expect("long pipeline must execute");
+        assert_eq!(materialized.to_luma8().as_raw(), &[10, 10, 10, 10]);
     }
 
     #[test]

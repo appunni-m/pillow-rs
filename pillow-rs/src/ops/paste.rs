@@ -215,7 +215,13 @@ impl PasteSource {
             ("F", PasteSource::Scalar(value)) => Ok(ResolvedPasteColor::Float(f32::from(*value))),
             ("F", PasteSource::RawScalar(value)) => Ok(ResolvedPasteColor::Float(*value as f32)),
             ("F", PasteSource::RawFloat(value)) => Ok(ResolvedPasteColor::Float(*value as f32)),
-            ("I" | "F", _) => Err(bad_single()),
+            ("I", _) => Err(bad_single()),
+            // Pillow's ImagingPaste rejects tuple colors for F with the
+            // native real-number diagnostic, while I shares the ordinary
+            // integer/single-element tuple message.
+            ("F", _) => Err(PilError::TypeError(
+                "must be real number, not tuple".to_owned(),
+            )),
             ("I;16" | "I;16L" | "I;16B" | "I;16N", PasteSource::Scalar(value)) => {
                 Ok(ResolvedPasteColor::Luma16(u16::from(*value) * 0x0101))
             }

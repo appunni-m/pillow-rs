@@ -13,8 +13,6 @@ struct Params {
 
 // ── Mode helpers ──
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 fn brightness_apply(c: u32, f: u32) -> u32 {
@@ -41,9 +39,13 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let val_g = brightness_apply(g, f);
     let val_b = brightness_apply(b, f);
 
+    // The host transport expands L/LA into equal RGB bytes before calling the
+    // CPU implementation. Process all three transport channels so restoring
+    // L/LA with preserve_mode sees the same luma instead of a weighted mix of
+    // one enhanced channel and two original channels.
     let out_r = val_r;
-    let out_g = select(g, val_g, mode_has_g(params.mode));
-    let out_b = select(b, val_b, mode_has_b(params.mode));
+    let out_g = val_g;
+    let out_b = val_b;
     let out_a = select(255u, a, mode_has_a(params.mode));
 
     output[idx] = out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);

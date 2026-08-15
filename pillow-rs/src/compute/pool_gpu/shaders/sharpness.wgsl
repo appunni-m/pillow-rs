@@ -27,8 +27,6 @@ struct Params {
 @group(0) @binding(1) var<storage, read_write> output: array<u32>;
 @group(0) @binding(2) var<uniform> params: Params;
 
-fn mode_has_g(m: u32) -> bool { return m >= 2u; }
-fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 fn clamp8(v: f32) -> u32 {
@@ -37,10 +35,30 @@ fn clamp8(v: f32) -> u32 {
     return u32(v);
 }
 
+fn blend_fixed(blurred: u32, original: u32, factor: u32) -> u32 {
+    // The host only advertises factors representable as factor*1000. Integer
+    // truncation here matches the CPU's positive f64 result cast to u8 and
+    // avoids f32 boundary drift in the unsharp blend.
+    let fi = i32(factor);
+    let value = i32(blurred) * (1000i - fi) + i32(original) * fi;
+    return u32(clamp(value / 1000i, 0i, 255i));
+}
+
 fn sharpen_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let h = params.height;
     let idx = y * w + x;
+
+    // The active GPU contract currently admits only factor=1.0. Return the
+    // exact identity before loading a 3x3 neighborhood so this endpoint
+    // cannot consume convolution work or trip a device watchdog.
+    if params.factor == 1000u {
+        return input[idx];
+    }
+
+    if w < 3u || h < 3u {
+        return input[idx];
+    }
 
     // Border: copy verbatim
     if x == 0u || x >= w - 1u || y == 0u || y >= h - 1u {
@@ -115,11 +133,6 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     let blur_r_u = clamp8(blur_r);
     let blur_g_u = clamp8(blur_g);
     let blur_b_u = clamp8(blur_b);
-    let blur_a_u = clamp8(blur_a);
-
-    // Factor: decoded from fixed-point (factor * 1000) as u32 → f32
-    let factor_f32 = f32(params.factor) / 1000.0;
-    let one_minus_factor = 1.0 - factor_f32;
 
     // Original pixel channels (read from input since border cells may differ)
     let in_pixel = input[idx];
@@ -132,16 +145,17 @@ fn sharpen_pixel(x: u32, y: u32) -> u32 {
     // At factor=1.0: out = original (identity)
     // At factor=0.0: out = blurred (fully smooth)
     // At factor=2.0: out = original + (original - blurred) (unsharp mask)
-    let out_r_f = f32(blur_r_u) * one_minus_factor + f32(orig_r) * factor_f32;
-    let out_g_f = f32(blur_g_u) * one_minus_factor + f32(orig_g) * factor_f32;
-    let out_b_f = f32(blur_b_u) * one_minus_factor + f32(orig_b) * factor_f32;
-    let out_a_f = f32(blur_a_u) * one_minus_factor + f32(orig_a) * factor_f32;
-
     // Mode-aware output: for L/LA modes, only R is processed; G/B/A preserved from input
-    let out_r = clamp8(out_r_f);
-    let out_g = select(orig_g, clamp8(out_g_f), mode_has_g(params.mode));
-    let out_b = select(orig_b, clamp8(out_b_f), mode_has_b(params.mode));
-    let out_a = select(255u, clamp8(out_a_f), mode_has_a(params.mode));
+    let out_r = blend_fixed(blur_r_u, orig_r, params.factor);
+    // L/LA are expanded to equal RGB transport bytes before the CPU
+    // implementation sharpens them. Apply the same operation to all three
+    // packed color bytes; changing only R would make preserve_mode compute a
+    // different luma on the way back to L/LA.
+    let out_g = blend_fixed(blur_g_u, orig_g, params.factor);
+    let out_b = blend_fixed(blur_b_u, orig_b, params.factor);
+    // ImageEnhance preserves alpha for LA/RGBA; it sharpens only the visible
+    // color channels. Non-alpha modes remain opaque in the packed transport.
+    let out_a = select(255u, orig_a, mode_has_a(params.mode));
 
     return out_r | (out_g << 8u) | (out_b << 16u) | (out_a << 24u);
 }

@@ -47,9 +47,15 @@ INSTRUMENTED_EXTENSION_NAMES = (
     "_core.dll",
     "lib_core.dll",
 )
+TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
+if TARGET_BACKEND == "all":
+    COVERAGE_BACKENDS = ("cpu", "simd")
+else:
+    COVERAGE_BACKENDS = (TARGET_BACKEND,)
 COMMAND = {
     "command_id": "coverage-rust",
-    "argv": ["make", "migration-parity-coverage-rust"],
+    "argv": ([f"MIGRATION_TARGET_BACKEND={TARGET_BACKEND}"] if TARGET_BACKEND != "cpu" else [])
+    + ["make", "migration-parity-coverage-rust"],
     "cwd": ".",
     "timeout_seconds": 7200,
 }
@@ -69,9 +75,6 @@ def coverage_build_inputs() -> list[Path]:
         ROOT / "pillow-rs-py" / "Cargo.toml",
         ROOT / "pillow-rs-py" / "pyproject.toml",
         ROOT / "pillow-rs-py" / "src",
-        ROOT.parent / "fontdone" / "Cargo.toml",
-        ROOT.parent / "fontdone" / "Cargo.lock",
-        ROOT.parent / "fontdone" / "src",
     )
     files: list[Path] = []
     for root in roots:
@@ -264,12 +267,14 @@ def run(args: argparse.Namespace) -> int:
         cases_by_id,
         case_ids=set(args.case_id) if args.case_id else None,
         operation=args.operation,
+        exclude_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
     )
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
 
     args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.python_report.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.llvm_report.resolve().parent.mkdir(parents=True, exist_ok=True)
+    args.coverage_data.resolve().parent.mkdir(parents=True, exist_ok=True)
     args.profile.resolve().parent.mkdir(parents=True, exist_ok=True)
 
     # cargo-llvm-cov can discover stale instrumented libraries left in its
@@ -362,27 +367,6 @@ def run(args: argparse.Namespace) -> int:
         target_python = str(ROOT / "pillow-rs-py" / "python")
         run_env["PYTHONPATH"] = target_python + os.pathsep + run_env.get("PYTHONPATH", "")
         run_env["LLVM_PROFILE_FILE"] = str(args.profile)
-        child_output = ROOT / "target" / "coverage" / "child-coverage-result.json"
-        subprocess.run(
-            [
-                sys.executable,
-                str(ROOT / "scripts" / "run_migration_coverage.py"),
-                "--output",
-                str(child_output),
-                "--coverage-report",
-                str(args.python_report),
-                "--coverage-data",
-                str(args.coverage_data),
-            ]
-            + (["--operation", args.operation] if args.operation else [])
-            + sum((["--case-id", case_id] for case_id in (args.case_id or [])), []),
-            env=run_env,
-            cwd=ROOT,
-            check=True,
-        )
-        child = json.loads(child_output.read_text(encoding="utf-8"))
-        child_output.unlink()
-
         # Exercise the legacy FreeTypeFont core variants that the ordinary
         # parity facade does not select (getlength, getmask2_with_start,
         # native_getvaraxes, native_getvarnames, native_setvaraxes,
@@ -402,22 +386,85 @@ def run(args: argparse.Namespace) -> int:
             (args.operation is None and not args.case_id)
             or "coverage-font-native" in selected_command_ids
         )
-        if run_font_native:
+        child_results: list[dict[str, Any]] = []
+        python_data_paths: list[Path] = []
+        for backend in COVERAGE_BACKENDS:
+            child_output = (
+                ROOT
+                / "target"
+                / "coverage"
+                / f"child-coverage-result-{backend}.json"
+            )
+            child_output.unlink(missing_ok=True)
+            backend_env = {**run_env, "MIGRATION_TARGET_BACKEND": backend}
+            backend_coverage_data = args.coverage_data.with_name(
+                f"{args.coverage_data.name}-{backend}"
+            )
+            backend_coverage_data.unlink(missing_ok=True)
+            python_data_paths.append(backend_coverage_data)
             subprocess.run(
                 [
                     sys.executable,
-                    str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
-                ],
-                env={
-                    **run_env,
-                    "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
-                    "LLVM_PROFILE_FILE": str(args.profile),
-                },
+                    str(ROOT / "scripts" / "run_migration_coverage.py"),
+                    "--output",
+                    str(child_output),
+                    "--coverage-report",
+                    str(args.python_report),
+                    "--coverage-data",
+                    str(backend_coverage_data),
+                ]
+                + (["--operation", args.operation] if args.operation else [])
+                + sum((["--case-id", case_id] for case_id in (args.case_id or [])), [])
+                + sum(
+                    (["--exclude-case-id", case_id] for case_id in (args.exclude_case_id or [])),
+                    [],
+                ),
+                env=backend_env,
                 cwd=ROOT,
                 check=True,
             )
+            child_results.append(json.loads(child_output.read_text(encoding="utf-8")))
+            child_output.unlink()
 
-        materialize_profiles()
+            if run_font_native:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
+                    ],
+                    env={
+                        **backend_env,
+                        "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
+                        "LLVM_PROFILE_FILE": str(args.profile),
+                    },
+                    cwd=ROOT,
+                    check=True,
+                )
+
+            materialize_profiles()
+
+        child = child_results[-1]
+        if any(
+            item["summary"]["plans_selected"] != child["summary"]["plans_selected"]
+            or item["summary"]["plans_executed"] != child["summary"]["plans_executed"]
+            for item in child_results
+        ):
+            raise RuntimeError("combined coverage backends selected different coverage plans")
+
+        combined_python = coverage.Coverage(
+            data_file=str(args.coverage_data.resolve()),
+            branch=True,
+            source=[str((ROOT / "pillow-rs-py" / "python" / "pillow_rs").resolve())],
+        )
+        combined_python.erase()
+        combined_python.combine(
+            data_paths=[str(path.resolve()) for path in python_data_paths],
+            strict=True,
+        )
+        combined_python.save()
+        combined_python.json_report(
+            outfile=str(args.python_report.resolve()), pretty_print=True
+        )
 
         llvm_version = subprocess.run(
             ["cargo", "+nightly", "llvm-cov", "--version"],
@@ -546,6 +593,7 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--operation")
     parser.add_argument("--case-id", action="append")
+    parser.add_argument("--exclude-case-id", action="append")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument("--python-report", type=Path, default=DEFAULT_PYTHON_REPORT)
     parser.add_argument("--llvm-report", type=Path, default=DEFAULT_LLVM_REPORT)

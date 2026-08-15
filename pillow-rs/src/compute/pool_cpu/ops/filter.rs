@@ -10,6 +10,243 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::raster::DynamicImage;
 
+/// Push one source index into a monotonic queue used by a byte min/max line.
+/// The queue stores indices rather than samples so stale values can be
+/// removed when the replicated-edge window advances.
+#[inline]
+fn push_extreme_index(
+    queue: &mut Vec<usize>,
+    head: &mut usize,
+    input: &[u8],
+    channels: usize,
+    channel: usize,
+    index: usize,
+    select_max: bool,
+) {
+    let value = input[index * channels + channel];
+    while queue.len() > *head {
+        let Some(&back) = queue.last() else {
+            break;
+        };
+        let back_value = input[back * channels + channel];
+        let remove_back = if select_max {
+            back_value <= value
+        } else {
+            back_value >= value
+        };
+        if !remove_back {
+            break;
+        }
+        queue.pop();
+    }
+    queue.push(index);
+}
+
+/// Apply a replicated-edge min/max window to one contiguous byte line.
+///
+/// A queue is reused for every channel, so the pass has no allocation in the
+/// output-pixel loop and its work is linear in the line length, independent of
+/// the square filter area.
+fn rank_filter_bytes_extreme_line(
+    input: &[u8],
+    output: &mut [u8],
+    length: usize,
+    channels: usize,
+    half: usize,
+    select_max: bool,
+    queues: &mut [Vec<usize>; 4],
+) {
+    if length == 0 || channels == 0 || channels > queues.len() {
+        return;
+    }
+    let last_index = length - 1;
+    let initial_end = half.min(last_index);
+    for channel in 0..channels {
+        let queue = &mut queues[channel];
+        queue.clear();
+        let mut head = 0usize;
+        for index in 0..=initial_end {
+            push_extreme_index(
+                queue, &mut head, input, channels, channel, index, select_max,
+            );
+        }
+        output[channel] = input[queue[head] * channels + channel];
+        let mut last_added = initial_end;
+        for x in 1..length {
+            let left = x.saturating_sub(half);
+            while head < queue.len() && queue[head] < left {
+                head += 1;
+            }
+            let entering = x.saturating_add(half).min(last_index);
+            if entering > last_added {
+                push_extreme_index(
+                    queue, &mut head, input, channels, channel, entering, select_max,
+                );
+                last_added = entering;
+            }
+            output[x * channels + channel] = input[queue[head] * channels + channel];
+        }
+    }
+}
+
+/// Evaluate one output row of the vertical extrema pass. Rebuilding a
+/// monotonic queue for the bounded vertical window keeps this pass parallel
+/// over disjoint destination rows while reducing the square scan to one
+/// horizontal and one vertical window traversal per pixel.
+fn rank_filter_bytes_extreme_vertical_row(
+    input: &[u8],
+    output: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    half: usize,
+    select_max: bool,
+    y: usize,
+    queues: &mut [Vec<usize>; 4],
+) {
+    let row_stride = width * channels;
+    let top = y.saturating_sub(half);
+    let bottom = y.saturating_add(half).min(height - 1);
+    for x in 0..width {
+        for channel in 0..channels {
+            let queue = &mut queues[channel];
+            queue.clear();
+            let head = 0usize;
+            for source_y in top..=bottom {
+                let value = input[source_y * row_stride + x * channels + channel];
+                while queue.len() > head {
+                    let Some(&back) = queue.last() else {
+                        break;
+                    };
+                    let back_value = input[back * row_stride + x * channels + channel];
+                    let remove_back = if select_max {
+                        back_value <= value
+                    } else {
+                        back_value >= value
+                    };
+                    if !remove_back {
+                        break;
+                    }
+                    queue.pop();
+                }
+                queue.push(source_y);
+            }
+            output[x * channels + channel] =
+                input[queue[head] * row_stride + x * channels + channel];
+        }
+    }
+}
+
+/// Exact native-byte min/max implementation using horizontal and vertical
+/// monotonic windows. Pillow's square window is separable for extrema, and
+/// duplicating the edge samples does not change a min or max. The intermediate
+/// buffer is one full frame, while the per-line queues are bounded by one
+/// image dimension and reused across channels.
+fn rank_filter_bytes_extreme_separable(
+    raw: &[u8],
+    out: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    select_max: bool,
+) -> bool {
+    let Ok(width) = usize::try_from(w) else {
+        return false;
+    };
+    let Ok(height) = usize::try_from(h) else {
+        return false;
+    };
+    let Ok(half) = usize::try_from(half) else {
+        return false;
+    };
+    let Some(row_stride) = width.checked_mul(channels) else {
+        return false;
+    };
+    let Some(total_bytes) = row_stride.checked_mul(height) else {
+        return false;
+    };
+    if channels == 0
+        || channels > 4
+        || raw.len() < total_bytes
+        || out.len() < total_bytes
+        || width == 0
+        || height == 0
+    {
+        return false;
+    }
+
+    let mut horizontal = vec![0u8; total_bytes];
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        &mut horizontal,
+        row_stride,
+        height,
+        |row_start, _row_end, _y, row| {
+            let mut queues: [Vec<usize>; 4] = std::array::from_fn(|_| Vec::with_capacity(width));
+            rank_filter_bytes_extreme_line(
+                &raw[row_start..row_start + row_stride],
+                row,
+                width,
+                channels,
+                half,
+                select_max,
+                &mut queues,
+            );
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y * row_stride;
+        let mut queues: [Vec<usize>; 4] = std::array::from_fn(|_| Vec::with_capacity(width));
+        rank_filter_bytes_extreme_line(
+            &raw[row_start..row_start + row_stride],
+            &mut horizontal[row_start..row_start + row_stride],
+            width,
+            channels,
+            half,
+            select_max,
+            &mut queues,
+        );
+    }
+
+    let queue_capacity = half.saturating_mul(2).saturating_add(1).min(height);
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(out, row_stride, height, |_row_start, _row_end, y, row| {
+        let mut queues: [Vec<usize>; 4] =
+            std::array::from_fn(|_| Vec::with_capacity(queue_capacity));
+        rank_filter_bytes_extreme_vertical_row(
+            &horizontal,
+            row,
+            width,
+            height,
+            channels,
+            half,
+            select_max,
+            y as usize,
+            &mut queues,
+        );
+    });
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y * row_stride;
+        let mut queues: [Vec<usize>; 4] =
+            std::array::from_fn(|_| Vec::with_capacity(queue_capacity));
+        rank_filter_bytes_extreme_vertical_row(
+            &horizontal,
+            &mut out[row_start..row_start + row_stride],
+            width,
+            height,
+            channels,
+            half,
+            select_max,
+            y,
+            &mut queues,
+        );
+    }
+    true
+}
+
 // ─── Clip helper ──
 
 /// PIL's clip8: truncating cast to u8, clamping at 0 and 255.
@@ -96,6 +333,59 @@ pub fn raw_bytes_to_image(
 ///   - Uses f32 for accumulation (same as UINT8 mode)
 ///   - With +0.5 rounding bias (same as UINT8 mode)
 ///   - Clips negative results to 0, allows values > 255
+#[inline]
+fn filter_3x3_i32_row(
+    raw: &[u8],
+    row: &mut [u8],
+    y: i32,
+    width: i32,
+    height: i32,
+    kernel: &[f32; 9],
+    offset: i32,
+) {
+    if y < 1 || y >= height - 1 || width < 3 {
+        return;
+    }
+    for x in 1..width - 1 {
+        let base = |dx: i32, dy: i32| -> usize { ((y + dy) * width + (x + dx)) as usize * 4 };
+        let read_pixel = |dx: i32, dy: i32| -> i32 {
+            let index = base(dx, dy);
+            i32::from_le_bytes([raw[index], raw[index + 1], raw[index + 2], raw[index + 3]])
+        };
+        let bottom = pillow_kernel_row_3(
+            [
+                read_pixel(-1, 1) as f32,
+                read_pixel(0, 1) as f32,
+                read_pixel(1, 1) as f32,
+            ],
+            &kernel[0..3],
+        );
+        let middle = pillow_kernel_row_3(
+            [
+                read_pixel(-1, 0) as f32,
+                read_pixel(0, 0) as f32,
+                read_pixel(1, 0) as f32,
+            ],
+            &kernel[3..6],
+        );
+        let top = pillow_kernel_row_3(
+            [
+                read_pixel(-1, -1) as f32,
+                read_pixel(0, -1) as f32,
+                read_pixel(1, -1) as f32,
+            ],
+            &kernel[6..9],
+        );
+        let mut value = offset as f32 + 0.5;
+        value += bottom;
+        value += middle;
+        value += top;
+        let result = if value >= 0.0 { value as i32 } else { 0 };
+        let output = x as usize * 4;
+        row[output..output + 4].copy_from_slice(&result.to_le_bytes());
+    }
+}
+
 fn filter_3x3_i32(
     img: &DynamicImage,
     kernel: &[f32; 9],
@@ -125,55 +415,43 @@ fn filter_3x3_i32(
 
     let mut out = raw.clone();
 
-    for y in 1..h - 1 {
-        for x in 1..w - 1 {
-            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * 4 };
-            let read_pixel = |dx: i32, dy: i32| -> i32 {
-                let bi = base(dx, dy);
-                i32::from_le_bytes([raw[bi], raw[bi + 1], raw[bi + 2], raw[bi + 3]])
-            };
-
-            // PIL reverses Y-axis: k[0] on bottom row, k[8] on top row
-            let bot_row = pillow_kernel_row_3(
-                [
-                    read_pixel(-1, 1) as f32,
-                    read_pixel(0, 1) as f32,
-                    read_pixel(1, 1) as f32,
-                ],
-                &kd[0..3],
+    let row_stride = w_u32 as usize * 4;
+    #[cfg(feature = "parallel")]
+    if row_stride != 0 {
+        crate::par_rows_mut!(
+            &mut out,
+            row_stride,
+            h_u32 as usize,
+            |_row_start, _row_end, y, row| {
+                filter_3x3_i32_row(&raw, row, y as i32, w, h, &kd, offset);
+            }
+        );
+    } else {
+        for y in 0..h {
+            let row_start = y as usize * row_stride;
+            filter_3x3_i32_row(
+                &raw,
+                &mut out[row_start..row_start + row_stride],
+                y,
+                w,
+                h,
+                &kd,
+                offset,
             );
-            let mid_row = pillow_kernel_row_3(
-                [
-                    read_pixel(-1, 0) as f32,
-                    read_pixel(0, 0) as f32,
-                    read_pixel(1, 0) as f32,
-                ],
-                &kd[3..6],
-            );
-            let top_row = pillow_kernel_row_3(
-                [
-                    read_pixel(-1, -1) as f32,
-                    read_pixel(0, -1) as f32,
-                    read_pixel(1, -1) as f32,
-                ],
-                &kd[6..9],
-            );
-
-            // PIL I-mode: with +0.5 rounding bias
-            let mut ss = offset as f32 + 0.5;
-            ss += bot_row;
-            ss += mid_row;
-            ss += top_row;
-
-            // PIL: clip negative to 0 (allow values > 255)
-            let result = if ss >= 0.0 { ss as i32 } else { 0 };
-            let out_idx = (y * w + x) as usize * 4;
-            let le = result.to_le_bytes();
-            out[out_idx] = le[0];
-            out[out_idx + 1] = le[1];
-            out[out_idx + 2] = le[2];
-            out[out_idx + 3] = le[3];
         }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..h {
+        let row_start = y as usize * row_stride;
+        filter_3x3_i32_row(
+            &raw,
+            &mut out[row_start..row_start + row_stride],
+            y,
+            w,
+            h,
+            &kd,
+            offset,
+        );
     }
 
     Ok(DynamicImage::ImageRgba8(
@@ -186,6 +464,87 @@ fn filter_3x3_i32(
 
 /// Apply a 5x5 kernel filter on I-mode (32-bit signed integer) data.
 /// Same approach as filter_3x3_i32 — f32, reversed Y-axis, +0.5 rounding.
+#[inline]
+fn filter_5x5_i32_row(
+    raw: &[u8],
+    row: &mut [u8],
+    y: i32,
+    width: i32,
+    height: i32,
+    kernel: &[f32; 25],
+    offset: i32,
+) {
+    if y < 2 || y >= height - 2 || width < 5 {
+        return;
+    }
+    for x in 2..width - 2 {
+        let base = |dx: i32, dy: i32| -> usize { ((y + dy) * width + (x + dx)) as usize * 4 };
+        let read_pixel = |dx: i32, dy: i32| -> i32 {
+            let index = base(dx, dy);
+            i32::from_le_bytes([raw[index], raw[index + 1], raw[index + 2], raw[index + 3]])
+        };
+        let bottom0 = pillow_kernel_row_5(
+            [
+                read_pixel(-2, 2) as f32,
+                read_pixel(-1, 2) as f32,
+                read_pixel(0, 2) as f32,
+                read_pixel(1, 2) as f32,
+                read_pixel(2, 2) as f32,
+            ],
+            &kernel[0..5],
+        );
+        let bottom1 = pillow_kernel_row_5(
+            [
+                read_pixel(-2, 1) as f32,
+                read_pixel(-1, 1) as f32,
+                read_pixel(0, 1) as f32,
+                read_pixel(1, 1) as f32,
+                read_pixel(2, 1) as f32,
+            ],
+            &kernel[5..10],
+        );
+        let middle = pillow_kernel_row_5(
+            [
+                read_pixel(-2, 0) as f32,
+                read_pixel(-1, 0) as f32,
+                read_pixel(0, 0) as f32,
+                read_pixel(1, 0) as f32,
+                read_pixel(2, 0) as f32,
+            ],
+            &kernel[10..15],
+        );
+        let top1 = pillow_kernel_row_5(
+            [
+                read_pixel(-2, -1) as f32,
+                read_pixel(-1, -1) as f32,
+                read_pixel(0, -1) as f32,
+                read_pixel(1, -1) as f32,
+                read_pixel(2, -1) as f32,
+            ],
+            &kernel[15..20],
+        );
+        let top0 = pillow_kernel_row_5(
+            [
+                read_pixel(-2, -2) as f32,
+                read_pixel(-1, -2) as f32,
+                read_pixel(0, -2) as f32,
+                read_pixel(1, -2) as f32,
+                read_pixel(2, -2) as f32,
+            ],
+            &kernel[20..25],
+        );
+        let mut value = offset as f32 + 0.5;
+        value += bottom0;
+        value += bottom1;
+        value += middle;
+        value += top1;
+        value += top0;
+        let result = if value >= 0.0 { value as i32 } else { 0 };
+        let output = x as usize * 4;
+        row[output..output + 4].copy_from_slice(&result.to_le_bytes());
+    }
+}
+
 fn filter_5x5_i32(
     img: &DynamicImage,
     kernel: &[f32; 25],
@@ -205,89 +564,278 @@ fn filter_5x5_i32(
 
     let mut out = raw.clone();
 
-    for y in 2..h - 2 {
-        for x in 2..w - 2 {
-            let base = |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * 4 };
-            let read_pixel = |dx: i32, dy: i32| -> i32 {
-                let bi = base(dx, dy);
-                i32::from_le_bytes([raw[bi], raw[bi + 1], raw[bi + 2], raw[bi + 3]])
-            };
-
-            // Reversed Y-axis: k[0..4] on bottom row (y+2), k[20..24] on top row (y-2)
-            let bot_row0 = pillow_kernel_row_5(
-                [
-                    read_pixel(-2, 2) as f32,
-                    read_pixel(-1, 2) as f32,
-                    read_pixel(0, 2) as f32,
-                    read_pixel(1, 2) as f32,
-                    read_pixel(2, 2) as f32,
-                ],
-                &kd[0..5],
+    let row_stride = w_u32 as usize * 4;
+    #[cfg(feature = "parallel")]
+    if row_stride != 0 {
+        crate::par_rows_mut!(
+            &mut out,
+            row_stride,
+            h_u32 as usize,
+            |_row_start, _row_end, y, row| {
+                filter_5x5_i32_row(&raw, row, y as i32, w, h, &kd, offset);
+            }
+        );
+    } else {
+        for y in 0..h {
+            let row_start = y as usize * row_stride;
+            filter_5x5_i32_row(
+                &raw,
+                &mut out[row_start..row_start + row_stride],
+                y,
+                w,
+                h,
+                &kd,
+                offset,
             );
-            let bot_row1 = pillow_kernel_row_5(
-                [
-                    read_pixel(-2, 1) as f32,
-                    read_pixel(-1, 1) as f32,
-                    read_pixel(0, 1) as f32,
-                    read_pixel(1, 1) as f32,
-                    read_pixel(2, 1) as f32,
-                ],
-                &kd[5..10],
-            );
-            let mid_row = pillow_kernel_row_5(
-                [
-                    read_pixel(-2, 0) as f32,
-                    read_pixel(-1, 0) as f32,
-                    read_pixel(0, 0) as f32,
-                    read_pixel(1, 0) as f32,
-                    read_pixel(2, 0) as f32,
-                ],
-                &kd[10..15],
-            );
-            let top_row1 = pillow_kernel_row_5(
-                [
-                    read_pixel(-2, -1) as f32,
-                    read_pixel(-1, -1) as f32,
-                    read_pixel(0, -1) as f32,
-                    read_pixel(1, -1) as f32,
-                    read_pixel(2, -1) as f32,
-                ],
-                &kd[15..20],
-            );
-            let top_row0 = pillow_kernel_row_5(
-                [
-                    read_pixel(-2, -2) as f32,
-                    read_pixel(-1, -2) as f32,
-                    read_pixel(0, -2) as f32,
-                    read_pixel(1, -2) as f32,
-                    read_pixel(2, -2) as f32,
-                ],
-                &kd[20..25],
-            );
-
-            // PIL I-mode: with +0.5 rounding bias
-            let mut ss = offset as f32 + 0.5;
-            ss += bot_row0;
-            ss += bot_row1;
-            ss += mid_row;
-            ss += top_row1;
-            ss += top_row0;
-
-            // PIL clips I-mode filter results to 0 (no negative values)
-            let result = if ss >= 0.0 { ss as i32 } else { 0 };
-            let out_idx = (y * w + x) as usize * 4;
-            let le = result.to_le_bytes();
-            out[out_idx] = le[0];
-            out[out_idx + 1] = le[1];
-            out[out_idx + 2] = le[2];
-            out[out_idx + 3] = le[3];
         }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..h {
+        let row_start = y as usize * row_stride;
+        filter_5x5_i32_row(
+            &raw,
+            &mut out[row_start..row_start + row_stride],
+            y,
+            w,
+            h,
+            &kd,
+            offset,
+        );
     }
 
     Ok(DynamicImage::ImageRgba8(
         crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
             .ok_or_else(|| PilError::ValueError("filter_5x5_i32: buffer error".into()))?,
     ))
+}
+
+/// Apply one row of the byte 3x3 convolution. The source is immutable and the
+/// destination row is exclusive, so complete rows can be evaluated in
+/// parallel without changing Pillow's per-pixel contraction order.
+#[inline]
+fn filter_3x3_byte_row(
+    raw: &[u8],
+    row: &mut [u8],
+    y: i32,
+    width: i32,
+    height: i32,
+    channels: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) {
+    if y < 1 || y >= height - 1 || width < 3 {
+        return;
+    }
+    for x in 1..width - 1 {
+        let base =
+            |dx: i32, dy: i32| -> usize { ((y + dy) * width + (x + dx)) as usize * channels };
+        for c in 0..channels {
+            let row_b = pillow_kernel_row_3(
+                [
+                    raw[base(-1, 1) + c] as f32,
+                    raw[base(0, 1) + c] as f32,
+                    raw[base(1, 1) + c] as f32,
+                ],
+                &kernel[0..3],
+            );
+            let row_c = pillow_kernel_row_3(
+                [
+                    raw[base(-1, 0) + c] as f32,
+                    raw[base(0, 0) + c] as f32,
+                    raw[base(1, 0) + c] as f32,
+                ],
+                &kernel[3..6],
+            );
+            let row_t = pillow_kernel_row_3(
+                [
+                    raw[base(-1, -1) + c] as f32,
+                    raw[base(0, -1) + c] as f32,
+                    raw[base(1, -1) + c] as f32,
+                ],
+                &kernel[6..9],
+            );
+            let mut ss = rounding_bias;
+            ss += row_b;
+            ss += row_c;
+            ss += row_t;
+            row[x as usize * channels + c] = clip8_filter(ss);
+        }
+    }
+}
+
+fn filter_3x3_byte_rows(
+    raw: &[u8],
+    out: &mut [u8],
+    width: i32,
+    height: i32,
+    channels: usize,
+    kernel: &[f32; 9],
+    rounding_bias: f32,
+) {
+    let row_stride = width.max(0) as usize * channels;
+    if row_stride == 0 || height <= 0 {
+        return;
+    }
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        out,
+        row_stride,
+        height.max(0) as usize,
+        |_row_start, _row_end, y, row| {
+            filter_3x3_byte_row(
+                raw,
+                row,
+                y as i32,
+                width,
+                height,
+                channels,
+                kernel,
+                rounding_bias,
+            );
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y.max(0) as usize * row_stride;
+        filter_3x3_byte_row(
+            raw,
+            &mut out[row_start..row_start + row_stride],
+            y,
+            width,
+            height,
+            channels,
+            kernel,
+            rounding_bias,
+        );
+    }
+}
+
+/// Apply one row of the byte 5x5 convolution. The arithmetic and tap order
+/// intentionally match the original scalar kernel exactly.
+#[inline]
+fn filter_5x5_byte_row(
+    raw: &[u8],
+    row: &mut [u8],
+    y: i32,
+    width: i32,
+    height: i32,
+    channels: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+) {
+    if y < 2 || y >= height - 2 || width < 5 {
+        return;
+    }
+    for x in 2..width - 2 {
+        let base =
+            |dx: i32, dy: i32| -> usize { ((y + dy) * width + (x + dx)) as usize * channels };
+        for c in 0..channels {
+            let row0 = pillow_kernel_row_5(
+                [
+                    raw[base(-2, 2) + c] as f32,
+                    raw[base(-1, 2) + c] as f32,
+                    raw[base(0, 2) + c] as f32,
+                    raw[base(1, 2) + c] as f32,
+                    raw[base(2, 2) + c] as f32,
+                ],
+                &kernel[0..5],
+            );
+            let row1 = pillow_kernel_row_5(
+                [
+                    raw[base(-2, 1) + c] as f32,
+                    raw[base(-1, 1) + c] as f32,
+                    raw[base(0, 1) + c] as f32,
+                    raw[base(1, 1) + c] as f32,
+                    raw[base(2, 1) + c] as f32,
+                ],
+                &kernel[5..10],
+            );
+            let row2 = pillow_kernel_row_5(
+                [
+                    raw[base(-2, 0) + c] as f32,
+                    raw[base(-1, 0) + c] as f32,
+                    raw[base(0, 0) + c] as f32,
+                    raw[base(1, 0) + c] as f32,
+                    raw[base(2, 0) + c] as f32,
+                ],
+                &kernel[10..15],
+            );
+            let row3 = pillow_kernel_row_5(
+                [
+                    raw[base(-2, -1) + c] as f32,
+                    raw[base(-1, -1) + c] as f32,
+                    raw[base(0, -1) + c] as f32,
+                    raw[base(1, -1) + c] as f32,
+                    raw[base(2, -1) + c] as f32,
+                ],
+                &kernel[15..20],
+            );
+            let row4 = pillow_kernel_row_5(
+                [
+                    raw[base(-2, -2) + c] as f32,
+                    raw[base(-1, -2) + c] as f32,
+                    raw[base(0, -2) + c] as f32,
+                    raw[base(1, -2) + c] as f32,
+                    raw[base(2, -2) + c] as f32,
+                ],
+                &kernel[20..25],
+            );
+            let mut ss = rounding_bias;
+            ss += row0;
+            ss += row1;
+            ss += row2;
+            ss += row3;
+            ss += row4;
+            row[x as usize * channels + c] = clip8_filter(ss);
+        }
+    }
+}
+
+fn filter_5x5_byte_rows(
+    raw: &[u8],
+    out: &mut [u8],
+    width: i32,
+    height: i32,
+    channels: usize,
+    kernel: &[f32; 25],
+    rounding_bias: f32,
+) {
+    let row_stride = width.max(0) as usize * channels;
+    if row_stride == 0 || height <= 0 {
+        return;
+    }
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        out,
+        row_stride,
+        height.max(0) as usize,
+        |_row_start, _row_end, y, row| {
+            filter_5x5_byte_row(
+                raw,
+                row,
+                y as i32,
+                width,
+                height,
+                channels,
+                kernel,
+                rounding_bias,
+            );
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height {
+        let row_start = y.max(0) as usize * row_stride;
+        filter_5x5_byte_row(
+            raw,
+            &mut out[row_start..row_start + row_stride],
+            y,
+            width,
+            height,
+            channels,
+            kernel,
+            rounding_bias,
+        );
+    }
 }
 
 // ── PIL-style box blur ──
@@ -481,6 +1029,33 @@ fn blur_line(
     }
 }
 
+#[inline]
+fn blur_one_row(
+    source: &[u8],
+    destination: &mut [u8],
+    row_start: usize,
+    width: usize,
+    channels: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_length = width * channels;
+    let mut accumulator = [0u32; 4];
+    blur_line(
+        &source[row_start..row_start + row_length],
+        destination,
+        0,
+        width,
+        channels,
+        radius,
+        whole_weight,
+        fractional_weight,
+        &mut accumulator,
+    );
+}
+
+#[cfg(feature = "parallel")]
 fn blur_rows(
     source: &[u8],
     destination: &mut [u8],
@@ -492,20 +1067,79 @@ fn blur_rows(
     fractional_weight: u32,
 ) {
     let row_length = width * channels;
-    let mut accumulator = [0u32; 4];
+    crate::par_rows_mut!(
+        destination,
+        row_length,
+        height,
+        |row_start, _row_end, _y, row| {
+            blur_one_row(
+                source,
+                row,
+                row_start,
+                width,
+                channels,
+                radius,
+                whole_weight,
+                fractional_weight,
+            );
+        }
+    );
+}
+
+#[cfg(not(feature = "parallel"))]
+fn blur_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    radius: usize,
+    whole_weight: u32,
+    fractional_weight: u32,
+) {
+    let row_length = width * channels;
     for row in 0..height {
-        blur_line(
+        blur_one_row(
             source,
-            destination,
+            &mut destination[row * row_length..(row + 1) * row_length],
             row * row_length,
             width,
             channels,
             radius,
             whole_weight,
             fractional_weight,
-            &mut accumulator,
         );
     }
+}
+
+#[cfg(feature = "parallel")]
+const VERTICAL_BLUR_TRANSPOSE_THRESHOLD: usize = 512 * 512;
+
+#[cfg(feature = "parallel")]
+fn transpose_interleaved_rows(
+    source: &[u8],
+    destination: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+) {
+    let source_row_stride = width * channels;
+    let destination_row_stride = height * channels;
+    crate::par_rows_mut!(
+        destination,
+        destination_row_stride,
+        width,
+        |row_start, row_end, x, row| {
+            let _ = (row_start, row_end);
+            let x = x as usize;
+            for y in 0..height {
+                let source_start = y * source_row_stride + x * channels;
+                let destination_start = y * channels;
+                row[destination_start..destination_start + channels]
+                    .copy_from_slice(&source[source_start..source_start + channels]);
+            }
+        }
+    );
 }
 
 fn blur_columns(
@@ -576,30 +1210,381 @@ fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicI
         std::mem::swap(&mut work, &mut scratch);
     }
 
-    // Pillow transposes before its vertical passes. Processing each complete
-    // row as one vector is algebraically identical and keeps both sides of the
-    // recurrence contiguous without two extra full-image copies.
-    let mut vertical_accumulator = vec![0u32; width * channels];
-    for _ in 0..passes {
-        blur_columns(
-            &work,
-            &mut scratch,
-            width,
-            height,
-            channels,
-            integer_radius,
-            whole_weight,
-            fractional_weight,
-            &mut vertical_accumulator,
-        );
-        std::mem::swap(&mut work, &mut scratch);
+    // Pillow transposes before its vertical passes. For large parallel jobs,
+    // keep that layout explicit: one transpose makes every original column a
+    // writable row, all vertical passes can then reuse the row-parallel blur,
+    // and one final transpose restores the public row-major layout. The
+    // serial/small-image path keeps the algebraically equivalent wide-row
+    // recurrence and avoids paying for the extra data movement.
+    #[cfg(feature = "parallel")]
+    let use_transposed_vertical =
+        width.saturating_mul(height) >= VERTICAL_BLUR_TRANSPOSE_THRESHOLD && passes > 0;
+    #[cfg(not(feature = "parallel"))]
+    let use_transposed_vertical = false;
+
+    if use_transposed_vertical {
+        #[cfg(feature = "parallel")]
+        {
+            transpose_interleaved_rows(&work, &mut scratch, width, height, channels);
+            for pass in 0..passes {
+                blur_rows(
+                    &scratch,
+                    &mut work,
+                    height,
+                    width,
+                    channels,
+                    integer_radius,
+                    whole_weight,
+                    fractional_weight,
+                );
+                // The freshly blurred result is in `work`.  Swap only when
+                // another pass still needs to read it; swapping after the
+                // final pass would make the final transpose consume the
+                // pre-blur transposed buffer for odd pass counts.
+                if pass + 1 < passes {
+                    std::mem::swap(&mut work, &mut scratch);
+                }
+            }
+            transpose_interleaved_rows(&work, &mut scratch, height, width, channels);
+        }
+    } else {
+        let mut vertical_accumulator = vec![0u32; width * channels];
+        for _ in 0..passes {
+            blur_columns(
+                &work,
+                &mut scratch,
+                width,
+                height,
+                channels,
+                integer_radius,
+                whole_weight,
+                fractional_weight,
+                &mut vertical_accumulator,
+            );
+            std::mem::swap(&mut work, &mut scratch);
+        }
     }
 
-    let result = raw_bytes_to_image(w_u32, h_u32, work, channels)?;
+    let output = if use_transposed_vertical {
+        scratch
+    } else {
+        work
+    };
+    let result = raw_bytes_to_image(w_u32, h_u32, output, channels)?;
     Ok(preserve_mode(img, result))
 }
 
 // ── Rank filter ──
+
+const SMALL_RANK_AREA: usize = 49;
+
+#[inline]
+fn select_rank_histogram(histogram: &[usize; 256], rank: usize) -> u8 {
+    let mut seen = 0usize;
+    for (value, count) in histogram.iter().enumerate() {
+        seen += *count;
+        if seen > rank {
+            return value as u8;
+        }
+    }
+    255
+}
+
+fn rank_filter_bytes_extreme_row(
+    raw: &[u8],
+    row: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    select_max: bool,
+    y: i32,
+) {
+    for x in 0..w {
+        let mut selected = if select_max { [0u8; 4] } else { [u8::MAX; 4] };
+        for dy in -half..=half {
+            for dx in -half..=half {
+                let sx = (x + dx).clamp(0, w - 1);
+                let sy = (y + dy).clamp(0, h - 1);
+                let base = (sy * w + sx) as usize * channels;
+                for c in 0..channels {
+                    let value = raw[base + c];
+                    if select_max {
+                        selected[c] = selected[c].max(value);
+                    } else {
+                        selected[c] = selected[c].min(value);
+                    }
+                }
+            }
+        }
+        let out_base = x as usize * channels;
+        row[out_base..out_base + channels].copy_from_slice(&selected[..channels]);
+    }
+}
+
+fn rank_filter_bytes_extreme(
+    raw: &[u8],
+    out: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    select_max: bool,
+) {
+    let row_stride = w.max(0) as usize * channels;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        out,
+        row_stride,
+        h.max(0) as usize,
+        |_row_start, _row_end, y, row| {
+            rank_filter_bytes_extreme_row(raw, row, w, h, channels, half, select_max, y as i32);
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..h {
+        let row_start = y as usize * row_stride;
+        rank_filter_bytes_extreme_row(
+            raw,
+            &mut out[row_start..row_start + row_stride],
+            w,
+            h,
+            channels,
+            half,
+            select_max,
+            y,
+        );
+    }
+}
+
+fn rank_filter_bytes_small_row(
+    raw: &[u8],
+    row: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    area: usize,
+    rank: usize,
+    y: i32,
+) {
+    debug_assert!(area <= SMALL_RANK_AREA);
+    for x in 0..w {
+        let mut values = [[0u8; SMALL_RANK_AREA]; 4];
+        let mut value_index = 0usize;
+        for dy in -half..=half {
+            for dx in -half..=half {
+                let sx = (x + dx).clamp(0, w - 1);
+                let sy = (y + dy).clamp(0, h - 1);
+                let base = (sy * w + sx) as usize * channels;
+                for c in 0..channels {
+                    values[c][value_index] = raw[base + c];
+                }
+                value_index += 1;
+            }
+        }
+        let out_base = x as usize * channels;
+        for c in 0..channels {
+            // Only the requested order statistic is observable. Selecting it
+            // avoids sorting the complete byte neighborhood while preserving
+            // the exact value returned for duplicate samples.
+            let (_, selected, _) = values[c][..area].select_nth_unstable(rank);
+            row[out_base + c] = *selected;
+        }
+    }
+}
+
+fn rank_filter_bytes_small(
+    raw: &[u8],
+    out: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    area: usize,
+    rank: usize,
+) {
+    let row_stride = w.max(0) as usize * channels;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        out,
+        row_stride,
+        h.max(0) as usize,
+        |_row_start, _row_end, y, row| {
+            rank_filter_bytes_small_row(raw, row, w, h, channels, half, area, rank, y as i32);
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..h {
+        let row_start = y as usize * row_stride;
+        rank_filter_bytes_small_row(
+            raw,
+            &mut out[row_start..row_start + row_stride],
+            w,
+            h,
+            channels,
+            half,
+            area,
+            rank,
+            y,
+        );
+    }
+}
+
+fn rank_filter_bytes_histogram_row(
+    raw: &[u8],
+    row: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    rank: usize,
+    y: i32,
+) {
+    let mut histogram = [[0usize; 256]; 4];
+    for dy in -half..=half {
+        let sy = (y + dy).clamp(0, h - 1);
+        for dx in -half..=half {
+            let sx = dx.clamp(0, w - 1);
+            let base = (sy * w + sx) as usize * channels;
+            for c in 0..channels {
+                histogram[c][raw[base + c] as usize] += 1;
+            }
+        }
+    }
+
+    for x in 0..w {
+        let out_base = x as usize * channels;
+        for c in 0..channels {
+            row[out_base + c] = select_rank_histogram(&histogram[c], rank);
+        }
+
+        if x + 1 < w {
+            let remove_x = (x - half).clamp(0, w - 1);
+            let add_x = (x + half + 1).clamp(0, w - 1);
+            for dy in -half..=half {
+                let sy = (y + dy).clamp(0, h - 1);
+                let remove_base = (sy * w + remove_x) as usize * channels;
+                let add_base = (sy * w + add_x) as usize * channels;
+                for c in 0..channels {
+                    histogram[c][raw[remove_base + c] as usize] -= 1;
+                    histogram[c][raw[add_base + c] as usize] += 1;
+                }
+            }
+        }
+    }
+}
+
+fn rank_filter_bytes_histogram(
+    raw: &[u8],
+    out: &mut [u8],
+    w: i32,
+    h: i32,
+    channels: usize,
+    half: i32,
+    rank: usize,
+) {
+    let row_stride = w.max(0) as usize * channels;
+    #[cfg(feature = "parallel")]
+    crate::par_rows_mut!(
+        out,
+        row_stride,
+        h.max(0) as usize,
+        |_row_start, _row_end, y, row| {
+            rank_filter_bytes_histogram_row(raw, row, w, h, channels, half, rank, y as i32);
+        }
+    );
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..h {
+        let row_start = y as usize * row_stride;
+        rank_filter_bytes_histogram_row(
+            raw,
+            &mut out[row_start..row_start + row_stride],
+            w,
+            h,
+            channels,
+            half,
+            rank,
+            y,
+        );
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+fn rank_filter_f_large_serial(
+    raw: &[u8],
+    out: &mut [u8],
+    w: i32,
+    h: i32,
+    half: i32,
+    area: usize,
+    rank: usize,
+) {
+    let mut values = Vec::with_capacity(area);
+    for y in 0..h {
+        for x in 0..w {
+            values.clear();
+            for dy in -half..=half {
+                for dx in -half..=half {
+                    let sx = (x + dx).clamp(0, w - 1);
+                    let sy = (y + dy).clamp(0, h - 1);
+                    let base = (sy * w + sx) as usize * 4;
+                    values.push(f32::from_le_bytes([
+                        raw[base],
+                        raw[base + 1],
+                        raw[base + 2],
+                        raw[base + 3],
+                    ]));
+                }
+            }
+            values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let out_base = (y * w + x) as usize * 4;
+            out[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
+        }
+    }
+}
+
+#[cfg(feature = "parallel")]
+fn rank_filter_f_large_parallel(
+    raw: &[u8],
+    out: &mut [u8],
+    w: i32,
+    h: i32,
+    half: i32,
+    area: usize,
+    rank: usize,
+) {
+    let width = w as usize;
+    let height = h as usize;
+    let row_stride = width * 4;
+    crate::par_rows_mut!(out, row_stride, height, |row_start, _row_end, y, row| {
+        let _ = row_start;
+        let y = y as i32;
+        // Rayon gives this closure a complete output row. Reusing the
+        // window scratch for that row removes the old per-pixel
+        // allocation while keeping each parallel worker independent.
+        let mut values = Vec::with_capacity(area);
+        for x in 0..w {
+            values.clear();
+            for dy in -half..=half {
+                for dx in -half..=half {
+                    let sx = (x + dx).clamp(0, w - 1);
+                    let sy = (y + dy).clamp(0, h - 1);
+                    let base = (sy * w + sx) as usize * 4;
+                    values.push(f32::from_le_bytes([
+                        raw[base],
+                        raw[base + 1],
+                        raw[base + 2],
+                        raw[base + 3],
+                    ]));
+                }
+            }
+            values.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
+            let out_base = x as usize * 4;
+            row[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
+        }
+    });
+}
 
 /// Generic rank filter: sorts neighborhood values and picks the one at `rank`.
 /// PIL uses clamping for border pixels.
@@ -622,33 +1607,37 @@ fn rank_filter_impl(
         let rgba = img.to_rgba8();
         let raw = rgba.into_raw();
         let mut out = CheckedDims::new(w as u32, h as u32, 4)?.alloc_buffer();
-
-        for y in 0..h {
-            for x in 0..w {
-                let mut vals: Vec<f32> = Vec::with_capacity(area);
-                for dy in -half..=half {
-                    for dx in -half..=half {
-                        let sx = (x + dx).clamp(0, w - 1);
-                        let sy = (y + dy).clamp(0, h - 1);
-                        let base = (sy * w + sx) as usize * 4;
-                        let val = f32::from_le_bytes([
-                            raw[base],
-                            raw[base + 1],
-                            raw[base + 2],
-                            raw[base + 3],
-                        ]);
-                        vals.push(val);
+        if area <= SMALL_RANK_AREA {
+            for y in 0..h {
+                for x in 0..w {
+                    let mut values = [0f32; SMALL_RANK_AREA];
+                    let mut value_index = 0usize;
+                    for dy in -half..=half {
+                        for dx in -half..=half {
+                            let sx = (x + dx).clamp(0, w - 1);
+                            let sy = (y + dy).clamp(0, h - 1);
+                            let base = (sy * w + sx) as usize * 4;
+                            values[value_index] = f32::from_le_bytes([
+                                raw[base],
+                                raw[base + 1],
+                                raw[base + 2],
+                                raw[base + 3],
+                            ]);
+                            value_index += 1;
+                        }
                     }
+                    values[..area].sort_unstable_by(|a, b| {
+                        a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    let out_base = (y * w + x) as usize * 4;
+                    out[out_base..out_base + 4].copy_from_slice(&values[rank].to_le_bytes());
                 }
-                vals.sort_unstable_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
-                let result = vals[rank];
-                let out_base = (y * w + x) as usize * 4;
-                let le = result.to_le_bytes();
-                out[out_base] = le[0];
-                out[out_base + 1] = le[1];
-                out[out_base + 2] = le[2];
-                out[out_base + 3] = le[3];
             }
+        } else {
+            #[cfg(feature = "parallel")]
+            rank_filter_f_large_parallel(&raw, &mut out, w, h, half, area, rank);
+            #[cfg(not(feature = "parallel"))]
+            rank_filter_f_large_serial(&raw, &mut out, w, h, half, area, rank);
         }
         let result = DynamicImage::ImageRgba8(
             crate::raster::RgbaImage::from_raw(w_u32, h_u32, out)
@@ -661,24 +1650,37 @@ fn rank_filter_impl(
     let raw = img.as_bytes();
     let mut out = CheckedDims::new(w as u32, h as u32, channels as u8)?.alloc_buffer();
 
-    for y in 0..h {
-        for x in 0..w {
-            let mut chan_vals: Vec<Vec<u8>> = vec![Vec::with_capacity(area); channels];
-            for dy in -half..=half {
-                for dx in -half..=half {
-                    let sx = (x + dx).clamp(0, w - 1);
-                    let sy = (y + dy).clamp(0, h - 1);
-                    let base = (sy * w + sx) as usize * channels;
-                    for c in 0..channels {
-                        chan_vals[c].push(raw[base + c]);
-                    }
-                }
-            }
-            for c in 0..channels {
-                chan_vals[c].sort_unstable();
-                out[(y * w + x) as usize * channels + c] = chan_vals[c][rank];
-            }
-        }
+    let native_byte_layout = matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    );
+    let separable_extreme =
+        native_byte_layout && size >= 5 && w.max(h) > 512 && (rank == 0 || rank == area - 1);
+    if separable_extreme
+        && rank_filter_bytes_extreme_separable(
+            raw,
+            &mut out,
+            w,
+            h,
+            channels,
+            half,
+            rank == area - 1,
+        )
+    {
+        // The separable path completed the output. Keep the original direct
+        // path below for typed layouts and small windows where its lower setup
+        // cost is preferable.
+    } else if rank == 0 {
+        rank_filter_bytes_extreme(raw, &mut out, w, h, channels, half, false);
+    } else if rank == area - 1 {
+        rank_filter_bytes_extreme(raw, &mut out, w, h, channels, half, true);
+    } else if area <= SMALL_RANK_AREA {
+        rank_filter_bytes_small(raw, &mut out, w, h, channels, half, area, rank);
+    } else {
+        rank_filter_bytes_histogram(raw, &mut out, w, h, channels, half, rank);
     }
     let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
     Ok(preserve_mode(img, result))
@@ -703,56 +1705,19 @@ pub fn execute_filter3x3(
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
     // The public kernel boundary clamps scales to a positive value before a
-    // pipeline operation is created.
-    let s = scale;
-    let k0 = kernel[0] / s;
-    let k1 = kernel[1] / s;
-    let k2 = kernel[2] / s;
-    let k3 = kernel[3] / s;
-    let k4 = kernel[4] / s;
-    let k5 = kernel[5] / s;
-    let k6 = kernel[6] / s;
-    let k7 = kernel[7] / s;
-    let k8 = kernel[8] / s;
+    // pipeline operation is created. Normalize once, outside the pixel loop.
+    let normalized_kernel: [f32; 9] = std::array::from_fn(|index| kernel[index] / scale);
     let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.to_vec();
-    for y in 1..h - 1 {
-        for x in 1..w - 1 {
-            let base =
-                |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * channels };
-            for c in 0..channels {
-                let row_b = pillow_kernel_row_3(
-                    [
-                        raw[base(-1, 1) + c] as f32,
-                        raw[base(0, 1) + c] as f32,
-                        raw[base(1, 1) + c] as f32,
-                    ],
-                    &[k0, k1, k2],
-                );
-                let row_c = pillow_kernel_row_3(
-                    [
-                        raw[base(-1, 0) + c] as f32,
-                        raw[base(0, 0) + c] as f32,
-                        raw[base(1, 0) + c] as f32,
-                    ],
-                    &[k3, k4, k5],
-                );
-                let row_t = pillow_kernel_row_3(
-                    [
-                        raw[base(-1, -1) + c] as f32,
-                        raw[base(0, -1) + c] as f32,
-                        raw[base(1, -1) + c] as f32,
-                    ],
-                    &[k6, k7, k8],
-                );
-                let mut ss = rounding_bias;
-                ss += row_b;
-                ss += row_c;
-                ss += row_t;
-                out[(y * w + x) as usize * channels + c] = clip8_filter(ss);
-            }
-        }
-    }
+    filter_3x3_byte_rows(
+        raw,
+        &mut out,
+        w,
+        h,
+        channels,
+        &normalized_kernel,
+        rounding_bias,
+    );
     let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
     Ok(preserve_mode(img, result))
 }
@@ -773,101 +1738,20 @@ pub fn execute_filter5x5(
     let raw = img.as_bytes();
     let (w_u32, h_u32) = (img.width(), img.height());
     let (w, h) = (w_u32 as i32, h_u32 as i32);
-    // The public kernel boundary clamps scales to a positive value before a
-    // pipeline operation is created.
-    let s = scale;
-    let k00 = kernel[0] / s;
-    let k01 = kernel[1] / s;
-    let k02 = kernel[2] / s;
-    let k03 = kernel[3] / s;
-    let k04 = kernel[4] / s;
-    let k10 = kernel[5] / s;
-    let k11 = kernel[6] / s;
-    let k12 = kernel[7] / s;
-    let k13 = kernel[8] / s;
-    let k14 = kernel[9] / s;
-    let k20 = kernel[10] / s;
-    let k21 = kernel[11] / s;
-    let k22 = kernel[12] / s;
-    let k23 = kernel[13] / s;
-    let k24 = kernel[14] / s;
-    let k30 = kernel[15] / s;
-    let k31 = kernel[16] / s;
-    let k32 = kernel[17] / s;
-    let k33 = kernel[18] / s;
-    let k34 = kernel[19] / s;
-    let k40 = kernel[20] / s;
-    let k41 = kernel[21] / s;
-    let k42 = kernel[22] / s;
-    let k43 = kernel[23] / s;
-    let k44 = kernel[24] / s;
+    // Normalize once, outside the pixel loop. The row helper keeps all five
+    // tap groups in the same order as the original scalar implementation.
+    let normalized_kernel: [f32; 25] = std::array::from_fn(|index| kernel[index] / scale);
     let rounding_bias = offset as f32 + 0.5;
     let mut out = raw.to_vec();
-    for y in 2..h - 2 {
-        for x in 2..w - 2 {
-            let base =
-                |dx: i32, dy: i32| -> usize { ((y + dy) * w + (x + dx)) as usize * channels };
-            for c in 0..channels {
-                let row0 = pillow_kernel_row_5(
-                    [
-                        raw[base(-2, 2) + c] as f32,
-                        raw[base(-1, 2) + c] as f32,
-                        raw[base(0, 2) + c] as f32,
-                        raw[base(1, 2) + c] as f32,
-                        raw[base(2, 2) + c] as f32,
-                    ],
-                    &[k00, k01, k02, k03, k04],
-                );
-                let mut ss = rounding_bias;
-                ss += row0;
-                let row1 = pillow_kernel_row_5(
-                    [
-                        raw[base(-2, 1) + c] as f32,
-                        raw[base(-1, 1) + c] as f32,
-                        raw[base(0, 1) + c] as f32,
-                        raw[base(1, 1) + c] as f32,
-                        raw[base(2, 1) + c] as f32,
-                    ],
-                    &[k10, k11, k12, k13, k14],
-                );
-                ss += row1;
-                let row2 = pillow_kernel_row_5(
-                    [
-                        raw[base(-2, 0) + c] as f32,
-                        raw[base(-1, 0) + c] as f32,
-                        raw[base(0, 0) + c] as f32,
-                        raw[base(1, 0) + c] as f32,
-                        raw[base(2, 0) + c] as f32,
-                    ],
-                    &[k20, k21, k22, k23, k24],
-                );
-                ss += row2;
-                let row3 = pillow_kernel_row_5(
-                    [
-                        raw[base(-2, -1) + c] as f32,
-                        raw[base(-1, -1) + c] as f32,
-                        raw[base(0, -1) + c] as f32,
-                        raw[base(1, -1) + c] as f32,
-                        raw[base(2, -1) + c] as f32,
-                    ],
-                    &[k30, k31, k32, k33, k34],
-                );
-                ss += row3;
-                let row4 = pillow_kernel_row_5(
-                    [
-                        raw[base(-2, -2) + c] as f32,
-                        raw[base(-1, -2) + c] as f32,
-                        raw[base(0, -2) + c] as f32,
-                        raw[base(1, -2) + c] as f32,
-                        raw[base(2, -2) + c] as f32,
-                    ],
-                    &[k40, k41, k42, k43, k44],
-                );
-                ss += row4;
-                out[(y * w + x) as usize * channels + c] = clip8_filter(ss);
-            }
-        }
-    }
+    filter_5x5_byte_rows(
+        raw,
+        &mut out,
+        w,
+        h,
+        channels,
+        &normalized_kernel,
+        rounding_bias,
+    );
     let result = raw_bytes_to_image(w_u32, h_u32, out, channels)?;
     Ok(preserve_mode(img, result))
 }

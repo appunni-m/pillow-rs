@@ -95,6 +95,49 @@ impl CheckedDims {
         Self::new_with_limit(width, height, channels, MAX_PIXELS.load(Ordering::Relaxed))
     }
 
+    /// Validates dimensions for an operation whose public Pillow contract
+    /// permits an empty result image.
+    ///
+    /// Ordinary image allocations continue to use [`CheckedDims::new`], which
+    /// rejects zero dimensions.  Empty images are an explicit boundary case:
+    /// they carry a zero-length buffer and never enter a pixel loop.
+    pub fn new_allow_empty(width: u32, height: u32, channels: u8) -> Result<Self, PilError> {
+        if channels == 0 {
+            return Err(PilError::DimensionError(
+                "channel count cannot be zero".into(),
+            ));
+        }
+
+        let total_pixels = (width as u64).checked_mul(height as u64).ok_or_else(|| {
+            PilError::DimensionError(format!(
+                "image dimensions overflow u64: {}×{}",
+                width, height
+            ))
+        })?;
+        let max_pixels = MAX_PIXELS.load(Ordering::Relaxed);
+        if total_pixels > max_pixels {
+            return Err(PilError::DimensionError(format!(
+                "image size {} exceeds MAX_PIXELS ({}) — \
+                 increase limit with CheckedDims::set_max_pixels()",
+                total_pixels, max_pixels
+            )));
+        }
+        let total_bytes = total_pixels.checked_mul(channels as u64).ok_or_else(|| {
+            PilError::DimensionError(format!(
+                "buffer size overflow: {} pixels × {} channels exceeds u64",
+                total_pixels, channels
+            ))
+        })?;
+
+        Ok(Self {
+            width,
+            height,
+            channels,
+            total_pixels: total_pixels as usize,
+            total_bytes: total_bytes as usize,
+        })
+    }
+
     fn new_with_limit(
         width: u32,
         height: u32,
@@ -183,7 +226,9 @@ impl CheckedDims {
     /// Use this helper instead of manually calculating a vector length.
     #[inline]
     pub fn alloc_buffer(&self) -> Vec<u8> {
-        vec![0u8; self.total_bytes]
+        let buffer = vec![0u8; self.total_bytes];
+        crate::compute::record_pipeline_allocation(buffer.len());
+        buffer
     }
 }
 

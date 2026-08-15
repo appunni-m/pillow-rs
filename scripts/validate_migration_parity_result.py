@@ -115,6 +115,103 @@ def infrastructure_errors(value: list[dict[str, Any]]) -> None:
         string(item["message"], f"infrastructure_errors[{index}].message")
 
 
+def execution_receipt(value: dict[str, Any], label: str) -> None:
+    exact(
+        value,
+        {
+            "status",
+            "requested_backend",
+            "actual_backend",
+            "actual_backend_counts",
+            "fallback_reason_counts",
+            "operation_count",
+            "dispatch_count",
+            "resize_coeff_cache_hits",
+            "resize_coeff_cache_misses",
+            "phase_timings_ns",
+            "resource",
+            "sample_count",
+            "cached_sample_count",
+        },
+        label,
+    )
+    if value["status"] not in {"completed", "not_proven", "not_applicable"}:
+        raise ValueError(f"{label}.status: invalid status")
+    string(value["requested_backend"], f"{label}.requested_backend")
+    string(value["actual_backend"], f"{label}.actual_backend", nullable=True)
+    for field in ("actual_backend_counts", "fallback_reason_counts"):
+        counts = value[field]
+        if not isinstance(counts, dict):
+            raise ValueError(f"{label}.{field}: expected object")
+        for key, count in counts.items():
+            string(key, f"{label}.{field} key")
+            if type(count) is not int or count <= 0:
+                raise ValueError(f"{label}.{field}.{key}: expected positive integer")
+
+    def summary(summary_value: dict[str, Any], summary_label: str) -> None:
+        exact(
+            summary_value,
+            {"sample_count", "min", "median", "mean", "max", "total"},
+            summary_label,
+        )
+        non_negative_int(summary_value["sample_count"], f"{summary_label}.sample_count")
+        for field in ("min", "median", "mean", "max", "total"):
+            number = summary_value[field]
+            if number is not None and (isinstance(number, bool) or not isinstance(number, (int, float))):
+                raise ValueError(f"{summary_label}.{field}: expected number or null")
+            if number is not None and number < 0:
+                raise ValueError(f"{summary_label}.{field}: expected non-negative number")
+
+    summary(value["operation_count"], f"{label}.operation_count")
+    summary(value["dispatch_count"], f"{label}.dispatch_count")
+    summary(
+        value["resize_coeff_cache_hits"],
+        f"{label}.resize_coeff_cache_hits",
+    )
+    summary(
+        value["resize_coeff_cache_misses"],
+        f"{label}.resize_coeff_cache_misses",
+    )
+    exact(value["phase_timings_ns"], {"route_ns", "validation_ns", "backend_ns"}, f"{label}.phase_timings_ns")
+    for phase, phase_summary in value["phase_timings_ns"].items():
+        summary(phase_summary, f"{label}.phase_timings_ns.{phase}")
+    exact(
+        value["resource"],
+        {
+            "sample_count",
+            "upload_bytes",
+            "readback_bytes",
+            "auxiliary_bytes",
+            "parameter_bytes",
+            "retained_cache_bytes",
+            "full_frame_copy_count",
+            "mode_conversion_count",
+            "host_buffer_count",
+            "host_buffer_bytes",
+            "peak_live_host_bytes",
+            "fused_operation_count",
+        },
+        f"{label}.resource",
+    )
+    non_negative_int(value["resource"]["sample_count"], f"{label}.resource.sample_count")
+    for field in (
+        "upload_bytes",
+        "readback_bytes",
+        "auxiliary_bytes",
+        "parameter_bytes",
+        "retained_cache_bytes",
+        "full_frame_copy_count",
+        "mode_conversion_count",
+        "host_buffer_count",
+        "host_buffer_bytes",
+        "peak_live_host_bytes",
+        "fused_operation_count",
+    ):
+        summary(value["resource"][field], f"{label}.resource.{field}")
+    non_negative_int(value["sample_count"], f"{label}.sample_count")
+    non_negative_int(value["cached_sample_count"], f"{label}.cached_sample_count")
+
+
 def workflow(value: dict[str, Any], label: str) -> None:
     exact(value, {"case_id", "status", "observations"}, label)
     string(value["case_id"], f"{label}.case_id")
@@ -153,12 +250,18 @@ def parity(result: dict[str, Any]) -> None:
     exact(result["summary"], {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}, "parity.summary")
     for field in result["summary"]:
         non_negative_int(result["summary"][field], f"parity.summary.{field}")
-    if result["summary"]["selected"] != len(result["comparisons"]):
-        raise ValueError("parity.summary.selected does not equal comparison count")
-    if result["summary"]["executed"] + result["summary"]["not_run"] != result["summary"]["selected"]:
-        raise ValueError("parity.summary: selected must equal executed plus not_run")
-    if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["executed"]:
-        raise ValueError("parity.summary: executed must equal passed plus failed plus not_run")
+    if result["summary"]["executed"] != len(result["comparisons"]):
+        raise ValueError("parity.summary.executed does not equal comparison count")
+    if result["status"] == "completed":
+        if result["summary"]["selected"] != result["summary"]["executed"]:
+            raise ValueError("completed parity must execute every selected case")
+        if result["summary"]["passed"] + result["summary"]["failed"] + result["summary"]["not_run"] != result["summary"]["executed"]:
+            raise ValueError("parity.summary: executed must equal passed plus failed plus not_run")
+    else:
+        if result["summary"]["passed"] + result["summary"]["failed"] != result["summary"]["executed"]:
+            raise ValueError("incomplete parity must classify every executed comparison")
+        if result["summary"]["not_run"] != result["summary"]["selected"] - result["summary"]["executed"]:
+            raise ValueError("incomplete parity must classify every unexecuted case as not_run")
     if result["summary"]["infrastructure_errors"] != len(result["infrastructure_errors"]):
         raise ValueError("parity.summary.infrastructure_errors does not equal error count")
     infrastructure_errors(result["infrastructure_errors"])
@@ -257,6 +360,128 @@ def coverage(result: dict[str, Any]) -> None:
         raise ValueError("coverage.summary: test counts cannot be below executed plan count")
 
 
+def all_backends(result: dict[str, Any]) -> None:
+    """Validate the one-command CPU/SIMD/GPU/Python/JS test evidence."""
+
+    exact(
+        result,
+        {
+            "schema",
+            "status",
+            "started_at",
+            "finished_at",
+            "revision",
+            "gpu_gate",
+            "gpu_full_requested",
+            "lanes",
+        },
+        "all_backends",
+    )
+    if result["schema"] != "migration-parity/all-backends-test-result@1":
+        raise ValueError("all_backends.schema: unsupported schema")
+    if result["status"] not in {"passed", "passed_with_gpu_skipped", "failed"}:
+        raise ValueError("all_backends.status: invalid status")
+    for field in ("started_at", "finished_at", "revision"):
+        string(result[field], f"all_backends.{field}")
+    if not isinstance(result["gpu_full_requested"], bool):
+        raise ValueError("all_backends.gpu_full_requested: expected boolean")
+
+    exact(
+        result["gpu_gate"],
+        {"case_id", "status", "timeout_seconds"},
+        "all_backends.gpu_gate",
+    )
+    string(result["gpu_gate"]["case_id"], "all_backends.gpu_gate.case_id")
+    if result["gpu_gate"]["status"] not in {"passed", "failed", "skipped"}:
+        raise ValueError("all_backends.gpu_gate.status: invalid status")
+    if type(result["gpu_gate"]["timeout_seconds"]) is not int or result["gpu_gate"]["timeout_seconds"] <= 0:
+        raise ValueError("all_backends.gpu_gate.timeout_seconds: expected positive integer")
+
+    expected_ids = {
+        "parity-cpu",
+        "parity-simd",
+        "parity-gpu-smoke",
+        "parity-gpu",
+        "js-wasm-package",
+    }
+    lane_ids: list[str] = []
+    failed_required = False
+    smoke_status: str | None = None
+    full_gpu_status: str | None = None
+    if not isinstance(result["lanes"], list) or not result["lanes"]:
+        raise ValueError("all_backends.lanes: expected a non-empty list")
+    for index, lane in enumerate(result["lanes"]):
+        prefix = f"all_backends.lanes[{index}]"
+        allowed = {
+            "lane_id",
+            "kind",
+            "backend",
+            "command",
+            "status",
+            "returncode",
+            "timed_out",
+            "artifact",
+            "summary",
+            "reason",
+            "output_tail",
+        }
+        if not isinstance(lane, dict) or not set(lane).issubset(allowed):
+            raise ValueError(f"{prefix}: unknown lane fields")
+        for field in ("lane_id", "kind", "status"):
+            string(lane.get(field), f"{prefix}.{field}")
+        lane_ids.append(lane["lane_id"])
+        if lane["status"] not in {"passed", "failed", "skipped"}:
+            raise ValueError(f"{prefix}.status: invalid status")
+        if lane["kind"] not in {"python-py3-parity", "javascript-wasm-package"}:
+            raise ValueError(f"{prefix}.kind: invalid kind")
+        if lane.get("backend") not in {None, "cpu", "simd", "gpu"}:
+            raise ValueError(f"{prefix}.backend: invalid backend")
+        if not isinstance(lane.get("command"), list) or not lane["command"] or not all(isinstance(value, str) and value for value in lane["command"]):
+            raise ValueError(f"{prefix}.command: expected non-empty string array")
+        returncode = lane.get("returncode")
+        if returncode is not None and (type(returncode) is not int or returncode < 0):
+            raise ValueError(f"{prefix}.returncode: expected non-negative integer or null")
+        if not isinstance(lane.get("timed_out"), bool):
+            raise ValueError(f"{prefix}.timed_out: expected boolean")
+        if "artifact" in lane:
+            string(lane["artifact"], f"{prefix}.artifact")
+        if "summary" in lane:
+            summary = lane["summary"]
+            exact(summary, {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}, f"{prefix}.summary")
+            for field, value in summary.items():
+                non_negative_int(value, f"{prefix}.summary.{field}")
+        if lane["status"] in {"failed", "skipped"}:
+            string(lane.get("reason"), f"{prefix}.reason")
+        if "output_tail" in lane:
+            string(lane["output_tail"], f"{prefix}.output_tail", allow_empty=True)
+        if lane["lane_id"] == "parity-gpu-smoke":
+            smoke_status = lane["status"]
+        if lane["lane_id"] == "parity-gpu":
+            full_gpu_status = lane["status"]
+        if lane["status"] == "failed" and lane["lane_id"] != "parity-gpu-smoke":
+            failed_required = True
+    unique(lane_ids, "all_backends.lanes")
+    if set(lane_ids) != expected_ids:
+        raise ValueError("all_backends.lanes: expected exactly CPU, SIMD, GPU gate/full, and JS lanes")
+    if smoke_status != result["gpu_gate"]["status"]:
+        raise ValueError("all_backends.gpu_gate.status does not match GPU smoke lane")
+    if smoke_status == "passed" and result["gpu_full_requested"] and full_gpu_status != "passed":
+        raise ValueError("all_backends: a requested full GPU lane must pass after a passed GPU gate")
+    if smoke_status == "passed" and not result["gpu_full_requested"] and full_gpu_status != "skipped":
+        raise ValueError("all_backends: the non-requested full GPU lane must be recorded as skipped")
+    if smoke_status in {"failed", "skipped"} and full_gpu_status != "skipped":
+        raise ValueError("all_backends: a non-passing GPU gate must skip the full GPU lane")
+    expected_status = (
+        "failed"
+        if failed_required
+        else "passed"
+        if smoke_status == "passed" and result["gpu_full_requested"]
+        else "passed_with_gpu_skipped"
+    )
+    if result["status"] != expected_status:
+        raise ValueError("all_backends.status does not match lane outcomes")
+
+
 def benchmark(result: dict[str, Any]) -> None:
     exact(result, {"schema", "identity", "status", "environment", "summary", "workloads", "suites", "infrastructure_errors"}, "benchmark")
     if result["schema"] != "migration-parity/benchmark-result@1":
@@ -277,10 +502,27 @@ def benchmark(result: dict[str, Any]) -> None:
     workload_ids: list[str] = []
     for index, workload in enumerate(result["workloads"]):
         prefix = f"benchmark.workloads[{index}]"
-        exact(workload, {"workload_id", "requirements", "measurement_policy", "correctness", "subjects", "budgets"}, prefix)
+        exact(workload, {"workload_id", "requirements", "measurement_policy", "context", "correctness", "subjects", "budgets"}, prefix)
         string(workload["workload_id"], f"{prefix}.workload_id")
         workload_ids.append(workload["workload_id"])
         id_array(workload["requirements"], f"{prefix}.requirements")
+        exact(workload["context"], {"size", "mode", "chain_length", "operation_class", "cache_state", "build_profile"}, f"{prefix}.context")
+        if (
+            not isinstance(workload["context"]["size"], list)
+            or len(workload["context"]["size"]) != 2
+            or any(type(value) is not int or value < 0 for value in workload["context"]["size"])
+        ):
+            raise ValueError(f"{prefix}.context.size: expected two non-negative integer dimensions")
+        if not isinstance(workload["context"]["mode"], str) or not workload["context"]["mode"]:
+            raise ValueError(f"{prefix}.context.mode: expected a non-empty mode")
+        if type(workload["context"]["chain_length"]) is not int or workload["context"]["chain_length"] < 0:
+            raise ValueError(f"{prefix}.context.chain_length: expected a non-negative integer")
+        if workload["context"]["operation_class"] not in {"point", "neighborhood", "geometry", "draw", "multi_image", "generator", "terminal"}:
+            raise ValueError(f"{prefix}.context.operation_class: unsupported operation class")
+        if workload["context"]["cache_state"] not in {"cold", "warm", "resident", "mixed"}:
+            raise ValueError(f"{prefix}.context.cache_state: unsupported cache state")
+        if workload["context"]["build_profile"] not in {"debug", "release"}:
+            raise ValueError(f"{prefix}.context.build_profile: unsupported build profile")
         if not isinstance(workload["measurement_policy"], dict):
             raise ValueError(f"{prefix}.measurement_policy: expected object")
         exact(workload["correctness"], {"gate", "outcome", "evidence_id"}, f"{prefix}.correctness")
@@ -292,7 +534,7 @@ def benchmark(result: dict[str, Any]) -> None:
         subject_ids: list[str] = []
         for subject_index, subject in enumerate(workload["subjects"]):
             sprefix = f"{prefix}.subjects[{subject_index}]"
-            exact(subject, {"kind", "id", "status", "measurements"}, sprefix)
+            exact(subject, {"kind", "id", "status", "measurements", "phases", "execution"}, sprefix)
             if subject["kind"] not in {"oracle", "target_profile"}:
                 raise ValueError(f"{sprefix}.kind: invalid subject kind")
             string(subject["id"], f"{sprefix}.id")
@@ -310,6 +552,16 @@ def benchmark(result: dict[str, Any]) -> None:
                     if value is not None and not isinstance(value, (int, float)):
                         raise ValueError(f"{mprefix}.statistics.{field}: expected number or null")
                 string(measurement["raw_samples_ref"], f"{mprefix}.raw_samples_ref", nullable=True)
+            exact(subject["phases"], {"setup", "pipeline", "terminal", "total"}, f"{sprefix}.phases")
+            for phase_name, phase in subject["phases"].items():
+                pprefix = f"{sprefix}.phases.{phase_name}"
+                exact(phase, {"sample_count", "statistics"}, pprefix)
+                non_negative_int(phase["sample_count"], f"{pprefix}.sample_count")
+                exact(phase["statistics"], {"min", "median", "mean", "p95", "p99", "max", "total", "weighted_mean", "standard_deviation"}, f"{pprefix}.statistics")
+                for field, value in phase["statistics"].items():
+                    if value is not None and not isinstance(value, (int, float)):
+                        raise ValueError(f"{pprefix}.statistics.{field}: expected number or null")
+            execution_receipt(subject["execution"], f"{sprefix}.execution")
         unique(subject_ids, f"{prefix}.subjects")
         for budget_index, budget in enumerate(workload["budgets"]):
             exact(budget, {"requirement_id", "subject_id", "baseline_subject", "metric", "statistic", "operator", "required", "observed", "unit", "outcome"}, f"{prefix}.budgets[{budget_index}]")
@@ -417,11 +669,11 @@ def status_report(result: dict[str, Any]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("lane", choices=("parity", "coverage", "benchmark", "status"))
+    parser.add_argument("lane", choices=("parity", "coverage", "all_backends", "benchmark", "status"))
     parser.add_argument("result", type=Path)
     args = parser.parse_args()
     result = json.loads(args.result.read_text(encoding="utf-8"))
-    {"parity": parity, "coverage": coverage, "benchmark": benchmark, "status": status_report}[args.lane](result)
+    {"parity": parity, "coverage": coverage, "all_backends": all_backends, "benchmark": benchmark, "status": status_report}[args.lane](result)
     print(f"{args.lane} result schema valid")
     return 0
 

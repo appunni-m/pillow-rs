@@ -40,24 +40,32 @@ fn alpha_composite_pixel(src_pixel: u32, dst_pixel: u32, mode: u32) -> u32 {
     let db = (dst_pixel >> 16u) & 0xffu;
     let da = (dst_pixel >> 24u) & 0xffu;
 
-    // Porter-Duff Over with integer rounding
-    // out_A = sa + da*(255-sa)/255  (rounded)
+    // Porter-Duff Over with the same rational arithmetic as the CPU's f64
+    // implementation. Multiply numerator and denominator by 255 first so
+    // the color path does not double-round the destination contribution.
     let inv_sa = 255u - sa;
-    let dst_contrib = (da * inv_sa + 127u) / 255u;
-    let out_a_val = sa + dst_contrib;
+    let alpha_den = sa * 255u + da * inv_sa;
+    let out_a_val = (alpha_den + 127u) / 255u;
+
+    // The CPU implementation leaves a fully transparent destination pixel
+    // untouched when both source and destination alpha are zero. In
+    // particular, RGB bytes under alpha=0 are observable in the raw image;
+    // returning zero here would silently erase them.
+    if out_a_val == 0u {
+        return dst_pixel;
+    }
 
     var out_r: u32 = 0u;
     var out_g: u32 = 0u;
     var out_b: u32 = 0u;
 
     if out_a_val > 0u {
-        // out_RGB = (sr*sa + dr*da*(255-sa)/255) / out_A  (rounded inner and outer)
-        let r_num = sr * sa + (dr * da * inv_sa + 127u) / 255u;
-        let g_num = sg * sa + (dg * da * inv_sa + 127u) / 255u;
-        let b_num = sb * sa + (db * da * inv_sa + 127u) / 255u;
-        out_r = (r_num + out_a_val / 2u) / out_a_val;
-        out_g = (g_num + out_a_val / 2u) / out_a_val;
-        out_b = (b_num + out_a_val / 2u) / out_a_val;
+        let r_num = sr * sa * 255u + dr * da * inv_sa;
+        let g_num = sg * sa * 255u + dg * da * inv_sa;
+        let b_num = sb * sa * 255u + db * da * inv_sa;
+        out_r = (r_num + alpha_den / 2u) / alpha_den;
+        out_g = (g_num + alpha_den / 2u) / alpha_den;
+        out_b = (b_num + alpha_den / 2u) / alpha_den;
     }
 
     // Mode-aware channel selection

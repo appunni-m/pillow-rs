@@ -51,6 +51,13 @@ fn process_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let idx = y * w + x;
 
+    // No interior pixel exists in a smaller image. Keep this defense in the
+    // shader as well as the host preflight so malformed dimensions cannot
+    // reach the y-1/x-1 neighborhood loads.
+    if w < 3u || params.height < 3u {
+        return input[idx];
+    }
+
     // Border: 1-pixel edge copied verbatim
     if x == 0u || x >= w - 1u || y == 0u || y >= params.height - 1u {
         return input[idx];

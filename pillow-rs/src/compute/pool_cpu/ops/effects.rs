@@ -9,6 +9,45 @@ use crate::raster::{
 };
 use std::sync::{Arc, Mutex, OnceLock};
 
+#[cfg(feature = "parallel")]
+const EFFECT_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
+fn apply_effect_rows<F>(
+    bytes: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    transform: F,
+) where
+    F: Fn(usize, &mut [u8]) + Send + Sync,
+{
+    if bytes.is_empty() || width == 0 || height == 0 {
+        return;
+    }
+    let stride = width.saturating_mul(channels);
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= EFFECT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(bytes, stride, height, |_row_start, _row_end, y, row| {
+            transform(y as usize, row);
+        });
+    } else {
+        for (y, row) in bytes.chunks_exact_mut(stride).take(height).enumerate() {
+            transform(y, row);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in bytes.chunks_exact_mut(stride).take(height).enumerate() {
+        transform(y, row);
+    }
+}
+
+#[inline]
+fn blend_row(first: &[u8], second: &[u8], output: &mut [u8], alpha: f64) {
+    for ((destination, &left), &right) in output.iter_mut().zip(first.iter()).zip(second.iter()) {
+        *destination = (left as f64 * (1.0 - alpha) + right as f64 * alpha).clamp(0.0, 255.0) as u8;
+    }
+}
+
 // ── Darwin-compatible PRNG ───────────────────────────────────────────────
 //
 // Pillow delegates effect_spread/effect_noise randomness to process-global
@@ -334,10 +373,14 @@ pub fn op_alpha_composite(
         let mut dest_la = img.to_luma_alpha8();
         let src_la = src_img.to_luma_alpha8();
         let (sw, sh) = src_la.dimensions();
-        for py in 0..sh.min(dest_la.height()) {
-            for px in 0..sw.min(dest_la.width()) {
-                let sp = src_la.get_pixel(px, py);
-                let dp = dest_la.get_pixel(px, py);
+        let width = sw.min(dest_la.width()) as usize;
+        let height = sh.min(dest_la.height()) as usize;
+        let source = src_la.as_raw();
+        let source_stride = sw as usize * 2;
+        apply_effect_rows(dest_la.as_mut(), width, height, 2, |row_index, row| {
+            let source_start = row_index * source_stride;
+            let source_row = &source[source_start..source_start + width * 2];
+            for (sp, dp) in source_row.chunks_exact(2).zip(row.chunks_exact_mut(2)) {
                 let sa = sp[1] as f64 / 255.0;
                 let da = dp[1] as f64 / 255.0;
                 let out_a = sa + da * (1.0 - sa);
@@ -348,19 +391,24 @@ pub fn op_alpha_composite(
                     .round()
                     .clamp(0.0, 255.0) as u8;
                 let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-                dest_la.put_pixel(px, py, crate::raster::LumaA([l, a]));
+                dp[0] = l;
+                dp[1] = a;
             }
-        }
+        });
         return Ok(DynamicImage::ImageLumaA8(dest_la));
     }
 
     let mut dest_rgba = img.to_rgba8();
     let src_rgba = src_img.to_rgba8();
     let (sw, sh) = src_rgba.dimensions();
-    for py in 0..sh.min(dest_rgba.height()) {
-        for px in 0..sw.min(dest_rgba.width()) {
-            let sp = src_rgba.get_pixel(px, py);
-            let dp = dest_rgba.get_pixel(px, py);
+    let width = sw.min(dest_rgba.width()) as usize;
+    let height = sh.min(dest_rgba.height()) as usize;
+    let source = src_rgba.as_raw();
+    let source_stride = sw as usize * 4;
+    apply_effect_rows(dest_rgba.as_mut(), width, height, 4, |row_index, row| {
+        let source_start = row_index * source_stride;
+        let source_row = &source[source_start..source_start + width * 4];
+        for (sp, dp) in source_row.chunks_exact(4).zip(row.chunks_exact_mut(4)) {
             let sa = sp[3] as f64 / 255.0;
             let da = dp[3] as f64 / 255.0;
             let out_a = sa + da * (1.0 - sa);
@@ -377,9 +425,12 @@ pub fn op_alpha_composite(
                 .round()
                 .clamp(0.0, 255.0) as u8;
             let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-            dest_rgba.put_pixel(px, py, crate::raster::Rgba([r, g, b, a]));
+            dp[0] = r;
+            dp[1] = g;
+            dp[2] = b;
+            dp[3] = a;
         }
-    }
+    });
     Ok(DynamicImage::ImageRgba8(dest_rgba))
 }
 
@@ -424,45 +475,61 @@ pub fn op_merge(
     match mode {
         ColorMode::RGB => {
             let mut rgb = vec![0u8; n * 3];
-            for i in 0..n {
-                rgb[i * 3] = band_pixels[0][i];
-                rgb[i * 3 + 1] = band_pixels[1][i];
-                rgb[i * 3 + 2] = band_pixels[2][i];
-            }
+            apply_effect_rows(&mut rgb, w as usize, h as usize, 3, |row_index, row| {
+                let source_start = row_index * w as usize;
+                for (pixel_index, pixel) in row.chunks_exact_mut(3).enumerate() {
+                    let source_index = source_start + pixel_index;
+                    pixel[0] = band_pixels[0][source_index];
+                    pixel[1] = band_pixels[1][source_index];
+                    pixel[2] = band_pixels[2][source_index];
+                }
+            });
             let img = RgbImage::from_raw(w, h, rgb)
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageRgb8(img))
         }
         ColorMode::RGBA => {
             let mut rgba = vec![0u8; n * 4];
-            for i in 0..n {
-                rgba[i * 4] = band_pixels[0][i];
-                rgba[i * 4 + 1] = band_pixels[1][i];
-                rgba[i * 4 + 2] = band_pixels[2][i];
-                rgba[i * 4 + 3] = band_pixels[3][i];
-            }
+            apply_effect_rows(&mut rgba, w as usize, h as usize, 4, |row_index, row| {
+                let source_start = row_index * w as usize;
+                for (pixel_index, pixel) in row.chunks_exact_mut(4).enumerate() {
+                    let source_index = source_start + pixel_index;
+                    pixel[0] = band_pixels[0][source_index];
+                    pixel[1] = band_pixels[1][source_index];
+                    pixel[2] = band_pixels[2][source_index];
+                    pixel[3] = band_pixels[3][source_index];
+                }
+            });
             let img = RgbaImage::from_raw(w, h, rgba)
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageRgba8(img))
         }
         ColorMode::CMYK => {
             let mut rgba = vec![0u8; n * 4];
-            for i in 0..n {
-                rgba[i * 4] = band_pixels[0][i];
-                rgba[i * 4 + 1] = band_pixels[1][i];
-                rgba[i * 4 + 2] = band_pixels[2][i];
-                rgba[i * 4 + 3] = band_pixels[3][i];
-            }
+            apply_effect_rows(&mut rgba, w as usize, h as usize, 4, |row_index, row| {
+                let source_start = row_index * w as usize;
+                for (pixel_index, pixel) in row.chunks_exact_mut(4).enumerate() {
+                    let source_index = source_start + pixel_index;
+                    pixel[0] = band_pixels[0][source_index];
+                    pixel[1] = band_pixels[1][source_index];
+                    pixel[2] = band_pixels[2][source_index];
+                    pixel[3] = band_pixels[3][source_index];
+                }
+            });
             let img = RgbaImage::from_raw(w, h, rgba)
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageRgba8(img))
         }
         ColorMode::LA => {
             let mut la = vec![0u8; n * 2];
-            for i in 0..n {
-                la[i * 2] = band_pixels[0][i];
-                la[i * 2 + 1] = band_pixels[1][i];
-            }
+            apply_effect_rows(&mut la, w as usize, h as usize, 2, |row_index, row| {
+                let source_start = row_index * w as usize;
+                for (pixel_index, pixel) in row.chunks_exact_mut(2).enumerate() {
+                    let source_index = source_start + pixel_index;
+                    pixel[0] = band_pixels[0][source_index];
+                    pixel[1] = band_pixels[1][source_index];
+                }
+            });
             let img = GrayAlphaImage::from_raw(w, h, la)
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageLumaA8(img))
@@ -499,23 +566,21 @@ pub fn op_blend_module(
             rgba1.width().min(rgba2.width()),
             rgba1.height().min(rgba2.height()),
         );
-        let mut out = RgbaImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
-                let p1 = rgba1.get_pixel(x, y);
-                let p2 = rgba2.get_pixel(x, y);
-                out.put_pixel(
-                    x,
-                    y,
-                    crate::raster::Rgba([
-                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a).clamp(0.0, 255.0) as u8,
-                    ]),
-                );
-            }
-        }
+        let row_bytes = w as usize * 4;
+        let first = rgba1.as_raw();
+        let second = rgba2.as_raw();
+        let mut output = vec![0u8; row_bytes * h as usize];
+        apply_effect_rows(&mut output, w as usize, h as usize, 4, |row_index, row| {
+            let start = row_index * row_bytes;
+            blend_row(
+                &first[start..start + row_bytes],
+                &second[start..start + row_bytes],
+                row,
+                a,
+            );
+        });
+        let out = RgbaImage::from_raw(w, h, output)
+            .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
@@ -526,44 +591,42 @@ pub fn op_blend_module(
         let first = img.to_luma_alpha8();
         let second = other_img.to_luma_alpha8();
         let (w, h) = (first.width(), first.height());
-        let mut out = GrayAlphaImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
-                let p1 = first.get_pixel(x, y);
-                let p2 = second.get_pixel(x, y);
-                out.put_pixel(
-                    x,
-                    y,
-                    crate::raster::LumaA([
-                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
-                    ]),
-                );
-            }
-        }
+        let row_bytes = w as usize * 2;
+        let first_bytes = first.as_raw();
+        let second_bytes = second.as_raw();
+        let mut output = vec![0u8; row_bytes * h as usize];
+        apply_effect_rows(&mut output, w as usize, h as usize, 2, |row_index, row| {
+            let start = row_index * row_bytes;
+            blend_row(
+                &first_bytes[start..start + row_bytes],
+                &second_bytes[start..start + row_bytes],
+                row,
+                a,
+            );
+        });
+        let out = GrayAlphaImage::from_raw(w, h, output)
+            .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
         return Ok(DynamicImage::ImageLumaA8(out));
     }
     if matches!(img, DynamicImage::ImageRgba8(_)) {
         let first = img.to_rgba8();
         let second = other_img.to_rgba8();
         let (w, h) = (first.width(), first.height());
-        let mut out = RgbaImage::new(w, h);
-        for y in 0..h {
-            for x in 0..w {
-                let p1 = first.get_pixel(x, y);
-                let p2 = second.get_pixel(x, y);
-                out.put_pixel(
-                    x,
-                    y,
-                    crate::raster::Rgba([
-                        (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).clamp(0.0, 255.0) as u8,
-                        (p1[3] as f64 * (1.0 - a) + p2[3] as f64 * a).clamp(0.0, 255.0) as u8,
-                    ]),
-                );
-            }
-        }
+        let row_bytes = w as usize * 4;
+        let first_bytes = first.as_raw();
+        let second_bytes = second.as_raw();
+        let mut output = vec![0u8; row_bytes * h as usize];
+        apply_effect_rows(&mut output, w as usize, h as usize, 4, |row_index, row| {
+            let start = row_index * row_bytes;
+            blend_row(
+                &first_bytes[start..start + row_bytes],
+                &second_bytes[start..start + row_bytes],
+                row,
+                a,
+            );
+        });
+        let out = RgbaImage::from_raw(w, h, output)
+            .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
         return Ok(DynamicImage::ImageRgba8(out));
     }
 
@@ -573,22 +636,21 @@ pub fn op_blend_module(
         rgb1.width().min(rgb2.width()),
         rgb1.height().min(rgb2.height()),
     );
-    let mut out = RgbImage::new(w, h);
-    for y in 0..h {
-        for x in 0..w {
-            let p1 = rgb1.get_pixel(x, y);
-            let p2 = rgb2.get_pixel(x, y);
-            out.put_pixel(
-                x,
-                y,
-                crate::raster::Rgb([
-                    (p1[0] as f64 * (1.0 - a) + p2[0] as f64 * a).clamp(0.0, 255.0) as u8,
-                    (p1[1] as f64 * (1.0 - a) + p2[1] as f64 * a).clamp(0.0, 255.0) as u8,
-                    (p1[2] as f64 * (1.0 - a) + p2[2] as f64 * a).clamp(0.0, 255.0) as u8,
-                ]),
-            );
-        }
-    }
+    let row_bytes = w as usize * 3;
+    let first = rgb1.as_raw();
+    let second = rgb2.as_raw();
+    let mut output = vec![0u8; row_bytes * h as usize];
+    apply_effect_rows(&mut output, w as usize, h as usize, 3, |row_index, row| {
+        let start = row_index * row_bytes;
+        blend_row(
+            &first[start..start + row_bytes],
+            &second[start..start + row_bytes],
+            row,
+            a,
+        );
+    });
+    let out = RgbImage::from_raw(w, h, output)
+        .ok_or_else(|| PilError::ValueError("blend: buffer error".into()))?;
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
@@ -887,13 +949,20 @@ fn transform_affine_generic(
 
     for dy in 0..dst_h {
         for dx in 0..dst_w {
-            let sx = aff_a * dx as f64 + aff_b * dy as f64 + aff_c;
-            let sy = aff_d * dx as f64 + aff_e * dy as f64 + aff_f;
+            // Geometry.c's affine_transform() evaluates destination pixel
+            // centers before applying the matrix. The nearest filter then
+            // truncates non-negative coordinates, while interpolating filters
+            // subtract 0.5 inside their own filter prologue.
+            let sx = aff_a * (dx as f64 + 0.5) + aff_b * (dy as f64 + 0.5) + aff_c;
+            let sy = aff_d * (dx as f64 + 0.5) + aff_e * (dy as f64 + 0.5) + aff_f;
             let out_idx = (dy * dst_w + dx) as usize * channels;
 
             if nearest {
-                let ix = (sx + 0.5).floor() as i64;
-                let iy = (sy + 0.5).floor() as i64;
+                // Matches Geometry.c's COORD(): negative coordinates are
+                // rejected and non-negative values use C's truncating cast,
+                // rather than round-to-nearest.
+                let ix = if sx < 0.0 { -1 } else { sx as i64 };
+                let iy = if sy < 0.0 { -1 } else { sy as i64 };
                 if ix >= 0 && ix < sw as i64 && iy >= 0 && iy < sh as i64 {
                     let in_idx = (iy as u32 * sw + ix as u32) as usize * channels;
                     out[out_idx..out_idx + channels]
@@ -909,12 +978,20 @@ fn transform_affine_generic(
                     }
                 }
             } else if sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64 {
-                let x0 = sx.floor() as u32;
-                let y0 = sy.floor() as u32;
-                let x1 = (x0 + 1).min(sw - 1);
-                let y1 = (y0 + 1).min(sh - 1);
-                let fx = sx - x0 as f64;
-                let fy = sy - y0 as f64;
+                // Matches Geometry.c's BILINEAR_HEAD(): bounds are checked
+                // in center space, then the filter moves to the surrounding
+                // sample corners. XCLIP/YCLIP keep the half-pixel border
+                // valid without indexing a negative floor coordinate.
+                let sample_x = sx - 0.5;
+                let sample_y = sy - 0.5;
+                let x_floor = sample_x.floor() as i64;
+                let y_floor = sample_y.floor() as i64;
+                let x0 = x_floor.clamp(0, sw as i64 - 1) as u32;
+                let y0 = y_floor.clamp(0, sh as i64 - 1) as u32;
+                let x1 = (x_floor + 1).clamp(0, sw as i64 - 1) as u32;
+                let y1 = (y_floor + 1).clamp(0, sh as i64 - 1) as u32;
+                let fx = sample_x - x_floor as f64;
+                let fy = sample_y - y_floor as f64;
                 for ch in 0..channels {
                     let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
                     let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;

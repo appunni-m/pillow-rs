@@ -22,8 +22,10 @@ fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 fn colorize_lerp(black: u32, white: u32, luma: u32) -> u32 {
-    let val = black * 255u + (white - black) * luma;
-    return min((val + 127u) / 255u, 255u);
+    // Use signed arithmetic so a valid inverted ramp (white < black) does
+    // not underflow the unsigned expression before the final clamp.
+    let val = i32(black) * 255i + (i32(white) - i32(black)) * i32(luma);
+    return u32(clamp((val + 127i) / 255i, 0i, 255i));
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;

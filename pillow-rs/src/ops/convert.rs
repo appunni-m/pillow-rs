@@ -1,6 +1,6 @@
 use crate::color;
 use crate::error::PilError;
-use crate::image::Image;
+use crate::image::{Image, PipelineOps};
 use crate::pipeline::{ColorMode, DitherMethod, PipelineOp};
 use crate::raster::DynamicImage;
 
@@ -315,6 +315,77 @@ impl Image {
             .map(str::to_owned)
             .unwrap_or_else(|| src_mode.clone());
         let effective_src_mode_name = effective_src_mode.as_str();
+
+        // Pillow's Image.convert first tries the direct I/F converter when
+        // one exists, then retries unsupported destinations through the
+        // source mode's base type, which is L.  Normalizing these scalar
+        // modes through RGB changes Pillow's fixed-point behavior (for
+        // example, RGB(11, 11, 11) has Y=10 while F(11.5) truncates to an
+        // L value of 11 before a YCbCr conversion).
+        if matches!(effective_src_mode_name, "I" | "F") {
+            let img = self.materialize()?;
+            let result = match (effective_src_mode_name, mode) {
+                ("I", "F") => color::i_to_f(&img),
+                ("F", "I") => color::f_to_i(&img),
+                _ => {
+                    let luma = if effective_src_mode_name == "I" {
+                        color::i_to_l(&img)
+                    } else {
+                        color::f_to_l(&img)
+                    };
+                    return Image::from_dynamic(luma, None).convert(
+                        mode,
+                        matrix,
+                        dither,
+                        None,
+                        _colors,
+                    );
+                }
+            };
+            return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
+        }
+
+        // Pillow's Convert.c first reinterprets non-standard source storage
+        // as RGB whenever the destination is another non-standard family.
+        // The deferred scalar converter only sees the destination mode, so
+        // passing raw CMYK/HSV/YCbCr/I/F bytes through would treat those bytes
+        // as ordinary RGB samples. Normalize the source through the public
+        // RGB representation before dispatching HSV, YCbCr, P, I, or F.
+        // CMYK->I/F retains its dedicated exact path below.
+        if is_nonstandard_mode(effective_src_mode_name)
+            && matches!(mode, "HSV" | "YCbCr" | "P" | "I" | "F")
+            && mode != effective_src_mode_name
+            && !(effective_src_mode_name == "CMYK" && matches!(mode, "I" | "F"))
+        {
+            let palette = self.palette();
+            let img = self.materialize()?;
+            let converted = if effective_src_mode_name == "PA" {
+                crate::image::expand_palette_alpha(
+                    &img.to_luma_alpha8(),
+                    palette.as_deref().unwrap_or_default(),
+                )
+            } else {
+                color::convert_from_nonstandard(
+                    effective_src_mode_name,
+                    &img,
+                    palette.as_deref(),
+                )
+                .unwrap_or_else(|| img.to_rgb8().into())
+            };
+            let rgb_source = Image::from_dynamic(converted, None);
+            return rgb_source.convert(mode, matrix, dither, None, _colors);
+        }
+
+        // `PA` is a real Pillow destination mode even though it is not one
+        // of the scalar pipeline modes.  Its conversion is not a generic
+        // mode tag: Pillow builds palette indices and a second, per-pixel
+        // alpha band.  Resolve it eagerly so standard and non-standard source
+        // modes follow the same public conversion contract.
+        if mode == "PA" {
+            let dither_enum = parse_dither(dither)?;
+            return convert_to_palette_alpha(self, effective_src_mode_name, dither_enum);
+        }
+
         let target_is_standard = !is_nonstandard_mode(mode);
         // Non-standard sources must be materialized and converted to RGB
         // before reaching a standard target OR a CMYK target (Pillow's
@@ -367,10 +438,41 @@ impl Image {
                     // Pillow's C converter maps YCbCr to L through the Y
                     // band directly, not through the RGB luma.
                     DynamicImage::ImageLuma8(ycbcr_luma8(&img))
+                } else if mode == "LA" && src_mode == "YCbCr" {
+                    // Convert.c's ycbcr2la likewise copies the Y band and
+                    // installs an opaque alpha byte. Reconstructing RGB
+                    // first would change the fixed-point Y value and expose
+                    // a storage byte as alpha.
+                    let gray = ycbcr_luma8(&img);
+                    let (width, height) = gray.dimensions();
+                    let mut la = crate::raster::GrayAlphaImage::new(width, height);
+                    for (output, gray_pixel) in la.pixels_mut().zip(gray.pixels()) {
+                        output[0] = gray_pixel[0];
+                        output[1] = 255;
+                    }
+                    DynamicImage::ImageLumaA8(la)
                 } else if mode == "L" {
                     DynamicImage::ImageLuma8(color::pil_grayscale(&converted)?)
                 } else {
-                    let mut la = color::pil_grayscale_alpha(&converted)?;
+                    let mut la = if src_mode == "PA" {
+                        // PA expansion carries the source alpha in the RGBA
+                        // result.  Keep that band when Pillow converts PA to
+                        // LA; the generic grayscale-alpha helper intentionally
+                        // creates an opaque alpha band for RGB-family inputs.
+                        let gray = color::pil_grayscale(&converted)?;
+                        let rgba = converted.to_rgba8();
+                        let (width, height) = gray.dimensions();
+                        let mut result = crate::raster::GrayAlphaImage::new(width, height);
+                        for ((output, gray_pixel), rgba_pixel) in
+                            result.pixels_mut().zip(gray.pixels()).zip(rgba.pixels())
+                        {
+                            output[0] = gray_pixel[0];
+                            output[1] = rgba_pixel[3];
+                        }
+                        result
+                    } else {
+                        color::pil_grayscale_alpha(&converted)?
+                    };
                     if src_mode == "P" {
                         // Pillow carries palette transparency into the LA
                         // alpha band (putpalettealpha before converting).
@@ -383,32 +485,6 @@ impl Image {
                     }
                     DynamicImage::ImageLumaA8(la)
                 }
-            } else if mode == "PA" && src_mode == "P" {
-                // Pillow P->PA keeps the palette indices with the palette
-                // alpha band (opaque unless a transparency marks entries).
-                let indices = img.to_luma8();
-                let (w, h) = indices.dimensions();
-                let mut pa = crate::raster::GrayAlphaImage::new(w, h);
-                let table = palette_alpha_for_convert(self);
-                for (op, ip) in pa.pixels_mut().zip(indices.pixels()) {
-                    op[0] = ip[0];
-                    op[1] = table
-                        .as_ref()
-                        .and_then(|t| t.get(usize::from(ip[0])))
-                        .copied()
-                        .unwrap_or(255);
-                }
-                let loaded = crate::image::Image::Loaded(crate::image::LoadedData {
-                    image: std::sync::Arc::new(crate::raster::DynamicImage::ImageLumaA8(pa)),
-                    explicit_mode: Some("PA".to_owned()),
-                    decoded_mode: crate::raster::ColorType::La8.into(),
-                    palette: palette.map(|p| p.to_vec()),
-                    palette_alpha: self.palette_alpha(),
-                    source_format: None,
-                    info: None,
-                    exif: self.exif_metadata(),
-                });
-                return Ok(loaded);
             } else if mode == "RGB" {
                 // PA expansion carries the per-pixel alpha needed by RGBA
                 // conversion, but Pillow's RGB conversion drops that band.
@@ -440,21 +516,6 @@ impl Image {
             // non-standard source and applies Pillow's dither policy.
         }
 
-        if mode == "PA" && src_mode == "L" {
-            // Pillow's Convert.c represents L->PA as the luma sample plus an
-            // opaque alpha byte. This path is used by Image.paste when a
-            // luma image is pasted into a palette-alpha destination.
-            let luma = self.materialize()?.to_luma8();
-            let (width, height) = luma.dimensions();
-            let pa = crate::raster::GrayAlphaImage::from_fn(width, height, |x, y| {
-                crate::raster::LumaA([luma.get_pixel(x, y)[0], 255])
-            });
-            return Ok(Image::from_dynamic(
-                DynamicImage::ImageLumaA8(pa),
-                Some("PA".to_owned()),
-            ));
-        }
-
         let dither_enum = parse_dither(dither)?;
 
         // Special case: converting to binary mode "1" — must eagerly execute
@@ -463,7 +524,7 @@ impl Image {
             let img = self.materialize()?;
             // Use truncated grayscale (PIL uses integer truncation, not rounding)
             let gray = if effective_src_mode == "CMYK" {
-                crate::color::cmyk_to_grayscale(&img)?
+                crate::color::cmyk_to_grayscale_truncate(&img)?
             } else if is_nonstandard_mode(&effective_src_mode) {
                 let palette = self.palette();
                 let rgb = crate::color::convert_from_nonstandard(
@@ -573,15 +634,24 @@ impl Image {
         // here so the palette is stored on the result Pipeline, enabling subsequent
         // convert("RGB") operations to do correct palette lookups.
         if mode == "P" {
+            if src_mode == "RGBA" {
+                // Pillow routes RGBA->P through FASTOCTREE rather than the
+                // fixed WEB palette used for RGB-family sources without an
+                // alpha band.  Returning the quantizer's indexed pipeline
+                // also preserves its palette metadata for later conversions.
+                return self.quantize(256, 0, None, true, 2);
+            }
             use crate::ops::quantize::web_palette_quantize;
             use std::sync::Arc;
 
             let img = self.materialize()?;
             let (w, h) = (img.width(), img.height());
-            let (indices, palette_bytes) = if matches!(src_mode.as_str(), "1" | "L") {
+            let (indices, palette_bytes) = if matches!(src_mode.as_str(), "1" | "L" | "LA") {
                 // Pillow 12.2 Convert.c maps L/1 samples directly to P indices
-                // and installs the identity grayscale palette. Web quantization
-                // would change the indices before mixed-mode paste/composite.
+                // and installs the identity grayscale palette. LA uses the
+                // same luma-band path; its alpha is not part of a P result.
+                // Web quantization would change the indices before mixed-mode
+                // paste/composite.
                 let indices = img.to_luma8().into_raw();
                 let palette = (0u8..=u8::MAX)
                     .flat_map(|value| [value, value, value])
@@ -614,14 +684,41 @@ impl Image {
             };
             return Ok(Image::Pipeline {
                 source: Arc::new(Image::Loaded(source)),
-                ops: vec![],
+                ops: PipelineOps::empty(),
                 format: None,
                 explicit_mode: Some("P".to_string()),
                 backend: None,
                 palette: Some(palette_bytes),
                 palette_alpha: None,
                 materialized: crate::image::materialization_cache(),
+                shape: crate::image::pipeline_shape_cache(),
+                mode: crate::image::pipeline_mode_cache(),
             });
+        }
+
+        // I/F targets keep their four-byte sample representation. Unlike
+        // ordinary RGB-backed conversions, a CMYK source must first expand
+        // C/M/Y/K into RGB; the deferred Convert op only receives the target
+        // mode tag, so preserve this source-specific conversion here.
+        if effective_src_mode_name == "CMYK" && matches!(mode, "I" | "F") {
+            let img = self.materialize()?;
+            let rgb = crate::color::cmyk_to_rgb(&img).to_rgb8();
+            let (w, h) = rgb.dimensions();
+            let mut out = crate::raster::RgbaImage::new(w, h);
+            for (output, pixel) in out.pixels_mut().zip(rgb.pixels()) {
+                let r = i32::from(pixel[0]);
+                let g = i32::from(pixel[1]);
+                let b = i32::from(pixel[2]);
+                if mode == "I" {
+                    let value = (19595i32 * r + 38470i32 * g + 7471i32 * b + 32768) >> 16;
+                    *output = crate::raster::Rgba(value.to_le_bytes());
+                } else {
+                    let value = (r * 299 + g * 587 + b * 114) as f32 / 1000.0;
+                    *output = crate::raster::Rgba(value.to_le_bytes());
+                }
+            }
+            let result = crate::raster::DynamicImage::ImageRgba8(out);
+            return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
         }
 
         let mode_enum = parse_mode(mode)?;
@@ -647,6 +744,151 @@ impl Image {
     }
 }
 
+/// Convert a source image to Pillow's palette-plus-alpha representation.
+///
+/// Pillow's `Convert.c` treats `PA` as an indexed destination, not as a
+/// spelling of `LA`: RGB-family and CMYK/HSV/YCbCr sources are mapped through
+/// the default WEB palette, RGBA keeps the source alpha bytes, and scalar or
+/// indexed sources retain their byte/index values. Scalar sources also receive
+/// Pillow's identity grayscale palette, so a later `PA` expansion resolves an
+/// index back to the original scalar value. Keeping those paths explicit also
+/// avoids feeding `PA` into the ordinary scalar pipeline, which has no palette
+/// storage to attach to its result.
+fn identity_grayscale_palette() -> Vec<u8> {
+    (0u8..=u8::MAX)
+        .flat_map(|value| [value, value, value])
+        .collect()
+}
+
+fn convert_to_palette_alpha(
+    image: &Image,
+    source_mode: &str,
+    dither: Option<DitherMethod>,
+) -> Result<Image, PilError> {
+    let source = image.materialize()?;
+    let (indices, palette, alpha) = match source_mode {
+        "P" => {
+            let indices = source.to_luma8();
+            let table = palette_alpha_for_convert(image);
+            let alpha = indices
+                .pixels()
+                .map(|pixel| {
+                    table
+                        .as_ref()
+                        .and_then(|values| values.get(usize::from(pixel[0])))
+                        .copied()
+                        .unwrap_or(255)
+                })
+                .collect();
+            (indices, image.palette(), alpha)
+        }
+        "1" | "L" | "LA" => {
+            let indices = source.to_luma8();
+            let alpha = vec![255; indices.width() as usize * indices.height() as usize];
+            (indices, Some(identity_grayscale_palette()), alpha)
+        }
+        "I" => {
+            // I->P is a direct clamped scalar-to-index conversion.  The
+            // intermediate RGB helper preserves that value without applying
+            // the I->L scaling formula used by ordinary grayscale conversion.
+            let indices = color::i_to_rgb(&source).to_luma8();
+            let alpha = vec![255; indices.width() as usize * indices.height() as usize];
+            (indices, Some(identity_grayscale_palette()), alpha)
+        }
+        "F" => {
+            // F->P truncates the clamped float value to an index, matching the
+            // existing F->RGB helper because all three broadcast channels are
+            // identical.
+            let indices = color::f_to_rgb(&source).to_luma8();
+            let alpha = vec![255; indices.width() as usize * indices.height() as usize];
+            (indices, Some(identity_grayscale_palette()), alpha)
+        }
+        "RGBA" => {
+            // Pillow's Python conversion splits RGBA into RGB and alpha,
+            // quantizes only the RGB image, then merges the original alpha
+            // band into PA.  Quantizing RGBA and moving transparent entries
+            // afterward produces different palette-index order for valid
+            // images with distinct transparent and visible colors.
+            let rgba = source.to_rgba8();
+            let alpha: Vec<u8> = rgba.pixels().map(|pixel| pixel[3]).collect();
+            let (width, height) = rgba.dimensions();
+            let mut rgb = crate::raster::RgbImage::new(width, height);
+            for (output, input) in rgb.pixels_mut().zip(rgba.pixels()) {
+                *output = crate::raster::Rgb([input[0], input[1], input[2]]);
+            }
+            let quantized = Image::from_dynamic(
+                DynamicImage::ImageRgb8(rgb),
+                Some("RGB".to_owned()),
+            )
+            // Image.convert("PA") calls RGB.quantize() without a method;
+            // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
+            // default.  The palette-index order is observable in PA bytes.
+            .quantize(256, 0, None, true, 0)?;
+            let index_bytes = quantized.materialize()?.to_luma8().into_raw();
+            let palette = quantized.palette();
+            let indices = crate::raster::GrayImage::from_raw(width, height, index_bytes)
+                .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+            (indices, palette, alpha)
+        }
+        "CMYK" | "HSV" | "YCbCr" => {
+            let source_palette = image.palette();
+            let rgb =
+                color::convert_from_nonstandard(source_mode, &source, source_palette.as_deref())
+                    .unwrap_or_else(|| source.to_rgb8().into())
+                    .to_rgb8();
+            let (width, height) = rgb.dimensions();
+            let dither = !matches!(dither, Some(DitherMethod::None));
+            let (indices, palette) = crate::ops::quantize::web_palette_quantize(
+                &rgb.clone().into_raw(),
+                width,
+                height,
+                dither,
+            )?;
+            let indices = crate::raster::GrayImage::from_raw(width, height, indices)
+                .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+            let alpha = vec![255; width as usize * height as usize];
+            (indices, Some(palette), alpha)
+        }
+        _ => {
+            let rgb = source.to_rgb8();
+            let (width, height) = rgb.dimensions();
+            let dither = !matches!(dither, Some(DitherMethod::None));
+            let (indices, palette) = crate::ops::quantize::web_palette_quantize(
+                &rgb.clone().into_raw(),
+                width,
+                height,
+                dither,
+            )?;
+            let indices = crate::raster::GrayImage::from_raw(width, height, indices)
+                .ok_or_else(|| PilError::ValueError("palette conversion failed".to_owned()))?;
+            let alpha = vec![255; width as usize * height as usize];
+            (indices, Some(palette), alpha)
+        }
+    };
+
+    let (width, height) = indices.dimensions();
+    let index_bytes = indices.into_raw();
+    let mut pa = crate::raster::GrayAlphaImage::new(width, height);
+    for (position, output) in pa.pixels_mut().enumerate() {
+        output[0] = index_bytes[position];
+        output[1] = alpha.get(position).copied().unwrap_or(255);
+    }
+
+    Ok(Image::Loaded(crate::image::LoadedData {
+        image: std::sync::Arc::new(DynamicImage::ImageLumaA8(pa)),
+        explicit_mode: Some("PA".to_owned()),
+        decoded_mode: crate::raster::ColorType::La8.into(),
+        palette,
+        palette_alpha: None,
+        // Pillow's mode conversion returns a detached image and does not
+        // carry the source decoder format or transient info dictionary into
+        // the result.  Retain only EXIF, matching the existing P/PA path.
+        source_format: None,
+        info: None,
+        exif: image.exif_metadata(),
+    }))
+}
+
 fn explicit_mode_for(mode: &str) -> Option<String> {
     match mode {
         "1" | "P" | "CMYK" | "HSV" | "YCbCr" | "I" | "F" => Some(mode.to_string()),
@@ -659,6 +901,11 @@ fn convert_with_matrix(
     target_mode: &str,
     matrix: &[f64],
 ) -> Result<crate::raster::DynamicImage, PilError> {
+    #[inline]
+    fn round_clip(value: f64) -> u8 {
+        value.round().clamp(0.0, 255.0) as u8
+    }
+
     match (matrix.len(), target_mode) {
         (4, "RGB") => {
             // Pillow 12.2 retains a legacy four-coefficient RGB-output path:
@@ -670,11 +917,12 @@ fn convert_with_matrix(
                 .pixels()
                 .flat_map(|p| {
                     [
-                        (matrix[0] * p[0] as f64
-                            + matrix[1] * p[1] as f64
-                            + matrix[2] * p[2] as f64
-                            + matrix[3])
-                            .clamp(0.0, 255.0) as u8,
+                        round_clip(
+                            matrix[0] * p[0] as f64
+                                + matrix[1] * p[1] as f64
+                                + matrix[2] * p[2] as f64
+                                + matrix[3],
+                        ),
                         0,
                         0,
                     ]
@@ -693,11 +941,12 @@ fn convert_with_matrix(
             let pixels: Vec<u8> = rgb
                 .pixels()
                 .map(|p| {
-                    (matrix[0] * p[0] as f64
-                        + matrix[1] * p[1] as f64
-                        + matrix[2] * p[2] as f64
-                        + matrix[3])
-                        .clamp(0.0, 255.0) as u8
+                    round_clip(
+                        matrix[0] * p[0] as f64
+                            + matrix[1] * p[1] as f64
+                            + matrix[2] * p[2] as f64
+                            + matrix[3],
+                    )
                 })
                 .collect();
             Ok(crate::raster::DynamicImage::ImageLuma8(
@@ -715,12 +964,9 @@ fn convert_with_matrix(
                     let g = p[1] as f64;
                     let b = p[2] as f64;
                     [
-                        (matrix[0] * r + matrix[1] * g + matrix[2] * b + matrix[3])
-                            .clamp(0.0, 255.0) as u8,
-                        (matrix[4] * r + matrix[5] * g + matrix[6] * b + matrix[7])
-                            .clamp(0.0, 255.0) as u8,
-                        (matrix[8] * r + matrix[9] * g + matrix[10] * b + matrix[11])
-                            .clamp(0.0, 255.0) as u8,
+                        round_clip(matrix[0] * r + matrix[1] * g + matrix[2] * b + matrix[3]),
+                        round_clip(matrix[4] * r + matrix[5] * g + matrix[6] * b + matrix[7]),
+                        round_clip(matrix[8] * r + matrix[9] * g + matrix[10] * b + matrix[11]),
                     ]
                 })
                 .collect();

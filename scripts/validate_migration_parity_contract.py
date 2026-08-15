@@ -860,7 +860,7 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
     workload_ids: set[str] = set()
     for index, workload in enumerate(_list(document["workloads"], f"{relative}.workloads")):
         path = f"{relative}.workloads[{index}]"
-        workload = _exact(workload, {"workload_id", "covers", "subjects", "input", "measurement"}, path)
+        workload = _exact(workload, {"workload_id", "covers", "subjects", "input", "measurement", "context"}, path)
         workload_id = _string(workload["workload_id"], f"{path}.workload_id")
         if workload_id in item_ids:
             raise _error(f"{path}.workload_id", "duplicate executable item ID")
@@ -873,6 +873,36 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
             requirement = requirement_index.get(requirement_id)
             if requirement is None or "benchmark" not in requirement["lanes"]:
                 raise _error(f"{path}.covers", f"invalid benchmark requirement {requirement_id!r}")
+        context = _exact(
+            workload["context"],
+            {"size", "mode", "chain_length", "operation_class", "cache_state", "build_profile"},
+            f"{path}.context",
+        )
+        size = context["size"]
+        if (
+            not isinstance(size, list)
+            or len(size) != 2
+            or any(type(value) is not int or value < 0 for value in size)
+        ):
+            raise _error(f"{path}.context.size", "expected two non-negative integer dimensions")
+        if not isinstance(context["mode"], str) or not context["mode"]:
+            raise _error(f"{path}.context.mode", "expected a non-empty mode")
+        if type(context["chain_length"]) is not int or context["chain_length"] < 0:
+            raise _error(f"{path}.context.chain_length", "expected a non-negative integer")
+        if context["operation_class"] not in {
+            "point",
+            "neighborhood",
+            "geometry",
+            "draw",
+            "multi_image",
+            "generator",
+            "terminal",
+        }:
+            raise _error(f"{path}.context.operation_class", "unsupported operation class")
+        if context["cache_state"] not in {"cold", "warm", "resident", "mixed"}:
+            raise _error(f"{path}.context.cache_state", "unsupported cache state")
+        if context["build_profile"] not in {"debug", "release"}:
+            raise _error(f"{path}.context.build_profile", "unsupported build profile")
         subjects = _list(workload["subjects"], f"{path}.subjects")
         if not subjects:
             raise _error(f"{path}.subjects", "at least one subject is required")
@@ -913,7 +943,7 @@ def _validate_benchmark_document(document: Any, relative: str, operation_index: 
         for key in ("warmup_iterations", "measurement_iterations", "samples", "concurrency"):
             if type(measurement[key]) is not int or measurement[key] < 0 or (key != "warmup_iterations" and measurement[key] == 0):
                 raise _error(f"{path}.measurement.{key}", "expected valid non-negative measurement count")
-        if measurement["cache_state"] not in {"cold", "warm", "mixed"}:
+        if measurement["cache_state"] not in {"cold", "warm", "resident", "mixed"}:
             raise _error(f"{path}.measurement.cache_state", "unsupported cache state")
         if measurement["correctness_gate"] not in {"parity_pass", "source_target_match", "successful_execution", "not_applicable"}:
             raise _error(f"{path}.measurement.correctness_gate", "unsupported correctness gate")

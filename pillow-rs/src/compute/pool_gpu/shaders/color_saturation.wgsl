@@ -19,8 +19,12 @@ fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
 fn lerp_fn(ch: u32, luma: u32, f: u32) -> u32 {
-    let inv_f = 1000u - f;
-    return min((luma * inv_f + ch * f) / 1000u, 255u);
+    // The public enhancement API permits factors above 1.0. Signed math
+    // preserves the extrapolation without unsigned underflow; the host
+    // safety bound keeps these products inside i32.
+    let fi = i32(f);
+    let value = i32(luma) * (1000i - fi) + i32(ch) * fi;
+    return u32(clamp(value / 1000i, 0i, 255i));
 }
 
 @group(0) @binding(0) var<storage, read> input: array<u32>;
@@ -38,8 +42,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let b = (pixel >> 16u) & 0xffu;
     let a = (pixel >> 24u) & 0xffu;
 
-    // BT.601 luma (for L/LA, g=0, b=0 so luma = 299*r/1000, but we pass through unchanged)
-    let luma = (299u * r + 587u * g + 114u * b) / 1000u;
+    // Pillow's rounded fixed-point BT.601 luma. For L/LA the result is not
+    // used because those modes are passed through below.
+    let luma = (19595u * r + 38470u * g + 7471u * b + 32768u) >> 16u;
 
     let f = params.factor_int;
     let val_r = lerp_fn(r, luma, f);

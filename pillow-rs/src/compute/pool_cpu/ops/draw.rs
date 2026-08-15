@@ -10,6 +10,7 @@
 
 use crate::draw::{DrawCanvas, bresenham_line, plot, round_down, round_up, scanline_polygon_fill};
 use crate::error::PilError;
+use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
 
 enum NativeDrawCanvas {
@@ -36,6 +37,12 @@ impl NativeDrawCanvas {
             Self::LA(pixels) => DynamicImage::ImageLumaA8(pixels),
             Self::RGB(pixels, _) => DynamicImage::ImageRgb8(pixels),
             Self::RGBA(pixels) => DynamicImage::ImageRgba8(pixels),
+        }
+    }
+
+    fn set_alpha_blend_rgb(&mut self, enabled: bool) {
+        if let Self::RGB(_, alpha_blend_rgb) = self {
+            *alpha_blend_rgb = enabled;
         }
     }
 }
@@ -165,6 +172,63 @@ fn draw_line_on_canvas<C: DrawCanvas>(
 }
 
 /// Draw a rectangle directly on a canvas.
+fn draw_horizontal_span<C: DrawCanvas>(
+    canvas: &mut C,
+    x0: i64,
+    x1: i64,
+    y: i64,
+    color: (u8, u8, u8, u8),
+    w: u32,
+    h: u32,
+) {
+    if y < 0 || y >= i64::from(h) || w == 0 || x1 < 0 || x0 >= i64::from(w) {
+        return;
+    }
+    let start = x0.max(0);
+    let end = x1.min(i64::from(w) - 1);
+    if start > end {
+        return;
+    }
+    for x in start..=end {
+        plot(canvas, x as i32, y as i32, color, w, h, false);
+    }
+}
+
+/// Draw the vertical line primitive used by Pillow's rectangle outline.
+/// `ImagingDrawRectangle` intentionally omits the final endpoint of each
+/// vertical line, unlike the public line wrapper which adds its endpoint.
+fn draw_vertical_segment_exclusive<C: DrawCanvas>(
+    canvas: &mut C,
+    x: i64,
+    y0: i64,
+    y1: i64,
+    color: (u8, u8, u8, u8),
+    w: u32,
+    h: u32,
+) {
+    if x < 0 || x >= i64::from(w) || h == 0 {
+        return;
+    }
+    if y0 < y1 {
+        let start = y0.max(0);
+        let end = y1.min(i64::from(h));
+        for y in start..end {
+            plot(canvas, x as i32, y as i32, color, w, h, false);
+        }
+    } else if y0 > y1 {
+        // Pillow's ImagingDrawRectangle keeps the exclusive vertical segment
+        // even when a wide stroke makes its endpoints cross.  That descending
+        // path is observable on degenerate public boxes, so retain it instead
+        // of treating the interval as an ordinary empty range.
+        let mut y = y0.min(i64::from(h) - 1);
+        let stop = y1.max(-1);
+        while y > stop {
+            plot(canvas, x as i32, y as i32, color, w, h, false);
+            y -= 1;
+        }
+    }
+}
+
 fn draw_rect_on_canvas<C: DrawCanvas>(
     canvas: &mut C,
     x0: i32,
@@ -180,42 +244,68 @@ fn draw_rect_on_canvas<C: DrawCanvas>(
         return;
     }
 
-    let visible_left = x0.max(0) as u32;
-    let visible_top = y0.max(0) as u32;
-    let visible_right = x1.min(img_w.saturating_sub(1) as i32);
-    let visible_bottom = y1.min(img_h.saturating_sub(1) as i32);
-    if visible_right < 0 || visible_bottom < 0 || visible_left >= img_w || visible_top >= img_h {
-        return;
-    }
-
-    // Pillow's ImagingDrawRectangle treats both ends as inclusive.
+    // Pillow's src/libImaging/Draw.c::ImagingDrawRectangle draws the fill as
+    // inclusive horizontal spans, then constructs the outline from width
+    // horizontal spans plus vertical line segments.  Keeping those primitive
+    // calls separate is important for degenerate boxes: a zero-width or
+    // zero-height box expands only through the outline's vertical segments.
     if let Some(fc) = fill {
-        for py in visible_top..=visible_bottom as u32 {
-            for px in visible_left..=visible_right as u32 {
-                canvas.put_rgba(px, py, [fc.0, fc.1, fc.2, fc.3]);
+        if img_h > 0 {
+            let start = i64::from(y0).max(0);
+            let end = i64::from(y1).min(i64::from(img_h) - 1);
+            for py in start..=end {
+                draw_horizontal_span(canvas, i64::from(x0), i64::from(x1), py, fc, img_w, img_h);
             }
         }
     }
 
-    // libImaging draws each additional outline ring inward. Computing the
-    // distance from every visible pixel to the original inclusive edge is
-    // equivalent to the C ring loop, while bounding work by the image size
-    // even when callers provide very large coordinates or widths.
+    // The C primitive normalizes width zero to one. The public binding already
+    // performs that normalization, but retaining it here keeps direct core
+    // dispatch behavior equivalent as well.
     if let Some(oc) = outline.filter(|_| width != 0) {
         let width = i64::from(width);
-        for py in visible_top..=visible_bottom as u32 {
-            for px in visible_left..=visible_right as u32 {
-                let px = i64::from(px);
-                let py = i64::from(py);
-                let edge_distance = (px - i64::from(x0))
-                    .min(i64::from(x1) - px)
-                    .min(py - i64::from(y0))
-                    .min(i64::from(y1) - py);
-                if edge_distance < width {
-                    canvas.put_rgba(px as u32, py as u32, [oc.0, oc.1, oc.2, oc.3]);
-                }
-            }
+        for i in 0..width {
+            draw_horizontal_span(
+                canvas,
+                i64::from(x0),
+                i64::from(x1),
+                i64::from(y0).saturating_add(i),
+                oc,
+                img_w,
+                img_h,
+            );
+            draw_horizontal_span(
+                canvas,
+                i64::from(x0),
+                i64::from(x1),
+                i64::from(y1).saturating_sub(i),
+                oc,
+                img_w,
+                img_h,
+            );
+            draw_vertical_segment_exclusive(
+                canvas,
+                i64::from(x1).saturating_sub(i),
+                i64::from(y0).saturating_add(width),
+                i64::from(y1).saturating_sub(width).saturating_add(1),
+                oc,
+                img_w,
+                img_h,
+            );
+            draw_vertical_segment_exclusive(
+                canvas,
+                i64::from(x0).saturating_add(i),
+                i64::from(y0).saturating_add(width),
+                i64::from(y1).saturating_sub(width).saturating_add(1),
+                oc,
+                img_w,
+                img_h,
+            );
         }
+    } else if outline.is_some() {
+        // An explicitly zero-width outline is intentionally a no-op at the
+        // Python layer, matching ImageDraw.rectangle's width guard.
+        return;
     }
 }
 
@@ -1025,6 +1115,414 @@ fn draw_pieslice_on_canvas<C: DrawCanvas>(
     }
 }
 
+fn validate_rounded_rect(x0: i32, y0: i32, x1: i32, y1: i32) -> Result<(), PilError> {
+    if x1 < x0 {
+        return Err(PilError::ValueError(
+            "x1 must be greater than or equal to x0".to_owned(),
+        ));
+    }
+    if y1 < y0 {
+        return Err(PilError::ValueError(
+            "y1 must be greater than or equal to y0".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+/// Draw a rounded rectangle into an already-owned native canvas.
+///
+/// Keeping the canvas ownership outside this routine is what lets a run of
+/// draw operations share one full-frame clone while preserving their public
+/// order and per-shape compositing behavior.
+fn draw_rounded_rect_on_canvas<C: DrawCanvas>(
+    canvas: &mut C,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    radius: f64,
+    fill: Option<(u8, u8, u8, u8)>,
+    outline: Option<(u8, u8, u8, u8)>,
+    width: u32,
+) {
+    let mut diameter = radius * 2.0;
+    let full_x = diameter >= f64::from(x1 - x0 - 1);
+    if full_x {
+        diameter = f64::from(x1 - x0);
+    }
+    let full_y = full_x && diameter >= f64::from(y1 - y0 - 1);
+    if full_y {
+        diameter = f64::from(y1 - y0);
+    }
+    if full_x && full_y {
+        draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
+        return;
+    }
+    if diameter == 0.0 {
+        draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
+        return;
+    }
+
+    let diameter = diameter as i32;
+    let radius = diameter / 2;
+    let corners = if full_x {
+        vec![
+            (x0, y0, x0 + diameter, y0 + diameter, 180.0, 360.0),
+            (x0, y1 - diameter, x0 + diameter, y1, 0.0, 180.0),
+        ]
+    } else if full_y {
+        vec![
+            (x0, y0, x0 + diameter, y0 + diameter, 90.0, 270.0),
+            (x1 - diameter, y0, x1, y0 + diameter, 270.0, 90.0),
+        ]
+    } else {
+        vec![
+            (x0, y0, x0 + diameter, y0 + diameter, 180.0, 270.0),
+            (x1 - diameter, y0, x1, y0 + diameter, 270.0, 360.0),
+            (x1 - diameter, y1 - diameter, x1, y1, 0.0, 90.0),
+            (x0, y1 - diameter, x0 + diameter, y1, 90.0, 180.0),
+        ]
+    };
+
+    if let Some(fill_color) = fill {
+        for &(left, top, right, bottom, start, end) in &corners {
+            draw_pieslice_on_canvas(
+                canvas,
+                left,
+                top,
+                right,
+                bottom,
+                start,
+                end,
+                Some(fill_color),
+                None,
+                1,
+            );
+        }
+        if full_x {
+            draw_rect_on_canvas(
+                canvas,
+                x0,
+                y0 + radius + 1,
+                x1,
+                y1 - radius - 1,
+                Some(fill_color),
+                None,
+                1,
+            );
+        } else if x1 - radius - 1 >= x0 + radius + 1 {
+            draw_rect_on_canvas(
+                canvas,
+                x0 + radius + 1,
+                y0,
+                x1 - radius - 1,
+                y1,
+                Some(fill_color),
+                None,
+                1,
+            );
+        }
+        if !full_x && !full_y {
+            draw_rect_on_canvas(
+                canvas,
+                x0,
+                y0 + radius + 1,
+                x0 + radius,
+                y1 - radius - 1,
+                Some(fill_color),
+                None,
+                1,
+            );
+            draw_rect_on_canvas(
+                canvas,
+                x1 - radius,
+                y0 + radius + 1,
+                x1,
+                y1 - radius - 1,
+                Some(fill_color),
+                None,
+                1,
+            );
+        }
+    }
+
+    if let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) {
+        for &(left, top, right, bottom, start, end) in &corners {
+            draw_arc_on_canvas(
+                canvas,
+                left,
+                top,
+                right,
+                bottom,
+                start,
+                end,
+                outline_color,
+                width,
+            );
+        }
+        let width = i32::try_from(width).unwrap_or(i32::MAX);
+        if !full_x {
+            draw_rect_on_canvas(
+                canvas,
+                x0 + radius + 1,
+                y0,
+                x1 - radius - 1,
+                y0.saturating_add(width - 1),
+                Some(outline_color),
+                None,
+                1,
+            );
+            draw_rect_on_canvas(
+                canvas,
+                x0 + radius + 1,
+                y1.saturating_sub(width - 1),
+                x1 - radius - 1,
+                y1,
+                Some(outline_color),
+                None,
+                1,
+            );
+        }
+        if !full_y {
+            draw_rect_on_canvas(
+                canvas,
+                x0,
+                y0 + radius + 1,
+                x0.saturating_add(width - 1),
+                y1 - radius - 1,
+                Some(outline_color),
+                None,
+                1,
+            );
+            draw_rect_on_canvas(
+                canvas,
+                x1.saturating_sub(width - 1),
+                y0 + radius + 1,
+                x1,
+                y1 - radius - 1,
+                Some(outline_color),
+                None,
+                1,
+            );
+        }
+    }
+}
+
+fn draw_op_on_canvas(
+    canvas: &mut NativeDrawCanvas,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<(), PilError> {
+    let alpha_blend_rgb = match op {
+        PipelineOp::DrawLine {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawRectangle {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawRoundedRect {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawEllipse {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawCircle {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawPolygon {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawArc {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawChord {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawPieslice {
+            alpha_blend_rgb, ..
+        }
+        | PipelineOp::DrawPoint {
+            alpha_blend_rgb, ..
+        } => *alpha_blend_rgb,
+        _ => false,
+    };
+    // Select the blend setting per operation so a mixed draw context retains
+    // the same RGB alpha behavior as the one-operation path.
+    canvas.set_alpha_blend_rgb(alpha_blend_rgb);
+    match op {
+        PipelineOp::DrawLine {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            width,
+            ..
+        } => draw_line_on_canvas(canvas, *x0, *y0, *x1, *y1, *fill, *width),
+        PipelineOp::DrawRectangle {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            ..
+        } => draw_rect_on_canvas(canvas, *x0, *y0, *x1, *y1, *fill, *outline, *width),
+        PipelineOp::DrawRoundedRect {
+            x0,
+            y0,
+            x1,
+            y1,
+            radius,
+            fill,
+            outline,
+            width,
+            ..
+        } => {
+            validate_rounded_rect(*x0, *y0, *x1, *y1)?;
+            draw_rounded_rect_on_canvas(
+                canvas, *x0, *y0, *x1, *y1, *radius, *fill, *outline, *width,
+            );
+        }
+        PipelineOp::DrawEllipse {
+            x0,
+            y0,
+            x1,
+            y1,
+            fill,
+            outline,
+            width,
+            ..
+        } => draw_ellipse_on_canvas(canvas, *x0, *y0, *x1, *y1, *fill, *outline, *width),
+        PipelineOp::DrawCircle {
+            cx,
+            cy,
+            radius,
+            fill,
+            outline,
+            width,
+            ..
+        } => draw_ellipse_on_canvas(
+            canvas,
+            *cx - *radius,
+            *cy - *radius,
+            *cx + *radius,
+            *cy + *radius,
+            *fill,
+            *outline,
+            *width,
+        ),
+        PipelineOp::DrawPolygon {
+            points,
+            fill,
+            outline,
+            width,
+            ..
+        } => draw_polygon_on_canvas(
+            canvas,
+            points,
+            *fill,
+            if mode == Some("F") { None } else { *outline },
+            *width,
+        ),
+        PipelineOp::DrawArc {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            width,
+            ..
+        } => {
+            if let Some(fill) = fill {
+                draw_arc_on_canvas(canvas, *x0, *y0, *x1, *y1, *start, *end, *fill, *width);
+            }
+        }
+        PipelineOp::DrawChord {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            outline,
+            width,
+            ..
+        } => draw_chord_on_canvas(
+            canvas, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width,
+        ),
+        PipelineOp::DrawPieslice {
+            x0,
+            y0,
+            x1,
+            y1,
+            start,
+            end,
+            fill,
+            outline,
+            width,
+            ..
+        } => draw_pieslice_on_canvas(
+            canvas, *x0, *y0, *x1, *y1, *start, *end, *fill, *outline, *width,
+        ),
+        PipelineOp::DrawPoint { points, fill, .. } => {
+            let (img_w, img_h) = (canvas.width(), canvas.height());
+            for &(x, y) in points.iter() {
+                plot(canvas, x, y, *fill, img_w, img_h, false);
+            }
+        }
+        _ => {
+            return Err(PilError::ValueError(
+                "non-draw operation in draw batch".to_owned(),
+            ));
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn is_draw_op(op: &PipelineOp) -> bool {
+    matches!(
+        op,
+        PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::DrawPoint { .. }
+    )
+}
+
+/// Execute contiguous drawing operations against one native canvas.
+pub(crate) fn execute_draw_batch(
+    img: &DynamicImage,
+    ops: &[PipelineOp],
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    for op in ops {
+        if !is_draw_op(op) {
+            return Err(PilError::ValueError(
+                "non-draw operation in draw batch".to_owned(),
+            ));
+        }
+        if let PipelineOp::DrawRoundedRect { x0, y0, x1, y1, .. } = op {
+            validate_rounded_rect(*x0, *y0, *x1, *y1)?;
+        }
+    }
+    let mut canvas = NativeDrawCanvas::from_image(img, false);
+    for op in ops {
+        draw_op_on_canvas(&mut canvas, op, mode)?;
+    }
+    Ok(canvas.into_image())
+}
+
 // ── Public op_draw_* API ──
 
 pub fn op_draw_line(
@@ -1073,179 +1571,9 @@ pub fn op_draw_rounded_rect(
     alpha_blend_rgb: bool,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if x1 < x0 {
-        return Err(PilError::ValueError(
-            "x1 must be greater than or equal to x0".to_owned(),
-        ));
-    }
-    if y1 < y0 {
-        return Err(PilError::ValueError(
-            "y1 must be greater than or equal to y0".to_owned(),
-        ));
-    }
-
+    validate_rounded_rect(x0, y0, x1, y1)?;
     Ok(draw_native(img, alpha_blend_rgb, |canvas| {
-        let mut diameter = radius * 2.0;
-        let full_x = diameter >= f64::from(x1 - x0 - 1);
-        if full_x {
-            diameter = f64::from(x1 - x0);
-        }
-        let full_y = full_x && diameter >= f64::from(y1 - y0 - 1);
-        if full_y {
-            diameter = f64::from(y1 - y0);
-        }
-        if full_x && full_y {
-            draw_ellipse_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
-            return;
-        }
-        if diameter == 0.0 {
-            draw_rect_on_canvas(canvas, x0, y0, x1, y1, fill, outline, width);
-            return;
-        }
-
-        let diameter = diameter as i32;
-        let radius = diameter / 2;
-        let corners = if full_x {
-            vec![
-                (x0, y0, x0 + diameter, y0 + diameter, 180.0, 360.0),
-                (x0, y1 - diameter, x0 + diameter, y1, 0.0, 180.0),
-            ]
-        } else if full_y {
-            vec![
-                (x0, y0, x0 + diameter, y0 + diameter, 90.0, 270.0),
-                (x1 - diameter, y0, x1, y0 + diameter, 270.0, 90.0),
-            ]
-        } else {
-            vec![
-                (x0, y0, x0 + diameter, y0 + diameter, 180.0, 270.0),
-                (x1 - diameter, y0, x1, y0 + diameter, 270.0, 360.0),
-                (x1 - diameter, y1 - diameter, x1, y1, 0.0, 90.0),
-                (x0, y1 - diameter, x0 + diameter, y1, 90.0, 180.0),
-            ]
-        };
-
-        if let Some(fill_color) = fill {
-            for &(left, top, right, bottom, start, end) in &corners {
-                draw_pieslice_on_canvas(
-                    canvas,
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    start,
-                    end,
-                    Some(fill_color),
-                    None,
-                    1,
-                );
-            }
-            if full_x {
-                draw_rect_on_canvas(
-                    canvas,
-                    x0,
-                    y0 + radius + 1,
-                    x1,
-                    y1 - radius - 1,
-                    Some(fill_color),
-                    None,
-                    1,
-                );
-            } else if x1 - radius - 1 >= x0 + radius + 1 {
-                draw_rect_on_canvas(
-                    canvas,
-                    x0 + radius + 1,
-                    y0,
-                    x1 - radius - 1,
-                    y1,
-                    Some(fill_color),
-                    None,
-                    1,
-                );
-            }
-            if !full_x && !full_y {
-                draw_rect_on_canvas(
-                    canvas,
-                    x0,
-                    y0 + radius + 1,
-                    x0 + radius,
-                    y1 - radius - 1,
-                    Some(fill_color),
-                    None,
-                    1,
-                );
-                draw_rect_on_canvas(
-                    canvas,
-                    x1 - radius,
-                    y0 + radius + 1,
-                    x1,
-                    y1 - radius - 1,
-                    Some(fill_color),
-                    None,
-                    1,
-                );
-            }
-        }
-
-        if let Some(outline_color) = outline.filter(|color| Some(*color) != fill && width != 0) {
-            for &(left, top, right, bottom, start, end) in &corners {
-                draw_arc_on_canvas(
-                    canvas,
-                    left,
-                    top,
-                    right,
-                    bottom,
-                    start,
-                    end,
-                    outline_color,
-                    width,
-                );
-            }
-            let width = i32::try_from(width).unwrap_or(i32::MAX);
-            if !full_x {
-                draw_rect_on_canvas(
-                    canvas,
-                    x0 + radius + 1,
-                    y0,
-                    x1 - radius - 1,
-                    y0.saturating_add(width - 1),
-                    Some(outline_color),
-                    None,
-                    1,
-                );
-                draw_rect_on_canvas(
-                    canvas,
-                    x0 + radius + 1,
-                    y1.saturating_sub(width - 1),
-                    x1 - radius - 1,
-                    y1,
-                    Some(outline_color),
-                    None,
-                    1,
-                );
-            }
-            if !full_y {
-                draw_rect_on_canvas(
-                    canvas,
-                    x0,
-                    y0 + radius + 1,
-                    x0.saturating_add(width - 1),
-                    y1 - radius - 1,
-                    Some(outline_color),
-                    None,
-                    1,
-                );
-                draw_rect_on_canvas(
-                    canvas,
-                    x1.saturating_sub(width - 1),
-                    y0 + radius + 1,
-                    x1,
-                    y1 - radius - 1,
-                    Some(outline_color),
-                    None,
-                    1,
-                );
-            }
-        }
+        draw_rounded_rect_on_canvas(canvas, x0, y0, x1, y1, radius, fill, outline, width);
     }))
 }
 
@@ -1301,6 +1629,10 @@ pub fn op_draw_polygon(
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let pts = points.to_vec();
+    // Pillow's floating-point ImagingDraw polygon path accepts an outline
+    // argument but stores only the fill sample.  Preserve that observable
+    // mode-specific behavior before entering the generic native canvas.
+    let outline = if _mode == Some("F") { None } else { outline };
     Ok(draw_native(img, alpha_blend_rgb, |canvas| {
         draw_polygon_on_canvas(canvas, &pts, fill, outline, width);
     }))

@@ -5,6 +5,38 @@ use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::raster::{DynamicImage, GrayAlphaImage, RgbaImage};
 
+#[cfg(feature = "parallel")]
+const ENHANCE_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
+fn apply_enhance_rows<F>(
+    bytes: &mut [u8],
+    width: usize,
+    height: usize,
+    channels: usize,
+    transform: F,
+) where
+    F: Fn(usize, &mut [u8]) + Send + Sync,
+{
+    if bytes.is_empty() || width == 0 || height == 0 {
+        return;
+    }
+    let stride = width.saturating_mul(channels);
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= ENHANCE_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(bytes, stride, height, |_row_start, _row_end, y, row| {
+            transform(y as usize, row);
+        });
+    } else {
+        for (y, row) in bytes.chunks_exact_mut(stride).take(height).enumerate() {
+            transform(y, row);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in bytes.chunks_exact_mut(stride).take(height).enumerate() {
+        transform(y, row);
+    }
+}
+
 fn preserve_alpha_result(original: &DynamicImage, rgba: RgbaImage) -> DynamicImage {
     let (w, h) = rgba.dimensions();
     if matches!(original, DynamicImage::ImageLumaA8(_)) {
@@ -27,11 +59,20 @@ pub fn op_enhance_brightness(
     if mode == Some("CMYK") {
         let mut rgba = img.to_rgba8();
         let f = factor;
-        for p in rgba.pixels_mut() {
-            for c in 0..4 {
-                p[c] = (p[c] as f64 * f).clamp(0.0, 255.0) as u8;
-            }
-        }
+        let (width, height) = rgba.dimensions();
+        apply_enhance_rows(
+            rgba.as_mut(),
+            width as usize,
+            height as usize,
+            4,
+            |_y, row| {
+                for pixel in row.chunks_exact_mut(4) {
+                    for channel in pixel.iter_mut() {
+                        *channel = (*channel as f64 * f).clamp(0.0, 255.0) as u8;
+                    }
+                }
+            },
+        );
         return Ok(DynamicImage::ImageRgba8(rgba));
     }
     if matches!(
@@ -39,20 +80,38 @@ pub fn op_enhance_brightness(
         DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
     ) {
         let mut rgba = img.to_rgba8();
-        for pixel in rgba.pixels_mut() {
-            for channel in 0..3 {
-                pixel[channel] = (pixel[channel] as f64 * factor).clamp(0.0, 255.0) as u8;
-            }
-        }
+        let (width, height) = rgba.dimensions();
+        apply_enhance_rows(
+            rgba.as_mut(),
+            width as usize,
+            height as usize,
+            4,
+            |_y, row| {
+                for pixel in row.chunks_exact_mut(4) {
+                    for channel in pixel.iter_mut().take(3) {
+                        *channel = (*channel as f64 * factor).clamp(0.0, 255.0) as u8;
+                    }
+                }
+            },
+        );
         return Ok(preserve_alpha_result(img, rgba));
     }
     let mut rgb = img.to_rgb8();
     let f = factor;
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] = ((p[c] as f64 * f).clamp(0.0, 255.0)) as u8;
-        }
-    }
+    let (width, height) = rgb.dimensions();
+    apply_enhance_rows(
+        rgb.as_mut(),
+        width as usize,
+        height as usize,
+        3,
+        |_y, row| {
+            for pixel in row.chunks_exact_mut(3) {
+                for channel in pixel.iter_mut() {
+                    *channel = (*channel as f64 * f).clamp(0.0, 255.0) as u8;
+                }
+            }
+        },
+    );
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
@@ -66,7 +125,7 @@ pub fn op_enhance_contrast(
         // PIL: convert to L (via RGB), compute rounded mean, create uniform gray CMYK,
         // then blend: degenerate * (1-factor) + original * factor
         // PIL's degenerate for CMYK: C=0, M=0, Y=0, K=255-mean (NOT mean on all channels)
-        let gray = pil_grayscale(img)?;
+        let gray = crate::color::cmyk_to_grayscale(img)?;
         let pixels: Vec<u8> = gray.pixels().map(|p| p[0]).collect();
         let n = pixels.len() as u64;
         let mean = if n > 0 {
@@ -78,14 +137,23 @@ pub fn op_enhance_contrast(
         let k_val = 255u8.saturating_sub(mean) as f64;
         let f = factor;
         let mut rgba = img.to_rgba8();
-        for p in rgba.pixels_mut() {
-            // C, M, Y: degenerate=0, so blend = 0*(1-f) + orig*f = orig*f
-            // K: degenerate = 255-mean
-            p[0] = (p[0] as f64 * f).clamp(0.0, 255.0) as u8;
-            p[1] = (p[1] as f64 * f).clamp(0.0, 255.0) as u8;
-            p[2] = (p[2] as f64 * f).clamp(0.0, 255.0) as u8;
-            p[3] = (k_val * (1.0 - f) + p[3] as f64 * f).clamp(0.0, 255.0) as u8;
-        }
+        let (width, height) = rgba.dimensions();
+        apply_enhance_rows(
+            rgba.as_mut(),
+            width as usize,
+            height as usize,
+            4,
+            |_y, row| {
+                for pixel in row.chunks_exact_mut(4) {
+                    // C, M, Y: degenerate=0, so blend = 0*(1-f) + orig*f = orig*f
+                    // K: degenerate = 255-mean
+                    pixel[0] = (pixel[0] as f64 * f).clamp(0.0, 255.0) as u8;
+                    pixel[1] = (pixel[1] as f64 * f).clamp(0.0, 255.0) as u8;
+                    pixel[2] = (pixel[2] as f64 * f).clamp(0.0, 255.0) as u8;
+                    pixel[3] = (k_val * (1.0 - f) + pixel[3] as f64 * f).clamp(0.0, 255.0) as u8;
+                }
+            },
+        );
         return Ok(DynamicImage::ImageRgba8(rgba));
     }
     // PIL: convert to L, compute rounded mean, create uniform gray degenerate,
@@ -107,20 +175,37 @@ pub fn op_enhance_contrast(
         DynamicImage::ImageLumaA8(_) | DynamicImage::ImageRgba8(_)
     ) {
         let mut rgba = img.to_rgba8();
-        for pixel in rgba.pixels_mut() {
-            for channel in 0..3 {
-                pixel[channel] =
-                    (m * (1.0 - f) + pixel[channel] as f64 * f).clamp(0.0, 255.0) as u8;
-            }
-        }
+        let (width, height) = rgba.dimensions();
+        apply_enhance_rows(
+            rgba.as_mut(),
+            width as usize,
+            height as usize,
+            4,
+            |_y, row| {
+                for pixel in row.chunks_exact_mut(4) {
+                    for channel in pixel.iter_mut().take(3) {
+                        *channel = (m * (1.0 - f) + *channel as f64 * f).clamp(0.0, 255.0) as u8;
+                    }
+                }
+            },
+        );
         return Ok(preserve_alpha_result(img, rgba));
     }
     let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] = (m * (1.0 - f) + p[c] as f64 * f).clamp(0.0, 255.0) as u8;
-        }
-    }
+    let (width, height) = rgb.dimensions();
+    apply_enhance_rows(
+        rgb.as_mut(),
+        width as usize,
+        height as usize,
+        3,
+        |_y, row| {
+            for pixel in row.chunks_exact_mut(3) {
+                for channel in pixel.iter_mut() {
+                    *channel = (m * (1.0 - f) + *channel as f64 * f).clamp(0.0, 255.0) as u8;
+                }
+            }
+        },
+    );
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
@@ -137,14 +222,15 @@ pub fn op_enhance_color_saturation(
         let (w, h) = rgba.dimensions();
         let mut out = rgba.clone();
         let f = factor;
-        for y in 0..h {
-            for x in 0..w {
-                let p = rgba.get_pixel(x, y);
+        let source = rgba.as_raw();
+        apply_enhance_rows(out.as_mut(), w as usize, h as usize, 4, |row_index, row| {
+            let source_row = &source[row_index * w as usize * 4..(row_index + 1) * w as usize * 4];
+            for (pixel, source_pixel) in row.chunks_exact_mut(4).zip(source_row.chunks_exact(4)) {
                 // CMYK→RGB: R = (255-C)*(255-K)/255, G = (255-M)*(255-K)/255, B = (255-Y)*(255-K)/255
-                let c = p[0] as u32;
-                let m = p[1] as u32;
-                let y_ = p[2] as u32;
-                let k = p[3] as u32;
+                let c = source_pixel[0] as u32;
+                let m = source_pixel[1] as u32;
+                let y_ = source_pixel[2] as u32;
+                let k = source_pixel[3] as u32;
                 let r = (255 - c) * (255 - k) / 255;
                 let g = (255 - m) * (255 - k) / 255;
                 let b = (255 - y_) * (255 - k) / 255;
@@ -153,18 +239,15 @@ pub fn op_enhance_color_saturation(
                 // PIL degenerate for CMYK: C=0, M=0, Y=0, K=255-gray_val
                 // Blend: degenerate * (1-f) + original * f
                 // C = 0 * (1-f) + orig_C * f
-                out.put_pixel(
-                    x,
-                    y,
-                    crate::raster::Rgba([
-                        (p[0] as f64 * f).clamp(0.0, 255.0) as u8,
-                        (p[1] as f64 * f).clamp(0.0, 255.0) as u8,
-                        (p[2] as f64 * f).clamp(0.0, 255.0) as u8,
-                        ((255.0 - gray_val) * (1.0 - f) + p[3] as f64 * f).clamp(0.0, 255.0) as u8,
-                    ]),
-                );
+                pixel.copy_from_slice(&[
+                    (source_pixel[0] as f64 * f).clamp(0.0, 255.0) as u8,
+                    (source_pixel[1] as f64 * f).clamp(0.0, 255.0) as u8,
+                    (source_pixel[2] as f64 * f).clamp(0.0, 255.0) as u8,
+                    ((255.0 - gray_val) * (1.0 - f) + source_pixel[3] as f64 * f).clamp(0.0, 255.0)
+                        as u8,
+                ]);
             }
-        }
+        });
         return Ok(DynamicImage::ImageRgba8(out));
     }
     // Use PIL's rounded grayscale conversion (to_luma8 truncates)
@@ -175,23 +258,45 @@ pub fn op_enhance_color_saturation(
     ) {
         let mut rgba = img.to_rgba8();
         let f = factor;
-        for (pixel, gray_pixel) in rgba.pixels_mut().zip(gray.pixels()) {
-            let g = gray_pixel[0] as f64;
-            for channel in 0..3 {
-                pixel[channel] = (g + f * (pixel[channel] as f64 - g)).clamp(0.0, 255.0) as u8;
-            }
-        }
+        let gray = gray.as_raw();
+        let (width, height) = rgba.dimensions();
+        apply_enhance_rows(
+            rgba.as_mut(),
+            width as usize,
+            height as usize,
+            4,
+            |row_index, row| {
+                let gray_row = &gray[row_index * width as usize..(row_index + 1) * width as usize];
+                for (pixel, &gray_pixel) in row.chunks_exact_mut(4).zip(gray_row.iter()) {
+                    let g = gray_pixel as f64;
+                    for channel in pixel.iter_mut().take(3) {
+                        *channel = (g + f * (*channel as f64 - g)).clamp(0.0, 255.0) as u8;
+                    }
+                }
+            },
+        );
         return Ok(preserve_alpha_result(img, rgba));
     }
     let mut rgb = img.to_rgb8();
     let f = factor;
-    for (px, gp) in rgb.pixels_mut().zip(gray.pixels()) {
-        let g = gp[0] as f64;
-        // blend formula: gray * (1-factor) + original * factor
-        px[0] = ((g + f * (px[0] as f64 - g)).clamp(0.0, 255.0)) as u8;
-        px[1] = ((g + f * (px[1] as f64 - g)).clamp(0.0, 255.0)) as u8;
-        px[2] = ((g + f * (px[2] as f64 - g)).clamp(0.0, 255.0)) as u8;
-    }
+    let gray = gray.as_raw();
+    let (width, height) = rgb.dimensions();
+    apply_enhance_rows(
+        rgb.as_mut(),
+        width as usize,
+        height as usize,
+        3,
+        |row_index, row| {
+            let gray_row = &gray[row_index * width as usize..(row_index + 1) * width as usize];
+            for (pixel, &gray_pixel) in row.chunks_exact_mut(3).zip(gray_row.iter()) {
+                let g = gray_pixel as f64;
+                // blend formula: gray * (1-factor) + original * factor
+                for channel in pixel.iter_mut() {
+                    *channel = (g + f * (*channel as f64 - g)).clamp(0.0, 255.0) as u8;
+                }
+            }
+        },
+    );
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 

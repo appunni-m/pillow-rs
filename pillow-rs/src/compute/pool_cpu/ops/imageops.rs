@@ -3,7 +3,7 @@
 //! invert, flip, mirror, posterize, solarize, grayscale, colorize,
 //! contain, cover, fit, pad, scale, expand, and crop border.
 
-use crate::raster::{DynamicImage, GenericImage};
+use crate::raster::DynamicImage;
 
 use crate::color::pil_grayscale;
 
@@ -29,10 +29,130 @@ use crate::ops::pil_resize::pil_resize;
 use crate::ops::pil_resize::pil_resize_boxed;
 use crate::pipeline::ResampleFilter;
 
+#[cfg(feature = "parallel")]
+const POINT_PARALLEL_PIXEL_THRESHOLD: usize = 512 * 512;
+
+#[inline]
+fn histogram_value_at(histogram: &[usize; 256], index: usize, fallback: u8) -> u8 {
+    let mut remaining = index;
+    for (value, count) in histogram.iter().enumerate() {
+        if remaining < *count {
+            return value as u8;
+        }
+        remaining -= *count;
+    }
+    fallback
+}
+
+#[inline]
+fn invert_bytes_serial(bytes: &mut [u8]) {
+    for value in bytes {
+        *value = u8::MAX - *value;
+    }
+}
+
+#[inline]
+fn apply_autocontrast_row(
+    raw: &[u8],
+    raw_start: usize,
+    row: &mut [u8],
+    channels: usize,
+    scales: &[f64; 4],
+    offsets: &[f64; 4],
+    stretch: &[bool; 4],
+) {
+    for (index, output) in row.iter_mut().enumerate() {
+        let channel = index % channels;
+        if !stretch[channel] {
+            continue;
+        }
+        // PIL: int(ix * scale + offset) with clamping to [0,255].
+        // Keep the multiplication/addition order explicit.
+        let value = raw[raw_start + index] as f64 * scales[channel] + offsets[channel];
+        *output = if value < 0.0 {
+            0
+        } else if value > 255.0 {
+            255
+        } else {
+            value as u8
+        };
+    }
+}
+
+#[inline]
+fn apply_equalize_row(source: &[u8], row: &mut [u8], luts: &[[u8; 256]; 3], apply: &[bool; 3]) {
+    for (output, input) in row.chunks_exact_mut(3).zip(source.chunks_exact(3)) {
+        for channel in 0..3 {
+            if apply[channel] {
+                output[channel] = luts[channel][input[channel] as usize];
+            }
+        }
+    }
+}
+
+fn apply_point_rows<F>(bytes: &mut [u8], width: usize, height: usize, transform: F)
+where
+    F: Fn(&mut [u8]) + Send + Sync,
+{
+    #[cfg(feature = "parallel")]
+    let stride = width.saturating_mul(3);
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(bytes, stride, height, |_row_start, _row_end, _y, row| {
+            transform(row);
+        });
+    } else {
+        transform(bytes);
+    }
+    #[cfg(not(feature = "parallel"))]
+    let _ = (width, height);
+    #[cfg(not(feature = "parallel"))]
+    transform(bytes);
+}
+
+#[inline]
+fn expand_rgba_row(
+    row: &mut [u8],
+    y: usize,
+    source: &[u8],
+    source_stride: usize,
+    offset_x: usize,
+    offset_y: usize,
+    copy_width: usize,
+    copy_height: usize,
+    fill: [u8; 4],
+) {
+    for pixel in row.chunks_exact_mut(4) {
+        pixel.copy_from_slice(&fill);
+    }
+
+    if y < offset_y || y >= offset_y.saturating_add(copy_height) {
+        return;
+    }
+    let source_start = (y - offset_y).saturating_mul(source_stride);
+    let copy_bytes = copy_width.saturating_mul(4);
+    if copy_bytes == 0 || offset_x >= row.len() || source_start >= source.len() {
+        return;
+    }
+    let output_start = offset_x.saturating_mul(4);
+    if output_start >= row.len() {
+        return;
+    }
+    let output_end = output_start.saturating_add(copy_bytes).min(row.len());
+    let available = output_end - output_start;
+    let source_end = source_start.saturating_add(available).min(source.len());
+    let available = source_end - source_start;
+    row[output_start..output_start + available].copy_from_slice(&source[source_start..source_end]);
+}
+
 /// Autocontrast: stretch image contrast based on histogram cutoff.
 /// PIL: per-channel histogram, find lo/hi at cutoff percentiles for each channel,
 /// then linearly map [lo, hi] to [0, 255] using truncation (int() cast).
-pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, PilError> {
+pub fn op_autocontrast(
+    img: &DynamicImage,
+    cutoff: f64,
+    mask: Option<&std::sync::Arc<crate::image::Image>>,
+) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w, h) = (img.width(), img.height());
     // Pillow's ImageOps.autocontrast preserves an empty image instead of
@@ -42,47 +162,91 @@ pub fn op_autocontrast(img: &DynamicImage, cutoff: f64) -> Result<DynamicImage, 
     if w == 0 || h == 0 {
         return Ok(img.clone());
     }
-    let dims = CheckedDims::new(w, h, 1)?;
-    let total = dims.total_pixels() as f64;
+    let image_pixels = CheckedDims::new(w, h, 1)?.total_pixels();
+    let mask = mask
+        .map(|mask| mask.materialize_for_ops())
+        .transpose()?
+        .map(|mask| mask.to_luma8());
+    let mut selected_pixels = if mask.is_none() { image_pixels } else { 0 };
     let raw = img.as_bytes();
     let mut out = raw.to_vec();
     let stride = w as usize * channels;
-    for c in 0..channels {
-        // Build sorted list of pixel values for this channel
-        let mut sorted: Vec<u8> = Vec::with_capacity(dims.total_pixels());
-        for y in 0..h as usize {
-            for x in 0..w as usize {
-                sorted.push(raw[y * stride + x * channels + c]);
+    let mut histograms = [[0usize; 256]; 4];
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            if let Some(mask) = mask.as_ref() {
+                if mask.get_pixel(x as u32, y as u32)[0] == 0 {
+                    continue;
+                }
+                selected_pixels += 1;
+            }
+            let index = y * stride + x * channels;
+            for c in 0..channels {
+                histograms[c][raw[index + c] as usize] += 1;
             }
         }
-        sorted.sort_unstable();
+    }
+
+    // Pillow's all-zero mask produces an identity LUT rather than dividing by
+    // a zero-sized histogram. The source image is still passed through that
+    // identity LUT, so returning a clone preserves the lazy operation result.
+    if selected_pixels == 0 {
+        return Ok(img.clone());
+    }
+    let total = selected_pixels as f64;
+
+    let mut scales = [0.0f64; 4];
+    let mut offsets = [0.0f64; 4];
+    let mut stretch = [false; 4];
+    for c in 0..channels {
         let low_thresh = (total * cutoff / 100.0) as usize;
         let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
-        let lo = *sorted.get(low_thresh).unwrap_or(&0) as f64;
-        let hi = *sorted
-            .get(high_thresh.min(sorted.len() - 1))
-            .unwrap_or(&255) as f64;
+        let lo = histogram_value_at(&histograms[c], low_thresh, 0) as f64;
+        let hi = histogram_value_at(&histograms[c], high_thresh.min(selected_pixels - 1), 255) as f64;
         if hi <= lo {
-            continue; // No stretch for this channel
+            continue;
         }
-        let scale = 255.0 / (hi - lo);
-        let offset = -lo * scale;
-        for y in 0..h as usize {
-            for x in 0..w as usize {
-                let idx = y * stride + x * channels + c;
-                // PIL: int(ix * scale + offset) with clamping to [0,255]
-                // Uses PIL's exact formula to match floating-point edge cases.
-                // (ix - lo) * scale can produce different fp results than ix*scale + offset
-                let val = out[idx] as f64 * scale + offset;
-                out[idx] = if val < 0.0 {
-                    0
-                } else if val > 255.0 {
-                    255
-                } else {
-                    val as u8
-                };
+        scales[c] = 255.0 / (hi - lo);
+        offsets[c] = -lo * scales[c];
+        stretch[c] = true;
+    }
+
+    #[cfg(feature = "parallel")]
+    if image_pixels >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut out,
+            stride,
+            h as usize,
+            |row_start, _row_end, _y, row| {
+                apply_autocontrast_row(raw, row_start, row, channels, &scales, &offsets, &stretch);
             }
+        );
+    } else {
+        for y in 0..h as usize {
+            let row_start = y * stride;
+            apply_autocontrast_row(
+                raw,
+                row_start,
+                &mut out[row_start..row_start + stride],
+                channels,
+                &scales,
+                &offsets,
+                &stretch,
+            );
         }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..h as usize {
+        let row_start = y * stride;
+        apply_autocontrast_row(
+            raw,
+            row_start,
+            &mut out[row_start..row_start + stride],
+            channels,
+            &scales,
+            &offsets,
+            &stretch,
+        );
     }
     let result = super::filter::raw_bytes_to_image(w, h, out, channels)?;
     Ok(preserve_mode(img, result))
@@ -98,31 +262,78 @@ pub fn op_equalize(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     // Start from a copy of the input: uniform or single-value histograms
     // keep the source pixels unchanged (PIL's equalize identity path).
     let mut out = rgb.clone();
-    for ch in 0..3 {
-        let mut hist = [0u32; 256];
-        for px in rgb.pixels() {
-            hist[px[ch] as usize] += 1;
+    let mut luts = [[0u8; 256]; 3];
+    let mut apply = [false; 3];
+    let mut histograms = [[0u32; 256]; 3];
+    for px in rgb.pixels() {
+        for ch in 0..3 {
+            histograms[ch][px[ch] as usize] += 1;
         }
-        // Collect non-zero bins
-        let nonzero: Vec<u32> = hist.iter().filter(|&&c| c > 0).copied().collect();
-        if nonzero.len() <= 1 {
+    }
+    for ch in 0..3 {
+        let mut nonzero_bins = 0usize;
+        let mut last_nonzero_count = 0u32;
+        let mut total = 0u32;
+        for &count in &histograms[ch] {
+            total += count;
+            if count > 0 {
+                nonzero_bins += 1;
+                last_nonzero_count = count;
+            }
+        }
+        if nonzero_bins <= 1 {
             // Identity LUT
             continue; // out already has original pixels from the RgbImage
         }
-        let total: u32 = nonzero.iter().sum();
-        let step = (total - nonzero[nonzero.len() - 1]) / 255;
+        let step = (total - last_nonzero_count) / 255;
         if step == 0 {
             continue; // Identity LUT
         }
         let mut n = step / 2;
-        let mut lut = [0u8; 256];
         for i in 0..256 {
-            lut[i] = (n / step).min(255) as u8;
-            n += hist[i];
+            luts[ch][i] = (n / step).min(255) as u8;
+            n += histograms[ch][i];
         }
-        for (opx, ipx) in out.pixels_mut().zip(rgb.pixels()) {
-            opx[ch] = lut[ipx[ch] as usize];
+        apply[ch] = true;
+    }
+    let (width, height) = rgb.dimensions();
+    let row_stride = width as usize * 3;
+    let source = rgb.as_raw();
+    #[cfg(feature = "parallel")]
+    if (width as usize).saturating_mul(height as usize) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            out.as_mut(),
+            row_stride,
+            height as usize,
+            |row_start, _row_end, _y, row| {
+                apply_equalize_row(
+                    &source[row_start..row_start + row_stride],
+                    row,
+                    &luts,
+                    &apply,
+                );
+            }
+        );
+    } else {
+        for y in 0..height as usize {
+            let row_start = y * row_stride;
+            apply_equalize_row(
+                &source[row_start..row_start + row_stride],
+                &mut out.as_mut()[row_start..row_start + row_stride],
+                &luts,
+                &apply,
+            );
         }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for y in 0..height as usize {
+        let row_start = y * row_stride;
+        apply_equalize_row(
+            &source[row_start..row_start + row_stride],
+            &mut out.as_mut()[row_start..row_start + row_stride],
+            &luts,
+            &apply,
+        );
     }
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
@@ -133,15 +344,23 @@ pub fn op_invert(img: &DynamicImage) -> Result<DynamicImage, PilError> {
     let (w, h) = (img.width(), img.height());
     let raw = img.as_bytes();
     let mut out = raw.to_vec();
+    #[cfg(feature = "parallel")]
     let stride = w as usize * channels;
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            for c in 0..channels {
-                let idx = y * stride + x * channels + c;
-                out[idx] = 255 - out[idx];
+    #[cfg(feature = "parallel")]
+    if (w as usize).saturating_mul(h as usize) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut out,
+            stride,
+            h as usize,
+            |_row_start, _row_end, _y, row| {
+                invert_bytes_serial(row);
             }
-        }
+        );
+    } else {
+        invert_bytes_serial(&mut out);
     }
+    #[cfg(not(feature = "parallel"))]
+    invert_bytes_serial(&mut out);
     let result = match channels {
         1 => crate::raster::GrayImage::from_raw(w, h, out)
             .map(DynamicImage::ImageLuma8)
@@ -179,11 +398,14 @@ pub fn op_mirror(img: &DynamicImage) -> Result<DynamicImage, PilError> {
 pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilError> {
     let mask = !((1u8 << (8 - bits)) - 1);
     let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            p[c] &= mask;
+    let (width, height) = rgb.dimensions();
+    apply_point_rows(rgb.as_mut(), width as usize, height as usize, |row| {
+        for pixel in row.chunks_exact_mut(3) {
+            for channel in pixel {
+                *channel &= mask;
+            }
         }
-    }
+    });
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
@@ -192,14 +414,17 @@ pub fn op_posterize(img: &DynamicImage, bits: u8) -> Result<DynamicImage, PilErr
 pub fn op_solarize(img: &DynamicImage, threshold: u8) -> Result<DynamicImage, PilError> {
     let t = threshold;
     let mut rgb = img.to_rgb8();
-    for p in rgb.pixels_mut() {
-        for c in 0..3 {
-            if p[c] >= t {
-                // PIL uses >=, not >
-                p[c] = 255 - p[c];
+    let (width, height) = rgb.dimensions();
+    apply_point_rows(rgb.as_mut(), width as usize, height as usize, |row| {
+        for pixel in row.chunks_exact_mut(3) {
+            for channel in pixel {
+                if *channel >= t {
+                    // PIL uses >=, not >
+                    *channel = u8::MAX - *channel;
+                }
             }
         }
-    }
+    });
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(rgb)))
 }
 
@@ -449,7 +674,7 @@ pub fn op_pad(
     // Pillow's ImagingCore resize keeps P/PA as indexed samples and ignores
     // the requested resampling kernel; using nearest here avoids interpolated
     // palette indices while preserving the raw mode through the pad path.
-    let resize_filter = if matches!(explicit_mode, Some("P" | "PA")) {
+    let resize_filter = if explicit_mode == Some("P") {
         ResampleFilter::Nearest
     } else {
         filter
@@ -518,46 +743,97 @@ pub fn op_pad(
         return Ok(DynamicImage::ImageLumaA8(padded));
     }
 
-    // Step 2: pad to target size
-    let mut padded = DynamicImage::new_rgba8(w, h);
-    for py in 0..h {
-        for px in 0..w {
-            padded.put_pixel(
-                px,
-                py,
-                crate::raster::Rgba([fill.0, fill.1, fill.2, fill.3]),
-            );
-        }
-    }
+    // Step 2: pad to target size. Build the native RGBA output once and
+    // operate on disjoint rows; repeated `put_pixel` calls otherwise add a
+    // bounds-check and pixel-wrapper construction for every destination.
     // PIL: x = round((size[0] - resized.width) * max(0, min(centering[0], 1)))
     let cx = centering.0.clamp(0.0, 1.0);
     let cy = centering.1.clamp(0.0, 1.0);
     let src_rgba = resized.to_rgba8();
     // Pillow's ImageOps.pad uses Image.paste without a mask, so the resized
     // source replaces the destination pixels even when the source has alpha.
-    if nw != w {
-        let ox = bankers_round((w as f64 - nw as f64) * cx) as u32;
-        for py in 0..nh.min(h) {
-            for px in 0..nw.min(w) {
-                let dx = ox + px;
-                if dx < w {
-                    let sp = *src_rgba.get_pixel(px, py);
-                    padded.put_pixel(dx, py, sp);
+    let (offset_x, offset_y) = if nw != w {
+        (bankers_round((w as f64 - nw as f64) * cx) as usize, 0usize)
+    } else {
+        (0usize, bankers_round((h as f64 - nh as f64) * cy) as usize)
+    };
+    let width = w as usize;
+    #[cfg(feature = "parallel")]
+    let height = h as usize;
+    let copy_width = nw.min(w) as usize;
+    let copy_height = nh.min(h) as usize;
+    let output_stride = width.saturating_mul(4);
+    let source_stride = nw as usize * 4;
+    let fill_bytes = [fill.0, fill.1, fill.2, fill.3];
+    let mut output = CheckedDims::new(w, h, 4)?.alloc_buffer();
+
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            height,
+            |_row_start, _row_end, _y, row| {
+                for pixel in row.chunks_exact_mut(4) {
+                    pixel.copy_from_slice(&fill_bytes);
                 }
             }
-        }
+        );
     } else {
-        let oy = bankers_round((h as f64 - nh as f64) * cy) as u32;
-        for py in 0..nh.min(h) {
-            for px in 0..nw.min(w) {
-                let dy = oy + py;
-                if dy < h {
-                    let sp = *src_rgba.get_pixel(px, py);
-                    padded.put_pixel(px, dy, sp);
-                }
+        for row in output.chunks_exact_mut(output_stride) {
+            for pixel in row.chunks_exact_mut(4) {
+                pixel.copy_from_slice(&fill_bytes);
             }
         }
     }
+    #[cfg(not(feature = "parallel"))]
+    for row in output.chunks_exact_mut(output_stride) {
+        for pixel in row.chunks_exact_mut(4) {
+            pixel.copy_from_slice(&fill_bytes);
+        }
+    }
+
+    let source = src_rgba.as_raw();
+    #[cfg(feature = "parallel")]
+    if width.saturating_mul(height) >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            output_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                let output_y = y as usize;
+                if output_y < offset_y || output_y >= offset_y.saturating_add(copy_height) {
+                    return;
+                }
+                let source_y = output_y - offset_y;
+                let source_start = source_y * source_stride;
+                let output_start = offset_x * 4;
+                let byte_count = copy_width * 4;
+                row[output_start..output_start + byte_count]
+                    .copy_from_slice(&source[source_start..source_start + byte_count]);
+            }
+        );
+    } else {
+        for output_y in offset_y..offset_y.saturating_add(copy_height) {
+            let source_y = output_y - offset_y;
+            let source_start = source_y * source_stride;
+            let output_start = output_y * output_stride + offset_x * 4;
+            let byte_count = copy_width * 4;
+            output[output_start..output_start + byte_count]
+                .copy_from_slice(&source[source_start..source_start + byte_count]);
+        }
+    }
+    #[cfg(not(feature = "parallel"))]
+    for output_y in offset_y..offset_y.saturating_add(copy_height) {
+        let source_y = output_y - offset_y;
+        let source_start = source_y * source_stride;
+        let output_start = output_y * output_stride + offset_x * 4;
+        let byte_count = copy_width * 4;
+        output[output_start..output_start + byte_count]
+            .copy_from_slice(&source[source_start..source_start + byte_count]);
+    }
+
+    let padded = crate::compute::pool_cpu::ops::filter::raw_bytes_to_image(w, h, output, 4)?;
     Ok(preserve_mode(img, padded))
 }
 
@@ -568,8 +844,10 @@ pub fn op_crop_border(img: &DynamicImage, border: u32) -> Result<DynamicImage, P
     // Pillow permits a border exactly half the image size and returns a
     // zero-sized image; only a strictly oversized border is invalid.
     if 2 * b > w || 2 * b > h {
+        // Pillow delegates this invalid box to Image.crop(), whose public
+        // contract reports the right edge being left of the left edge.
         return Err(PilError::ValueError(
-            "crop border exceeds image dimensions".into(),
+            "Coordinate 'right' is less than 'left'".into(),
         ));
     }
     Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
@@ -582,8 +860,11 @@ pub fn op_scale(
     filter: ResampleFilter,
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let new_w = (img.width() as f64 * factor).round() as u32;
-    let new_h = (img.height() as f64 * factor).round() as u32;
+    // ImageOps.scale uses Python's round(image_dimension * factor), whose
+    // ties-to-even behavior is observable at .5 dimensions (13 * 1.5 -> 20
+    // while 11 * 1.5 -> 16).
+    let new_w = bankers_round(img.width() as f64 * factor) as u32;
+    let new_h = bankers_round(img.height() as f64 * factor) as u32;
     let result = pil_resize(img, new_w.max(1), new_h.max(1), filter, explicit_mode);
     Ok(preserve_mode(img, result))
 }
@@ -629,27 +910,72 @@ pub fn op_expand(
         return Ok(DynamicImage::ImageLumaA8(expanded));
     }
 
-    let mut expanded = DynamicImage::new_rgba8(new_w, new_h);
-    for py in 0..new_h {
-        for px in 0..new_w {
-            expanded.put_pixel(
-                px,
-                py,
-                crate::raster::Rgba([fill.0, fill.1, fill.2, fill.3]),
+    let src_rgba = img.to_rgba8();
+    let (sw, sh) = (src_rgba.width(), src_rgba.height());
+    let dims = CheckedDims::new(new_w, new_h, 4)?;
+    #[cfg(feature = "parallel")]
+    let height = new_h as usize;
+    let row_stride = dims.row_stride();
+    let source_stride = sw as usize * 4;
+    let offset_x = border as usize;
+    let offset_y = border as usize;
+    let copy_width = sw.min(new_w.saturating_sub(border)) as usize;
+    let copy_height = sh.min(new_h.saturating_sub(border)) as usize;
+    let fill = [fill.0, fill.1, fill.2, fill.3];
+    let source = src_rgba.as_raw();
+    let mut output = dims.alloc_buffer();
+
+    #[cfg(feature = "parallel")]
+    if dims.total_pixels() >= POINT_PARALLEL_PIXEL_THRESHOLD {
+        crate::par_rows_mut!(
+            &mut output,
+            row_stride,
+            height,
+            |_row_start, _row_end, y, row| {
+                expand_rgba_row(
+                    row,
+                    y as usize,
+                    source,
+                    source_stride,
+                    offset_x,
+                    offset_y,
+                    copy_width,
+                    copy_height,
+                    fill,
+                );
+            }
+        );
+    } else {
+        for (y, row) in output.chunks_exact_mut(row_stride).enumerate() {
+            expand_rgba_row(
+                row,
+                y,
+                source,
+                source_stride,
+                offset_x,
+                offset_y,
+                copy_width,
+                copy_height,
+                fill,
             );
         }
     }
-    let src_rgba = img.to_rgba8();
-    let (sw, sh) = (src_rgba.width(), src_rgba.height());
-    for py in 0..sh.min(expanded.height()) {
-        for px in 0..sw.min(expanded.width()) {
-            let dx = (border as i64 + px as i64) as u32;
-            let dy = (border as i64 + py as i64) as u32;
-            if dx < expanded.width() && dy < expanded.height() {
-                expanded.put_pixel(dx, dy, *src_rgba.get_pixel(px, py));
-            }
-        }
+    #[cfg(not(feature = "parallel"))]
+    for (y, row) in output.chunks_exact_mut(row_stride).enumerate() {
+        expand_rgba_row(
+            row,
+            y,
+            source,
+            source_stride,
+            offset_x,
+            offset_y,
+            copy_width,
+            copy_height,
+            fill,
+        );
     }
+
+    let expanded = super::filter::raw_bytes_to_image(new_w, new_h, output, 4)?;
     Ok(preserve_mode(img, expanded))
 }
 

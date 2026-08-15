@@ -104,7 +104,7 @@ pub enum PipelineOp {
         /// Destination color mode.
         mode: ColorMode,
         /// Optional conversion matrix.
-        matrix: Option<Vec<f64>>,
+        matrix: Option<Arc<[f64]>>,
         /// Optional dither method.
         dither: Option<DitherMethod>,
     },
@@ -118,7 +118,7 @@ pub enum PipelineOp {
     /// Remap palette indices through a destination map.
     RemapPalette {
         /// Destination palette index map.
-        dest_map: Vec<u8>,
+        dest_map: Arc<[u8]>,
     },
 
     // ── Filters (3×3 and 5×5 convolution) ──
@@ -178,6 +178,8 @@ pub enum PipelineOp {
     Autocontrast {
         /// Cutoff percentage.
         cutoff: f64,
+        /// Optional `1`/`L` histogram mask used to choose the contrast range.
+        mask: Option<Arc<Image>>,
     },
     /// Equalize image histogram.
     Equalize,
@@ -454,7 +456,7 @@ pub enum PipelineOp {
         /// Destination color mode.
         mode: ColorMode,
         /// Band images.
-        bands: Vec<Image>,
+        bands: Arc<[Image]>,
     },
     /// Module-level blend operation.
     BlendModule {
@@ -475,7 +477,7 @@ pub enum PipelineOp {
     /// Apply a lookup table to every pixel value.
     Eval {
         /// Lookup table.
-        lut: Vec<u8>,
+        lut: Arc<[u8]>,
     },
     /// Generate noise with a Gaussian sigma.
     EffectNoise {
@@ -487,7 +489,7 @@ pub enum PipelineOp {
     /// Apply a point lookup table.
     PointOp {
         /// Lookup table.
-        lut: Vec<u8>,
+        lut: Arc<[u8]>,
     },
     // ── 3D Color Lookup Table ──
     /// Apply a 3D color lookup table.
@@ -495,7 +497,7 @@ pub enum PipelineOp {
         /// LUT dimensions.
         size: (u32, u32, u32),
         /// LUT table values.
-        table: Vec<f64>,
+        table: Arc<[f64]>,
         /// Number of output channels.
         channels: u32,
         /// Logical Pillow mode of the input samples.
@@ -512,7 +514,7 @@ pub enum PipelineOp {
         /// Transform method.
         method: TransformMethod,
         /// Method-specific transform coefficients.
-        data: Vec<f64>,
+        data: Arc<[f64]>,
         /// Filter used when sampling source pixels.
         filter: ResampleFilter,
         /// Optional fill color.
@@ -539,7 +541,7 @@ pub enum PipelineOp {
     /// Replace image data from raw bytes.
     PutData {
         /// Raw pixel data.
-        data: Vec<u8>,
+        data: Arc<[u8]>,
         /// Logical Pillow mode whose sample layout `data` follows.
         mode: PixelMode,
     },
@@ -693,7 +695,7 @@ pub enum PipelineOp {
     /// Draw a polygon.
     DrawPolygon {
         /// Polygon vertices.
-        points: Vec<(i32, i32)>,
+        points: Arc<[(i32, i32)]>,
         /// Optional fill color.
         fill: Option<(u8, u8, u8, u8)>,
         /// Optional outline color.
@@ -773,7 +775,7 @@ pub enum PipelineOp {
     /// Draw one or more points.
     DrawPoint {
         /// Point coordinates.
-        points: Vec<(i32, i32)>,
+        points: Arc<[(i32, i32)]>,
         /// Fill color.
         fill: (u8, u8, u8, u8),
         /// Blend RGBA ink into an RGB destination instead of replacing pixels.

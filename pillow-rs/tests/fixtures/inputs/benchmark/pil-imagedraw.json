@@ -1,0 +1,127 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagedraw.draw.standard",
+      "covers": [
+        "PIL.ImageDraw.Draw.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.Draw.behavior.default"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          16,
+          16
+        ],
+        "mode": "RGB",
+        "chain_length": 1,
+        "operation_class": "draw",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-imagedraw.outline.standard",
+      "covers": [
+        "PIL.ImageDraw.Outline.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageDraw.Outline.behavior.default"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagedraw.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageDraw.",
+      "members": [
+        {
+          "workload_id": "pil-imagedraw.draw.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagedraw.outline.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}

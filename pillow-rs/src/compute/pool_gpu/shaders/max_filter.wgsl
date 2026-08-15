@@ -23,7 +23,11 @@ fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 fn max_pixel(x: u32, y: u32) -> u32 {
     let w = params.width;
     let h = params.height;
-    let size = params.size;
+    let size = min(params.size, 9u);
+    let idx = y * w + x;
+    if size == 0u || size % 2u == 0u {
+        return input[idx];
+    }
     let half = i32(size) / 2i;
 
     var max_r: u32 = 0u;

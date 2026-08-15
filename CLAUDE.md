@@ -45,8 +45,10 @@ Workspace crates:
 - `pillow-rs/`: pure Rust image logic. No binding dependencies.
 - `pillow-rs-py/`: PyO3 wrapper. Keep it thin.
 - `pillow-rs-js/`: wasm-bindgen wrapper. Keep it thin.
-- `../fontdone/`: sibling standalone pure Rust FreeType-compatible
-  implementation and parity harness. Cargo package/crate name: `fontdone`.
+- `build/fontdone-src/`: pinned GitHub checkout of the standalone pure Rust
+  FreeType-compatible implementation and parity harness. The Cargo package/
+  crate name is `fontdone`; the root Makefile owns the checkout at the pinned
+  `FONTDONE_REF`.
 
 Core crates never touch Python objects, JS objects, file paths, or network.
 Core takes Rust primitives and returns Rust primitives. I/O and conversion live
@@ -59,7 +61,7 @@ that document with `make repo-map-update` and verify it with
 
 ## Non-Negotiable Rules
 
-- No runtime FFI shortcuts in core or `../fontdone`: no `freetype-sys`,
+- No runtime FFI shortcuts in core or the pinned `fontdone` checkout: no `freetype-sys`,
   `bindgen`, `cc`, `extern "C"`, `dlopen`, or native FreeType calls.
 - C/Pillow/FreeType references are read-only oracles for fixture generation,
   diagnosis, and trace comparison.
@@ -68,7 +70,7 @@ that document with `make repo-map-update` and verify it with
 - Never commit temporary debug prints. Permanent traces must use guarded
   `log::trace!` patterns.
 - Never work on legacy `pillow-rs-font`; keep FreeType effort focused on the
-  sibling `../fontdone` repository.
+  pinned GitHub `fontdone` repository through the root Makefile checkout.
 - Do not use destructive git commands like `git reset --hard` or broad
   checkouts unless the user explicitly asks.
 - Do not revert user changes. Work with them or ask only if they make progress
@@ -165,7 +167,8 @@ only reflect already-correct core behavior through the ABI surface.
 ## Harness And Fixtures
 
 - Fixture generators are part of the system. Add or update documented
-  generators under `../fontdone/scripts/` or `../fontdone/doc/`.
+  generators under `build/fontdone-src/scripts/` or `build/fontdone-src/doc/`
+  only in a separately authorized fontdone task.
 - Do not create one-off scripts that future agents cannot reproduce.
 - Prefer exact comparisons: pixel bytes for masks, bytes/hashes for bitmap
   output, exact 26.6 values for metrics and geometry.
@@ -274,14 +277,15 @@ the harness and wrapper boundaries honest while parity failures remain visible.
 For narrow FreeType lanes, prefer the crate-local Makefile targets:
 
 ```bash
-make -C ../fontdone test-harness
-make -C ../fontdone test-generator
-make -C ../fontdone test-render-mode
-make -C ../fontdone test-fixed
-make -C ../fontdone test-interface
-make -C ../fontdone test-ffi
-make -C ../fontdone test-ffi-compat
-make -C ../fontdone test-perf
+make fontdone-source
+make -C build/fontdone-src test-harness
+make -C build/fontdone-src test-generator
+make -C build/fontdone-src test-render-mode
+make -C build/fontdone-src test-fixed
+make -C build/fontdone-src test-interface
+make -C build/fontdone-src test-ffi
+make -C build/fontdone-src test-ffi-compat
+make -C build/fontdone-src test-perf
 ```
 
 Run the narrow failing Makefile target first, then the broader harness target.

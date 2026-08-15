@@ -1,5 +1,5 @@
-// Grayscale: BT.601 luma with integer arithmetic.
-// luma = (299*r + 587*g + 114*b + 500) / 1000
+// Grayscale: Pillow's rounded fixed-point BT.601 luma.
+// luma = (19595*r + 38470*g + 7471*b + 32768) >> 16
 // Mode-aware: only processes channels present in the image mode.
 // Mode codes: 0=L, 1=LA, 2=RGB, 3=RGBA
 // Packed u32 RGBA: byte0=R, byte1=G, byte2=B, byte3=A
@@ -32,9 +32,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     let b = (pixel >> 16u) & 0xffu;
     let a = (pixel >> 24u) & 0xffu;
 
-    // BT.601 luma: always computed from all 3 channels.
+    // Pillow's fixed-point BT.601 luma: always computed from all 3 channels.
     // For L mode, r=g=b=luma so the result is correct (but still compute for safety).
-    let luma = (299u * r + 587u * g + 114u * b + 500u) / 1000u;
+    let luma = (19595u * r + 38470u * g + 7471u * b + 32768u) >> 16u;
     let luma_clamped = min(luma, 255u);
 
     // R channel always gets luma (present in all modes).

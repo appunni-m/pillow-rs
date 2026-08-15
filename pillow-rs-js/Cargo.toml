@@ -24,7 +24,6 @@ default = ["wasm-core"]
 wasm-core = [
     "pillow-rs/image-codecs-all",
     "pillow-rs/wasm-wide-font-internals",
-    "pillow-rs/fontdone-default",
 ]
 # Backwards-compatible name for consumers that selected the former extra
 # bundle. It intentionally resolves to the same complete codec surface.

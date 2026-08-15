@@ -159,7 +159,7 @@ pub fn merge(mode: &str, bands: &[Image]) -> Result<Image, PilError> {
         &bands[0],
         PipelineOp::Merge {
             mode: mode_enum,
-            bands: bands.to_vec(),
+            bands: bands.to_vec().into(),
         },
     );
     if let Image::Pipeline {
@@ -293,7 +293,9 @@ pub fn composite(image1: &Image, image2: &Image, mask: &Image) -> Result<Image, 
 pub fn eval(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
     Ok(Image::push_op(
         image,
-        PipelineOp::Eval { lut: lut.to_vec() },
+        PipelineOp::Eval {
+            lut: lut.to_vec().into(),
+        },
     ))
 }
 

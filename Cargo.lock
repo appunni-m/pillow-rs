@@ -324,6 +324,7 @@ checksum = "d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2"
 [[package]]
 name = "fontdone"
 version = "2.14.3-alpha.1"
+source = "git+https://github.com/appunni-m/fontdone.git?rev=95dc33f12790c896f9a5c95571eec4360f22412e#95dc33f12790c896f9a5c95571eec4360f22412e"
 dependencies = [
  "bzip2-rs",
  "flate2",
@@ -837,6 +838,7 @@ dependencies = [
  "sha2",
  "thiserror 2.0.19",
  "wgpu",
+ "wide",
 ]
 
 [[package]]
@@ -1046,6 +1048,15 @@ name = "rustversion"
 version = "1.0.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f"
+
+[[package]]
+name = "safe_arch"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3a52ec151f024d703f9fd65abb7cbe81e7cdb39f18917a3a37e3014470dc7c59"
+dependencies = [
+ "bytemuck",
+]
 
 [[package]]
 name = "scopeguard"
@@ -1477,6 +1488,16 @@ dependencies = [
  "js-sys",
  "log",
  "web-sys",
+]
+
+[[package]]
+name = "wide"
+version = "1.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "de2aaf408e58689c2096682331b1f42bb2d9f2ed6b11560407d023cd0a6c634e"
+dependencies = [
+ "bytemuck",
+ "safe_arch",
 ]
 
 [[package]]

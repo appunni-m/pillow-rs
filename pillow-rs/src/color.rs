@@ -347,6 +347,30 @@ pub fn cmyk_to_grayscale(img: &DynamicImage) -> Result<crate::raster::GrayImage,
         .ok_or_else(|| PilError::InternalError("cmyk_to_grayscale buffer mismatch".to_string()))
 }
 
+/// Converts CMYK storage to Pillow's truncated binary-conversion luminance.
+///
+/// Pillow's `convert("1")` path uses the integer `299/587/114` luma formula
+/// after expanding CMYK to RGB.  That is intentionally different from the
+/// rounded fixed-point formula used by ordinary `L` conversion, because the
+/// difference changes Floyd–Steinberg threshold decisions near 128.
+pub fn cmyk_to_grayscale_truncate(
+    img: &DynamicImage,
+) -> Result<crate::raster::GrayImage, PilError> {
+    let rgb = cmyk_to_rgb(img).to_rgb8();
+    let (w, h) = rgb.dimensions();
+    let dims = CheckedDims::new(w, h, 1)?;
+    let mut gray = dims.alloc_buffer();
+    for (index, pixel) in rgb.pixels().enumerate() {
+        let value = (299u32 * u32::from(pixel[0])
+            + 587u32 * u32::from(pixel[1])
+            + 114u32 * u32::from(pixel[2]))
+            / 1000;
+        gray[index] = value.min(255) as u8;
+    }
+    crate::raster::GrayImage::from_raw(w, h, gray)
+        .ok_or_else(|| PilError::InternalError("cmyk grayscale buffer mismatch".to_string()))
+}
+
 /// Maps an RGB buffer to Pillow's default CMYK inverse: C=255-R, M=255-G,
 /// Y=255-B, K=0.
 pub fn rgb_to_cmyk_inverse(rgb: &crate::raster::RgbImage) -> crate::raster::RgbaImage {
@@ -1028,6 +1052,74 @@ pub fn f_to_rgb(img: &DynamicImage) -> DynamicImage {
         // PIL: F→X casts float to int via truncation
         let clamped = val.clamp(0.0, 255.0) as u8;
         *op = crate::raster::Rgb([clamped, clamped, clamped]);
+    }
+    DynamicImage::ImageRgb8(out)
+}
+
+/// Converts Pillow `I` storage to the intermediate `L` image used by
+/// `Image.convert` when the destination has no direct integer converter.
+///
+/// This is the `i2l` path in Pillow's `Convert.c`: values at or below zero
+/// become zero, values at or above 255 become 255, and interior values are
+/// truncated rather than rounded.
+pub fn i_to_l(img: &DynamicImage) -> DynamicImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut out = crate::raster::GrayImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+        let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
+        op[0] = value.clamp(0, 255) as u8;
+    }
+    DynamicImage::ImageLuma8(out)
+}
+
+/// Converts Pillow `F` storage to the intermediate `L` image used by
+/// `Image.convert` when the destination has no direct float converter.
+///
+/// This is the `f2l` path in Pillow's `Convert.c`, including truncation of
+/// interior floating-point samples.
+pub fn f_to_l(img: &DynamicImage) -> DynamicImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut out = crate::raster::GrayImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+        let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]);
+        op[0] = value.clamp(0.0, 255.0) as u8;
+    }
+    DynamicImage::ImageLuma8(out)
+}
+
+/// Converts Pillow `I` storage to `F` storage using the direct `i2f` path.
+pub fn i_to_f(img: &DynamicImage) -> DynamicImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut out = crate::raster::RgbaImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+        let value = i32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]) as f32;
+        *op = crate::raster::Rgba(value.to_le_bytes());
+    }
+    DynamicImage::ImageRgba8(out)
+}
+
+/// Converts Pillow `F` storage to `I` storage using the direct `f2i` path.
+pub fn f_to_i(img: &DynamicImage) -> DynamicImage {
+    let rgba = img.to_rgba8();
+    let (w, h) = rgba.dimensions();
+    let mut out = crate::raster::RgbaImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
+        let value = f32::from_le_bytes([ip[0], ip[1], ip[2], ip[3]]) as i32;
+        *op = crate::raster::Rgba(value.to_le_bytes());
+    }
+    DynamicImage::ImageRgba8(out)
+}
+
+/// Converts a luma image to YCbCr through Pillow's direct `l2ycbcr` path.
+pub fn luma_to_ycbcr(img: &DynamicImage) -> DynamicImage {
+    let luma = img.to_luma8();
+    let (w, h) = luma.dimensions();
+    let mut out = RgbImage::new(w, h);
+    for (op, ip) in out.pixels_mut().zip(luma.pixels()) {
+        *op = crate::raster::Rgb([ip[0], 128, 128]);
     }
     DynamicImage::ImageRgb8(out)
 }

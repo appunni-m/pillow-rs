@@ -25,17 +25,18 @@ fn mode_has_g(m: u32) -> bool { return m >= 2u; }
 fn mode_has_b(m: u32) -> bool { return m >= 2u; }
 fn mode_has_a(m: u32) -> bool { return m == 1u || m == 3u; }
 
-fn get_src_coord(x: u32, y: u32, w: u32, h: u32, op: u32) -> vec2<u32> {
+fn get_src_coord(x: u32, y: u32, src_w: u32, src_h: u32, op: u32) -> vec2<u32> {
     var sx = x;
     var sy = y;
     switch op {
-        case 0u: { sx = w - 1u - x; }             // FLIP_LEFT_RIGHT
-        case 1u: { sy = h - 1u - y; }             // FLIP_TOP_BOTTOM
-        case 2u: { sx = y; sy = h - 1u - x; }     // ROTATE_90  (swap)
-        case 3u: { sx = w - 1u - x; sy = h - 1u - y; } // ROTATE_180
-        case 4u: { sx = y; sy = w - 1u - x; }     // ROTATE_270 (swap)
-        case 5u: { sx = y; sy = x; }              // TRANSPOSE  (swap)
-        case 6u: { sx = h - 1u - y; sy = w - 1u - x; } // TRANSVERSE (swap)
+        case 0u: { sx = src_w - 1u - x; } // FLIP_LEFT_RIGHT
+        case 1u: { sy = src_h - 1u - y; } // FLIP_TOP_BOTTOM
+        // Pillow ROTATE_90 is counter-clockwise.
+        case 2u: { sx = src_w - 1u - y; sy = x; } // ROTATE_90 (swap)
+        case 3u: { sx = src_w - 1u - x; sy = src_h - 1u - y; } // ROTATE_180
+        case 4u: { sx = y; sy = src_h - 1u - x; } // ROTATE_270 (swap)
+        case 5u: { sx = y; sy = x; } // TRANSPOSE (swap)
+        case 6u: { sx = src_w - 1u - y; sy = src_h - 1u - x; } // TRANSVERSE (swap)
         default: {}
     }
     return vec2<u32>(sx, sy);
@@ -52,8 +53,9 @@ fn main(@builtin(global_invocation_id) gid: vec3<u32>) {
     // Ops 2,4,5,6 swap input dimensions
     let swap = op == 2u || op == 4u || op == 5u || op == 6u;
     let in_w = select(w, h, swap);
+    let in_h = select(h, w, swap);
 
-    let src = get_src_coord(gid.x, gid.y, w, h, op);
+    let src = get_src_coord(gid.x, gid.y, in_w, in_h, op);
     let src_idx = src.y * in_w + src.x;
     let dst_idx = gid.y * w + gid.x;
 

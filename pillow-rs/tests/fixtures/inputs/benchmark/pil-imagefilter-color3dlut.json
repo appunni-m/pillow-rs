@@ -1,0 +1,184 @@
+{
+  "schema": "migration-parity/benchmark-input@1",
+  "workloads": [
+    {
+      "workload_id": "pil-imagefilter-color3dlut.repr.standard",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.__repr__.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.Color3DLUT.__repr__.behavior.default"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter-color3dlut.generate.standard",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.generate.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.Color3DLUT.generate.behavior.default"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pil-imagefilter-color3dlut.transform.standard",
+      "covers": [
+        "PIL.ImageFilter.Color3DLUT.transform.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "parity_case",
+        "case_id": "PIL.ImageFilter.Color3DLUT.transform.behavior.default"
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 5,
+        "measurement_iterations": 20,
+        "samples": 5,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "parity_pass"
+      },
+      "context": {
+        "size": [
+          0,
+          0
+        ],
+        "mode": "unknown",
+        "chain_length": 1,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    }
+  ],
+  "suites": [
+    {
+      "suite_id": "pil-imagefilter-color3dlut.benchmark-suite",
+      "description": "Equal-weight public workloads for PIL.ImageFilter.Color3DLUT.",
+      "members": [
+        {
+          "workload_id": "pil-imagefilter-color3dlut.repr.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter-color3dlut.generate.standard",
+          "weight": 1
+        },
+        {
+          "workload_id": "pil-imagefilter-color3dlut.transform.standard",
+          "weight": 1
+        }
+      ]
+    }
+  ]
+}
