@@ -846,6 +846,18 @@ def bytes_literal(value: list[int]) -> dict[str, Any]:
     return {"kind": "bytes", "value": value}
 
 
+def sequence_literal(value: list[Any]) -> dict[str, Any]:
+    """Build a public sequence that bypasses exact list/tuple fast paths."""
+
+    return literal({"protocol": "sequence", "items": value})
+
+
+def list_literal(value: list[Any]) -> dict[str, Any]:
+    """Build an exact public list without changing nested tuple semantics."""
+
+    return literal({"protocol": "list", "items": value})
+
+
 def text_repeat_literal(text: str, repeat: int) -> dict[str, Any]:
     """Keep large text boundary inputs compact and source-neutral."""
 
@@ -3116,18 +3128,16 @@ class WorkflowBuilder:
             "image1",
             "image2",
         }:
-            if requested_mode != "RGB" or self.scenario_pixel is None:
+            if requested_mode not in {"RGB", "RGBa"} or self.scenario_pixel is None:
                 raise ValueError(
-                    "chops-binary-high-low requires RGB operands and a pixel"
+                    "chops-binary-high-low requires RGB/RGBa operands and a pixel"
                 )
             # Exercise both sides of the public ImageChops channel formulas.
             # The regular nonzero-pixel setup changes only image1, leaving the
             # second operand at zero and making its high-channel branches
             # unreachable through the input-only parity workflow.
-            pixel = (
-                self.scenario_pixel
-                if label == "image1"
-                else [50, 200, 150]
+            pixel = self.scenario_pixel if label == "image1" else (
+                [50, 200, 150, 89] if requested_mode == "RGBa" else [50, 200, 150]
             )
             self.add_step(
                 "PIL.Image.Image",
@@ -3187,6 +3197,28 @@ class WorkflowBuilder:
                     "value": literal(255),
                 },
                 step_id=self.next_step_id("setup-mask-pixel"),
+            )
+        elif self.edge == "autocontrast-mask-nonzero-pixel" and label in {
+            "image",
+            "mask",
+        }:
+            if label == "image":
+                if self.scenario_pixel is None:
+                    raise ValueError(
+                        "autocontrast mask edge requires an image pixel"
+                    )
+                value = self.scenario_pixel
+            else:
+                value = 255
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 3]),
+                    "value": literal(value),
+                },
+                step_id=self.next_step_id("setup-autocontrast-mask-pixel"),
             )
         elif self.edge == "paste-mask-partial-pixel":
             # A masked paste must be materialized through the public receiver
@@ -6728,7 +6760,334 @@ def pipeline_composition_cases(
         ]
     )
 
+    def gpu_auxiliary_cache_case(pattern: int) -> dict[str, Any]:
+        """Build a public chain that reuses a secondary image and one LUT.
+
+        The GPU submission cache is only populated when an auxiliary image or
+        LUT recurs inside one lazy pipeline.  Repeating ordinary public
+        ImageChops and Image.point calls makes those identities observable
+        without reaching into the compute implementation.
+        """
+
+        mode = ("L", "RGB", "RGBA")[pattern % 3]
+        size = [8 + pattern % 5, 7 + (pattern // 5) % 5]
+        seed = 17 + (pattern * 37) % 220
+        if mode == "L":
+            color1: Any = seed
+            color2: Any = (seed * 3 + 29) % 256
+            lut = list((value * 5 + pattern * 7) % 256 for value in range(256))
+        elif mode == "RGB":
+            color1 = [seed, (seed * 3 + 17) % 256, (seed * 5 + 29) % 256]
+            color2 = [(seed + 41) % 256, (seed + 83) % 256, (seed + 127) % 256]
+            lut = [
+                (value * 5 + band * 31 + pattern * 7) % 256
+                for band in range(3)
+                for value in range(256)
+            ]
+        else:
+            color1 = [seed, (seed * 3 + 17) % 256, (seed * 5 + 29) % 256, 127]
+            color2 = [(seed + 41) % 256, (seed + 83) % 256, (seed + 127) % 256, 191]
+            lut = [
+                (value * 5 + band * 31 + pattern * 7) % 256
+                for band in range(4)
+                for value in range(256)
+            ]
+
+        steps: list[dict[str, Any]] = [
+            new_image("setup-image-1", mode, size, color1),
+            new_image("setup-image-2", mode, size, color2),
+        ]
+        previous = "setup-image-1"
+        for index in range(2 + pattern):
+            step_id = f"auxiliary-{index:03d}"
+            steps.append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.ImageChops",
+                    "operation": "multiply" if index % 2 == 0 else "screen",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding(previous),
+                        "image2": binding("setup-image-2"),
+                    },
+                }
+            )
+            previous = step_id
+        for index in range(2 + pattern % 4):
+            step_id = f"cached-point-{index:02d}"
+            steps.append(
+                {
+                    "step_id": step_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "point",
+                    "receiver": binding(previous),
+                    "arguments": {"lut": literal(lut)},
+                }
+            )
+            previous = step_id
+        steps.append(materialize(previous))
+        return {
+            "case_id": f"pipeline-composition.gpu-auxiliary-cache-{pattern:03d}",
+            "surface": "PIL.ImageChops",
+            "operation": "screen",
+            "covers": [
+                behavior("PIL.ImageChops", "multiply"),
+                behavior("PIL.ImageChops", "screen"),
+                behavior("PIL.Image.Image", "point"),
+            ],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": steps,
+            # The declared primary operation must be observed explicitly; the
+            # alternating chain always creates its first screen at index 1.
+            "observations": ["auxiliary-000", "auxiliary-001", previous, "materialize"],
+        }
+
+    def gpu_paste_mask_cache_case(pattern: int) -> dict[str, Any]:
+        """Repeat one public paste source and mask inside one lazy image.
+
+        Image.paste is the supported three-input operation that reaches the
+        GPU worker's third-image upload. Reusing the same public mask across
+        the chain keeps the cache stimulus input-driven and avoids internal
+        handles or backend-specific probes.
+        """
+
+        mode = ("L", "RGB", "RGBA")[pattern % 3]
+        size = [8 + pattern % 5, 7 + (pattern // 5) % 5]
+        seed = 23 + (pattern * 41) % 220
+        mask_value = 37 + (pattern * 17) % 219
+        if mode == "L":
+            image_color: Any = seed
+            source_color: Any = (seed * 3 + 29) % 256
+        elif mode == "RGB":
+            image_color = [seed, (seed * 3 + 17) % 256, (seed * 5 + 29) % 256]
+            source_color = [
+                (seed + 41) % 256,
+                (seed + 83) % 256,
+                (seed + 127) % 256,
+            ]
+        else:
+            image_color = [
+                seed,
+                (seed * 3 + 17) % 256,
+                (seed * 5 + 29) % 256,
+                127,
+            ]
+            source_color = [
+                (seed + 41) % 256,
+                (seed + 83) % 256,
+                (seed + 127) % 256,
+                191,
+            ]
+
+        steps: list[dict[str, Any]] = [
+            new_image("setup-image", mode, size, image_color),
+            new_image("setup-source", mode, size, source_color),
+            new_image("setup-mask", "L", size, mask_value),
+        ]
+        paste_count = 2 + pattern
+        for index in range(paste_count):
+            steps.append(
+                {
+                    "step_id": f"cached-paste-{index:03d}",
+                    "surface": "PIL.Image.Image",
+                    "operation": "paste",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "im": binding("setup-source"),
+                        "mask": binding("setup-mask"),
+                    },
+                }
+            )
+        steps.append(materialize("setup-image"))
+        return {
+            "case_id": f"pipeline-composition.gpu-paste-mask-cache-{pattern:03d}",
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "covers": [behavior("PIL.Image.Image", "paste")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": steps,
+            "observations": ["cached-paste-000", "cached-paste-001", "materialize"],
+        }
+
+    def gpu_safety_negative_gaussian_case(pattern: int) -> dict[str, Any]:
+        """Use Pillow-valid negative Gaussian radii to exercise GPU rejection.
+
+        Pillow accepts negative Gaussian radii as a no-op. The GPU backend
+        must reject them during its safety check and let the exact CPU path
+        handle the public operation; this does not require an adapter or a
+        direct backend probe.
+        """
+
+        mode = ("L", "RGB", "RGBA")[pattern % 3]
+        size = [7 + pattern % 5, 6 + (pattern // 5) % 5]
+        seed = 23 + (pattern * 41) % 220
+        radius = -1.0 - 0.25 * (pattern % 8)
+        if mode == "L":
+            color: Any = seed
+        elif mode == "RGB":
+            color = [seed, (seed * 3 + 17) % 256, (seed * 5 + 29) % 256]
+        else:
+            color = [
+                seed,
+                (seed * 3 + 17) % 256,
+                (seed * 5 + 29) % 256,
+                127 + pattern % 2 * 64,
+            ]
+        return {
+            "case_id": f"pipeline-composition.gpu-safety-negative-gaussian-{pattern:03d}",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "covers": [behavior("PIL.Image.Image", "filter")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", mode, size, color),
+                {
+                    "step_id": "setup-filter",
+                    "surface": "PIL.ImageFilter",
+                    "operation": "GaussianBlur",
+                    "receiver": None,
+                    "arguments": {"radius": literal(radius)},
+                },
+                {
+                    "step_id": "filtered",
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": binding("setup-image"),
+                    "arguments": {"filter": binding("setup-filter")},
+                },
+                materialize("filtered"),
+            ],
+            "observations": ["setup-filter", "filtered", "materialize"],
+        }
+
+    def gpu_transpose_fusion_case(
+        name: str,
+        first_method: int,
+        second_method: int,
+        *,
+        prefix_operation: str | None = None,
+        tail_operation: str | None = None,
+        size: list[int] | None = None,
+        include_materialize: bool = True,
+    ) -> dict[str, Any]:
+        """Compose two public transpose calls in one GPU-eligible pipeline.
+
+        The repeated calls are ordinary ``Image.transpose`` inputs. Keeping
+        the intermediate unobserved lets the backend see adjacent public
+        transpose operations and exercise its exact dihedral composition
+        check instead of a coverage-only helper invocation.
+        """
+
+        steps = [
+            new_image("setup-image", "RGB", size or [19, 13], [17, 83, 149])
+        ]
+        receiver = "setup-image"
+        if prefix_operation is not None:
+            if prefix_operation == "grayscale":
+                prefix_surface = "PIL.ImageOps"
+                prefix_receiver = None
+                prefix_arguments = {"image": binding(receiver)}
+            else:
+                if prefix_operation != "convert":
+                    raise ValueError(f"unknown transpose-fusion prefix: {prefix_operation}")
+                prefix_surface = "PIL.Image.Image"
+                prefix_receiver = binding(receiver)
+                prefix_arguments = {"mode": literal("L")}
+            steps.append(
+                {
+                    "step_id": "prefix",
+                    "surface": prefix_surface,
+                    "operation": prefix_operation,
+                    "receiver": prefix_receiver,
+                    "arguments": prefix_arguments,
+                }
+            )
+            receiver = "prefix"
+        steps.extend(
+            [
+                {
+                    "step_id": "first-transpose",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding(receiver),
+                    "arguments": {"method": literal(first_method)},
+                },
+                {
+                    "step_id": "second-transpose",
+                    "surface": "PIL.Image.Image",
+                    "operation": "transpose",
+                    "receiver": binding("first-transpose"),
+                    "arguments": {"method": literal(second_method)},
+                },
+            ]
+        )
+        materialize_receiver = "second-transpose"
+        if tail_operation is not None:
+            if tail_operation != "invert":
+                raise ValueError(f"unknown transpose-fusion tail: {tail_operation}")
+            steps.append(
+                {
+                    "step_id": "tail",
+                    "surface": "PIL.ImageOps",
+                    "operation": tail_operation,
+                    "receiver": None,
+                    "arguments": {"image": binding("second-transpose")},
+                }
+            )
+            materialize_receiver = "tail"
+        if include_materialize:
+            steps.append(materialize(materialize_receiver))
+        return {
+            "case_id": f"pipeline-composition.gpu-transpose-fusion-{name}",
+            "surface": "PIL.Image.Image",
+            "operation": "transpose",
+            "covers": [behavior("PIL.Image.Image", "transpose")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": steps,
+            "observations": [
+                "second-transpose",
+                *(["materialize"] if include_materialize else []),
+            ],
+        }
+
     cases = [
+        {
+            "case_id": "pipeline-composition.thumbnail-size-metadata",
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "covers": [
+                behavior("PIL.Image.Image", "thumbnail"),
+                behavior("PIL.Image.Image", "size"),
+            ],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                new_image("setup-image", "RGB", [46, 22], [17, 83, 149]),
+                {
+                    "step_id": "thumbnail",
+                    "surface": "PIL.Image.Image",
+                    "operation": "thumbnail",
+                    "receiver": binding("setup-image"),
+                    "arguments": {
+                        "size": literal([23, 11]),
+                        "resample": literal(0),
+                    },
+                },
+                {
+                    "step_id": "size",
+                    "surface": "PIL.Image.Image",
+                    "operation": "size",
+                    "receiver": binding("setup-image"),
+                    "arguments": {},
+                },
+                materialize("setup-image"),
+            ],
+            "observations": ["thumbnail", "size", "materialize"],
+        },
         {
             "case_id": "pipeline-composition.filter-invert-mirror",
             "surface": "PIL.Image.Image",
@@ -6986,6 +7345,114 @@ def pipeline_composition_cases(
                 materialize("inverted"),
             ],
             "observations": ["screened", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.opened-rgb-multiply-screen-shared-source",
+            "surface": "PIL.ImageChops",
+            "operation": "screen",
+            "covers": [
+                behavior("PIL.ImageChops", "multiply"),
+                behavior("PIL.ImageChops", "screen"),
+            ],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [
+                {
+                    "id": "opened-shared-rgb-source",
+                    "kind": "builtin",
+                    "name": "encoded-png-input",
+                }
+            ],
+            "steps": [
+                # The mode-changing prefix is intentional: a pure
+                # mode-preserving Multiply->Screen append is split by the
+                # pipeline-prefix cache before the fusion helper can inspect
+                # adjacent ops. Reusing one opened secondary then reaches the
+                # public Bytes source-identity arm.
+                new_image("setup-image-1", "RGB", [2, 2], [25, 23, 197]),
+                {
+                    "step_id": "setup-image-2",
+                    "surface": "PIL.Image",
+                    "operation": "open",
+                    "receiver": None,
+                    "arguments": {"fp": asset_value("opened-shared-rgb-source")},
+                },
+                {
+                    "step_id": "grayscale",
+                    "surface": "PIL.ImageOps",
+                    "operation": "grayscale",
+                    "receiver": None,
+                    "arguments": {"image": binding("setup-image-1")},
+                },
+                {
+                    "step_id": "colorized",
+                    "surface": "PIL.ImageOps",
+                    "operation": "colorize",
+                    "receiver": None,
+                    "arguments": {
+                        "image": binding("grayscale"),
+                        "black": literal("black"),
+                        "white": literal("white"),
+                    },
+                },
+                {
+                    "step_id": "multiplied",
+                    "surface": "PIL.ImageChops",
+                    "operation": "multiply",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("colorized"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                {
+                    "step_id": "screened",
+                    "surface": "PIL.ImageChops",
+                    "operation": "screen",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("multiplied"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                materialize("screened"),
+            ],
+            "observations": ["multiplied", "screened", "materialize"],
+        },
+        {
+            "case_id": "pipeline-composition.hsv-multiply-crop",
+            "surface": "PIL.Image.Image",
+            "operation": "crop",
+            "covers": [behavior("PIL.Image.Image", "crop")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": [
+                # A plain Crop-only pipeline is intentionally routed to the
+                # native CPU row mover. Keeping a public HSV Multiply before
+                # the crop makes the batch genuinely multi-op, so automatic
+                # SIMD routing reaches the packed crop adapter without the
+                # CMYK fourth-channel/alpha ambiguity.
+                new_image("setup-image-1", "HSV", [16, 16], [17, 83, 149]),
+                new_image("setup-image-2", "HSV", [16, 16], [211, 127, 43]),
+                {
+                    "step_id": "multiplied",
+                    "surface": "PIL.ImageChops",
+                    "operation": "multiply",
+                    "receiver": None,
+                    "arguments": {
+                        "image1": binding("setup-image-1"),
+                        "image2": binding("setup-image-2"),
+                    },
+                },
+                {
+                    "step_id": "cropped",
+                    "surface": "PIL.Image.Image",
+                    "operation": "crop",
+                    "receiver": binding("multiplied"),
+                    "arguments": {"box": literal([1.0, 2.0, 14.0, 15.0])},
+                },
+                materialize("cropped"),
+            ],
+            "observations": ["multiplied", "cropped", "materialize"],
         },
         {
             "case_id": "pipeline-composition.alpha-composite-grayscale-invert",
@@ -10338,6 +10805,69 @@ def pipeline_composition_cases(
             },
         ]
     )
+    # Coverage probe 2026-08-16c: a public grayscale boundary prevents
+    # prefix-cache splitting without attaching an explicit mode tag, allowing
+    # the GPU preflight to inspect the two adjacent transpose operations as
+    # one input-driven batch. The batch is then intentionally sent to CPU
+    # because Grayscale is nonterminal; that is the supported public fallback
+    # whose transpose planner still runs first.
+    cases.extend(
+        gpu_transpose_fusion_case(
+            name,
+            first_method,
+            second_method,
+            prefix_operation="grayscale",
+        )
+        for name, first_method, second_method in (
+            ("after-grayscale-compose", 0, 1),
+            ("after-grayscale-identity", 0, 0),
+        )
+    )
+    cases.append(
+        gpu_transpose_fusion_case(
+            "after-grayscale-stop-at-invert",
+            0,
+            0,
+            prefix_operation="grayscale",
+            tail_operation="invert",
+        )
+    )
+    cases.extend(
+        gpu_transpose_fusion_case(
+            name,
+            first_method,
+            second_method,
+            prefix_operation="grayscale",
+        )
+        for name, first_method, second_method in (
+            ("after-grayscale-rotate90", 2, 1),
+            ("after-grayscale-rotate270", 4, 1),
+            ("after-grayscale-transpose", 5, 1),
+            ("after-grayscale-transverse", 6, 1),
+        )
+    )
+    cases.append(
+        gpu_transpose_fusion_case(
+            "after-grayscale-zero-dimensions",
+            0,
+            0,
+            prefix_operation="grayscale",
+            size=[0, 0],
+            include_materialize=False,
+        )
+    )
+    # Coverage batch 2026-08-15b: exercise repeated public auxiliary-image
+    # and LUT identities inside one lazy pipeline. Keep exactly 100 retained
+    # workflows so cache coverage remains input-driven and auditable.
+    cases.extend(gpu_auxiliary_cache_case(pattern) for pattern in range(100))
+    # Coverage batch 2026-08-15c: exercise repeated public paste masks inside
+    # one lazy pipeline. Keep exactly 100 workflows so the third-image cache
+    # remains input-driven and auditable.
+    cases.extend(gpu_paste_mask_cache_case(pattern) for pattern in range(100))
+    # Coverage batch 2026-08-16b: Pillow-valid negative Gaussian radii must
+    # take the GPU safety rejection and exact CPU fallback without requiring a
+    # device. Keep the batch public and parity-observed.
+    cases.extend(gpu_safety_negative_gaussian_case(pattern) for pattern in range(100))
     # Expand the reviewed workflows into a small public pipeline matrix.  The
     # templates are all already parity-validated; varying only the public
     # source colors keeps the graph shape and operation contracts identical
@@ -11976,6 +12506,39 @@ def build_nuanced_cases(
             "values": {"factor": literal(1.25), "resample": literal(99)},
         }
 
+    def autocontrast_mask_nonzero_spec(pattern: int) -> dict[str, Any]:
+        """Build one valid public autocontrast workflow with a selected mask pixel.
+
+        The existing mask cases intentionally retain Pillow's all-zero-mask
+        identity behavior. This matrix keeps the image and mask public while
+        selecting one real pixel, which reaches the complementary histogram
+        branch without embedding an output or calling a native helper.
+        """
+
+        mode = "L" if pattern % 2 == 0 else "RGB"
+        pixel = (
+            17 + (pattern * 37) % 220
+            if mode == "L"
+            else [
+                17 + (pattern * 37) % 220,
+                31 + (pattern * 53) % 220,
+                47 + (pattern * 71) % 208,
+            ]
+        )
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "autocontrast",
+            "requirement_suffix": "parameter.mask",
+            "name": f"coverage-batch-autocontrast-mask-nonzero-{pattern:03d}",
+            "mode": mode,
+            "size": [5 + pattern % 4, 5 + (pattern // 4) % 4],
+            "mask_mode": "1" if pattern % 4 < 2 else "L",
+            "edge": "autocontrast-mask-nonzero-pixel",
+            "pixel": pixel,
+            "values": {"cutoff": literal((pattern % 6) * 2)},
+            "observe_result": "tobytes",
+        }
+
     def exif_boundary_spec(pattern: int) -> dict[str, Any]:
         """Build one public JPEG EXIF malformed-tail workflow.
 
@@ -12106,6 +12669,48 @@ def build_nuanced_cases(
             "edge": "nonzero-pixel",
             "pixel": (pattern * 29 + 7) % 256,
             "values": {"bits": literal(1 + pattern % 8)},
+        }
+
+    def imageops_scalar_fallback_spec(pattern: int) -> dict[str, Any]:
+        """Build valid ImageOps inputs for non-native SIMD fallback modes.
+
+        Ordinary L/LA/RGB/RGBA byte images use native byte transforms in the
+        SIMD adapter. CMYK and palette images exercise the public packed
+        scalar path for operations whose ImageOps contract accepts them.
+        Posterize's unsupported modes stay in its separate error batch.
+        """
+
+        if pattern < 50:
+            operation = "invert"
+            mode = "CMYK"
+            pixel = [
+                7 + (pattern * 11) % 240,
+                19 + (pattern * 17) % 220,
+                31 + (pattern * 23) % 210,
+                43 + (pattern * 29) % 200,
+            ]
+            values: dict[str, Any] = {}
+        else:
+            operation = "solarize"
+            mode = "CMYK" if pattern < 75 else "P"
+            seed = 7 + (pattern * 37) % 240
+            if mode == "CMYK":
+                pixel = [seed, (seed + 41) % 256, (seed + 83) % 256, (seed + 127) % 256]
+            else:
+                pixel = seed
+            values = {"threshold": literal((pattern * 19) % 256)}
+
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-imageops-scalar-fallback-{pattern:03d}",
+            "mode": mode,
+            "size": [5 + pattern % 7, 4 + (pattern // 7) % 6],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "values": values,
+            "observe_result": "tobytes",
         }
 
     def imageops_pad_zero_dimension_coverage_spec(pattern: int) -> dict[str, Any]:
@@ -12365,6 +12970,51 @@ def build_nuanced_cases(
         if pattern == binary_case_count + 3:
             spec["size"] = [0, 8]
         return spec
+
+    def chops_premultiplied_alpha_spec(pattern: int) -> dict[str, Any]:
+        """Build one public ``RGBa`` ImageChops workflow.
+
+        ``RGBa`` shares four-byte storage with RGBA but is intentionally not
+        eligible for the native straight-alpha byte adapters.  These valid
+        public inputs therefore exercise the packed scalar fallback for the
+        dual-image operations whose alpha and four-channel branches remain
+        red in ``pool_simd/ops/scalar.rs``.  Results are observed through
+        ``tobytes`` so the deferred operation is evaluated by the normal
+        parity runner.
+        """
+
+        operations = (
+            "multiply",
+            "screen",
+            "darker",
+            "lighter",
+            "difference",
+            "subtract_modulo",
+            "add_modulo",
+        )
+        operation = operations[pattern // 4]
+        local = pattern % 4
+        seed = pattern * 29 + local * 7
+        color1 = [
+            (31 + seed) % 256,
+            (109 + seed * 3) % 256,
+            (197 + seed * 5) % 256,
+            127 + (local * 31) % 129,
+        ]
+        return {
+            "surface": "PIL.ImageChops",
+            "operation": operation,
+            "requirement_suffix": "behavior.default",
+            "name": (
+                "coverage-batch-chops-rgba-premultiplied-"
+                f"{operation}-{local}"
+            ),
+            "mode": "RGBa",
+            "size": [3 + local, 2 + (pattern % 3)],
+            "edge": "chops-binary-high-low",
+            "pixel": color1,
+            "observe_result": "tobytes",
+        }
 
     def public_generator_materialization_spec(pattern: int) -> dict[str, Any]:
         """Build one distinct public generator workflow that observes bytes.
@@ -13296,6 +13946,13 @@ def build_nuanced_cases(
             "requirement_suffix": "parameter.fp",
             "name": "nonexistent-path-no-formats",
             "edge": "nonexistent-file-no-formats",
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.fp",
+            "name": "directory-path-error",
+            "edge": "read-only-directory",
         },
         # Exercise the public ImageEnhance constructor plus enhance() call on
         # the modes rejected by the Rust core. These are behavioral parity
@@ -20976,6 +21633,101 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "l-generic-sequence",
+            "observe_receiver": True,
+            "mode": "L",
+            "values": {
+                "data": sequence_literal([0, 32, 64, 96, 128, 160, 192, 224, 255]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "p-generic-sequence",
+            "observe_receiver": True,
+            "mode": "P",
+            "values": {
+                "data": sequence_literal([0, 1, 2, 3, 4, 5, 6, 7, 8]),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-generic-sequence",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "data": sequence_literal([[1, 2, 3]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-generic-packed",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "data": sequence_literal([0x00302010] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-generic-singleton-packed",
+            "observe_receiver": True,
+            "mode": "RGB",
+            "values": {
+                "data": sequence_literal([[1]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "la-generic-scalar-float",
+            "mode": "LA",
+            "values": {
+                "data": sequence_literal([1.5] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "la-generic-singleton-float",
+            "mode": "LA",
+            "values": {
+                "data": sequence_literal([[1.5]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-generic-singleton-float",
+            "mode": "RGB",
+            "values": {
+                "data": sequence_literal([[1.5]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-generic-invalid-item",
+            "mode": "RGB",
+            "values": {
+                "data": sequence_literal(["not-a-color"] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "opened-i16-values",
             "observe_receiver": True,
             "mode": "I;16",
@@ -22029,7 +22781,7 @@ def build_nuanced_cases(
             "observe_receiver": True,
             "mode": "RGBA",
             "values": {
-                "data": literal([[255, 0, 0, 128]] * 9),
+                "data": list_literal([[255, 0, 0, 128]] * 9),
             },
         },
         {
@@ -23570,6 +24322,23 @@ def build_nuanced_cases(
             for prefix, mode in (("rgb16-png", "RGB"), ("rgba16-png", "RGBA"))
             for pattern in range(10)
         ),
+        # Coverage batch 2026-08-16a: exercise the public L16 entropy path.
+        # ImageStat and getbbox intentionally keep their I;16* fast paths in
+        # byte/scalar storage, but entropy reduces L16 through DynamicImage's
+        # byte luma adapter. Keep the stimulus parity-stable: Pillow's raw
+        # I;16 histogram has a separate mixed-sample behavior that is not
+        # mirrored by the current core histogram implementation.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "entropy",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-entropy-i16-{prefix}-{pattern}",
+                "scenario_inline_image": f"{prefix}-pattern-{pattern}",
+            }
+            for prefix in ("i16-frombytes",)
+            for pattern in (0,)
+        ),
         # Coverage batch 2026-08-14d: exercise the public band extraction
         # endpoint across every byte-backed channel family.  The indices are
         # all valid for the selected mode, and the cases observe the real
@@ -24423,7 +25192,7 @@ def build_nuanced_cases(
                 ("RGB", [180, 120, 60]),
                 ("RGBA", [180, 120, 60, 128]),
             )
-            for index, method in enumerate((0, 1, 2, 3, 4))
+            for index, method in enumerate((0, 1, 2, 3, 4, 5, 6))
         ),
         *(
             {
@@ -25262,10 +26031,18 @@ def build_nuanced_cases(
         # unsupported modes, optional mask validation, and palette/typed
         # geometry success paths. Keep this as exactly 100 retained cases.
         *(imageops_contract_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-16b: exercise the valid nonzero-mask branch
+        # of ImageOps.autocontrast through public image/mask pixels and an
+        # observed result. Keep the input matrix bounded at 100 cases.
+        *(autocontrast_mask_nonzero_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14ar: exercise the reachable public
         # ImageOps.posterize mode-P NotImplementedError branch with exactly
         # 100 valid palette images and bit-depth inputs.
         *(imageops_posterize_palette_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-15a: exercise public CMYK/P ImageOps modes
+        # that select the packed SIMD scalar fallback rather than the native
+        # byte transform. Keep this at exactly 100 valid input cases.
+        *(imageops_scalar_fallback_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14as: exercise the remaining public
         # ImageOps.pad zero-dimension short-circuit sides with exactly 100
         # valid source/target dimension inputs.
@@ -25298,6 +26075,10 @@ def build_nuanced_cases(
         # binary early-return path with valid equal zero dimensions. The
         # legacy Blend/Composite dispatch is intentionally not targeted.
         *(chops_empty_dimension_spec(pattern) for pattern in range(103)),
+        # Coverage batch 2026-08-16a: exercise the packed scalar fallback for
+        # valid premultiplied-alpha RGBa dual-image Chops operations. Native
+        # byte adapters intentionally handle straight-alpha layouts only.
+        *(chops_premultiplied_alpha_spec(pattern) for pattern in range(28)),
         # Coverage batch 2026-08-14al: materialize the reachable public
         # generator facades. The exact 100-case matrix varies valid modes,
         # dimensions, sigma values, and iteration quality without targeting
@@ -29271,6 +30052,14 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "save",
+            "requirement_suffix": "parameter.fp",
+            "name": "embedded-null-bytes",
+            "edge": "embedded-null-bytes",
+            "values": {"format": literal("PNG")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "save",
             "requirement_suffix": "behavior.default",
             "name": "in-memory-stream",
             "edge": "save-in-memory-stream",
@@ -29577,6 +30366,13 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "png-rgb-opened",
             "scenario_asset": "image/rgb-small.png",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "load",
+            "requirement_suffix": "behavior.default",
+            "name": "png-without-idat",
+            "scenario_inline_image": "png-no-idat",
         },
         {
             "surface": "PIL.Image.Image",
@@ -33254,6 +34050,18 @@ def build_nuanced_cases(
             },
         },
         {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "behavior.default",
+            "name": "max-pixels-error",
+            "mode": "L",
+            "edge": "max-pixels",
+            "values": {
+                "size": literal([16385, 16385]),
+                "data": bytes_literal([]),
+            },
+        },
+        {
             "surface": "PIL.Image.Image",
             "operation": "frombytes",
             "requirement_suffix": "mode.l",
@@ -35847,8 +36655,8 @@ def build_nuanced_cases(
                 ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [16, 32, 48, 64], {"factor": literal(0.0)}, "parameter.factor"),
                 ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [17, 33, 49, 65], {"factor": literal(0.5)}, "parameter.factor"),
                 ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [18, 34, 50, 66], {"factor": literal(2.0)}, "parameter.factor"),
-                ("PIL.ImageEnhance.Brightness", "enhance", "P", 7, {"factor": literal(0.75)}, "parameter.factor"),
-                ("PIL.ImageEnhance.Brightness", "enhance", "PA", [7, 191], {"factor": literal(1.25)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [19, 35, 51, 67], {"factor": literal(0.75)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [20, 36, 52, 68], {"factor": literal(1.25)}, "parameter.factor"),
                 ("PIL.ImageOps", "flip", "P", 7, None, "behavior.default"),
                 ("PIL.ImageOps", "flip", "PA", [7, 191], None, "behavior.default"),
                 ("PIL.ImageOps", "flip", "CMYK", [17, 33, 49, 65], None, "behavior.default"),
@@ -36078,11 +36886,819 @@ def build_nuanced_cases(
             1,
         )
     )
+
+    # Coverage campaign 2026-08-15: a second, independent 100-case batch.  The
+    # prior campaign remains intact so this batch cannot trade away coverage
+    # from an older reachable input.  These cases are public ImageOps,
+    # ImageEnhance, and ImageChops workflows; no expected bytes or native
+    # probes are embedded.
+    simd_campaign_extra_specs: list[dict[str, Any]] = []
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            11,
+            case,
+            "PIL.ImageChops",
+            "invert",
+            mode=mode,
+            size=[4 + case, 1 + case % 3],
+            pixel=pixel,
+            edge="nonzero-pixel",
+        )
+        for case, (mode, pixel) in enumerate(
+            (
+                ("P", 0),
+                ("P", 3),
+                ("P", 127),
+                ("P", 255),
+                ("PA", [3, 191]),
+                ("PA", [11, 127]),
+                ("PA", [127, 63]),
+                ("CMYK", [17, 33, 49, 65]),
+                ("CMYK", [251, 7, 63, 191]),
+                ("CMYK", [231, 29, 127, 63]),
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            12,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[4 + case, 3 + case % 3],
+            pixel=pixel,
+            values=values,
+            requirement_suffix=requirement_suffix,
+        )
+        for case, (surface, operation, mode, pixel, values, requirement_suffix) in enumerate(
+            (
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [16, 32, 48, 64], {"factor": literal(0.0)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [17, 33, 49, 65], {"factor": literal(0.5)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "CMYK", [18, 34, 50, 66], {"factor": literal(2.0)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "P", 7, {"factor": literal(0.75)}, "parameter.factor"),
+                ("PIL.ImageEnhance.Brightness", "enhance", "PA", [7, 191], {"factor": literal(1.25)}, "parameter.factor"),
+                ("PIL.ImageOps", "flip", "P", 7, None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "PA", [7, 191], None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "CMYK", [17, 33, 49, 65], None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "P", 127, None, "behavior.default"),
+                ("PIL.ImageOps", "flip", "PA", [231, 29], None, "behavior.default"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            13,
+            case,
+            "PIL.ImageChops",
+            "multiply",
+            mode="CMYK",
+            size=[3 + case, 2 + case % 4],
+            pixel=pixel,
+        )
+        for case, pixel in enumerate(
+            (
+                [17, 83, 149, 191],
+                [0, 1, 254, 255],
+                [37, 211, 89, 173],
+                [127, 128, 129, 130],
+                [251, 7, 63, 191],
+                [1, 17, 33, 49],
+                [83, 149, 211, 29],
+                [255, 255, 255, 255],
+                [0, 0, 0, 0],
+                [231, 29, 127, 63],
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            14,
+            case,
+            "PIL.ImageChops",
+            "screen",
+            mode="CMYK",
+            size=[3 + case, 2 + case % 4],
+            pixel=pixel,
+        )
+        for case, pixel in enumerate(
+            (
+                [17, 83, 149, 191],
+                [0, 1, 254, 255],
+                [37, 211, 89, 173],
+                [127, 128, 129, 130],
+                [251, 7, 63, 191],
+                [1, 17, 33, 49],
+                [83, 149, 211, 29],
+                [255, 255, 255, 255],
+                [0, 0, 0, 0],
+                [231, 29, 127, 63],
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            15,
+            case,
+            "PIL.ImageChops",
+            operation,
+            mode="CMYK",
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+        )
+        for case, (operation, pixel) in enumerate(
+            (
+                ("darker", [17, 83, 149, 191]),
+                ("lighter", [17, 83, 149, 191]),
+                ("difference", [17, 83, 149, 191]),
+                ("darker", [0, 1, 254, 255]),
+                ("lighter", [0, 1, 254, 255]),
+                ("difference", [0, 1, 254, 255]),
+                ("darker", [127, 128, 129, 130]),
+                ("lighter", [127, 128, 129, 130]),
+                ("difference", [127, 128, 129, 130]),
+                ("difference", [231, 29, 127, 63]),
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            16,
+            case,
+            "PIL.ImageChops",
+            "add_modulo",
+            mode="CMYK",
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+        )
+        for case, pixel in enumerate(
+            (
+                [17, 83, 149, 191],
+                [0, 1, 254, 255],
+                [37, 211, 89, 173],
+                [127, 128, 129, 130],
+                [251, 7, 63, 191],
+                [1, 17, 33, 49],
+                [83, 149, 211, 29],
+                [255, 255, 255, 255],
+                [0, 0, 0, 0],
+                [231, 29, 127, 63],
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            17,
+            case,
+            "PIL.ImageChops",
+            "subtract_modulo",
+            mode="CMYK",
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+        )
+        for case, pixel in enumerate(
+            (
+                [17, 83, 149, 191],
+                [0, 1, 254, 255],
+                [37, 211, 89, 173],
+                [127, 128, 129, 130],
+                [251, 7, 63, 191],
+                [1, 17, 33, 49],
+                [83, 149, 211, 29],
+                [255, 255, 255, 255],
+                [0, 0, 0, 0],
+                [231, 29, 127, 63],
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            18,
+            case,
+            "PIL.ImageChops",
+            operation,
+            mode="CMYK",
+            size=[3 + case, 2 + case % 3],
+            pixel=pixel,
+        )
+        for case, (operation, pixel) in enumerate(
+            (
+                ("overlay", [17, 83, 149, 191]),
+                ("hard_light", [17, 83, 149, 191]),
+                ("soft_light", [17, 83, 149, 191]),
+                ("overlay", [0, 1, 254, 255]),
+                ("hard_light", [0, 1, 254, 255]),
+                ("soft_light", [0, 1, 254, 255]),
+                ("overlay", [127, 128, 129, 130]),
+                ("hard_light", [127, 128, 129, 130]),
+                ("soft_light", [127, 128, 129, 130]),
+                ("overlay", [231, 29, 127, 63]),
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            19,
+            case,
+            "PIL.ImageEnhance.Sharpness",
+            "enhance",
+            mode="CMYK",
+            size=[5 + case % 3, 5 + case % 2],
+            pixel=pixel,
+            values={"factor": literal(factor)},
+            requirement_suffix="parameter.factor",
+        )
+        for case, (pixel, factor) in enumerate(
+            (
+                ([17, 83, 149, 191], 0.0),
+                ([37, 211, 89, 173], 0.5),
+                ([127, 128, 129, 130], 1.0),
+                ([251, 7, 63, 191], 1.5),
+                ([1, 17, 33, 49], 2.0),
+                ([83, 149, 211, 29], 0.25),
+                ([255, 255, 255, 255], 0.75),
+                ([0, 0, 0, 0], 1.25),
+                ([231, 29, 127, 63], 1.75),
+                ([11, 61, 151, 203], 2.5),
+            ),
+            1,
+        )
+    )
+    simd_campaign_extra_specs.extend(
+        simd_campaign_spec(
+            20,
+            case,
+            surface,
+            operation,
+            mode=mode,
+            size=[3 + case, 3 + case % 4],
+            pixel=pixel,
+            values=values,
+            requirement_suffix="behavior.default",
+        )
+        for case, (surface, operation, mode, pixel, values) in enumerate(
+            (
+                ("PIL.ImageOps", "mirror", "P", 7, None),
+                ("PIL.ImageOps", "mirror", "PA", [7, 191], None),
+                ("PIL.ImageOps", "mirror", "CMYK", [17, 33, 49, 65], None),
+                ("PIL.Image.Image", "transpose", "P", 7, {"method": literal(0)}),
+                ("PIL.Image.Image", "transpose", "P", 7, {"method": literal(1)}),
+                ("PIL.Image.Image", "transpose", "PA", [7, 191], {"method": literal(2)}),
+                ("PIL.Image.Image", "transpose", "CMYK", [17, 33, 49, 65], {"method": literal(3)}),
+                ("PIL.Image.Image", "transpose", "CMYK", [17, 33, 49, 65], {"method": literal(5)}),
+                ("PIL.ImageOps", "mirror", "P", 127, None),
+                ("PIL.ImageOps", "mirror", "PA", [231, 29], None),
+            ),
+            1,
+        )
+    )
+    # Coverage campaign 2026-08-15: the read-only strategist's corrected
+    # offset packet.  ``ImageChops.offset`` is a supported public operation
+    # for these modes, including its omitted-yoffset overload and typed
+    # images.  Keep this as a separate exact-100 batch so any gain is
+    # attributable without replacing the earlier campaigns.
+    simd_campaign_offset_specs: list[dict[str, Any]] = []
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            21,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="P",
+            size=[7 + case, 5 + case % 3],
+            pixel=pixel,
+            values={"xoffset": literal(xoffset), "yoffset": literal(0)},
+        )
+        for case, (pixel, xoffset) in enumerate(
+            (
+                (0, -1),
+                (3, 0),
+                (17, 1),
+                (63, 2),
+                (127, -3),
+                (191, 4),
+                (223, -5),
+                (239, 7),
+                (251, -8),
+                (255, 9),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            22,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="P",
+            size=[6 + case, 6 + case % 3],
+            pixel=pixel,
+            values={"xoffset": literal(0), "yoffset": literal(yoffset)},
+        )
+        for case, (pixel, yoffset) in enumerate(
+            (
+                (0, -1),
+                (3, 0),
+                (17, 1),
+                (63, 2),
+                (127, -3),
+                (191, 4),
+                (223, -5),
+                (239, 7),
+                (251, -8),
+                (255, 9),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            23,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="PA",
+            size=[7 + case, 4 + case % 4],
+            pixel=pixel,
+            values={"xoffset": literal(xoffset), "yoffset": literal(yoffset)},
+        )
+        for case, (pixel, xoffset, yoffset) in enumerate(
+            (
+                ([3, 191], -1, 1),
+                ([7, 127], 0, -2),
+                ([17, 63], 1, 3),
+                ([31, 255], 2, -4),
+                ([63, 1], -3, 5),
+                ([95, 127], 4, -6),
+                ([127, 191], -5, 7),
+                ([159, 63], 7, -8),
+                ([223, 255], -8, 9),
+                ([251, 29], 9, -10),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            24,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="CMYK",
+            size=[6 + case, 5 + case % 4],
+            pixel=pixel,
+            values={"xoffset": literal(xoffset), "yoffset": literal(yoffset)},
+        )
+        for case, (pixel, xoffset, yoffset) in enumerate(
+            (
+                ([17, 33, 49, 65], -1, 1),
+                ([37, 53, 69, 85], 0, -2),
+                ([63, 79, 95, 111], 1, 3),
+                ([127, 128, 129, 130], 2, -4),
+                ([191, 177, 163, 149], -3, 5),
+                ([223, 207, 191, 175], 4, -6),
+                ([251, 7, 63, 191], -5, 7),
+                ([1, 17, 33, 49], 7, -8),
+                ([255, 255, 255, 255], -8, 9),
+                ([0, 0, 0, 0], 9, -10),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            25,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="I",
+            size=[6 + case, 5 + case % 3],
+            pixel=pixel,
+            values={"xoffset": literal(xoffset), "yoffset": literal(yoffset)},
+        )
+        for case, (pixel, xoffset, yoffset) in enumerate(
+            (
+                (0, -1, 1),
+                (1, 0, -2),
+                (257, 1, 3),
+                (100001, 2, -4),
+                (-257, -3, 5),
+                (214748, 4, -6),
+                (-100001, -5, 7),
+                (17, 7, -8),
+                (65535, -8, 9),
+                (123456789, 9, -10),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            26,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="F",
+            size=[6 + case, 5 + case % 3],
+            pixel=pixel,
+            values={"xoffset": literal(xoffset), "yoffset": literal(yoffset)},
+        )
+        for case, (pixel, xoffset, yoffset) in enumerate(
+            (
+                (0.0, -1, 1),
+                (0.5, 0, -2),
+                (1.25, 1, 3),
+                (12.5, 2, -4),
+                (-0.75, -3, 5),
+                (17.125, 4, -6),
+                (-12.5, -5, 7),
+                (255.5, 7, -8),
+                (0.03125, -8, 9),
+                (1024.75, 9, -10),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            27,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode=mode,
+            size=[2, 2],
+            values={"xoffset": literal(xoffset), "yoffset": literal(yoffset)},
+            inline_image=inline_image,
+        )
+        for case, (mode, inline_image, xoffset, yoffset) in enumerate(
+            (
+                ("I;16L", "i16l-frombytes-pattern-1", -1, 1),
+                ("I;16L", "i16l-frombytes-pattern-2", 0, -2),
+                ("I;16L", "i16l-frombytes-pattern-3", 1, 3),
+                ("I;16L", "i16l-frombytes-pattern-4", 2, -4),
+                ("I;16B", "i16b-frombytes-pattern-1", -3, 5),
+                ("I;16B", "i16b-frombytes-pattern-2", 4, -6),
+                ("I;16B", "i16b-frombytes-pattern-3", -5, 7),
+                ("I;16N", "i16n-frombytes-pattern-1", 7, -8),
+                ("I;16N", "i16n-frombytes-pattern-2", -8, 9),
+                ("I;16N", "i16n-frombytes-pattern-3", 9, -10),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            28,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode="1",
+            size=[6 + case, 5 + case % 3],
+            pixel=1,
+            values={"xoffset": literal(xoffset), "yoffset": literal(yoffset)},
+        )
+        for case, (xoffset, yoffset) in enumerate(
+            (
+                (-1, 1),
+                (0, -2),
+                (1, 3),
+                (2, -4),
+                (-3, 5),
+                (4, -6),
+                (-5, 7),
+                (7, -8),
+                (-8, 9),
+                (9, -10),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            29,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode=mode,
+            size=[6 + case, 5 + case % 3] if inline_image is None else [2, 2],
+            pixel=pixel,
+            values={"xoffset": literal(xoffset)},
+            inline_image=inline_image,
+        )
+        for case, (mode, pixel, xoffset, inline_image) in enumerate(
+            (
+                ("L", 37, -1, None),
+                ("RGB", [17, 83, 149], 0, None),
+                ("RGBA", [17, 83, 149, 191], 1, None),
+                ("P", 7, 2, None),
+                ("PA", [7, 191], -3, None),
+                ("CMYK", [17, 33, 49, 65], 4, None),
+                ("I", 100001, -5, None),
+                ("F", 12.5, 7, None),
+                ("1", 1, -8, None),
+                ("I;16L", None, 9, "i16l-frombytes-pattern-4"),
+            ),
+            1,
+        )
+    )
+    simd_campaign_offset_specs.extend(
+        simd_campaign_spec(
+            30,
+            case,
+            "PIL.ImageChops",
+            "offset",
+            mode=mode,
+            size=[32 + case, 31 + case % 4] if inline_image is None else [2, 2],
+            pixel=pixel,
+            values={
+                "xoffset": literal(xoffset),
+                "yoffset": literal(yoffset),
+            },
+            inline_image=inline_image,
+        )
+        for case, (mode, pixel, xoffset, yoffset, inline_image) in enumerate(
+            (
+                ("L", 37, 100000, -100001, None),
+                ("RGB", [17, 83, 149], -100000, 100001, None),
+                ("RGBA", [17, 83, 149, 191], 65536, -65537, None),
+                ("P", 7, -65536, 65537, None),
+                ("PA", [7, 191], 12345, -23456, None),
+                ("CMYK", [17, 33, 49, 65], -32769, 32768, None),
+                ("I", 100001, 214748, -214749, None),
+                ("F", 12.5, -214748, 214749, None),
+                ("1", 1, 1000000, -1000001, None),
+                ("I;16L", None, 65536, -65537, "i16l-frombytes-pattern-1"),
+            ),
+            1,
+        )
+    )
+
+    # Coverage campaign 2026-08-16: reach the packed scalar Brightness
+    # fallback with explicit YCbCr and HSV modes. Ordinary L/LA/RGB/RGBA
+    # inputs are consumed by the native byte LUT before scalar::brightness;
+    # these two public modes keep the logical mode while retaining RGB8
+    # storage, so the SIMD adapter takes the supported scalar fallback.
+    def brightness_campaign_specs(
+        family: int,
+        mode: str,
+        sizes: list[list[int]],
+        pixels: list[Any],
+        factors: list[float],
+    ) -> list[dict[str, Any]]:
+        if not (len(sizes) == len(pixels) == len(factors) == 10):
+            raise ValueError("Brightness SIMD campaign families must contain 10 cases")
+        return [
+            simd_campaign_spec(
+                family,
+                case,
+                "PIL.ImageEnhance.Brightness",
+                "enhance",
+                mode=mode,
+                size=size,
+                pixel=pixel,
+                values={"factor": literal(factor)},
+                requirement_suffix="parameter.factor",
+            )
+            for case, (size, pixel, factor) in enumerate(
+                zip(sizes, pixels, factors),
+                1,
+            )
+        ]
+
+    simd_campaign_brightness_specs: list[dict[str, Any]] = []
+    for family, mode, sizes, pixels, factors in (
+            (
+                31,
+                "YCbCr",
+                [[2 + case, 2 + case % 3] for case in range(1, 11)],
+                [
+                    [(17 * case) % 256, (83 + 19 * case) % 256, (149 + 31 * case) % 256]
+                    for case in range(1, 11)
+                ],
+                [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 0.999, 1.0],
+            ),
+            (
+                32,
+                "YCbCr",
+                [[3 + case, 3 + case % 4] for case in range(1, 11)],
+                [
+                    [23 + 17 * case, (211 - 13 * case) % 256, (37 + 29 * case) % 256]
+                    for case in range(1, 11)
+                ],
+                [1.001, 1.125, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 8.0],
+            ),
+            (
+                33,
+                "YCbCr",
+                [[5 + case, 4 + case % 3] for case in range(1, 11)],
+                [
+                    [0, 0, 0],
+                    [255, 255, 255],
+                    [0, 128, 255],
+                    [255, 128, 0],
+                    [1, 127, 254],
+                    [254, 129, 1],
+                    [16, 235, 16],
+                    [235, 16, 235],
+                    [127, 128, 129],
+                    [129, 128, 127],
+                ],
+                [0.5] * 10,
+            ),
+            (
+                34,
+                "YCbCr",
+                [[1, 1], [1, 7], [7, 1], [2, 3], [3, 2], [5, 5], [16, 1], [17, 1], [4, 9], [9, 4]],
+                [[17, 83, 149]] * 10,
+                [1.25] * 10,
+            ),
+            (
+                35,
+                "YCbCr",
+                [[6 + case, 3 + case % 2] for case in range(1, 11)],
+                [[37, 211, 89]] * 10,
+                [0.0009, 0.001, 0.0019, 0.999, 1.001, 1.234, 1.999, 2.001, 2.345, 4.096],
+            ),
+            (
+                36,
+                "HSV",
+                [[2 + case, 2 + case % 3] for case in range(1, 11)],
+                [
+                    [(29 * case) % 256, (47 + 23 * case) % 256, (71 + 31 * case) % 256]
+                    for case in range(1, 11)
+                ],
+                [0.0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 0.999, 1.0],
+            ),
+            (
+                37,
+                "HSV",
+                [[3 + case, 3 + case % 4] for case in range(1, 11)],
+                [
+                    [23 + 17 * case, (211 - 13 * case) % 256, (37 + 29 * case) % 256]
+                    for case in range(1, 11)
+                ],
+                [1.001, 1.125, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0, 8.0],
+            ),
+            (
+                38,
+                "HSV",
+                [[5 + case, 4 + case % 3] for case in range(1, 11)],
+                [
+                    [0, 0, 0],
+                    [255, 255, 255],
+                    [0, 128, 255],
+                    [255, 128, 0],
+                    [1, 127, 254],
+                    [254, 129, 1],
+                    [16, 235, 16],
+                    [235, 16, 235],
+                    [127, 128, 129],
+                    [129, 128, 127],
+                ],
+                [0.5] * 10,
+            ),
+            (
+                39,
+                "HSV",
+                [[1, 1], [1, 7], [7, 1], [2, 3], [3, 2], [5, 5], [16, 1], [17, 1], [4, 9], [9, 4]],
+                [[17, 83, 149]] * 10,
+                [1.25] * 10,
+            ),
+            (
+                40,
+                "HSV",
+                [[6 + case, 3 + case % 2] for case in range(1, 11)],
+                [[37, 211, 89]] * 10,
+                [0.0009, 0.001, 0.0019, 0.999, 1.001, 1.234, 1.999, 2.001, 2.345, 4.096],
+            ),
+        ):
+        simd_campaign_brightness_specs.extend(
+            brightness_campaign_specs(
+                family,
+                mode,
+                sizes,
+                pixels,
+                factors,
+            )
+        )
+
+    # Coverage campaign 2026-08-16: exactly 100 valid public ``putdata``
+    # byte inputs in ten families of ten. ``1``/``L``/``P``/``I;16*`` bytes
+    # are consumed by the core byte fast path; these multiband modes instead
+    # take the public Python bytes-sequence route and reach the explicit
+    # ``Ok(false)`` handoff in ``Image::putdata_bytes_fast_path``.
+    def putdata_bytes_campaign_spec(
+        family: int,
+        case: int,
+        mode: str,
+        *,
+        scale: float | None = None,
+        offset: float | None = None,
+    ) -> dict[str, Any]:
+        size = [3 + case % 4, 2 + case % 3]
+        data = [
+            (family * 17 + case * 29 + index * 43) % 256
+            for index in range(1 + case % 5)
+        ]
+        values: dict[str, Any] = {"data": bytes_literal(data)}
+        if scale is not None:
+            values["scale"] = literal(scale)
+        if offset is not None:
+            values["offset"] = literal(offset)
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": f"coverage-batch-image-putdata-bytes-f{family:02d}-c{case:02d}",
+            "observe_receiver": True,
+            "mode": mode,
+            "size": size,
+            "values": values,
+        }
+
+    putdata_bytes_campaign_specs: list[dict[str, Any]] = []
+    putdata_bytes_campaign_specs.extend(
+        putdata_bytes_campaign_spec(family, case, mode)
+        for family, mode in (
+            (41, "RGB"),
+            (42, "RGBA"),
+            (43, "LA"),
+            (44, "PA"),
+            (45, "CMYK"),
+            (46, "YCbCr"),
+            (47, "HSV"),
+        )
+        for case in range(1, 11)
+    )
+    putdata_bytes_campaign_specs.extend(
+        putdata_bytes_campaign_spec(
+            48,
+            case,
+            "RGB",
+            scale=(0.5, 1.0, 1.25, 2.0, 0.75)[case % 5],
+            offset=(-3.0, 0.0, 1.0, 7.0, 0.5)[case % 5],
+        )
+        for case in range(1, 11)
+    )
+    putdata_bytes_campaign_specs.extend(
+        putdata_bytes_campaign_spec(
+            49,
+            case,
+            "LA",
+            scale=(0.25, 0.5, 1.0, 1.5, 2.0)[case % 5],
+            offset=(-1.0, 0.0, 2.0, 11.0, 0.25)[case % 5],
+        )
+        for case in range(1, 11)
+    )
+    putdata_bytes_campaign_specs.extend(
+        putdata_bytes_campaign_spec(
+            50,
+            case,
+            "RGBA",
+            scale=(0.125, 0.5, 1.0, 1.75, 3.0)[case % 5],
+            offset=(-5.0, 0.0, 3.0, 9.0, 0.75)[case % 5],
+        )
+        for case in range(1, 11)
+    )
+
     if len(simd_campaign_specs) != 100:
         raise ValueError(
             "SIMD coverage campaign must contain exactly 100 candidates"
         )
-    specs = specs + tuple(simd_campaign_specs)
+    if len(simd_campaign_extra_specs) != 100:
+        raise ValueError(
+            "SIMD follow-up coverage campaign must contain exactly 100 candidates"
+        )
+    if len(simd_campaign_offset_specs) != 100:
+        raise ValueError(
+            "SIMD offset coverage campaign must contain exactly 100 candidates"
+        )
+    if len(simd_campaign_brightness_specs) != 100:
+        raise ValueError(
+            "SIMD Brightness coverage campaign must contain exactly 100 candidates"
+        )
+
+    if len(putdata_bytes_campaign_specs) != 100:
+        raise ValueError(
+            "Image.putdata bytes coverage campaign must contain exactly 100 candidates"
+        )
+    specs = (
+        specs
+        + tuple(simd_campaign_specs)
+        + tuple(simd_campaign_extra_specs)
+        + tuple(simd_campaign_offset_specs)
+        + tuple(simd_campaign_brightness_specs)
+        + tuple(putdata_bytes_campaign_specs)
+    )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
     for surface in manifest["surfaces"]:

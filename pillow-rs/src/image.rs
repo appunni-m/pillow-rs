@@ -698,6 +698,35 @@ pub enum PutDataValue {
     Components(Vec<i128>),
 }
 
+/// Shape of one host-language value accepted by `Image.putdata`.
+///
+/// Bindings use this result to choose whether to extract a numeric scalar or
+/// a multiband tuple. The mode-specific distinction belongs to the core so
+/// each binding exposes the same public coercion boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PutDataValueKind {
+    /// A scalar sample for `1`, `L`, `P`, `I`, `I;16*`, or `F`.
+    Numeric,
+    /// A packed integer or component tuple for a multiband mode.
+    Components {
+        /// Number of logical channels in the image mode.
+        channels: usize,
+    },
+}
+
+/// Callback-free bulk values extracted by a host-language binding.
+///
+/// Python and other bindings remain responsible for protocol iteration and
+/// coercion. Once a built-in sequence has been extracted, this type lets the
+/// core own the mode policy and canonical pixel normalization.
+#[derive(Debug, Clone, Copy)]
+pub enum PutDataInput<'a> {
+    /// Integer samples, interpreted as numeric or packed values by the mode.
+    Integers(&'a [i64]),
+    /// Floating-point numeric samples.
+    Numbers(&'a [f64]),
+}
+
 /// A Pillow pixel value after the core has applied the logical mode's band
 /// shape. Bindings only need to map these variants to their native
 /// scalar/tuple value types.
@@ -4706,6 +4735,41 @@ impl Image {
         self.putdata(&data)
     }
 
+    /// Returns the host-language value shape required by the current mode.
+    ///
+    /// This is the core-owned mode policy for `putdata`. A binding may still
+    /// need to inspect Python protocol behavior, but it does not need to
+    /// duplicate the list of numeric and multiband mode names.
+    pub fn putdata_value_kind(&self) -> Result<PutDataValueKind, PilError> {
+        let mode_name = self.mode()?;
+        if matches!(
+            mode_name.as_str(),
+            "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+        ) {
+            return Ok(PutDataValueKind::Numeric);
+        }
+        let mode = crate::pipeline::PixelMode::from_name(&mode_name).ok_or_else(|| {
+            PilError::ValueError(format!("unsupported putdata mode: {mode_name}"))
+        })?;
+        Ok(PutDataValueKind::Components {
+            channels: mode.channels(),
+        })
+    }
+
+    /// Applies a callback-free bulk input through the canonical `putdata`
+    /// normalization path.
+    pub fn putdata_input(
+        &mut self,
+        input: PutDataInput<'_>,
+        scale: f64,
+        offset: f64,
+    ) -> Result<(), PilError> {
+        match input {
+            PutDataInput::Integers(values) => self.putdata_integer_values(values, scale, offset),
+            PutDataInput::Numbers(values) => self.putdata_numeric_values(values, scale, offset),
+        }
+    }
+
     /// Replaces numeric samples through the shared `putdata` normalization path.
     ///
     /// Bindings use this callback-free entry point for exact built-in numeric
@@ -4740,24 +4804,24 @@ impl Image {
         scale: f64,
         offset: f64,
     ) -> Result<(), PilError> {
-        let mode_name = self.mode()?;
-        let values = if matches!(
-            mode_name.as_str(),
-            "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
-        ) {
-            values
-                .iter()
-                .copied()
-                .map(|value| PutDataValue::Number(value as f64))
-                .collect::<Vec<_>>()
-        } else {
-            values
-                .iter()
-                .copied()
-                .map(PutDataValue::Packed)
-                .collect::<Vec<_>>()
-        };
-        self.putdata_values(&values, scale, offset)
+        match self.putdata_value_kind()? {
+            PutDataValueKind::Numeric => {
+                let values = values
+                    .iter()
+                    .copied()
+                    .map(|value| PutDataValue::Number(value as f64))
+                    .collect::<Vec<_>>();
+                self.putdata_values(&values, scale, offset)
+            }
+            PutDataValueKind::Components { .. } => {
+                let values = values
+                    .iter()
+                    .copied()
+                    .map(PutDataValue::Packed)
+                    .collect::<Vec<_>>();
+                self.putdata_values(&values, scale, offset)
+            }
+        }
     }
 
     /// Validates the sequence length before host-language value coercion.
@@ -4775,6 +4839,41 @@ impl Image {
             return Err(PilError::TypeError("too many data entries".into()));
         }
         Ok(())
+    }
+
+    /// Applies the byte-oriented `putdata` fast paths.
+    ///
+    /// Returns `Ok(true)` when the current mode consumed the bytes. Other
+    /// modes return `Ok(false)` so the binding can preserve Python's generic
+    /// sequence and callback behavior.
+    pub fn putdata_bytes_fast_path(
+        &mut self,
+        data: &[u8],
+        entry_count: usize,
+        scale: f64,
+        offset: f64,
+    ) -> Result<bool, PilError> {
+        let mode_name = self.mode()?;
+        if is_l16_mode(&mode_name) {
+            self.putdata_l16_bytes(data, scale, offset)?;
+            return Ok(true);
+        }
+        if matches!(mode_name.as_str(), "1" | "L" | "P") {
+            let values = data
+                .iter()
+                .copied()
+                // Pillow reads the terminating NUL when a bytes subtype
+                // reports one more item than its physical payload. Extend
+                // that behavior safely for every missing item instead of
+                // following its unchecked C pointer read out of bounds.
+                .chain(std::iter::repeat(0))
+                .take(entry_count)
+                .map(|value| PutDataValue::Number(f64::from(value)))
+                .collect::<Vec<_>>();
+            self.putdata_values(&values, scale, offset)?;
+            return Ok(true);
+        }
+        Ok(false)
     }
 
     /// Replaces raw I;16 samples from Pillow's bytes fast path.

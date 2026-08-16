@@ -690,10 +690,9 @@
           "pipeline-composition.filter-rgb-5x5-pad",
           "pipeline-composition.filter-la-5x5-mirror",
           "pipeline-composition.filter-rgba-5x5-invert",
-          "pipeline-composition.matrix-093",
-          "pipeline-composition.matrix-094",
-          "pipeline-composition.matrix-095",
           "pipeline-composition.matrix-096",
+          "pipeline-composition.matrix-097",
+          "pipeline-composition.matrix-098",
           "pipeline-composition.matrix-099"
         ],
         "command_ids": []

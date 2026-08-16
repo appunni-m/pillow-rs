@@ -36,6 +36,16 @@
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-2",
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-3",
           "PIL.ImageEnhance.Sharpness.enhance.nuanced.coverage-batch-enhance-large-sharpness-cmyk-4",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c01",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c02",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c03",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c04",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c05",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c06",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c07",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c08",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c09",
+          "PIL.ImageEnhance.Sharpness.enhance.nuanced.simd-cov-f19-c10",
           "pipeline-case.sharpness.materialized-smoke"
         ],
         "command_ids": []

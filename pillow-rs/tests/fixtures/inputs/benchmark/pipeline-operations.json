@@ -38095,6 +38095,135 @@
     {
       "workload_id": "pipeline-chain.matrix-000",
       "covers": [
+        "PIL.Image.Image.thumbnail.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  46,
+                  22
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  11,
+                  50,
+                  84
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "thumbnail",
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": [
+                  23,
+                  11
+                ]
+              },
+              "resample": {
+                "kind": "literal",
+                "value": 0
+              }
+            }
+          },
+          {
+            "step_id": "size",
+            "surface": "PIL.Image.Image",
+            "operation": "size",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "thumbnail",
+          "size",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          46,
+          22
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "geometry",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.matrix-001",
+      "covers": [
         "PIL.Image.Image.filter.performance.standard"
       ],
       "subjects": [
@@ -38139,9 +38268,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  11,
-                  50,
-                  84
+                  48,
+                  161,
+                  13
                 ]
               }
             }
@@ -38240,7 +38369,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-001",
+      "workload_id": "pipeline-chain.matrix-002",
       "covers": [
         "PIL.ImageOps.posterize.performance.standard"
       ],
@@ -38285,7 +38414,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 48
+                "value": 85
               }
             }
           },
@@ -38636,7 +38765,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-002",
+      "workload_id": "pipeline-chain.matrix-003",
       "covers": [
         "PIL.Image.Image.point.performance.standard"
       ],
@@ -38681,7 +38810,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 85
+                "value": 122
               }
             }
           },
@@ -39047,7 +39176,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-003",
+      "workload_id": "pipeline-chain.matrix-004",
       "covers": [
         "PIL.Image.Image.resize.performance.standard"
       ],
@@ -39093,9 +39222,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  122,
-                  127,
-                  127,
+                  159,
+                  238,
+                  56,
                   127
                 ]
               }
@@ -39205,7 +39334,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-004",
+      "workload_id": "pipeline-chain.matrix-005",
       "covers": [
         "PIL.Image.Image.quantize.performance.standard"
       ],
@@ -39251,9 +39380,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  159,
-                  238,
-                  56
+                  196,
+                  93,
+                  241
                 ]
               }
             }
@@ -39355,7 +39484,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-005",
+      "workload_id": "pipeline-chain.matrix-006",
       "covers": [
         "PIL.ImageChops.screen.performance.standard"
       ],
@@ -39401,9 +39530,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  196,
-                  93,
-                  241
+                  233,
+                  204,
+                  170
                 ]
               }
             }
@@ -39428,9 +39557,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  196,
-                  93,
-                  241
+                  233,
+                  204,
+                  170
                 ]
               }
             }
@@ -39522,7 +39651,186 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-006",
+      "workload_id": "pipeline-chain.matrix-007",
+      "covers": [
+        "PIL.ImageChops.screen.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [
+          {
+            "id": "opened-shared-rgb-source",
+            "kind": "builtin",
+            "name": "encoded-png-input"
+          }
+        ],
+        "steps": [
+          {
+            "step_id": "setup-image-1",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  2,
+                  2
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  14,
+                  59,
+                  99
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-image-2",
+            "surface": "PIL.Image",
+            "operation": "open",
+            "receiver": null,
+            "arguments": {
+              "fp": {
+                "kind": "asset",
+                "asset_id": "opened-shared-rgb-source"
+              }
+            }
+          },
+          {
+            "step_id": "grayscale",
+            "surface": "PIL.ImageOps",
+            "operation": "grayscale",
+            "receiver": null,
+            "arguments": {
+              "image": {
+                "kind": "binding",
+                "step_id": "setup-image-1"
+              }
+            }
+          },
+          {
+            "step_id": "colorized",
+            "surface": "PIL.ImageOps",
+            "operation": "colorize",
+            "receiver": null,
+            "arguments": {
+              "image": {
+                "kind": "binding",
+                "step_id": "grayscale"
+              },
+              "black": {
+                "kind": "literal",
+                "value": "black"
+              },
+              "white": {
+                "kind": "literal",
+                "value": "white"
+              }
+            }
+          },
+          {
+            "step_id": "multiplied",
+            "surface": "PIL.ImageChops",
+            "operation": "multiply",
+            "receiver": null,
+            "arguments": {
+              "image1": {
+                "kind": "binding",
+                "step_id": "colorized"
+              },
+              "image2": {
+                "kind": "binding",
+                "step_id": "setup-image-2"
+              }
+            }
+          },
+          {
+            "step_id": "screened",
+            "surface": "PIL.ImageChops",
+            "operation": "screen",
+            "receiver": null,
+            "arguments": {
+              "image1": {
+                "kind": "binding",
+                "step_id": "multiplied"
+              },
+              "image2": {
+                "kind": "binding",
+                "step_id": "setup-image-2"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "screened"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "multiplied",
+          "screened",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          2,
+          2
+        ],
+        "mode": "RGB",
+        "chain_length": 4,
+        "operation_class": "multi_image",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.matrix-009",
       "covers": [
         "PIL.Image.Image.alpha_composite.performance.standard"
       ],
@@ -39568,9 +39876,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  233,
-                  204,
-                  170,
+                  88,
+                  25,
+                  213,
                   127
                 ]
               }
@@ -39596,9 +39904,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  233,
-                  204,
-                  170,
+                  88,
+                  25,
+                  213,
                   127
                 ]
               }
@@ -39686,7 +39994,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-007",
+      "workload_id": "pipeline-chain.matrix-010",
       "covers": [
         "PIL.Image.Image.transpose.performance.standard"
       ],
@@ -39731,7 +40039,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 14
+                "value": 125
               }
             }
           },
@@ -39827,7 +40135,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-008",
+      "workload_id": "pipeline-chain.matrix-011",
       "covers": [
         "PIL.ImageOps.expand.performance.standard"
       ],
@@ -39873,9 +40181,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  51,
-                  170,
-                  28
+                  162,
+                  247,
+                  71
                 ]
               }
             }
@@ -39971,7 +40279,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-009",
+      "workload_id": "pipeline-chain.matrix-012",
       "covers": [
         "PIL.ImageOps.equalize.performance.standard"
       ],
@@ -40016,7 +40324,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 88
+                "value": 199
               }
             }
           },
@@ -40103,7 +40411,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-010",
+      "workload_id": "pipeline-chain.matrix-013",
       "covers": [
         "PIL.Image.Image.filter.performance.standard"
       ],
@@ -40149,8 +40457,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  125,
-                  136
+                  236,
+                  213
                 ]
               }
             }
@@ -40769,7 +41077,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-014",
+      "workload_id": "pipeline-chain.matrix-017",
       "covers": [
         "PIL.Image.Image.putalpha.performance.standard"
       ],
@@ -40815,9 +41123,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  17,
-                  68,
-                  114,
+                  128,
+                  145,
+                  157,
                   127
                 ]
               }
@@ -40936,7 +41244,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-015",
+      "workload_id": "pipeline-chain.matrix-018",
       "covers": [
         "PIL.Image.Image.putpixel.performance.standard"
       ],
@@ -40982,8 +41290,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  54,
-                  179
+                  165,
+                  0
                 ]
               }
             }
@@ -41083,7 +41391,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-017",
+      "workload_id": "pipeline-chain.matrix-020",
       "covers": [
         "PIL.ImageChops.blend.performance.standard"
       ],
@@ -41129,9 +41437,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  128,
-                  145,
-                  157
+                  239,
+                  222,
+                  200
                 ]
               }
             }
@@ -41156,9 +41464,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  128,
-                  145,
-                  157
+                  239,
+                  222,
+                  200
                 ]
               }
             }
@@ -41270,7 +41578,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-018",
+      "workload_id": "pipeline-chain.matrix-021",
       "covers": [
         "PIL.Image.Image.alpha_composite.performance.standard"
       ],
@@ -41316,9 +41624,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  165,
-                  0,
-                  86,
+                  20,
+                  77,
+                  129,
                   127
                 ]
               }
@@ -41344,9 +41652,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  165,
-                  0,
-                  86,
+                  20,
+                  77,
+                  129,
                   127
                 ]
               }
@@ -41444,7 +41752,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-019",
+      "workload_id": "pipeline-chain.matrix-022",
       "covers": [
         "PIL.ImageDraw.ImageDraw.line.performance.standard"
       ],
@@ -41490,9 +41798,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  202,
-                  111,
-                  15
+                  57,
+                  188,
+                  58
                 ]
               }
             }
@@ -41656,7 +41964,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-020",
+      "workload_id": "pipeline-chain.matrix-023",
       "covers": [
         "PIL.ImageDraw.ImageDraw.polygon.performance.standard"
       ],
@@ -41702,9 +42010,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  239,
-                  222,
-                  200
+                  94,
+                  43,
+                  243
                 ]
               }
             }
@@ -42198,7 +42506,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-021",
+      "workload_id": "pipeline-chain.matrix-024",
       "covers": [
         "PIL.ImageDraw.ImageDraw.rounded_rectangle.performance.standard"
       ],
@@ -42244,9 +42552,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  20,
-                  77,
-                  129,
+                  131,
+                  154,
+                  172,
                   127
                 ]
               }
@@ -42465,7 +42773,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-022",
+      "workload_id": "pipeline-chain.matrix-025",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -42511,9 +42819,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  57,
-                  188,
-                  58,
+                  168,
+                  9,
+                  101,
                   127
                 ]
               }
@@ -42658,7 +42966,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-027",
+      "workload_id": "pipeline-chain.matrix-030",
       "covers": [
         "PIL.Image.Image.verify.performance.standard"
       ],
@@ -42704,9 +43012,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  242,
-                  231,
-                  215
+                  97,
+                  52,
+                  2
                 ]
               }
             }
@@ -42792,7 +43100,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-028",
+      "workload_id": "pipeline-chain.matrix-031",
       "covers": [
         "PIL.Image.Image.verify.performance.standard"
       ],
@@ -42837,7 +43145,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 23
+                "value": 134
               }
             }
           },
@@ -42915,7 +43223,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-029",
+      "workload_id": "pipeline-chain.matrix-032",
       "covers": [
         "PIL.ImageChops.difference.performance.standard"
       ],
@@ -42960,7 +43268,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 60
+                "value": 171
               }
             }
           },
@@ -42983,7 +43291,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 60
+                "value": 171
               }
             }
           },
@@ -43074,7 +43382,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-030",
+      "workload_id": "pipeline-chain.matrix-033",
       "covers": [
         "PIL.Image.Image.load.performance.standard"
       ],
@@ -43120,9 +43428,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  97,
-                  52,
-                  2
+                  208,
+                  129,
+                  45
                 ]
               }
             }
@@ -43219,7 +43527,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-031",
+      "workload_id": "pipeline-chain.matrix-034",
       "covers": [
         "PIL.Image.Image.verify.performance.standard"
       ],
@@ -43265,9 +43573,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  134,
-                  163,
-                  187
+                  245,
+                  240,
+                  230
                 ]
               }
             }
@@ -43369,384 +43677,6 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-033",
-      "covers": [
-        "PIL.Image.Image.convert.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  10,
-                  8
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": [
-                  208,
-                  129,
-                  45
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "cmyk",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "CMYK"
-              }
-            }
-          },
-          {
-            "step_id": "rgb",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "cmyk"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              }
-            }
-          },
-          {
-            "step_id": "materialize",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "rgb"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "cmyk",
-          "materialize"
-        ]
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 1,
-        "measurement_iterations": 3,
-        "samples": 2,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "successful_execution"
-      },
-      "context": {
-        "size": [
-          10,
-          8
-        ],
-        "mode": "RGB",
-        "chain_length": 2,
-        "operation_class": "point",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
-      "workload_id": "pipeline-chain.matrix-034",
-      "covers": [
-        "PIL.Image.Image.convert.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  10,
-                  8
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": [
-                  245,
-                  240,
-                  230
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "hsv",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "HSV"
-              }
-            }
-          },
-          {
-            "step_id": "rgb",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "hsv"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              }
-            }
-          },
-          {
-            "step_id": "materialize",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "rgb"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "hsv",
-          "materialize"
-        ]
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 1,
-        "measurement_iterations": 3,
-        "samples": 2,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "successful_execution"
-      },
-      "context": {
-        "size": [
-          10,
-          8
-        ],
-        "mode": "RGB",
-        "chain_length": 2,
-        "operation_class": "point",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
-      "workload_id": "pipeline-chain.matrix-035",
-      "covers": [
-        "PIL.Image.Image.convert.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  10,
-                  8
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": [
-                  26,
-                  95,
-                  159
-                ]
-              }
-            }
-          },
-          {
-            "step_id": "ycbcr",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "YCbCr"
-              }
-            }
-          },
-          {
-            "step_id": "rgb",
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "ycbcr"
-            },
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "RGB"
-              }
-            }
-          },
-          {
-            "step_id": "materialize",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "rgb"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "ycbcr",
-          "materialize"
-        ]
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 1,
-        "measurement_iterations": 3,
-        "samples": 2,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "successful_execution"
-      },
-      "context": {
-        "size": [
-          10,
-          8
-        ],
-        "mode": "RGB",
-        "chain_length": 2,
-        "operation_class": "point",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
       "workload_id": "pipeline-chain.matrix-036",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
@@ -43801,7 +43731,7 @@
             }
           },
           {
-            "step_id": "int32",
+            "step_id": "cmyk",
             "surface": "PIL.Image.Image",
             "operation": "convert",
             "receiver": {
@@ -43811,22 +43741,22 @@
             "arguments": {
               "mode": {
                 "kind": "literal",
-                "value": "I"
+                "value": "CMYK"
               }
             }
           },
           {
-            "step_id": "gray",
+            "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
             "receiver": {
               "kind": "binding",
-              "step_id": "int32"
+              "step_id": "cmyk"
             },
             "arguments": {
               "mode": {
                 "kind": "literal",
-                "value": "L"
+                "value": "RGB"
               }
             }
           },
@@ -43836,13 +43766,13 @@
             "operation": "tobytes",
             "receiver": {
               "kind": "binding",
-              "step_id": "gray"
+              "step_id": "rgb"
             },
             "arguments": {}
           }
         ],
         "observations": [
-          "int32",
+          "cmyk",
           "materialize"
         ]
       },
@@ -43927,6 +43857,384 @@
             }
           },
           {
+            "step_id": "hsv",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "HSV"
+              }
+            }
+          },
+          {
+            "step_id": "rgb",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "hsv"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "hsv",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          10,
+          8
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.matrix-038",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  10,
+                  8
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  137,
+                  172,
+                  202
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "ycbcr",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "YCbCr"
+              }
+            }
+          },
+          {
+            "step_id": "rgb",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "ycbcr"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "ycbcr",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          10,
+          8
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.matrix-039",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  10,
+                  8
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  174,
+                  27,
+                  131
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "int32",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "I"
+              }
+            }
+          },
+          {
+            "step_id": "gray",
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "int32"
+            },
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "L"
+              }
+            }
+          },
+          {
+            "step_id": "materialize",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          }
+        ],
+        "observations": [
+          "int32",
+          "materialize"
+        ]
+      },
+      "measurement": {
+        "boundary": "whole_workflow",
+        "step_ids": [],
+        "metrics": [
+          "latency",
+          "throughput"
+        ],
+        "warmup_iterations": 1,
+        "measurement_iterations": 3,
+        "samples": 2,
+        "concurrency": 1,
+        "cache_state": "warm",
+        "correctness_gate": "successful_execution"
+      },
+      "context": {
+        "size": [
+          10,
+          8
+        ],
+        "mode": "RGB",
+        "chain_length": 2,
+        "operation_class": "point",
+        "cache_state": "warm",
+        "build_profile": "release"
+      }
+    },
+    {
+      "workload_id": "pipeline-chain.matrix-040",
+      "covers": [
+        "PIL.Image.Image.convert.performance.standard"
+      ],
+      "subjects": [
+        {
+          "kind": "oracle",
+          "id": "pillow"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-cpu"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-simd"
+        },
+        {
+          "kind": "target_profile",
+          "id": "python-gpu"
+        }
+      ],
+      "input": {
+        "kind": "workflow",
+        "assets": [],
+        "steps": [
+          {
+            "step_id": "setup-image",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGB"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  10,
+                  8
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  211,
+                  138,
+                  60
+                ]
+              }
+            }
+          },
+          {
             "step_id": "float32",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -43999,7 +44307,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-038",
+      "workload_id": "pipeline-chain.matrix-041",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44044,7 +44352,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 137
+                "value": 248
               }
             }
           },
@@ -44121,7 +44429,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-039",
+      "workload_id": "pipeline-chain.matrix-042",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44167,8 +44475,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  174,
-                  27
+                  29,
+                  104
                 ]
               }
             }
@@ -44246,7 +44554,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-040",
+      "workload_id": "pipeline-chain.matrix-043",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44291,7 +44599,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 211
+                "value": 66
               }
             }
           },
@@ -44372,7 +44680,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-042",
+      "workload_id": "pipeline-chain.matrix-045",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44418,9 +44726,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  29,
-                  104,
-                  174,
+                  140,
+                  181,
+                  217,
                   127
                 ]
               }
@@ -44499,7 +44807,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-051",
+      "workload_id": "pipeline-chain.matrix-054",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44545,9 +44853,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  106,
-                  79,
-                  47,
+                  217,
+                  156,
+                  90,
                   127
                 ]
               }
@@ -44627,7 +44935,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-054",
+      "workload_id": "pipeline-chain.matrix-057",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44673,9 +44981,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  217,
-                  156,
-                  90
+                  72,
+                  233,
+                  133
                 ]
               }
             }
@@ -44753,7 +45061,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-055",
+      "workload_id": "pipeline-chain.matrix-058",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44799,9 +45107,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  254,
-                  11,
-                  19,
+                  109,
+                  88,
+                  62,
                   127
                 ]
               }
@@ -44880,7 +45188,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-056",
+      "workload_id": "pipeline-chain.matrix-059",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -44925,7 +45233,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 35
+                "value": 146
               }
             }
           },
@@ -45002,7 +45310,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-063",
+      "workload_id": "pipeline-chain.matrix-066",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -45048,9 +45356,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  38,
-                  131,
-                  219,
+                  149,
+                  208,
+                  6,
                   127
                 ]
               }
@@ -45129,7 +45437,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-064",
+      "workload_id": "pipeline-chain.matrix-067",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -45175,9 +45483,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  75,
-                  242,
-                  148
+                  186,
+                  63,
+                  191
                 ]
               }
             }
@@ -45255,7 +45563,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-065",
+      "workload_id": "pipeline-chain.matrix-068",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -45300,7 +45608,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 112
+                "value": 223
               }
             }
           },
@@ -45377,7 +45685,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-066",
+      "workload_id": "pipeline-chain.matrix-069",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -45422,7 +45730,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 149
+                "value": 4
               }
             }
           },
@@ -45499,7 +45807,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-067",
+      "workload_id": "pipeline-chain.matrix-070",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -45545,9 +45853,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  186,
-                  63,
-                  191
+                  41,
+                  140,
+                  234
                 ]
               }
             }
@@ -45625,7 +45933,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-068",
+      "workload_id": "pipeline-chain.matrix-071",
       "covers": [
         "PIL.Image.Image.convert.performance.standard"
       ],
@@ -45671,9 +45979,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  223,
-                  174,
-                  120
+                  78,
+                  251,
+                  163
                 ]
               }
             }
@@ -45751,7 +46059,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-069",
+      "workload_id": "pipeline-chain.matrix-072",
       "covers": [
         "PIL.Image.Image.remap_palette.performance.standard"
       ],
@@ -45796,7 +46104,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 4
+                "value": 115
               }
             }
           },
@@ -45862,7 +46170,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-070",
+      "workload_id": "pipeline-chain.matrix-073",
       "covers": [
         "PIL.Image.Image.getchannel.performance.standard"
       ],
@@ -45908,9 +46216,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  41,
-                  140,
-                  234,
+                  152,
+                  217,
+                  21,
                   127
                 ]
               }
@@ -45986,7 +46294,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-071",
+      "workload_id": "pipeline-chain.matrix-074",
       "covers": [
         "PIL.Image.Image.getchannel.performance.standard"
       ],
@@ -46032,8 +46340,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  78,
-                  251
+                  189,
+                  72
                 ]
               }
             }
@@ -46111,7 +46419,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-072",
+      "workload_id": "pipeline-chain.matrix-075",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -46157,9 +46465,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  115,
-                  106,
-                  92
+                  226,
+                  183,
+                  135
                 ]
               }
             }
@@ -46262,7 +46570,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-073",
+      "workload_id": "pipeline-chain.matrix-076",
       "covers": [
         "PIL.ImageOps.pad.performance.standard"
       ],
@@ -46308,9 +46616,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  152,
-                  217,
-                  21
+                  7,
+                  38,
+                  64
                 ]
               }
             }
@@ -46404,7 +46712,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-074",
+      "workload_id": "pipeline-chain.matrix-077",
       "covers": [
         "PIL.ImageOps.pad.performance.standard"
       ],
@@ -46449,7 +46757,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 189
+                "value": 44
               }
             }
           },
@@ -46543,7 +46851,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-075",
+      "workload_id": "pipeline-chain.matrix-078",
       "covers": [
         "PIL.ImageOps.pad.performance.standard"
       ],
@@ -46589,8 +46897,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  226,
-                  183
+                  81,
+                  4
                 ]
               }
             }
@@ -46680,7 +46988,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-076",
+      "workload_id": "pipeline-chain.matrix-079",
       "covers": [
         "PIL.ImageOps.pad.performance.standard"
       ],
@@ -46726,9 +47034,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  7,
-                  38,
-                  64,
+                  118,
+                  115,
+                  107,
                   127
                 ]
               }
@@ -46816,7 +47124,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-078",
+      "workload_id": "pipeline-chain.matrix-081",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -46862,8 +47170,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  81,
-                  4
+                  192,
+                  81
                 ]
               }
             }
@@ -46967,7 +47275,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-079",
+      "workload_id": "pipeline-chain.matrix-082",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -47013,9 +47321,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  118,
-                  115,
-                  107
+                  229,
+                  192,
+                  150
                 ]
               }
             }
@@ -47122,7 +47430,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-080",
+      "workload_id": "pipeline-chain.matrix-083",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -47168,9 +47476,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  155,
-                  226,
-                  36
+                  10,
+                  47,
+                  79
                 ]
               }
             }
@@ -47269,7 +47577,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-081",
+      "workload_id": "pipeline-chain.matrix-084",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -47315,9 +47623,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  192,
-                  81,
-                  221,
+                  47,
+                  158,
+                  8,
                   127
                 ]
               }
@@ -47430,7 +47738,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-082",
+      "workload_id": "pipeline-chain.matrix-085",
       "covers": [
         "PIL.Image.Image.transform.performance.standard"
       ],
@@ -47476,8 +47784,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  229,
-                  192
+                  84,
+                  13
                 ]
               }
             }
@@ -47586,7 +47894,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-083",
+      "workload_id": "pipeline-chain.matrix-086",
       "covers": [
         "PIL.ImageChops.invert.performance.standard"
       ],
@@ -47632,8 +47940,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  10,
-                  47
+                  121,
+                  124
                 ]
               }
             }
@@ -47705,7 +48013,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-084",
+      "workload_id": "pipeline-chain.matrix-087",
       "covers": [
         "PIL.ImageChops.invert.performance.standard"
       ],
@@ -47751,9 +48059,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  47,
                   158,
-                  8,
+                  235,
+                  51,
                   127
                 ]
               }
@@ -47829,7 +48137,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-093",
+      "workload_id": "pipeline-chain.matrix-096",
       "covers": [
         "PIL.ImageFilter.Kernel.performance.standard"
       ],
@@ -47874,7 +48182,7 @@
               },
               "color": {
                 "kind": "literal",
-                "value": 124
+                "value": 235
               }
             }
           },
@@ -47978,7 +48286,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-094",
+      "workload_id": "pipeline-chain.matrix-097",
       "covers": [
         "PIL.ImageFilter.Kernel.performance.standard"
       ],
@@ -48024,9 +48332,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  161,
-                  244,
-                  66
+                  16,
+                  65,
+                  109
                 ]
               }
             }
@@ -48131,7 +48439,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-095",
+      "workload_id": "pipeline-chain.matrix-098",
       "covers": [
         "PIL.ImageFilter.Kernel.performance.standard"
       ],
@@ -48177,9 +48485,9 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  198,
-                  99,
-                  251,
+                  53,
+                  176,
+                  38,
                   127
                 ]
               }
@@ -48288,7 +48596,7 @@
       }
     },
     {
-      "workload_id": "pipeline-chain.matrix-096",
+      "workload_id": "pipeline-chain.matrix-099",
       "covers": [
         "PIL.ImageFilter.Kernel.performance.standard"
       ],
@@ -48334,8 +48642,8 @@
               "color": {
                 "kind": "literal",
                 "value": [
-                  235,
-                  210
+                  90,
+                  31
                 ]
               }
             }
@@ -48437,183 +48745,6 @@
           9
         ],
         "mode": "LA",
-        "chain_length": 2,
-        "operation_class": "neighborhood",
-        "cache_state": "warm",
-        "build_profile": "release"
-      }
-    },
-    {
-      "workload_id": "pipeline-chain.matrix-099",
-      "covers": [
-        "PIL.ImageFilter.Kernel.performance.standard"
-      ],
-      "subjects": [
-        {
-          "kind": "oracle",
-          "id": "pillow"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-cpu"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-simd"
-        },
-        {
-          "kind": "target_profile",
-          "id": "python-gpu"
-        }
-      ],
-      "input": {
-        "kind": "workflow",
-        "assets": [],
-        "steps": [
-          {
-            "step_id": "setup-image",
-            "surface": "PIL.Image",
-            "operation": "new",
-            "receiver": null,
-            "arguments": {
-              "mode": {
-                "kind": "literal",
-                "value": "L"
-              },
-              "size": {
-                "kind": "literal",
-                "value": [
-                  13,
-                  11
-                ]
-              },
-              "color": {
-                "kind": "literal",
-                "value": 90
-              }
-            }
-          },
-          {
-            "step_id": "setup-filter",
-            "surface": "PIL.ImageFilter",
-            "operation": "Kernel",
-            "receiver": null,
-            "arguments": {
-              "size": {
-                "kind": "literal",
-                "value": [
-                  5,
-                  5
-                ]
-              },
-              "kernel": {
-                "kind": "literal",
-                "value": [
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0,
-                  1.0
-                ]
-              },
-              "scale": {
-                "kind": "literal",
-                "value": 25.0
-              }
-            }
-          },
-          {
-            "step_id": "filtered",
-            "surface": "PIL.Image.Image",
-            "operation": "filter",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image"
-            },
-            "arguments": {
-              "filter": {
-                "kind": "binding",
-                "step_id": "setup-filter"
-              }
-            }
-          },
-          {
-            "step_id": "scaled",
-            "surface": "PIL.ImageOps",
-            "operation": "scale",
-            "receiver": null,
-            "arguments": {
-              "image": {
-                "kind": "binding",
-                "step_id": "filtered"
-              },
-              "factor": {
-                "kind": "literal",
-                "value": 1.5
-              },
-              "resample": {
-                "kind": "literal",
-                "value": "NEAREST"
-              }
-            }
-          },
-          {
-            "step_id": "materialize",
-            "surface": "PIL.Image.Image",
-            "operation": "tobytes",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "scaled"
-            },
-            "arguments": {}
-          }
-        ],
-        "observations": [
-          "setup-filter",
-          "filtered",
-          "materialize"
-        ]
-      },
-      "measurement": {
-        "boundary": "whole_workflow",
-        "step_ids": [],
-        "metrics": [
-          "latency",
-          "throughput"
-        ],
-        "warmup_iterations": 1,
-        "measurement_iterations": 3,
-        "samples": 2,
-        "concurrency": 1,
-        "cache_state": "warm",
-        "correctness_gate": "successful_execution"
-      },
-      "context": {
-        "size": [
-          13,
-          11
-        ],
-        "mode": "L",
         "chain_length": 2,
         "operation_class": "neighborhood",
         "cache_state": "warm",
@@ -235052,10 +235183,6 @@
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-008",
-          "weight": 1
-        },
-        {
           "workload_id": "pipeline-chain.matrix-009",
           "weight": 1
         },
@@ -235064,11 +235191,15 @@
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-014",
+          "workload_id": "pipeline-chain.matrix-011",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-015",
+          "workload_id": "pipeline-chain.matrix-012",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.matrix-013",
           "weight": 1
         },
         {
@@ -235077,10 +235208,6 @@
         },
         {
           "workload_id": "pipeline-chain.matrix-018",
-          "weight": 1
-        },
-        {
-          "workload_id": "pipeline-chain.matrix-019",
           "weight": 1
         },
         {
@@ -235096,15 +235223,15 @@
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-027",
+          "workload_id": "pipeline-chain.matrix-023",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-028",
+          "workload_id": "pipeline-chain.matrix-024",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-029",
+          "workload_id": "pipeline-chain.matrix-025",
           "weight": 1
         },
         {
@@ -235116,15 +235243,15 @@
           "weight": 1
         },
         {
+          "workload_id": "pipeline-chain.matrix-032",
+          "weight": 1
+        },
+        {
           "workload_id": "pipeline-chain.matrix-033",
           "weight": 1
         },
         {
           "workload_id": "pipeline-chain.matrix-034",
-          "weight": 1
-        },
-        {
-          "workload_id": "pipeline-chain.matrix-035",
           "weight": 1
         },
         {
@@ -235148,11 +235275,19 @@
           "weight": 1
         },
         {
+          "workload_id": "pipeline-chain.matrix-041",
+          "weight": 1
+        },
+        {
           "workload_id": "pipeline-chain.matrix-042",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-051",
+          "workload_id": "pipeline-chain.matrix-043",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.matrix-045",
           "weight": 1
         },
         {
@@ -235160,23 +235295,15 @@
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-055",
+          "workload_id": "pipeline-chain.matrix-057",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-056",
+          "workload_id": "pipeline-chain.matrix-058",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-063",
-          "weight": 1
-        },
-        {
-          "workload_id": "pipeline-chain.matrix-064",
-          "weight": 1
-        },
-        {
-          "workload_id": "pipeline-chain.matrix-065",
+          "workload_id": "pipeline-chain.matrix-059",
           "weight": 1
         },
         {
@@ -235224,15 +235351,15 @@
           "weight": 1
         },
         {
+          "workload_id": "pipeline-chain.matrix-077",
+          "weight": 1
+        },
+        {
           "workload_id": "pipeline-chain.matrix-078",
           "weight": 1
         },
         {
           "workload_id": "pipeline-chain.matrix-079",
-          "weight": 1
-        },
-        {
-          "workload_id": "pipeline-chain.matrix-080",
           "weight": 1
         },
         {
@@ -235252,19 +235379,27 @@
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-093",
+          "workload_id": "pipeline-chain.matrix-085",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-094",
+          "workload_id": "pipeline-chain.matrix-086",
           "weight": 1
         },
         {
-          "workload_id": "pipeline-chain.matrix-095",
+          "workload_id": "pipeline-chain.matrix-087",
           "weight": 1
         },
         {
           "workload_id": "pipeline-chain.matrix-096",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.matrix-097",
+          "weight": 1
+        },
+        {
+          "workload_id": "pipeline-chain.matrix-098",
           "weight": 1
         },
         {

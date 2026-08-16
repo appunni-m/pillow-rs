@@ -54689,7 +54689,7 @@
       ]
     },
     {
-      "case_id": "pipeline-composition.matrix-093",
+      "case_id": "pipeline-composition.matrix-096",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -54719,7 +54719,7 @@
             },
             "color": {
               "kind": "literal",
-              "value": 124
+              "value": 235
             }
           }
         },
@@ -54797,7 +54797,7 @@
       ]
     },
     {
-      "case_id": "pipeline-composition.matrix-094",
+      "case_id": "pipeline-composition.matrix-097",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -54828,9 +54828,9 @@
             "color": {
               "kind": "literal",
               "value": [
-                161,
-                244,
-                66
+                16,
+                65,
+                109
               ]
             }
           }
@@ -54909,7 +54909,7 @@
       ]
     },
     {
-      "case_id": "pipeline-composition.matrix-095",
+      "case_id": "pipeline-composition.matrix-098",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -54940,9 +54940,9 @@
             "color": {
               "kind": "literal",
               "value": [
-                198,
-                99,
-                251,
+                53,
+                176,
+                38,
                 127
               ]
             }
@@ -55025,7 +55025,7 @@
       ]
     },
     {
-      "case_id": "pipeline-composition.matrix-096",
+      "case_id": "pipeline-composition.matrix-099",
       "surface": "PIL.ImageFilter",
       "operation": "Kernel",
       "covers": [
@@ -55056,8 +55056,8 @@
             "color": {
               "kind": "literal",
               "value": [
-                235,
-                210
+                90,
+                31
               ]
             }
           }
@@ -55129,142 +55129,6 @@
           "receiver": {
             "kind": "binding",
             "step_id": "inverted"
-          },
-          "arguments": {}
-        }
-      ],
-      "observations": [
-        "setup-filter",
-        "filtered",
-        "materialize"
-      ]
-    },
-    {
-      "case_id": "pipeline-composition.matrix-099",
-      "surface": "PIL.ImageFilter",
-      "operation": "Kernel",
-      "covers": [
-        "PIL.ImageFilter.Kernel.behavior.default"
-      ],
-      "target_profiles": [
-        "python-cpu"
-      ],
-      "assets": [],
-      "steps": [
-        {
-          "step_id": "setup-image",
-          "surface": "PIL.Image",
-          "operation": "new",
-          "receiver": null,
-          "arguments": {
-            "mode": {
-              "kind": "literal",
-              "value": "L"
-            },
-            "size": {
-              "kind": "literal",
-              "value": [
-                13,
-                11
-              ]
-            },
-            "color": {
-              "kind": "literal",
-              "value": 90
-            }
-          }
-        },
-        {
-          "step_id": "setup-filter",
-          "surface": "PIL.ImageFilter",
-          "operation": "Kernel",
-          "receiver": null,
-          "arguments": {
-            "size": {
-              "kind": "literal",
-              "value": [
-                5,
-                5
-              ]
-            },
-            "kernel": {
-              "kind": "literal",
-              "value": [
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0,
-                1.0
-              ]
-            },
-            "scale": {
-              "kind": "literal",
-              "value": 25.0
-            }
-          }
-        },
-        {
-          "step_id": "filtered",
-          "surface": "PIL.Image.Image",
-          "operation": "filter",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "setup-image"
-          },
-          "arguments": {
-            "filter": {
-              "kind": "binding",
-              "step_id": "setup-filter"
-            }
-          }
-        },
-        {
-          "step_id": "scaled",
-          "surface": "PIL.ImageOps",
-          "operation": "scale",
-          "receiver": null,
-          "arguments": {
-            "image": {
-              "kind": "binding",
-              "step_id": "filtered"
-            },
-            "factor": {
-              "kind": "literal",
-              "value": 1.5
-            },
-            "resample": {
-              "kind": "literal",
-              "value": "NEAREST"
-            }
-          }
-        },
-        {
-          "step_id": "materialize",
-          "surface": "PIL.Image.Image",
-          "operation": "tobytes",
-          "receiver": {
-            "kind": "binding",
-            "step_id": "scaled"
           },
           "arguments": {}
         }

@@ -647,6 +647,8 @@ def _literal_type(value: Any) -> str:
     if isinstance(value, dict):
         if value.get("protocol") == "outline":
             return "handle"
+        if value.get("protocol") == "sequence" and isinstance(value.get("items"), list):
+            return "sequence"
         if (
             value.get("protocol") == "text-repeat"
             and isinstance(value.get("text"), str)
