@@ -4,10 +4,10 @@
 #![allow(clippy::unwrap_in_result)]
 #![allow(clippy::redundant_clone)]
 
+use pillow_rs::Image as RsImage;
 use pillow_rs::PilError;
-use pillow_rs::{Image as RsImage, PutDataValue};
 use pyo3::ToPyObject;
-use pyo3::exceptions::{PySystemError, PyTypeError, PyUserWarning, PyValueError};
+use pyo3::exceptions::{PyTypeError, PyUserWarning, PyValueError};
 use pyo3::prelude::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
@@ -29,19 +29,19 @@ use pyo3::types::PyBytesMethods;
 use pyo3::types::PyCapsule;
 use pyo3::types::PyDict;
 use pyo3::types::PyDictMethods;
-use pyo3::types::PyFloat;
 use pyo3::types::PyInt;
 use pyo3::types::PyList;
 use pyo3::types::PyListMethods;
 use pyo3::types::PyModuleMethods;
 use pyo3::types::PyString;
 use pyo3::types::PyTuple;
-use pyo3::types::PyTupleMethods;
 use pyo3::types::PyType;
 use pyo3::types::PyTypeMethods;
 use pyo3::wrap_pyfunction;
 use std::ffi::CString;
 use std::path::PathBuf;
+
+mod putdata;
 
 // Pillow's custom exception for images exceeding its decompression-bomb limit.
 pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyException);
@@ -534,77 +534,6 @@ fn stat_result_to_python(result: &pillow_rs::StatResult) -> PyResult<PyObject> {
     })
 }
 
-#[allow(unsafe_code)]
-fn python_is_sequence(value: &Bound<'_, PyAny>) -> bool {
-    // SAFETY: `Bound` guarantees a non-null, GIL-bound borrowed pointer for
-    // this call. `PySequence_Check` only inspects the object's type slots and
-    // neither steals a reference nor stores the pointer.
-    unsafe { pyo3::ffi::PySequence_Check(value.as_ptr()) != 0 }
-}
-
-fn putdata_value_from_python(value: &Bound<'_, PyAny>, mode: &str) -> PyResult<PutDataValue> {
-    if matches!(
-        mode,
-        "1" | "L" | "P" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
-    ) {
-        if python_is_sequence(value) {
-            // Preserve the shape distinction for the core's canonical
-            // "sequence must be flattened" error instead of terminating in
-            // the binding before putdata_bytes sees the value.
-            return Ok(PutDataValue::Components(Vec::new()));
-        }
-        // Pillow's numeric `_putdata` path deliberately clears conversion
-        // errors after writing the sentinel returned by PyFloat_AsDouble.
-        return Ok(PutDataValue::Number(value.extract::<f64>().unwrap_or(-1.0)));
-    }
-
-    if value.is_instance_of::<PyInt>() {
-        return value.extract::<i64>().map(PutDataValue::Packed);
-    }
-
-    // Multiband Pillow putdata rejects scalar floats through the same shape
-    // validation as other non-tuple values. Preserve the numeric distinction
-    // for the core so it owns the public error contract instead of the
-    // binding short-circuiting that path.
-    if value.is_instance_of::<PyFloat>() {
-        return value.extract::<f64>().map(PutDataValue::Number);
-    }
-
-    let Ok(tuple) = value.downcast::<PyTuple>() else {
-        return Err(PyTypeError::new_err("color must be int or tuple"));
-    };
-    let tuple_len = tuple.len();
-    if tuple_len == 1 {
-        let packed = tuple.get_item(0)?;
-        if packed.is_instance_of::<PyInt>() {
-            return packed.extract::<i64>().map(PutDataValue::Packed);
-        }
-        if matches!(mode, "LA" | "PA") {
-            return Err(PySystemError::new_err(
-                "new style getargs format but argument is not a tuple",
-            ));
-        }
-        return Err(PyTypeError::new_err(
-            "color must be int, or tuple of one, three or four elements",
-        ));
-    }
-
-    // Keep tuple extraction in the binding, but let the core own arity
-    // validation.  That preserves one canonical error path for every backend
-    // and lets public parity inputs exercise the same shape checks as the
-    // Rust API.
-    let mut components = Vec::with_capacity(tuple_len);
-    for (index, item) in tuple.iter().enumerate() {
-        let component = if index == 0 {
-            item.extract::<i64>()? as i128
-        } else {
-            item.extract::<i32>()? as i128
-        };
-        components.push(component);
-    }
-    Ok(PutDataValue::Components(components))
-}
-
 fn putpixel_value_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::PutPixelValue {
     if let Ok(value) = value.extract::<i64>() {
         return pillow_rs::PutPixelValue::Integer(value);
@@ -949,20 +878,11 @@ impl PyImage {
         }
     }
 
-    fn tobytes(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
-        py.allow_threads(|| self.inner.tobytes()).map_err(map_error)
-    }
-
     fn tobytes_unpacked(&self, py: Python<'_>) -> PyResult<Vec<u8>> {
         py.allow_threads(|| self.inner.tobytes_unpacked())
             .map_err(map_error)
     }
 
-    fn tobytes_formatted(&self, mode: &str, py: Python<'_>) -> PyResult<Vec<u8>> {
-        let mode = mode.to_owned();
-        py.allow_threads(|| self.inner.tobytes_formatted(&mode))
-            .map_err(map_error)
-    }
     fn tobytes_encoded(
         &self,
         mode: &str,
@@ -990,23 +910,6 @@ impl PyImage {
         Ok(PyImage { inner })
     }
 
-    /// Return palette data (RGB triples) for P-mode quantized images.
-    fn palette(&self) -> Option<Vec<u8>> {
-        self.inner.palette()
-    }
-    /// Return palette trimmed of trailing zero triples, matching PIL's getpalette().
-    fn getpalette_trimmed(&self) -> Option<Vec<u8>> {
-        self.inner.getpalette_trimmed()
-    }
-
-    fn getpalette_rgba(&self) -> Option<Vec<u8>> {
-        self.inner.getpalette_rgba()
-    }
-
-    fn getpalette_rawmode(&self, rawmode: &str) -> PyResult<Option<Vec<u8>>> {
-        self.inner.getpalette_rawmode(rawmode).map_err(map_error)
-    }
-
     #[pyo3(signature = (rawmode=None))]
     fn getpalette_with_input(&self, rawmode: Option<String>, py: Python<'_>) -> PyResult<PyObject> {
         let palette = self
@@ -1025,24 +928,6 @@ impl PyImage {
 
     fn palette_mode(&self) -> Option<String> {
         self.inner.palette_mode().map(str::to_owned)
-    }
-
-    fn pending_transparency_index(&self) -> Option<u8> {
-        match self.inner.pending_palette_transparency() {
-            Some(pillow_rs::PaletteTransparency::Index(index)) => Some(index),
-            _ => None,
-        }
-    }
-
-    fn pending_transparency_table(&self) -> Option<Vec<u8>> {
-        match self.inner.pending_palette_transparency() {
-            Some(pillow_rs::PaletteTransparency::Table(alpha)) => Some(alpha),
-            _ => None,
-        }
-    }
-
-    fn converted_palette_transparency(&self, mode: &str) -> Option<Vec<u8>> {
-        self.inner.converted_palette_transparency(mode)
     }
 
     fn has_transparency_data(&self) -> bool {
@@ -1134,10 +1019,6 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn getextrema(&self, py: Python<'_>) -> PyResult<Vec<(u8, u8)>> {
-        py.allow_threads(|| self.inner.getextrema())
-            .map_err(map_error)
-    }
     /// Return extrema formatted as PIL expects.
     fn getextrema_formatted(&self, py: Python<'_>) -> PyResult<PyObject> {
         let formatted = py
@@ -1176,10 +1057,6 @@ impl PyImage {
         })
     }
 
-    fn stat(&self, py: Python<'_>) -> PyResult<Vec<Vec<f64>>> {
-        py.allow_threads(|| self.inner.stat()).map_err(map_error)
-    }
-
     #[pyo3(signature = (mask=None))]
     fn stat_formatted(
         &self,
@@ -1193,11 +1070,6 @@ impl PyImage {
         stat_result_to_python(&result)
     }
 
-    fn histogram(&self, py: Python<'_>) -> PyResult<Vec<u32>> {
-        py.allow_threads(|| self.inner.histogram())
-            .map_err(map_error)
-    }
-
     #[pyo3(signature = (mask=None))]
     fn histogram_with_input(
         &self,
@@ -1206,16 +1078,6 @@ impl PyImage {
     ) -> PyResult<Vec<u32>> {
         let mask = image_analysis_mask_from_python(mask)?;
         py.allow_threads(|| self.inner.histogram_with_input(mask))
-            .map_err(map_error)
-    }
-
-    fn histogram_with_mask(
-        &self,
-        mask: Option<&Bound<'_, PyImage>>,
-        py: Python<'_>,
-    ) -> PyResult<Vec<u32>> {
-        let mask_inner = mask.map(|m| m.borrow().inner.clone());
-        py.allow_threads(|| self.inner.histogram_with_mask(mask_inner.as_ref()))
             .map_err(map_error)
     }
 
@@ -1332,11 +1194,6 @@ impl PyImage {
         py.allow_threads(|| self.inner.load()).map_err(map_error)
     }
 
-    fn putalpha(&mut self, alpha: u8, py: Python<'_>) -> PyResult<()> {
-        py.allow_threads(|| self.inner.putalpha(alpha))
-            .map_err(map_error)
-    }
-
     fn putalpha_input(&mut self, alpha: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<()> {
         let input = if let Some(mask) = image_from_python(alpha) {
             pillow_rs::PutAlphaInput::Image(mask)
@@ -1346,12 +1203,6 @@ impl PyImage {
             pillow_rs::PutAlphaInput::Invalid(alpha.get_type().name()?.to_string())
         };
         py.allow_threads(|| self.inner.putalpha_with_input(input))
-            .map_err(map_error)
-    }
-
-    fn putalpha_data(&mut self, mask: &Bound<'_, PyImage>, py: Python<'_>) -> PyResult<()> {
-        let mask_inner = mask.borrow().inner.clone();
-        py.allow_threads(|| self.inner.putalpha_data(&mask_inner))
             .map_err(map_error)
     }
 
@@ -1405,9 +1256,6 @@ impl PyImage {
         .map_err(map_error)
     }
 
-    fn getcolors(&mut self, maxcolors: Option<u32>, py: Python<'_>) -> PyResult<Option<PyObject>> {
-        self.getcolors_formatted(maxcolors, py)
-    }
     /// Return getcolors formatted as PIL expects.
     fn getcolors_formatted(
         &mut self,
@@ -1439,10 +1287,6 @@ impl PyImage {
         })
     }
 
-    fn getdata(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<Vec<u8>> {
-        py.allow_threads(|| self.inner.getdata(band))
-            .map_err(map_error)
-    }
     /// Return getdata formatted as PIL expects.
     fn getdata_formatted(&mut self, band: Option<i32>, py: Python<'_>) -> PyResult<PyObject> {
         let formatted = py
@@ -1474,10 +1318,6 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn entropy(&mut self, py: Python<'_>) -> PyResult<f64> {
-        py.allow_threads(|| self.inner.entropy()).map_err(map_error)
-    }
-
     #[pyo3(signature = (mask=None))]
     fn entropy_with_input(
         &mut self,
@@ -1486,16 +1326,6 @@ impl PyImage {
     ) -> PyResult<f64> {
         let mask = image_analysis_mask_from_python(mask)?;
         py.allow_threads(|| self.inner.entropy_with_input(mask))
-            .map_err(map_error)
-    }
-
-    fn entropy_with_mask(
-        &mut self,
-        mask: Option<&Bound<'_, PyImage>>,
-        py: Python<'_>,
-    ) -> PyResult<f64> {
-        let mask_inner = mask.map(|m| m.borrow().inner.clone());
-        py.allow_threads(|| self.inner.entropy_with_mask(mask_inner.as_ref()))
             .map_err(map_error)
     }
 
@@ -1606,13 +1436,6 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn effect_noise(&self, sigma: Option<f64>, py: Python<'_>) -> PyResult<PyImage> {
-        let sigma = sigma.unwrap_or(10.0);
-        py.allow_threads(|| pillow_rs::image_effect_noise(&self.inner, sigma))
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error)
-    }
-
     #[classmethod]
     fn blend(
         _cls: &Bound<'_, PyType>,
@@ -1695,11 +1518,6 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn getpixel(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<(u8, u8, u8, u8)> {
-        py.allow_threads(|| self.inner.getpixel(xy.0, xy.1))
-            .map_err(map_error)
-    }
-
     fn getpixel_formatted(&mut self, xy: (u32, u32), py: Python<'_>) -> PyResult<PyObject> {
         let value = py
             .allow_threads(|| self.inner.getpixel_formatted(xy.0, xy.1))
@@ -1714,10 +1532,6 @@ impl PyImage {
         })
     }
 
-    fn putdata(slf: &Bound<'_, Self>, data: &Bound<'_, PyAny>) -> PyResult<()> {
-        Self::putdata_formatted(slf, data, 1.0, 0.0)
-    }
-
     #[pyo3(signature = (data, scale=1.0, offset=0.0))]
     fn putdata_formatted(
         slf: &Bound<'_, Self>,
@@ -1725,154 +1539,9 @@ impl PyImage {
         scale: f64,
         offset: f64,
     ) -> PyResult<()> {
-        if !python_is_sequence(data) {
-            return Err(PyTypeError::new_err("argument must be a sequence"));
-        }
-        let entry_count = data
-            .len()
-            .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
-
-        let mode = {
-            let image = slf.try_borrow()?;
-            image
-                .inner
-                .validate_putdata_length(entry_count)
-                .map_err(map_error)?;
-            image.inner.mode().map_err(map_error)?
-        };
-
-        // Pillow's I;16 bytes fast path copies the supplied bytes into the
-        // raw two-byte sample buffer. It does not coerce each byte into a
-        // separate numeric sample as the generic sequence path does.
-        if matches!(mode.as_str(), "I;16" | "I;16L" | "I;16B" | "I;16N") {
-            if let Ok(bytes) = data.downcast::<PyBytes>() {
-                return slf
-                    .try_borrow_mut()?
-                    .inner
-                    .putdata_l16_bytes(bytes.as_bytes(), scale, offset)
-                    .map_err(map_error);
-            }
-
-            // Exact built-in numeric sequences have no user callbacks to
-            // observe between writes, so let Rust own their bulk coercion and
-            // 16-bit storage path. Subclasses, nested values, and arbitrary
-            // sequences continue through the re-entrant per-item path below.
-            if data.downcast_exact::<PyList>().is_ok() || data.downcast_exact::<PyTuple>().is_ok() {
-                if let Ok(values) = data.extract::<Vec<f64>>() {
-                    return slf
-                        .try_borrow_mut()?
-                        .inner
-                        .putdata_numeric_values(&values, scale, offset)
-                        .map_err(map_error);
-                }
-            }
-        }
-
-        // Exact built-in numeric lists and tuples have no user callbacks to
-        // observe between writes. Let Rust normalize them in one operation so
-        // the selected CPU/SIMD backend can process the complete pixel batch.
-        // Subclasses, nested values, and arbitrary sequences continue through
-        // the re-entrant per-item path below.
-        if data.downcast_exact::<PyList>().is_ok() || data.downcast_exact::<PyTuple>().is_ok() {
-            if let Ok(values) = data.extract::<Vec<i64>>() {
-                return slf
-                    .try_borrow_mut()?
-                    .inner
-                    .putdata_integer_values(&values, scale, offset)
-                    .map_err(map_error);
-            }
-            if let Ok(values) = data.extract::<Vec<f64>>() {
-                return slf
-                    .try_borrow_mut()?
-                    .inner
-                    .putdata_numeric_values(&values, scale, offset)
-                    .map_err(map_error);
-            }
-        }
-
-        // Pillow's image8 fast path reads the underlying bytes directly, even
-        // for a bytes subclass that overrides Python iteration.
-        if matches!(mode.as_str(), "1" | "L" | "P") {
-            if let Ok(bytes) = data.downcast::<PyBytes>() {
-                let values = bytes
-                    .as_bytes()
-                    .iter()
-                    .copied()
-                    // Pillow reads the terminating NUL when a bytes subtype
-                    // reports one more item than its physical payload. Extend
-                    // that behavior safely for every missing item instead of
-                    // following its unchecked C pointer read out of bounds.
-                    .chain(std::iter::repeat(0))
-                    .take(entry_count)
-                    .map(|value| PutDataValue::Number(f64::from(value)))
-                    .collect::<Vec<_>>();
-                return slf
-                    .try_borrow_mut()?
-                    .inner
-                    .putdata_values(&values, scale, offset)
-                    .map_err(map_error);
-            }
-        }
-
-        let write_item = |pixel_index, item: Bound<'_, PyAny>| -> PyResult<()> {
-            // No PyImage borrow may span coercion: __index__ and __float__ can
-            // re-enter this same public image and must observe earlier writes.
-            let value = putdata_value_from_python(&item, &mode)?;
-            slf.try_borrow_mut()?
-                .inner
-                .putdata_value_at(pixel_index, &value, scale, offset)
-                .map_err(map_error)
-        };
-
-        // CPython's PySequence_Fast retains exact lists and tuples instead of
-        // copying them. Read each exact-list item only when its pixel is due so
-        // coercing an earlier item can replace a later one, as Pillow exposes.
-        if let Ok(list) = data.downcast_exact::<PyList>() {
-            for pixel_index in 0..entry_count {
-                write_item(pixel_index, list.get_item(pixel_index)?)?;
-            }
-            return Ok(());
-        }
-        if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
-            for pixel_index in 0..entry_count {
-                write_item(pixel_index, tuple.get_item(pixel_index)?)?;
-            }
-            return Ok(());
-        }
-
-        // Pillow calls PySequence_Fast before coercing any pixel. Materialize
-        // generic sequence items first, map iteration failures to its fixed
-        // error, then process only the count reported by the original sequence.
-        let iterator = data
-            .iter()
-            .map_err(|_| PyTypeError::new_err("argument must be a sequence"))?;
-        let mut items = Vec::new();
-        for item in iterator {
-            items.push(item.map_err(|_| PyTypeError::new_err("argument must be a sequence"))?);
-        }
-
-        for (pixel_index, item) in items.into_iter().take(entry_count).enumerate() {
-            write_item(pixel_index, item)?;
-        }
-        Ok(())
+        putdata::putdata_formatted(slf, data, scale, offset)
     }
 
-    fn putpixel(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
-        let (r, g, b, a) = if let Ok((r, g, b)) = value.extract::<(u8, u8, u8)>() {
-            (r, g, b, 255)
-        } else if let Ok((r, g, b, a)) = value.extract::<(u8, u8, u8, u8)>() {
-            (r, g, b, a)
-        } else if let Ok(val) = value.extract::<u8>() {
-            (val, val, val, 255)
-        } else {
-            return Err(pyo3::exceptions::PyTypeError::new_err(
-                "value must be int, RGB tuple, or RGBA tuple",
-            ));
-        };
-        self.inner
-            .putpixel(xy.0, xy.1, r, g, b, a)
-            .map_err(map_error)
-    }
     /// Mode-aware putpixel: expands values according to PIL's per-mode semantics.
     fn putpixel_mode(&mut self, xy: (u32, u32), value: &Bound<'_, PyAny>) -> PyResult<()> {
         let value = putpixel_value_from_python(value);
@@ -1901,10 +1570,6 @@ impl PyImage {
     #[getter]
     fn mode(&mut self) -> PyResult<String> {
         self.inner.mode().map_err(map_error)
-    }
-
-    fn explicit_mode(&self) -> PyResult<Option<String>> {
-        Ok(self.inner.explicit_mode().map(|s| s.to_string()))
     }
 
     #[getter]
@@ -2027,23 +1692,6 @@ fn validate_transposed_font_length(orientation: Option<&str>) -> PyResult<()> {
     pillow_rs::validate_transposed_length(orientation).map_err(map_error)
 }
 
-#[pyfunction]
-fn resolve_array_layout(
-    shape: Vec<usize>,
-    typestr: &str,
-    mode: Option<&str>,
-) -> PyResult<(String, String, usize, usize, usize, bool)> {
-    let layout = pillow_rs::resolve_array_layout(&shape, typestr, mode).map_err(map_error)?;
-    Ok((
-        layout.mode,
-        layout.raw_mode,
-        layout.width,
-        layout.height,
-        layout.dimensions,
-        layout.mode_reinterprets_dtype,
-    ))
-}
-
 /// Activate a compute backend. Returns true if the backend exists on this machine.
 #[pyfunction]
 fn enable_backend(name: &str) -> PyResult<bool> {
@@ -2103,12 +1751,6 @@ fn backend_enabled(name: &str) -> PyResult<bool> {
 #[pyfunction]
 fn set_pipeline_telemetry(enabled: bool) -> bool {
     pillow_rs::Backend::set_pipeline_telemetry_enabled(enabled)
-}
-
-/// Return whether image-pipeline execution telemetry is enabled.
-#[pyfunction]
-fn pipeline_telemetry_enabled() -> bool {
-    pillow_rs::Backend::pipeline_telemetry_enabled()
 }
 
 /// Take the most recent completed image-pipeline telemetry sample for this
@@ -2231,54 +1873,6 @@ fn fromarray(data: &Bound<'_, PyAny>, mode: Option<&str>) -> PyResult<PyImage> {
         .map_err(map_error)
 }
 
-/// Flatten mesh transform data (list of (bbox, quad) tuples) into a flat f64 Vec.
-///
-/// Accepts `[(bbox, quad), …]` where each bbox is `[x0, y0, x1, y1]` and each
-/// quad is `[x0, y0, …, x3, y3]` (8 coords).  Returns `[b0,b1,b2,b3, q0,…,q7, …]`.
-#[pyfunction]
-fn mesh_flatten(items: Vec<(Vec<f64>, Vec<f64>)>) -> PyResult<Vec<f64>> {
-    let mut flat = Vec::with_capacity(items.len() * 12);
-    for (bbox, quad) in &items {
-        if bbox.len() != 4 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "mesh_flatten: each bbox must have exactly 4 values [x0, y0, x1, y1]",
-            ));
-        }
-        if quad.len() != 8 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "mesh_flatten: each quad must have exactly 8 values [x0, y0, …, x3, y3]",
-            ));
-        }
-        flat.extend_from_slice(bbox);
-        flat.extend_from_slice(quad);
-    }
-    Ok(flat)
-}
-
-/// Adapt a Python callback into the core-owned LUT builder.
-#[pyfunction]
-fn make_lut(func: &Bound<'_, PyAny>) -> PyResult<Vec<u8>> {
-    pillow_rs::make_lut(1, |sample| {
-        let result = func.call1((sample,)).map_err(|error| {
-            pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
-        })?;
-        result.extract::<i32>().map_err(|_| {
-            pillow_rs::PilError::ValueError("LUT function must return an integer".to_owned())
-        })
-    })
-    .map_err(map_error)
-}
-
-#[pyfunction]
-fn eval_validate_input(value: &Bound<'_, PyAny>) -> PyResult<()> {
-    let kind = if value.extract::<String>().is_ok() {
-        pillow_rs::EvalInputKind::String
-    } else {
-        pillow_rs::EvalInputKind::Other
-    };
-    pillow_rs::validate_eval_input(kind).map_err(map_error)
-}
-
 #[pyfunction]
 fn imaging_core_to_bytes(py: Python<'_>, values: &Bound<'_, PyAny>) -> PyResult<PyObject> {
     let input = values
@@ -2367,7 +1961,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(transposed_font_bbox, m)?)?;
     m.add_function(wrap_pyfunction!(validate_transposed_font_length, m)?)?;
     m.add_function(wrap_pyfunction!(transposed_font_orientation, m)?)?;
-    m.add_function(wrap_pyfunction!(resolve_array_layout, m)?)?;
 
     // ImageOps functions
     m.add_function(wrap_pyfunction!(ops_autocontrast, m)?)?;
@@ -2415,17 +2008,12 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // ImageColor
     m.add_function(wrap_pyfunction!(getrgb, m)?)?;
     m.add_function(wrap_pyfunction!(getcolor, m)?)?;
-    m.add_function(wrap_pyfunction!(palette_search, m)?)?;
     m.add_function(wrap_pyfunction!(palette_getcolor_append, m)?)?;
     m.add_function(wrap_pyfunction!(palette_getcolor_validate, m)?)?;
     m.add_function(wrap_pyfunction!(palette_save_to_file, m)?)?;
     m.add_function(wrap_pyfunction!(palette_to_text, m)?)?;
 
-    // ImageDraw helpers
-    m.add_function(wrap_pyfunction!(outline_curve, m)?)?;
-
     // ImageStat module helpers
-    m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
     m.add_function(wrap_pyfunction!(stat_from_histogram, m)?)?;
 
     // Image module functions
@@ -2444,7 +2032,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(active_backends, m)?)?;
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
-    m.add_function(wrap_pyfunction!(pipeline_telemetry_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;
 
     // ImageFilter helper functions
@@ -2453,16 +2040,11 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(color3dlut_generate, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_transform, m)?)?;
     m.add_function(wrap_pyfunction!(color3dlut_repr, m)?)?;
-    m.add_function(wrap_pyfunction!(stat_from_list, m)?)?;
-    m.add_function(wrap_pyfunction!(kernel_prepare, m)?)?;
     m.add_function(wrap_pyfunction!(kernel_validate_coefficients, m)?)?;
 
     // Utility functions (moved from Python)
     m.add_function(wrap_pyfunction!(align_row_to_32, m)?)?;
     m.add_function(wrap_pyfunction!(fromarray, m)?)?;
-    m.add_function(wrap_pyfunction!(mesh_flatten, m)?)?;
-    m.add_function(wrap_pyfunction!(make_lut, m)?)?;
-    m.add_function(wrap_pyfunction!(eval_validate_input, m)?)?;
     m.add_function(wrap_pyfunction!(imaging_core_to_bytes, m)?)?;
     m.add_function(wrap_pyfunction!(exif_compat_fields, m)?)?;
     m.add_function(wrap_pyfunction!(imagefont_normalize_bbox, m)?)?;
@@ -3293,11 +2875,6 @@ impl PyOutline {
         if self.points.len() > 2 && self.points.first() != self.points.last() {
             self.points.push(self.points[0]);
         }
-    }
-
-    #[getter]
-    fn _points(&self) -> Vec<(i32, i32)> {
-        self.points.clone()
     }
 }
 
@@ -4512,11 +4089,6 @@ fn getrgb(color: &str) -> PyResult<PyObject> {
     })
 }
 
-#[pyfunction]
-fn palette_search(palette: Vec<u8>, r: u8, g: u8, b: u8) -> Option<usize> {
-    pillow_rs::palette_getcolor(&palette, r, g, b)
-}
-
 /// PIL-compatible getcolor: search palette for (r,g,b[,a]), append if new. Returns index.
 #[pyfunction]
 fn palette_getcolor_append(
@@ -4581,31 +4153,6 @@ fn palette_save_to_file(palette: Vec<u8>, mode: &str, fp: &str) -> PyResult<()> 
     let text = pillow_rs::palette_to_text(&palette, mode);
     std::fs::write(fp, text).map_err(|error| {
         pyo3::exceptions::PyOSError::new_err(format!("Cannot write palette file: {error}"))
-    })
-}
-
-/// Compute cubic Bezier curve subdivision points for Outline.
-/// Accepts flat list of 8 control points [x0,y0,x1,y1,x2,y2,x3,y3] and steps.
-/// Returns flat list of [x,y] int pairs for the curve.
-#[pyfunction]
-fn outline_curve(points: Vec<f64>, steps: u32) -> Vec<Vec<i32>> {
-    let result = pillow_rs::outline_curve_points(&points, steps);
-    result.into_iter().map(|(x, y)| vec![x, y]).collect()
-}
-
-/// Compute basic statistics from a list of values (PIL's ImageStat fallback).
-/// Returns a dict with count, sum, mean, min, max.
-#[pyfunction]
-fn stat_from_list(data: Vec<f64>) -> PyObject {
-    let (count, sum, mean, min_val, max_val) = pillow_rs::stat_from_list(&data);
-    Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new(py);
-        let _ = dict.set_item("count", count as i64);
-        let _ = dict.set_item("sum", sum);
-        let _ = dict.set_item("mean", mean);
-        let _ = dict.set_item("min", min_val);
-        let _ = dict.set_item("max", max_val);
-        dict.to_object(py)
     })
 }
 
@@ -4711,23 +4258,6 @@ fn color3dlut_repr(
     target_mode: Option<&str>,
 ) -> String {
     pillow_rs::color3dlut_repr(table_type, size, channels, target_mode)
-}
-
-/// Prepare kernel parameters for image convolution.
-/// - If `kernel` is None, creates a default kernel of all 1.0s
-/// - If `scale` is None, computes it as the sum of kernel values
-/// - Converts `offset` to i32
-/// - Validates that size[0] == size[1] and size[0] in {3, 5}
-/// Returns (kernel, scale, offset_i32, size_x).
-#[pyfunction]
-#[pyo3(signature = (kernel, scale=None, offset=0.0, size=(3, 3)))]
-fn kernel_prepare(
-    kernel: Option<Vec<f64>>,
-    scale: Option<f64>,
-    offset: f64,
-    size: (u32, u32),
-) -> PyResult<(Vec<f64>, f64, i32, u32)> {
-    pillow_rs::prepare_kernel(kernel, scale, offset, size).map_err(map_error)
 }
 
 #[pyfunction]

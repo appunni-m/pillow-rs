@@ -1,0 +1,616 @@
+# Coverage backlog after the Python binding target
+
+This is the remaining initial queue after selecting pillow-rs-py/src/lib.rs
+as the first target. It is ordered by missing LLVM regions, highest first.
+
+Evidence source: Coverage MCP snapshot
+35129b99-796a-47c3-9f19-05db4f6510e9, suite
+pillow-rs-current-cpu-simd-gpu-coverage-20260815, commit
+78d361194e272a574ae89ceb13be3b3be1114377.
+
+The current target is intentionally omitted. Zero-gap files are omitted. This
+report is planning evidence only; it does not modify fixtures, outputs, hashes,
+thresholds, filters, coverage counts, or denominators. Font entries remain
+deferred, and GPU work must remain bounded and memory-safe.
+
+## Rank-1 follow-up: `pillow-rs/src/compute/pool_simd/ops/scalar.rs`
+
+The reachability audit used the baseline snapshot above and the read-only Sol
+strategy packet. The retained input batch adds 100 valid public
+`PIL.ImageEnhance.Brightness.enhance` cases in explicit `YCbCr` and `HSV`
+modes, using generator families 31-40. These modes bypass the native byte LUT
+while remaining supported RGB8-backed public images, so they reach the packed
+scalar Brightness fallback.
+
+The follow-up Coverage MCP snapshot is
+`5b4abec1-a801-4720-a4fb-29ca9d3c23ba`. It covers `scalar.rs:129` and leaves
+`scalar.rs:133` red. The remaining red branch is the unsupported
+non-alpha/non-CMYK fallback: supported public L/RGB posterize and Brightness
+inputs use native paths, while the public typed/palette alternatives reject or
+divert before this branch.
+
+The audit also classifies the large scalar transpose body as native-fast-path
+or CPU-diverted for all supported public representations; the F-mode rank
+fallback as unreachable through public filter dispatch; the packed median,
+min/max/rank and BoxBlur bodies as already covered; and scalar rotate as
+already covered. This rank is therefore complete as a reachability target, not
+as a license to force private probes. The next reachable file-level audit is
+`pillow-rs/src/image.rs`; `pillow-rs/src/raster/dynamic.rs` remains an
+internal type-matrix target unless a supported public path is demonstrated.
+
+## Rank-3 follow-up: `pillow-rs/src/image.rs` `putdata` bytes fallback
+
+Coverage MCP source context identified `image.rs:4875-4876` as the public
+multiband `bytes` handoff: `putdata_bulk` recognizes a Python `bytes` object,
+the core fast path consumes only `1`, `L`, `P`, and `I;16*`, and all other
+supported modes deliberately return `Ok(false)` for generic per-item
+coercion. The retained input batch adds exactly 100 valid public
+`PIL.Image.Image.putdata` cases in ten families, covering RGB, RGBA, LA, PA,
+CMYK, YCbCr, HSV, and multiband scale/offset variants. Representative RGB,
+LA, CMYK, PA, YCbCr, HSV, and scaled cases passed focused parity validation.
+
+The Coverage MCP run is `ee78289b-7b7b-43a4-b8d3-2b8f95b85d1c`, using the
+registered bounded all-GPU command. It passed all 24 plans, 9,881 tests, and
+468 parity cases with zero failures or skips; the ingested snapshot is
+`9f4cc724-9d07-48bd-a2a2-429fe341a56f`. Compared with the prior snapshot
+`5b4abec1-a801-4720-a4fb-29ca9d3c23ba`, aggregate coverage gained 4 regions,
+3 lines, and 1 branch with unchanged denominators. The file-level result is
+5,677/6,528 regions (86.964%), 3,517/3,988 lines (88.190%), 611/690
+branches (88.551%), and 289/368 functions (78.533%). MCP line evidence shows
+300 hits on lines 4875-4876, confirming the new inputs reached the intended
+fallback rather than a private probe.
+
+The remaining `PutPixelValue::Invalid` branch at lines 2813-2819 is not
+retained as an input target: the manifest declares `putpixel.value` as
+integer, number, or sequence, and non-integral sequence members reach
+source/target error-message differences for multiband modes. The next
+`image.rs` audit should therefore move to another declared public operation,
+not broaden the input contract or alter comparison policy.
+
+## Reachable public input: `putdata` generic `P` sequence
+
+A parity-validated generic sequence was added for `PIL.Image.Image.putdata` on
+mode `P`. Unlike exact lists, tuples, and bytes, the public sequence protocol
+uses the per-item `putdata_value_at` path; the case reaches the
+`Image::Paletted` mutation arm at `image.rs:4993-4996`.
+
+The bounded all-GPU Coverage MCP run
+`a0cda9c8-da31-4a9a-9954-32824403a0bc` passed all 24 plans, 9,883 tests, and
+468 parity cases with zero failures/skips in 193.239 seconds. Snapshot
+`b03eb6ff-68e8-471c-9c0a-4adc70b7afa1` compared with
+`34936b0b-f469-49d2-b5d8-e1442c4b82b7` gained 7 regions, 5 lines, and 1
+branch with unchanged denominators. `image.rs` is now at 5,685/6,528 regions,
+3,522/3,988 lines, 612/690 branches, and 289/368 functions; aggregate
+coverage is 55,103/64,241 regions, 34,277/39,438 lines, 5,556/6,968
+branches, and 2,655/3,259 functions. The generic P case is retained.
+
+## Zero-gain audit: typed `ImageStat.Stat` fallback
+
+The supported public 16-bit RGB/RGBA PNG streams were tested as a candidate
+entry point for the `ImageStat.Stat` fallback at `image.rs:3030-3206`. One
+hundred valid `ImageStat.Stat` workflows were temporarily added, with both
+RGB16 and RGBA16 PNG inputs and all public Stat properties observed. The two
+representative RGB16/RGBA16 cases passed focused parity validation, but the
+bounded all-GPU Coverage MCP run `7fe55f11-1f5c-48b8-96c9-0e4e8f2b5b78`
+passed all 24 plans, 9,981 tests, and 468 parity cases with zero failures or
+skips while producing no coverage delta: snapshot
+`db224a1b-af3b-4458-a25f-4a064470b7b8` remains 55,095/64,241 regions,
+34,272/39,438 lines, 5,555/6,968 branches, and 2,655/3,259 functions,
+identical to snapshot `9f4cc724-9d07-48bd-a2a2-429fe341a56f`. The temporary
+batch was pruned as zero-gain. The fallback remains a reachability finding,
+not an honest input target, until a supported public source is shown to retain
+the typed DynamicImage representation through the maintained decode path.
+
+## Zero-gain audit: `Image::materialize_for_ops` palette-pipeline path
+
+Coverage MCP source context at `image.rs:4270-4298` identifies the remaining
+palette expansion branches in `Image::materialize_for_ops` and
+`paletted_to_rgb`. A temporary batch of exactly 100 public
+`PIL.ImageChops.blend` workflows used deferred `P` operands with nontrivial
+alpha values; all four representative cases passed focused parity validation.
+The bounded all-GPU Coverage MCP run
+`53bb1c5a-5aed-4883-810f-b9303d0640d7` passed all 24 plans, 9,981 tests, and
+468 parity cases with zero failures or skips; snapshot
+`610d34d7-852f-4425-92c4-0871ea883f95` is identical to the prior snapshot
+`db224a1b-af3b-4458-a25f-4a064470b7b8` at 55,095/64,241 regions,
+34,272/39,438 lines, 5,555/6,968 branches, and 2,655/3,259 functions.
+MCP line evidence leaves lines 4273, 4277-4282, and 4290-4291 red.
+
+The zero gain is explained by the supported public contract, not by missing
+input variety: `pillow-rs/src/ops/module_fns.rs::blend` rejects `P` images
+before queuing the operation, while the public indexed paste/composite paths
+deliberately use `materialize_indices` to preserve raw samples. The temporary
+batch was pruned, and these branches remain classified as internal fallback
+reachability rather than an honest input target.
+
+## Reachable public input: `Image.load` malformed PNG without `IDAT`
+
+Coverage MCP source context at `image.rs:4428-4436` showed the public lazy
+decode path. A valid encoded PNG header with an `IHDR` and `IEND` but no
+`IDAT` was added as one direct `PIL.Image.Image.load` input. Focused parity
+passed exactly: Pillow and Rust both accepted the header at `open` and
+returned `OSError("cannot load this image")` from `load`.
+
+The bounded all-GPU Coverage MCP run was
+`84dcaa74-8762-4b98-8fda-1b38b7308d77`, with 24 plans, 9,882 tests, and 468
+parity cases passing, zero failures/skips, and a 197.077-second duration. The
+ingested snapshot is `34936b0b-f469-49d2-b5d8-e1442c4b82b7`. Compared with
+`aa99e411-abd1-4b0a-987a-ae1f0c5af83d`, it gained one region and no lines,
+branches, functions, or denominator changes: aggregate coverage is now
+55,096/64,241 regions, 34,272/39,438 lines, 5,555/6,968 branches, and
+2,655/3,259 functions. The final `image_from_materialized(...)?` region at
+line 4436 remains red because this malformed stream fails during deferred
+codec materialization before that conversion call. The input is retained as
+an honest one-region gain.
+
+## Zero-gain audit: palette-less `P` pipeline `load`
+
+A focused public case chained `Image.new("P")`, `ImageChops.invert`, and
+`Image.load` to probe the `Image::Pipeline` no-retained-palette error arm at
+`image.rs:4458`. Source and target both returned a `PixelAccess`, so focused
+parity passed. The bounded all-GPU Coverage MCP run
+`2865ce1f-6bd8-4f97-b149-44b5df119b73` passed all 24 plans, 9,883 tests, and
+468 parity cases with zero failures/skips in 198.545 seconds; snapshot
+`455a88f4-f820-44eb-9841-123ff5b60293` had no coverage delta from
+`34936b0b-f469-49d2-b5d8-e1442c4b82b7`.
+
+The branch is not reached because `Image::push_op` deliberately represents
+an indexed ImageChops result with `Some(Vec::new())`, distinguishing an empty
+public palette from an absent retained-palette invariant. The temporary case
+was pruned; line 4458 remains classified as an internal defensive branch.
+
+## Zero-gain audit: `Image.getdata(band=...)` non-byte fallback
+
+A valid public `Image.frombytes("I;16", ...)` followed by
+`Image.getdata(band=0)` was tested against the red fallback at
+`image.rs:4595-4598`. Focused parity passed, but the bounded all-GPU Coverage
+MCP run `2d02c2ef-cbd7-4caa-bcc2-1ce86705d9a7` passed all 24 plans, 9,883
+tests, and 468 parity cases with zero failures/skips in 193.964 seconds; its
+snapshot `b9762199-3372-44e4-a4a4-0a81b78b8375` had no delta from
+`34936b0b-f469-49d2-b5d8-e1442c4b82b7`.
+
+The public Python binding handles `I;16` in `getdata_formatted` and rejects an
+explicit band with `ValueError("image has wrong mode")` before calling core
+`Image::getdata`. The temporary case was therefore pruned; the fallback is
+binding-inaccessible through supported Python inputs.
+
+## Zero-gain audit: `Image.getcolors` non-native raster fallback
+
+A valid 16-bit RGB PNG was tested against the conversion fallbacks at
+`image.rs:5250-5277`. Focused parity passed, but the bounded all-GPU Coverage
+MCP run `ee5f7581-ed6c-4edb-bf89-cfae6ad3f826` passed all 24 plans, 9,884
+tests, and 468 parity cases with zero failures/skips in 192.955 seconds;
+snapshot `2526c366-d132-4c02-a6a8-b26cb33c4961` had no coverage delta from
+`b03eb6ff-68e8-471c-9c0a-4adc70b7afa1`.
+
+The maintained encoded-input path normalizes this public PNG into the ordinary
+RGB representation before `getcolors`; it does not expose a `DynamicImage::Rgb16`
+to the operation. The temporary case was pruned, and the non-native fallback
+remains an internal decoder/type-matrix path.
+
+## Rejected input: synthetic 16-bit RGB TIFF
+
+To distinguish the PNG normalization result from a genuinely retained typed
+raster, a temporary valid little-endian 16-bit RGB TIFF was tried against
+`ImageStat.Stat`, `Image.getcolors`, and `Image.getprojection`. Pillow decoded
+the source case, but the supported target decoder returned
+`UnidentifiedImageError("cannot identify image file ...")` during the public
+`Image.open` setup step. Focused parity therefore failed with a
+`not_run_mismatch`, and no Coverage MCP run was submitted because the parity
+gate rejected the input before the operation under test.
+
+The helper and all three temporary cases were pruned. This is evidence that
+the TIFF route cannot establish honest target reachability for the RGB16
+fallbacks; it does not justify changing `image-slash-star`, the target decoder
+surface, or parity policy.
+
+## Zero-gain audit: `Image.getexif` JPEG scanner boundaries
+
+Coverage MCP source context at `image.rs:4127-4176` leaves only the defensive
+JPEG scanner returns at lines 4129, 4149, 4164, and 4175. Existing supported
+JPEG inputs cover the valid SOI, standalone-marker, short-length, SOS, and
+APP1-payload paths. Three temporary encoded inputs were then tried to place
+EOI, a truncated APP1 segment, or end-of-input before SOS. Each focused parity
+run reported `setup-image-1 failed`, leaving the `getexif` call `not_run` on
+both source and target; the matching all-GPU Coverage MCP run
+`eda3b511-dcab-4d87-be0d-a9d9323ca7e7` passed in 192.964 seconds and ingested
+snapshot `75cb3bfc-a7f9-456c-a623-0285cfa119ee`, but comparison with
+`b03eb6ff-68e8-471c-9c0a-4adc70b7afa1` showed zero coverage delta. The
+pre-SOS cases were pruned. These returns remain unreachable through the
+supported public JPEG opener; covering them would require a direct parser
+probe or a decoder change, neither of which is an input-driven coverage gain.
+
+## Zero-gain audit: `Image::shares_execution_source` non-loaded arms
+
+Coverage MCP source context at `image.rs:1228-1258` identifies the remaining
+paletted, encoded-byte, and deferred-pipeline identity arms at lines 1233-1254.
+A temporary matrix supplied 100 valid public
+`PIL.ImageChops.multiply(...).screen(...)` workflows that reused the same
+secondary object, spanning concrete `P`, lazy encoded RGB/RGBA, and deferred
+pipeline operands. Sixty-nine structurally distinct cases were retained after
+input deduplication; representative P, pipeline, and lazy encoded cases all
+passed focused parity validation.
+
+The bounded all-backend Coverage MCP run
+`f2d5f7a2-910c-4ea3-a38a-6eaef353837a` completed in 193.346 seconds with all
+24 plans, 9,950 tests, and 468 parity cases passing, zero failures/skips, and
+an ingested snapshot `8f15b258-7466-4b1a-90cf-cae85995d5ad`. Compared with
+snapshot `610d34d7-852f-4425-92c4-0871ea883f95`, aggregate coverage was
+unchanged at 55,095/64,241 regions, 34,272/39,438 lines, 5,555/6,968
+branches, and 2,655/3,259 functions. MCP source evidence still marks
+`image.rs:1233-1234`, `1238`, `1241`, `1247`, `1250`, and `1253-1254` red.
+
+The public inputs reached the documented fusion-shaped workflows but not these
+defensive identity arms: CPU and SIMD fusion return before the identity check
+when an explicit mode is present, and the registered combined dispatch did not
+enter the remaining Paletted/Bytes/Pipeline match arms. The temporary matrix
+was pruned. The already-covered `Loaded` arm remains evidence that ordinary
+same-source fusion is reachable; the other arms are currently classified as
+internal reachability rather than retained input targets.
+
+## First-target audit: `pillow-rs-py/src/lib.rs`
+
+The first input-driven pass used Coverage MCP snapshot
+`dbedfb50-985d-452f-b2db-df4ab018654c` after adding a public sequence
+descriptor and six parity-validated `putdata`/`putpixel` stimuli. The file is
+now at 4,966/6,311 regions (78.688%), 3,294/3,885 lines (84.788%),
+303/360 branches (84.167%), and 452/575 functions (78.609%). Compared with
+the initial snapshot, this recovered 60 regions, 35 lines, and 8 branches;
+the aggregate suite recovered 60 regions and moved from 85.172% to 85.265%
+region coverage.
+
+The remaining `putdata_value_from_python` conversion arms are covered. The
+remaining red conversion region is the final `Invalid` arm of
+`putpixel_value_from_python`: an input containing a non-numeric member reaches
+the target, but the source and target expose different public error messages,
+so it cannot be retained as an honest parity case without changing behavior or
+comparison policy.
+
+Most of this file is correctly binding-owned: PyO3 extraction, Python
+sequence/type-slot checks, Python callback invocation, filesystem/file-like
+I/O, `PyErr` mapping, and conversion of Rust results into Python objects. The
+actual image semantics and validation are delegated to `pillow-rs`. The one
+clear algorithmic duplicate is the `_core.mesh_flatten` compatibility helper
+around lines 2239-2256; public `Image.transform` already flattens real mesh
+data in `pillow-rs/src/ops/transform.rs`, while no active public workflow calls
+the standalone helper. It is therefore classified as an architectural cleanup,
+not an input-driven coverage target for this pass.
+
+Conversions do not automatically cover every conversion branch. Exact
+`list`/`tuple`/`bytes` values intentionally take bulk fast paths before the
+per-item converter; defaults and internal-only entry points bypass other arms;
+and unsupported Python object shapes are not expressible as valid
+parity-equivalent inputs. The new generic sequence cases cover the valid
+non-fast-path contract without weakening expected results.
+
+| Rank | File | Missing regions | Missing lines | Missing branches | Missing functions | Initial disposition |
+|---:|---|---:|---:|---:|---:|---|
+| 1 | [pillow-rs/src/compute/pool_simd/ops/scalar.rs](../pillow-rs/src/compute/pool_simd/ops/scalar.rs) | 1078 | 565 | 254 | 18 | reachability audit; public dispatch currently bypasses several scalar arms |
+| 2 | [pillow-rs/src/raster/dynamic.rs](../pillow-rs/src/raster/dynamic.rs) | 852 | 460 | 2 | 57 | internal type matrix; not a supported public-input target |
+| 3 | [pillow-rs/src/image.rs](../pillow-rs/src/image.rs) | 847 | 471 | 79 | 78 | targeted public-input audit; many lifecycle/invariant paths |
+| 4 | [pillow-rs/src/compute/pool_simd/ops/adapters.rs](../pillow-rs/src/compute/pool_simd/ops/adapters.rs) | 742 | 417 | 196 | 14 | reachability audit; adapter guards and unsupported layouts |
+| 5 | [pillow-rs/src/compute/pool_gpu/mod.rs](../pillow-rs/src/compute/pool_gpu/mod.rs) | 735 | 561 | 210 | 43 | do not force; cache/device/failure paths are safety-sensitive |
+| 6 | [pillow-rs/src/compute/registry.rs](../pillow-rs/src/compute/registry.rs) | 530 | 281 | 111 | 11 | internal registry/backend permutations |
+| 7 | [pillow-rs/src/compute/pool_cpu/ops/color.rs](../pillow-rs/src/compute/pool_cpu/ops/color.rs) | 286 | 109 | 22 | 2 | conditional public-input audit; verify route before adding cases |
+| 8 | [pillow-rs/src/compute/mod.rs](../pillow-rs/src/compute/mod.rs) | 285 | 236 | 18 | 47 | internal backend control/telemetry helpers |
+| 9 | [pillow-rs/src/raster/traits/primitive.rs](../pillow-rs/src/raster/traits/primitive.rs) | 225 | 132 | 48 | 14 | generic trait instantiations not reached by supported inputs |
+| 10 | [pillow-rs/src/lib.rs](../pillow-rs/src/lib.rs) | 210 | 216 | 0 | 37 | public/core entry-point audit |
+| 11 | [pillow-rs/src/compute/pool_cpu/ops/chops.rs](../pillow-rs/src/compute/pool_cpu/ops/chops.rs) | 208 | 175 | 10 | 18 | targeted public-input audit |
+| 12 | [pillow-rs/src/compute/pool_cpu/ops/effects.rs](../pillow-rs/src/compute/pool_cpu/ops/effects.rs) | 197 | 127 | 41 | 34 | targeted public-input audit |
+| 13 | [pillow-rs/src/compute/pool_simd/mod.rs](../pillow-rs/src/compute/pool_simd/mod.rs) | 150 | 108 | 17 | 11 | backend dispatch reachability audit |
+| 14 | [pillow-rs/src/compute/pool_cpu/ops/imageops.rs](../pillow-rs/src/compute/pool_cpu/ops/imageops.rs) | 139 | 69 | 12 | 6 | targeted public-input audit |
+| 15 | [pillow-rs/src/font/imagingft.rs](../pillow-rs/src/font/imagingft.rs) | 133 | 43 | 18 | 11 | defer; font lane excluded from this campaign |
+| 16 | [pillow-rs/src/ops/analysis.rs](../pillow-rs/src/ops/analysis.rs) | 124 | 53 | 28 | 0 | targeted public-input audit |
+| 17 | [pillow-rs/src/draw/mod.rs](../pillow-rs/src/draw/mod.rs) | 123 | 91 | 36 | 13 | targeted public-input audit |
+| 18 | [pillow-rs/src/compute/pool_cpu/ops/draw.rs](../pillow-rs/src/compute/pool_cpu/ops/draw.rs) | 111 | 65 | 61 | 2 | targeted public-input audit |
+| 19 | [pillow-rs/src/ops/convert.rs](../pillow-rs/src/ops/convert.rs) | 100 | 30 | 10 | 10 | targeted public-input audit |
+| 20 | [pillow-rs/src/raster/color/from_color.rs](../pillow-rs/src/raster/color/from_color.rs) | 93 | 46 | 0 | 8 | reachability audit; generic color conversion matrix |
+| 21 | [pillow-rs/src/color.rs](../pillow-rs/src/color.rs) | 90 | 39 | 1 | 7 | targeted public-input audit |
+| 22 | [pillow-rs/src/ops/pil_resize.rs](../pillow-rs/src/ops/pil_resize.rs) | 78 | 49 | 43 | 4 | targeted public-input audit |
+| 23 | [pillow-rs/src/raster/color/from_primitive.rs](../pillow-rs/src/raster/color/from_primitive.rs) | 77 | 40 | 0 | 8 | generic conversion matrix; likely unsupported public types |
+| 24 | [pillow-rs/src/compute/pool_cpu/ops/filter.rs](../pillow-rs/src/compute/pool_cpu/ops/filter.rs) | 70 | 49 | 29 | 7 | targeted public-input audit |
+| 25 | [pillow-rs/src/ops/paste.rs](../pillow-rs/src/ops/paste.rs) | 68 | 13 | 0 | 10 | targeted public-input audit |
+| 26 | [pillow-rs/src/compute/pool_cpu/ops/geometry.rs](../pillow-rs/src/compute/pool_cpu/ops/geometry.rs) | 65 | 23 | 26 | 7 | targeted public-input audit |
+| 27 | [pillow-rs/src/ops/utils.rs](../pillow-rs/src/ops/utils.rs) | 65 | 48 | 14 | 2 | zero-coverage utility; reachability audit |
+| 28 | [pillow-rs/src/ops/quantize.rs](../pillow-rs/src/ops/quantize.rs) | 61 | 38 | 36 | 2 | targeted public-input audit |
+| 29 | [pillow-rs/src/ops/imageops.rs](../pillow-rs/src/ops/imageops.rs) | 59 | 18 | 10 | 3 | targeted public-input audit |
+| 30 | [pillow-rs/src/font/pilfont.rs](../pillow-rs/src/font/pilfont.rs) | 52 | 16 | 0 | 12 | defer; font lane excluded from this campaign |
+| 31 | [pillow-rs/src/ops/transform.rs](../pillow-rs/src/ops/transform.rs) | 48 | 45 | 5 | 3 | targeted public-input audit |
+| 32 | [pillow-rs/src/compute/pool_cpu/mod.rs](../pillow-rs/src/compute/pool_cpu/mod.rs) | 36 | 19 | 9 | 4 | backend dispatch reachability audit |
+| 33 | [pillow-rs/src/ops/module_fns.rs](../pillow-rs/src/ops/module_fns.rs) | 36 | 17 | 10 | 0 | targeted public-input audit |
+| 34 | [pillow-rs/src/raster/color/pixel_rgb.rs](../pillow-rs/src/raster/color/pixel_rgb.rs) | 30 | 21 | 0 | 5 | generic pixel conversion reachability audit |
+| 35 | [pillow-rs/src/font/mod.rs](../pillow-rs/src/font/mod.rs) | 26 | 17 | 0 | 3 | defer; font lane excluded from this campaign |
+| 36 | [pillow-rs/src/ops/array.rs](../pillow-rs/src/ops/array.rs) | 25 | 10 | 2 | 7 | targeted public-input audit |
+| 37 | [pillow-rs/src/ops/crop.rs](../pillow-rs/src/ops/crop.rs) | 25 | 6 | 0 | 6 | targeted public-input audit |
+| 38 | [pillow-rs/src/ops/param_filters.rs](../pillow-rs/src/ops/param_filters.rs) | 24 | 2 | 0 | 2 | targeted public-input audit |
+| 39 | [pillow-rs/src/checked_dims.rs](../pillow-rs/src/checked_dims.rs) | 19 | 39 | 4 | 4 | bounded error cases; avoid unsafe allocation forcing |
+| 40 | [pillow-rs/src/raster/buffer.rs](../pillow-rs/src/raster/buffer.rs) | 17 | 15 | 5 | 1 | targeted public-input audit |
+| 41 | [pillow-rs/src/compute/pool_cpu/ops/enhance.rs](../pillow-rs/src/compute/pool_cpu/ops/enhance.rs) | 12 | 5 | 5 | 2 | targeted public-input audit |
+| 42 | [pillow-rs/src/ops/filter.rs](../pillow-rs/src/ops/filter.rs) | 7 | 5 | 0 | 1 | targeted public-input audit |
+| 43 | [pillow-rs/src/raster/color/pixel_luma.rs](../pillow-rs/src/raster/color/pixel_luma.rs) | 6 | 6 | 0 | 2 | generic pixel conversion reachability audit |
+| 44 | [pillow-rs/src/ops/rotate.rs](../pillow-rs/src/ops/rotate.rs) | 3 | 0 | 0 | 0 | targeted public-input audit |
+| 45 | [pillow-rs/src/ops/chops.rs](../pillow-rs/src/ops/chops.rs) | 2 | 0 | 0 | 0 | targeted public-input audit |
+| 46 | [pillow-rs/src/ops/enhance.rs](../pillow-rs/src/ops/enhance.rs) | 2 | 1 | 1 | 0 | targeted public-input audit |
+| 47 | [pillow-rs/src/ops/resize.rs](../pillow-rs/src/ops/resize.rs) | 2 | 1 | 0 | 1 | targeted public-input audit |
+| 48 | [pillow-rs/src/ops/split.rs](../pillow-rs/src/ops/split.rs) | 1 | 0 | 0 | 0 | targeted public-input audit |
+| 49 | [pillow-rs/src/ops/transpose.rs](../pillow-rs/src/ops/transpose.rs) | 1 | 1 | 0 | 0 | targeted public-input audit |
+| 50 | [pillow-rs/src/pipeline.rs](../pillow-rs/src/pipeline.rs) | 1 | 1 | 0 | 0 | pipeline reachability audit |
+| 51 | [pillow-rs/src/raster/traits/view.rs](../pillow-rs/src/raster/traits/view.rs) | 1 | 1 | 1 | 0 | generic view reachability audit |
+
+## Accepted input: `Thumbnail` size metadata
+
+Coverage MCP source context identified `image.rs:338` as the only uncovered
+arm in `known_pipeline_op_dimensions` for the public `Thumbnail` operation. A
+focused workflow using `Image.new("RGB", (46, 22), ...)`, the public
+`Image.thumbnail((23, 11), 0)`, the public `size` property, and final
+`tobytes` passed exact parity with every observation executed on both sides.
+The proportional dimensions are intentional: a non-proportional probe also
+exposed an existing target-vs-Pillow thumbnail aspect-ratio mismatch
+(`31x19` bounded by `23x11`), so it was not retained as a coverage input.
+
+The retained case was included in bounded all-GPU Coverage MCP run
+`8c16b69a-4630-4fd8-ab74-02c088fbe79e`, which passed in 190.157 seconds and
+ingested snapshot `ae6dc5b8-ff20-4523-b063-0f7fb957cc6b`. Compared with
+`b03eb6ff-68e8-471c-9c0a-4adc70b7afa1`, it added one covered line and two
+covered regions overall; `image.rs:338` recorded six hits. Aggregate coverage
+is now 34,278/39,438 lines and 55,105/64,241 regions, with no denominator,
+branch, or function changes.
+
+## Reachability disposition: SIMD scalar `posterize`
+
+Coverage MCP snapshot `ae6dc5b8-ff20-4523-b063-0f7fb957cc6b` still reports
+`pillow-rs/src/compute/pool_simd/ops/scalar.rs:87-106` red. The public
+`ImageOps.posterize` contract creates a pipeline only for logical modes `L`
+and `RGB`; the adapter's `native_byte_layout` covers both corresponding
+`DynamicImage` layouts before it can call `scalar::posterize`. Pillow's `P`
+case is the named `NotImplementedError` path, and alpha, CMYK, `I`, `F`, and
+16-bit modes fail the public mode check before a `Posterize` operation is
+queued. Therefore no supported public input can currently reach this scalar
+function without changing dispatch or public behavior; no synthetic or
+invalid case was retained.
+
+## Accepted input: GPU transpose composition planner
+
+The public adjacent-transpose workflow was first tested with eight valid
+`Image.transpose` pairs. That input was semantically correct but produced no
+new GPU fuser coverage because `Image::push_op` installed a prefix cache
+between mode-preserving operations. Disabling that cache was not retained:
+explicit mode selection then skipped the fuser, and adding a grayscale prefix
+caused the GPU preflight to route the mixed batch to CPU. The retained cases
+therefore use a public `ImageOps.grayscale` prefix followed by the transpose
+composition, which exercises the planner without a private probe or a GPU
+device allocation.
+
+The retained IDs are
+`after-grayscale-compose`, `after-grayscale-identity`,
+`after-grayscale-stop-at-invert`, `after-grayscale-rotate90`,
+`after-grayscale-rotate270`, `after-grayscale-transpose`,
+`after-grayscale-transverse`, and `after-grayscale-zero-dimensions`.
+Focused exact parity passed for all eight cases. The final bounded all-GPU
+Coverage MCP run was `3ad9dac8-8967-45ef-86b8-56f5e971624d`, completed in
+204.467 seconds, and ingested snapshot
+`6a0cad1b-41ae-44f5-a874-b401421d70cc`. Relative to the campaign baseline
+`ae6dc5b8-ff20-4523-b063-0f7fb957cc6b`, the snapshot reached 34,440/39,438
+lines, 55,322/64,241 regions, 5,579/6,968 branches, and 2,665/3,259
+functions. All lines in the helper range `pool_gpu/mod.rs:2558-2628` are now
+covered; one helper branch remains red. The explicit zero-dimension
+`tobytes` observation was not retained because Pillow returns empty bytes while
+the target rejects zero dimensions; the retained zero-dimension case observes
+only the public transpose result.
+
+## Accepted input: GPU safety fallback for negative Gaussian radius
+
+Pillow accepts negative `GaussianBlur` radii as a no-op. One hundred valid
+public pipeline cases, IDs
+`pipeline-composition.gpu-safety-negative-gaussian-000` through `-099`,
+cycle supported `L`, `RGB`, and `RGBA` images and use negative radii from
+`-1.0` through `-2.75` before materialization. Four representative cases
+passed focused CPU parity, and a focused GPU-selected case also passed.
+
+The registered bounded all-GPU Coverage MCP run
+`3fff204a-da5c-4344-a2be-0aa29e1327bd` passed in 205.677 seconds with no
+hang, timeout, cancellation, GPU-memory change, or setting change. It
+ingested snapshot `45f655ec-2e8c-44c3-adc6-f61cede3eb2e`. Compared with
+baseline `ae6dc5b8-ff20-4523-b063-0f7fb957cc6b`, aggregate coverage increased
+by one line, one region, and one branch, to 34,441/39,438 lines,
+55,323/64,241 regions, 5,580/6,968 branches, and 2,665/3,259 functions.
+Coverage MCP line evidence records 100 hits on
+`pillow-rs/src/compute/pool_gpu/mod.rs:3300`, the safety rejection return in
+`gpu_operation_is_safe`; the fallback occurs before GPU adapter/device
+initialization.
+
+A separate valid LUT-cache experiment was pruned after the focused
+GPU-selected run reported that the local environment enumerated no GPU
+adapter at `Image.blend`. It is not coverage evidence and no LUT cases remain
+in the maintained inputs. The earlier invalid scalar fallback batch likewise
+remains excluded from coverage claims.
+
+## Zero-gain audit: palette expansion before `ImageOps.equalize`
+
+One hundred public `P` workflows with an attached RGB palette were tested to
+look for a new route through `image.rs:2226-2247`. Four representative CPU
+cases and one GPU-selected case passed exact parity. The bounded all-GPU
+Coverage MCP run `f8a0ea26-87ba-4112-9282-f9cd6af912fd` passed in 209.338
+seconds and ingested snapshot `7e62fc40-0b77-4751-963f-84afb1e4e144`, but
+Coverage MCP reported zero aggregate delta: the palette expansion lines were
+already covered by existing inputs.
+
+A second 100-case public `PA` probe batch without an RGB palette also passed
+the oracle/target result comparison, but `ImageOps.equalize` rejects `PA` at
+the public mode check, so it did not reach the pipeline fallback. Its bounded
+all-GPU run `4f2693fe-e3b2-45b0-aa3b-6c8f93438582` passed in 195.314 seconds
+and ingested snapshot `81b0d745-96ec-4d02-a0d3-349908459bad`; it likewise
+produced zero aggregate delta. Narrow MCP evidence still shows
+`image.rs:2244` (the `execute_prepared` error arm) and `image.rs:2246` (the
+no-palette fallthrough) uncovered. Both batches were pruned from the
+maintained inputs because neither added honest coverage.
+
+## Zero-gain audit: typed SIMD `flip` fallback
+
+One hundred valid public `ImageOps.flip` workflows were temporarily added
+using `I` and `F` images with odd heights, targeting the packed scalar fallback
+at `pool_simd/ops/scalar.rs:185-186`. Focused CPU parity for representative
+cases and one GPU-selected parity case passed. The bounded all-GPU Coverage
+MCP run `cce5a613-4791-4ecd-b5de-02646e59be43` passed in 217.800 seconds and
+ingested snapshot `1014a5f5-4b71-4059-8fe6-24d354df485d`, but aggregate
+coverage was unchanged from snapshot
+`81b0d745-96ec-4d02-a0d3-349908459bad`.
+
+Line-level MCP evidence at the resulting snapshot records zero hits on both
+lines 185 and 186. The retained run log also contains no `typed-flip` case
+execution, so the public workflows did not reach this implementation path
+under the maintained coverage runner. The temporary batch was pruned; the
+scalar middle-row cleanup remains unproven through supported public inputs.
+
+## Accepted input: packed scalar fallback for public `RGBa` Chops
+
+Twenty-eight valid public `PIL.ImageChops` workflows were added for the
+premultiplied-alpha `RGBa` mode: four each for `multiply`, `screen`, `darker`,
+`lighter`, `difference`, `subtract_modulo`, and `add_modulo`. `RGBa` shares four-byte
+storage with `RGBA` but is intentionally excluded from the native straight-
+alpha byte adapters, so these cases exercise the packed scalar dual-image
+fallback. All seven representative operations passed focused exact parity.
+
+The bounded all-GPU Coverage MCP run
+`79b5c9bc-8fa6-4c95-abe2-60b9516548f0` passed in 195.176 seconds with exit
+code 0 and ingested snapshot `676010ed-d6db-4002-868d-cb6b9d344bca`. Relative
+to snapshot `1014a5f5-4b71-4059-8fe6-24d354df485d`, aggregate coverage gained
+7 lines, 12 regions, and 7 branches: 34,448/39,438 lines,
+55,335/64,241 regions, 5,587/6,968 branches, and 2,665/3,259 functions.
+MCP line evidence records hits on scalar fallback lines 332, 368, 396, 424,
+460, 493, and 526. A follow-up bounded run
+`6aeacd3d-a846-471c-94fb-cc1c1ddd9fe5` passed in 193.638 seconds and ingested
+snapshot `e4b2e00b-27aa-4163-b294-744d64635ccc`; relative to the first RGBa
+snapshot it added one line, two regions, and one branch, covering
+`scalar.rs:493`. The batch is retained; the straight-alpha `L` fallback arms
+at lines 360, 365, 452, and 457 remain red because supported native byte
+inputs route through the exact native adapters instead.
+
+## Accepted input: public nonzero-mask `ImageOps.autocontrast`
+
+One hundred valid public `PIL.ImageOps.autocontrast` workflows were added
+with a real selected pixel in the public `1` or `L` mask. The existing mask
+cases intentionally preserve Pillow's all-zero-mask identity behavior; this
+bounded matrix selects one mask pixel so the complementary histogram branch
+is exercised without embedding an output or calling a native helper. The
+image modes alternate between `L` and `RGB`, and the cases observe the public
+result bytes.
+
+Four representative cases passed focused exact CPU parity. The bounded
+all-GPU Coverage MCP run `a35ecc53-5d39-4ba1-b880-b83460024fc2` passed in
+195.126 seconds with exit code 0 and ingested snapshot
+`35502193-0867-4a4f-b641-0f5ed0799fab`; no hang, timeout, cancellation,
+GPU-memory change, or setting change occurred. Relative to the preceding
+snapshot `e4b2e00b-27aa-4163-b294-744d64635ccc`, aggregate coverage gained
+6 lines, 7 regions, and 2 branches: 34,455/39,438 lines,
+55,344/64,241 regions, 5,590/6,968 branches, and 2,665/3,259 functions.
+Coverage MCP source evidence confirms that
+`pillow-rs/src/compute/pool_cpu/ops/imageops.rs:180-181` is now covered.
+
+## Zero-gain audit: typed `I;16*` transpose arms
+
+One hundred public `I;16*` `Image.frombytes` transpose workflows were
+temporarily added across the four supported byte orders and five direct
+flip/rotate methods. Five representative CPU cases passed exact parity. The
+bounded all-GPU Coverage MCP run `543409eb-f201-4032-9753-2603c301c8d0`
+passed in 210.599 seconds with exit code 0 and ingested snapshot
+`b356f2aa-2b0a-4aca-a6a4-e8c681ff16e8`.
+
+Compared with the accepted snapshot
+`35502193-0867-4a4f-b641-0f5ed0799fab`, Coverage MCP reported zero delta in
+lines, regions, branches, and functions. The typed `DynamicImage` transpose
+arms therefore were not reached by these supported public workflows under
+the maintained coverage runner. The temporary matrix was pruned; no
+coverage or denominator data was changed.
+
+## Zero-gain audit: materialized empty-image `ImageChops.offset`
+
+Two valid public `ImageChops.offset(...).tobytes()` workflows were temporarily
+added for zero-width `L` and zero-height `RGBA` images to target the empty-image
+guard at `pillow-rs/src/compute/pool_simd/ops/scalar.rs:753`. Both focused CPU
+parity cases passed.
+
+The registered bounded all-GPU Coverage MCP run
+`503e7359-513d-4d3c-a6a0-9c3c23485588` passed in 196.316 seconds with exit code
+0 and no hang, timeout, cancellation, GPU-memory change, or setting change. It
+ingested snapshot `161c39da-85fd-4a88-a6dc-7757853a7bc1`. Compared with the
+accepted snapshot `35502193-0867-4a4f-b641-0f5ed0799fab`, Coverage MCP reported
+zero delta in lines, regions, branches, and functions. MCP line evidence still
+records zero hits on scalar offset line 753; the public workflows therefore did
+not reach that SIMD scalar helper under the maintained all-GPU coverage runner.
+The temporary two-case batch was pruned; no coverage or denominator data was
+changed.
+
+## Zero-gain audit: deferred `PutData` mode planner
+
+Four public `Image.open(...).putdata(...)` workflows (L/LA/RGB/RGBA) were
+temporarily added using committed/inline encoded inputs and immediate `.mode`
+observations. All four focused CPU parity cases passed.
+
+The bounded all-GPU Coverage MCP runs
+`258c04c1-8fb8-45f7-920d-7e6be9dc3bf9` and
+`93b111a6-7630-44b6-9409-90f5d3b1a8d2` passed in 207.964 and 196.917 seconds,
+respectively, with exit code 0 and ingested snapshots
+`022af5c5-3faa-46be-b998-f87b3fd23993` and
+`e62f172b-8d13-4a21-8fb5-bb50decb918b`. No hang, timeout, cancellation,
+GPU-memory change, or setting change occurred. Coverage MCP reported zero
+delta against accepted snapshot `0ce19b70-332c-4650-898d-c59c6bda6fae`.
+
+MCP source evidence shows `PipelineOp::PutData` is included in
+`op_preserves_mode`; `Image::mode` returns the source mode through that fast
+path before calling `known_pipeline_op_mode`. The red `PutData` planner branch
+is therefore unreachable through supported public inputs under the current
+core design. The temporary cases were pruned; no coverage or denominator data
+was changed.
+
+## Accepted input: large public transpose/transverse methods
+
+Coverage MCP source and dispatch evidence showed that the existing large
+transpose matrix covered methods `0-4` only. Those methods use the flip/rotate
+paths; the CPU tiled block at
+`pillow-rs/src/compute/pool_cpu/ops/geometry.rs:1332-1334` is selected by the
+public `TRANSPOSE` and `TRANSVERSE` methods (`5` and `6`). Eight bounded public
+workflows were added across `L`, `LA`, `RGB`, and `RGBA` at the existing
+`512x512` size.
+
+All eight cases passed focused exact CPU parity. The registered bounded
+all-GPU Coverage MCP run `7a587ec7-00a2-4e38-9b10-1219993c7c8d` passed in
+217.121 seconds with exit code 0 and ingested snapshot
+`3ba022a1-9b9b-4576-bb5d-e3b316bf4462`; no hang, timeout, cancellation,
+GPU-memory change, or setting change occurred. All 24 coverage plans
+completed with 10,128 passed and 0 failed cases. Compared with the accepted
+snapshot `161c39da-85fd-4a88-a6dc-7757853a7bc1`, Coverage MCP reported a gain
+of 2 lines, 12 regions, and 1 branch: 34,457/39,438 lines,
+55,356/64,241 regions, 5,591/6,968 branches, and 2,665/3,259 functions.
+The geometry file now has only nine uncovered lines; the tiled transpose
+region is no longer red.
+
+## Rejected probe: unsupported non-numeric `putpixel` value
+
+A temporary two-case probe used string values for public `Image.putpixel` to
+target the invalid-value classifier at `pillow-rs/src/image.rs:2813-2818`.
+The fixed manifest declares the public `value` parameter as `integer | number |
+sequence`, so contract validation rejected both inputs before parity execution.
+No Coverage MCP run was submitted and no coverage or denominator data changed.
+The temporary cases were pruned; this classifier remains outside the supported
+input surface.
+
+## Zero-gain audit: explicit YCbCr/HSV brightness fallback
+
+Two valid public `ImageEnhance.Brightness.enhance` workflows were temporarily
+added for explicit `YCbCr` and `HSV` images to target the no-alpha fallback at
+`pillow-rs/src/compute/pool_simd/ops/scalar.rs:133`. Both focused CPU parity
+cases passed exact parity, and the all-GPU coverage plan selected and passed
+both new case IDs.
+
+The registered bounded all-GPU Coverage MCP run
+`3d26a34a-9c07-4a70-8cba-90a12141206b` passed in 210.680 seconds with exit
+code 0 and ingested snapshot `0ce19b70-332c-4650-898d-c59c6bda6fae`; no hang,
+timeout, cancellation, GPU-memory change, or setting change occurred.
+Compared with the accepted snapshot `3ba022a1-9b9b-4576-bb5d-e3b316bf4462`,
+Coverage MCP reported zero delta in lines, regions, branches, and functions:
+34,457/39,438 lines, 55,356/64,241 regions, 5,591/6,968 branches, and
+2,665/3,259 functions. MCP line evidence still records zero hits on scalar
+line 133, so the public workflows did not reach that helper under the
+maintained all-GPU coverage runner. The temporary two-case batch was pruned;
+no coverage or denominator data was changed.

@@ -246,6 +246,25 @@ class BufferedArrayInterfaceValue(ArrayInterfaceValue):
         return memoryview(self._data)
 
 
+class PublicSequenceValue:
+    """Small public ``Sequence`` object that is not an exact list or tuple.
+
+    The binding deliberately has separate fast paths for exact built-in
+    sequences and the generic Python sequence protocol.  This object keeps
+    that distinction in the input language without reaching into private
+    target APIs or adding a native probe.
+    """
+
+    def __init__(self, items: tuple[Any, ...]):
+        self._items = items
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+    def __getitem__(self, index: int) -> Any:
+        return self._items[index]
+
+
 def decode_numpy_array(value: dict[str, Any]) -> Any:
     """Build a real buffer-backed array for valid ``fromarray`` parity."""
 
@@ -305,6 +324,18 @@ def decode_literal(
             return ArrayInterfaceValue(value)
         if protocol == "buffered-array-interface":
             return BufferedArrayInterfaceValue(value)
+        if protocol == "sequence":
+            items = value.get("items")
+            if not isinstance(items, list):
+                raise ValueError("sequence requires an items list")
+            return PublicSequenceValue(
+                tuple(decode_literal(item, side=side) for item in items)
+            )
+        if protocol == "list":
+            items = value.get("items")
+            if not isinstance(items, list):
+                raise ValueError("list requires an items list")
+            return [decode_literal(item, side=side) for item in items]
         if protocol == "getmesh":
             return DeformerValue(value)
         if protocol == "public-class":

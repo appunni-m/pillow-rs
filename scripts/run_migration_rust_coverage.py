@@ -50,6 +50,8 @@ INSTRUMENTED_EXTENSION_NAMES = (
 TARGET_BACKEND = os.environ.get("MIGRATION_TARGET_BACKEND", "cpu").strip().lower()
 if TARGET_BACKEND == "all":
     COVERAGE_BACKENDS = ("cpu", "simd")
+elif TARGET_BACKEND == "all-gpu":
+    COVERAGE_BACKENDS = ("cpu", "simd", "gpu")
 else:
     COVERAGE_BACKENDS = (TARGET_BACKEND,)
 COMMAND = {

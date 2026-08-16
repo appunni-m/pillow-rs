@@ -245,6 +245,7 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- min_filter.wgsl
 |   |   |   |       |-- mirror.wgsl
 |   |   |   |       |-- multiply.wgsl
+|   |   |   |       |-- multiply_screen.wgsl
 |   |   |   |       |-- offset.wgsl
 |   |   |   |       |-- overlay.wgsl
 |   |   |   |       |-- pad.wgsl
@@ -355,6 +356,8 @@ generated reports, build outputs, and package installs.
 |   |-- Cargo.toml
 |   |-- pyproject.toml
 |   |-- python/
+|   |   |-- RSPIL/
+|   |   |   `-- __init__.py
 |   |   `-- pillow_rs/
 |   |       |-- __init__.py
 |   |       |-- enums.py
@@ -381,13 +384,19 @@ generated reports, build outputs, and package installs.
 |   |-- build_migration_parity_manifest.py
 |   |-- check_bindings.py
 |   |-- check_migration_parity_inputs.py
+|   |-- check_pipeline_benchmark_budgets.py
 |   |-- check_public_api_boundary.py
 |   |-- check_repo_map.py
 |   |-- generate_migration_parity_docs.py
 |   |-- lint.sh
 |   |-- migration_parity_inventory.py
+|   |-- profile_migration_benchmark.py
 |   |-- report_migration_parity_region_coverage.py
+|   |-- report_pipeline_benchmark_coverage.py
+|   |-- report_pipeline_performance.py
+|   |-- report_pipeline_roadmap_status.py
 |   |-- review_migration_parity_cases.py
+|   |-- run_all_backend_tests.py
 |   |-- run_migration_benchmark.py
 |   |-- run_migration_coverage.py
 |   |-- run_migration_font_native_cases.py
