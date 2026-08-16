@@ -2559,6 +2559,59 @@ class WorkflowBuilder:
             )
             self._image_steps[cache_key] = step_id
             return step_id
+        if self.edge == "quantize-octree-sort":
+            if requested_mode != "RGB":
+                raise ValueError("quantize-octree-sort edge requires RGB mode")
+            # FASTOCTREE sorts the fixed fine cube, including empty buckets.
+            # Give a deterministic set of high-nibble buckets distinct
+            # frequencies so the public image path reaches the sorter's
+            # insertion-sort fallback instead of only its equal-count path.
+            size = self.scenario_size or [8256, 1]
+            seed = self.scenario_noise_seed or 0
+            bucket_count = 128
+            bucket_ids = list(range(bucket_count))
+            if seed % 5 == 1:
+                bucket_ids.reverse()
+            elif seed % 5 == 2:
+                bucket_ids = [((index * 37) + seed) % bucket_count for index in range(bucket_count)]
+            elif seed % 5 == 3:
+                bucket_ids = [
+                    ((index * 2) if index < bucket_count // 2 else (index * 2 + 1))
+                    % bucket_count
+                    for index in range(bucket_count)
+                ]
+            elif seed % 5 == 4:
+                bucket_ids = [
+                    (index // 2 if index % 2 == 0 else bucket_count - 1 - index // 2)
+                    for index in range(bucket_count)
+                ]
+            data = bytearray()
+            for index, bucket in enumerate(bucket_ids):
+                red = (bucket >> 8) * 16 + (seed + index) % 16
+                green = ((bucket >> 4) & 15) * 16 + (seed * 3 + index) % 16
+                blue = (bucket & 15) * 16 + (seed * 5 + index) % 16
+                weight = index + 1 if seed % 3 else bucket_count - index
+                data.extend((red, green, blue) * weight)
+            if len(data) != size[0] * size[1] * 3:
+                raise ValueError("quantize-octree-sort edge generated an invalid payload size")
+            data_desc = self.inline_bytes(
+                f"{label}-quantize-octree-sort",
+                bytes(data),
+                "application/octet-stream",
+            )
+            step_id = self.add_step(
+                "PIL.Image",
+                "frombytes",
+                receiver=None,
+                arguments={
+                    "mode": literal(requested_mode),
+                    "size": literal(size),
+                    "data": data_desc,
+                },
+                step_id=self.next_step_id(f"setup-{label}"),
+            )
+            self._image_steps[cache_key] = step_id
+            return step_id
         if self.edge == "convert-coverage-pattern" and label == "image":
             # Keep conversion coverage input-driven while varying the source
             # samples inside each public mode. Uniform Image.new values cover
@@ -11285,6 +11338,26 @@ def build_nuanced_cases(
                 "colors": literal(colors),
                 "method": literal(method),
                 "kmeans": literal(kmeans),
+            },
+            "observe_result": "tobytes",
+        }
+
+    def quantize_octree_sort_spec(pattern: int) -> dict[str, Any]:
+        """Build valid FASTOCTREE inputs with distinct fine-bucket counts."""
+
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.method",
+            "name": f"coverage-batch-quantize-octree-sort-{pattern}",
+            "mode": "RGB",
+            "size": [8256, 1],
+            "edge": "quantize-octree-sort",
+            "seed": 20260816 + pattern,
+            "values": {
+                "colors": literal((4, 8, 16, 32)[pattern % 4]),
+                "method": literal(2),
+                "kmeans": literal(0),
             },
             "observe_result": "tobytes",
         }
@@ -25998,6 +26071,9 @@ def build_nuanced_cases(
         # Coverage batch 2026-08-14y: exercise valid quantizer distributions
         # across median-cut, MAXCOVERAGE, and FASTOCTREE RGB/RGBA paths.
         *(quantize_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-16a: exercise the public FASTOCTREE sorter
+        # with distinct fine-bucket frequencies and its insertion fallback.
+        *(quantize_octree_sort_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14aa: exercise non-uniform public terminal
         # analysis inputs across every maintained source mode. The generator
         # writes only public pixels and masks; returned extrema, histograms,

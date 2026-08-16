@@ -541,6 +541,48 @@ not reach that SIMD scalar helper under the maintained all-GPU coverage runner.
 The temporary two-case batch was pruned; no coverage or denominator data was
 changed.
 
+## Zero-gain audit: scalar-source `Image.convert` destinations
+
+Four valid public `Image.convert` workflows (`I/F → CMYK` and `I/F → P`) were
+temporarily added to target the nonstandard-source branches at
+`pillow-rs/src/ops/convert.rs:423-429` and `794-804`. All four focused CPU
+parity cases passed exactly, and the registered coverage artifact selected all
+four case IDs.
+
+The registered bounded all-GPU Coverage MCP run
+`477fdfa2-caee-4e3c-9f24-c5028f054deb` passed in 196.844 seconds with exit
+code 0 and ingested snapshot
+`3b54f900-5fcc-4dcc-a054-ddafdc2c0f55`. No hang, timeout, cancellation,
+GPU-memory change, or setting change occurred. Compared with accepted snapshot
+`6edb6cb5-91d9-40c4-a05a-df175235662d`, Coverage MCP reported zero delta in
+lines, regions, branches, and functions: 34,472/39,438 lines,
+55,389/64,241 regions, 5,595/6,968 branches, and 2,667/3,259 functions.
+MCP source evidence still marks both target ranges red. The temporary
+four-case batch was pruned; no coverage, denominator, filter, output, hash, or
+threshold data was changed.
+
+## Zero-gain audit: paletted odd-height `ImageOps.flip`
+
+One valid public `PIL.ImageOps.flip` workflow on a `P` image with size `4x3`
+was temporarily added to target the packed SIMD fallback's odd-height middle
+row at `pillow-rs/src/compute/pool_simd/ops/scalar.rs:184-186`. The focused CPU
+parity case passed exactly, and the registered coverage artifact selected the
+case ID.
+
+The registered bounded all-GPU Coverage MCP run
+`25f5a59b-b12e-4f90-91a7-6bbbbed3f6a4` passed in 197.601 seconds with exit
+code 0 and ingested snapshot
+`b2632a21-f6f1-4edd-98fd-62dd6ebfc4bd`. No hang, timeout, cancellation,
+GPU-memory change, or setting change occurred. Compared with accepted snapshot
+`6edb6cb5-91d9-40c4-a05a-df175235662d`, Coverage MCP reported zero delta in
+lines, regions, branches, and functions: 34,472/39,438 lines,
+55,389/64,241 regions, 5,595/6,968 branches, and 2,667/3,259 functions.
+MCP source evidence still marks scalar lines 185-186 red and line 184 as a
+branch gap. The public case is valid, but the registered combined backend lane
+does not execute this SIMD scalar fallback for it. The temporary case was
+pruned; no coverage, denominator, filter, output, hash, or threshold data was
+changed.
+
 ## Zero-gain audit: deferred `PutData` mode planner
 
 Four public `Image.open(...).putdata(...)` workflows (L/LA/RGB/RGBA) were
@@ -614,3 +656,53 @@ Coverage MCP reported zero delta in lines, regions, branches, and functions:
 line 133, so the public workflows did not reach that helper under the
 maintained all-GPU coverage runner. The temporary two-case batch was pruned;
 no coverage or denominator data was changed.
+
+## Accepted input: public FASTOCTREE insertion-sort fallback
+
+One hundred valid public `PIL.Image.Image.quantize(method=2)` workflows were
+added with deterministic RGB `frombytes` payloads. Each payload uses 128
+distinct high-nibble octree buckets with distinct frequencies, varying bucket
+order, frequency order, and requested palette size. This is an ordinary
+supported quantization input; the payload generator stores no expected output
+or hash.
+
+Representative cases 0–3 passed focused exact CPU parity. The maintained input
+regeneration reproduced exactly. The input-check command then exposed one
+pre-existing contract-test failure in
+`test_grouped_benchmark_timing_excludes_result_encoding` (`StopIteration` from
+its mocked `time.perf_counter_ns`), after reporting that the parity inputs and
+crash quarantine reproduced exactly; this did not affect the parity cases.
+
+The registered bounded all-GPU Coverage MCP run
+`b7df908b-0d5e-413a-a4e3-a4eb675bbf48` passed in 206.805 seconds with exit
+code 0 and ingested snapshot `6edb6cb5-91d9-40c4-a05a-df175235662d`. No hang,
+timeout, cancellation, GPU-memory change, or setting change occurred.
+Compared with accepted snapshot `18badb14-932f-47c1-8f1e-380d13e2b1fa`,
+Coverage MCP reported +6 lines, +13 regions, +4 branches, and +1 function:
+34,472/39,438 lines, 55,389/64,241 regions, 5,595/6,968 branches, and
+2,667/3,259 functions. MCP line evidence marks
+`pillow-rs/src/ops/quantize.rs:1521` and `1632-1635` improved, with hits
+1116, 1512, 1512, 396, and 1116 respectively. The batch is retained.
+
+## Zero-gain audit: `Image.merge` → `putdata` mode-cache probe
+
+Four valid public `Image.merge(...).putdata(...)` workflows (L/LA/RGB/RGBA)
+were temporarily added with immediate `.mode` observations to target the
+deferred `PutData` mode planner and `pixel_mode_name` at
+`pillow-rs/src/image.rs:240-255,276`. All four focused CPU parity cases passed
+exactly, and the registered coverage artifact selected all four case IDs.
+
+The registered bounded all-GPU Coverage MCP run
+`c61c6523-af8e-4816-a53a-447d786a7680` passed in 193.253 seconds with exit
+code 0 and ingested snapshot
+`931000a9-cca0-4fc6-8459-6f9acd90704e`. No hang, timeout, cancellation,
+GPU-memory change, or setting change occurred. Compared with accepted snapshot
+`6edb6cb5-91d9-40c4-a05a-df175235662d`, Coverage MCP reported zero delta in
+lines, regions, branches, and functions: 34,472/39,438 lines,
+55,389/64,241 regions, 5,595/6,968 branches, and 2,667/3,259 functions.
+MCP source evidence still marks `pixel_mode_name` lines 240-255 and the
+`PutData` planner return at line 276 as uncovered. Under the current public
+pipeline semantics, these inputs therefore do not reach the intended helper
+despite being valid and parity-correct. The temporary four-case batch was
+pruned; no coverage, denominator, filter, output, hash, or threshold data was
+changed.
