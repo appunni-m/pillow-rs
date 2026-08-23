@@ -145,30 +145,6 @@ class Image(_PILImageBase):
         return cls(RustImage.new(mode, size, color))
 
     @classmethod
-    def blend(
-        cls, im1: "Image", im2: "Image", alpha: float
-    ) -> "Image":
-        """Deprecated pillow-rs-only alias for :func:`pillow_rs.blend`."""
-        rust_image = RustImage.blend(im1._rust_image, im2._rust_image, alpha)
-        return cls(rust_image)
-
-    @classmethod
-    def composite(
-        cls, image1: "Image", image2: "Image", mask: "Image"
-    ) -> "Image":
-        """Deprecated pillow-rs-only alias for :func:`pillow_rs.composite`."""
-        rust_image = RustImage.composite(
-            image1._rust_image, image2._rust_image, mask._rust_image
-        )
-        return cls(rust_image)
-
-    @classmethod
-    def merge(cls, mode: str, bands: Tuple["Image", ...]) -> "Image":
-        """Deprecated pillow-rs-only alias for :func:`pillow_rs.merge`."""
-        rust_image = RustImage.merge(mode, bands)
-        return cls(rust_image)
-
-    @classmethod
     def effect_noise(cls, size: Tuple[int, int], sigma: float) -> "Image":
         """Generate Gaussian noise image."""
         return cls(RustImage.effect_noise_from_size(size, sigma))

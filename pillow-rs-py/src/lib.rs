@@ -1436,69 +1436,6 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    /// Deprecated pillow-rs-only alias for the module-level `pillow_rs.blend`.
-    ///
-    /// The maintained Python facade calls `_core.image_blend` directly. Keep
-    /// this wrapper behavior-free and in sync only until the compatibility
-    /// surface can be removed; this is not part of Pillow's `Image.Image` API.
-    #[deprecated(note = "pillow-rs-only alias; use the module-level pillow_rs.blend wrapper")]
-    #[classmethod]
-    fn blend(
-        _cls: &Bound<'_, PyType>,
-        image1: &Bound<'_, PyImage>,
-        image2: &Bound<'_, PyImage>,
-        alpha: f64,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let im1 = image1.borrow().inner.clone();
-        let im2 = image2.borrow().inner.clone();
-        py.allow_threads(|| pillow_rs::image_blend(&im1, &im2, alpha))
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error)
-    }
-
-    /// Deprecated pillow-rs-only alias for the module-level `pillow_rs.composite`.
-    ///
-    /// The maintained Python facade calls `_core.image_composite` directly.
-    /// Keep this wrapper behavior-free and in sync only until the compatibility
-    /// surface can be removed; this is not part of Pillow's `Image.Image` API.
-    #[deprecated(note = "pillow-rs-only alias; use the module-level pillow_rs.composite wrapper")]
-    #[classmethod]
-    fn composite(
-        _cls: &Bound<'_, PyType>,
-        image1: &Bound<'_, PyImage>,
-        image2: &Bound<'_, PyImage>,
-        mask: &Bound<'_, PyImage>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let im1 = image1.borrow().inner.clone();
-        let im2 = image2.borrow().inner.clone();
-        let m = mask.borrow().inner.clone();
-        py.allow_threads(|| pillow_rs::image_composite(&im1, &im2, &m))
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error)
-    }
-
-    /// Deprecated pillow-rs-only alias for the module-level `pillow_rs.merge`.
-    ///
-    /// The maintained Python facade calls `_core.image_merge` directly. Keep
-    /// this wrapper behavior-free and in sync only until the compatibility
-    /// surface can be removed; this is not part of Pillow's `Image.Image` API.
-    #[deprecated(note = "pillow-rs-only alias; use the module-level pillow_rs.merge wrapper")]
-    #[classmethod]
-    fn merge(
-        _cls: &Bound<'_, PyType>,
-        mode: &str,
-        bands: &Bound<'_, PyAny>,
-        py: Python<'_>,
-    ) -> PyResult<PyImage> {
-        let inputs = merge_inputs_from_python(bands)?;
-        let mode = mode.to_owned();
-        py.allow_threads(|| pillow_rs::image_merge_inputs(&mode, &inputs))
-            .map(|img| PyImage { inner: img })
-            .map_err(map_error)
-    }
-
     fn close(&self) -> PyResult<()> {
         // No-op: Rust's Drop handles cleanup
         Ok(())
