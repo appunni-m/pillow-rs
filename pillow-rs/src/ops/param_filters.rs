@@ -549,6 +549,9 @@ impl Image {
             return Err(PilError::ValueError("image has wrong mode".into()));
         }
 
+        // Color3DLUT stores its output mode in `explicit_mode`; Image::mode
+        // therefore returns it directly instead of entering the metadata
+        // planner for this operation.
         Ok(Image::push_mode_changing_op(
             self,
             PipelineOp::Color3DLut {
