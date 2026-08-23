@@ -108,7 +108,13 @@ pub enum PipelineOp {
         /// Optional dither method.
         dither: Option<DitherMethod>,
     },
-    /// Quantize image colors to a palette.
+    /// Legacy deferred quantization descriptor.
+    ///
+    /// The public [`Image::quantize`](crate::Image::quantize) implementation
+    /// owns quantization and materializes the palette directly. This variant
+    /// remains only for compatibility with internally constructed registry
+    /// operations and is not produced by a supported public pipeline.
+    #[deprecated(note = "legacy deferred quantization; use Image::quantize instead")]
     Quantize {
         /// Requested palette color count.
         colors: u32,
@@ -376,14 +382,24 @@ pub enum PipelineOp {
         /// Vertical offset.
         y: i32,
     },
-    /// Blend with another image.
+    /// Legacy ImageChops blend descriptor.
+    ///
+    /// Public `ImageChops.blend` uses [`BlendModule`](Self::BlendModule),
+    /// which carries the module-level mode and size contract. This older
+    /// descriptor is retained for internal registry/GPU compatibility only.
+    #[deprecated(note = "legacy ImageChops blend descriptor; use PipelineOp::BlendModule")]
     Blend {
         /// Second image argument supplied to the operation.
         other: Arc<Image>,
         /// Blend alpha.
         alpha: f64,
     },
-    /// Composite with another image using a mask.
+    /// Legacy ImageChops composite descriptor.
+    ///
+    /// Public `ImageChops.composite` uses [`CompositeModule`](Self::CompositeModule),
+    /// which carries the module-level mask and canvas contract. This older
+    /// descriptor is retained for internal registry/GPU compatibility only.
+    #[deprecated(note = "legacy ImageChops composite descriptor; use PipelineOp::CompositeModule")]
     Composite {
         /// Second image argument supplied to the operation.
         other: Arc<Image>,
@@ -486,7 +502,12 @@ pub enum PipelineOp {
     },
 
     // ── Point operations (lookup table) ──
-    /// Apply a point lookup table.
+    /// Legacy CPU point-operation descriptor.
+    ///
+    /// Public point/eval calls use [`Eval`](Self::Eval). This descriptor is
+    /// retained for internal GPU LUT fusion and is not a public pipeline
+    /// construction path.
+    #[deprecated(note = "legacy point descriptor; use PipelineOp::Eval")]
     PointOp {
         /// Lookup table.
         lut: Arc<[u8]>,
@@ -568,19 +589,31 @@ pub enum PipelineOp {
     },
 
     // ── Gradient generation (ImageModule) ──
-    /// Generate a linear gradient.
+    /// Legacy deferred linear-gradient descriptor.
+    ///
+    /// The public module constructor materializes the gradient eagerly. This
+    /// variant is retained for internal registry compatibility only.
+    #[deprecated(note = "legacy deferred gradient; use the public linear_gradient constructor")]
     LinearGradient {
         /// Output mode.
         mode: ColorMode,
     },
-    /// Generate a radial gradient.
+    /// Legacy deferred radial-gradient descriptor.
+    ///
+    /// The public module constructor materializes the gradient eagerly. This
+    /// variant is retained for internal registry compatibility only.
+    #[deprecated(note = "legacy deferred gradient; use the public radial_gradient constructor")]
     RadialGradient {
         /// Output mode.
         mode: ColorMode,
     },
 
     // ── Fractal generation (ImageModule) ──
-    /// Generate a Mandelbrot image.
+    /// Legacy deferred Mandelbrot descriptor.
+    ///
+    /// The public module constructor materializes the effect eagerly. This
+    /// variant is retained for internal registry compatibility only.
+    #[deprecated(note = "legacy deferred Mandelbrot; use the public effect_mandelbrot constructor")]
     EffectMandelbrot {
         /// Target width of the produced image, in pixels.
         w: u32,

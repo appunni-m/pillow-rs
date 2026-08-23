@@ -265,8 +265,13 @@ pub fn op_convert(
     }
 }
 
-/// Quantize image to a palette of `colors` entries.
-/// Uses median-cut quantization, matching PIL's behavior.
+/// Legacy registry quantization implementation.
+///
+/// The supported public [`Image::quantize`](crate::Image::quantize) path owns
+/// palette construction, alpha handling, and method validation. This simpler
+/// deferred operation is retained only for internally constructed
+/// `PipelineOp::Quantize` values; no supported public pipeline creates one.
+#[deprecated(note = "legacy deferred quantization; use Image::quantize instead")]
 pub fn op_quantize(
     img: &DynamicImage,
     colors: usize,
