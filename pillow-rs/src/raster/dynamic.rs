@@ -10,6 +10,7 @@ use super::color::{self, ColorType, Luma, LumaA, Rgb, Rgba};
 use super::traits::{GenericImageView, Pixel, Primitive};
 use image_slash_star::DecodedImage;
 
+use crate::pipeline::TransposeMethod;
 use crate::raster::color::FromColor;
 
 macro_rules! dynamic_map(
@@ -81,6 +82,27 @@ where
     let (width, height) = image.dimensions();
     ImageBuffer::from_fn(height, width, |x, y| {
         *image.get_pixel(width.saturating_sub(1).saturating_sub(y), x)
+    })
+}
+
+fn transpose_diagonal<P>(
+    image: &ImageBuffer<P, Vec<P::Subpixel>>,
+    method: &TransposeMethod,
+) -> ImageBuffer<P, Vec<P::Subpixel>>
+where
+    P: Pixel,
+{
+    let (width, height) = image.dimensions();
+    ImageBuffer::from_fn(height, width, |x, y| {
+        let (source_x, source_y) = match method {
+            TransposeMethod::Transpose => (y, x),
+            TransposeMethod::Transverse => (
+                width.saturating_sub(1).saturating_sub(y),
+                height.saturating_sub(1).saturating_sub(x),
+            ),
+            _ => unreachable!("diagonal transpose helper received another method"),
+        };
+        *image.get_pixel(source_x, source_y)
     })
 }
 
@@ -941,6 +963,42 @@ impl DynamicImage {
             DynamicImage::ImageRgb32F(p) => DynamicImage::ImageRgb32F(rotate_counter_clockwise(p)),
             DynamicImage::ImageRgba32F(p) => {
                 DynamicImage::ImageRgba32F(rotate_counter_clockwise(p))
+            }
+        }
+    }
+
+    /// Apply a diagonal transpose while retaining the image's native pixel type.
+    pub(crate) fn transpose_diagonal(&self, method: &TransposeMethod) -> DynamicImage {
+        match self {
+            DynamicImage::ImageLuma8(image) => {
+                DynamicImage::ImageLuma8(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageLumaA8(image) => {
+                DynamicImage::ImageLumaA8(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageRgb8(image) => {
+                DynamicImage::ImageRgb8(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageRgba8(image) => {
+                DynamicImage::ImageRgba8(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageLuma16(image) => {
+                DynamicImage::ImageLuma16(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageLumaA16(image) => {
+                DynamicImage::ImageLumaA16(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageRgb16(image) => {
+                DynamicImage::ImageRgb16(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageRgba16(image) => {
+                DynamicImage::ImageRgba16(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageRgb32F(image) => {
+                DynamicImage::ImageRgb32F(transpose_diagonal(image, method))
+            }
+            DynamicImage::ImageRgba32F(image) => {
+                DynamicImage::ImageRgba32F(transpose_diagonal(image, method))
             }
         }
     }

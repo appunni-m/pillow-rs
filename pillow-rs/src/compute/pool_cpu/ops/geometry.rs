@@ -1213,55 +1213,7 @@ pub fn execute_transpose(
             Ok(img.rotate90())
         }
         TransposeMethod::Transpose | TransposeMethod::Transverse => {
-            let (width, height) = img.dimensions();
-            let channels = img.color().channel_count() as usize;
-            let source = img.as_bytes();
-            let mut output = CheckedDims::new(height, width, channels as u8)?.alloc_buffer();
-            let output_stride = height as usize * channels;
-
-            if should_tile_transpose(width, height) {
-                transpose_bytes_tiled(source, &mut output, width, height, channels, method);
-                return raw_bytes_to_image(height, width, output, channels);
-            }
-
-            #[cfg(feature = "parallel")]
-            crate::par_rows_mut!(
-                &mut output,
-                output_stride,
-                width as usize,
-                |_row_start, _row_end, output_y, row| {
-                    let output_y = output_y as u32;
-                    for output_x in 0..height {
-                        let (source_x, source_y) = if matches!(method, TransposeMethod::Transpose) {
-                            (output_y, output_x)
-                        } else {
-                            (width - 1 - output_y, height - 1 - output_x)
-                        };
-                        let source_index = (source_y * width + source_x) as usize * channels;
-                        let output_index = output_x as usize * channels;
-                        row[output_index..output_index + channels]
-                            .copy_from_slice(&source[source_index..source_index + channels]);
-                    }
-                }
-            );
-
-            #[cfg(not(feature = "parallel"))]
-            for output_y in 0..width {
-                let output_start = output_y as usize * output_stride;
-                let row = &mut output[output_start..output_start + output_stride];
-                for output_x in 0..height {
-                    let (source_x, source_y) = if matches!(method, TransposeMethod::Transpose) {
-                        (output_y, output_x)
-                    } else {
-                        (width - 1 - output_y, height - 1 - output_x)
-                    };
-                    let source_index = (source_y * width + source_x) as usize * channels;
-                    let output_index = output_x as usize * channels;
-                    row[output_index..output_index + channels]
-                        .copy_from_slice(&source[source_index..source_index + channels]);
-                }
-            }
-            raw_bytes_to_image(height, width, output, channels)
+            Ok(img.transpose_diagonal(method))
         }
     }
 }
