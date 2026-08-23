@@ -350,57 +350,12 @@ impl DynamicImage {
         }
     }
 
-    /// Returns a copy of this image as an RGB image (16-bit).
-    #[must_use]
-    pub fn to_rgb16(&self) -> ImageBuffer<Rgb<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageRgb16(x) => x.clone(),
-            _x => self.to_generic::<Rgb<u16>>(),
-        }
-    }
-
-    /// Returns a copy of this image as an RGBA image (16-bit).
-    #[must_use]
-    pub fn to_rgba16(&self) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageRgba16(x) => x.clone(),
-            _x => self.to_generic::<Rgba<u16>>(),
-        }
-    }
-
     /// Returns a copy of this image as a Luma image (16-bit).
     #[must_use]
     pub fn to_luma16(&self) -> ImageBuffer<Luma<u16>, Vec<u16>> {
         match self {
             DynamicImage::ImageLuma16(x) => x.clone(),
             _x => self.to_generic::<Luma<u16>>(),
-        }
-    }
-
-    /// Returns a copy of this image as a LumaA image (16-bit).
-    #[must_use]
-    pub fn to_luma_alpha16(&self) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageLumaA16(x) => x.clone(),
-            _x => self.to_generic::<LumaA<u16>>(),
-        }
-    }
-
-    /// Returns a copy of this image as an RGB image (f32).
-    #[must_use]
-    pub fn to_rgb32f(&self) -> Rgb32FImage {
-        match self {
-            DynamicImage::ImageRgb32F(x) => x.clone(),
-            _x => self.to_generic::<Rgb<f32>>(),
-        }
-    }
-
-    /// Returns a copy of this image as an RGBA image (f32).
-    #[must_use]
-    pub fn to_rgba32f(&self) -> Rgba32FImage {
-        match self {
-            DynamicImage::ImageRgba32F(x) => x.clone(),
-            _x => self.to_generic::<Rgba<f32>>(),
         }
     }
 
@@ -469,57 +424,12 @@ impl DynamicImage {
         }
     }
 
-    /// Consume the image and returns a RGB image (16-bit).
-    #[must_use]
-    pub fn into_rgb16(self) -> ImageBuffer<Rgb<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageRgb16(x) => x,
-            x => x.to_rgb16(),
-        }
-    }
-
-    /// Consume the image and returns a RGBA image (16-bit).
-    #[must_use]
-    pub fn into_rgba16(self) -> ImageBuffer<Rgba<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageRgba16(x) => x,
-            x => x.to_rgba16(),
-        }
-    }
-
     /// Consume the image and returns a Luma image (16-bit).
     #[must_use]
     pub fn into_luma16(self) -> ImageBuffer<Luma<u16>, Vec<u16>> {
         match self {
             DynamicImage::ImageLuma16(x) => x,
             x => x.to_luma16(),
-        }
-    }
-
-    /// Consume the image and returns a LumaA image (16-bit).
-    #[must_use]
-    pub fn into_luma_alpha16(self) -> ImageBuffer<LumaA<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageLumaA16(x) => x,
-            x => x.to_luma_alpha16(),
-        }
-    }
-
-    /// Consume the image and returns a RGB image (f32).
-    #[must_use]
-    pub fn into_rgb32f(self) -> Rgb32FImage {
-        match self {
-            DynamicImage::ImageRgb32F(x) => x,
-            x => x.to_rgb32f(),
-        }
-    }
-
-    /// Consume the image and returns a RGBA image (f32).
-    #[must_use]
-    pub fn into_rgba32f(self) -> Rgba32FImage {
-        match self {
-            DynamicImage::ImageRgba32F(x) => x,
-            x => x.to_rgba32f(),
         }
     }
 
