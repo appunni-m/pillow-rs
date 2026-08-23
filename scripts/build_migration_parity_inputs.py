@@ -7890,6 +7890,13 @@ def pipeline_composition_cases(
                         "arguments": {"alpha": literal(192)},
                     },
                     {
+                        "step_id": "mode-after-alpha",
+                        "surface": "PIL.Image.Image",
+                        "operation": "mode",
+                        "receiver": binding("setup-image"),
+                        "arguments": {},
+                    },
+                    {
                         "step_id": "setup-filter",
                         "surface": "PIL.ImageFilter",
                         "operation": "GaussianBlur",
@@ -7919,7 +7926,12 @@ def pipeline_composition_cases(
                     },
                     materialize("inverted"),
                 ],
-                "observations": ["alpha-set", "blurred", "materialize"],
+                "observations": [
+                    "alpha-set",
+                    "mode-after-alpha",
+                    "blurred",
+                    "materialize",
+                ],
             },
             {
                 "case_id": "pipeline-composition.la-putpixel-convert-mirror",
