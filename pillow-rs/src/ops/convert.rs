@@ -147,8 +147,6 @@ pub enum PythonConvertPaletteInput {
     None,
     /// A symbolic palette name.
     Name(String),
-    /// A host image object, which Pillow treats as the palette argument.
-    Image,
     /// A value of another host type.
     Invalid(String),
 }
@@ -204,7 +202,7 @@ impl Image {
         }
 
         let palette = match palette {
-            PythonConvertPaletteInput::None | PythonConvertPaletteInput::Image => None,
+            PythonConvertPaletteInput::None => None,
             PythonConvertPaletteInput::Name(name) => Some(name),
             // Pillow accepts and ignores palette values for the public
             // conversion paths exercised here; only the target mode and
