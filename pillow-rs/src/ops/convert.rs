@@ -415,6 +415,9 @@ impl Image {
             // For mode "L" etc., derive from the RGB result.
             let result = if mode == "CMYK" {
                 if matches!(src_mode, "I" | "F") {
+                    // DEPRECATED deferred compatibility arm: the preceding
+                    // scalar-source dispatch handles public I/F conversions
+                    // before this non-standard-source fallback is reached.
                     // Pillow's Convert.c sends I/F sources through the
                     // grayscale-to-CMYK path, not the RGB inverse: C=M=Y=0
                     // and K=255-gray.  The old Rust path inverted the
