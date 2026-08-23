@@ -16,13 +16,6 @@ pub struct FreeTypeFont {
     engine: imagingft::FontEngine,
 }
 
-/// Pillow `ImageFont.ImageFont`-compatible bitmap font handle.
-///
-/// The implementation type remains [`pilfont::PilFont`] internally because a
-/// Pillow bitmap font is loaded from `.pil` metrics plus a sibling glyph image.
-/// The root public alias uses Pillow's base class name.
-pub type ImageFont = pilfont::PilFont;
-
 /// Optional Pillow `ImageFont.truetype()` constructor arguments.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ImageFontLoadOptions {

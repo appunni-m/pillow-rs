@@ -165,7 +165,6 @@ pub use crate::draw::normalize_rounded_rectangle_box;
 pub use crate::draw::outline_curve_points;
 pub use crate::error::PilError;
 pub use crate::font::FreeTypeFont;
-pub use crate::font::ImageFont;
 pub use crate::font::ImageFontBBoxValue;
 pub use crate::font::ImageFontFaceInfo;
 pub use crate::font::ImageFontLoadOptions;
