@@ -1210,11 +1210,11 @@ pub fn op_transform(
             Ok(preserve_mode(img, result))
         }
         &TransformMethod::Mesh => {
-            if data.len() < 12 {
-                return Err(PilError::ValueError(
-                    "Mesh transform needs at least 12 values per element".into(),
-                ));
-            }
+            // `Image::transform_public` validates every mesh record and
+            // flattens it into complete twelve-value elements before queuing
+            // this operation. The old public raw-data wrapper was removed, so
+            // malformed mesh descriptors are outside the supported input
+            // boundary.
             let result = transform_mesh(img, w, h, data, fill);
             Ok(preserve_mode(img, result?))
         }
