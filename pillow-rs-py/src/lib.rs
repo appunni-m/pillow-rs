@@ -339,9 +339,6 @@ fn centering_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::CenteringInput 
 }
 
 fn image_from_python(value: &Bound<'_, PyAny>) -> Option<RsImage> {
-    if let Ok(image) = value.downcast::<PyImage>() {
-        return Some(image.borrow().inner.clone());
-    }
     value.getattr("_rust_image").ok().and_then(|inner| {
         inner
             .downcast::<PyImage>()
