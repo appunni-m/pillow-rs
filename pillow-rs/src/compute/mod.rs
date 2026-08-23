@@ -421,16 +421,6 @@ pub(crate) trait BackendImpl: Send + Sync {
 
 // ── Modules ────────────────────────────────────────────────────────────────
 
-// AS PER DESIGN — DO NOT REMOVE:
-// backend_op: BackendOp trait for per-backend capability detection
-// op_def:     define_op! macro — single-definition op registration
-/// Per-backend capability trait used by operation descriptors.
-#[allow(dead_code)]
-pub(crate) mod backend_op;
-/// Macro-backed operation registration helpers.
-#[allow(dead_code)]
-pub(crate) mod op_def;
-
 mod pool_cpu;
 #[cfg(feature = "gpu")]
 mod pool_gpu;

@@ -97,7 +97,6 @@ use std::collections::BTreeMap;
 //   - checked_dims:  Only way to allocate image buffers (no overflow, no DoS)
 //   - par:           Approved parallelization macros (no raw rayon; native default)
 //   - image_utils:   Canonical buffer conversion (no duplicate copies)
-//   - compute::op_def: Declarative op registration (no parallel match arms)
 // ============================================================================
 
 /// Validated image dimensions and allocation-size helpers.

@@ -169,9 +169,7 @@ generated reports, build outputs, and package installs.
 |   |   |-- checked_dims.rs
 |   |   |-- color.rs
 |   |   |-- compute/
-|   |   |   |-- backend_op.rs
 |   |   |   |-- mod.rs
-|   |   |   |-- op_def.rs
 |   |   |   |-- pool_cpu/
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
