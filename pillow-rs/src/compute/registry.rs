@@ -1191,7 +1191,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     use crate::compute::pool_cpu::ops::effects::{
         op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module,
         op_effect_mandelbrot, op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste,
-        op_point, op_put_alpha, op_put_alpha_data, op_put_data, op_put_pixel, op_transform,
+        op_put_alpha, op_put_alpha_data, op_put_data, op_put_pixel, op_transform,
     };
     use crate::compute::pool_cpu::ops::enhance::{
         op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast,
@@ -2308,7 +2308,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::PointOp { lut } = op {
-                    op_point(img, lut)
+                    // PointOp is an internal LUT-fusion descriptor; share the
+                    // public Eval implementation so validation and semantics
+                    // cannot drift between the two operation forms.
+                    op_eval(img, lut)
                 } else {
                     Err(PilError::ValueError("expected PointOp op".into()))
                 }
