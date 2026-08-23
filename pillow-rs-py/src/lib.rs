@@ -2182,14 +2182,6 @@ impl PyFont {
         Ok(PyFont { inner: font })
     }
 
-    fn getbbox(&self, text: &str) -> PyResult<(i32, i32, i32, i32)> {
-        pillow_rs::imagefont_getbbox(&self.inner, text).map_err(map_error)
-    }
-
-    fn getbbox_bytes(&self, text: Vec<u8>) -> PyResult<(i32, i32, i32, i32)> {
-        pillow_rs::imagefont_getbbox_bytes(&self.inner, &text).map_err(map_error)
-    }
-
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None))]
     fn getbbox_with_options(
         &self,
@@ -2219,14 +2211,6 @@ impl PyFont {
             &options,
         )
         .map_err(map_error)
-    }
-
-    fn getmask_alpha(&self, text: &str) -> PyResult<(u32, u32, Vec<u8>)> {
-        pillow_rs::imagefont_getmask(&self.inner, text).map_err(map_error)
-    }
-
-    fn getmask_alpha_bytes(&self, text: Vec<u8>) -> PyResult<(u32, u32, Vec<u8>)> {
-        pillow_rs::imagefont_getmask_bytes(&self.inner, &text).map_err(map_error)
     }
 
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None))]
@@ -2289,50 +2273,6 @@ impl PyFont {
         Ok(PyImage { inner })
     }
 
-    #[pyo3(signature = (text, start=None))]
-    fn getmask2_image(
-        &self,
-        text: &str,
-        start: Option<(f64, f64)>,
-    ) -> PyResult<(PyImage, (i32, i32))> {
-        let (width, height, pixels, offset) = match start {
-            None => pillow_rs::imagefont_getmask2(&self.inner, text),
-            Some(start) => pillow_rs::imagefont_getmask2_with_start(&self.inner, text, start),
-        }
-        .map_err(map_error)?;
-        let inner = pillow_rs::imagefont_mask_image(
-            width,
-            height,
-            pixels,
-            &pillow_rs::ImageFontTextOptions::default(),
-        )
-        .map_err(map_error)?;
-        Ok((PyImage { inner }, offset))
-    }
-
-    #[pyo3(signature = (text, start=None))]
-    fn getmask2_image_bytes(
-        &self,
-        text: Vec<u8>,
-        start: Option<(f64, f64)>,
-    ) -> PyResult<(PyImage, (i32, i32))> {
-        let (width, height, pixels, offset) = match start {
-            None => pillow_rs::imagefont_getmask2_bytes(&self.inner, &text),
-            Some(start) => {
-                pillow_rs::imagefont_getmask2_bytes_with_start(&self.inner, &text, start)
-            }
-        }
-        .map_err(map_error)?;
-        let inner = pillow_rs::imagefont_mask_image(
-            width,
-            height,
-            pixels,
-            &pillow_rs::ImageFontTextOptions::default(),
-        )
-        .map_err(map_error)?;
-        Ok((PyImage { inner }, offset))
-    }
-
     #[pyo3(signature = (text, mode=None, direction=None, features=None, language=None, stroke_width=0.0, anchor=None, ink=None, start=None, stroke_filled=false, has_args=false, has_kwargs=false))]
     fn getmask2_image_with_options(
         &self,
@@ -2381,14 +2321,6 @@ impl PyFont {
 
     fn getlength(&self, text: &str) -> PyResult<i32> {
         pillow_rs::imagefont_native_getlength_26dot6(&self.inner, text).map_err(map_error)
-    }
-
-    fn getlength_alpha(&self, text: &str) -> PyResult<f32> {
-        pillow_rs::imagefont_getlength(&self.inner, text).map_err(map_error)
-    }
-
-    fn getlength_bytes(&self, text: Vec<u8>) -> PyResult<f32> {
-        pillow_rs::imagefont_getlength_bytes(&self.inner, &text).map_err(map_error)
     }
 
     fn getsize(&self, text: &str) -> PyResult<((i32, i32), (i32, i32))> {
