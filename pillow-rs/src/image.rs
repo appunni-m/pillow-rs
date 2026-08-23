@@ -194,8 +194,6 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::LogicalOr { .. }
             | PipelineOp::LogicalXor { .. }
             | PipelineOp::Offset { .. }
-            | PipelineOp::Blend { .. }
-            | PipelineOp::Composite { .. }
             | PipelineOp::Duplicate
             | PipelineOp::InvertChops
             | PipelineOp::Brightness { .. }
@@ -3493,12 +3491,10 @@ impl Image {
             | PipelineOp::LogicalAnd { other }
             | PipelineOp::LogicalOr { other }
             | PipelineOp::LogicalXor { other }
-            | PipelineOp::Blend { other, .. }
             | PipelineOp::BlendModule { other, .. } => {
                 Arc::make_mut(other).lock_backend_recursive(b);
             }
-            PipelineOp::Composite { other, mask }
-            | PipelineOp::CompositeModule { other, mask, .. } => {
+            PipelineOp::CompositeModule { other, mask, .. } => {
                 Arc::make_mut(other).lock_backend_recursive(b);
                 Arc::make_mut(mask).lock_backend_recursive(b);
             }

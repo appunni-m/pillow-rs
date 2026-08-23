@@ -2334,8 +2334,6 @@ fn extract_second_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, Pi
         | PipelineOp::LogicalAnd { other }
         | PipelineOp::LogicalOr { other }
         | PipelineOp::LogicalXor { other }
-        | PipelineOp::Blend { other, .. }
-        | PipelineOp::Composite { other, .. }
         | PipelineOp::BlendModule { other, .. }
         | PipelineOp::CompositeModule { other, .. } => Some(other),
         PipelineOp::AlphaComposite { source, .. } => Some(source),
@@ -2350,7 +2348,7 @@ fn extract_second_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, Pi
 /// Returns shared materialized pixels ready for GPU upload.
 fn extract_third_image(op: &PipelineOp) -> Result<Option<Arc<DynamicImage>>, PilError> {
     let arc_img: Option<&std::sync::Arc<crate::image::Image>> = match op {
-        PipelineOp::Composite { mask, .. } | PipelineOp::CompositeModule { mask, .. } => Some(mask),
+        PipelineOp::CompositeModule { mask, .. } => Some(mask),
         PipelineOp::Paste { mask, .. } => mask.as_ref(),
         _ => None,
     };
@@ -2850,7 +2848,6 @@ fn gpu_auxiliary_shapes_are_safe(
                 }
         }
         PipelineOp::CompositeModule { .. } => third == Some(current),
-        PipelineOp::Composite { .. } => second == Some(current) && third == Some(current),
         PipelineOp::PutAlphaData { .. } => third == Some(current),
         PipelineOp::AlphaComposite { .. } => second == Some(current),
         _ => match (second, third) {
@@ -3043,7 +3040,6 @@ fn gpu_auxiliary_modes_are_safe(
             | PipelineOp::LogicalAnd { .. }
             | PipelineOp::LogicalOr { .. }
             | PipelineOp::LogicalXor { .. }
-            | PipelineOp::Blend { .. }
             | PipelineOp::BlendModule { .. }
             | PipelineOp::Paste { .. }
             | PipelineOp::AlphaComposite { .. }
@@ -3336,7 +3332,7 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
                 && (*offset as f32) as f64 == *offset
                 && offset.fract() == 0.0
         }
-        PipelineOp::Blend { alpha, .. } | PipelineOp::BlendModule { alpha, .. } => {
+        PipelineOp::BlendModule { alpha, .. } => {
             alpha.is_finite() && (*alpha == 0.0 || *alpha == 1.0)
         }
         PipelineOp::Scale { factor, .. } => {
@@ -4136,12 +4132,6 @@ mod tests {
 
     #[test]
     fn blend_shaders_match_the_public_direction_and_alpha_contracts() {
-        let blend = super::registry::gpu_shader_source_for_key("Blend")
-            .expect("registry lookup must succeed")
-            .expect("Blend must retain its shader source");
-        assert!(blend.contains("ar * inv_alpha + br * alpha"));
-        assert!(blend.contains("let out_a = 255u;"));
-
         let blend_module = super::registry::gpu_shader_source_for_key("BlendModule")
             .expect("registry lookup must succeed")
             .expect("BlendModule must retain its shader source");
@@ -4341,13 +4331,6 @@ mod tests {
         assert!(super::registry::gpu_supports(&PipelineOp::Sharpness { factor: 1.0 }).unwrap());
         let blend_other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
         assert!(
-            !super::registry::gpu_supports(&PipelineOp::Blend {
-                other: blend_other.clone(),
-                alpha: 0.5,
-            })
-            .unwrap()
-        );
-        assert!(
             !super::registry::gpu_supports(&PipelineOp::BlendModule {
                 other: blend_other,
                 alpha: 0.5,
@@ -4357,23 +4340,9 @@ mod tests {
         let exact_blend_other =
             std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
         assert!(
-            !super::registry::gpu_supports(&PipelineOp::Blend {
-                other: exact_blend_other.clone(),
-                alpha: 127.0 / 255.0,
-            })
-            .unwrap()
-        );
-        assert!(
             !super::registry::gpu_supports(&PipelineOp::BlendModule {
                 other: exact_blend_other.clone(),
                 alpha: 127.0 / 255.0,
-            })
-            .unwrap()
-        );
-        assert!(
-            super::registry::gpu_supports(&PipelineOp::Blend {
-                other: exact_blend_other.clone(),
-                alpha: 0.0,
             })
             .unwrap()
         );
@@ -4467,13 +4436,6 @@ mod tests {
         );
         let other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
         let mask = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Composite {
-                other: other.clone(),
-                mask: mask.clone(),
-            })
-            .unwrap()
-        );
         assert!(
             !super::registry::gpu_supports(&PipelineOp::CompositeModule {
                 other,

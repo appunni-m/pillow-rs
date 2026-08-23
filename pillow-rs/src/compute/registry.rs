@@ -161,12 +161,8 @@ pub enum OpId {
     HardLight,
     /// Dispatch key for the shader that performs soft-light blending.
     SoftLight,
-    /// Dispatch key for the shader that blends two images by alpha.
-    Blend,
     /// Dispatch key for the module-level blend shader path.
     BlendModule,
-    /// Dispatch key for the shader that composites with a mask.
-    Composite,
     /// Dispatch key for the module-level composite shader path.
     CompositeModule,
     /// Dispatch key for the shader that applies box blur.
@@ -375,8 +371,6 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::LogicalXor { .. } => "LogicalXor",
         PipelineOp::Constant { .. } => "Constant",
         PipelineOp::Offset { .. } => "Offset",
-        PipelineOp::Blend { .. } => "Blend",
-        PipelineOp::Composite { .. } => "Composite",
         PipelineOp::Duplicate => "Duplicate",
         PipelineOp::InvertChops => "InvertChops",
         PipelineOp::Brightness { .. } => "Brightness",
@@ -540,20 +534,18 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // integer in that expression, while the integer shader lands on the
         // mathematical rational.  Only the endpoint alphas are universally
         // bit-exact across both paths; all interpolating requests stay CPU.
-        PipelineOp::Blend { alpha, .. } | PipelineOp::BlendModule { alpha, .. } => {
+        PipelineOp::BlendModule { alpha, .. } => {
             alpha.is_finite() && (*alpha == 0.0 || *alpha == 1.0)
         }
         // The old Color3DLut source is intentionally a pass-through and is no
         // longer registered as a GPU implementation, but keep this guard next
         // to the other contract checks if a source is reintroduced.
         PipelineOp::Color3DLut { .. } => false,
-        // Both composite variants have public mode/canvas contracts that the
-        // retained single-dispatch shaders do not fully carry: ImageChops
-        // composite rounds RGB channels and preserves alpha from image1,
-        // while Image.composite writes image2's canvas/mode. Keep these
-        // shader assets available for validation, but use the CPU path until
-        // the binding and output-mode contracts are explicit.
-        PipelineOp::Composite { .. } | PipelineOp::CompositeModule { .. } => false,
+        // Image.composite writes image2's canvas/mode, which the retained
+        // single-dispatch module path does not fully carry. Keep this public
+        // operation on CPU until the binding and output-mode contracts are
+        // explicit.
+        PipelineOp::CompositeModule { .. } => false,
         // Pillow's overlay family is implemented through exact 256x256 LUTs;
         // the compact WGSL formulas are only approximations at rounding
         // boundaries. Keep these operations on the CPU until the LUT is
@@ -705,8 +697,6 @@ pub fn op_id(op: &PipelineOp) -> Option<OpId> {
         PipelineOp::LogicalXor { .. } => Some(OpId::LogicalXor),
         PipelineOp::Constant { .. } => Some(OpId::Constant),
         PipelineOp::Offset { .. } => Some(OpId::Offset),
-        PipelineOp::Blend { .. } => Some(OpId::Blend),
-        PipelineOp::Composite { .. } => Some(OpId::Composite),
         PipelineOp::Duplicate => Some(OpId::Duplicate),
         PipelineOp::InvertChops => Some(OpId::InvertChops),
         PipelineOp::Brightness { .. } => Some(OpId::Brightness),
@@ -833,8 +823,7 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
         | PipelineOp::LogicalXor { .. }
         | PipelineOp::Overlay { .. }
         | PipelineOp::HardLight { .. }
-        | PipelineOp::SoftLight { .. }
-        | PipelineOp::Composite { .. } => vec![],
+        | PipelineOp::SoftLight { .. } => vec![],
 
         // ── CompositeModule: mask_alpha ──
         PipelineOp::CompositeModule { mask_alpha, .. } => vec![*mask_alpha as u32],
@@ -899,8 +888,8 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
             vec![(*scale as f32).to_bits(), (*offset as f32).to_bits()]
         }
 
-        // ── Blend / BlendModule: alpha * 255 as u32 ──
-        PipelineOp::Blend { alpha, .. } | PipelineOp::BlendModule { alpha, .. } => {
+        // ── BlendModule: alpha * 255 as u32 ──
+        PipelineOp::BlendModule { alpha, .. } => {
             vec![(alpha.clamp(0.0, 1.0) * 255.0) as u32]
         }
 
@@ -1186,8 +1175,8 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
 fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {
     use crate::compute::pool_cpu::ops::chops::{
-        op_chops_add, op_chops_add_modulo, op_chops_blend, op_chops_composite, op_chops_constant,
-        op_chops_darker, op_chops_difference, op_chops_duplicate, op_chops_hard_light,
+        op_chops_add, op_chops_add_modulo, op_chops_constant, op_chops_darker,
+        op_chops_difference, op_chops_duplicate, op_chops_hard_light,
         op_chops_invert, op_chops_lighter, op_chops_logical_and, op_chops_logical_or,
         op_chops_logical_xor, op_chops_multiply, op_chops_offset, op_chops_overlay,
         op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
@@ -2062,32 +2051,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                 }
             },
             "offset.wgsl"
-        ),
-    );
-    m.insert(
-        "Blend",
-        gpu_entry!(
-            |img, op, _mode| {
-                if let PipelineOp::Blend { other, alpha } = op {
-                    op_chops_blend(img, other, *alpha)
-                } else {
-                    Err(PilError::ValueError("expected Blend op".into()))
-                }
-            },
-            "blend.wgsl"
-        ),
-    );
-    m.insert(
-        "Composite",
-        gpu_entry!(
-            |img, op, _mode| {
-                if let PipelineOp::Composite { other, mask } = op {
-                    op_chops_composite(img, other, mask)
-                } else {
-                    Err(PilError::ValueError("expected Composite op".into()))
-                }
-            },
-            "composite.wgsl"
         ),
     );
     m.insert(
