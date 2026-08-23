@@ -122,46 +122,61 @@ fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
 // Native byte transforms always operate on L/LA/RGB/RGBA layouts. Keeping
 // their active-channel masks in one table avoids duplicating an input-driven
 // branch in every closure monomorphization of `native_byte_transform`.
+const NATIVE_BYTE_ZERO_MASK: [u8; 16] = [0; 16];
+const NATIVE_BYTE_ALL_MASK: [u8; 16] = [u8::MAX; 16];
+const NATIVE_BYTE_LA_MASK: [u8; 16] = [
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+    u8::MAX,
+    0,
+];
+const NATIVE_BYTE_RGBA_MASK: [u8; 16] = [
+    u8::MAX,
+    u8::MAX,
+    u8::MAX,
+    0,
+    u8::MAX,
+    u8::MAX,
+    u8::MAX,
+    0,
+    u8::MAX,
+    u8::MAX,
+    u8::MAX,
+    0,
+    u8::MAX,
+    u8::MAX,
+    u8::MAX,
+    0,
+];
+
 const NATIVE_BYTE_ACTIVE_MASKS: [[u8; 16]; 5] = [
-    [0; 16],
-    [u8::MAX; 16],
-    [
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-        u8::MAX,
-        0,
-    ],
-    [u8::MAX; 16],
-    [
-        u8::MAX,
-        u8::MAX,
-        u8::MAX,
-        0,
-        u8::MAX,
-        u8::MAX,
-        u8::MAX,
-        0,
-        u8::MAX,
-        u8::MAX,
-        u8::MAX,
-        0,
-        u8::MAX,
-        u8::MAX,
-        u8::MAX,
-        0,
-    ],
+    NATIVE_BYTE_ZERO_MASK,
+    NATIVE_BYTE_ALL_MASK,
+    NATIVE_BYTE_LA_MASK,
+    NATIVE_BYTE_ALL_MASK,
+    NATIVE_BYTE_RGBA_MASK,
+];
+
+// `invert_alpha as usize` selects preserve-alpha (false) or invert-alpha
+// (true). Native inversion dispatch supplies only channel counts 1..=4.
+const NATIVE_BYTE_INVERT_MASKS: [[&[u8; 16]; 2]; 5] = [
+    [&NATIVE_BYTE_ZERO_MASK, &NATIVE_BYTE_ZERO_MASK],
+    [&NATIVE_BYTE_ALL_MASK, &NATIVE_BYTE_ALL_MASK],
+    [&NATIVE_BYTE_LA_MASK, &NATIVE_BYTE_ALL_MASK],
+    [&NATIVE_BYTE_ALL_MASK, &NATIVE_BYTE_ALL_MASK],
+    [&NATIVE_BYTE_RGBA_MASK, &NATIVE_BYTE_ALL_MASK],
 ];
 
 #[inline]
@@ -233,37 +248,23 @@ where
 /// keeps alpha bytes unchanged when Pillow's operation does not invert alpha,
 /// while still allowing LA/RGBA to use the same interleaved path.
 fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
-    let active_channels = if !invert_alpha && matches!(channels, 2 | 4) {
-        channels - 1
-    } else {
-        channels
-    };
-    let mut active = [0u8; 16];
-    for (index, slot) in active.iter_mut().enumerate() {
-        let channel = index % channels;
-        *slot = if channel < active_channels {
-            u8::MAX
-        } else {
-            0
-        };
-    }
-    let active = u8x16::new(active);
-    let inactive = u8x16::splat(u8::MAX) - active;
+    let active = NATIVE_BYTE_INVERT_MASKS[channels][invert_alpha as usize];
+    let active_vector = u8x16::new(*active);
+    let inactive = u8x16::splat(u8::MAX) - active_vector;
     let mut chunks = bytes.chunks_exact_mut(16);
     for chunk in &mut chunks {
         let input =
             <[u8; 16]>::try_from(&*chunk).expect("chunks_exact_mut yields 16-byte chunks");
         let input = u8x16::new(input);
         let inverted = u8x16::splat(u8::MAX) - input;
-        let output = (inverted & active) | (input & inactive);
+        let output = (inverted & active_vector) | (input & inactive);
         chunk.copy_from_slice(&output.to_array());
     }
     let remainder = chunks.into_remainder();
     for (index, value) in remainder.iter_mut().enumerate() {
-        let channel = index % channels;
-        if channel < active_channels {
-            *value = u8::MAX - *value;
-        }
+        let mask = active[index % 16];
+        let inverted = u8::MAX - *value;
+        *value = (inverted & mask) | (*value & !mask);
     }
 }
 
