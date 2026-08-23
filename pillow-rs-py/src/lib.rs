@@ -2156,25 +2156,6 @@ impl PyFont {
     }
 
     #[staticmethod]
-    #[pyo3(signature = (data, size, index=0, encoding="", layout_engine=None))]
-    fn truetype_from_bytes(
-        data: Vec<u8>,
-        size: f64,
-        index: usize,
-        encoding: &str,
-        layout_engine: Option<String>,
-    ) -> PyResult<Self> {
-        let options = pillow_rs::ImageFontLoadOptions {
-            index: Some(index),
-            encoding: (!encoding.is_empty()).then(|| encoding.to_owned()),
-            layout_engine,
-        };
-        let font = pillow_rs::imagefont_from_bytes_with_options(data, size as f32, &options)
-            .map_err(map_error)?;
-        Ok(PyFont { inner: font })
-    }
-
-    #[staticmethod]
     #[pyo3(signature = (size=None))]
     fn load_default(size: Option<f32>) -> PyResult<Self> {
         let sz = size.unwrap_or(10.0);
