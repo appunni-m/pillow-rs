@@ -2,7 +2,7 @@
 //! These implement PIL-compatible color mode conversion, quantization, and palette remapping.
 
 use crate::checked_dims::CheckedDims;
-use crate::color::{pil_grayscale, pil_grayscale_truncate};
+use crate::color::pil_grayscale;
 use crate::error::PilError;
 use crate::image::preserve_mode;
 use crate::ops::quantize::median_cut_quantize_rgb;
@@ -12,12 +12,9 @@ use crate::raster::GenericImageView;
 
 /// Convert image to a specified color mode.
 /// Matches PIL's Image.convert() behavior exactly.
-/// `explicit_mode` is the PIL mode string on the source image.
 pub fn op_convert(
     img: &DynamicImage,
     mode: &ColorMode,
-    dither: Option<&DitherMethod>,
-    explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     match mode {
         ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?)),
@@ -26,12 +23,8 @@ pub fn op_convert(
             let (w, h) = gray.dimensions();
             let mut ga = crate::raster::GrayAlphaImage::new(w, h);
             // Pillow's convert.c carries the source alpha through an RGBA
-            // to LA conversion.  RGBX uses an unused byte instead of alpha,
-            // while CMYK/I/F are four-byte storage formats rather than alpha
-            // images; those modes therefore retain the opaque default.
-            let source_alpha = if matches!(img.color(), crate::raster::ColorType::Rgba8)
-                && !matches!(explicit_mode, Some("RGBX" | "CMYK" | "I" | "F"))
-            {
+            // to LA conversion. Non-RGBA source layouts use opaque alpha.
+            let source_alpha = if matches!(img.color(), crate::raster::ColorType::Rgba8) {
                 Some(
                     img.as_bytes()
                         .chunks_exact(4)
@@ -52,108 +45,12 @@ pub fn op_convert(
             Ok(DynamicImage::ImageLumaA8(ga))
         }
         ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
-        ColorMode::RGBA => {
-            if explicit_mode == Some("RGBX") {
-                // RGBX uses the same four-byte storage as RGBA, but its X byte
-                // is padding rather than opacity. Pillow expands it to an
-                // opaque RGBA pixel during conversion.
-                let rgb = img.to_rgb8();
-                let (w, h) = rgb.dimensions();
-                let mut out = crate::raster::RgbaImage::new(w, h);
-                for (output, input) in out.pixels_mut().zip(rgb.pixels()) {
-                    *output = crate::raster::Rgba([input[0], input[1], input[2], 255]);
-                }
-                Ok(DynamicImage::ImageRgba8(out))
-            } else {
-                Ok(DynamicImage::ImageRgba8(img.to_rgba8()))
-            }
-        }
-        ColorMode::Mode1 => {
-            // DEPRECATED deferred compatibility arm: the public Image::convert
-            // path materializes binary threshold/dither conversions eagerly.
-            // PIL uses TRUNCATED grayscale for convert("1") (dither or no dither)
-            // while convert("L") uses ROUNDED grayscale.
-            // CMYK mode: proper CMYK→RGB→L conversion before thresholding.
-            let gray = if explicit_mode == Some("CMYK") {
-                crate::color::cmyk_to_grayscale_truncate(img)?
-            } else {
-                pil_grayscale_truncate(img)?
-            };
-            let (w, h) = gray.dimensions();
-            let mut out = crate::raster::GrayImage::new(w, h);
-            match dither {
-                Some(DitherMethod::None) => {
-                    // Threshold at 128 (no dither)
-                    for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
-                        op[0] = if gp[0] >= 128 { 255 } else { 0 };
-                    }
-                }
-                _ => {
-                    // PIL-compatible Floyd-Steinberg dither using PIL's scaled-error pattern.
-                    // Single errors array [w+1]; running l0/l1 carry error between rows.
-                    // Truncation-toward-zero division, no intermediate clipping.
-                    let mut errors = vec![0i32; (w + 1) as usize];
-                    let src: Vec<i32> = gray.pixels().map(|p| p[0] as i32).collect();
-                    let mut fs_out = CheckedDims::new(w, h, 1)?.alloc_buffer();
-                    let wu = w as usize;
-                    for y in 0..h as usize {
-                        let mut l = 0i32;
-                        let mut l0: i32 = 0;
-                        let mut l1: i32 = 0;
-                        for x in 0..wu {
-                            let idx = y * wu + x;
-                            let acc = l + errors[x + 1];
-                            let v = src[idx] + acc / 16;
-                            let v = v.clamp(0, 255);
-                            let new = if v > 128 { 255i32 } else { 0i32 };
-                            fs_out[idx] = new as u8;
-                            l = v - new;
-                            let l2 = l;
-                            let d2 = l + l;
-                            l += d2;
-                            errors[x] = l + l0;
-                            l += d2;
-                            l0 = l + l1;
-                            l1 = l2;
-                            l += d2;
-                        }
-                    }
-                    for (op, &gp) in out.pixels_mut().zip(fs_out.iter()) {
-                        op[0] = gp;
-                    }
-                }
-            }
-            Ok(DynamicImage::ImageLuma8(out))
-        }
-        ColorMode::P => {
-            // DEPRECATED deferred compatibility arm: public palette conversion
-            // is owned by Image::convert/quantize before pipeline dispatch.
-            // convert("P") = quantize(256) with dither
-            let rgb = img.to_rgb8();
-            let (w, h) = rgb.dimensions();
-            let n = CheckedDims::new(w, h, 1)?.total_pixels();
-            let rgb_raw = rgb.into_raw();
-            let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, 256);
-            let mut out = crate::raster::GrayImage::new(w, h);
-            for (i, pixel) in out.pixels_mut().enumerate().take(n) {
-                pixel[0] = indices.get(i).copied().unwrap_or(0);
-            }
-            Ok(DynamicImage::ImageLuma8(out))
-        }
+        ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
         ColorMode::I => {
-            // Convert to int32 mode: PIL stores rounded grayscale as int32 LE in RGBA.
-            // Use the luma formula directly (no intermediate u8 truncation).
-            // CMYK is stored in the RGBA container as C/M/Y/K, not as an
-            // ordinary RGBA pixel. Convert it through Pillow's CMYK->RGB
-            // path before deriving luma; otherwise a zero CMYK sample is
-            // incorrectly treated as black instead of white.
-            // DEPRECATED deferred compatibility arm: public CMYK->I conversion
-            // is materialized by Image::convert before this operation runs.
-            let rgb = if explicit_mode == Some("CMYK") {
-                crate::color::cmyk_to_rgb(img).to_rgb8()
-            } else {
-                img.to_rgb8()
-            };
+            // RGB-family sources use the deferred exact converter for I.
+            // CMYK/I/F source normalization is handled by Image::convert
+            // before this operation is queued.
+            let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             let mut out = crate::raster::RgbaImage::new(w, h);
             for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
@@ -162,30 +59,21 @@ pub fn op_convert(
                 let b = px[2] as i32;
                 // PIL's rounded luma: (19595*R + 38470*G + 7471*B + 32768) >> 16
                 let val = (19595i32 * r + 38470i32 * g + 7471i32 * b + 32768) >> 16;
-                let le = val.to_le_bytes();
-                *op = crate::raster::Rgba([le[0], le[1], le[2], le[3]]);
+                *op = crate::raster::Rgba(val.to_le_bytes());
             }
             Ok(DynamicImage::ImageRgba8(out))
         }
         ColorMode::F => {
-            // Convert to float32 mode using PIL's exact formula from rgb2f:
-            //   v = (r*299 + g*587 + b*114) / 1000.0F
-            // This computes the sum in integer arithmetic (matching PIL's `L` macro)
-            // then divides by 1000.0F as float, matching PIL pixel-for-pixel.
-            // DEPRECATED deferred compatibility arm: public CMYK->F conversion
-            // is materialized by Image::convert before this operation runs.
-            let rgb = if explicit_mode == Some("CMYK") {
-                crate::color::cmyk_to_rgb(img).to_rgb8()
-            } else {
-                img.to_rgb8()
-            };
+            // RGB-family sources use the deferred exact converter for F.
+            // CMYK/I/F source normalization is handled by Image::convert
+            // before this operation is queued.
+            let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
             let mut out = crate::raster::RgbaImage::new(w, h);
             for (op, px) in out.pixels_mut().zip(rgb.pixels()) {
                 let sum = px[0] as i32 * 299 + px[1] as i32 * 587 + px[2] as i32 * 114;
                 let val = sum as f32 / 1000.0_f32;
-                let le = val.to_le_bytes();
-                *op = crate::raster::Rgba([le[0], le[1], le[2], le[3]]);
+                *op = crate::raster::Rgba(val.to_le_bytes());
             }
             Ok(DynamicImage::ImageRgba8(out))
         }
@@ -199,19 +87,8 @@ pub fn op_convert(
                 DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
             ) {
                 let (w, h) = img.dimensions();
-                // "1" mode is stored as raw 0/1 bytes; Pillow converts it to
-                // "L" first (1 -> 255) before the gray->K branch.
-                // DEPRECATED deferred compatibility arm: Image::convert
-                // normalizes public mode-1 sources before deferred dispatch.
-                let gray = if explicit_mode == Some("1") {
-                    let mut out = crate::raster::GrayImage::new(w, h);
-                    for (op, ip) in out.pixels_mut().zip(img.to_luma8().pixels()) {
-                        op[0] = if ip[0] != 0 { 255 } else { 0 };
-                    }
-                    crate::raster::DynamicImage::ImageLuma8(out)
-                } else {
-                    crate::raster::DynamicImage::ImageLuma8(crate::color::pil_grayscale(img)?)
-                };
+                let gray =
+                    crate::raster::DynamicImage::ImageLuma8(crate::color::pil_grayscale(img)?);
                 let mut out = crate::raster::RgbaImage::new(w, h);
                 for (op, gp) in out.pixels_mut().zip(gray.pixels()) {
                     *op = crate::raster::Rgba([0u8, 0u8, 0u8, 255u8.wrapping_sub(gp.2[0])]);
@@ -252,6 +129,12 @@ pub fn op_convert(
                 Ok(crate::color::rgb_to_ycbcr(img))
             }
         }
+        // The public conversion path materializes binary and palette targets
+        // before queuing a deferred operation. Keep the descriptor variants
+        // for registry compatibility, but reject their duplicate CPU kernels.
+        ColorMode::Mode1 | ColorMode::P => Err(
+            PilError::ValueError("deferred conversion mode must be materialized first".into()),
+        ),
     }
 }
 
