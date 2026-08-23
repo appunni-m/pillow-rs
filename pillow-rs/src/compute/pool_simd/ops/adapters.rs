@@ -3621,11 +3621,11 @@ pub fn simd_reduce(
 pub fn simd_convert(
     img: &DynamicImage,
     op: &PipelineOp,
-    mode: Option<&str>,
+    _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let (w, h) = img.dimensions();
     if let PipelineOp::Convert {
-        mode: cm, dither, ..
+        mode: cm, ..
     } = op
     {
         // The packed SIMD converter only represents byte L/LA/RGB/RGBA/CMYK
@@ -3644,8 +3644,6 @@ pub fn simd_convert(
             return crate::compute::pool_cpu::ops::color::op_convert(
                 img,
                 cm,
-                dither.as_ref(),
-                mode,
             );
         }
         if matches!(cm, ColorMode::CMYK)
@@ -3674,8 +3672,6 @@ pub fn simd_convert(
             return crate::compute::pool_cpu::ops::color::op_convert(
                 img,
                 cm,
-                dither.as_ref(),
-                mode,
             );
         }
         let src_mode = dynimg_mode(img);
