@@ -36,18 +36,6 @@ fn mode_to_u32(img: &DynamicImage, mode: Option<&str>) -> u32 {
     }
 }
 
-/// Convert ColorMode to SIMD mode code.
-fn color_mode_to_u32(cm: &ColorMode) -> u32 {
-    match cm {
-        ColorMode::L | ColorMode::Mode1 => 0,
-        ColorMode::LA => 1,
-        ColorMode::RGB => 2,
-        ColorMode::RGBA => 3,
-        ColorMode::CMYK => 4,
-        _ => 3, // fallback
-    }
-}
-
 /// Convert ResampleFilter to SIMD filter code (0=nearest, 1=bilinear).
 fn filter_to_u32(f: &ResampleFilter) -> u32 {
     match f {
@@ -3692,21 +3680,20 @@ pub fn simd_convert(
         // The packed SIMD converter only represents byte L/LA/RGB/RGBA/CMYK
         // samples. Keep scalar-mode and color-space conversions on the shared
         // pure-Rust converter instead of returning an RGBA-shaped result for a
-        // public HSV, YCbCr, I, or F image.
-        if matches!(
-            cm,
+        // public HSV, YCbCr, I, F, P, or 1-bit image.
+        let target_mode = match cm {
             ColorMode::HSV
-                | ColorMode::YCbCr
-                | ColorMode::I
-                | ColorMode::F
-                | ColorMode::P
-                | ColorMode::Mode1
-        ) {
-            return crate::compute::pool_cpu::ops::color::op_convert(
-                img,
-                cm,
-            );
-        }
+            | ColorMode::YCbCr
+            | ColorMode::I
+            | ColorMode::F
+            | ColorMode::P
+            | ColorMode::Mode1 => return crate::compute::pool_cpu::ops::color::op_convert(img, cm),
+            ColorMode::L => 0,
+            ColorMode::LA => 1,
+            ColorMode::RGB => 2,
+            ColorMode::RGBA => 3,
+            ColorMode::CMYK => 4,
+        };
         if matches!(cm, ColorMode::CMYK)
             && matches!(
                 img,
@@ -3737,7 +3724,6 @@ pub fn simd_convert(
         }
         let src_mode = dynimg_mode(img);
         let pixels = pixels_from_dynimg(img);
-        let target_mode = color_mode_to_u32(cm);
         let (result, _nw, _nh) = super::scalar::convert(&pixels, w, h, src_mode, target_mode);
         // `convert` returns packed RGBA storage for every logical target. The
         // public result must retain the target mode, not the storage mode.
