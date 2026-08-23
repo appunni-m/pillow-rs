@@ -73,12 +73,15 @@ fn pack_rgba(c: (u8, u8, u8, u8)) -> u32 {
 /// Derive SIMD mode code from a DynamicImage's channel count.
 /// 0=L (1ch), 1=LA (2ch), 2=RGB (3ch), 3=RGBA (4ch)
 fn dynimg_mode(img: &DynamicImage) -> u32 {
-    match img.color().channel_count() {
-        1 => 0,
-        2 => 1,
-        3 => 2,
-        4 => 3,
-        _ => 3,
+    match img {
+        DynamicImage::ImageLuma8(_) | DynamicImage::ImageLuma16(_) => 0,
+        DynamicImage::ImageLumaA8(_) | DynamicImage::ImageLumaA16(_) => 1,
+        DynamicImage::ImageRgb8(_)
+        | DynamicImage::ImageRgb16(_)
+        | DynamicImage::ImageRgb32F(_) => 2,
+        DynamicImage::ImageRgba8(_)
+        | DynamicImage::ImageRgba16(_)
+        | DynamicImage::ImageRgba32F(_) => 3,
     }
 }
 
@@ -162,28 +165,15 @@ const NATIVE_BYTE_ACTIVE_MASKS: [[u8; 16]; 5] = [
 ];
 
 #[inline]
-fn native_byte_transform<F>(
-    img: &DynamicImage,
-    mode: Option<&str>,
-    transform: F,
-) -> Option<DynamicImage>
+fn native_byte_transform_bytes<F>(bytes: &mut [u8], channels: usize, transform: &F) -> Option<()>
 where
     F: Fn(u8x16) -> u8x16,
 {
-    let channels = native_byte_layout(img, mode)?;
-    // `native_byte_layout` produces only indices 1..=4, so this lookup is
+    // Native-byte callers pass only channel counts 1..=4, so this lookup is
     // total for every supported native byte image.
     let active = NATIVE_BYTE_ACTIVE_MASKS[channels];
     let active_vector = u8x16::new(active);
     let inactive = u8x16::splat(u8::MAX) - active_vector;
-    let mut result = img.clone();
-    let bytes = match &mut result {
-        DynamicImage::ImageLuma8(image) => image.as_mut(),
-        DynamicImage::ImageLumaA8(image) => image.as_mut(),
-        DynamicImage::ImageRgb8(image) => image.as_mut(),
-        DynamicImage::ImageRgba8(image) => image.as_mut(),
-        _ => return None,
-    };
     let mut chunks = bytes.chunks_exact_mut(16);
     for chunk in &mut chunks {
         let input = u8x16::new(<[u8; 16]>::try_from(&*chunk).ok()?);
@@ -198,7 +188,41 @@ where
         let mask = active[index % 16];
         *value = (transformed & mask) | (*value & !mask);
     }
-    Some(result)
+    Some(())
+}
+
+#[inline]
+fn native_byte_transform<F>(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    transform: F,
+) -> Option<DynamicImage>
+where
+    F: Fn(u8x16) -> u8x16,
+{
+    match img {
+        DynamicImage::ImageLuma8(image) if matches!(mode, None | Some("L")) => {
+            let mut result = image.clone();
+            native_byte_transform_bytes(&mut result, 1, &transform)?;
+            Some(DynamicImage::ImageLuma8(result))
+        }
+        DynamicImage::ImageLumaA8(image) if matches!(mode, None | Some("LA")) => {
+            let mut result = image.clone();
+            native_byte_transform_bytes(&mut result, 2, &transform)?;
+            Some(DynamicImage::ImageLumaA8(result))
+        }
+        DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB")) => {
+            let mut result = image.clone();
+            native_byte_transform_bytes(&mut result, 3, &transform)?;
+            Some(DynamicImage::ImageRgb8(result))
+        }
+        DynamicImage::ImageRgba8(image) if matches!(mode, None | Some("RGBA")) => {
+            let mut result = image.clone();
+            native_byte_transform_bytes(&mut result, 4, &transform)?;
+            Some(DynamicImage::ImageRgba8(result))
+        }
+        _ => None,
+    }
 }
 
 /// Invert selected byte channels with one portable 16-byte vector operation.
