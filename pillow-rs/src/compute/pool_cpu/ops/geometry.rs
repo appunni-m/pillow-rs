@@ -10,6 +10,7 @@ use std::f64;
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
+use crate::image_utils::raw_bytes_to_image;
 use crate::ops::pil_resize::{
     pil_resize, pil_resize_boxed, precompute_coeffs_f64, premultiply_alpha, round_up,
     unpremultiply_alpha,
@@ -90,37 +91,6 @@ fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) {
 }
 
 // ── Helpers ──
-
-/// Convert raw flat bytes back to a DynamicImage based on channel count.
-pub fn raw_bytes_to_image(
-    w: u32,
-    h: u32,
-    data: Vec<u8>,
-    channels: usize,
-) -> Result<DynamicImage, PilError> {
-    match channels {
-        1 => Ok(DynamicImage::ImageLuma8(
-            crate::raster::GrayImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        2 => Ok(DynamicImage::ImageLumaA8(
-            crate::raster::GrayAlphaImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        3 => Ok(DynamicImage::ImageRgb8(
-            crate::raster::RgbImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        4 => Ok(DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        _ => Err(PilError::ValueError(format!(
-            "raw_bytes_to_image: unsupported channel count {}",
-            channels
-        ))),
-    }
-}
 
 // ── F-mode / I-mode resize ──
 
@@ -826,86 +796,6 @@ fn rotate_arbitrary_scalar(
             output[output_index..output_index + 4].copy_from_slice(&bytes);
         }
     }
-}
-
-#[allow(dead_code)]
-/// Apply an affine transform working on the native number of channels.
-/// When `nearest` is true, uses nearest-neighbor sampling.
-fn transform_affine_generic(
-    img: &DynamicImage,
-    dst_w: u32,
-    dst_h: u32,
-    aff_a: f64,
-    aff_b: f64,
-    aff_c: f64,
-    aff_d: f64,
-    aff_e: f64,
-    aff_f: f64,
-    fill: Option<(u8, u8, u8, u8)>,
-    nearest: bool,
-) -> Result<DynamicImage, PilError> {
-    let channels = img.color().channel_count() as usize;
-    let raw = img.as_bytes();
-    let (sw, sh) = img.dimensions();
-    let fill_color = fill.unwrap_or((0, 0, 0, 255));
-
-    let mut out = CheckedDims::new(dst_w, dst_h, channels as u8)?.alloc_buffer();
-
-    for dy in 0..dst_h {
-        for dx in 0..dst_w {
-            let sx = aff_a * dx as f64 + aff_b * dy as f64 + aff_c;
-            let sy = aff_d * dx as f64 + aff_e * dy as f64 + aff_f;
-            let out_idx = (dy * dst_w + dx) as usize * channels;
-
-            if nearest {
-                let ix = (sx + 0.5).floor() as i64;
-                let iy = (sy + 0.5).floor() as i64;
-                if ix >= 0 && ix < sw as i64 && iy >= 0 && iy < sh as i64 {
-                    let in_idx = (iy as u32 * sw + ix as u32) as usize * channels;
-                    out[out_idx..out_idx + channels]
-                        .copy_from_slice(&raw[in_idx..in_idx + channels]);
-                } else {
-                    for ch in 0..channels.min(4) {
-                        out[out_idx + ch] = match ch {
-                            0 => fill_color.0,
-                            1 => fill_color.1,
-                            2 => fill_color.2,
-                            _ => fill_color.3,
-                        };
-                    }
-                }
-            } else if sx >= 0.0 && sx < sw as f64 && sy >= 0.0 && sy < sh as f64 {
-                let x0 = sx.floor() as u32;
-                let y0 = sy.floor() as u32;
-                let x1 = (x0 + 1).min(sw - 1);
-                let y1 = (y0 + 1).min(sh - 1);
-                let fx = sx - x0 as f64;
-                let fy = sy - y0 as f64;
-                for ch in 0..channels {
-                    let p00 = raw[(y0 * sw + x0) as usize * channels + ch] as f64;
-                    let p10 = raw[(y0 * sw + x1) as usize * channels + ch] as f64;
-                    let p01 = raw[(y1 * sw + x0) as usize * channels + ch] as f64;
-                    let p11 = raw[(y1 * sw + x1) as usize * channels + ch] as f64;
-                    let v = (1.0 - fx) * (1.0 - fy) * p00
-                        + fx * (1.0 - fy) * p10
-                        + (1.0 - fx) * fy * p01
-                        + fx * fy * p11;
-                    out[out_idx + ch] = v.round() as u8;
-                }
-            } else {
-                for ch in 0..channels.min(4) {
-                    out[out_idx + ch] = match ch {
-                        0 => fill_color.0,
-                        1 => fill_color.1,
-                        2 => fill_color.2,
-                        _ => fill_color.3,
-                    };
-                }
-            }
-        }
-    }
-
-    raw_bytes_to_image(dst_w, dst_h, out, channels)
 }
 
 // ── Execute geometry ops ──

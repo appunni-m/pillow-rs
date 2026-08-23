@@ -157,7 +157,7 @@ impl Image {
     /// [`PilError`] when mode conversion or materialization fails.
     pub fn filter(&self, filter_type: &str) -> Result<Image, PilError> {
         self.validate_filter(filter_type)?;
-        // I-mode: push the filter op directly — execute_op handles I-mode dispatch
+        // I-mode: push the filter op directly — the CPU registry handles I-mode dispatch.
         // by operating on int32 pixel values with no [0,255] clipping.
         if self.explicit_mode() == Some("I") {
             return self.filter_push(filter_type);

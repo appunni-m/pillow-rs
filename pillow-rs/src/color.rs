@@ -758,41 +758,6 @@ pub fn hsv_to_rgb(img: &DynamicImage) -> DynamicImage {
     DynamicImage::ImageRgb8(out)
 }
 
-/// Converts Pillow `"I"` storage to `L`.
-///
-/// The input is RGBA storage interpreted as little-endian `i32` pixels.
-/// Output uses Pillow's scaling formula: `L = (I + 32768) / 256`, clamped to a
-/// byte.
-#[allow(dead_code)]
-pub(crate) fn i32_to_l(img: &DynamicImage) -> crate::raster::GrayImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut gray = crate::raster::GrayImage::new(w, h);
-    for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
-        let i = i32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
-        let l = ((i as i64 + 32768) / 256).clamp(0, 255) as u8;
-        gp[0] = l;
-    }
-    gray
-}
-
-/// Converts Pillow `"F"` storage to `L`.
-///
-/// The input is RGBA storage interpreted as little-endian `f32` pixels. Output
-/// clamps each value to `0..=255` and truncates to a byte.
-#[allow(dead_code)]
-pub(crate) fn f32_to_l(img: &DynamicImage) -> crate::raster::GrayImage {
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut gray = crate::raster::GrayImage::new(w, h);
-    for (gp, rp) in gray.pixels_mut().zip(rgba.pixels()) {
-        let f = f32::from_le_bytes([rp[0], rp[1], rp[2], rp[3]]);
-        let l = (f.clamp(0.0, 255.0)) as u8;
-        gp[0] = l;
-    }
-    gray
-}
-
 /// Converts RGB to HSV using Pillow's `rgb2hsv` precision behavior.
 ///
 /// Input and output are `RGB8` buffers. Output channels are `H`, `S`, `V`, each

@@ -248,7 +248,7 @@ pub fn op_autocontrast(
             &stretch,
         );
     }
-    let result = super::filter::raw_bytes_to_image(w, h, out, channels)?;
+    let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;
     Ok(preserve_mode(img, result))
 }
 
@@ -833,7 +833,7 @@ pub fn op_pad(
             .copy_from_slice(&source[source_start..source_start + byte_count]);
     }
 
-    let padded = crate::compute::pool_cpu::ops::filter::raw_bytes_to_image(w, h, output, 4)?;
+    let padded = crate::image_utils::raw_bytes_to_image(w, h, output, 4)?;
     Ok(preserve_mode(img, padded))
 }
 
@@ -983,6 +983,6 @@ pub fn op_expand(
         );
     }
 
-    let expanded = super::filter::raw_bytes_to_image(new_w, new_h, output, 4)?;
+    let expanded = crate::image_utils::raw_bytes_to_image(new_w, new_h, output, 4)?;
     Ok(preserve_mode(img, expanded))
 }

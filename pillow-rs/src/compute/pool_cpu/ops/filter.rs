@@ -8,6 +8,7 @@
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
 use crate::image::preserve_mode;
+use crate::image_utils::raw_bytes_to_image;
 use crate::raster::DynamicImage;
 
 /// Push one source index into a monotonic queue used by a byte min/max line.
@@ -286,39 +287,6 @@ fn pillow_kernel_row_5(pixels: [f32; 5], kernel: &[f32]) -> f32 {
     let sum = pixels[2].mul_add(kernel[2], sum);
     let sum = pixels[3].mul_add(kernel[3], sum);
     pixels[4].mul_add(kernel[4], sum)
-}
-
-// ── Raw bytes to image ──
-
-/// Convert raw flat bytes back to a DynamicImage based on channel count.
-pub fn raw_bytes_to_image(
-    w: u32,
-    h: u32,
-    data: Vec<u8>,
-    channels: usize,
-) -> Result<DynamicImage, PilError> {
-    match channels {
-        1 => Ok(DynamicImage::ImageLuma8(
-            crate::raster::GrayImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        2 => Ok(DynamicImage::ImageLumaA8(
-            crate::raster::GrayAlphaImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        3 => Ok(DynamicImage::ImageRgb8(
-            crate::raster::RgbImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        4 => Ok(DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        _ => Err(PilError::ValueError(format!(
-            "raw_bytes_to_image: unsupported channel count {}",
-            channels
-        ))),
-    }
 }
 
 // ── 3x3 filter (I-mode) ──

@@ -357,7 +357,7 @@ impl Image {
             }
         }
 
-        let result = crate::image::raw_bytes_to_image(w, h, out, channels)?;
+        let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;
         Ok(Image::from_dynamic(result, None))
     }
 
@@ -468,7 +468,7 @@ impl Image {
                 }
             }
         }
-        let result = crate::image::raw_bytes_to_image(w_u32, h_u32, out, channels)?;
+        let result = crate::image_utils::raw_bytes_to_image(w_u32, h_u32, out, channels)?;
         // Preserve palette for P-mode images
         if let Some(pal) = palette {
             // A palette image materializes as one-band indices, so the raw

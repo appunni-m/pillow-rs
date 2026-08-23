@@ -24,21 +24,26 @@ use crate::error::PilError;
 ///
 /// `channels` is the number of stored bytes per pixel and must be `1`, `2`,
 /// `3`, or `4`. `data` may be longer than needed; only the validated
-/// `width * height * channels` prefix is copied into the image.
+/// `width * height * channels` prefix is consumed.
 ///
 /// # Errors
 ///
 /// Returns [`PilError::DimensionError`] if dimensions or byte counts are
 /// invalid, and [`PilError::ValueError`] if `data` is too short for the declared
 /// shape.
-#[allow(dead_code)]
 pub(crate) fn raw_bytes_to_image(
     width: u32,
     height: u32,
-    channels: u8,
-    data: &[u8],
+    mut data: Vec<u8>,
+    channels: usize,
 ) -> Result<DynamicImage, PilError> {
-    let dims = CheckedDims::new(width, height, channels)?;
+    if !(1..=4).contains(&channels) {
+        return Err(PilError::ValueError(format!(
+            "raw_bytes_to_image: unsupported channel count {channels}"
+        )));
+    }
+
+    let dims = CheckedDims::new(width, height, channels as u8)?;
 
     if data.len() < dims.total_bytes() {
         return Err(PilError::ValueError(format!(
@@ -51,34 +56,30 @@ pub(crate) fn raw_bytes_to_image(
         )));
     }
 
-    let pixel_data = data[..dims.total_bytes()].to_vec();
+    data.truncate(dims.total_bytes());
 
-    // AS PER DESIGN: Channels 1-4 are the only valid counts. The match
-    // arms correspond exactly to the image crate's DynamicImage variants.
-    // Channels is validated to be 1-4 by CheckedDims (zero rejected above).
+    // Channels 1-4 are the only valid counts. The match arms correspond
+    // exactly to the image crate's DynamicImage variants.
     Ok(match channels {
-        1 => DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, pixel_data).ok_or_else(
-            || PilError::InternalError("raw_bytes_to_image: L buffer shape mismatch".to_string()),
+        1 => {
+            DynamicImage::ImageLuma8(GrayImage::from_raw(width, height, data).ok_or_else(|| {
+                PilError::InternalError("raw_bytes_to_image: L buffer shape mismatch".to_string())
+            })?)
+        }
+        2 => DynamicImage::ImageLumaA8(GrayAlphaImage::from_raw(width, height, data).ok_or_else(
+            || PilError::InternalError("raw_bytes_to_image: LA buffer shape mismatch".to_string()),
         )?),
-        2 => DynamicImage::ImageLumaA8(
-            GrayAlphaImage::from_raw(width, height, pixel_data).ok_or_else(|| {
-                PilError::InternalError("raw_bytes_to_image: LA buffer shape mismatch".to_string())
-            })?,
-        ),
-        3 => DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, pixel_data).ok_or_else(
-            || PilError::InternalError("raw_bytes_to_image: RGB buffer shape mismatch".to_string()),
-        )?),
-        4 => DynamicImage::ImageRgba8(RgbaImage::from_raw(width, height, pixel_data).ok_or_else(
-            || {
+        3 => DynamicImage::ImageRgb8(RgbImage::from_raw(width, height, data).ok_or_else(|| {
+            PilError::InternalError("raw_bytes_to_image: RGB buffer shape mismatch".to_string())
+        })?),
+        4 => {
+            DynamicImage::ImageRgba8(RgbaImage::from_raw(width, height, data).ok_or_else(|| {
                 PilError::InternalError(
                     "raw_bytes_to_image: RGBA buffer shape mismatch".to_string(),
                 )
-            },
-        )?),
-        _ => {
-            // CheckedDims validates channels ∈ [1,4], so this is unreachable.
-            unreachable!("CheckedDims guarantees channels ∈ [1,4]");
+            })?)
         }
+        _ => unreachable!("channel count was validated above"),
     })
 }
 
@@ -87,7 +88,7 @@ pub(crate) fn raw_bytes_to_image(
 /// Use this only when `data` came from [`CheckedDims::alloc_buffer`] or an
 /// equivalent checked path. Debug builds assert that the byte length still
 /// matches [`CheckedDims::total_bytes`].
-#[allow(dead_code)]
+#[cfg(test)]
 pub(crate) fn raw_bytes_to_image_trusted(
     dims: CheckedDims,
     data: Vec<u8>,
@@ -142,7 +143,7 @@ mod tests {
     #[test]
     fn valid_rgba_image() {
         let data = vec![128u8; 100 * 100 * 4];
-        let img = raw_bytes_to_image(100, 100, 4, &data).unwrap();
+        let img = raw_bytes_to_image(100, 100, data, 4).unwrap();
         assert_eq!(img.width(), 100);
         assert_eq!(img.height(), 100);
     }
@@ -150,13 +151,13 @@ mod tests {
     #[test]
     fn buffer_too_small() {
         let data = vec![0u8; 10];
-        assert!(raw_bytes_to_image(100, 100, 4, &data).is_err());
+        assert!(raw_bytes_to_image(100, 100, data, 4).is_err());
     }
 
     #[test]
     fn zero_dimension_rejected() {
         let data = vec![0u8; 100];
-        assert!(raw_bytes_to_image(0, 100, 3, &data).is_err());
+        assert!(raw_bytes_to_image(0, 100, data, 3).is_err());
     }
 
     #[test]
