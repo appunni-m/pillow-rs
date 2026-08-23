@@ -194,7 +194,6 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- autocontrast_cutoff.wgsl
 |   |   |   |       |-- autocontrast_histogram.wgsl
 |   |   |   |       |-- autocontrast_remap.wgsl
-|   |   |   |       |-- blend.wgsl
 |   |   |   |       |-- blend_module.wgsl
 |   |   |   |       |-- box_blur.wgsl
 |   |   |   |       |-- box_blur_h.wgsl
@@ -203,7 +202,6 @@ generated reports, build outputs, and package installs.
 |   |   |   |       |-- color_3dlut.wgsl
 |   |   |   |       |-- color_saturation.wgsl
 |   |   |   |       |-- colorize.wgsl
-|   |   |   |       |-- composite.wgsl
 |   |   |   |       |-- composite_module.wgsl
 |   |   |   |       |-- constant.wgsl
 |   |   |   |       |-- contain.wgsl
@@ -374,7 +372,8 @@ generated reports, build outputs, and package installs.
 |   |       |-- imagestat.py
 |   |       `-- operations.py
 |   `-- src/
-|       `-- lib.rs
+|       |-- lib.rs
+|       `-- putdata.rs
 |-- rust-toolchain.toml
 |-- rustfmt.toml
 |-- scripts/

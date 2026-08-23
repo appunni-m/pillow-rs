@@ -382,30 +382,6 @@ pub enum PipelineOp {
         /// Vertical offset.
         y: i32,
     },
-    /// Legacy ImageChops blend descriptor.
-    ///
-    /// Public `ImageChops.blend` uses [`BlendModule`](Self::BlendModule),
-    /// which carries the module-level mode and size contract. This older
-    /// descriptor is retained for internal registry/GPU compatibility only.
-    #[deprecated(note = "legacy ImageChops blend descriptor; use PipelineOp::BlendModule")]
-    Blend {
-        /// Second image argument supplied to the operation.
-        other: Arc<Image>,
-        /// Blend alpha.
-        alpha: f64,
-    },
-    /// Legacy ImageChops composite descriptor.
-    ///
-    /// Public `ImageChops.composite` uses [`CompositeModule`](Self::CompositeModule),
-    /// which carries the module-level mask and canvas contract. This older
-    /// descriptor is retained for internal registry/GPU compatibility only.
-    #[deprecated(note = "legacy ImageChops composite descriptor; use PipelineOp::CompositeModule")]
-    Composite {
-        /// Second image argument supplied to the operation.
-        other: Arc<Image>,
-        /// Mask image.
-        mask: Arc<Image>,
-    },
     /// Duplicate the image.
     Duplicate,
     /// Invert image channels through ImageChops.
