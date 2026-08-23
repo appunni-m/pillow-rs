@@ -1069,22 +1069,6 @@ pub type Rgb32FImage = ImageBuffer<Rgb<f32>, Vec<f32>>;
 /// Sendable 32-bit float RGBA image buffer.
 pub type Rgba32FImage = ImageBuffer<Rgba<f32>, Vec<f32>>;
 
-/// Sendable 16-bit grayscale image buffer.
-#[allow(dead_code)]
-pub(crate) type Gray16Image = ImageBuffer<Luma<u16>, Vec<u16>>;
-
-/// Sendable 16-bit grayscale + alpha channel image buffer.
-#[allow(dead_code)]
-pub(crate) type GrayAlpha16Image = ImageBuffer<LumaA<u16>, Vec<u16>>;
-
-/// Sendable 16-bit RGB image buffer.
-#[allow(dead_code)]
-pub(crate) type Rgb16Image = ImageBuffer<Rgb<u16>, Vec<u16>>;
-
-/// Sendable 16-bit RGBA image buffer.
-#[allow(dead_code)]
-pub(crate) type Rgba16Image = ImageBuffer<Rgba<u16>, Vec<u16>>;
-
 // ---------------------------------------------------------------------------
 // ConvertBuffer trait
 // ---------------------------------------------------------------------------

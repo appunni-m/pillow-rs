@@ -6192,42 +6192,6 @@ pub fn preserve_mode(original: &DynamicImage, result: DynamicImage) -> DynamicIm
         _ => result,
     }
 }
-/// Converts raw flat bytes into a [`DynamicImage`] with `channels` bytes per pixel.
-///
-/// # Errors
-///
-/// Returns [`PilError::ValueError`] when `channels` is not one of `1`, `2`,
-/// `3`, or `4`, or when the byte length does not match `w * h * channels`.
-pub fn raw_bytes_to_image(
-    w: u32,
-    h: u32,
-    data: Vec<u8>,
-    channels: usize,
-) -> Result<DynamicImage, PilError> {
-    match channels {
-        1 => Ok(DynamicImage::ImageLuma8(
-            crate::raster::GrayImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        2 => Ok(DynamicImage::ImageLumaA8(
-            crate::raster::GrayAlphaImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        3 => Ok(DynamicImage::ImageRgb8(
-            crate::raster::RgbImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        4 => Ok(DynamicImage::ImageRgba8(
-            crate::raster::RgbaImage::from_raw(w, h, data)
-                .ok_or_else(|| PilError::ValueError("raw_bytes_to_image: buffer error".into()))?,
-        )),
-        _ => Err(PilError::ValueError(format!(
-            "raw_bytes_to_image: unsupported channel count {}",
-            channels
-        ))),
-    }
-}
-
 /// Computes Pillow `ImageStat.Stat` values from a precomputed histogram.
 ///
 /// A histogram is partitioned into 256-bin bands. Each returned band contains
@@ -6307,26 +6271,6 @@ pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
         0.0
     };
     (count, sum, mean, min_val, max_val)
-}
-
-/// Executes one [`PipelineOp`] against a materialized image.
-///
-/// `explicit_mode` carries Pillow mode tags, such as `"F"` or `"P"`, that the
-/// underlying [`DynamicImage`] cannot express directly. The optional palette is
-/// accepted for API symmetry with older call sites; CPU registry execution
-/// currently receives palette state through the operation or image pipeline.
-///
-/// # Errors
-///
-/// Returns [`PilError`] from the CPU registry implementation.
-#[allow(dead_code)]
-pub(crate) fn execute_op(
-    img: &DynamicImage,
-    op: &PipelineOp,
-    explicit_mode: Option<&str>,
-    _palette: Option<&[u8]>,
-) -> Result<DynamicImage, PilError> {
-    crate::compute::registry::execute_cpu(op, img, explicit_mode)
 }
 
 #[cfg(test)]

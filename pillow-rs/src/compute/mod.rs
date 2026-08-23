@@ -14,9 +14,8 @@
 //! # Adding Operations
 //!
 //! New operations must define the pipeline variant, CPU implementation, registry
-//! key, and optional GPU/SIMD support together. The registry module is the source
-//! of truth used by [`crate::compute::route`] and
-//! [`crate::compute::execute_batch`].
+//! key, and optional GPU/SIMD support together. The registry module is the
+//! source of truth used by the routing and execution phases.
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
@@ -532,17 +531,6 @@ pub fn available_backends() -> Vec<Backend> {
 
 // ── Router ─────────────────────────────────────────────────────────────────
 
-/// Picks the best active backend that supports every operation in `ops`.
-///
-/// Passing `explicit` bypasses automatic routing and returns that backend even
-/// if it is inactive or cannot support the batch; execution will report the
-/// actual backend error later. Without an explicit backend, routing prefers
-/// active backends by priority and falls back to [`Backend::Cpu`].
-#[allow(dead_code)]
-pub fn route(ops: &[PipelineOp], explicit: Option<Backend>) -> Result<Backend, PilError> {
-    route_decision(ops, explicit).map(|(backend, _, _)| backend)
-}
-
 fn route_decision(
     ops: &[PipelineOp],
     explicit: Option<Backend>,
@@ -659,8 +647,7 @@ pub(crate) fn prepare_execution(
 ///
 /// Image pipelines call this before materializing their source so an explicit
 /// backend lock reports the first unsupported operation before any decode or
-/// nested-pipeline error. [`execute_batch`] repeats the validation for callers
-/// that already own a materialized image.
+/// nested-pipeline error.
 ///
 /// # Errors
 ///
@@ -686,26 +673,6 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
         )));
     }
     Ok(())
-}
-
-/// Executes `ops` on a specific backend.
-///
-/// `mode` carries Pillow mode tags such as `"P"` or `"F"` when the
-/// [`DynamicImage`] color type is not enough to describe semantics.
-///
-/// # Errors
-///
-/// Returns [`PilError::ValueError`] when `backend` is not compiled into this
-/// crate, or the backend returns an operation-specific error.
-#[allow(dead_code)]
-pub fn execute_batch(
-    backend: Backend,
-    ops: &[PipelineOp],
-    img: &DynamicImage,
-    mode: Option<&str>,
-) -> Result<DynamicImage, PilError> {
-    let prepared = prepare_execution(ops, Some(backend))?;
-    execute_prepared(&prepared, ops, img, mode)
 }
 
 /// Executes a previously routed and validated pipeline, recording the bounded

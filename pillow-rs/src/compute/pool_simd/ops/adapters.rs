@@ -2372,7 +2372,7 @@ pub fn simd_filter_3x3(
                 &normalized_kernel,
                 *offset as f32 + 0.5,
             );
-            return crate::compute::pool_cpu::ops::filter::raw_bytes_to_image(
+            return crate::image_utils::raw_bytes_to_image(
                 img.width(),
                 img.height(),
                 output,
@@ -2433,7 +2433,7 @@ pub fn simd_filter_5x5(
                 &normalized_kernel,
                 *offset as f32 + 0.5,
             );
-            return crate::compute::pool_cpu::ops::filter::raw_bytes_to_image(
+            return crate::image_utils::raw_bytes_to_image(
                 img.width(),
                 img.height(),
                 output,
@@ -2777,7 +2777,7 @@ fn simd_pil_box_blur(
     }
     simd_transpose_interleaved_rows(&work, &mut scratch, height, width, channels);
 
-    let result = crate::compute::pool_cpu::ops::filter::raw_bytes_to_image(
+    let result = crate::image_utils::raw_bytes_to_image(
         dimensions.width,
         dimensions.height,
         scratch,
