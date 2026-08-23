@@ -255,14 +255,16 @@ fn pixel_mode_name(mode: PixelMode) -> &'static str {
 }
 
 fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
-    Some(match mode {
-        PixelMode::Mode1 | PixelMode::I | PixelMode::F => "LA",
-        PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => "RGBA",
-        PixelMode::L | PixelMode::LA => "LA",
-        PixelMode::RGBA => "RGBA",
-        PixelMode::P | PixelMode::PA => "PA",
-        PixelMode::CMYK => return None,
-    })
+    match mode {
+        PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some("RGBA"),
+        PixelMode::L | PixelMode::LA => Some("LA"),
+        PixelMode::RGBA => Some("RGBA"),
+        PixelMode::P | PixelMode::PA => Some("PA"),
+        PixelMode::CMYK => None,
+        // Public putalpha rejects 1/I/F before it queues a pipeline op, so
+        // unsupported source modes conservatively retain materialization.
+        _ => None,
+    }
 }
 
 /// Computes a statically known logical mode for one pipeline operation.
