@@ -824,6 +824,12 @@ pub fn pad_with_input(
 /// # Errors
 ///
 /// Returns [`PilError::ValueError`] when `filter` is unknown.
+///
+/// This legacy Rust-facing wrapper is not used by the host bindings; they use
+/// [`scale_with_input`] so Pillow's integer/enum resampling values are
+/// normalized in the core. Keep this entry point for source compatibility, but
+/// migrate callers to [`scale_with_input`].
+#[deprecated(note = "legacy scale wrapper; use scale_with_input instead")]
 pub fn scale(image: &Image, factor: f64, filter: Option<&str>) -> Result<Image, PilError> {
     let filter = parse_resample(filter)?;
     Ok(Image::push_op(image, PipelineOp::Scale { factor, filter }))
