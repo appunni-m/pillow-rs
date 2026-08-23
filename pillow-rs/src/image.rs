@@ -280,7 +280,6 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
             PipelineOp::Equalize if matches!(current, "P" | "PA") => "RGB",
             PipelineOp::Equalize => current,
             PipelineOp::Convert { mode, .. } => color_mode_name(mode),
-            PipelineOp::Quantize { .. } => "P",
             PipelineOp::Grayscale => "L",
             PipelineOp::Colorize { .. } => "RGB",
             PipelineOp::Constant { .. } => "L",
@@ -290,10 +289,7 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
             }
             PipelineOp::ExtractBand { .. } => "L",
             PipelineOp::Merge { mode, .. } => color_mode_name(mode),
-            PipelineOp::LinearGradient { mode } | PipelineOp::RadialGradient { mode } => {
-                color_mode_name(mode)
-            }
-            PipelineOp::EffectNoise { .. } | PipelineOp::EffectMandelbrot { .. } => "L",
+            PipelineOp::EffectNoise { .. } => "L",
             _ => return None,
         }
         .to_owned(),
@@ -334,8 +330,7 @@ fn known_pipeline_op_dimensions(
         PipelineOp::Resize { w, h, .. }
         | PipelineOp::Thumbnail { w, h, .. }
         | PipelineOp::Pad { w, h, .. }
-        | PipelineOp::Transform { w, h, .. }
-        | PipelineOp::EffectMandelbrot { w, h, .. } => Some((*w, *h)),
+        | PipelineOp::Transform { w, h, .. } => Some((*w, *h)),
         PipelineOp::Crop {
             left,
             top,
@@ -435,12 +430,10 @@ fn known_pipeline_op_dimensions(
                 Some((if cover { new_width.max(1) } else { new_width }, *h))
             }
         }
-        PipelineOp::LinearGradient { .. } | PipelineOp::RadialGradient { .. } => Some((256, 256)),
         // These operations are unary and have no deferred dimension or
         // secondary-image validation.  Keeping them here is what makes long
         // point/filter/draw chains answer `size()` without replaying pixels.
         PipelineOp::Convert { .. }
-        | PipelineOp::Quantize { .. }
         | PipelineOp::RemapPalette { .. }
         | PipelineOp::Color3DLut { .. }
         | PipelineOp::ExtractBand { .. }
@@ -2352,7 +2345,6 @@ impl Image {
             match &op {
                 PipelineOp::Grayscale
                 | PipelineOp::Convert { .. }
-                | PipelineOp::Quantize { .. }
                 | PipelineOp::ExtractBand { .. } => None,
                 _ => source.explicit_mode().map(str::to_owned),
             }
