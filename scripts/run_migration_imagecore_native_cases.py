@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 
+import pillow_rs
 from pillow_rs import Image
 
 
@@ -69,24 +70,22 @@ def run_native_cases() -> tuple[int, int, int]:
             # the instrumented path; unexpected failures are still counted.
             passed += 1
 
-    import pillow_rs
-
     probes: list[tuple[str, callable]] = [
         # Image constructor variants.
         ("new-list-color", lambda: pillow_rs.Image.new("RGB", (4, 4), [255, 0, 0])),
         ("new-bytes-color", lambda: pillow_rs.Image.new("L", (4, 4), b"\x00")),
-        ("blend-classmethod", lambda: pillow_rs.Image.blend(pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4)), 0.5)),
+        ("blend-module", lambda: pillow_rs.blend(pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4)), 0.5)),
         (
             "blend-size-mismatch",
-            lambda: pillow_rs.Image.blend(
+            lambda: pillow_rs.blend(
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("L", (5, 4)),
                 0.5,
             ),
         ),
         (
-            "composite-classmethod",
-            lambda: pillow_rs.Image.composite(
+            "composite-module",
+            lambda: pillow_rs.composite(
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("L", (4, 4)),
@@ -94,7 +93,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ),
         (
             "composite-mask-mismatch",
-            lambda: pillow_rs.Image.composite(
+            lambda: pillow_rs.composite(
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("L", (2, 2)),
@@ -102,7 +101,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ),
         (
             "composite-bad-mask-mode",
-            lambda: pillow_rs.Image.composite(
+            lambda: pillow_rs.composite(
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("CMYK", (4, 4)),
@@ -110,7 +109,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ),
         (
             "composite-mode-convert",
-            lambda: pillow_rs.Image.composite(
+            lambda: pillow_rs.composite(
                 pillow_rs.Image.new("L", (4, 4)),
                 pillow_rs.Image.new("RGB", (4, 4)),
                 pillow_rs.Image.new("L", (4, 4)),
@@ -121,8 +120,8 @@ def run_native_cases() -> tuple[int, int, int]:
             lambda: _composite_palette(),
         ),
         (
-            "merge-classmethod",
-            lambda: pillow_rs.Image.merge(
+            "merge-module",
+            lambda: pillow_rs.merge(
                 "RGB",
                 [pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4))],
             ),
@@ -563,7 +562,7 @@ def _exhausted_palette_image() -> Image:
 
 
 def _composite_palette() -> None:
-    result = Image.composite(
+    result = pillow_rs.composite(
         _palette_image(),
         _palette_image(),
         Image.new("L", (2, 2), 128),
