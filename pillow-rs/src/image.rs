@@ -221,31 +221,15 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
     )
 }
 
-fn color_mode_name(mode: &ColorMode) -> &'static str {
-    match mode {
-        ColorMode::L => "L",
-        ColorMode::LA => "LA",
-        ColorMode::RGB => "RGB",
-        ColorMode::RGBA => "RGBA",
-        ColorMode::CMYK => "CMYK",
-        ColorMode::YCbCr => "YCbCr",
-        ColorMode::HSV => "HSV",
-        ColorMode::I => "I",
-        ColorMode::F => "F",
-        ColorMode::P => "P",
-        ColorMode::Mode1 => "1",
-    }
-}
-
 fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
     match mode {
         PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some("RGBA"),
         PixelMode::L | PixelMode::LA => Some("LA"),
         PixelMode::RGBA => Some("RGBA"),
-        PixelMode::P | PixelMode::PA => Some("PA"),
         PixelMode::CMYK => None,
-        // Public putalpha rejects 1/I/F before it queues a pipeline op, so
-        // unsupported source modes conservatively retain materialization.
+        // Palette putalpha is tagged as PA in push_op before this planner is
+        // reached. Public putalpha also rejects 1/I/F, YCbCr, and HSV before
+        // queueing; keep this fallback for malformed/internal descriptors.
         _ => None,
     }
 }
@@ -264,7 +248,19 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
         match op {
             PipelineOp::Equalize if matches!(current, "P" | "PA") => "RGB",
             PipelineOp::Equalize => current,
-            PipelineOp::Convert { mode, .. } => color_mode_name(mode),
+            // Public convert and merge constructors attach `explicit_mode`
+            // for non-raster-native targets (including CMYK, YCbCr, HSV, I,
+            // F, P, and 1). `Image::mode` returns that tag before reaching
+            // this planner, so only these four raster-native modes are live
+            // here. Keep the fallback conservative for malformed/internal
+            // descriptors instead of manufacturing metadata.
+            PipelineOp::Convert { mode, .. } | PipelineOp::Merge { mode, .. } => match mode {
+                ColorMode::L => "L",
+                ColorMode::LA => "LA",
+                ColorMode::RGB => "RGB",
+                ColorMode::RGBA => "RGBA",
+                _ => return None,
+            },
             PipelineOp::Grayscale => "L",
             PipelineOp::Colorize { .. } => "RGB",
             PipelineOp::Constant { .. } => "L",
@@ -272,7 +268,6 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
                 known_putalpha_mode(*mode)?
             }
             PipelineOp::ExtractBand { .. } => "L",
-            PipelineOp::Merge { mode, .. } => color_mode_name(mode),
             PipelineOp::EffectNoise { .. } => "L",
             _ => return None,
         }
