@@ -846,52 +846,6 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
     Ok(DynamicImage::ImageLuma8(out))
 }
 
-// ── PointOp (lookup table) ──
-
-/// Legacy CPU point-operation registry hook.
-///
-/// Public point/eval calls use `op_eval`; `PipelineOp::PointOp` is retained
-/// only for internal GPU LUT fusion and does not reach this CPU hook through a
-/// supported public input.
-#[deprecated(note = "legacy point hook; use op_eval instead")]
-pub fn op_point(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
-    let n_bands = match img.color() {
-        crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
-        crate::raster::ColorType::La8 | crate::raster::ColorType::La16 => 2,
-        crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
-        _ => 4,
-    };
-    // PIL requires EXACTLY 256 * n_bands lut entries
-    let expected = 256 * n_bands;
-    if lut.len() != expected {
-        return Err(PilError::ValueError("wrong number of lut entries".into()));
-    }
-    let band_luts: Vec<&[u8]> = (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect();
-    // For single-channel images, operate on Luma8 directly
-    // to avoid precision loss through RGBA round-trip.
-    if n_bands == 1 {
-        let gray = img.to_luma8();
-        let (w, h) = gray.dimensions();
-        let mut out = GrayImage::new(w, h);
-        for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
-            let idx = ip[0] as usize;
-            op[0] = *band_luts[0].get(idx).unwrap_or(&ip[0]);
-        }
-        return Ok(DynamicImage::ImageLuma8(out));
-    }
-    let rgba = img.to_rgba8();
-    let (w, h) = rgba.dimensions();
-    let mut out = RgbaImage::new(w, h);
-    for (op, ip) in out.pixels_mut().zip(rgba.pixels()) {
-        for b in 0..4 {
-            let idx = ip[b] as usize;
-            let band = b.min(band_luts.len() - 1);
-            op[b] = *band_luts[band].get(idx).unwrap_or(&ip[b]);
-        }
-    }
-    Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
-}
-
 // ── Transform ──
 
 /// Apply an affine transform working on the native number of channels.
