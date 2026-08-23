@@ -1436,6 +1436,12 @@ impl PyImage {
             .map_err(map_error)
     }
 
+    /// Deprecated compatibility alias for the module-level `pillow_rs.blend`.
+    ///
+    /// The maintained Python facade calls `_core.image_blend` directly. Keep
+    /// this wrapper behavior-free and in sync only until the compatibility
+    /// surface can be removed.
+    #[deprecated(note = "use the module-level pillow_rs.blend wrapper")]
     #[classmethod]
     fn blend(
         _cls: &Bound<'_, PyType>,
@@ -1451,6 +1457,12 @@ impl PyImage {
             .map_err(map_error)
     }
 
+    /// Deprecated compatibility alias for the module-level `pillow_rs.composite`.
+    ///
+    /// The maintained Python facade calls `_core.image_composite` directly.
+    /// Keep this wrapper behavior-free and in sync only until the compatibility
+    /// surface can be removed.
+    #[deprecated(note = "use the module-level pillow_rs.composite wrapper")]
     #[classmethod]
     fn composite(
         _cls: &Bound<'_, PyType>,
@@ -1467,6 +1479,12 @@ impl PyImage {
             .map_err(map_error)
     }
 
+    /// Deprecated compatibility alias for the module-level `pillow_rs.merge`.
+    ///
+    /// The maintained Python facade calls `_core.image_merge` directly. Keep
+    /// this wrapper behavior-free and in sync only until the compatibility
+    /// surface can be removed.
+    #[deprecated(note = "use the module-level pillow_rs.merge wrapper")]
     #[classmethod]
     fn merge(
         _cls: &Bound<'_, PyType>,
