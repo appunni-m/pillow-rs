@@ -7,8 +7,6 @@
 //! # Functions
 //!
 //! * `align_row_to_32` — BMP/Qt-compatible scanline padding to 4-byte boundary
-//! * `flatten_pixel_list` — reduce nested Python-style lists to flat byte arrays
-
 use crate::error::PilError;
 
 /// Convert each scanline from 8-bit to 32-bit aligned (PIL / Qt compatibility).
@@ -62,41 +60,9 @@ pub fn align_row_to_32(data: &[u8], width: u32, bits_per_pixel: u8) -> Result<Ve
     Ok(padded)
 }
 
-/// Flatten a nested list/tuple of integers into a flat byte array.
-///
-/// Accepts either a flat list `[0, 255, 128, …]` or a nested list of rows
-/// `[[0, 1], [2, 3], …]` and returns a single `Vec<u8>`.  Returns an error
-/// if any element is outside the 0..256 range.
-///
-/// This corresponds to PIL's `Image.fromarray` list-flattening path.
-///
-/// The maintained array path now resolves host array interfaces directly in
-/// [`crate::ops::array::from_resolved_array_interface`]. Keep this old helper
-/// for Rust source compatibility, but migrate callers to the array API.
-#[deprecated(note = "legacy list flattener; use from_resolved_array_interface instead")]
-pub fn flatten_pixel_list(values: &[i32]) -> Result<Vec<u8>, PilError> {
-    if values.is_empty() {
-        return Err(PilError::ValueError(
-            "flatten_pixel_list: empty list".into(),
-        ));
-    }
-    let mut out = Vec::with_capacity(values.len());
-    for &v in values {
-        if v < 0 || v > 255 {
-            return Err(PilError::ValueError(format!(
-                "flatten_pixel_list: pixel value {} out of range [0, 255]",
-                v
-            )));
-        }
-        out.push(v as u8);
-    }
-    Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
     use super::align_row_to_32;
-    use super::flatten_pixel_list;
 
     #[test]
     fn test_align_row_to_32_no_padding() {
@@ -130,21 +96,4 @@ mod tests {
         assert!(result.is_empty());
     }
 
-    #[test]
-    fn test_flatten_pixel_list_flat() {
-        let result = flatten_pixel_list(&[0, 128, 255]).unwrap();
-        assert_eq!(result, vec![0u8, 128, 255]);
-    }
-
-    #[test]
-    fn test_flatten_pixel_list_out_of_range() {
-        let result = flatten_pixel_list(&[0, 256]);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_flatten_pixel_list_empty() {
-        let result = flatten_pixel_list(&[]);
-        assert!(result.is_err());
-    }
 }

@@ -326,7 +326,6 @@ pub use crate::ops::transpose::normalize_transpose_input;
 pub use crate::ops::transpose::normalize_transposed_font_input;
 pub use crate::ops::transpose::transpose_name_from_int;
 pub use crate::ops::utils::align_row_to_32;
-pub use crate::ops::utils::flatten_pixel_list;
 #[cfg(feature = "test-api")]
 pub use crate::pipeline::PipelineOp;
 pub use crate::pipeline::ResampleFilter;
