@@ -769,11 +769,10 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
         crate::raster::ColorType::Rgb8 | crate::raster::ColorType::Rgb16 => 3,
         _ => 4,
     };
-    // PIL requires EXACTLY 256 * n_bands lut entries
-    let expected = 256 * n_bands;
-    if lut.len() != expected {
-        return Err(PilError::ValueError("wrong number of lut entries".into()));
-    }
+    // `image_eval_validated` checks the exact band length before queuing the
+    // operation, and internal PointOp fusion constructs complete tables. A
+    // malformed Eval descriptor is outside the supported public input
+    // boundary, so the executor does not duplicate that validation.
     let band_luts: Vec<&[u8]> = (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect();
     // For single-channel images (mode "1", "L", "P"), operate on Luma8 directly
     // to avoid precision loss through RGBA round-trip.
