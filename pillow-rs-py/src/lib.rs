@@ -249,9 +249,6 @@ fn convert_palette_input_from_python(
 ) -> PyResult<pillow_rs::PythonConvertPaletteInput> {
     match value {
         None => Ok(pillow_rs::PythonConvertPaletteInput::None),
-        Some(value) if value.downcast::<PyImage>().is_ok() => {
-            Ok(pillow_rs::PythonConvertPaletteInput::Image)
-        }
         Some(value) => match value.extract::<String>() {
             Ok(value) => Ok(pillow_rs::PythonConvertPaletteInput::Name(value)),
             Err(_) => Ok(pillow_rs::PythonConvertPaletteInput::Invalid(
@@ -323,10 +320,7 @@ fn reduce_factor_from_python(value: &Bound<'_, PyAny>) -> PyResult<pillow_rs::Re
     ))
 }
 
-fn reduce_box_from_python(value: Option<&Bound<'_, PyAny>>) -> PyResult<pillow_rs::ReduceBox> {
-    let Some(value) = value else {
-        return Ok(pillow_rs::ReduceBox::Invalid);
-    };
+fn reduce_box_from_python(value: &Bound<'_, PyAny>) -> PyResult<pillow_rs::ReduceBox> {
     let value = match value.extract::<Vec<i64>>() {
         Ok(value) => pillow_rs::ReduceBox::Sequence(value),
         Err(_) => pillow_rs::ReduceBox::InvalidType(value.get_type().name()?.to_string()),
@@ -334,10 +328,7 @@ fn reduce_box_from_python(value: Option<&Bound<'_, PyAny>>) -> PyResult<pillow_r
     Ok(value)
 }
 
-fn centering_from_python(value: Option<&Bound<'_, PyAny>>) -> pillow_rs::CenteringInput {
-    let Some(value) = value else {
-        return pillow_rs::CenteringInput::Default;
-    };
+fn centering_from_python(value: &Bound<'_, PyAny>) -> pillow_rs::CenteringInput {
     if let Ok(value) = value.extract::<f64>() {
         return pillow_rs::CenteringInput::Scalar(value);
     }
@@ -1208,7 +1199,7 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let factor = reduce_factor_from_python(factor)?;
         let box_coords = box_coords
-            .map(|value| reduce_box_from_python(Some(value)))
+            .map(reduce_box_from_python)
             .transpose()?;
         let rs = py
             .allow_threads(|| self.inner.reduce_public(factor, box_coords))
@@ -3627,7 +3618,7 @@ fn ops_fit(
     centering: &Bound<'_, PyAny>,
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
-    let centering = centering_from_python(Some(centering));
+    let centering = centering_from_python(centering);
     let inner = image.borrow().inner.clone();
     let rs = Python::with_gil(|py| {
         py.allow_threads(|| {
@@ -3654,7 +3645,7 @@ fn ops_pad(
     centering: &Bound<'_, PyAny>,
 ) -> PyResult<PyImage> {
     let filter = resample_input_from_python(filter)?;
-    let centering = centering_from_python(Some(centering));
+    let centering = centering_from_python(centering);
     let color = imageops_color_from_python(color);
 
     let inner = image.borrow().inner.clone();
