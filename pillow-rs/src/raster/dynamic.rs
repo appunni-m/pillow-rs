@@ -188,27 +188,6 @@ impl DynamicImage {
         DynamicImage::ImageRgba8(ImageBuffer::new(w, h))
     }
 
-    /// Generic conversion to any pixel type using the ConvertBuffer trait.
-    #[inline]
-    #[must_use]
-    pub fn to<
-        T: Pixel
-            + FromColor<color::Rgb<u8>>
-            + FromColor<color::Rgb<f32>>
-            + FromColor<color::Rgba<u8>>
-            + FromColor<color::Rgba<u16>>
-            + FromColor<color::Rgba<f32>>
-            + FromColor<color::Rgb<u16>>
-            + FromColor<Luma<u8>>
-            + FromColor<Luma<u16>>
-            + FromColor<LumaA<u16>>
-            + FromColor<LumaA<u8>>,
-    >(
-        &self,
-    ) -> ImageBuffer<T, Vec<T::Subpixel>> {
-        dynamic_map!(*self, ref p, p.convert())
-    }
-
     /// Returns a copy of this image as an RGB image.
     #[must_use]
     pub fn to_rgb8(&self) -> RgbImage {
@@ -344,15 +323,6 @@ impl DynamicImage {
         match self {
             DynamicImage::ImageLumaA8(x) => x,
             x => x.to_luma_alpha8(),
-        }
-    }
-
-    /// Consume the image and returns a Luma image (16-bit).
-    #[must_use]
-    pub fn into_luma16(self) -> ImageBuffer<Luma<u16>, Vec<u16>> {
-        match self {
-            DynamicImage::ImageLuma16(x) => x,
-            x => x.to_luma16(),
         }
     }
 
