@@ -414,28 +414,12 @@ impl Image {
             };
             // For mode "L" etc., derive from the RGB result.
             let result = if mode == "CMYK" {
-                if matches!(src_mode, "I" | "F") {
-                    // DEPRECATED deferred compatibility arm: the preceding
-                    // scalar-source dispatch handles public I/F conversions
-                    // before this non-standard-source fallback is reached.
-                    // Pillow's Convert.c sends I/F sources through the
-                    // grayscale-to-CMYK path, not the RGB inverse: C=M=Y=0
-                    // and K=255-gray.  The old Rust path inverted the
-                    // broadcast RGB representation and diverged for these
-                    // source modes.
-                    let gray = color::pil_grayscale(&converted)?;
-                    let (w, h) = gray.dimensions();
-                    let mut cmyk = crate::raster::RgbaImage::new(w, h);
-                    for (out, input) in cmyk.pixels_mut().zip(gray.pixels()) {
-                        *out = crate::raster::Rgba([0, 0, 0, 255 - input[0]]);
-                    }
-                    DynamicImage::ImageRgba8(cmyk)
-                } else {
-                    // Apply the RGB inverse directly on the converted RGB.
-                    DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
-                        &converted.to_rgb8(),
-                    ))
-                }
+                // I/F sources return through the scalar dispatch above before
+                // this fallback, so this active path receives RGB-family
+                // representations and applies the RGB inverse directly.
+                DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
+                    &converted.to_rgb8(),
+                ))
             } else if mode == "L" || mode == "LA" {
                 if mode == "L" && src_mode == "YCbCr" {
                     // Pillow's C converter maps YCbCr to L through the Y
