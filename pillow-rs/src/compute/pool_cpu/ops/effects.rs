@@ -523,9 +523,10 @@ pub fn op_blend_module(
     explicit_mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let other_img = other.materialize_for_ops()?;
-    if (other_img.width(), other_img.height()) != (img.width(), img.height()) {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
+    // `Image::blend` validates both image dimensions before queuing this
+    // operation. A malformed `PipelineOp::BlendModule` is outside the
+    // supported module-level input boundary, so this executor does not repeat
+    // that validation.
     // Pillow 12.2.0 `Blend.c::ImagingBlend` interpolates for alpha in [0, 1]
     // and clips extrapolation results to [0, 255] for any other alpha.
     let a = alpha;
