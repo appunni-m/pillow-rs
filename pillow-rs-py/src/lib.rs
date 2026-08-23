@@ -594,14 +594,8 @@ impl PyImage {
     ) -> PyResult<Self> {
         let mode = open_mode_input_from_python(mode)?;
         let formats = open_formats_input_from_python(formats)?;
-        pillow_rs::validate_python_open_inputs(mode, formats.clone()).map_err(map_error)?;
-        let format_names = match formats {
-            pillow_rs::PythonOpenFormatsInput::None => None,
-            pillow_rs::PythonOpenFormatsInput::Names(names) => Some(names),
-            pillow_rs::PythonOpenFormatsInput::Invalid(_) => {
-                unreachable!("validated Image.open formats cannot remain invalid")
-            }
-        };
+        let format_names = pillow_rs::validate_python_open_inputs(mode, formats)
+            .map_err(map_error)?;
         let format_refs = format_names
             .as_deref()
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
@@ -641,6 +635,7 @@ impl PyImage {
             open_mode_input_from_python(mode)?,
             open_formats_input_from_python(formats)?,
         )
+        .map(|_| ())
         .map_err(map_error)
     }
 

@@ -855,7 +855,7 @@ pub enum PythonOpenFormatsInput {
 pub fn validate_python_open_inputs(
     mode: PythonOpenModeInput,
     formats: PythonOpenFormatsInput,
-) -> Result<(), PilError> {
+) -> Result<Option<Vec<String>>, PilError> {
     match mode {
         PythonOpenModeInput::None => {}
         PythonOpenModeInput::Name(name) if name == "r" => {}
@@ -868,12 +868,13 @@ pub fn validate_python_open_inputs(
             return Err(PilError::ValueError(format!("bad mode {value}")));
         }
     }
-    if matches!(formats, PythonOpenFormatsInput::Invalid(_)) {
-        return Err(PilError::TypeError(
+    match formats {
+        PythonOpenFormatsInput::None => Ok(None),
+        PythonOpenFormatsInput::Names(names) => Ok(Some(names)),
+        PythonOpenFormatsInput::Invalid(_) => Err(PilError::TypeError(
             "formats must be a list or tuple".to_owned(),
-        ));
+        )),
     }
-    Ok(())
 }
 
 /// Validates byte paths before the binding translates decode failures.
