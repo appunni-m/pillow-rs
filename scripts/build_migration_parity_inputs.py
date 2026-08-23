@@ -24585,6 +24585,55 @@ def build_nuanced_cases(
             for prefix, mode in (("rgb16-png", "RGB"), ("rgba16-png", "RGBA"))
             for pattern in range(10)
         ),
+        # Coverage batch 2026-08-24a: exercise DynamicImage's typed geometry
+        # branches through supported public image inputs.  Analysis already
+        # reaches these decoders, but geometry needs to materialize the typed
+        # enum variants through the public transpose, ImageOps flip/mirror,
+        # and crop endpoints.  These are valid input-only workflows; no
+        # expected output, hash, or coverage metadata is authored here.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "parameter.method",
+                "name": f"coverage-batch-dynamic-typed-transpose-{prefix}-{method}",
+                "scenario_inline_image": f"{prefix}-pattern-3"
+                if prefix in {"rgb16-png", "rgba16-png"}
+                else prefix,
+                "values": {"method": literal(method)},
+                "observe_result": "tobytes",
+            }
+            for prefix in ("i16-frombytes", "l16-png", "rgb16-png", "rgba16-png")
+            for method in range(7)
+        ),
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": operation,
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-dynamic-typed-{operation}-{prefix}",
+                "scenario_inline_image": f"{prefix}-pattern-3"
+                if prefix in {"rgb16-png", "rgba16-png"}
+                else prefix,
+                "observe_result": "tobytes",
+            }
+            for operation in ("flip", "mirror")
+            for prefix in ("i16-frombytes", "l16-png", "rgb16-png", "rgba16-png")
+        ),
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "crop",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-dynamic-typed-crop-{prefix}",
+                "scenario_inline_image": f"{prefix}-pattern-3"
+                if prefix in {"rgb16-png", "rgba16-png"}
+                else prefix,
+                "values": {"box": literal([0, 0, 1, 1])},
+                "observe_result": "tobytes",
+            }
+            for prefix in ("i16-frombytes", "l16-png", "rgb16-png", "rgba16-png")
+        ),
         # Coverage batch 2026-08-16a: exercise the public L16 entropy path.
         # ImageStat and getbbox intentionally keep their I;16* fast paths in
         # byte/scalar storage, but entropy reduces L16 through DynamicImage's
