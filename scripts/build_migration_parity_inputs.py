@@ -26140,6 +26140,63 @@ def build_nuanced_cases(
             }
             for pattern in range(100)
         ),
+        # Coverage batch 2026-08-23g: exercise scalar ImageOps routes that
+        # native byte layouts intentionally bypass. Palette contain reaches
+        # the equal-aspect branch, palette pad reaches the zero-source guard,
+        # and palette/CMYK crop reaches both packed crop-border channel arms.
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "contain",
+            "requirement_suffix": "parameter.size",
+            "name": "coverage-batch-scalar-imageops-p-contain-equal-aspect",
+            "mode": "P",
+            "size": [8, 8],
+            "edge": "nonzero-pixel",
+            "pixel": 7,
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([4, 4]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "pad",
+            "requirement_suffix": "parameter.size",
+            "name": "coverage-batch-scalar-imageops-p-pad-zero-width",
+            "mode": "P",
+            "size": [0, 2],
+            "edge": "zero-size-frombytes",
+            "observe_result": "tobytes",
+            "values": {
+                "size": literal([2, 2]),
+                "method": literal(0),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "crop",
+            "requirement_suffix": "parameter.border",
+            "name": "coverage-batch-scalar-imageops-p-crop-border",
+            "mode": "P",
+            "size": [8, 8],
+            "edge": "nonzero-pixel",
+            "pixel": 7,
+            "observe_result": "tobytes",
+            "values": {"border": literal(1)},
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "crop",
+            "requirement_suffix": "parameter.border",
+            "name": "coverage-batch-scalar-imageops-cmyk-crop-border",
+            "mode": "CMYK",
+            "size": [8, 8],
+            "edge": "nonzero-pixel",
+            "pixel": [17, 83, 149, 211],
+            "observe_result": "tobytes",
+            "values": {"border": literal(1)},
+        },
         # Coverage batch 2026-08-14t: exercise the maintained row-parallel
         # paths with public ImageOps inputs at the 512×512 threshold. The
         # existing large workloads are benchmark-only, so they must not be
