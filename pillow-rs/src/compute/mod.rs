@@ -425,7 +425,6 @@ mod pool_cpu;
 #[cfg(feature = "gpu")]
 mod pool_gpu;
 mod pool_simd;
-#[allow(dead_code)]
 pub(crate) mod registry;
 
 pub(crate) use pool_cpu::CpuPool;

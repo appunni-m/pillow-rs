@@ -436,8 +436,9 @@ pub fn execute_cpu(
     f(img, op, mode)
 }
 
-/// Returns embedded WGSL source for a registered variant key.
-pub fn gpu_shader_source_for_key(key: &str) -> Result<Option<&'static str>, PilError> {
+/// Returns embedded WGSL source for a registered variant key in tests.
+#[cfg(test)]
+pub(crate) fn gpu_shader_source_for_key(key: &str) -> Result<Option<&'static str>, PilError> {
     Ok(registry()?.get(key).and_then(|e| e.gpu_source))
 }
 
