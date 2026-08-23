@@ -213,6 +213,8 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::DrawPieslice { .. }
             | PipelineOp::DrawPoint { .. }
             | PipelineOp::PutPixel { .. }
+            // PutData records the image's current mode when it is queued, so
+            // the generic mode-preserving planner path is authoritative.
             | PipelineOp::PutData { .. }
             | PipelineOp::Eval { .. }
             | PipelineOp::PointOp { .. }
@@ -270,9 +272,6 @@ fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
 /// mode cache is separate from the pixel cache because metadata reads must not
 /// publish or expose a partially executed image.
 fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
-    if let PipelineOp::PutData { mode, .. } = op {
-        return Some(pixel_mode_name(*mode).to_owned());
-    }
     if op_preserves_mode(op) {
         return Some(current.to_owned());
     }
