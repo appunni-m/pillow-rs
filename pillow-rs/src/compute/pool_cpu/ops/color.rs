@@ -1,12 +1,10 @@
 //! Color/Convert CPU operations extracted from image.rs execute_op().
 //! These implement PIL-compatible color mode conversion, quantization, and palette remapping.
 
-use crate::checked_dims::CheckedDims;
 use crate::color::pil_grayscale;
 use crate::error::PilError;
 use crate::image::preserve_mode;
-use crate::ops::quantize::median_cut_quantize_rgb;
-use crate::pipeline::{ColorMode, DitherMethod};
+use crate::pipeline::ColorMode;
 use crate::raster::DynamicImage;
 use crate::raster::GenericImageView;
 
@@ -136,40 +134,6 @@ pub fn op_convert(
             PilError::ValueError("deferred conversion mode must be materialized first".into()),
         ),
     }
-}
-
-/// Legacy registry quantization implementation.
-///
-/// The supported public [`Image::quantize`](crate::Image::quantize) path owns
-/// palette construction, alpha handling, and method validation. This simpler
-/// deferred operation is retained only for internally constructed
-/// `PipelineOp::Quantize` values; no supported public pipeline creates one.
-#[deprecated(note = "legacy deferred quantization; use Image::quantize instead")]
-pub fn op_quantize(
-    img: &DynamicImage,
-    colors: usize,
-    _dither: Option<&DitherMethod>,
-) -> Result<DynamicImage, PilError> {
-    let rgb = img.to_rgb8();
-    let (w, h) = rgb.dimensions();
-    let n = CheckedDims::new(w, h, 1)?.total_pixels();
-    if n == 0 {
-        return Err(PilError::ValueError("quantize: empty image".into()));
-    }
-    let colors = colors.clamp(2, 256);
-    let rgb_raw = rgb.into_raw();
-    if rgb_raw.len() < colors * 3 {
-        return Err(PilError::ValueError(
-            "quantize: not enough pixel data".into(),
-        ));
-    }
-    // Use median-cut quantization instead of NeuQuant.
-    let (indices, _palette) = median_cut_quantize_rgb(&rgb_raw, colors);
-    let mut out = crate::raster::GrayImage::new(w, h);
-    for (i, pixel) in out.pixels_mut().enumerate().take(n) {
-        pixel[0] = indices.get(i).copied().unwrap_or(0);
-    }
-    Ok(DynamicImage::ImageLuma8(out))
 }
 
 /// Remap palette indices according to a destination map.

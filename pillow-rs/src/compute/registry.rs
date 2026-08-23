@@ -1181,9 +1181,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         op_chops_logical_xor, op_chops_multiply, op_chops_offset, op_chops_overlay,
         op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
     };
-    use crate::compute::pool_cpu::ops::color::{
-        op_convert, op_extract_band, op_quantize, op_remap_palette,
-    };
+    use crate::compute::pool_cpu::ops::color::{op_convert, op_extract_band, op_remap_palette};
     use crate::compute::pool_cpu::ops::draw::{
         op_draw_arc, op_draw_chord, op_draw_circle, op_draw_ellipse, op_draw_line,
         op_draw_pieslice, op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
@@ -1346,23 +1344,6 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                 }
             },
             "convert.wgsl"
-        ),
-    );
-    m.insert(
-        "Quantize",
-        gpu_entry!(
-            |img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::Quantize { colors, dither } = op {
-                    let _ = dither;
-                    op_quantize(img, *colors as usize, None)
-                } else {
-                    Err(PilError::ValueError("expected Quantize op".into()))
-                }
-            },
-            "quantize.wgsl"
         ),
     );
     m.insert(

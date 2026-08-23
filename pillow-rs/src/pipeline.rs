@@ -112,8 +112,8 @@ pub enum PipelineOp {
     ///
     /// The public [`Image::quantize`](crate::Image::quantize) implementation
     /// owns quantization and materializes the palette directly. This variant
-    /// remains only for compatibility with internally constructed registry
-    /// operations and is not produced by a supported public pipeline.
+    /// remains only for compatibility with operation metadata; it has no
+    /// registered executor and is not produced by a supported public pipeline.
     #[deprecated(note = "legacy deferred quantization; use Image::quantize instead")]
     Quantize {
         /// Requested palette color count.
