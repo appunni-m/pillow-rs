@@ -1673,7 +1673,7 @@ impl ImageOps {
     }
     #[wasm_bindgen(js_name = "scale")]
     pub fn scale(img: &Image, factor: f64) -> Result<Image, JsValue> {
-        pillow_rs::imageops_scale(&img.inner, factor, None)
+        pillow_rs::imageops_scale_with_input(&img.inner, factor, None)
             .map(|i| Image { inner: i })
             .map_err(err)
     }
@@ -2013,7 +2013,7 @@ pub fn crop_border(img: &Image, border: u32) -> Result<Image, JsValue> {
 
 #[wasm_bindgen(js_name = "scaleFn")]
 pub fn scale(img: &Image, factor: f64) -> Result<Image, JsValue> {
-    pillow_rs::imageops_scale(&img.inner, factor, None)
+    pillow_rs::imageops_scale_with_input(&img.inner, factor, None)
         .map(|i| Image { inner: i })
         .map_err(err)
 }
