@@ -168,9 +168,6 @@ fn rotate_resample_input_from_python(
     match value {
         None => Ok(pillow_rs::RotateResampleInput::None),
         Some(value) => {
-            if value.is_none() {
-                return Ok(pillow_rs::RotateResampleInput::None);
-            }
             if let Ok(code) = value.extract::<i64>() {
                 return Ok(pillow_rs::RotateResampleInput::Code(code));
             }
@@ -208,9 +205,6 @@ fn rotate_point_input_from_python(
     let Some(value) = value else {
         return Ok(pillow_rs::RotatePointInput::Default);
     };
-    if value.is_none() {
-        return Ok(pillow_rs::RotatePointInput::Default);
-    }
     if let Ok(values) = value.extract::<Vec<f64>>() {
         return Ok(pillow_rs::RotatePointInput::Values(values));
     }
