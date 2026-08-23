@@ -4312,7 +4312,59 @@ class WorkflowBuilder:
 
             chain = self.scenario_chain
             observation_step: str | None = None
-            if chain == "jpeg-to-p-exif-transpose":
+            if chain == "gpu-lut-cache":
+                image_step = self.ensure_image(mode=self.mode)
+                lut = self.scenario_values.get("lut")
+                if lut is None:
+                    raise ValueError("gpu-lut-cache requires a public LUT input")
+                first_point = self.add_step(
+                    "PIL.Image.Image",
+                    "point",
+                    receiver=binding(image_step),
+                    arguments={"lut": lut},
+                    step_id="setup-lut-first-point",
+                )
+                receiver_step = self.add_step(
+                    "PIL.ImageOps",
+                    "mirror",
+                    receiver=None,
+                    arguments={"image": binding(first_point)},
+                    step_id="setup-lut-mirror",
+                )
+            elif chain == "gpu-lut-growth":
+                image_step = self.ensure_image(mode=self.mode)
+                cache_lut = self.scenario_values.get("cache_lut")
+                if cache_lut is None:
+                    raise ValueError("gpu-lut-growth requires a cache LUT input")
+                first_point = self.add_step(
+                    "PIL.Image.Image",
+                    "point",
+                    receiver=binding(image_step),
+                    arguments={"lut": cache_lut},
+                    step_id="setup-growth-first-point",
+                )
+                first_mirror = self.add_step(
+                    "PIL.ImageOps",
+                    "mirror",
+                    receiver=None,
+                    arguments={"image": binding(first_point)},
+                    step_id="setup-growth-first-mirror",
+                )
+                second_point = self.add_step(
+                    "PIL.Image.Image",
+                    "point",
+                    receiver=binding(first_mirror),
+                    arguments={"lut": cache_lut},
+                    step_id="setup-growth-second-point",
+                )
+                receiver_step = self.add_step(
+                    "PIL.ImageOps",
+                    "mirror",
+                    receiver=None,
+                    arguments={"image": binding(second_point)},
+                    step_id="setup-growth-second-mirror",
+                )
+            elif chain == "jpeg-to-p-exif-transpose":
                 image_step = self.ensure_image(mode="RGB")
                 receiver_step = self.add_step(
                     "PIL.Image.Image",
@@ -12025,6 +12077,96 @@ def build_nuanced_cases(
             "size": [4 + pattern % 3, 4 + (pattern // 3) % 3],
             "observe_result": "tobytes",
             "values": {"lut": literal(lut)},
+        }
+
+    def gpu_lut_cache_spec(pattern: int) -> dict[str, Any]:
+        """Build a public pipeline with the same LUT on both sides of a mirror.
+
+        The GPU planner fuses only adjacent point operations. A public mirror
+        between two identical point tables therefore keeps both LUT operations
+        in one bounded batch and exercises the execution-wide repeated-LUT
+        cache without embedding any expected output.
+        """
+
+        mode, bands = (
+            ("L", 1),
+            ("LA", 2),
+            ("RGB", 3),
+            ("RGBA", 4),
+        )[pattern % 4]
+        lut = [
+            (sample * 11 + band * 53 + pattern * 17) % 256
+            for band in range(bands)
+            for sample in range(256)
+        ]
+        pixel = (
+            37 + pattern % 200
+            if mode == "L"
+            else [
+                (37 + pattern * 7) % 256,
+                (91 + pattern * 11) % 256,
+                *(([143 + pattern * 13] if mode in {"RGB", "RGBA"} else [])),
+                *(([197 + pattern * 17] if mode == "RGBA" else [])),
+            ]
+        )
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": f"coverage-batch-gpu-lut-cache-{pattern:03d}",
+            "mode": mode,
+            "size": [8 + pattern % 3, 7 + (pattern // 3) % 3],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "chain": "gpu-lut-cache",
+            "values": {"lut": literal(lut)},
+            "observe_result": "tobytes",
+        }
+
+    def gpu_lut_growth_spec(pattern: int) -> dict[str, Any]:
+        """Build a repeated cached LUT followed by a distinct public LUT."""
+
+        mode, bands = (
+            ("L", 1),
+            ("LA", 2),
+            ("RGB", 3),
+            ("RGBA", 4),
+        )[pattern % 4]
+        cache_lut = [
+            (sample * 7 + band * 61 + pattern * 23) % 256
+            for band in range(bands)
+            for sample in range(256)
+        ]
+        final_lut = [
+            (sample * 13 + band * 47 + pattern * 29) % 256
+            for band in range(bands)
+            for sample in range(256)
+        ]
+        pixel = (
+            43 + pattern % 190
+            if mode == "L"
+            else [
+                (43 + pattern * 5) % 256,
+                (97 + pattern * 9) % 256,
+                *(([151 + pattern * 13] if mode in {"RGB", "RGBA"} else [])),
+                *(([203 + pattern * 17] if mode == "RGBA" else [])),
+            ]
+        )
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": f"coverage-batch-gpu-lut-growth-{pattern:03d}",
+            "mode": mode,
+            "size": [9 + pattern % 3, 6 + (pattern // 3) % 3],
+            "edge": "nonzero-pixel",
+            "pixel": pixel,
+            "chain": "gpu-lut-growth",
+            "values": {
+                "cache_lut": literal(cache_lut),
+                "lut": literal(final_lut),
+            },
+            "observe_result": "tobytes",
         }
 
     def imageops_coverage_spec(pattern: int) -> dict[str, Any]:
@@ -26099,6 +26241,12 @@ def build_nuanced_cases(
         # Coverage batch 2026-08-14ae: exercise expanded public point LUTs
         # across the native one-, two-, three-, and four-band mode families.
         *(point_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-23a: exercise the GPU execution-wide cache
+        # with two identical public LUT operations separated by a mirror.
+        *(gpu_lut_cache_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-23b: exercise LUT-arena growth when a
+        # distinct public table follows the repeated execution-wide table.
+        *(gpu_lut_growth_spec(pattern) for pattern in range(100)),
         # Coverage batch 2026-08-14af: exercise public ImageOps color,
         # centering, geometry, and mode-contract normalization paths.
         *(imageops_coverage_spec(pattern) for pattern in range(100)),
