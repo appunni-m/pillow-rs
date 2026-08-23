@@ -69,6 +69,11 @@ pub fn align_row_to_32(data: &[u8], width: u32, bits_per_pixel: u8) -> Result<Ve
 /// if any element is outside the 0..256 range.
 ///
 /// This corresponds to PIL's `Image.fromarray` list-flattening path.
+///
+/// The maintained array path now resolves host array interfaces directly in
+/// [`crate::ops::array::from_resolved_array_interface`]. Keep this old helper
+/// for Rust source compatibility, but migrate callers to the array API.
+#[deprecated(note = "legacy list flattener; use from_resolved_array_interface instead")]
 pub fn flatten_pixel_list(values: &[i32]) -> Result<Vec<u8>, PilError> {
     if values.is_empty() {
         return Err(PilError::ValueError(
