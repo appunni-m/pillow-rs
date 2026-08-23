@@ -1436,12 +1436,12 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    /// Deprecated compatibility alias for the module-level `pillow_rs.blend`.
+    /// Deprecated pillow-rs-only alias for the module-level `pillow_rs.blend`.
     ///
     /// The maintained Python facade calls `_core.image_blend` directly. Keep
     /// this wrapper behavior-free and in sync only until the compatibility
-    /// surface can be removed.
-    #[deprecated(note = "use the module-level pillow_rs.blend wrapper")]
+    /// surface can be removed; this is not part of Pillow's `Image.Image` API.
+    #[deprecated(note = "pillow-rs-only alias; use the module-level pillow_rs.blend wrapper")]
     #[classmethod]
     fn blend(
         _cls: &Bound<'_, PyType>,
@@ -1457,12 +1457,12 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    /// Deprecated compatibility alias for the module-level `pillow_rs.composite`.
+    /// Deprecated pillow-rs-only alias for the module-level `pillow_rs.composite`.
     ///
     /// The maintained Python facade calls `_core.image_composite` directly.
     /// Keep this wrapper behavior-free and in sync only until the compatibility
-    /// surface can be removed.
-    #[deprecated(note = "use the module-level pillow_rs.composite wrapper")]
+    /// surface can be removed; this is not part of Pillow's `Image.Image` API.
+    #[deprecated(note = "pillow-rs-only alias; use the module-level pillow_rs.composite wrapper")]
     #[classmethod]
     fn composite(
         _cls: &Bound<'_, PyType>,
@@ -1479,12 +1479,12 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    /// Deprecated compatibility alias for the module-level `pillow_rs.merge`.
+    /// Deprecated pillow-rs-only alias for the module-level `pillow_rs.merge`.
     ///
     /// The maintained Python facade calls `_core.image_merge` directly. Keep
     /// this wrapper behavior-free and in sync only until the compatibility
-    /// surface can be removed.
-    #[deprecated(note = "use the module-level pillow_rs.merge wrapper")]
+    /// surface can be removed; this is not part of Pillow's `Image.Image` API.
+    #[deprecated(note = "pillow-rs-only alias; use the module-level pillow_rs.merge wrapper")]
     #[classmethod]
     fn merge(
         _cls: &Bound<'_, PyType>,
