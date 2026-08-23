@@ -706,3 +706,59 @@ pipeline semantics, these inputs therefore do not reach the intended helper
 despite being valid and parity-correct. The temporary four-case batch was
 pruned; no coverage, denominator, filter, output, hash, or threshold data was
 changed.
+
+## Accepted input: repeated public GPU LUT cache
+
+One hundred valid public `PIL.Image.Image.point` workflows were added across
+L, LA, RGB, and RGBA. Each workflow applies the same deterministic expanded
+LUT, calls public `ImageOps.mirror`, and applies that LUT again. The mirror
+keeps the two point operations non-adjacent, so the GPU planner cannot fuse
+them away and the execution-wide repeated-LUT cache is exercised through
+supported inputs. No expected output, hash, or coverage metadata is stored in
+the generator.
+
+Representative cases 0–3 passed focused exact CPU parity. The maintained input
+regeneration produced all 100 cases, and the registered all-backend coverage
+lane selected 10,327 parity cases across 24 plans with zero failures.
+
+The registered bounded all-CPU/SIMD/GPU Coverage MCP run
+`d4362460-5318-44c5-91b2-509fadf7ea25` passed in 199.610 seconds with exit
+code 0 and ingested snapshot `9840bd6a-2147-4490-8fdd-a686392ddecd`. No hang,
+timeout, cancellation, GPU-memory change, or setting change occurred.
+Compared with baseline snapshot `3b54f900-5fcc-4dcc-a054-ddafdc2c0f55`,
+Coverage MCP reported +21 lines, +28 regions, +8 branches, and +0 functions:
+34,493/39,438 lines, 55,417/64,241 regions, 5,603/6,968 branches, and
+2,667/3,259 functions. MCP source evidence marks
+`pillow-rs/src/compute/pool_gpu/mod.rs:147-155` and the associated LUT arena
+upload/reuse ranges at `1501-1510`, `1661-1662`, and `1752` covered by this
+batch. The retained cases do not reach the separate capacity-overflow and
+cache-growth fallbacks at lines 143, 156, 1664, and 1765-1768; those remain
+documented as the next bounded GPU target, subject to safe public-input
+construction.
+
+## Accepted input: public GPU LUT-arena growth
+
+One hundred valid public `PIL.Image.Image.point` workflows were added across
+L, LA, RGB, and RGBA. Each applies repeated LUT A on both sides of a public
+`ImageOps.mirror`, mirrors again, and then applies a distinct LUT B. This
+keeps LUT A in the execution-wide cache while forcing the bounded local LUT
+arena to grow for LUT B; all behavior remains expressed through public image
+inputs and no expected output or hash is embedded.
+
+Representative cases 0–3 passed focused exact CPU parity. The maintained input
+regeneration produced all 100 cases, and the registered all-backend coverage
+lane selected 10,427 parity cases across 24 plans with zero failures.
+
+The registered bounded all-CPU/SIMD/GPU Coverage MCP run
+`765afb8c-7436-4e0e-9f44-655e91e64d66` passed in 204.719 seconds with exit
+code 0 and ingested snapshot `25b52c40-b837-4990-a2d4-5f1c5f6a8d6e`. No hang,
+timeout, cancellation, GPU-memory change, or setting change occurred.
+Compared with baseline snapshot `9840bd6a-2147-4490-8fdd-a686392ddecd`,
+Coverage MCP reported +7 lines, +5 regions, +2 branches, and +0 functions:
+34,500/39,438 lines, 55,422/64,241 regions, 5,605/6,968 branches, and
+2,667/3,259 functions. MCP source evidence marks
+`pillow-rs/src/compute/pool_gpu/mod.rs:1764-1768` improved and covered by this
+family. The remaining repeated-resource capacity fallbacks at lines 143, 156,
+and 1664 require exceeding the fixed auxiliary-cache budget or bypassing the
+execution-wide cache; they are not attempted with oversized or unbounded
+public workloads.
