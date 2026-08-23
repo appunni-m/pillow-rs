@@ -426,19 +426,9 @@ pub fn op_merge(
     mode: &ColorMode,
     bands: &[Arc<Image>],
 ) -> Result<DynamicImage, PilError> {
-    let _n_expected = match mode {
-        ColorMode::RGB => 3,
-        ColorMode::RGBA => 4,
-        ColorMode::CMYK => 4,
-        ColorMode::LA => 2,
-        ColorMode::L | ColorMode::Mode1 => 1,
-        _ => {
-            return Err(PilError::ValueError(format!(
-                "Unsupported merge mode: {:?}",
-                mode
-            )));
-        }
-    };
+    // Image::merge validates the supported mode, band count, band modes, and
+    // dimensions before queuing this operation. The executor therefore only
+    // handles the validated mode matrix below.
     // Get pixel data from each band
     let mut band_pixels: Vec<Vec<u8>> = Vec::new();
     // First band is the current image
@@ -447,12 +437,6 @@ pub fn op_merge(
     band_pixels.push(first_gray.into_raw());
     for band in bands.iter().skip(1) {
         let b_img = band.materialize_for_ops()?;
-        // Pillow's ImagingMerge rejects bands with different dimensions. Do
-        // this check before indexing the packed samples so a malformed merge
-        // is a public ValueError instead of a Rust bounds panic.
-        if b_img.dimensions() != (w, h) {
-            return Err(PilError::ValueError("size mismatch".into()));
-        }
         let b_gray = b_img.to_luma8();
         band_pixels.push(b_gray.into_raw());
     }
@@ -524,6 +508,8 @@ pub fn op_merge(
                 .ok_or_else(|| PilError::ValueError("merge: buffer error".into()))?;
             Ok(DynamicImage::ImageLuma8(img))
         }
+        // Exhaustiveness for ColorMode variants that Image::merge rejects
+        // before it queues PipelineOp::Merge; not a supported input path.
         _ => Err(PilError::ValueError("Unsupported merge mode".into())),
     }
 }
