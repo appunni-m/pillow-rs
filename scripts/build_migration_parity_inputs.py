@@ -25010,6 +25010,23 @@ def build_nuanced_cases(
                 )
             )
         ),
+        # Coverage batch 2026-08-23c: exercise the reachable SIMD scalar
+        # converter with public unsigned-16-bit source images.  I;16 retains
+        # native L16 storage, unlike the RGBA-backed I/F compatibility modes,
+        # so these conversions cross the adapter's packed-scalar boundary.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "convert",
+                "requirement_suffix": "parameter.mode",
+                "name": f"coverage-batch-convert-i16-source-{target.lower()}",
+                "mode": "I;16",
+                "scenario_inline_image": "i16-frombytes-pattern-3",
+                "observe_result": "tobytes",
+                "values": {"mode": literal(target)},
+            }
+            for target in ("L", "LA", "CMYK")
+        ),
         # Coverage batch 2026-08-14aq: exercise the public RGBA->PA
         # transparent-palette reorder with distinct valid corner samples.
         *(convert_palette_alpha_coverage_spec(pattern) for pattern in range(100)),
