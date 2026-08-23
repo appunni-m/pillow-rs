@@ -106,15 +106,60 @@ fn uses_native_scalar_mode(img: &DynamicImage, mode: Option<&str>) -> bool {
         || matches!(img, DynamicImage::ImageLuma16(_))
 }
 
-fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<(usize, usize)> {
+fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
-        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some((1, 1)),
-        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some((2, 1)),
-        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some((3, 3)),
-        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some((4, 3)),
+        DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("L")) => Some(1),
+        DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA")) => Some(2),
+        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
+        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA")) => Some(4),
         _ => None,
     }
 }
+
+// Native byte transforms always operate on L/LA/RGB/RGBA layouts. Keeping
+// their active-channel masks in one table avoids duplicating an input-driven
+// branch in every closure monomorphization of `native_byte_transform`.
+const NATIVE_BYTE_ACTIVE_MASKS: [[u8; 16]; 5] = [
+    [0; 16],
+    [u8::MAX; 16],
+    [
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+        u8::MAX,
+        0,
+    ],
+    [u8::MAX; 16],
+    [
+        u8::MAX,
+        u8::MAX,
+        u8::MAX,
+        0,
+        u8::MAX,
+        u8::MAX,
+        u8::MAX,
+        0,
+        u8::MAX,
+        u8::MAX,
+        u8::MAX,
+        0,
+        u8::MAX,
+        u8::MAX,
+        u8::MAX,
+        0,
+    ],
+];
 
 #[inline]
 fn native_byte_transform<F>(
@@ -125,17 +170,12 @@ fn native_byte_transform<F>(
 where
     F: Fn(u8x16) -> u8x16,
 {
-    let (channels, active_channels) = native_byte_layout(img, mode)?;
-    let mut active = [0u8; 16];
-    for (index, slot) in active.iter_mut().enumerate() {
-        *slot = if index % channels < active_channels {
-            u8::MAX
-        } else {
-            0
-        };
-    }
-    let active = u8x16::new(active);
-    let inactive = u8x16::splat(u8::MAX) - active;
+    let channels = native_byte_layout(img, mode)?;
+    // `native_byte_layout` produces only indices 1..=4, so this lookup is
+    // total for every supported native byte image.
+    let active = NATIVE_BYTE_ACTIVE_MASKS[channels];
+    let active_vector = u8x16::new(active);
+    let inactive = u8x16::splat(u8::MAX) - active_vector;
     let mut result = img.clone();
     let bytes = match &mut result {
         DynamicImage::ImageLuma8(image) => image.as_mut(),
@@ -148,15 +188,15 @@ where
     for chunk in &mut chunks {
         let input = u8x16::new(<[u8; 16]>::try_from(&*chunk).ok()?);
         let transformed = transform(input);
-        let output = (transformed & active) | (input & inactive);
+        let output = (transformed & active_vector) | (input & inactive);
         chunk.copy_from_slice(&output.to_array());
     }
     let remainder = chunks.into_remainder();
     for (index, value) in remainder.iter_mut().enumerate() {
-        if index % channels < active_channels {
-            let input = u8x16::new([*value; 16]);
-            *value = transform(input).to_array()[0];
-        }
+        let input = u8x16::new([*value; 16]);
+        let transformed = transform(input).to_array()[0];
+        let mask = active[index % 16];
+        *value = (transformed & mask) | (*value & !mask);
     }
     Some(result)
 }
@@ -2787,7 +2827,7 @@ fn simd_pil_box_blur(
 }
 
 fn simd_native_blur_channels(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
-    let (channels, _) = native_byte_layout(img, mode)?;
+    let channels = native_byte_layout(img, mode)?;
     (1..=4).contains(&channels).then_some(channels)
 }
 
