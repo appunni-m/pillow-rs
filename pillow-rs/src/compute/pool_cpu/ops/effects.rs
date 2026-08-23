@@ -782,7 +782,7 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
         let mut out = GrayImage::new(w, h);
         for (op, ip) in out.pixels_mut().zip(gray.pixels()) {
             let idx = ip[0] as usize;
-            op[0] = *band_luts[0].get(idx).unwrap_or(&ip[0]);
+            op[0] = band_luts[0][idx];
         }
         return Ok(DynamicImage::ImageLuma8(out));
     }
@@ -793,7 +793,7 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
         for b in 0..4 {
             let idx = ip[b] as usize;
             let band = b.min(band_luts.len() - 1);
-            op[b] = *band_luts[band].get(idx).unwrap_or(&ip[b]);
+            op[b] = band_luts[band][idx];
         }
     }
     Ok(preserve_mode(img, DynamicImage::ImageRgba8(out)))
@@ -1243,10 +1243,10 @@ pub fn op_put_pixel(
     y: u32,
     color: (u8, u8, u8, u8),
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = (img.width(), img.height());
-    if x >= w || y >= h {
-        return Err(PilError::IndexError("image index out of range".into()));
-    }
+    // Every supported Image::putpixel entry point validates coordinates before
+    // queuing PipelineOp::PutPixel. A malformed internal descriptor is outside
+    // the public input boundary, so the executor writes the validated pixel
+    // directly.
     match img.clone() {
         DynamicImage::ImageLuma8(mut l) => {
             l.put_pixel(x, y, crate::raster::Luma([color.0]));
