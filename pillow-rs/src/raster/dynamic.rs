@@ -182,87 +182,10 @@ impl Clone for DynamicImage {
 }
 
 impl DynamicImage {
-    /// Creates a dynamic image backed by a buffer depending on the color type given.
-    #[must_use]
-    pub fn new(w: u32, h: u32, color: ColorType) -> DynamicImage {
-        match color {
-            ColorType::L8 => Self::new_luma8(w, h),
-            ColorType::La8 => Self::new_luma_a8(w, h),
-            ColorType::Rgb8 => Self::new_rgb8(w, h),
-            ColorType::Rgba8 => Self::new_rgba8(w, h),
-            // DynamicImage mirrors image-rs and has no native CMYK variant;
-            // callers retain CMYK losslessly through DecodedImage instead.
-            ColorType::Cmyk8 => panic!("DynamicImage has no native CMYK representation"),
-            ColorType::L16 => Self::new_luma16(w, h),
-            ColorType::La16 => Self::new_luma_a16(w, h),
-            ColorType::Rgb16 => Self::new_rgb16(w, h),
-            ColorType::Rgba16 => Self::new_rgba16(w, h),
-            ColorType::Rgb32F => Self::new_rgb32f(w, h),
-            ColorType::Rgba32F => Self::new_rgba32f(w, h),
-            ColorType::L32F => panic!("DynamicImage has no native scalar-f32 representation"),
-            ColorType::L32I => panic!("DynamicImage has no native scalar-i32 representation"),
-            _ => panic!("DynamicImage does not support this color representation"),
-        }
-    }
-
-    /// Creates a dynamic image backed by a buffer of gray pixels.
-    #[must_use]
-    pub fn new_luma8(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageLuma8(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of gray pixels with transparency.
-    #[must_use]
-    pub fn new_luma_a8(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageLumaA8(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of RGB pixels.
-    #[must_use]
-    pub fn new_rgb8(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageRgb8(ImageBuffer::new(w, h))
-    }
-
     /// Creates a dynamic image backed by a buffer of RGBA pixels.
     #[must_use]
     pub fn new_rgba8(w: u32, h: u32) -> DynamicImage {
         DynamicImage::ImageRgba8(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of gray pixels (16-bit).
-    #[must_use]
-    pub fn new_luma16(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageLuma16(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of gray pixels with transparency (16-bit).
-    #[must_use]
-    pub fn new_luma_a16(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageLumaA16(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of RGB pixels (16-bit).
-    #[must_use]
-    pub fn new_rgb16(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageRgb16(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of RGBA pixels (16-bit).
-    #[must_use]
-    pub fn new_rgba16(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageRgba16(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of RGB pixels (f32).
-    #[must_use]
-    pub fn new_rgb32f(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageRgb32F(ImageBuffer::new(w, h))
-    }
-
-    /// Creates a dynamic image backed by a buffer of RGBA pixels (f32).
-    #[must_use]
-    pub fn new_rgba32f(w: u32, h: u32) -> DynamicImage {
-        DynamicImage::ImageRgba32F(ImageBuffer::new(w, h))
     }
 
     /// Generic conversion to any pixel type using the ConvertBuffer trait.
