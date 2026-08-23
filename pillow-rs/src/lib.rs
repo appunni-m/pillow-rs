@@ -952,12 +952,6 @@ pub fn backend_gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     crate::compute::registry::gpu_supports(op)
 }
 
-/// Returns whether a pipeline operation maps to a GPU operation descriptor.
-#[cfg(feature = "test-api")]
-pub fn backend_map_op_to_gpu(op: &PipelineOp) -> Result<bool, PilError> {
-    Ok(crate::compute::registry::map_op_to_gpu(op)?.is_some())
-}
-
 /// Returns the backend support matrix as deterministic pretty JSON.
 #[cfg(feature = "test-api")]
 pub fn backend_support_matrix_json() -> Result<String, PilError> {
