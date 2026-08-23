@@ -82,6 +82,22 @@ macro_rules! gpu_entry {
     };
 }
 
+/// Create an OpEntry that retains a shader contract without a CPU executor.
+///
+/// Some deprecated descriptors remain in the operation metadata so backend
+/// contract tests can inspect their shader sources, while their supported
+/// public constructors materialize eagerly and never dispatch these entries.
+macro_rules! gpu_only_entry {
+    ($shader:literal) => {
+        $crate::compute::registry::OpEntry {
+            cpu_fn: None,
+            gpu_shader: Some($shader),
+            gpu_source: Some(include_str!(concat!("pool_gpu/shaders/", $shader))),
+            simd_fn: None,
+        }
+    };
+}
+
 static REGISTRY: OnceLock<Result<HashMap<&'static str, OpEntry>, PilError>> = OnceLock::new();
 
 /// Returns the global operation registry keyed by [`variant_key`].
@@ -1188,8 +1204,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     };
     use crate::compute::pool_cpu::ops::effects::{
         op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module,
-        op_effect_mandelbrot, op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste,
-        op_put_alpha, op_put_alpha_data, op_put_data, op_put_pixel, op_transform,
+        op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste, op_put_alpha,
+        op_put_alpha_data, op_put_data, op_put_pixel, op_transform,
     };
     use crate::compute::pool_cpu::ops::enhance::{
         op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast,
@@ -1206,8 +1222,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     };
     use crate::compute::pool_cpu::ops::imageops::{
         op_autocontrast, op_colorize, op_contain, op_cover, op_crop_border, op_equalize, op_expand,
-        op_fit, op_flip, op_grayscale, op_invert, op_linear_gradient, op_mirror, op_pad,
-        op_posterize, op_radial_gradient, op_scale, op_solarize,
+        op_fit, op_flip, op_grayscale, op_invert, op_mirror, op_pad, op_posterize, op_scale,
+        op_solarize,
     };
 
     // ── Geometry ──
@@ -2443,67 +2459,22 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         ),
     );
 
-    // ── LinearGradient (CPU-only for now) ──
+    // ── LinearGradient (deprecated shader contract only) ──
     m.insert(
         "LinearGradient",
-        gpu_entry!(
-            |_img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::LinearGradient { mode } = op {
-                    op_linear_gradient(mode)
-                } else {
-                    Err(PilError::ValueError("expected LinearGradient op".into()))
-                }
-            },
-            "linear_gradient.wgsl"
-        ),
+        gpu_only_entry!("linear_gradient.wgsl"),
     );
 
-    // ── RadialGradient ──
+    // ── RadialGradient (deprecated shader contract only) ──
     m.insert(
         "RadialGradient",
-        gpu_entry!(
-            |_img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::RadialGradient { mode } = op {
-                    op_radial_gradient(mode)
-                } else {
-                    Err(PilError::ValueError("expected RadialGradient op".into()))
-                }
-            },
-            "radial_gradient.wgsl"
-        ),
+        gpu_only_entry!("radial_gradient.wgsl"),
     );
 
-    // ── EffectMandelbrot ──
+    // ── EffectMandelbrot (deprecated shader contract only) ──
     m.insert(
         "EffectMandelbrot",
-        gpu_entry!(
-            |_img: &DynamicImage,
-             op: &PipelineOp,
-             _mode: Option<&str>|
-             -> Result<DynamicImage, PilError> {
-                if let PipelineOp::EffectMandelbrot {
-                    w,
-                    h,
-                    x0,
-                    y0,
-                    x1,
-                    y1,
-                    quality,
-                } = op
-                {
-                    op_effect_mandelbrot(*w, *h, *x0, *y0, *x1, *y1, *quality)
-                } else {
-                    Err(PilError::ValueError("expected EffectMandelbrot op".into()))
-                }
-            },
-            "effect_mandelbrot.wgsl"
-        ),
+        gpu_only_entry!("effect_mandelbrot.wgsl"),
     );
 
     // ── ImageDraw ops (CPU-only for now) ──

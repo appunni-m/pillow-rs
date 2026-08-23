@@ -568,7 +568,8 @@ pub enum PipelineOp {
     /// Legacy deferred linear-gradient descriptor.
     ///
     /// The public module constructor materializes the gradient eagerly. This
-    /// variant is retained for internal registry compatibility only.
+    /// deprecated descriptor is retained for operation metadata and shader
+    /// contract inspection only; it has no registered executor.
     #[deprecated(note = "legacy deferred gradient; use the public linear_gradient constructor")]
     LinearGradient {
         /// Output mode.
@@ -577,7 +578,8 @@ pub enum PipelineOp {
     /// Legacy deferred radial-gradient descriptor.
     ///
     /// The public module constructor materializes the gradient eagerly. This
-    /// variant is retained for internal registry compatibility only.
+    /// deprecated descriptor is retained for operation metadata and shader
+    /// contract inspection only; it has no registered executor.
     #[deprecated(note = "legacy deferred gradient; use the public radial_gradient constructor")]
     RadialGradient {
         /// Output mode.
@@ -588,7 +590,8 @@ pub enum PipelineOp {
     /// Legacy deferred Mandelbrot descriptor.
     ///
     /// The public module constructor materializes the effect eagerly. This
-    /// variant is retained for internal registry compatibility only.
+    /// deprecated descriptor is retained for operation metadata and shader
+    /// contract inspection only; it has no registered executor.
     #[deprecated(note = "legacy deferred Mandelbrot; use the public effect_mandelbrot constructor")]
     EffectMandelbrot {
         /// Target width of the produced image, in pixels.
