@@ -26158,19 +26158,17 @@ def build_nuanced_cases(
             for pattern in range(100)
         ),
         # Coverage batch 2026-08-23h: exercise the public SIMD native-byte
-        # transform tail with valid LA/RGBA ImageChops inputs whose byte
-        # payload is not a multiple of the 16-byte vector width.  ImageOps
-        # invert rejects these alpha modes before creating a pipeline, while
-        # ImageChops owns the supported InvertChops path.  Odd dimensions
-        # guarantee a non-empty remainder for both two- and four-byte pixels,
-        # so the active and inactive channel sides of the tail predicate are
-        # both input-driven observations.
+        # transform tail with valid LA/RGBA Brightness inputs.  Existing large
+        # ImageEnhance cases cover the 16-byte vector loop, while odd
+        # dimensions leave a remainder so both active and inactive channel
+        # sides of native_byte_transform's predicates at lines 131 and 156
+        # are input-driven observations.
         *(
             {
-                "surface": "PIL.ImageChops",
-                "operation": "invert",
-                "requirement_suffix": "behavior.default",
-                "name": f"coverage-batch-simd-native-tail-invert-{pattern:03d}",
+                "surface": "PIL.ImageEnhance.Brightness",
+                "operation": "enhance",
+                "requirement_suffix": "parameter.factor",
+                "name": f"coverage-batch-simd-native-byte-tail-brightness-{pattern:03d}",
                 "mode": "LA" if pattern % 2 else "RGBA",
                 "size": [
                     3 + 2 * (pattern % 3),
@@ -26190,6 +26188,7 @@ def build_nuanced_cases(
                         (211 + pattern * 73) % 256,
                     ]
                 ),
+                "values": {"factor": literal(0.5 + 0.25 * (pattern % 7))},
                 "observe_result": "tobytes",
             }
             for pattern in range(100)
