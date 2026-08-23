@@ -9539,7 +9539,7 @@
         "assets": [],
         "steps": [
           {
-            "step_id": "setup-image",
+            "step_id": "setup-image-rgb",
             "surface": "PIL.Image",
             "operation": "new",
             "receiver": null,
@@ -9566,7 +9566,7 @@
             }
           },
           {
-            "step_id": "setup-lut",
+            "step_id": "setup-lut-rgb",
             "surface": "PIL.ImageFilter",
             "operation": "Color3DLUT",
             "receiver": null,
@@ -9607,34 +9607,291 @@
             }
           },
           {
-            "step_id": "call",
+            "step_id": "call-rgb",
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "receiver": {
               "kind": "binding",
-              "step_id": "setup-image"
+              "step_id": "setup-image-rgb"
             },
             "arguments": {
               "filter": {
                 "kind": "binding",
-                "step_id": "setup-lut"
+                "step_id": "setup-lut-rgb"
               }
             }
           },
           {
-            "step_id": "materialize",
+            "step_id": "mode-rgb",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-rgb"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize-rgb",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
             "receiver": {
               "kind": "binding",
-              "step_id": "call"
+              "step_id": "call-rgb"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "setup-image-rgba",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGBA"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  16
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149,
+                  127
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-lut-rgba",
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": 2
+              },
+              "table": {
+                "kind": "literal",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "channels": {
+                "kind": "literal",
+                "value": 4
+              },
+              "target_mode": {
+                "kind": "literal",
+                "value": "RGBA"
+              }
+            }
+          },
+          {
+            "step_id": "call-rgba",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image-rgba"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-lut-rgba"
+              }
+            }
+          },
+          {
+            "step_id": "mode-rgba",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-rgba"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize-rgba",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-rgba"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "setup-image-cmyk",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "CMYK"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  16,
+                  16
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149,
+                  31
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-lut-cmyk",
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": 2
+              },
+              "table": {
+                "kind": "literal",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "channels": {
+                "kind": "literal",
+                "value": 4
+              },
+              "target_mode": {
+                "kind": "literal",
+                "value": "CMYK"
+              }
+            }
+          },
+          {
+            "step_id": "call-cmyk",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image-cmyk"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-lut-cmyk"
+              }
+            }
+          },
+          {
+            "step_id": "mode-cmyk",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-cmyk"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize-cmyk",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-cmyk"
             },
             "arguments": {}
           }
         ],
         "observations": [
-          "call",
-          "materialize"
+          "call-rgb",
+          "mode-rgb",
+          "materialize-rgb",
+          "call-rgba",
+          "mode-rgba",
+          "materialize-rgba",
+          "call-cmyk",
+          "mode-cmyk",
+          "materialize-cmyk"
         ]
       },
       "measurement": {
@@ -9660,7 +9917,7 @@
           16
         ],
         "mode": "RGB",
-        "chain_length": 1,
+        "chain_length": 6,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -20565,7 +20822,7 @@
         "assets": [],
         "steps": [
           {
-            "step_id": "setup-image",
+            "step_id": "setup-image-rgb",
             "surface": "PIL.Image",
             "operation": "new",
             "receiver": null,
@@ -20592,7 +20849,7 @@
             }
           },
           {
-            "step_id": "setup-lut",
+            "step_id": "setup-lut-rgb",
             "surface": "PIL.ImageFilter",
             "operation": "Color3DLUT",
             "receiver": null,
@@ -20633,34 +20890,291 @@
             }
           },
           {
-            "step_id": "call",
+            "step_id": "call-rgb",
             "surface": "PIL.Image.Image",
             "operation": "filter",
             "receiver": {
               "kind": "binding",
-              "step_id": "setup-image"
+              "step_id": "setup-image-rgb"
             },
             "arguments": {
               "filter": {
                 "kind": "binding",
-                "step_id": "setup-lut"
+                "step_id": "setup-lut-rgb"
               }
             }
           },
           {
-            "step_id": "materialize",
+            "step_id": "mode-rgb",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-rgb"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize-rgb",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
             "receiver": {
               "kind": "binding",
-              "step_id": "call"
+              "step_id": "call-rgb"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "setup-image-rgba",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "RGBA"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  32,
+                  24
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149,
+                  127
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-lut-rgba",
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": 2
+              },
+              "table": {
+                "kind": "literal",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "channels": {
+                "kind": "literal",
+                "value": 4
+              },
+              "target_mode": {
+                "kind": "literal",
+                "value": "RGBA"
+              }
+            }
+          },
+          {
+            "step_id": "call-rgba",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image-rgba"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-lut-rgba"
+              }
+            }
+          },
+          {
+            "step_id": "mode-rgba",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-rgba"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize-rgba",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-rgba"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "setup-image-cmyk",
+            "surface": "PIL.Image",
+            "operation": "new",
+            "receiver": null,
+            "arguments": {
+              "mode": {
+                "kind": "literal",
+                "value": "CMYK"
+              },
+              "size": {
+                "kind": "literal",
+                "value": [
+                  32,
+                  24
+                ]
+              },
+              "color": {
+                "kind": "literal",
+                "value": [
+                  17,
+                  83,
+                  149,
+                  31
+                ]
+              }
+            }
+          },
+          {
+            "step_id": "setup-lut-cmyk",
+            "surface": "PIL.ImageFilter",
+            "operation": "Color3DLUT",
+            "receiver": null,
+            "arguments": {
+              "size": {
+                "kind": "literal",
+                "value": 2
+              },
+              "table": {
+                "kind": "literal",
+                "value": [
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0,
+                  0.0
+                ]
+              },
+              "channels": {
+                "kind": "literal",
+                "value": 4
+              },
+              "target_mode": {
+                "kind": "literal",
+                "value": "CMYK"
+              }
+            }
+          },
+          {
+            "step_id": "call-cmyk",
+            "surface": "PIL.Image.Image",
+            "operation": "filter",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "setup-image-cmyk"
+            },
+            "arguments": {
+              "filter": {
+                "kind": "binding",
+                "step_id": "setup-lut-cmyk"
+              }
+            }
+          },
+          {
+            "step_id": "mode-cmyk",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-cmyk"
+            },
+            "arguments": {}
+          },
+          {
+            "step_id": "materialize-cmyk",
+            "surface": "PIL.Image.Image",
+            "operation": "tobytes",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "call-cmyk"
             },
             "arguments": {}
           }
         ],
         "observations": [
-          "call",
-          "materialize"
+          "call-rgb",
+          "mode-rgb",
+          "materialize-rgb",
+          "call-rgba",
+          "mode-rgba",
+          "materialize-rgba",
+          "call-cmyk",
+          "mode-cmyk",
+          "materialize-cmyk"
         ]
       },
       "measurement": {
@@ -20686,7 +21200,7 @@
           24
         ],
         "mode": "RGB",
-        "chain_length": 1,
+        "chain_length": 6,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -43746,6 +44260,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -43761,6 +44285,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -43773,6 +44307,8 @@
         ],
         "observations": [
           "cmyk",
+          "cmyk-mode",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -43796,7 +44332,7 @@
           8
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -43872,6 +44408,16 @@
             }
           },
           {
+            "step_id": "hsv-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "hsv"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -43887,6 +44433,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -43899,6 +44455,8 @@
         ],
         "observations": [
           "hsv",
+          "hsv-mode",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -43922,7 +44480,7 @@
           8
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -43998,6 +44556,16 @@
             }
           },
           {
+            "step_id": "ycbcr-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "ycbcr"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44013,6 +44581,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44025,6 +44603,8 @@
         ],
         "observations": [
           "ycbcr",
+          "ycbcr-mode",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -44048,7 +44628,7 @@
           8
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44124,6 +44704,16 @@
             }
           },
           {
+            "step_id": "int32-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "int32"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "gray",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44139,6 +44729,16 @@
             }
           },
           {
+            "step_id": "gray-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44151,6 +44751,8 @@
         ],
         "observations": [
           "int32",
+          "int32-mode",
+          "gray-mode",
           "materialize"
         ]
       },
@@ -44174,7 +44776,7 @@
           8
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44250,6 +44852,16 @@
             }
           },
           {
+            "step_id": "float32-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "float32"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "gray",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44265,6 +44877,16 @@
             }
           },
           {
+            "step_id": "gray-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44277,6 +44899,8 @@
         ],
         "observations": [
           "float32",
+          "float32-mode",
+          "gray-mode",
           "materialize"
         ]
       },
@@ -44300,7 +44924,7 @@
           8
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44372,6 +44996,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "gray",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44387,6 +45021,16 @@
             }
           },
           {
+            "step_id": "gray-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44399,6 +45043,8 @@
         ],
         "observations": [
           "cmyk",
+          "cmyk-mode",
+          "gray-mode",
           "materialize"
         ]
       },
@@ -44422,7 +45068,7 @@
           8
         ],
         "mode": "L",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44497,6 +45143,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "gray",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44512,6 +45168,16 @@
             }
           },
           {
+            "step_id": "gray-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44524,6 +45190,8 @@
         ],
         "observations": [
           "cmyk",
+          "cmyk-mode",
+          "gray-mode",
           "materialize"
         ]
       },
@@ -44547,7 +45215,7 @@
           8
         ],
         "mode": "LA",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44623,6 +45291,16 @@
             }
           },
           {
+            "step_id": "one-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "one"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "gray",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44638,6 +45316,16 @@
             }
           },
           {
+            "step_id": "gray-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44650,6 +45338,8 @@
         ],
         "observations": [
           "one",
+          "one-mode",
+          "gray-mode",
           "materialize"
         ]
       },
@@ -44673,7 +45363,7 @@
           8
         ],
         "mode": "L",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44750,6 +45440,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgba",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44765,6 +45465,16 @@
             }
           },
           {
+            "step_id": "rgba-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgba"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44777,6 +45487,8 @@
         ],
         "observations": [
           "la",
+          "la-mode",
+          "rgba-mode",
           "materialize"
         ]
       },
@@ -44800,7 +45512,7 @@
           8
         ],
         "mode": "RGBA",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -44877,6 +45589,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "la",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -44892,6 +45614,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -44905,6 +45637,8 @@
         "observations": [
           "cmyk",
           "la",
+          "cmyk-mode",
+          "la-mode",
           "materialize"
         ]
       },
@@ -44928,7 +45662,7 @@
           6
         ],
         "mode": "RGBA",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45004,6 +45738,16 @@
             }
           },
           {
+            "step_id": "pa-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "pa"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgba",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45019,6 +45763,16 @@
             }
           },
           {
+            "step_id": "rgba-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgba"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45031,6 +45785,8 @@
         ],
         "observations": [
           "pa",
+          "pa-mode",
+          "rgba-mode",
           "materialize"
         ]
       },
@@ -45054,7 +45810,7 @@
           6
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45131,6 +45887,16 @@
             }
           },
           {
+            "step_id": "pa-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "pa"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45146,6 +45912,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45158,6 +45934,8 @@
         ],
         "observations": [
           "pa",
+          "pa-mode",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -45181,7 +45959,7 @@
           6
         ],
         "mode": "RGBA",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45253,6 +46031,16 @@
             }
           },
           {
+            "step_id": "pa-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "pa"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "la",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45268,6 +46056,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45280,6 +46078,8 @@
         ],
         "observations": [
           "pa",
+          "pa-mode",
+          "la-mode",
           "materialize"
         ]
       },
@@ -45303,7 +46103,7 @@
           6
         ],
         "mode": "L",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45380,6 +46180,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgba",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45395,6 +46205,16 @@
             }
           },
           {
+            "step_id": "rgba-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgba"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45407,6 +46227,8 @@
         ],
         "observations": [
           "la",
+          "la-mode",
+          "rgba-mode",
           "materialize"
         ]
       },
@@ -45430,7 +46252,7 @@
           7
         ],
         "mode": "RGBA",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45506,6 +46328,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgba",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45521,6 +46353,16 @@
             }
           },
           {
+            "step_id": "rgba-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgba"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45533,6 +46375,8 @@
         ],
         "observations": [
           "la",
+          "la-mode",
+          "rgba-mode",
           "materialize"
         ]
       },
@@ -45556,7 +46400,7 @@
           7
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45628,6 +46472,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "la",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45643,6 +46497,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45655,6 +46519,8 @@
         ],
         "observations": [
           "rgb",
+          "rgb-mode",
+          "la-mode",
           "materialize"
         ]
       },
@@ -45678,7 +46544,7 @@
           7
         ],
         "mode": "L",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45750,6 +46616,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45765,6 +46641,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45777,6 +46663,8 @@
         ],
         "observations": [
           "cmyk",
+          "cmyk-mode",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -45800,7 +46688,7 @@
           7
         ],
         "mode": "L",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -45876,6 +46764,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "gray",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -45891,6 +46789,16 @@
             }
           },
           {
+            "step_id": "gray-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "gray"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -45903,6 +46811,8 @@
         ],
         "observations": [
           "cmyk",
+          "cmyk-mode",
+          "gray-mode",
           "materialize"
         ]
       },
@@ -45926,7 +46836,7 @@
           7
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -46002,6 +46912,16 @@
             }
           },
           {
+            "step_id": "palette-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "palette"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "rgb",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -46017,6 +46937,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -46029,6 +46959,8 @@
         ],
         "observations": [
           "palette",
+          "palette-mode",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -46052,7 +46984,7 @@
           7
         ],
         "mode": "RGB",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -61686,6 +62618,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -61698,6 +62640,7 @@
         ],
         "observations": [
           "rgb",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -61721,7 +62664,7 @@
           6
         ],
         "mode": "P",
-        "chain_length": 3,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -61793,6 +62736,16 @@
             }
           },
           {
+            "step_id": "rgb-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgb"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -61805,6 +62758,7 @@
         ],
         "observations": [
           "rgb",
+          "rgb-mode",
           "materialize"
         ]
       },
@@ -61828,7 +62782,7 @@
           6
         ],
         "mode": "P",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -61909,6 +62863,16 @@
             }
           },
           {
+            "step_id": "one-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "one"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -61921,6 +62885,7 @@
         ],
         "observations": [
           "one",
+          "one-mode",
           "materialize"
         ]
       },
@@ -61944,7 +62909,7 @@
           6
         ],
         "mode": "CMYK",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62021,6 +62986,16 @@
             }
           },
           {
+            "step_id": "one-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "one"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62033,6 +63008,7 @@
         ],
         "observations": [
           "one",
+          "one-mode",
           "materialize"
         ]
       },
@@ -62056,7 +63032,7 @@
           7
         ],
         "mode": "CMYK",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62133,6 +63109,16 @@
             }
           },
           {
+            "step_id": "int32-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "int32"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62145,6 +63131,7 @@
         ],
         "observations": [
           "int32",
+          "int32-mode",
           "materialize"
         ]
       },
@@ -62168,7 +63155,7 @@
           6
         ],
         "mode": "CMYK",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62245,6 +63232,16 @@
             }
           },
           {
+            "step_id": "float32-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "float32"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62257,6 +63254,7 @@
         ],
         "observations": [
           "float32",
+          "float32-mode",
           "materialize"
         ]
       },
@@ -62280,7 +63278,7 @@
           6
         ],
         "mode": "CMYK",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62352,6 +63350,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62364,6 +63372,7 @@
         ],
         "observations": [
           "cmyk",
+          "cmyk-mode",
           "materialize"
         ]
       },
@@ -62387,7 +63396,7 @@
           6
         ],
         "mode": "1",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62464,6 +63473,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62476,6 +63495,7 @@
         ],
         "observations": [
           "la",
+          "la-mode",
           "materialize"
         ]
       },
@@ -62499,7 +63519,7 @@
           6
         ],
         "mode": "CMYK",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62576,6 +63596,16 @@
             }
           },
           {
+            "step_id": "cmyk-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "cmyk"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "la",
             "surface": "PIL.Image.Image",
             "operation": "convert",
@@ -62591,6 +63621,16 @@
             }
           },
           {
+            "step_id": "la-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "la"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62604,6 +63644,8 @@
         "observations": [
           "cmyk",
           "la",
+          "cmyk-mode",
+          "la-mode",
           "materialize"
         ]
       },
@@ -62627,7 +63669,7 @@
           6
         ],
         "mode": "RGBA",
-        "chain_length": 2,
+        "chain_length": 4,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
@@ -62704,6 +63746,16 @@
             }
           },
           {
+            "step_id": "rgba-mode",
+            "surface": "PIL.Image.Image",
+            "operation": "mode",
+            "receiver": {
+              "kind": "binding",
+              "step_id": "rgba"
+            },
+            "arguments": {}
+          },
+          {
             "step_id": "materialize",
             "surface": "PIL.Image.Image",
             "operation": "tobytes",
@@ -62716,6 +63768,7 @@
         ],
         "observations": [
           "rgba",
+          "rgba-mode",
           "materialize"
         ]
       },
@@ -62739,7 +63792,7 @@
           6
         ],
         "mode": "CMYK",
-        "chain_length": 1,
+        "chain_length": 2,
         "operation_class": "point",
         "cache_state": "warm",
         "build_profile": "release"
