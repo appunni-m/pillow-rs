@@ -213,6 +213,9 @@ pub fn op_paste(
     if copy_width == 0 || copy_height == 0 {
         return Ok(img.clone());
     }
+    // Image::paste validates mask dimensions against the paste region before
+    // queuing this operation, so every loop coordinate is valid for the mask.
+    // Keep malformed PipelineOp fallback arms out of this public-input path.
 
     if img.color() == crate::raster::ColorType::L16 {
         // Pillow's Paste.c keeps I;16 samples as unsigned 16-bit values.
@@ -248,17 +251,8 @@ pub fn op_paste(
                     continue;
                 };
                 let mask_value = match mask_image {
-                    Luma16PasteMask::Luma(pixels)
-                        if source_x < pixels.width() && source_y < pixels.height() =>
-                    {
-                        pixels.get_pixel(source_x, source_y)[0]
-                    }
-                    Luma16PasteMask::Alpha(pixels)
-                        if source_x < pixels.width() && source_y < pixels.height() =>
-                    {
-                        pixels.get_pixel(source_x, source_y)[3]
-                    }
-                    _ => 0,
+                    Luma16PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
+                    Luma16PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
                 };
                 if mask_value == 0 {
                     continue;
@@ -312,17 +306,8 @@ pub fn op_paste(
                 continue;
             };
             let mask_value = match mask_image {
-                PasteMask::Luma(pixels)
-                    if source_x < pixels.width() && source_y < pixels.height() =>
-                {
-                    pixels.get_pixel(source_x, source_y)[0]
-                }
-                PasteMask::Alpha(pixels)
-                    if source_x < pixels.width() && source_y < pixels.height() =>
-                {
-                    pixels.get_pixel(source_x, source_y)[3]
-                }
-                _ => 0,
+                PasteMask::Luma(pixels) => pixels.get_pixel(source_x, source_y)[0],
+                PasteMask::Alpha(pixels) => pixels.get_pixel(source_x, source_y)[3],
             };
             if mask_value == 0 {
                 continue;
@@ -364,9 +349,9 @@ pub fn op_alpha_composite(
     source: &Arc<Image>,
 ) -> Result<DynamicImage, PilError> {
     let src_img = source.materialize_for_ops()?;
-    if (src_img.width(), src_img.height()) != (img.width(), img.height()) {
-        return Err(PilError::ValueError("images do not match".into()));
-    }
+    // Image::alpha_composite validates mode and dimensions before queuing this
+    // operation; this executor only receives matching source and destination
+    // images from supported public inputs.
 
     // LA mode: composite on native LA canvas, return LA (PIL behavior)
     if matches!(img.color(), crate::raster::ColorType::La8) {
