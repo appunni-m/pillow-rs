@@ -165,7 +165,7 @@ const NATIVE_BYTE_ACTIVE_MASKS: [[u8; 16]; 5] = [
 ];
 
 #[inline]
-fn native_byte_transform_bytes<F>(bytes: &mut [u8], channels: usize, transform: &F) -> Option<()>
+fn native_byte_transform_bytes<F>(bytes: &mut [u8], channels: usize, transform: &F)
 where
     F: Fn(u8x16) -> u8x16,
 {
@@ -176,7 +176,9 @@ where
     let inactive = u8x16::splat(u8::MAX) - active_vector;
     let mut chunks = bytes.chunks_exact_mut(16);
     for chunk in &mut chunks {
-        let input = u8x16::new(<[u8; 16]>::try_from(&*chunk).ok()?);
+        let input = u8x16::new(
+            <[u8; 16]>::try_from(&*chunk).expect("chunks_exact_mut yields 16-byte chunks"),
+        );
         let transformed = transform(input);
         let output = (transformed & active_vector) | (input & inactive);
         chunk.copy_from_slice(&output.to_array());
@@ -188,7 +190,6 @@ where
         let mask = active[index % 16];
         *value = (transformed & mask) | (*value & !mask);
     }
-    Some(())
 }
 
 #[inline]
@@ -203,22 +204,22 @@ where
     match img {
         DynamicImage::ImageLuma8(image) if matches!(mode, None | Some("L")) => {
             let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 1, &transform)?;
+            native_byte_transform_bytes(&mut result, 1, &transform);
             Some(DynamicImage::ImageLuma8(result))
         }
         DynamicImage::ImageLumaA8(image) if matches!(mode, None | Some("LA")) => {
             let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 2, &transform)?;
+            native_byte_transform_bytes(&mut result, 2, &transform);
             Some(DynamicImage::ImageLumaA8(result))
         }
         DynamicImage::ImageRgb8(image) if matches!(mode, None | Some("RGB")) => {
             let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 3, &transform)?;
+            native_byte_transform_bytes(&mut result, 3, &transform);
             Some(DynamicImage::ImageRgb8(result))
         }
         DynamicImage::ImageRgba8(image) if matches!(mode, None | Some("RGBA")) => {
             let mut result = image.clone();
-            native_byte_transform_bytes(&mut result, 4, &transform)?;
+            native_byte_transform_bytes(&mut result, 4, &transform);
             Some(DynamicImage::ImageRgba8(result))
         }
         _ => None,
@@ -232,10 +233,6 @@ where
 /// keeps alpha bytes unchanged when Pillow's operation does not invert alpha,
 /// while still allowing LA/RGBA to use the same interleaved path.
 fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
-    if !(1..=4).contains(&channels) {
-        return;
-    }
-
     let active_channels = if !invert_alpha && matches!(channels, 2 | 4) {
         channels - 1
     } else {
@@ -254,9 +251,8 @@ fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
     let inactive = u8x16::splat(u8::MAX) - active;
     let mut chunks = bytes.chunks_exact_mut(16);
     for chunk in &mut chunks {
-        let Ok(input) = <[u8; 16]>::try_from(&*chunk) else {
-            continue;
-        };
+        let input =
+            <[u8; 16]>::try_from(&*chunk).expect("chunks_exact_mut yields 16-byte chunks");
         let input = u8x16::new(input);
         let inverted = u8x16::splat(u8::MAX) - input;
         let output = (inverted & active) | (input & inactive);
