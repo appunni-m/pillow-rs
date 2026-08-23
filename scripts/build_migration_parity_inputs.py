@@ -25766,6 +25766,32 @@ def build_nuanced_cases(
                 )
             )
         ),
+        # Coverage batch 2026-08-23d: exercise scalar reduce through the
+        # public three-band color-space modes.  These modes retain explicit
+        # tags over byte-backed RGB storage, so SIMD's scalar adapter owns the
+        # valid partial edge blocks that the native L/LA/RGB/RGBA paths do not
+        # visit.  Non-divisible dimensions keep both edge guards reachable;
+        # result bytes are observed without authoring output data.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "reduce",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-reduce-scalar-color-space-{mode.lower()}-{pattern}",
+                "mode": mode,
+                "scenario_size": [5 + pattern % 5, 7 + (pattern // 5) % 5],
+                "edge": "nonzero-pixel",
+                "pixel": [
+                    (pattern * 29 + 17) % 256,
+                    (pattern * 47 + 83) % 256,
+                    (pattern * 61 + 149) % 256,
+                ],
+                "observe_result": "tobytes",
+                "values": {"factor": literal(2 + pattern % 3)},
+            }
+            for pattern in range(50)
+            for mode in ("HSV", "YCbCr")
+        ),
         # Coverage batch 2026-08-14p: exercise the remaining successful public
         # transform input families in one lazy graph per case.  The fillcolor
         # values use Pillow-accepted scalar, tuple, and named-color forms for
@@ -26071,6 +26097,24 @@ def build_nuanced_cases(
                 "values": {"border": literal(border)},
             }
             for border in range(9, 109)
+        ),
+        # Coverage batch 2026-08-23c: exercise the second operand of the
+        # public ImageOps.crop oversized-border guard.  The existing square
+        # matrix short-circuits on ``2 * border > width``; these rectangular
+        # inputs keep the width valid while the same border is oversized for
+        # height, so both public implementations evaluate the height side of
+        # the documented ValueError contract.
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "crop",
+                "requirement_suffix": "parameter.border",
+                "name": f"coverage-batch-crop-height-oversized-border-{border}",
+                "mode": "RGB",
+                "size": [2 * border + 1, 2 * border - 1],
+                "values": {"border": literal(border)},
+            }
+            for border in range(1, 101)
         ),
         # Coverage batch 2026-08-14t: exercise the maintained row-parallel
         # paths with public ImageOps inputs at the 512×512 threshold. The

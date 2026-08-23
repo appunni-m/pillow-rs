@@ -843,11 +843,19 @@ pub fn op_crop_border(img: &DynamicImage, border: u32) -> Result<DynamicImage, P
     let (w, h) = (img.width(), img.height());
     // Pillow permits a border exactly half the image size and returns a
     // zero-sized image; only a strictly oversized border is invalid.
-    if 2 * b > w || 2 * b > h {
+    if 2 * b > w {
         // Pillow delegates this invalid box to Image.crop(), whose public
-        // contract reports the right edge being left of the left edge.
+        // contract reports the right edge being left of the left edge when
+        // the width is the first invalid dimension.
         return Err(PilError::ValueError(
             "Coordinate 'right' is less than 'left'".into(),
+        ));
+    }
+    if 2 * b > h {
+        // Keep the height-specific crop error observable for rectangular
+        // inputs instead of collapsing it into the width diagnostic above.
+        return Err(PilError::ValueError(
+            "Coordinate 'lower' is less than 'upper'".into(),
         ));
     }
     Ok(img.crop_imm(b, b, w - 2 * b, h - 2 * b))
