@@ -876,6 +876,12 @@ pub fn op_effect_noise(img: &DynamicImage, sigma: f64) -> Result<DynamicImage, P
 
 // ── PointOp (lookup table) ──
 
+/// Legacy CPU point-operation registry hook.
+///
+/// Public point/eval calls use `op_eval`; `PipelineOp::PointOp` is retained
+/// only for internal GPU LUT fusion and does not reach this CPU hook through a
+/// supported public input.
+#[deprecated(note = "legacy point hook; use op_eval instead")]
 pub fn op_point(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let n_bands = match img.color() {
         crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
@@ -1763,9 +1769,12 @@ pub fn transform_mesh(
         })
 }
 
-/// Generate a Mandelbrot set fractal image.
-/// For each pixel (px, py) in w×h, maps to complex plane via extent [x0,y0]→[x1,y1],
-/// iterates z = z² + c up to `quality` times, outputs iteration count as grayscale.
+/// Legacy deferred Mandelbrot registry hook.
+///
+/// The public module constructor uses the eager implementation in
+/// `ops::module_fns`. This hook remains only for internally constructed
+/// `PipelineOp::EffectMandelbrot` values.
+#[deprecated(note = "legacy deferred Mandelbrot hook; use the public constructor instead")]
 pub fn op_effect_mandelbrot(
     w: u32,
     h: u32,

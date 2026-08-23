@@ -987,7 +987,12 @@ pub fn op_expand(
     Ok(preserve_mode(img, expanded))
 }
 
-/// Generate a 256x256 linear gradient (top-to-bottom, black-to-white).
+/// Legacy deferred linear-gradient registry hook.
+///
+/// The public `linear_gradient` constructor materializes its result eagerly;
+/// this hook remains only for internally constructed
+/// `PipelineOp::LinearGradient` values.
+#[deprecated(note = "legacy deferred gradient hook; use the public constructor instead")]
 pub fn op_linear_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicImage, PilError> {
     use crate::pipeline::ColorMode;
     let w = 256u32;
@@ -1017,7 +1022,12 @@ pub fn op_linear_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicIm
     }
 }
 
-/// Generate a 256x256 radial gradient (center-out, black-to-white).
+/// Legacy deferred radial-gradient registry hook.
+///
+/// The public `radial_gradient` constructor materializes its result eagerly;
+/// this hook remains only for internally constructed
+/// `PipelineOp::RadialGradient` values.
+#[deprecated(note = "legacy deferred gradient hook; use the public constructor instead")]
 pub fn op_radial_gradient(mode: &crate::pipeline::ColorMode) -> Result<DynamicImage, PilError> {
     use crate::pipeline::ColorMode;
     let w = 256u32;

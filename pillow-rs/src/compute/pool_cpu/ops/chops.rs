@@ -591,6 +591,12 @@ pub fn op_chops_offset(img: &DynamicImage, x: i32, y: i32) -> DynamicImage {
     preserve_mode(img, DynamicImage::ImageRgba8(result))
 }
 
+/// Legacy ImageChops blend registry hook.
+///
+/// Public module-level blending uses `op_blend_module`, whose operation also
+/// preserves the public size and mode contract. This hook remains only for
+/// internally constructed legacy `PipelineOp::Blend` values.
+#[deprecated(note = "legacy ImageChops blend hook; use op_blend_module instead")]
 pub fn op_chops_blend(
     img: &DynamicImage,
     other: &Arc<Image>,
@@ -620,6 +626,12 @@ pub fn op_chops_blend(
     Ok(preserve_mode(img, DynamicImage::ImageRgb8(out)))
 }
 
+/// Legacy ImageChops composite registry hook.
+///
+/// Public module-level compositing uses `op_composite_module`, which carries
+/// the mask-alpha and destination-canvas contract. This hook remains only for
+/// internally constructed legacy `PipelineOp::Composite` values.
+#[deprecated(note = "legacy ImageChops composite hook; use op_composite_module instead")]
 pub fn op_chops_composite(
     img: &DynamicImage,
     other: &Arc<Image>,
