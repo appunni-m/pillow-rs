@@ -26157,6 +26157,41 @@ def build_nuanced_cases(
             }
             for pattern in range(100)
         ),
+        # Coverage batch 2026-08-23h: exercise the public SIMD native-byte
+        # transform tail with valid LA/RGBA images whose byte payload is not a
+        # multiple of the 16-byte vector width.  Odd dimensions guarantee a
+        # non-empty remainder for both two- and four-byte pixels, so the
+        # active and inactive channel sides of the tail predicate are both
+        # input-driven observations.
+        *(
+            {
+                "surface": "PIL.ImageOps",
+                "operation": "invert",
+                "requirement_suffix": "behavior.default",
+                "name": f"coverage-batch-simd-native-tail-invert-{pattern:03d}",
+                "mode": "LA" if pattern % 2 else "RGBA",
+                "size": [
+                    3 + 2 * (pattern % 3),
+                    3 + 2 * ((pattern // 3) % 3),
+                ],
+                "edge": "nonzero-pixel",
+                "pixel": (
+                    [
+                        (17 + pattern * 31) % 256,
+                        (83 + pattern * 47) % 256,
+                    ]
+                    if pattern % 2
+                    else [
+                        (17 + pattern * 31) % 256,
+                        (83 + pattern * 47) % 256,
+                        (149 + pattern * 61) % 256,
+                        (211 + pattern * 73) % 256,
+                    ]
+                ),
+                "observe_result": "tobytes",
+            }
+            for pattern in range(100)
+        ),
         # Coverage batch 2026-08-23g: exercise scalar ImageOps routes that
         # native byte layouts intentionally bypass. Palette contain reaches
         # the equal-aspect branch, palette pad reaches the zero-source guard,
