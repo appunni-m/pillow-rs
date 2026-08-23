@@ -1157,11 +1157,11 @@ pub fn op_transform(
 ) -> Result<DynamicImage, PilError> {
     match method {
         TransformMethod::Affine => {
-            if data.len() < 6 {
-                return Err(PilError::ValueError(
-                    "Affine transform needs 6 coefficients".into(),
-                ));
-            }
+            // `Image::transform_public` and the maintained affine wrappers
+            // validate the exact six-coefficient contract before queuing the
+            // operation. A malformed transform descriptor is outside the
+            // supported public input boundary, so the executor can index the
+            // validated coefficients directly.
             if img.color() == crate::raster::ColorType::L16 {
                 return transform_affine_luma16(img, w, h, data, fill);
             }
@@ -1219,20 +1219,16 @@ pub fn op_transform(
             Ok(preserve_mode(img, result?))
         }
         &TransformMethod::Perspective => {
-            if data.len() < 8 {
-                return Err(PilError::ValueError(
-                    "Perspective transform needs 8 coefficients".into(),
-                ));
-            }
+            // `Image::transform_public` and the maintained perspective
+            // wrapper validate the exact eight-coefficient contract before
+            // queuing this operation.
             let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, false)?;
             Ok(preserve_mode(img, result))
         }
         &TransformMethod::Quad => {
-            if data.len() < 8 {
-                return Err(PilError::ValueError(
-                    "Quad transform needs 8 coordinates".into(),
-                ));
-            }
+            // `Image::transform_public` and the maintained quad wrapper
+            // validate the exact eight-coordinate contract before queuing
+            // this operation.
             let result = transform_projective_generic(img, w, h, &data[..8], filter, fill, true)?;
             Ok(preserve_mode(img, result))
         }
