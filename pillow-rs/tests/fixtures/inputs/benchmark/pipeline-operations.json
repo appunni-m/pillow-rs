@@ -41147,16 +41147,6 @@
             }
           },
           {
-            "step_id": "mode-after-alpha",
-            "surface": "PIL.Image.Image",
-            "operation": "mode",
-            "receiver": {
-              "kind": "binding",
-              "step_id": "setup-image"
-            },
-            "arguments": {}
-          },
-          {
             "step_id": "setup-filter",
             "surface": "PIL.ImageFilter",
             "operation": "GaussianBlur",
@@ -41223,7 +41213,6 @@
         ],
         "observations": [
           "alpha-set",
-          "mode-after-alpha",
           "blurred",
           "materialize"
         ]
@@ -41248,7 +41237,7 @@
           20
         ],
         "mode": "RGBA",
-        "chain_length": 5,
+        "chain_length": 4,
         "operation_class": "neighborhood",
         "cache_state": "warm",
         "build_profile": "release"
