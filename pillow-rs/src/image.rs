@@ -237,23 +237,6 @@ fn color_mode_name(mode: &ColorMode) -> &'static str {
     }
 }
 
-fn pixel_mode_name(mode: PixelMode) -> &'static str {
-    match mode {
-        PixelMode::L => "L",
-        PixelMode::LA => "LA",
-        PixelMode::RGB => "RGB",
-        PixelMode::RGBA => "RGBA",
-        PixelMode::P => "P",
-        PixelMode::PA => "PA",
-        PixelMode::CMYK => "CMYK",
-        PixelMode::Mode1 => "1",
-        PixelMode::YCbCr => "YCbCr",
-        PixelMode::HSV => "HSV",
-        PixelMode::I => "I",
-        PixelMode::F => "F",
-    }
-}
-
 fn known_putalpha_mode(mode: PixelMode) -> Option<&'static str> {
     match mode {
         PixelMode::YCbCr | PixelMode::HSV | PixelMode::RGB => Some("RGBA"),
@@ -285,7 +268,6 @@ fn known_pipeline_op_mode(op: &PipelineOp, current: &str) -> Option<String> {
             PipelineOp::Grayscale => "L",
             PipelineOp::Colorize { .. } => "RGB",
             PipelineOp::Constant { .. } => "L",
-            PipelineOp::Color3DLut { target_mode, .. } => pixel_mode_name(*target_mode),
             PipelineOp::PutAlpha { mode, .. } | PipelineOp::PutAlphaData { mode, .. } => {
                 known_putalpha_mode(*mode)?
             }
