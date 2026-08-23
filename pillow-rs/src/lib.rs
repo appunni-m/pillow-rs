@@ -270,7 +270,6 @@ pub use crate::ops::imageops::mirror as imageops_mirror;
 pub use crate::ops::imageops::pad as imageops_pad;
 pub use crate::ops::imageops::pad_with_input as imageops_pad_with_input;
 pub use crate::ops::imageops::posterize as imageops_posterize;
-pub use crate::ops::imageops::scale as imageops_scale;
 pub use crate::ops::imageops::scale_with_input as imageops_scale_with_input;
 pub use crate::ops::imageops::solarize as imageops_solarize;
 pub use crate::ops::imageops::validate_colorize_mode as imageops_validate_colorize_mode;
