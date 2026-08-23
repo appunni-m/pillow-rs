@@ -148,7 +148,7 @@ class Image(_PILImageBase):
     def blend(
         cls, im1: "Image", im2: "Image", alpha: float
     ) -> "Image":
-        """Deprecated compatibility alias for :func:`pillow_rs.blend`."""
+        """Deprecated pillow-rs-only alias for :func:`pillow_rs.blend`."""
         rust_image = RustImage.blend(im1._rust_image, im2._rust_image, alpha)
         return cls(rust_image)
 
@@ -156,7 +156,7 @@ class Image(_PILImageBase):
     def composite(
         cls, image1: "Image", image2: "Image", mask: "Image"
     ) -> "Image":
-        """Deprecated compatibility alias for :func:`pillow_rs.composite`."""
+        """Deprecated pillow-rs-only alias for :func:`pillow_rs.composite`."""
         rust_image = RustImage.composite(
             image1._rust_image, image2._rust_image, mask._rust_image
         )
@@ -164,7 +164,7 @@ class Image(_PILImageBase):
 
     @classmethod
     def merge(cls, mode: str, bands: Tuple["Image", ...]) -> "Image":
-        """Deprecated compatibility alias for :func:`pillow_rs.merge`."""
+        """Deprecated pillow-rs-only alias for :func:`pillow_rs.merge`."""
         rust_image = RustImage.merge(mode, bands)
         return cls(rust_image)
 
