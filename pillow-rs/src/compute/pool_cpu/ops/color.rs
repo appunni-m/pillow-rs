@@ -56,6 +56,8 @@ pub fn op_convert(
         ColorMode::RGB => {
             // P-mode images store palette indices in Luma8. When converting
             // to RGB, expand indices through the palette to get actual colors.
+            // DEPRECATED deferred compatibility arm: Image::convert eagerly
+            // expands public P sources before queuing PipelineOp::Convert.
             if explicit_mode == Some("P") {
                 if let Some(pal) = palette {
                     let gray = img.to_luma8();
@@ -89,6 +91,8 @@ pub fn op_convert(
             }
         }
         ColorMode::Mode1 => {
+            // DEPRECATED deferred compatibility arm: the public Image::convert
+            // path materializes binary threshold/dither conversions eagerly.
             // PIL uses TRUNCATED grayscale for convert("1") (dither or no dither)
             // while convert("L") uses ROUNDED grayscale.
             // CMYK mode: proper CMYK→RGB→L conversion before thresholding.
@@ -144,6 +148,8 @@ pub fn op_convert(
             Ok(DynamicImage::ImageLuma8(out))
         }
         ColorMode::P => {
+            // DEPRECATED deferred compatibility arm: public palette conversion
+            // is owned by Image::convert/quantize before pipeline dispatch.
             // convert("P") = quantize(256) with dither
             let rgb = img.to_rgb8();
             let (w, h) = rgb.dimensions();
@@ -163,6 +169,8 @@ pub fn op_convert(
             // ordinary RGBA pixel. Convert it through Pillow's CMYK->RGB
             // path before deriving luma; otherwise a zero CMYK sample is
             // incorrectly treated as black instead of white.
+            // DEPRECATED deferred compatibility arm: public CMYK->I conversion
+            // is materialized by Image::convert before this operation runs.
             let rgb = if explicit_mode == Some("CMYK") {
                 crate::color::cmyk_to_rgb(img).to_rgb8()
             } else {
@@ -186,6 +194,8 @@ pub fn op_convert(
             //   v = (r*299 + g*587 + b*114) / 1000.0F
             // This computes the sum in integer arithmetic (matching PIL's `L` macro)
             // then divides by 1000.0F as float, matching PIL pixel-for-pixel.
+            // DEPRECATED deferred compatibility arm: public CMYK->F conversion
+            // is materialized by Image::convert before this operation runs.
             let rgb = if explicit_mode == Some("CMYK") {
                 crate::color::cmyk_to_rgb(img).to_rgb8()
             } else {
@@ -213,6 +223,8 @@ pub fn op_convert(
                 let (w, h) = img.dimensions();
                 // "1" mode is stored as raw 0/1 bytes; Pillow converts it to
                 // "L" first (1 -> 255) before the gray->K branch.
+                // DEPRECATED deferred compatibility arm: Image::convert
+                // normalizes public mode-1 sources before deferred dispatch.
                 let gray = if explicit_mode == Some("1") {
                     let mut out = crate::raster::GrayImage::new(w, h);
                     for (op, ip) in out.pixels_mut().zip(img.to_luma8().pixels()) {
