@@ -10973,6 +10973,54 @@ def pipeline_composition_cases(
     # take the GPU safety rejection and exact CPU fallback without requiring a
     # device. Keep the batch public and parity-observed.
     cases.extend(gpu_safety_negative_gaussian_case(pattern) for pattern in range(100))
+    # Coverage probe 2026-08-24a: observe every public conversion node's
+    # ``mode`` before materialization.  The conversion itself is already
+    # covered; this input-only observation reaches the lazy metadata planner
+    # for the supported Pillow mode names without changing pixel outputs.
+    for case in cases:
+        if not case["case_id"].startswith("pipeline-composition.convert-"):
+            continue
+        mode_steps: list[dict[str, Any]] = []
+        mode_ids: list[str] = []
+        for step in case["steps"]:
+            if (
+                step.get("surface") == "PIL.Image.Image"
+                and step.get("operation") == "convert"
+            ):
+                mode_id = f"{step['step_id']}-mode"
+                mode_ids.append(mode_id)
+                mode_steps.append(
+                    {
+                        "step_id": mode_id,
+                        "surface": "PIL.Image.Image",
+                        "operation": "mode",
+                        "receiver": binding(step["step_id"]),
+                        "arguments": {},
+                    }
+                )
+        if not mode_steps:
+            continue
+        expanded_steps: list[dict[str, Any]] = []
+        for step in case["steps"]:
+            expanded_steps.append(step)
+            matching = [
+                mode_step
+                for mode_step in mode_steps
+                if mode_step["receiver"]["step_id"] == step["step_id"]
+            ]
+            expanded_steps.extend(matching)
+        case["steps"] = expanded_steps
+        observations = list(case["observations"])
+        materialize_index = next(
+            (
+                index
+                for index, observation in enumerate(observations)
+                if observation == "materialize"
+            ),
+            len(observations),
+        )
+        observations[materialize_index:materialize_index] = mode_ids
+        case["observations"] = observations
     # Expand the reviewed workflows into a small public pipeline matrix.  The
     # templates are all already parity-validated; varying only the public
     # source colors keeps the graph shape and operation contracts identical
@@ -38298,47 +38346,71 @@ def _pipeline_materialization_receiver(
 
 
 def _color3dlut_pipeline_workflow() -> dict[str, Any]:
-    return {
-        "assets": [],
-        "steps": [
-            {
-                "step_id": "setup-image",
-                "surface": "PIL.Image",
-                "operation": "new",
-                "receiver": None,
-                "arguments": {
-                    "mode": literal("RGB"),
-                    "size": literal([16, 16]),
-                    "color": literal([17, 83, 149]),
+    workflows = (
+        ("rgb", "RGB", 3, None, [17, 83, 149]),
+        ("rgba", "RGBA", 4, "RGBA", [17, 83, 149, 127]),
+        ("cmyk", "CMYK", 4, "CMYK", [17, 83, 149, 31]),
+    )
+    steps: list[dict[str, Any]] = []
+    observations: list[str] = []
+    for name, mode, channels, target_mode, color in workflows:
+        image_id = f"setup-image-{name}"
+        lut_id = f"setup-lut-{name}"
+        call_id = f"call-{name}"
+        mode_id = f"mode-{name}"
+        materialize_id = f"materialize-{name}"
+        lut_arguments: dict[str, Any] = {
+            "size": literal(2),
+            "table": literal([0.0] * (8 * channels)),
+        }
+        if channels != 3:
+            lut_arguments["channels"] = literal(channels)
+            lut_arguments["target_mode"] = literal(target_mode)
+        steps.extend(
+            [
+                {
+                    "step_id": image_id,
+                    "surface": "PIL.Image",
+                    "operation": "new",
+                    "receiver": None,
+                    "arguments": {
+                        "mode": literal(mode),
+                        "size": literal([16, 16]),
+                        "color": literal(color),
+                    },
                 },
-            },
-            {
-                "step_id": "setup-lut",
-                "surface": "PIL.ImageFilter",
-                "operation": "Color3DLUT",
-                "receiver": None,
-                "arguments": {
-                    "size": literal(2),
-                    "table": literal([0.0] * 24),
+                {
+                    "step_id": lut_id,
+                    "surface": "PIL.ImageFilter",
+                    "operation": "Color3DLUT",
+                    "receiver": None,
+                    "arguments": lut_arguments,
                 },
-            },
-            {
-                "step_id": "call",
-                "surface": "PIL.Image.Image",
-                "operation": "filter",
-                "receiver": binding("setup-image"),
-                "arguments": {"filter": binding("setup-lut")},
-            },
-            {
-                "step_id": "materialize",
-                "surface": "PIL.Image.Image",
-                "operation": "tobytes",
-                "receiver": binding("call"),
-                "arguments": {},
-            },
-        ],
-        "observations": ["call", "materialize"],
-    }
+                {
+                    "step_id": call_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "filter",
+                    "receiver": binding(image_id),
+                    "arguments": {"filter": binding(lut_id)},
+                },
+                {
+                    "step_id": mode_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "mode",
+                    "receiver": binding(call_id),
+                    "arguments": {},
+                },
+                {
+                    "step_id": materialize_id,
+                    "surface": "PIL.Image.Image",
+                    "operation": "tobytes",
+                    "receiver": binding(call_id),
+                    "arguments": {},
+                },
+            ]
+        )
+        observations.extend([call_id, mode_id, materialize_id])
+    return {"assets": [], "steps": steps, "observations": observations}
 
 
 def _point_fusion_pipeline_workflow(spec: dict[str, Any]) -> dict[str, Any]:
