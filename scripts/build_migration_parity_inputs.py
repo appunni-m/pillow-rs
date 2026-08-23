@@ -26116,6 +26116,30 @@ def build_nuanced_cases(
             }
             for border in range(1, 101)
         ),
+        # Coverage batch 2026-08-23f: exercise scalar transpose methods for
+        # RGBX.  RGBX retains four-byte samples but is intentionally excluded
+        # from the native byte-layout matcher, so the public transpose method
+        # reaches scalar::transpose for all seven supported transforms.
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "transpose",
+                "requirement_suffix": "parameter.method",
+                "name": f"coverage-batch-transpose-scalar-rgbx-{pattern}",
+                "mode": "RGBX",
+                "scenario_size": [5 + pattern % 5, 6 + (pattern // 5) % 5],
+                "edge": "nonzero-pixel",
+                "pixel": [
+                    (pattern * 31 + 17) % 256,
+                    (pattern * 47 + 83) % 256,
+                    (pattern * 61 + 149) % 256,
+                    (pattern * 73 + 211) % 256,
+                ],
+                "observe_result": "tobytes",
+                "values": {"method": literal(pattern % 7)},
+            }
+            for pattern in range(100)
+        ),
         # Coverage batch 2026-08-14t: exercise the maintained row-parallel
         # paths with public ImageOps inputs at the 512×512 threshold. The
         # existing large workloads are benchmark-only, so they must not be
