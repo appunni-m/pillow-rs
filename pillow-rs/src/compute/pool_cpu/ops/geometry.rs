@@ -1213,7 +1213,7 @@ pub fn execute_transpose(
             Ok(img.rotate90())
         }
         TransposeMethod::Transpose | TransposeMethod::Transverse => {
-            Ok(img.transpose_diagonal(method))
+            Ok(img.transpose_diagonal(matches!(method, TransposeMethod::Transverse)))
         }
     }
 }
