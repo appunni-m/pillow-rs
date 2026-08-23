@@ -13,13 +13,11 @@ use crate::raster::GenericImageView;
 /// Convert image to a specified color mode.
 /// Matches PIL's Image.convert() behavior exactly.
 /// `explicit_mode` is the PIL mode string on the source image.
-/// `palette` is the palette data for P-mode images.
 pub fn op_convert(
     img: &DynamicImage,
     mode: &ColorMode,
     dither: Option<&DitherMethod>,
     explicit_mode: Option<&str>,
-    palette: Option<&[u8]>,
 ) -> Result<DynamicImage, PilError> {
     match mode {
         ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?)),
@@ -53,27 +51,7 @@ pub fn op_convert(
             }
             Ok(DynamicImage::ImageLumaA8(ga))
         }
-        ColorMode::RGB => {
-            // P-mode images store palette indices in Luma8. When converting
-            // to RGB, expand indices through the palette to get actual colors.
-            // DEPRECATED deferred compatibility arm: Image::convert eagerly
-            // expands public P sources before queuing PipelineOp::Convert.
-            if explicit_mode == Some("P") {
-                if let Some(pal) = palette {
-                    let gray = img.to_luma8();
-                    let (w, h) = gray.dimensions();
-                    let mut out = crate::raster::RgbImage::new(w, h);
-                    for (opx, ip) in out.pixels_mut().zip(gray.pixels()) {
-                        let idx = ip[0] as usize * 3;
-                        opx[0] = pal.get(idx).copied().unwrap_or(0);
-                        opx[1] = pal.get(idx + 1).copied().unwrap_or(0);
-                        opx[2] = pal.get(idx + 2).copied().unwrap_or(0);
-                    }
-                    return Ok(DynamicImage::ImageRgb8(out));
-                }
-            }
-            Ok(DynamicImage::ImageRgb8(img.to_rgb8()))
-        }
+        ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
         ColorMode::RGBA => {
             if explicit_mode == Some("RGBX") {
                 // RGBX uses the same four-byte storage as RGBA, but its X byte

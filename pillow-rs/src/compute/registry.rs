@@ -1340,7 +1340,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     dither,
                 } = op
                 {
-                    op_convert(img, cm, dither.as_ref(), mode, None)
+                    op_convert(img, cm, dither.as_ref(), mode)
                 } else {
                     Err(PilError::ValueError("expected Convert op".into()))
                 }

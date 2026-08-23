@@ -3646,7 +3646,6 @@ pub fn simd_convert(
                 cm,
                 dither.as_ref(),
                 mode,
-                None,
             );
         }
         if matches!(cm, ColorMode::CMYK)
@@ -3677,7 +3676,6 @@ pub fn simd_convert(
                 cm,
                 dither.as_ref(),
                 mode,
-                None,
             );
         }
         let src_mode = dynimg_mode(img);
