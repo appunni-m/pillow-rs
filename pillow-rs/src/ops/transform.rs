@@ -590,6 +590,12 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when `matrix` does not contain exactly
     /// six coefficients.
+    ///
+    /// The host bindings use [`Image::transform_public`] so method, resampling,
+    /// and fill inputs are normalized together. Keep this direct wrapper for
+    /// Rust source compatibility and migrate callers to that public-input
+    /// entry point.
+    #[deprecated(note = "legacy affine transform wrapper; use transform_public instead")]
     pub fn transform_affine(
         &self,
         size: (u32, u32),
@@ -616,6 +622,11 @@ impl Image {
     ///
     /// Returns [`PilError::ValueError`] when the source is not mode `P`, or
     /// when `matrix` does not contain exactly six coefficients.
+    ///
+    /// This compatibility wrapper predates the host-neutral
+    /// [`Image::transform_public`] contract, which owns palette fill
+    /// normalization. Migrate callers to that entry point.
+    #[deprecated(note = "legacy palette affine wrapper; use transform_public instead")]
     pub fn transform_affine_palette_index(
         &self,
         size: (u32, u32),
@@ -759,6 +770,11 @@ impl Image {
     ///
     /// Currently returns `Ok(Image)`; malformed mesh data is reported by
     /// pipeline execution.
+    ///
+    /// The maintained binding path uses [`Image::transform_public`] and keeps
+    /// mesh extraction/flattening in the core-owned neutral input contract.
+    /// This direct wrapper remains only for source compatibility.
+    #[deprecated(note = "legacy mesh transform wrapper; use transform_public instead")]
     pub fn transform_mesh(
         &self,
         size: (u32, u32),
