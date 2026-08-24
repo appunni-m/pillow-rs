@@ -867,3 +867,30 @@ routes. The typed `DynamicImage` clone arms therefore cannot be reached by
 these supported public inputs. The two cases and their generator chain were
 removed; no outputs, hashes, thresholds, filters, coverage counts, or
 denominators were changed.
+
+## Accepted input: non-positive `ImageOps.scale` factors
+
+Coverage MCP source review identified `pillow-rs/src/image.rs:283-296` as a
+candidate invalid-dimension fallback. A public negative-factor probe showed
+that this fallback is not reachable through supported `ImageOps.scale`
+inputs: Pillow rejects `factor <= 0` during the public call, while the Rust
+wrapper previously deferred the value and returned a clamped 1x1 image.
+
+The core now validates the factor in
+`pillow-rs/src/ops/imageops.rs:828-835`, preserving the public error boundary
+and leaving the planner fallback as an invariant guard. Focused exact parity
+passed for both maintained probes:
+
+- `PIL.ImageOps.scale.nuanced.coverage-batch-imageops-edge-scale-negative-factor-rgb-0`
+- `PIL.ImageOps.scale.nuanced.coverage-batch-imageops-edge-scale-negative-factor-l-1`
+
+The fix and inputs are in commit `3aa557bdc`. The managed strict CPU/SIMD/GPU
+Coverage MCP run `ef390d93-1e44-4e17-a2a9-3e78aff9adc5` passed all 24 plans
+with zero failures and ingested snapshot
+`6aff81e6-d00a-4c0f-abea-419211e21d37` in 282.934 seconds. Against snapshot
+`07323456-6669-4a98-a0f0-b31ea9c0376a`, MCP measured `+4` covered regions,
+`+5` covered lines, and `+3` covered branches; the function count was
+unchanged. The aggregate is now 55,769/62,330 regions (89.474%),
+34,647/38,285 lines (90.498%), 5,587/6,736 branches (82.942%), and
+2,684/3,161 functions (84.910%). Free memory stayed between 70% and 72%
+during the GPU run.
