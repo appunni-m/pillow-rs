@@ -989,3 +989,29 @@ branches; function coverage was unchanged. The aggregate is now
 source review confirms line 127 is covered; the third-image and LUT fallback
 lines 143 and 156 remain uncovered. Free memory ranged from 57% to 69% during
 the GPU run and was 58% at completion.
+
+## Accepted input: GPU third-image cache budget fallback
+
+The remaining reachable GPU cache guard at
+`pillow-rs/src/compute/pool_gpu/mod.rs:143` handles repeated public paste
+masks after the bounded auxiliary cache is full. The new case
+`pipeline-composition.gpu-paste-mask-cache-budget` uses one valid public
+2048x2048 `L` source and five distinct 2048x2048 `L` masks, reusing each mask
+through two `Image.paste` calls and observing one final pixel. The packed
+source plus masks exceed the existing cache budget without changing any
+runtime limit.
+
+Focused exact parity passed 1/1 on both the CPU and strict GPU target; the
+observed pixel was `233` on source and target. Commit `9b282ea64` added only
+the generator and generated input manifests; no runtime code, outputs, hashes,
+thresholds, filters, coverage counts, or denominators changed. The managed
+strict CPU/SIMD/GPU Coverage MCP run
+`0dca577c-90c3-469b-910f-d1ecc4b451bb` passed all 24 plans with zero failures
+and ingested snapshot `f6de21e5-646f-477a-a34f-3b48ed53ba72` in 258.244
+seconds. Against snapshot `bac8edd2-fbb0-4eb1-a83c-3d5766cb214c`, MCP
+measured `+5` covered regions, `+6` covered lines, and `+2` covered branches;
+function coverage was unchanged. The aggregate is now 55,795/62,330 regions
+(89.515%), 34,680/38,285 lines (90.584%), 5,596/6,736 branches (83.076%),
+and 2,684/3,161 functions (84.910%). MCP source review confirms line 143 is
+covered; the LUT fallback at line 156 remains uncovered. Free memory stayed
+between 65% and 67% during the focused and managed GPU runs.
