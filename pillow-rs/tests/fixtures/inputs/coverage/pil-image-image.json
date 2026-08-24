@@ -5070,7 +5070,6 @@
           "PIL.Image.Image.getcolors.nuanced.f-two-colors-limit",
           "PIL.Image.Image.getcolors.nuanced.l-two-colors-limit",
           "PIL.Image.Image.getcolors.nuanced.la-odd-nonzero",
-          "PIL.Image.Image.getcolors.nuanced.empty-rgb-pixel-iterator",
           "PIL.Image.Image.getdata.nuanced.opened-rgb",
           "PIL.Image.Image.getdata.nuanced.bytes-luma",
           "PIL.Image.Image.getdata.nuanced.bytes-rgb-multiband",
