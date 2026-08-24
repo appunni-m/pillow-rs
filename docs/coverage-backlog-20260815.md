@@ -1015,3 +1015,28 @@ function coverage was unchanged. The aggregate is now 55,795/62,330 regions
 and 2,684/3,161 functions (84.910%). MCP source review confirms line 143 is
 covered; the LUT fallback at line 156 remains uncovered. Free memory stayed
 between 65% and 67% during the focused and managed GPU runs.
+
+## Accepted input: GPU LUT cache budget fallback
+
+The final GPU auxiliary-cache gap was the LUT fallback at
+`pillow-rs/src/compute/pool_gpu/mod.rs:156`. A valid public pipeline now fills
+the cache with five reused 2048x2048 secondary images, applies one LUT through
+`Image.point`, separates the second point call with public `ImageOps.mirror`,
+and applies the same LUT again. The separator is required because adjacent
+point operations are intentionally fused into one GPU `PointOp`; without it,
+the cache sees only one LUT identity.
+
+The focused exact parity case passed 1/1 on both CPU and strict GPU; the final
+observed pixel was `169` on source and target. Commit `dbe5eedfa` added only
+the generator and generated input manifests; no runtime code, outputs, hashes,
+thresholds, filters, coverage counts, or denominators changed. The managed
+strict CPU/SIMD/GPU Coverage MCP run
+`7c7599fa-de88-45a3-ac2a-6c86078b7102` passed all 24 plans with zero failures
+and ingested snapshot `8640e614-6a83-4ca9-a756-f714423c9227` in 275.887
+seconds. Against snapshot `de75832a-c9de-447f-b547-cd06452046d8`, MCP
+measured `+3` covered regions, `+1` covered line, and `+2` covered branches;
+function coverage was unchanged. The aggregate is now 55,798/62,330 regions
+(89.520%), 34,681/38,285 lines (90.586%), 5,598/6,736 branches (83.106%),
+and 2,684/3,161 functions (84.910%). MCP source review confirms lines 127,
+143, and 156 in the GPU auxiliary-cache guards are all covered. Free memory
+ranged from 66% to 68% during the focused and managed GPU runs.
