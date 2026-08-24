@@ -1060,3 +1060,24 @@ does not call `DynamicImage::to_luma_alpha8`, so the Luma16 arm is not a
 supported public-input route. The temporary case is therefore pruned rather
 than retained as zero-gain coverage debt. No runtime code, outputs, hashes,
 thresholds, filters, coverage counts, or denominators changed.
+
+## Pruned zero-gain candidate: empty median-cut quantization materialization
+
+Coverage MCP ranked `pillow-rs/src/ops/quantize.rs:258-259` as an uncovered
+median-cut fallback. The maintained public case
+`PIL.Image.Image.quantize.nuanced.mediancut-zero-size` already supplied a
+supported empty RGB image, but observed only the returned image. A temporary
+input-only change added a public `tobytes()` observation to force
+materialization; focused parity passed 1/1.
+
+The managed run `b4ef8f4e-d486-49c1-b50c-dabb179cd6de` ingested snapshot
+`2569675e-e97f-4711-a87d-7df7babb8814` at commit `5662b1069` and passed all 24
+plans. MCP measured no change in covered regions, lines, branches, or
+functions; the aggregate remained 55,798/62,330 regions (89.520%),
+34,681/38,285 lines (90.586%), 5,598/6,736 branches (83.106%), and
+2,684/3,161 functions (84.910%). Source evidence shows the supported empty
+input returns at `quantize.rs:234-235`, which are already covered; reaching
+`258-259` would require `n > 0` with an empty collected hash table. The
+temporary observation was removed and the candidate pruned. No runtime code,
+outputs, hashes, thresholds, filters, coverage counts, or denominators
+changed.
