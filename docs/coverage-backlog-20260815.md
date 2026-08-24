@@ -1245,3 +1245,25 @@ middle-row condition therefore sees `has_a=true`; public supported inputs do
 not reach the non-alpha branch. The input was removed rather than retained as
 zero-gain coverage debt. No runtime code, outputs, hashes, thresholds,
 filters, coverage counts, or denominators were edited.
+
+## Accepted input: stringified resample-object fallbacks
+
+Coverage MCP source review identified the unsupported-host-object conversion
+paths at `pillow-rs-py/src/lib.rs:160-162`, `176`, and `181`. The maintained
+image-core native corpus now supplies custom public Python objects whose
+`__str__` returns an unknown filter name to `Image.resize` and `Image.rotate`.
+These inputs exercise the binding's `value.str()` conversion while core owns
+the resulting unknown-filter validation; the native lane passed 220/220.
+
+Commit `e9a845bb2` contains only this coverage-only input corpus change. The
+managed strict CPU/SIMD/GPU Coverage MCP run
+`04dc696f-d3f1-48c5-ab4e-9d9f523e5fe2` passed in 308.588 seconds and ingested
+snapshot `4ea6f42a-6054-4f0d-9a88-41f650775e96`. Against snapshot
+`41c51477-4243-4a97-a37a-6657b7526315`, MCP measured `+10` covered regions,
+`+5` covered lines, and `+2` covered branches; function coverage was
+unchanged. The aggregate is now 56,175/62,331 regions (90.124%),
+34,962/38,286 lines (91.318%), 5,620/6,736 branches (83.432%), and
+2,725/3,161 functions (86.207%). MCP source review reports all five target
+regions green. Memory ranged from 42% to 66% free during the run and ended
+at 63% free. No runtime code, outputs, hashes, thresholds, filters, coverage
+counts, or denominators were changed.
