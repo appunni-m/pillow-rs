@@ -1267,3 +1267,84 @@ unchanged. The aggregate is now 56,175/62,331 regions (90.124%),
 regions green. Memory ranged from 42% to 66% free during the run and ended
 at 63% free. No runtime code, outputs, hashes, thresholds, filters, coverage
 counts, or denominators were changed.
+
+## Accepted input: rotate expand coercions
+
+Coverage MCP source review identified reachable coercion branches in the
+public `Image.rotate` binding. Commit `1c6a079ab` adds valid input-only cases
+for integer-like and float-like expand values; the focused native lane passed.
+Managed run `8b528834-fb07-454d-bdb6-ee180ed17c51` ingested snapshot
+`5b600eb1-115f-4d75-aff7-a5c4928edaf4` and measured `+3` regions and `+2`
+lines. Branch and function coverage were unchanged. Memory ended at 64% free.
+
+## Accepted inputs: open and histogram coercions
+
+Commit `2ac4ddada` adds valid public coercion cases for `Image.open` and
+`Image.histogram`. Managed run `8e5a7222-20c6-4822-825b-31d545ef8b11`
+ingested snapshot `1266fccd-e1c0-46f6-9c42-9ad0ba3c5bcc` and measured `+4`
+regions, `+2` lines, and `+1` branch; function coverage was unchanged.
+Memory ended at 67% free.
+
+## Accepted input: default image constructor
+
+Commit `3974ad7f3` adds a supported public default-constructor input that
+materializes the resulting image. Managed run
+`462c3104-8a99-41b9-ba62-8882511cbf04` ingested snapshot
+`d4018275-88cd-4e93-a82e-d35858936c17` and measured `+8` regions, `+4` lines,
+and `+1` function. Memory ended at 58% free.
+
+## Accepted inputs: binding error and default paths
+
+Commit `a674c6623` adds input-driven coverage for public binding error and
+default paths. Managed run `c61e0a0d-102f-4365-b80a-2d4c644b2621` ingested
+snapshot `06713846-7992-498d-8188-d9adf6283cb0` and measured `+12` regions,
+`+15` lines, and `+4` functions; branch coverage was unchanged. Memory ended
+at 66% free.
+
+## Accepted input: image-open error mappings
+
+Commit `aa31f716f` adds supported public open-error inputs. Managed run
+`67029e24-5c87-43f9-b186-d30c7bd4aac9` ingested snapshot
+`2c05630e-86a7-4da7-9545-ee4f64615746` and measured `+8` regions and `+2`
+lines; branch and function coverage were unchanged. Memory ended at 59% free.
+
+## Pruned zero-gain candidate: GPU mode-conversion outputs
+
+A temporary input-only GPU batch exercised public mode-changing conversion and
+`putalpha` outputs. The managed run selected and passed the probes, but the
+GPU artifact ingestion timed out and the supported snapshot showed no usable
+coverage gain. Coverage MCP source tracing found that the current public
+backend routing keeps these mode-changing operations on CPU. The probes were
+removed rather than retained as zero-gain coverage debt.
+
+## Pruned zero-gain candidate: affine default fills
+
+Coverage MCP ranked affine default-fill branches in
+`pillow-rs/src/compute/pool_cpu/ops/effects.rs`. Valid public affine inputs
+were tested through the managed strict CPU/SIMD/GPU plan, including materialized
+outputs, but snapshot `b1c404a0-2a03-4a95-881c-49a665aced26` showed no delta.
+Source tracing found that public normalization always supplies an explicit
+fill value before the core operation, so the Rust default-fill branches are
+not reachable through supported public inputs. The probes were removed.
+
+## Pruned harness-only candidate: unmaterialized native draw probes
+
+Commit `32ed6633b` first added six valid ImageDraw geometry probes. The
+standalone lane passed all 15 probes, but the managed run
+`994cbe20-97fb-444a-8879-31e0d7769da6` ingested snapshot
+`e4eff498-9465-473a-83e2-23ff196b7c77` with no coverage delta because the
+temporary helpers discarded lazy images without observing their bytes. This
+was corrected before accepting the batch; no thresholds or coverage metadata
+were changed.
+
+## Accepted input: materialized native draw guards
+
+Commit `a9330a7f0` materializes the supported native ImageDraw outputs. The
+managed run `4ac0ad06-078d-43b7-a721-932928f7b3d4` ingested snapshot
+`a7cda08a-fdce-4bf1-8d89-342e9425ae38` and measured `+10` regions, `+4` lines,
+and `+3` branches; function coverage was unchanged. Coverage MCP source
+review confirms the gain is in `pillow-rs/src/compute/pool_cpu/ops/draw.rs`.
+The wide degenerate line and extreme-coordinate ellipse probes are retained;
+typed-image and narrow-outline probes showed no new regions and were pruned
+in `d8b43da2e`. The standalone native lane passes 12/12. Memory ended at 66%
+free during the managed run.
