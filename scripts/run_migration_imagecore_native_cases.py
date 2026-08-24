@@ -390,6 +390,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ("transform-mesh-missing-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, None)),
         ("open-path-object", lambda: Image.open("/tmp/imagecore-save3.png")),
         ("open-missing-path", lambda: Image.open("/tmp/does-not-exist-anywhere.png")),
+        ("open-formats-bad-element", lambda: Image.open("/tmp/does-not-exist-anywhere.png", formats=[1])),
         # putdata packed/component storage paths per mode.
         ("putdata-l-packed", lambda: _putdata("L", [0x0A0B0C0D0E0F1011, 0x1213141516171819, 0x2021222324252627, 0x28292A2B2C2D2E2F])),
         ("putdata-rgb-tuple", lambda: _putdata("RGB", [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)])),
@@ -460,6 +461,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ("getprojection-content", lambda: Image.new("L", (8, 8), 0).point(lambda v: 255).getprojection()),
         # stat on an empty image exercises the zero-count band branch.
         ("stat-empty", lambda: _stat_of(Image.new("L", (0, 0)))),
+        ("histogram-falsey-mask", lambda: Image.new("L", (4, 4)).histogram(mask=0)),
         # Malformed JPEG APP1 shapes drive the EXIF scanner error branches.
         ("exif-valid-app1", lambda: _exif_probe("valid")),
         ("exif-short-app1", lambda: _exif_probe("short-app1")),
