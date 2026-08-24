@@ -12812,6 +12812,29 @@ def build_nuanced_cases(
             "values": {"factor": literal(1.25), "resample": literal(99)},
         }
 
+    def imageops_scale_factor_edge_spec(pattern: int) -> dict[str, Any]:
+        """Build a bounded public negative-factor scale probe.
+
+        ``ImageOps.scale`` accepts a numeric factor before it computes the
+        resize dimensions. Observing the returned public image through
+        ``size`` exercises the lazy planner's invalid-dimension fallback
+        without asking the campaign to allocate a huge image.
+        """
+
+        mode = "RGB" if pattern == 0 else "L"
+        return {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.factor",
+            "name": f"coverage-batch-imageops-edge-scale-negative-factor-{mode.lower()}-{pattern}",
+            "mode": mode,
+            "size": [8, 7],
+            "edge": "negative-factor",
+            "pixel": [173, 127, 31] if mode == "RGB" else 173,
+            "values": {"factor": literal(-1.0), "resample": literal(0)},
+            "observe_result": "size",
+        }
+
     def autocontrast_mask_nonzero_spec(pattern: int) -> dict[str, Any]:
         """Build one valid public autocontrast workflow with a selected mask pixel.
 
@@ -26641,6 +26664,9 @@ def build_nuanced_cases(
         # Coverage batch 2026-08-14ag: exercise reachable ImageOps cutoff,
         # empty-source expand, and scale resampling error paths.
         *(imageops_edge_spec(pattern) for pattern in range(10)),
+        # Coverage batch 2026-08-24a: exercise the public numeric-factor
+        # failure path in the lazy ImageOps.scale dimension planner.
+        *(imageops_scale_factor_edge_spec(pattern) for pattern in range(2)),
         # Coverage batch 2026-08-14ah: exercise the public encoded-image EXIF
         # path where Orientation is valid but a later advertised IFD entry is
         # truncated. These are real JPEG inputs and do not call parser APIs.
