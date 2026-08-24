@@ -476,6 +476,7 @@
           "PIL.ImageFilter.MinFilter.nuanced.coverage-batch-filter-large-extreme-minfilter-rgb-1",
           "PIL.ImageFilter.MinFilter.nuanced.coverage-batch-filter-large-extreme-minfilter-rgba-0",
           "PIL.ImageFilter.MinFilter.nuanced.coverage-batch-filter-large-extreme-minfilter-rgba-1",
+          "PIL.ImageFilter.RankFilter.nuanced.coverage-batch-filter-large-rank-l-0",
           "PIL.ImageFilter.BoxBlur.nuanced.coverage-batch-filter-large-blur-boxblur-l-0",
           "PIL.ImageFilter.BoxBlur.nuanced.coverage-batch-filter-large-blur-boxblur-la-0",
           "PIL.ImageFilter.BoxBlur.nuanced.coverage-batch-filter-large-blur-boxblur-rgb-0",

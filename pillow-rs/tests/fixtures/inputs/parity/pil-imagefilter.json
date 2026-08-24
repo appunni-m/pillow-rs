@@ -33816,6 +33816,100 @@
       ]
     },
     {
+      "case_id": "PIL.ImageFilter.RankFilter.nuanced.coverage-batch-filter-large-rank-l-0",
+      "surface": "PIL.ImageFilter",
+      "operation": "RankFilter",
+      "covers": [
+        "PIL.ImageFilter.RankFilter.mode.l"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageFilter",
+          "operation": "RankFilter",
+          "receiver": null,
+          "arguments": {
+            "size": {
+              "kind": "literal",
+              "value": 5
+            },
+            "rank": {
+              "kind": "literal",
+              "value": 12
+            }
+          }
+        },
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                513,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 180
+            }
+          }
+        },
+        {
+          "step_id": "apply-filter",
+          "surface": "PIL.Image.Image",
+          "operation": "filter",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "filter": {
+              "kind": "binding",
+              "step_id": "call"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call",
+        "apply-filter"
+      ]
+    },
+    {
       "case_id": "PIL.ImageFilter.BoxBlur.nuanced.coverage-batch-filter-large-blur-boxblur-l-0",
       "surface": "PIL.ImageFilter",
       "operation": "BoxBlur",
