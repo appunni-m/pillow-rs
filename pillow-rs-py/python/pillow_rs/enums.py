@@ -1,5 +1,7 @@
 """Enumerations and constants matching Pillow's API."""
 
+from . import _core
+
 
 class ImageMode:
     L = "L"
