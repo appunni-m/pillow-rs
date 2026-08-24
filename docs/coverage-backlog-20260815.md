@@ -848,3 +848,22 @@ transform inputs are either rejected before queueing, impossible after checked
 allocation, or outside the supported public input contract. No output, hash,
 threshold, filter, denominator, or coverage-count file was changed during
 this audit.
+
+## Pruned probe: typed PNG `copy()` arms
+
+Two maintained `PIL.Image.Image.copy()` cases were added for 16-bit RGB and
+RGBA PNG inputs. Focused parity passed for both cases. The first managed
+Coverage MCP run (`811c0772-d466-467f-95b2-ede0610fe00a`, snapshot
+`2dc1339e-4f1b-4a66-993b-bc2fccc45938`) showed no coverage delta because the
+opened image remained byte-backed until copied. A second run
+(`63c93190-351b-48ff-b012-bd71ee0e10d2`, snapshot
+`07323456-6669-4a98-a0f0-b31ea9c0376a`) materialized the image with public
+`load()` first and still showed zero delta: 55,765/62,326 regions (89.473%),
+with unchanged lines, branches, and functions.
+
+Read-only inspection of the maintained PNG decoder confirmed that 8- and
+16-bit RGB/RGBA PNG samples are normalized to the public `Rgb8`/`Rgba8`
+routes. The typed `DynamicImage` clone arms therefore cannot be reached by
+these supported public inputs. The two cases and their generator chain were
+removed; no outputs, hashes, thresholds, filters, coverage counts, or
+denominators were changed.
