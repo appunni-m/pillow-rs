@@ -206,7 +206,6 @@ pub use crate::image::StatValue;
 pub use crate::image::imaging_core_to_bytes;
 pub use crate::image::prepare_exif_compat;
 pub use crate::image::stat_from_histogram;
-pub use crate::image::stat_from_list;
 pub use crate::image::validate_python_open_inputs;
 pub use crate::image::validate_python_open_source_bytes;
 pub use crate::image_sequence::ImageSequenceIterator;

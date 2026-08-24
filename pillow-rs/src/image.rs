@@ -6223,27 +6223,6 @@ pub fn stat_from_histogram(data: &[f64]) -> StatResult {
     StatResult::from_bands(&bands)
 }
 
-/// Computes basic statistics for non-image numeric input.
-///
-/// This is the Pillow `ImageStat` fallback for plain lists. The returned tuple
-/// is `(count, sum, mean, min, max)`.
-pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
-    let count = data.len() as f64;
-    let sum: f64 = data.iter().sum();
-    let mean = if count > 0.0 { sum / count } else { 0.0 };
-    let min_val = if count > 0.0 {
-        data.iter().cloned().fold(f64::MAX, f64::min)
-    } else {
-        0.0
-    };
-    let max_val = if count > 0.0 {
-        data.iter().cloned().fold(f64::NEG_INFINITY, f64::max)
-    } else {
-        0.0
-    };
-    (count, sum, mean, min_val, max_val)
-}
-
 #[cfg(test)]
 mod tests {
     use super::Image;
