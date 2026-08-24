@@ -83,6 +83,7 @@ def run_native_cases() -> tuple[int, int, int]:
 
     probes: list[tuple[str, callable]] = [
         # Image constructor variants.
+        ("default-image-constructor", lambda: pillow_rs.Image()),
         ("new-list-color", lambda: pillow_rs.Image.new("RGB", (4, 4), [255, 0, 0])),
         ("new-bytes-color", lambda: pillow_rs.Image.new("L", (4, 4), b"\x00")),
         ("blend-module", lambda: pillow_rs.blend(pillow_rs.Image.new("L", (4, 4)), pillow_rs.Image.new("L", (4, 4)), 0.5)),
