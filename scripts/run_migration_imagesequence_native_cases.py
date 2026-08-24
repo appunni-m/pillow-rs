@@ -68,6 +68,13 @@ def run_native_cases() -> tuple[int, int, int]:
             ),
         ),
         (
+            "iterator-custom-min-frame-error",
+            lambda: _expect_error(
+                lambda: ImageSequence.Iterator(_SeekableWithMinFrameError()),
+                ValueError,
+            ),
+        ),
+        (
             "iterator-custom-seek-error",
             lambda: _expect_error(
                 lambda: next(ImageSequence.Iterator(_SeekError())),
@@ -113,6 +120,15 @@ class _SeekableWithMinFrame:
 
 class _SeekableWithInvalidMinFrame:
     _min_frame = "not-an-integer"
+
+    def seek(self, _frame: int) -> None:
+        return None
+
+
+class _SeekableWithMinFrameError:
+    @property
+    def _min_frame(self) -> int:
+        raise ValueError("min frame unavailable")
 
     def seek(self, _frame: int) -> None:
         return None
