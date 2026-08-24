@@ -1448,3 +1448,37 @@ aggregate is now 56,234/62,331 regions (90.218%), 35,005/38,286 lines
 (91.430%), 5,629/6,736 branches (83.566%), and 2,731/3,161 functions
 (86.397%). Source review marks line 26 green. Memory recovered to 67% free;
 no GPU hang or sustained memory-pressure condition occurred.
+
+## Current supported-input ceiling audit
+
+Coverage MCP re-ranked the maintained strict CPU/SIMD/GPU measurement at
+snapshot `56337811-5f66-4f8d-a206-c9bcd1bd61d6`, from run
+`23dc28dc-ceb6-42d9-a846-175c6e0224b1`. The run passed all 24 plans and
+10,886 tests with zero failures or skips. The measured supported-input
+ceiling is `56,234/62,331` regions (`90.2183504%`), `35,005/38,286` lines
+(`91.4302878%`), `5,629/6,736` branches (`83.5659145%`), and `2,731/3,161`
+functions (`86.3967099%`). The run ended with 67% free memory and no GPU
+hang or sustained memory-pressure condition.
+
+The remaining executable regions were reviewed through Coverage MCP source
+evidence and the prior focused zero-gain runs. Their reachability status is:
+
+| source family | remaining reason | supported-input conclusion |
+| --- | --- | --- |
+| `compute/pool_gpu/mod.rs` | Capacity overflow, allocation, cache-budget, and device-error guards are protected by high-water preflight and backend validation. | Do not force unsafe-sized or failure-inducing workloads. |
+| `image.rs` | Unknown-mode, malformed-descriptor, non-finite-dimension, and typed-raster fallbacks are rejected or normalized at public boundaries. | No supported public route remains; typed PNG probes were zero-gain. |
+| `compute/pool_simd/ops/adapters.rs` | LUT-length, fixed-width conversion, and invalid native-layout guards are preceded by public validation. | Keep adapter invariants; no input-only route. |
+| `raster/dynamic.rs` | Typed clone and conversion variants are not retained by the maintained public decoder routes. | Keep the generic type matrix; typed PNG/copy/convert probes were pruned as zero-gain. |
+| `compute/pool_simd/ops/scalar.rs` | Remaining non-alpha packed fallbacks are bypassed by native byte adapters or by mode validation. | Brightness, flip, and scalar-mode probes found no supported route. |
+| `compute/registry.rs`, `compute/mod.rs` | Registry-miss, backend-control, telemetry, and internal descriptor paths are control-plane behavior. | Outside the supported image-input manifest. |
+| `pillow-rs/src/lib.rs` | Remaining ranges are font constructors and font behavior. | Deferred under the no-fontdone constraint. |
+| `pillow-rs-py/src/lib.rs` | Remaining red regions are PyO3 macro/error-allocation edges; public constructor and iterator behavior are already exercised. | No supported input reaches the residual macro-generated edges. |
+| generic raster/utility files | Generic typed implementations, raw-buffer shape errors, Qt alignment helpers, and panic guards require private construction or optional host integrations. | Not supported manifest inputs; do not synthesize private probes. |
+| analysis/convert/transform/draw/effects | Public normalization either rejects the invalid state or selects a native route; prior malformed, typed, and default-path probes showed no gain or parity failure. | Preserve defensive code and the unchanged denominator. |
+
+Accordingly, 100% region coverage is not reachable through the supported
+public input surface without changing the runtime, removing defensive code,
+or editing the denominator. Those actions are out of scope. The snapshot
+above is the exact measured maximum for the maintained input surface under
+the campaign constraints; no output, hash, threshold, filter, coverage
+count, denominator, fontdone, or image-slash-star file was changed.
