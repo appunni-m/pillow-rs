@@ -25766,6 +25766,25 @@ def build_nuanced_cases(
                 "width": literal(1),
             },
         },
+        # Coverage batch 2026-08-24d: exercise the public rectangle validator
+        # for a reversed vertical extent.  The analogous reversed-x error is
+        # already covered; this keeps the case input-only and observes the
+        # receiver so the error path is measured without embedding outputs.
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-draw-rectangle-reversed-y",
+            "mode": "L",
+            "size": [8, 8],
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([1, 6, 5, 2]),
+                "fill": literal(255),
+                "outline": literal(127),
+                "width": literal(1),
+            },
+        },
         *(
             {
                 "surface": "PIL.ImageDraw.ImageDraw",

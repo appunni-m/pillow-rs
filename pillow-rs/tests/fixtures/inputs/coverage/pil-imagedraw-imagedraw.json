@@ -768,6 +768,7 @@
           "PIL.ImageDraw.ImageDraw.line.nuanced.coverage-batch-draw-line-rgba-9",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.coverage-batch-draw-rectangle-zero-height",
           "PIL.ImageDraw.ImageDraw.rectangle.nuanced.coverage-batch-draw-rectangle-rgbx-default-ink",
+          "PIL.ImageDraw.ImageDraw.rectangle.nuanced.coverage-batch-draw-rectangle-reversed-y",
           "PIL.ImageDraw.ImageDraw.polygon.nuanced.coverage-batch-draw-polygon-l-0",
           "PIL.ImageDraw.ImageDraw.polygon.nuanced.coverage-batch-draw-polygon-rgb-0",
           "PIL.ImageDraw.ImageDraw.polygon.nuanced.coverage-batch-draw-polygon-l-1",
