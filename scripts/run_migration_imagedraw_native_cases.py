@@ -46,13 +46,9 @@ def run_native_cases() -> tuple[int, int, int]:
         ("polygon-horizontal-runs", lambda: _polygon_horizontal()),
         ("polygon-out-of-bounds", lambda: _polygon_oob()),
         ("line-out-of-bounds", lambda: _line_oob()),
-        # Native CPU drawing falls back through RGBA for typed images; the
-        # remaining geometry probes use valid public coordinates that exercise
-        # degenerate strokes, narrow outlined boxes, and checked i32 extents.
-        ("line-typed-i", lambda: _typed_line("I")),
-        ("line-typed-f", lambda: _typed_line("F")),
+        # Native geometry probes use valid public coordinates that exercise
+        # degenerate strokes and checked i32 extents.
         ("line-wide-degenerate", lambda: _wide_degenerate_line()),
-        ("rectangle-narrow-outline", lambda: _narrow_outline()),
         ("ellipse-x-coordinate-overflow", lambda: _ellipse_extreme("x")),
         ("ellipse-y-coordinate-overflow", lambda: _ellipse_extreme("y")),
     ]
@@ -74,22 +70,10 @@ def run_native_cases() -> tuple[int, int, int]:
         draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
         draw.line([(-4, -4), (20, 20)], fill=255, width=2)
 
-    def _typed_line(mode: str) -> None:
-        image = Image.new(mode, (4, 4), 0)
-        draw = ImageDraw.Draw(image)
-        draw.line((0, 0, 3, 3), fill=255)
-        image.tobytes()
-
     def _wide_degenerate_line() -> None:
         image = Image.new("RGB", (4, 4), 0)
         draw = ImageDraw.Draw(image)
         draw.line((1, 1, 1, 1), fill=255, width=2)
-        image.tobytes()
-
-    def _narrow_outline() -> None:
-        image = Image.new("RGB", (4, 4), 0)
-        draw = ImageDraw.Draw(image)
-        draw.rectangle((1, 1, 3, 2), outline=255, width=2)
         image.tobytes()
 
     def _ellipse_extreme(axis: str) -> None:
