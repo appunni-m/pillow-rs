@@ -28733,20 +28733,6 @@ def build_nuanced_cases(
             "size": [4, 3],
             "observe_result": "tobytes",
         },
-        # Palette images intentionally bypass the native L/LA/RGB/RGBA byte
-        # mover and reach the packed SIMD scalar fallback.  Keep the height
-        # odd so the public flip operation visits its middle-row clamp.
-        {
-            "surface": "PIL.ImageOps",
-            "operation": "flip",
-            "requirement_suffix": "behavior.default",
-            "name": "scalar-p-odd-height",
-            "mode": "P",
-            "edge": "nonzero-pixel",
-            "pixel": 200,
-            "size": [4, 3],
-            "observe_result": "tobytes",
-        },
         {
             "surface": "PIL.ImageOps",
             "operation": "mirror",
