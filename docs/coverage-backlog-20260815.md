@@ -1160,3 +1160,38 @@ mode encoded as non-alpha; supported public mode/layout combinations do not
 provide that state. The temporary input was removed rather than retained as
 zero-gain coverage debt. No runtime code, outputs, hashes, thresholds,
 filters, coverage counts, or denominators were edited.
+
+## Coverage campaign continuation: exact-list `putdata` error edge
+
+Coverage MCP identified `pillow-rs-py/src/putdata.rs:172` as the uncovered
+error edge of the exact built-in-list loop. The retained public case
+`PIL.Image.Image.putdata.nuanced.rgb-exact-list-invalid-tuple` supplies an
+exact list whose pixel tuples have the wrong arity; focused source/target
+parity passed 1/1.
+
+The managed strict CPU/SIMD/GPU Coverage MCP run
+`874a2640-2562-41b7-994e-a623c25f3476` passed all 24 plans in 282.979 seconds
+and ingested snapshot `8cd5b843-97db-4b8e-8848-60cac21a7f92`. Against the
+previous snapshot, MCP measured `+1` covered region and `+1` covered line;
+branches and functions were unchanged. The aggregate is now 55,801/62,331
+regions (89.524%), 34,684/38,286 lines (90.592%), 5,600/6,736 branches
+(83.135%), and 2,684/3,161 functions (84.910%). Memory remained healthy and
+ended at 68% free. Commits `47f3afe89` and the generated input manifests
+contain only this input-driven case; no runtime code, outputs, hashes,
+thresholds, filters, coverage counts, or denominators were changed.
+
+## Pruned zero-gain candidates: NaN rotation and 16-bit PNG conversions
+
+The public `Image.rotate(angle=NaN, expand=True)` probe was removed because
+source Pillow raised `ValueError: cannot convert float NaN to integer`, while
+the target raised `ValueError: image dimensions cannot be zero: 0×0`.
+
+Six focused-parity-valid public conversions from RGB16/RGBA16 PNG inputs to
+L, LA, RGB, and RGBA were also tested. The managed run
+`61f4c9c2-9e08-4075-bcff-d0d9100eb9bd` passed all 24 plans in 307.578 seconds
+and ingested snapshot `c5e6b097-64ec-42b3-88a5-0eb25e530216`, but MCP measured
+zero aggregate change. Source tracing therefore classifies those typed
+conversion implementations as unreachable through the current supported
+public decoder path; commits `2e3e23326` and `6fe0a5c4f` add then prune the
+batch. No runtime code, outputs, hashes, thresholds, filters, coverage counts,
+or denominators were changed.
