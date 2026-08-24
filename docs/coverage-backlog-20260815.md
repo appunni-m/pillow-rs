@@ -1407,3 +1407,23 @@ The aggregate is now 56,228/62,331 regions (90.209%), 34,997/38,286 lines
 (91.409%), 5,629/6,736 branches (83.566%), and 2,730/3,161 functions
 (86.365%). Source review marks line 21 green. Memory recovered to 67% free;
 no GPU hang or sustained memory-pressure condition occurred.
+
+## Accepted input: custom unknown filter error
+
+Coverage MCP identified the reachable unknown-filter arm at
+`pillow-rs/src/ops/filter.rs:200`. The native corpus now passes a public
+`Image.filter` custom object with an `_apply` method that delegates to the
+Rust-owned named-filter boundary using an unknown filter name. The input
+returns the documented `NotImplementedError` without changing any expected
+output or test metadata.
+
+Commit `15912b303` adds the input-only probe; the focused native lane passed
+238/238. Managed run `3ae219b3-39d1-4b81-be59-5ad58329ed8b` passed in
+282.025 seconds and ingested snapshot
+`6b440ebc-f0c1-4b19-b192-bc7f48795b35`. Against snapshot
+`bb4019bc-4d08-435d-8fe0-15f490675c4b`, MCP measured `+1` covered region and
+`+4` covered lines; branches and functions were unchanged. The aggregate is
+now 56,229/62,331 regions (90.210%), 35,001/38,286 lines (91.420%),
+5,629/6,736 branches (83.566%), and 2,730/3,161 functions (86.365%).
+Source review marks line 200 green. Memory ended at 68% free; no GPU hang or
+sustained memory-pressure condition occurred.
