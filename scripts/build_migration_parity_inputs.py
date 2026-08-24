@@ -3163,6 +3163,30 @@ class WorkflowBuilder:
                     },
                     step_id=self.next_step_id(f"setup-stat-descending-{step_name}"),
                 )
+        elif self.edge == "histogram-f-descending" and label == "image":
+            if self.scenario_pixel is None:
+                raise ValueError(
+                    "histogram-f-descending edge requires a scenario pixel"
+                )
+            # The ordinary F histogram matrix starts with zero and only raises
+            # its extrema. Put a larger float sample before a later zero so the
+            # public reducer must lower its seeded minimum through putpixel.
+            for step_name, xy, value in (
+                ("high", [0, 0], self.scenario_pixel),
+                ("low", [1, 0], 0.0),
+            ):
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal(xy),
+                        "value": literal(value),
+                    },
+                    step_id=self.next_step_id(
+                        f"setup-histogram-f-descending-{step_name}"
+                    ),
+                )
         elif self.edge == "nonzero-pixel" and label in {"image", "image1"}:
             if self.scenario_pixel is None:
                 raise ValueError("nonzero-pixel edge requires a scenario pixel")
@@ -13791,6 +13815,26 @@ def build_nuanced_cases(
             "observe_stat_properties": True,
         }
 
+    def analysis_float_histogram_descending_coverage_spec() -> dict[str, Any]:
+        """Build one valid F-mode histogram whose first sample is not minimal.
+
+        The regular F histogram matrix starts with a zero-filled image and
+        writes only larger samples. Keep this separate so a public
+        ``Image.new``/``Image.putpixel`` workflow reaches the reducer's
+        minimum-extrema update without authoring histogram output.
+        """
+
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "histogram",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-analysis-f-histogram-descending-000",
+            "mode": "F",
+            "size": [3, 1],
+            "edge": "histogram-f-descending",
+            "pixel": 100.0,
+        }
+
     specs: tuple[dict[str, Any], ...] = (
         # Coverage batch 2026-08-14y: exercise every public ImageStat.Stat
         # property over native one-, two-, three-, and four-band modes. The
@@ -13809,6 +13853,9 @@ def build_nuanced_cases(
         # histogram reducer. The existing mixed analysis matrix masks every
         # F-mode slot, so those valid calls stop at Pillow's wrong-mode guard.
         *(analysis_float_histogram_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-24b: put a larger F-mode sample before zero so
+        # the public histogram reducer's minimum-extrema update is reached.
+        analysis_float_histogram_descending_coverage_spec(),
         # Coverage batch 2026-08-14ap: exercise valid scalar histogram
         # early-return paths for constant/empty I and F images, plus the
         # reducer's finite-value guard. These are public Image.new inputs and
