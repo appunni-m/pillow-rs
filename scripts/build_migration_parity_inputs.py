@@ -23480,6 +23480,16 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "putdata",
             "requirement_suffix": "behavior.default",
+            "name": "rgb-exact-list-invalid-tuple",
+            "mode": "RGB",
+            "values": {
+                "data": list_literal([[1, 2]] * 9),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
             "name": "rgba-premultiplied-tag-tuples",
             "observe_receiver": True,
             "mode": "RGBa",
