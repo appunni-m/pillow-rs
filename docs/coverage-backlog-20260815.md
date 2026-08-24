@@ -1348,3 +1348,15 @@ The wide degenerate line and extreme-coordinate ellipse probes are retained;
 typed-image and narrow-outline probes showed no new regions and were pruned
 in `d8b43da2e`. The standalone native lane passes 12/12. Memory ended at 66%
 free during the managed run.
+
+## Accepted input: native `I;16` draw fallback
+
+Coverage MCP source review identified the supported `I;16` dynamic-image route
+to `pillow-rs/src/compute/pool_cpu/ops/draw.rs:30`. Commit `8e7225e67` adds a
+materialized public `ImageDraw.line` probe on an `I;16` image; the standalone
+native lane passes 13/13. Managed run
+`bf2f4239-80b7-4a74-a5ec-fafbc3bef02b` passed in 288.557 seconds and ingested
+snapshot `c72b0c8a-97d0-4ab8-b695-d05f0e5e8fff`. Against the preceding accepted
+snapshot, MCP measured `+1` covered region and `+1` covered line; branches and
+functions were unchanged. Source review marks line 30 green. Memory ended at
+67% free; no GPU hang or memory-pressure condition occurred.
