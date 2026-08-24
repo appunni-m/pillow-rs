@@ -1084,6 +1084,7 @@
           "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-float-histogram-097",
           "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-float-histogram-098",
           "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-float-histogram-099",
+          "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-f-histogram-descending-000",
           "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-scalar-degenerate-i-000",
           "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-scalar-degenerate-i-001",
           "PIL.Image.Image.histogram.nuanced.coverage-batch-analysis-scalar-degenerate-i-002",
