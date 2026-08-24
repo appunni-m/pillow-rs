@@ -75,24 +75,32 @@ def run_native_cases() -> tuple[int, int, int]:
         draw.line([(-4, -4), (20, 20)], fill=255, width=2)
 
     def _typed_line(mode: str) -> None:
-        draw = ImageDraw.Draw(Image.new(mode, (4, 4), 0))
+        image = Image.new(mode, (4, 4), 0)
+        draw = ImageDraw.Draw(image)
         draw.line((0, 0, 3, 3), fill=255)
+        image.tobytes()
 
     def _wide_degenerate_line() -> None:
-        draw = ImageDraw.Draw(Image.new("RGB", (4, 4), 0))
+        image = Image.new("RGB", (4, 4), 0)
+        draw = ImageDraw.Draw(image)
         draw.line((1, 1, 1, 1), fill=255, width=2)
+        image.tobytes()
 
     def _narrow_outline() -> None:
-        draw = ImageDraw.Draw(Image.new("RGB", (4, 4), 0))
+        image = Image.new("RGB", (4, 4), 0)
+        draw = ImageDraw.Draw(image)
         draw.rectangle((1, 1, 3, 2), outline=255, width=2)
+        image.tobytes()
 
     def _ellipse_extreme(axis: str) -> None:
-        draw = ImageDraw.Draw(Image.new("RGB", (4, 4), 0))
+        image = Image.new("RGB", (4, 4), 0)
+        draw = ImageDraw.Draw(image)
         limit = 2**31
         if axis == "x":
             draw.ellipse((-limit, 0, limit - 1, 1), outline=255)
         else:
             draw.ellipse((0, -limit, 1, limit - 1), outline=255)
+        image.tobytes()
 
     for name, call in probes:
         probe(name, call)
