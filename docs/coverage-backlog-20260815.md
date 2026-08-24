@@ -1388,3 +1388,22 @@ source review shows the supported Python conversion path returns a copy at
 `pillow-rs/src/ops/convert.rs:186-187` whenever target and source modes match,
 so the later `P` arm is unreachable through supported binding inputs. The
 probe was removed; no output, threshold, or denominator was changed.
+
+## Accepted input: materialized empty enhancement buffer
+
+Coverage MCP identified the empty-buffer early return at
+`pillow-rs/src/compute/pool_cpu/ops/enhance.rs:20-21`. The public input
+`ImageEnhance.Brightness(Image.new("L", (0, 0))).enhance(1.0).tobytes()`
+reaches that Rust path because the final `tobytes()` materializes the
+otherwise deferred pipeline. The first probe stopped after `enhance()` and
+correctly showed no gain; it only constructed a lazy image.
+
+Commit `8507be7f6` adds the materialized native input. Managed run
+`c28dc2fa-d465-4102-a6f9-60c5eee71cbb` passed in 289.374 seconds and ingested
+snapshot `bb4019bc-4d08-435d-8fe0-15f490675c4b`. Against the preceding
+accepted snapshot `fc350296-40ba-44d6-90f8-85f16b7bbc0a`, MCP measured `+1`
+covered region, `+1` line, and `+1` branch; function coverage was unchanged.
+The aggregate is now 56,228/62,331 regions (90.209%), 34,997/38,286 lines
+(91.409%), 5,629/6,736 branches (83.566%), and 2,730/3,161 functions
+(86.365%). Source review marks line 21 green. Memory recovered to 67% free;
+no GPU hang or sustained memory-pressure condition occurred.
