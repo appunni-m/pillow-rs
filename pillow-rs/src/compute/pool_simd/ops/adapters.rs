@@ -94,7 +94,10 @@ fn transform_mode_to_u32(img: &DynamicImage, mode: Option<&str>) -> u32 {
 /// which operates on the native representation and is also used by CPU.
 fn uses_native_scalar_mode(img: &DynamicImage, mode: Option<&str>) -> bool {
     matches!(mode, Some("F" | "I" | "I;16" | "I;16L" | "I;16B" | "I;16N"))
-        || matches!(img, DynamicImage::ImageLuma16(_))
+        || matches!(
+            img,
+            DynamicImage::ImageLuma16(_) | DynamicImage::ImageLumaA16(_)
+        )
 }
 
 fn native_byte_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
@@ -3171,35 +3174,22 @@ pub fn simd_transpose(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Transpose { method } = op {
-        if let Some(result) = native_transpose(img, mode, method.clone()) {
-            return Ok(result);
-        }
+    let PipelineOp::Transpose { method } = op else {
+        return Err(PilError::ValueError("expected Transpose op".into()));
+    };
+    if let Some(result) = native_transpose(img, mode, method.clone()) {
+        return Ok(result);
     }
     if uses_native_scalar_mode(img, mode) {
-        if let PipelineOp::Transpose { method } = op {
-            return crate::compute::pool_cpu::ops::geometry::execute_transpose(img, method);
-        }
-        return Err(PilError::ValueError("expected Transpose op".into()));
+        return crate::compute::pool_cpu::ops::geometry::execute_transpose(img, method);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
-    let method_code: u32 = match op {
-        PipelineOp::Transpose { method } => match method {
-            TransposeMethod::FlipLeftRight => 0,
-            TransposeMethod::FlipTopBottom => 1,
-            TransposeMethod::Rotate90 => 2,
-            TransposeMethod::Rotate180 => 3,
-            TransposeMethod::Rotate270 => 4,
-            TransposeMethod::Transpose => 5,
-            TransposeMethod::Transverse => 6,
-        },
-        _ => return Err(PilError::ValueError("expected Transpose op".into())),
-    };
-    // scalar::transpose modifies pixels in-place for ops 0,1,3 and returns new buffer
-    // for ops 2,4,5,6. Pass the actual pixel buffer so in-place ops work correctly.
+    // The public byte layouts are handled above, and native scalar layouts
+    // are delegated to the shared CPU geometry path. This remaining adapter
+    // is therefore only the packed RGB/RGBA typed fallback.
     let mut pixels = pixels_from_dynimg(img);
-    let (result, nw, nh) = super::scalar::transpose(&mut pixels, w, h, mode_code, method_code);
+    let (result, nw, nh) = super::scalar::transpose(&mut pixels, w, h, mode_code, method);
     let final_pixels = if result.is_empty() { pixels } else { result };
     Ok(preserve_mode(img, dynimg_from_rgba(final_pixels, nw, nh)?))
 }

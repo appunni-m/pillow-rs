@@ -4,6 +4,8 @@
 //! them when compiled with `-C target-cpu=native`. They also serve as the
 //! reference implementation for platform-specific SIMD code.
 
+use crate::pipeline::TransposeMethod;
+
 /// Invert: 255 - value for each active channel.
 /// Mode-aware: only touches channels present in the image mode.
 /// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
@@ -1604,43 +1606,40 @@ pub fn mirror(pixels: &mut [u32], w: u32, h: u32, mode: u32) {
 
 /// Transpose: transpose/rotate with coordinate remapping.
 ///
-/// method_code:
-///   0=FlipLeftRight, 1=FlipTopBottom, 2=Rotate90, 3=Rotate180,
-///   4=Rotate270, 5=Transpose, 6=Transverse
-///
 /// Operations 0,1,3 are in-place (same dimensions). Operations 2,4,5,6
 /// change dimensions (output is H×W). Returns (pixels, new_w, new_h).
 ///
-/// For L/LA modes: G = B = R (luma carried in R, G/B stale after remap).
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
+/// The packed fallback is called only for RGB/RGBA typed images. Ordinary
+/// L/LA inputs use native byte layouts, and 16-bit luma inputs use the CPU
+/// geometry path before reaching this function.
+/// mode: 2=RGB, 3=RGBA
 #[inline]
 pub fn transpose(
     pixels: &mut [u32],
     w: u32,
     h: u32,
     mode: u32,
-    method_code: u32,
+    method: &TransposeMethod,
 ) -> (Vec<u32>, u32, u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
+    let has_a = mode == 3;
     let w_us = w as usize;
     let h_us = h as usize;
 
-    match method_code {
+    match method {
         // ── FlipLeftRight: horizontal mirror ──
-        0 => {
+        TransposeMethod::FlipLeftRight => {
             mirror(pixels, w, h, mode);
             (Vec::new(), w, h)
         }
 
         // ── FlipTopBottom: vertical flip ──
-        1 => {
+        TransposeMethod::FlipTopBottom => {
             flip(pixels, w, h, mode);
             (Vec::new(), w, h)
         }
 
         // ── Rotate90 (CCW): output[H×W] row_out=col, col_out=W-1-row ──
-        2 => {
+        TransposeMethod::Rotate90 => {
             let mut out = vec![0u32; w_us * h_us];
             for row_out in 0..w_us {
                 for col_out in 0..h_us {
@@ -1651,21 +1650,14 @@ pub fn transpose(
                     let sp = pixels[src_idx];
 
                     let dst_idx = row_out * h_us + col_out;
-                    if has_gb {
-                        out[dst_idx] = sp;
-                    } else {
-                        let r = sp & 0xFF;
-                        let a = sp & 0xFF00_0000;
-                        out[dst_idx] =
-                            r | (r << 8) | (r << 16) | if has_a { a } else { 0xFF00_0000 };
-                    }
+                    out[dst_idx] = sp;
                 }
             }
             (out, h, w)
         }
 
         // ── Rotate180: reverse everything ──
-        3 => {
+        TransposeMethod::Rotate180 => {
             // Reverse entire buffer: swap first with last, etc.
             let total = w_us * h_us;
             for i in 0..total / 2 {
@@ -1673,36 +1665,19 @@ pub fn transpose(
                 let li = pixels[i];
                 let rj = pixels[j];
 
-                if has_gb {
-                    let mask = if has_a { 0xFFFF_FFFF } else { 0x00FF_FFFF };
-                    pixels[i] = rj & mask;
-                    pixels[j] = li & mask;
-                } else {
-                    let li_r = li & 0xFF;
-                    let li_a = li & 0xFF00_0000;
-                    let rj_r = rj & 0xFF;
-                    let rj_a = rj & 0xFF00_0000;
-                    pixels[i] =
-                        rj_r | (rj_r << 8) | (rj_r << 16) | if has_a { rj_a } else { 0xFF00_0000 };
-                    pixels[j] =
-                        li_r | (li_r << 8) | (li_r << 16) | if has_a { li_a } else { 0xFF00_0000 };
-                }
+                let mask = if has_a { 0xFFFF_FFFF } else { 0x00FF_FFFF };
+                pixels[i] = rj & mask;
+                pixels[j] = li & mask;
             }
             // Middle pixel if odd total
-            if total % 2 == 1 && !has_gb {
-                let mid = total / 2;
-                let p = pixels[mid];
-                let r = p & 0xFF;
-                let a = p & 0xFF00_0000;
-                pixels[mid] = r | (r << 8) | (r << 16) | if has_a { a } else { 0xFF00_0000 };
-            } else if total % 2 == 1 && !has_a {
+            if total % 2 == 1 && !has_a {
                 pixels[total / 2] &= 0x00FF_FFFF;
             }
             (Vec::new(), w, h)
         }
 
         // ── Rotate270 (CW): output[H×W] row_out=col, col_out=row ──
-        4 => {
+        TransposeMethod::Rotate270 => {
             let mut out = vec![0u32; w_us * h_us];
             for row_out in 0..w_us {
                 for col_out in 0..h_us {
@@ -1713,21 +1688,14 @@ pub fn transpose(
                     let sp = pixels[src_idx];
 
                     let dst_idx = row_out * h_us + col_out;
-                    if has_gb {
-                        out[dst_idx] = sp;
-                    } else {
-                        let r = sp & 0xFF;
-                        let a = sp & 0xFF00_0000;
-                        out[dst_idx] =
-                            r | (r << 8) | (r << 16) | if has_a { a } else { 0xFF00_0000 };
-                    }
+                    out[dst_idx] = sp;
                 }
             }
             (out, h, w)
         }
 
         // ── Transpose: output[H×W] row_out=col, col_out=row ──
-        5 => {
+        TransposeMethod::Transpose => {
             let mut out = vec![0u32; w_us * h_us];
             for row_out in 0..w_us {
                 for col_out in 0..h_us {
@@ -1736,21 +1704,14 @@ pub fn transpose(
                     let sp = pixels[src_idx];
 
                     let dst_idx = row_out * h_us + col_out;
-                    if has_gb {
-                        out[dst_idx] = sp;
-                    } else {
-                        let r = sp & 0xFF;
-                        let a = sp & 0xFF00_0000;
-                        out[dst_idx] =
-                            r | (r << 8) | (r << 16) | if has_a { a } else { 0xFF00_0000 };
-                    }
+                    out[dst_idx] = sp;
                 }
             }
             (out, h, w)
         }
 
         // ── Transverse: output[H×W] row_out=W-1-col, col_out=H-1-row ──
-        6 => {
+        TransposeMethod::Transverse => {
             let mut out = vec![0u32; w_us * h_us];
             for row_out in 0..w_us {
                 for col_out in 0..h_us {
@@ -1761,22 +1722,10 @@ pub fn transpose(
                     let sp = pixels[src_idx];
 
                     let dst_idx = row_out * h_us + col_out;
-                    if has_gb {
-                        out[dst_idx] = sp;
-                    } else {
-                        let r = sp & 0xFF;
-                        let a = sp & 0xFF00_0000;
-                        out[dst_idx] =
-                            r | (r << 8) | (r << 16) | if has_a { a } else { 0xFF00_0000 };
-                    }
+                    out[dst_idx] = sp;
                 }
             }
             (out, h, w)
-        }
-
-        _ => {
-            // Unknown method code: no-op (return input unchanged)
-            (Vec::new(), w, h)
         }
     }
 }
@@ -2540,7 +2489,7 @@ mod tests {
         logical_or, logical_xor, max_filter, median_filter, merge, min_filter, mirror, multiply,
         offset, overlay, pad, paste, put_alpha, put_data, put_pixel, rank_filter,
         reduce, remap_palette, resize, rotate, scale, screen, sharpness, soft_light, solarize,
-        subtract, subtract_modulo, thumbnail, transform, transpose,
+        subtract, subtract_modulo, thumbnail, transform,
     };
 
     /// Helper: create a packed u32 pixel from RGBA bytes.
