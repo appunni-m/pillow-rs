@@ -790,3 +790,29 @@ aggregate result is 55,732/62,314 regions (89.437%), 34,628/38,275 lines
 introduced by the source change; no fixture denominator, filter, threshold,
 output, hash, or coverage-count file was edited. MCP line evidence marks the
 I/F-to-RGB helpers green.
+
+## Accepted input: public L-source palette remap
+
+Coverage MCP source review found that `op_remap_palette` already had a
+publicly appropriate L-source branch, but the pipeline passed its P result tag
+as the kernel's mode. That caused an L image to be interpreted as raw palette
+indices. The executor now passes the source mode for a one-step
+`RemapPalette`; the result remains P-tagged and retains its reordered palette.
+
+Focused exact parity passed for the maintained L-source pipeline case, the
+manifest L-mode case, and an attached-palette P-source case. The core fix was
+committed and pushed as `bb2c84823`.
+
+The strict managed CPU/SIMD/GPU Coverage MCP run was
+`2f54a9e3-42f1-4e43-9f25-503b8b0b6b56`; all 24 plans and 10,873 tests passed
+with zero failures, and it ingested snapshot
+`cd281200-a551-48ae-aa74-846a6ee7df6e` in 272.616 seconds. Compared with the
+prior executable snapshot `f34b8a36-5e3e-4526-abe5-216d9d7a2483`, Coverage
+MCP measured `+33` covered regions, `+14` lines, `+6` branches, and `+0`
+functions. The aggregate result is 55,765/62,326 regions (89.473%),
+34,642/38,280 lines (90.496%), 5,584/6,732 branches (82.947%), and
+2,684/3,161 functions (84.910%). The source edit added 12 regions, 5 lines,
+and 4 branches to the executable denominator; no fixture denominator,
+filter, threshold, output, hash, or coverage-count file was edited. MCP line
+evidence marks the L-source branch green; its non-L fallback remains
+classified as unreachable under the supported public mode contract.
