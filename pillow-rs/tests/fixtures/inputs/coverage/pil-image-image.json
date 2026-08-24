@@ -1725,6 +1725,7 @@
           "PIL.Image.Image.save.nuanced.f-bmp-error",
           "PIL.Image.Image.save.nuanced.cmyk-bmp-error",
           "PIL.Image.Image.putdata.nuanced.rgba-tuples",
+          "PIL.Image.Image.putdata.nuanced.rgb-exact-list-invalid-tuple",
           "PIL.Image.Image.putdata.nuanced.rgba-premultiplied-tag-tuples",
           "PIL.Image.Image.putdata.nuanced.rgbx-tag-tuples",
           "PIL.Image.Image.putdata.nuanced.cmyk-tuples",
