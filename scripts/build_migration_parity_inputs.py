@@ -4799,6 +4799,16 @@ class WorkflowBuilder:
                     step_id="setup-resize",
                 )
                 receiver_step = resized_step
+            elif chain == "typed-load-copy":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-load",
+                )
+                receiver_step = image_step
             elif chain == "p-putalpha-convert":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -33987,6 +33997,7 @@ def build_nuanced_cases(
                 "requirement_suffix": "behavior.default",
                 "name": f"typed-{prefix}-copy",
                 "scenario_inline_image": f"{prefix}-pattern-0",
+                "chain": "typed-load-copy",
             }
             for prefix in ("rgb16-png", "rgba16-png")
         ),
