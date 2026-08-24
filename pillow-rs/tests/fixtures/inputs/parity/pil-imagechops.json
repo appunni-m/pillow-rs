@@ -413269,6 +413269,343 @@
       ]
     },
     {
+      "case_id": "pipeline-composition.gpu-auxiliary-cache-budget",
+      "surface": "PIL.ImageChops",
+      "operation": "screen",
+      "covers": [
+        "PIL.ImageChops.multiply.behavior.default",
+        "PIL.ImageChops.screen.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-primary",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2048,
+                2048
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 17
+            }
+          }
+        },
+        {
+          "step_id": "setup-secondary-0",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2048,
+                2048
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 41
+            }
+          }
+        },
+        {
+          "step_id": "setup-secondary-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2048,
+                2048
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 78
+            }
+          }
+        },
+        {
+          "step_id": "setup-secondary-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2048,
+                2048
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 115
+            }
+          }
+        },
+        {
+          "step_id": "setup-secondary-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2048,
+                2048
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 152
+            }
+          }
+        },
+        {
+          "step_id": "setup-secondary-4",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2048,
+                2048
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 189
+            }
+          }
+        },
+        {
+          "step_id": "secondary-0-multiply",
+          "surface": "PIL.ImageChops",
+          "operation": "multiply",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-primary"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-0"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-0-screen",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-0-multiply"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-0"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-1-multiply",
+          "surface": "PIL.ImageChops",
+          "operation": "multiply",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-0-screen"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-1"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-1-screen",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-1-multiply"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-1"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-2-multiply",
+          "surface": "PIL.ImageChops",
+          "operation": "multiply",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-1-screen"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-2"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-2-screen",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-2-multiply"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-2"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-3-multiply",
+          "surface": "PIL.ImageChops",
+          "operation": "multiply",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-2-screen"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-3"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-3-screen",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-3-multiply"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-3"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-4-multiply",
+          "surface": "PIL.ImageChops",
+          "operation": "multiply",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-3-screen"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-4"
+            }
+          }
+        },
+        {
+          "step_id": "secondary-4-screen",
+          "surface": "PIL.ImageChops",
+          "operation": "screen",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "secondary-4-multiply"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-secondary-4"
+            }
+          }
+        },
+        {
+          "step_id": "materialize",
+          "surface": "PIL.Image.Image",
+          "operation": "getpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "secondary-4-screen"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "observations": [
+        "secondary-0-multiply",
+        "secondary-0-screen",
+        "secondary-4-screen",
+        "materialize"
+      ]
+    },
+    {
       "case_id": "pipeline-composition.matrix-006",
       "surface": "PIL.ImageChops",
       "operation": "screen",
