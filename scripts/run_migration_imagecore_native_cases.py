@@ -154,6 +154,8 @@ def run_native_cases() -> tuple[int, int, int]:
         # outputs to [0, 255] (CLIP8); out-of-range values exercise that arm.
         ("eval-clamp-high", lambda: pillow_rs.Image.eval(pillow_rs.Image.new("L", (4, 4)), lambda v: v + 100)),
         ("point-clamp-low", lambda: pillow_rs.Image.new("L", (4, 4)).point(lambda v: v - 100)),
+        ("point-callable-raises", lambda: _point_callable_raises()),
+        ("point-callable-non-integer", lambda: _point_callable_non_integer()),
         # save error surfaces.
         ("save-path-object", lambda: pillow_rs.Image.new("RGB", (4, 4)).save("/tmp/imagecore-save2.png", format="PNG")),
         ("save-bad-format", lambda: pillow_rs.Image.new("RGB", (4, 4)).save("/tmp/x.png", format="NOT_A_FORMAT")),
@@ -166,6 +168,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ("putpixel-string-single", lambda: pillow_rs.Image.new("L", (4, 4)).putpixel((1, 1), "red")),
         ("putpixel-string-multi", lambda: pillow_rs.Image.new("RGB", (4, 4)).putpixel((1, 1), "red")),
         ("putpixel-bad-type", lambda: pillow_rs.Image.new("L", (4, 4)).putpixel((1, 1), 1.5)),
+        ("alpha-composite-explicit-none-boxes", lambda: _alpha_composite_none_boxes()),
         ("putalpha-int", lambda: pillow_rs.Image.new("RGBA", (4, 4)).putalpha(128)),
         (
             "putalpha-l-mask-promotes-rgb",
@@ -429,6 +432,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ("backend-enable-cpu", lambda: pillow_rs.enable_backend("cpu")),
         ("backend-disable-cpu", lambda: pillow_rs.disable_backend("cpu")),
         ("backend-unknown", lambda: pillow_rs.enable_backend("NOPE")),
+        ("backend-disable-unknown", lambda: pillow_rs.disable_backend("NOPE")),
         ("backend-eval-image", lambda: _backend_image()),
         # Public _core telemetry lifecycle: empty reads cover the no-sample
         # result, while a materialized resize produces the populated record.
@@ -495,6 +499,23 @@ def _pixel_access(image: Image) -> None:
     access = image.load()
     _ = access[0, 0]
     access[0, 0] = 255
+
+
+def _alpha_composite_none_boxes() -> None:
+    background = Image.new("RGBA", (2, 2), (10, 20, 30, 255))
+    foreground = Image.new("RGBA", (2, 2), (40, 50, 60, 128))
+    background.alpha_composite(foreground, dest=None, source=None)
+
+
+def _point_callable_raises() -> None:
+    def fail(_sample):
+        raise ValueError("coverage probe")
+
+    Image.new("L", (2, 2)).point(fail)
+
+
+def _point_callable_non_integer() -> None:
+    Image.new("L", (2, 2)).point(lambda _sample: "not-an-integer")
 
 
 def _closed_attribute(image: Image) -> None:
