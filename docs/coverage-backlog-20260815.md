@@ -1376,3 +1376,15 @@ run `5379983a-4d3f-441a-b6e5-aea7570bbecc`, ingesting snapshot
 and `+2` branches. The source review marks the `images do not match` branch
 green. The managed run used 341 seconds and memory recovered to 65% free;
 there was no GPU hang or sustained memory-pressure condition.
+
+## Pruned zero-gain candidate: same-mode `P` conversion
+
+A supported `Image.convert("P")` input was temporarily added to target the
+legacy `pillow-rs/src/ops/convert.rs:298-299` compatibility arm. The native
+lane passed 237/237, but managed run
+`d6ab2a42-c877-4ecb-a145-7f05500ac3c1` ingested snapshot
+`73829c5a-29cb-4374-82b8-bba21f01397c` with no coverage delta. Coverage MCP
+source review shows the supported Python conversion path returns a copy at
+`pillow-rs/src/ops/convert.rs:186-187` whenever target and source modes match,
+so the later `P` arm is unreachable through supported binding inputs. The
+probe was removed; no output, threshold, or denominator was changed.
