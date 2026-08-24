@@ -416,6 +416,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ("resize-palette-bicubic-materialized", lambda: _materialize_resize(_palette_image(), 3)),
         ("filter-callable-p", lambda: _filter_callable(Image.new("P", (4, 4)))),
         ("filter-parametric-p", lambda: _filter_parametric(Image.new("P", (4, 4)))),
+        ("filter-custom-unknown-name", lambda: _filter_custom_unknown_name()),
         ("filter-p-string", lambda: Image.new("P", (4, 4)).filter("BLUR")),
         ("transform-mesh-flat-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, [0, 0, 8, 8, 0, 0, 0, 8, 8, 8, 8, 0])),
         ("transform-mesh-missing-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, None)),
@@ -571,6 +572,16 @@ def _filter_parametric(image: Image) -> None:
             return _image
 
     image.filter(Parametric())
+
+
+def _filter_custom_unknown_name() -> None:
+    class UnknownFilter:
+        name = "UNKNOWN"
+
+        def _apply(self, rust_image):
+            return rust_image.filter_name("NOT_A_FILTER")
+
+    Image.new("L", (4, 4)).filter(UnknownFilter())
 
 
 def _thumbnail_int(image: Image) -> None:
