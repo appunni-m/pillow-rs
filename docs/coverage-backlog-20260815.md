@@ -1118,3 +1118,26 @@ input returns at `quantize.rs:234-235`, which are already covered; reaching
 temporary observation was removed and the candidate pruned. No runtime code,
 outputs, hashes, thresholds, filters, coverage counts, or denominators
 changed.
+
+## Accepted input: RGBX default draw ink
+
+Coverage MCP source review identified `pillow-rs/src/draw/mod.rs:512` as the
+default shape-ink fallback for modes outside the known ImageDraw families. A
+supported public `RGBX` rectangle with both `fill=None` and `outline=None`
+reached that dispatch. The first focused parity run exposed a real semantic
+divergence: Pillow draws the implicit white outline for RGBX, while Rust's
+omitted RGBX arm returned no outline. Core dispatch now treats RGBX as an
+RGB-family mode, and the focused live-oracle case passes 1/1.
+
+Commit `fb2f07c61` contains the core fix and the input-only parity/coverage
+case `PIL.ImageDraw.ImageDraw.rectangle.nuanced.coverage-batch-draw-rectangle-rgbx-default-ink`.
+The managed strict CPU/SIMD/GPU Coverage MCP run
+`5bd4f2f7-6ffb-4885-93ac-0b3357e168f0` passed all 24 plans and ingested
+snapshot `c678251c-acee-43c9-b048-fcdb9b28495c` in 327.464 seconds. Against
+snapshot `6ed880d9-34cd-46d4-9562-41e5a8018e79`, MCP measured `+1` covered
+region and `+1` covered line; branch and function coverage were unchanged.
+The aggregate is now 55,800/62,331 regions (89.522%), 34,683/38,286 lines
+(90.589%), 5,600/6,736 branches (83.135%), and 2,684/3,161 functions
+(84.910%). Memory ranged from 56% to 65% free during the run and ended at
+61% free. No outputs, hashes, thresholds, filters, coverage counts, or
+denominators were edited.
