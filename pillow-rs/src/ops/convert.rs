@@ -320,7 +320,10 @@ impl Image {
         // modes through RGB changes Pillow's fixed-point behavior (for
         // example, RGB(11, 11, 11) has Y=10 while F(11.5) truncates to an
         // L value of 11 before a YCbCr conversion).
-        if matches!(effective_src_mode_name, "I" | "F") {
+        // PA is a dedicated indexed-plus-alpha destination; route I/F through
+        // convert_to_palette_alpha below so scalar samples use its direct
+        // clamped-index conversion instead of the generic L fallback.
+        if matches!(effective_src_mode_name, "I" | "F") && mode != "PA" {
             let img = self.materialize()?;
             let result = match (effective_src_mode_name, mode) {
                 ("I", "F") => color::i_to_f(&img),
