@@ -762,3 +762,31 @@ family. The remaining repeated-resource capacity fallbacks at lines 143, 156,
 and 1664 require exceeding the fixed auxiliary-cache budget or bypassing the
 execution-wide cache; they are not attempted with oversized or unbounded
 public workloads.
+
+## Accepted input: scalar I/F-to-PA conversion dispatch
+
+Coverage MCP source review found that the maintained public I/F-to-PA cases
+already existed, but `Image::convert_with_input` intercepted them in the
+generic scalar I/F dispatch and recursively converted through `L`. That left
+the existing dedicated PA converter's direct clamped-index helpers
+(`color.rs:994-1022`) unreachable. The core dispatch now excludes `PA` from
+that scalar shortcut, so supported I/F-to-PA inputs reach
+`convert_to_palette_alpha` without adding a private probe or changing the
+public input contract.
+
+Focused exact parity passed for representative I-to-PA and F-to-PA cases and
+for both existing unsupported-source compatibility cases. The change was
+committed and pushed as `cdab5218a`.
+
+The strict managed CPU/SIMD/GPU Coverage MCP run was
+`a03b1371-1f15-45db-bcd0-bb7b22601b47`; all 24 plans and 10,873 tests passed
+with zero failures, and the run ingested snapshot
+`f34b8a36-5e3e-4526-abe5-216d9d7a2483` in 290.582 seconds. Compared with the
+parent snapshot `db30d43a-7594-46ef-8f4c-ee92806f01c9`, Coverage MCP measured
+`+102` covered regions, `+42` lines, `+4` branches, and `+4` functions. The
+aggregate result is 55,732/62,314 regions (89.437%), 34,628/38,275 lines
+(90.472%), 5,578/6,728 branches (82.907%), and 2,684/3,161 functions
+(84.910%). The one-region denominator increase is the executable branch
+introduced by the source change; no fixture denominator, filter, threshold,
+output, hash, or coverage-count file was edited. MCP line evidence marks the
+I/F-to-RGB helpers green.
