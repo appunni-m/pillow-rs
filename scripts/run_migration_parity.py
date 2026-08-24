@@ -600,6 +600,15 @@ def _call_arguments(
             and name == "axes"
             and descriptor.get("kind") == "literal"
         )
+        # Image.open declares ``formats`` as list[str] | tuple[str, ...].
+        # Preserve an explicit list so the PyO3 adapter's public list arm is
+        # input-reachable; generic sequence inputs remain tuple-canonicalized.
+        preserve_lists = preserve_lists or (
+            opdef["source"].get("path") == "PIL.Image.open"
+            and name == "formats"
+            and descriptor.get("kind") == "literal"
+            and isinstance(descriptor.get("value"), list)
+        )
         value = resolve_descriptor(
             descriptor,
             bindings,

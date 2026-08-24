@@ -14564,6 +14564,13 @@ def build_nuanced_cases(
             "surface": "PIL.Image",
             "operation": "open",
             "requirement_suffix": "parameter.formats",
+            "name": "formats-list-accepted",
+            "values": {"formats": list_literal(["PNG"])},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "open",
+            "requirement_suffix": "parameter.formats",
             "name": "formats-rejected",
             "values": {"formats": literal(["JPEG"])},
         },
