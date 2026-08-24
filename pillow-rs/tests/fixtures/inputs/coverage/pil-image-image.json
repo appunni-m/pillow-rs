@@ -3011,8 +3011,6 @@
           "PIL.Image.Image.convert.nuanced.coverage-batch-convert-matrix-rgb-7",
           "PIL.Image.Image.convert.nuanced.coverage-batch-convert-matrix-rgb-8",
           "PIL.Image.Image.convert.nuanced.coverage-batch-convert-matrix-rgb-9",
-          "PIL.Image.Image.convert.nuanced.coverage-batch-dynamic-clone-rgb16-png-convert-1",
-          "PIL.Image.Image.convert.nuanced.coverage-batch-dynamic-clone-rgba16-png-convert-1",
           "PIL.Image.Image.transform.nuanced.coverage-batch-geometry-affine-large-l-0",
           "PIL.Image.Image.transform.nuanced.coverage-batch-geometry-affine-large-l-1",
           "PIL.Image.Image.transform.nuanced.coverage-batch-geometry-affine-large-l-2",
