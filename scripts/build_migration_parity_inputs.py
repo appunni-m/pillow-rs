@@ -36976,6 +36976,20 @@ def build_nuanced_cases(
             )
             for index, size in enumerate(([513, 3], [513, 16]))
         ),
+        # Coverage batch 2026-08-24: cross the native-byte RankFilter size
+        # threshold through the public filter wrapper.  Existing rank cases
+        # are intentionally small and therefore use the scalar adapter.
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "RankFilter",
+            "requirement_suffix": "mode.l",
+            "name": "coverage-batch-filter-large-rank-l-0",
+            "mode": "L",
+            "size": [513, 16],
+            "edge": "nonzero-pixel",
+            "pixel": 180,
+            "values": {"size": literal(5), "rank": literal(12)},
+        },
         # Coverage batch 2026-08-14: exercise the remaining public filter
         # geometry combinations in one input-driven slice.  The first eight
         # cases cross the maintained parallel blur transpose threshold; the
