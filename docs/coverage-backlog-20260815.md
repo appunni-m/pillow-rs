@@ -816,3 +816,35 @@ and 4 branches to the executable denominator; no fixture denominator,
 filter, threshold, output, hash, or coverage-count file was edited. MCP line
 evidence marks the L-source branch green; its non-L fallback remains
 classified as unreachable under the supported public mode contract.
+
+## Current MCP ceiling audit: active supported-input corpus
+
+Coverage MCP insight at snapshot
+`cd281200-a551-48ae-aa74-846a6ee7df6e` ranks the remaining uncovered source
+regions as follows. This is the measured ceiling for the current maintained
+public-input corpus, not a claim that every hypothetical private or unsupported
+input should execute. The strict managed CPU/SIMD/GPU run passed all 24 plans
+and 10,873 tests with zero failures; it reports 55,765/62,326 regions
+(89.473%), 34,642/38,280 lines (90.496%), 5,584/6,732 branches (82.947%),
+and 2,684/3,161 functions (84.910%).
+
+| rank | file | uncovered lines | MCP reachability reason | disposition |
+| ---: | --- | ---: | --- | --- |
+| 1 | `pillow-rs/src/compute/pool_gpu/mod.rs` | 457 | Device, allocation, cache-capacity, and error fallbacks; forcing them requires unsafe-sized or failure-inducing workloads. | Keep bounded; do not force. |
+| 2 | `pillow-rs/src/image.rs` | 354 | Planner fallbacks for invalid modes, malformed descriptors, and non-finite dimensions rejected or normalized at public boundaries. | Keep as invariant guards. |
+| 3 | `pillow-rs/src/compute/pool_simd/ops/adapters.rs` | 315 | Invalid LUT lengths and impossible fixed-width conversions are checked before the native adapter is called. | Keep as adapter guards. |
+| 4 | `pillow-rs/src/raster/dynamic.rs` | 286 | Typed clone/clone-from arms are not reached by the maintained public decoder routes; the prior typed PNG batch produced zero unique gain. | Pruned as zero-gain for now. |
+| 5 | `pillow-rs/src/compute/pool_simd/ops/scalar.rs` | 264 | Remaining alpha/channel fallback arms belong to internal packed-mode dispatch; supported public routes select other adapters. | No input-only route found. |
+| 6 | `pillow-rs/src/compute/registry.rs` | 241 | Registry initialization succeeds; missing entries are internal descriptor/error paths or operations that bypass this lookup. | Keep registry safety paths. |
+| 7 | `pillow-rs-py/src/lib.rs` | 241 | Iterator constructor/error branches and wrapper helpers are not selected by the active public-input plans. | Defer until a maintained public case exists. |
+| 8 | `pillow-rs/src/compute/mod.rs` | 227 | Invalid backend parsing and telemetry controls are control-plane APIs outside the active image-input manifest. | Defer; no filter changes. |
+| 9 | `pillow-rs/src/lib.rs` | 216 | The largest remaining ranges are font constructors and other exported entry points outside this campaign’s allowed font lane. | Deferred; do not touch fontdone. |
+| 10 | `pillow-rs/src/raster/traits/primitive.rs` | 103 | Generic primitive implementations are not instantiated by the supported public raster paths measured here. | Keep generic implementations. |
+
+The lower-ranked CPU candidates were also sampled with MCP source review:
+empty-image histogram returns, invalid ImageOps colors, unsupported merge
+modes, zero-coefficient resize guards, raw-buffer shape errors, and malformed
+transform inputs are either rejected before queueing, impossible after checked
+allocation, or outside the supported public input contract. No output, hash,
+threshold, filter, denominator, or coverage-count file was changed during
+this audit.
