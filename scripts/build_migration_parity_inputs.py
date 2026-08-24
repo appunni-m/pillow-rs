@@ -7144,6 +7144,70 @@ def pipeline_composition_cases(
             "observations": ["cached-paste-000", "cached-paste-001", "materialize"],
         }
 
+    def gpu_paste_mask_cache_budget_case() -> dict[str, Any]:
+        """Overflow the public GPU third-image cache budget.
+
+        One public source and five distinct public masks are each reused by
+        valid Image.paste calls.  The packed source plus masks exceed the
+        bounded cache, so a mask insertion takes the existing fallback.
+        """
+
+        size = [2048, 2048]
+        steps: list[dict[str, Any]] = [
+            new_image("setup-image", "L", size, 17),
+            new_image("setup-source", "L", size, 233),
+        ]
+        for index in range(5):
+            steps.append(
+                new_image(
+                    f"setup-mask-{index}",
+                    "L",
+                    size,
+                    31 + index * 41,
+                )
+            )
+
+        for index in range(5):
+            mask = f"setup-mask-{index}"
+            for repeat in range(2):
+                steps.append(
+                    {
+                        "step_id": f"budget-paste-{index}-{repeat}",
+                        "surface": "PIL.Image.Image",
+                        "operation": "paste",
+                        "receiver": binding("setup-image"),
+                        "arguments": {
+                            "im": binding("setup-source"),
+                            "mask": binding(mask),
+                        },
+                    }
+                )
+
+        steps.append(
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "getpixel",
+                "receiver": binding("setup-image"),
+                "arguments": {"xy": literal([0, 0])},
+            }
+        )
+        return {
+            "case_id": "pipeline-composition.gpu-paste-mask-cache-budget",
+            "surface": "PIL.Image.Image",
+            "operation": "paste",
+            "covers": [behavior("PIL.Image.Image", "paste")],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": steps,
+            "observations": [
+                "budget-paste-0-0",
+                "budget-paste-0-1",
+                "budget-paste-4-1",
+                "materialize",
+            ],
+        }
+
     def gpu_safety_negative_gaussian_case(pattern: int) -> dict[str, Any]:
         """Use Pillow-valid negative Gaussian radii to exercise GPU rejection.
 
@@ -11100,6 +11164,9 @@ def pipeline_composition_cases(
     # one lazy pipeline. Keep exactly 100 workflows so the third-image cache
     # remains input-driven and auditable.
     cases.extend(gpu_paste_mask_cache_case(pattern) for pattern in range(100))
+    # Coverage batch 2026-08-24c: exercise the valid public third-image cache
+    # budget fallback with five reused 2048x2048 masks.
+    cases.append(gpu_paste_mask_cache_budget_case())
     # Coverage batch 2026-08-16b: Pillow-valid negative Gaussian radii must
     # take the GPU safety rejection and exact CPU fallback without requiring a
     # device. Keep the batch public and parity-observed.
