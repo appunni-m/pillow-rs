@@ -394,10 +394,19 @@ def run(args: argparse.Namespace) -> int:
         # instrumented extension rather than silently omitted from Rust
         # coverage. Scoped operation/case runs intentionally remain
         # operation-attributable and do not inherit this supplement.
-        run_imagecore_native = (
-            (args.operation is None and not args.case_id)
-            or "coverage-imagecore-native" in selected_command_ids
-        )
+        canonical_full_lane = args.operation is None and not args.case_id
+        native_supplement_scripts: list[str] = []
+        native_supplements = {
+            "coverage-imagecore-native": "run_migration_imagecore_native_cases.py",
+            "coverage-imageops-native": "run_migration_imageops_native_cases.py",
+            "coverage-imagesequence-native": "run_migration_imagesequence_native_cases.py",
+            "coverage-imagedraw-native": "run_migration_imagedraw_native_cases.py",
+            "coverage-imagecolor-native": "run_migration_imagecolor_native_cases.py",
+            "coverage-imagepalette-native": "run_migration_imagepalette_native_cases.py",
+        }
+        for command_id, script_name in native_supplements.items():
+            if canonical_full_lane or command_id in selected_command_ids:
+                native_supplement_scripts.append(script_name)
         child_results: list[dict[str, Any]] = []
         python_data_paths: list[Path] = []
         for backend in COVERAGE_BACKENDS:
@@ -453,11 +462,11 @@ def run(args: argparse.Namespace) -> int:
                     check=True,
                 )
 
-            if run_imagecore_native:
+            for script_name in native_supplement_scripts:
                 subprocess.run(
                     [
                         sys.executable,
-                        str(ROOT / "scripts" / "run_migration_imagecore_native_cases.py"),
+                        str(ROOT / "scripts" / script_name),
                     ],
                     env={
                         **backend_env,
