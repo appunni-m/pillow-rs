@@ -310,6 +310,7 @@
           "PIL.Image.merge.nuanced.invalid-mode",
           "PIL.Image.merge.nuanced.wrong-band-count",
           "PIL.Image.merge.nuanced.invalid-band-item",
+          "PIL.Image.merge.nuanced.invalid-band-item-int",
           "PIL.Image.merge.nuanced.l-mode-band-mismatch",
           "PIL.Image.merge.nuanced.band-size-mismatch",
           "PIL.Image.blend.nuanced.mismatched-sizes",
