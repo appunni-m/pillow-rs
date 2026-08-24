@@ -1227,3 +1227,21 @@ conversion implementations as unreachable through the current supported
 public decoder path; commits `2e3e23326` and `6fe0a5c4f` add then prune the
 batch. No runtime code, outputs, hashes, thresholds, filters, coverage counts,
 or denominators were changed.
+
+## Pruned zero-gain candidate: odd-height integer flip fallback
+
+Coverage MCP ranked `pillow-rs/src/compute/pool_simd/ops/scalar.rs:160-161` as
+an uncovered region. The temporary public case
+`PIL.ImageOps.flip.nuanced.coverage-batch-simd-flip-i-odd-height` used a valid
+5×3 integer image and passed focused parity 1/1. The managed strict
+CPU/SIMD/GPU run `104b2ffd-94c8-4a47-b655-b194e48c9532` selected and passed
+the case in 304.595 seconds, but MCP measured no aggregate change: coverage
+remained 55,802/62,331 regions (89.525%), 34,687/38,286 lines (90.600%),
+5,601/6,736 branches (83.150%), and 2,684/3,161 functions (84.910%).
+
+Source tracing found that SIMD does execute, but `mode_to_u32` maps public
+tagged `I`, `F`, and other non-native four-byte modes to mode code 3. The
+middle-row condition therefore sees `has_a=true`; public supported inputs do
+not reach the non-alpha branch. The input was removed rather than retained as
+zero-gain coverage debt. No runtime code, outputs, hashes, thresholds,
+filters, coverage counts, or denominators were edited.

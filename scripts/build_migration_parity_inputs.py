@@ -38733,23 +38733,6 @@ def build_nuanced_cases(
         raise ValueError(
             "Image.putdata bytes coverage campaign must contain exactly 100 candidates"
         )
-    # Coverage batch 2026-08-24b: ordinary byte-backed flip inputs use the
-    # native transpose mover.  An odd-height integer image is a valid public
-    # input for the packed SIMD fallback and keeps its middle-row alpha-mask
-    # branch input-driven without adding a probe or expected output.
-    reachability_specs = (
-        {
-            "surface": "PIL.ImageOps",
-            "operation": "flip",
-            "requirement_suffix": "behavior.default",
-            "name": "coverage-batch-simd-flip-i-odd-height",
-            "mode": "I",
-            "size": [5, 3],
-            "edge": "nonzero-pixel",
-            "pixel": 100001,
-            "observe_result": "tobytes",
-        },
-    )
     specs = (
         specs
         + tuple(simd_campaign_specs)
@@ -38757,7 +38740,6 @@ def build_nuanced_cases(
         + tuple(simd_campaign_offset_specs)
         + tuple(simd_campaign_brightness_specs)
         + tuple(putdata_bytes_campaign_specs)
-        + reachability_specs
     )
 
     requirements: dict[tuple[str, str], dict[str, dict[str, Any]]] = {}
