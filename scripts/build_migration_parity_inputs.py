@@ -33640,6 +33640,14 @@ def build_nuanced_cases(
         },
         {
             "surface": "PIL.Image.Image",
+            "operation": "getcolors",
+            "requirement_suffix": "behavior.default",
+            "name": "empty-rgb-pixel-iterator",
+            "mode": "RGB",
+            "edge": "zero-width",
+        },
+        {
+            "surface": "PIL.Image.Image",
             "operation": "getdata",
             "requirement_suffix": "behavior.default",
             "name": "opened-rgb",
