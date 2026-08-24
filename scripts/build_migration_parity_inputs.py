@@ -7076,6 +7076,103 @@ def pipeline_composition_cases(
             ],
         }
 
+    def gpu_lut_cache_budget_case() -> dict[str, Any]:
+        """Overflow the public GPU LUT cache after filling image cache.
+
+        Four reused 2048x2048 secondary images fill the bounded cache exactly.
+        Two public point calls then reuse one valid LUT, so its first cache
+        insertion takes the existing bounded LUT fallback.
+        """
+
+        size = [2048, 2048]
+        lut = literal([(value * 7 + 19) % 256 for value in range(256)])
+        steps: list[dict[str, Any]] = [
+            new_image("setup-primary", "L", size, 17),
+        ]
+        for index in range(4):
+            steps.append(
+                new_image(
+                    f"setup-secondary-{index}",
+                    "L",
+                    size,
+                    41 + index * 37,
+                )
+            )
+
+        previous = "setup-primary"
+        for index in range(4):
+            secondary = f"setup-secondary-{index}"
+            first_step = f"secondary-{index}-multiply"
+            second_step = f"secondary-{index}-screen"
+            steps.extend(
+                [
+                    {
+                        "step_id": first_step,
+                        "surface": "PIL.ImageChops",
+                        "operation": "multiply",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding(previous),
+                            "image2": binding(secondary),
+                        },
+                    },
+                    {
+                        "step_id": second_step,
+                        "surface": "PIL.ImageChops",
+                        "operation": "screen",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding(first_step),
+                            "image2": binding(secondary),
+                        },
+                    },
+                ]
+            )
+            previous = second_step
+
+        for index in range(2):
+            point_step = f"cached-point-{index}"
+            steps.append(
+                {
+                    "step_id": point_step,
+                    "surface": "PIL.Image.Image",
+                    "operation": "point",
+                    "receiver": binding(previous),
+                    "arguments": {"lut": lut},
+                }
+            )
+            previous = point_step
+
+        steps.append(
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "getpixel",
+                "receiver": binding(previous),
+                "arguments": {"xy": literal([0, 0])},
+            }
+        )
+        return {
+            "case_id": "pipeline-composition.gpu-lut-cache-budget",
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "covers": [
+                behavior("PIL.ImageChops", "multiply"),
+                behavior("PIL.ImageChops", "screen"),
+                behavior("PIL.Image.Image", "point"),
+            ],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": steps,
+            "observations": [
+                "secondary-0-multiply",
+                "secondary-0-screen",
+                "cached-point-0",
+                "cached-point-1",
+                "materialize",
+            ],
+        }
+
     def gpu_paste_mask_cache_case(pattern: int) -> dict[str, Any]:
         """Repeat one public paste source and mask inside one lazy image.
 
@@ -11160,6 +11257,9 @@ def pipeline_composition_cases(
     # Coverage batch 2026-08-24b: exercise the valid public secondary-image
     # cache budget fallback with five reused 2048x2048 images.
     cases.append(gpu_auxiliary_cache_budget_case())
+    # Coverage batch 2026-08-24d: exercise the valid public LUT cache budget
+    # fallback after four reused 2048x2048 images fill the cache.
+    cases.append(gpu_lut_cache_budget_case())
     # Coverage batch 2026-08-15c: exercise repeated public paste masks inside
     # one lazy pipeline. Keep exactly 100 workflows so the third-image cache
     # remains input-driven and auditable.

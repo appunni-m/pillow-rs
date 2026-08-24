@@ -5802,6 +5802,7 @@
           "pipeline-composition.gpu-transpose-fusion-after-grayscale-transpose",
           "pipeline-composition.gpu-transpose-fusion-after-grayscale-transverse",
           "pipeline-composition.gpu-transpose-fusion-after-grayscale-zero-dimensions",
+          "pipeline-composition.gpu-lut-cache-budget",
           "pipeline-composition.gpu-paste-mask-cache-000",
           "pipeline-composition.gpu-paste-mask-cache-001",
           "pipeline-composition.gpu-paste-mask-cache-002",
