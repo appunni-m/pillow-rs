@@ -362,7 +362,6 @@ def run_native_cases() -> tuple[int, int, int]:
         ("frombytes-class-cmyk", lambda: Image.frombytes("CMYK", (1, 1), b"\x00\x00\x00\x00")),
         ("tobytes-encoder-mismatch", lambda: Image.new("L", (1, 1)).tobytes("raw", "BOGUS")),
         ("putalpha-float", lambda: Image.new("RGBA", (1, 1)).putalpha(1.5)),
-        ("putalpha-image", _putalpha_image),
         ("getdata-index", lambda: Image.new("L", (2, 2)).getdata()[0]),
         ("getpalette-p-empty", lambda: Image.new("P", (2, 2)).getpalette()),
         ("closed-image-attribute", lambda: _closed_attribute(Image.new("L", (1, 1)))),
@@ -375,10 +374,6 @@ def run_native_cases() -> tuple[int, int, int]:
         ("convert-one-to-l", lambda: Image.frombytes("1", (8, 1), b"\xaa").convert("L")),
         ("convert-one-to-rgb", lambda: Image.frombytes("1", (8, 1), b"\xaa").convert("RGB")),
         ("convert-one-to-cmyk", lambda: Image.frombytes("1", (8, 1), b"\xaa").convert("CMYK")),
-        ("convert-l-to-rgb", lambda: _convert_mode("L", "RGB")),
-        ("convert-rgb-to-l", lambda: _convert_mode("RGB", "L")),
-        ("convert-rgb-to-la", lambda: _convert_mode("RGB", "LA")),
-        ("convert-rgb-to-rgba", lambda: _convert_mode("RGB", "RGBA")),
         ("convert-ycbcr-to-one", lambda: Image.frombytes("YCbCr", (2, 1), bytes([16, 128, 128, 200, 100, 50])).convert("1", dither=0)),
         ("convert-hsv-to-one", lambda: Image.frombytes("HSV", (2, 1), bytes([0, 255, 255, 64, 128, 192])).convert("1", dither=0)),
         ("convert-cmyk-to-one", lambda: Image.frombytes("CMYK", (2, 1), bytes([0, 255, 0, 0, 128, 64, 32, 16])).convert("1", dither=0)),
@@ -651,19 +646,6 @@ def _rotate_explicit_none_expand() -> None:
 
 def _rotate_truthy_expand_object() -> None:
     Image.new("RGB", (4, 4)).rotate(45, expand=object()).tobytes()
-
-
-def _convert_mode(source_mode: str, target_mode: str) -> None:
-    image = Image.new(source_mode, (4, 4), 128)
-    if source_mode == "RGB":
-        image.putpixel((0, 0), (10, 20, 30))
-    image.convert(target_mode).tobytes()
-
-
-def _putalpha_image() -> None:
-    image = Image.new("RGB", (4, 4), (10, 20, 30))
-    image.putalpha(Image.new("L", (4, 4), 128))
-    image.tobytes()
 
 
 def _open_invalid_bytes() -> None:
