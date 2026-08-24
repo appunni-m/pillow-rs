@@ -6994,6 +6994,88 @@ def pipeline_composition_cases(
             "observations": ["auxiliary-000", "auxiliary-001", previous, "materialize"],
         }
 
+    def gpu_auxiliary_cache_budget_case() -> dict[str, Any]:
+        """Overflow the public GPU secondary-image cache budget.
+
+        Five distinct 2048x2048 public images are each reused by two ordinary
+        ImageChops operations.  The packed RGBA representations total 80 MiB,
+        so the fifth cache insertion takes the existing bounded fallback while
+        keeping every input valid and parity-observed.
+        """
+
+        size = [2048, 2048]
+        steps: list[dict[str, Any]] = [
+            new_image("setup-primary", "L", size, 17),
+        ]
+        for index in range(5):
+            steps.append(
+                new_image(
+                    f"setup-secondary-{index}",
+                    "L",
+                    size,
+                    41 + index * 37,
+                )
+            )
+
+        previous = "setup-primary"
+        for index in range(5):
+            secondary = f"setup-secondary-{index}"
+            first_step = f"secondary-{index}-multiply"
+            second_step = f"secondary-{index}-screen"
+            steps.extend(
+                [
+                    {
+                        "step_id": first_step,
+                        "surface": "PIL.ImageChops",
+                        "operation": "multiply",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding(previous),
+                            "image2": binding(secondary),
+                        },
+                    },
+                    {
+                        "step_id": second_step,
+                        "surface": "PIL.ImageChops",
+                        "operation": "screen",
+                        "receiver": None,
+                        "arguments": {
+                            "image1": binding(first_step),
+                            "image2": binding(secondary),
+                        },
+                    },
+                ]
+            )
+            previous = second_step
+
+        steps.append(
+            {
+                "step_id": "materialize",
+                "surface": "PIL.Image.Image",
+                "operation": "getpixel",
+                "receiver": binding(previous),
+                "arguments": {"xy": literal([0, 0])},
+            }
+        )
+        return {
+            "case_id": "pipeline-composition.gpu-auxiliary-cache-budget",
+            "surface": "PIL.ImageChops",
+            "operation": "screen",
+            "covers": [
+                behavior("PIL.ImageChops", "multiply"),
+                behavior("PIL.ImageChops", "screen"),
+            ],
+            "target_profiles": [TARGET_PROFILE],
+            "assets": [],
+            "steps": steps,
+            "observations": [
+                "secondary-0-multiply",
+                "secondary-0-screen",
+                "secondary-4-screen",
+                "materialize",
+            ],
+        }
+
     def gpu_paste_mask_cache_case(pattern: int) -> dict[str, Any]:
         """Repeat one public paste source and mask inside one lazy image.
 
@@ -11011,6 +11093,9 @@ def pipeline_composition_cases(
     # and LUT identities inside one lazy pipeline. Keep exactly 100 retained
     # workflows so cache coverage remains input-driven and auditable.
     cases.extend(gpu_auxiliary_cache_case(pattern) for pattern in range(100))
+    # Coverage batch 2026-08-24b: exercise the valid public secondary-image
+    # cache budget fallback with five reused 2048x2048 images.
+    cases.append(gpu_auxiliary_cache_budget_case())
     # Coverage batch 2026-08-15c: exercise repeated public paste masks inside
     # one lazy pipeline. Keep exactly 100 workflows so the third-image cache
     # remains input-driven and auditable.
