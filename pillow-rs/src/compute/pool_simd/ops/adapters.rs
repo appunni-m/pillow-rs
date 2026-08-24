@@ -1132,6 +1132,11 @@ fn mirror_native_bytes(bytes: &mut [u8], width: u32, height: u32, channels: usiz
     let Some(rows) = bytes.get_mut(..total_len) else {
         return false;
     };
+    // A zero-width image has no row bytes. `chunks_exact_mut(0)` panics, while
+    // Pillow treats mirroring the empty rows as a valid no-op.
+    if row_len == 0 {
+        return true;
+    }
     for row in rows.chunks_exact_mut(row_len) {
         // A 16-byte lane can reverse complete L, LA, or RGBA pixel groups.
         // RGB is intentionally left on the scalar path: its three-byte
