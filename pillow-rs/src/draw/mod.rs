@@ -500,7 +500,9 @@ impl Draw {
         match self.effective_mode().as_str() {
             // ImageDraw._getink() starts an RGB-family outline with
             // draw_ink(-1), which resolves to an all-255 sample.
-            "RGB" | "RGBA" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => Some((255, 255, 255, 255)),
+            "RGB" | "RGBA" | "RGBX" | "LA" | "PA" | "CMYK" | "YCbCr" | "HSV" => {
+                Some((255, 255, 255, 255))
+            }
             // I/F contexts initialize their ink with draw_ink(1). These
             // tuples are the native little-endian representations carried by
             // the explicit-mode RGBA canvas used by this crate.
