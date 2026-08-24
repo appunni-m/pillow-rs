@@ -4799,6 +4799,16 @@ class WorkflowBuilder:
                     step_id="setup-resize",
                 )
                 receiver_step = resized_step
+            elif chain == "load-copy-high-depth":
+                image_step = self.ensure_image()
+                self.add_step(
+                    "PIL.Image.Image",
+                    "load",
+                    receiver=binding(image_step),
+                    arguments={},
+                    step_id="setup-load",
+                )
+                receiver_step = image_step
             elif chain == "p-putalpha-convert":
                 image_step = self.ensure_image(mode="P")
                 self.add_step(
@@ -34359,6 +34369,30 @@ def build_nuanced_cases(
             "requirement_suffix": "behavior.default",
             "name": "resize-pipeline",
             "chain": "resize-copy",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "copy",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-l16-png",
+            "scenario_inline_image": "l16-png",
+            "chain": "load-copy-high-depth",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "copy",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-rgb16-png",
+            "scenario_inline_image": "rgb16-png-pattern-3",
+            "chain": "load-copy-high-depth",
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "copy",
+            "requirement_suffix": "behavior.default",
+            "name": "loaded-rgba16-png",
+            "scenario_inline_image": "rgba16-png-pattern-3",
+            "chain": "load-copy-high-depth",
         },
         {
             "surface": "PIL.Image.Image",
