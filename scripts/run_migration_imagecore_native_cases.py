@@ -395,6 +395,8 @@ def run_native_cases() -> tuple[int, int, int]:
         ("open-path-object", lambda: Image.open("/tmp/imagecore-save3.png")),
         ("open-missing-path", lambda: Image.open("/tmp/does-not-exist-anywhere.png")),
         ("open-formats-bad-element", lambda: Image.open("/tmp/does-not-exist-anywhere.png", formats=[1])),
+        ("open-invalid-bytes", _open_invalid_bytes),
+        ("open-unknown-format", _open_unknown_format),
         # putdata packed/component storage paths per mode.
         ("putdata-l-packed", lambda: _putdata("L", [0x0A0B0C0D0E0F1011, 0x1213141516171819, 0x2021222324252627, 0x28292A2B2C2D2E2F])),
         ("putdata-rgb-tuple", lambda: _putdata("RGB", [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)])),
@@ -644,6 +646,18 @@ def _rotate_explicit_none_expand() -> None:
 
 def _rotate_truthy_expand_object() -> None:
     Image.new("RGB", (4, 4)).rotate(45, expand=object()).tobytes()
+
+
+def _open_invalid_bytes() -> None:
+    from io import BytesIO
+
+    Image.open(BytesIO(b"not an image"))
+
+
+def _open_unknown_format() -> None:
+    from io import BytesIO
+
+    Image.open(BytesIO(b""), formats=["NOT_A_FORMAT"])
 
 
 def _imaging_core_one():
