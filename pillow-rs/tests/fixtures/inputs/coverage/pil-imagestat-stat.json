@@ -271,6 +271,7 @@
           "PIL.ImageStat.Stat.extrema.nuanced.coverage-batch-stat-float-097",
           "PIL.ImageStat.Stat.extrema.nuanced.coverage-batch-stat-float-098",
           "PIL.ImageStat.Stat.extrema.nuanced.coverage-batch-stat-float-099",
+          "PIL.ImageStat.Stat.extrema.nuanced.coverage-batch-stat-i-descending-000",
           "PIL.ImageStat.Stat.extrema.nuanced.p-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.i-mode",
           "PIL.ImageStat.Stat.extrema.nuanced.f-mode",
