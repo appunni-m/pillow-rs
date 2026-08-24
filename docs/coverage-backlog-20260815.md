@@ -541,6 +541,43 @@ not reach that SIMD scalar helper under the maintained all-GPU coverage runner.
 The temporary two-case batch was pruned; no coverage or denominator data was
 changed.
 
+## Accepted input: zero-height native draw rectangle
+
+Coverage MCP ranked the native CPU draw helper's empty-canvas branch at
+`pillow-rs/src/compute/pool_cpu/ops/draw.rs:253,259` as a reachable public
+edge. The new case
+`PIL.ImageDraw.ImageDraw.rectangle.nuanced.coverage-batch-draw-rectangle-zero-height`
+creates a valid `L` image of size `8x0`, draws a rectangle with both fill and
+outline, and observes `tobytes()` on the receiver. Focused exact parity passed
+1/1. Commit `12b4747d4` added only the generator and generated input manifests;
+no runtime code, outputs, hashes, thresholds, filters, coverage counts, or
+denominators changed.
+
+The managed strict CPU/SIMD/GPU Coverage MCP run
+`ef4a2ca0-5a8d-40da-9992-842d40def805` passed all 24 plans with zero failures
+and ingested snapshot `6ed880d9-34cd-46d4-9562-41e5a8018e79` in 316.954
+seconds. Against snapshot `2569675e-e97f-4711-a87d-7df7babb8814`, MCP
+measured `+1` covered region, `+1` covered line, and `+2` covered branches;
+function coverage was unchanged. The aggregate is now 55,799/62,330 regions
+(89.522%), 34,682/38,285 lines (90.589%), 5,600/6,736 branches (83.135%),
+and 2,684/3,161 functions (84.910%). Free memory ranged from 53% to 67%
+during the GPU run; it completed without a hang, timeout, or cancellation.
+
+## Reachability classification: typed RGB/RGBA fallback paths
+
+Coverage MCP still reports the typed fallback regions at
+`pillow-rs/src/ops/analysis.rs:312-331` and
+`pillow-rs/src/ops/pil_resize.rs:113-115` as uncovered. The existing public
+16-bit RGB/RGBA PNG inputs are valid, but the focused parity result for
+`PIL.Image.Image.transpose.nuanced.coverage-batch-dynamic-typed-transpose-rgb16-png-0`
+reports public mode `RGB` and 12-byte RGB output, not a public 16-bit typed
+mode. The supported Python `Image.frombytes` surface also accepts only byte
+`RGB`/`RGBA` layouts or scalar `I;16*` layouts. The remaining typed enum arms
+therefore require an internal `DynamicImage` construction rather than a
+supported public input, so adding more PNG or resize cases is expected to be
+zero-gain until the public decoder contract changes. No runtime code or
+fixture was changed for this classification.
+
 ## Zero-gain audit: scalar-source `Image.convert` destinations
 
 Four valid public `Image.convert` workflows (`I/F → CMYK` and `I/F → P`) were
