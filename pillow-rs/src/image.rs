@@ -2216,13 +2216,23 @@ impl Image {
             }
         }
 
+        // RemapPalette's kernel needs the source mode to distinguish L samples
+        // from P indices. The pipeline remains P-tagged for the result, but
+        // passing that destination tag into the kernel would skip the public
+        // L-source path and reinterpret luma values as palette indices.
+        let remap_source_mode =
+            if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::RemapPalette { .. })) {
+                Some(source.mode()?)
+            } else {
+                None
+            };
         // A one-step conversion still needs the source-only mode tag at the
         // executor boundary. RGBX and RGBa share RGBA storage, but their fourth
         // byte has different Pillow semantics; the pipeline output tag is the
         // destination and cannot stand in for that source tag.
-        let execution_mode = if ops.len() == 1
-            && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
-        {
+        let execution_mode = if let Some(mode) = remap_source_mode.as_deref() {
+            Some(mode)
+        } else if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::Convert { .. })) {
             source.explicit_mode().or(explicit_mode.as_deref())
         } else {
             explicit_mode.as_deref()
