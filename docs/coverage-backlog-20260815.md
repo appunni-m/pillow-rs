@@ -1141,3 +1141,22 @@ The aggregate is now 55,800/62,331 regions (89.522%), 34,683/38,286 lines
 (84.910%). Memory ranged from 56% to 65% free during the run and ended at
 61% free. No outputs, hashes, thresholds, filters, coverage counts, or
 denominators were edited.
+
+## Pruned zero-gain candidate: SIMD scalar flip middle row
+
+Coverage MCP ranked `pillow-rs/src/compute/pool_simd/ops/scalar.rs:160-161` as
+an uncovered region. A temporary valid public case,
+`PIL.ImageOps.flip.nuanced.scalar-p-odd-height`, used an odd-height palette
+image and passed focused parity 1/1. The managed run
+`499601f0-6208-4726-b4cb-0e5ba98209ad` selected and passed the case, but MCP
+measured no change in regions, lines, branches, or functions; the aggregate
+remained 55,800/62,331 regions (89.522%), 34,683/38,286 lines (90.589%),
+5,600/6,736 branches (83.135%), and 2,684/3,161 functions (84.910%).
+
+Source tracing showed that SIMD `native_transpose` intentionally accepts
+palette indices as a native one-byte layout, so the public `P` flip never
+enters `scalar::flip`. The remaining middle-row branch requires a non-native
+mode encoded as non-alpha; supported public mode/layout combinations do not
+provide that state. The temporary input was removed rather than retained as
+zero-gain coverage debt. No runtime code, outputs, hashes, thresholds,
+filters, coverage counts, or denominators were edited.
