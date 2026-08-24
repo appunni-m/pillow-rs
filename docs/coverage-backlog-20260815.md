@@ -917,3 +917,26 @@ unchanged. The aggregate is now 55,771/62,330 regions (89.477%),
 34,648/38,285 lines (90.500%), 5,588/6,736 branches (82.957%), and
 2,684/3,161 functions (84.910%). Free memory stayed between 69% and 70%
 during the GPU run.
+
+## Accepted input: large native-byte `RankFilter`
+
+Coverage MCP source review identified the native-byte rank dispatch in
+`pillow-rs/src/compute/pool_simd/ops/adapters.rs:1957-1963` and
+`2304-2320` as reachable when a public byte image exceeds 64x64 pixels and no
+explicit mode override is supplied. Existing public rank cases were all
+below that threshold and therefore exercised only the scalar adapter.
+
+The new public case
+`PIL.ImageFilter.RankFilter.nuanced.coverage-batch-filter-large-rank-l-0`
+uses a 513x16 `L` image and a valid 5x5, rank-12 filter. Focused exact parity
+passed 1/1. Commit `9cf4675df` added only the generator and generated input
+manifests; no runtime code, outputs, hashes, thresholds, filters, coverage
+counts, or denominators changed. The managed strict CPU/SIMD/GPU Coverage MCP
+run `bf4eed47-3ea2-4b7d-97c4-1c2dda0ad107` passed all 24 plans with zero
+failures and ingested snapshot `2c0392cf-be29-47ec-8856-e1e5e04dafd3` in
+230.406 seconds. Against snapshot
+`088a15bd-1fdc-4cd4-9f6d-6702bbb21b8e`, MCP measured `+5` covered regions,
+`+2` covered lines, and `+1` covered branch; function coverage was unchanged.
+The aggregate is now 55,776/62,330 regions (89.485%), 34,650/38,285 lines
+(90.505%), 5,589/6,736 branches (82.972%), and 2,684/3,161 functions
+(84.910%). Free memory stayed between 67% and 68% during the GPU run.
