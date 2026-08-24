@@ -894,3 +894,26 @@ unchanged. The aggregate is now 55,769/62,330 regions (89.474%),
 34,647/38,285 lines (90.498%), 5,587/6,736 branches (82.942%), and
 2,684/3,161 functions (84.910%). Free memory stayed between 70% and 72%
 during the GPU run.
+
+## Accepted input: non-uniform `quantize(colors=1)`
+
+Coverage MCP source review identified `pillow-rs/src/ops/quantize.rs:1247-1248`
+as a reachable one-color palette-mapping early return that the existing
+quantizer matrix did not exercise because it started at `colors=2`. The new
+public case
+`PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-single-color-rgb-0`
+uses a non-uniform RGB `frombytes` payload, requests `colors=1`, and observes
+`tobytes()` so the lazy quantizer is materialized.
+
+Focused exact parity passed 1/1. Commit `f692ef9ef` added only the generator
+and generated input manifests; no outputs, hashes, thresholds, filters,
+coverage counts, or denominators changed. The managed strict CPU/SIMD/GPU
+Coverage MCP run `e9c5ad96-7f8d-45ed-b72d-394d47d6eee4` passed all 24 plans
+with zero failures and ingested snapshot
+`088a15bd-1fdc-4cd4-9f6d-6702bbb21b8e` in 236.909 seconds. Against the prior
+snapshot `6aff81e6-d00a-4c0f-abea-419211e21d37`, MCP measured `+2` covered
+regions, `+1` covered line, and `+1` covered branch; function coverage was
+unchanged. The aggregate is now 55,771/62,330 regions (89.477%),
+34,648/38,285 lines (90.500%), 5,588/6,736 branches (82.957%), and
+2,684/3,161 functions (84.910%). Free memory stayed between 69% and 70%
+during the GPU run.
