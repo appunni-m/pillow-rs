@@ -136518,6 +136518,91 @@
       ]
     },
     {
+      "case_id": "PIL.ImageOps.flip.nuanced.coverage-batch-simd-flip-i-odd-height",
+      "surface": "PIL.ImageOps",
+      "operation": "flip",
+      "covers": [
+        "PIL.ImageOps.flip.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "I"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                5,
+                3
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-varied-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 100001
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageOps",
+          "operation": "flip",
+          "receiver": null,
+          "arguments": {
+            "image": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "observe-result",
+          "surface": "PIL.Image.Image",
+          "operation": "tobytes",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-result"
+      ]
+    },
+    {
       "case_id": "PIL.ImageOps.invert.benchmark.materialized-pipeline-1024",
       "surface": "PIL.ImageOps",
       "operation": "invert",

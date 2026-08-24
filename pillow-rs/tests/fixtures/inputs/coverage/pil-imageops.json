@@ -1769,6 +1769,7 @@
           "PIL.ImageOps.mirror.nuanced.simd-cov-f20-c03",
           "PIL.ImageOps.mirror.nuanced.simd-cov-f20-c09",
           "PIL.ImageOps.mirror.nuanced.simd-cov-f20-c10",
+          "PIL.ImageOps.flip.nuanced.coverage-batch-simd-flip-i-odd-height",
           "pipeline-composition.point-solarize-posterize",
           "pipeline-composition.crop-expand-mirror",
           "pipeline-composition.equalize-autocontrast-invert",
