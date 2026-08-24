@@ -1427,3 +1427,24 @@ now 56,229/62,331 regions (90.210%), 35,001/38,286 lines (91.420%),
 5,629/6,736 branches (83.566%), and 2,730/3,161 functions (86.365%).
 Source review marks line 200 green. Memory ended at 68% free; no GPU hang or
 sustained memory-pressure condition occurred.
+
+## Accepted input: public transpose enum fallback
+
+Coverage MCP identified the remaining supported public-input gap at
+`pillow-rs/src/ops/transpose.rs:26`, the fallback arm of the exposed
+`Image.Transpose.from_int` classmethod. The thin Python enum wrapper had a
+pre-existing missing `_core` import, so the public method raised `NameError`
+before reaching its existing Rust implementation. Commit `072f2e217` restores
+that import and adds the valid public input `Image.Transpose.from_int(99)` to
+the maintained native corpus; the Rust fallback returns
+`FLIP_LEFT_RIGHT` without changing output or coverage metadata.
+
+The focused native ImageCore lane passed 239/239. Managed run
+`23dc28dc-ceb6-42d9-a846-175c6e0224b1` passed in 286.245 seconds and ingested
+snapshot `56337811-5f66-4f8d-a206-c9bcd1bd61d6`. Against snapshot
+`6b440ebc-f0c1-4b19-b192-bc7f48795b35`, MCP measured `+5` covered regions,
+`+4` covered lines, and `+1` covered function; branches were unchanged. The
+aggregate is now 56,234/62,331 regions (90.218%), 35,005/38,286 lines
+(91.430%), 5,629/6,736 branches (83.566%), and 2,731/3,161 functions
+(86.397%). Source review marks line 26 green. Memory recovered to 67% free;
+no GPU hang or sustained memory-pressure condition occurred.
