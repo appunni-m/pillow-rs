@@ -905,6 +905,17 @@ these supported public inputs. The two cases and their generator chain were
 removed; no outputs, hashes, thresholds, filters, coverage counts, or
 denominators were changed.
 
+## Pruned parity-invalid candidate: `I;16` shape default ink
+
+Coverage MCP source review identified `pillow-rs/src/draw/mod.rs:514` as the
+fallback arm of `Draw::default_shape_ink`. A temporary input-only public case,
+`PIL.ImageDraw.ImageDraw.shape.nuanced.coverage-batch-draw-shape-i16-default-ink`,
+used `ImageDraw.shape` on an `I;16` image with both colors omitted. Focused
+parity failed 0/1: Pillow produced a nonzero implicit shape ink, while the
+Rust path returned a no-op for that mode. The candidate was removed before a
+managed run; no runtime code, outputs, hashes, thresholds, filters, coverage
+counts, or denominators changed.
+
 ## Pruned zero-gain candidate: empty ImageEnhance contrast means
 
 Coverage MCP ranked `pillow-rs/src/compute/pool_cpu/ops/enhance.rs:21,135,169`
