@@ -280,6 +280,7 @@
           "PIL.Image.fromarray.nuanced.height-overflow",
           "PIL.Image.fromarray.nuanced.width-overflow",
           "PIL.Image.open.nuanced.formats-accepted",
+          "PIL.Image.open.nuanced.formats-list-accepted",
           "PIL.Image.open.nuanced.formats-rejected",
           "PIL.Image.open.nuanced.formats-single-string",
           "PIL.Image.open.nuanced.read-mode",

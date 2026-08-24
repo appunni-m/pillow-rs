@@ -6172,6 +6172,50 @@
       ]
     },
     {
+      "case_id": "PIL.Image.open.nuanced.formats-list-accepted",
+      "surface": "PIL.Image",
+      "operation": "open",
+      "covers": [
+        "PIL.Image.open.parameter.formats"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "encoded-input",
+          "kind": "builtin",
+          "name": "encoded-png-input"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "open",
+          "receiver": null,
+          "arguments": {
+            "fp": {
+              "kind": "asset",
+              "asset_id": "encoded-input"
+            },
+            "formats": {
+              "kind": "literal",
+              "value": {
+                "protocol": "list",
+                "items": [
+                  "PNG"
+                ]
+              }
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.Image.open.nuanced.formats-rejected",
       "surface": "PIL.Image",
       "operation": "open",
