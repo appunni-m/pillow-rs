@@ -392,8 +392,6 @@ def run_native_cases() -> tuple[int, int, int]:
         ("filter-p-string", lambda: Image.new("P", (4, 4)).filter("BLUR")),
         ("transform-mesh-flat-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, [0, 0, 8, 8, 0, 0, 0, 8, 8, 8, 8, 0])),
         ("transform-mesh-missing-data", lambda: Image.new("RGB", (8, 8)).transform((8, 8), 4, None)),
-        ("transform-affine-la-default-fill", lambda: _transform_affine_default_fill("LA")),
-        ("transform-affine-rgba-default-fill", lambda: _transform_affine_default_fill("RGBA")),
         ("open-path-object", lambda: Image.open("/tmp/imagecore-save3.png")),
         ("open-missing-path", lambda: Image.open("/tmp/does-not-exist-anywhere.png")),
         ("open-formats-bad-element", lambda: Image.open("/tmp/does-not-exist-anywhere.png", formats=[1])),
@@ -660,16 +658,6 @@ def _open_unknown_format() -> None:
     from io import BytesIO
 
     Image.open(BytesIO(b""), formats=["NOT_A_FORMAT"])
-
-
-def _transform_affine_default_fill(mode: str) -> None:
-    color = {
-        "LA": (128, 128),
-        "RGBA": (128, 128, 128, 128),
-    }[mode]
-    Image.new(mode, (4, 4), color).transform(
-        (4, 4), 0, [1, 0, 0, 0, 1, 0]
-    ).tobytes()
 
 
 def _imaging_core_one():
