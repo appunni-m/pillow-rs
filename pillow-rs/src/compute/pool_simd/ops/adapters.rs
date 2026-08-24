@@ -1647,23 +1647,23 @@ pub fn simd_posterize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Posterize { bits } = op {
-        if *bits <= 8 {
-            let shift = 8 - *bits as u32;
-            if let Some(result) =
-                native_byte_transform(img, mode, |input| (input >> shift) << shift)
-            {
-                return Ok(result);
-            }
-        }
-    }
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Posterize { bits } = op {
-        super::scalar::posterize(&mut pixels, mode_code, *bits as u32);
-    }
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
+    let PipelineOp::Posterize { bits } = op else {
+        return Err(PilError::ValueError("expected Posterize op".into()));
+    };
+
+    // ImageOps.posterize validates the public mode before it queues this
+    // operation: only L and RGB reach the pipeline, and both use the native
+    // byte layouts above. The old packed-u32 fallback therefore had no
+    // supported public input; keep an explicit diagnostic for an invalid
+    // internal dispatch instead of maintaining a second implementation.
+    let shift = 8u32
+        .checked_sub(*bits as u32)
+        .ok_or_else(|| PilError::ValueError("posterize bits must be at most 8".into()))?;
+    native_byte_transform(img, mode, |input| (input >> shift) << shift).ok_or_else(|| {
+        PilError::NotImplementedError(
+            "SIMD posterize requires a validated native L or RGB byte image".into(),
+        )
+    })
 }
 
 pub fn simd_brightness(

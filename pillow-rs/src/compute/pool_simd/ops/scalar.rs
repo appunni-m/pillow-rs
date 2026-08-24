@@ -78,33 +78,6 @@ pub fn solarize(pixels: &mut [u32], mode: u32, threshold: u8) {
     }
 }
 
-/// Posterize: reduce the number of bits per channel.
-/// Each channel is quantized to `bits` bits (1-8) using the formula:
-/// `out = ((val >> (8 - bits)) << (8 - bits))`.
-/// Mode-aware: only touches channels present in the image mode.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn posterize(pixels: &mut [u32], mode: u32, bits: u32) {
-    let has_gb = mode >= 2;
-    let has_a = mode == 1 || mode == 3;
-    let shift = 8 - bits;
-
-    for p in pixels.iter_mut() {
-        let r = *p & 0xFF;
-        let g = (*p >> 8) & 0xFF;
-        let b = (*p >> 16) & 0xFF;
-        let a = *p & 0xFF00_0000;
-
-        // PIL formula: ((val >> shift) << shift) zeros lower (8-bits) bits
-        let out_r = (r >> shift) << shift;
-        let out_g = if has_gb { (g >> shift) << shift } else { g };
-        let out_b = if has_gb { (b >> shift) << shift } else { b };
-        let out_a = if has_a { a } else { 0xFF00_0000 };
-
-        *p = out_r | (out_g << 8) | (out_b << 16) | out_a;
-    }
-}
-
 /// Brightness: multiply active channels by factor (fixed-point: factor * 1000).
 /// Mode 4 is CMYK, stored as C/M/Y/K in the packed RGBA lanes.
 #[inline]
@@ -2565,7 +2538,7 @@ mod tests {
         crop, crop_border, darker, difference, duplicate, equalize, eval, expand, filter_3x3,
         filter_5x5, fit, flip, grayscale, hard_light, invert, invert_chops, lighter, logical_and,
         logical_or, logical_xor, max_filter, median_filter, merge, min_filter, mirror, multiply,
-        offset, overlay, pad, paste, posterize, put_alpha, put_data, put_pixel, rank_filter,
+        offset, overlay, pad, paste, put_alpha, put_data, put_pixel, rank_filter,
         reduce, remap_palette, resize, rotate, scale, screen, sharpness, soft_light, solarize,
         subtract, subtract_modulo, thumbnail, transform, transpose,
     };
