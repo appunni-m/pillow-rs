@@ -905,6 +905,27 @@ these supported public inputs. The two cases and their generator chain were
 removed; no outputs, hashes, thresholds, filters, coverage counts, or
 denominators were changed.
 
+## Pruned zero-gain candidate: empty ImageEnhance contrast means
+
+Coverage MCP ranked `pillow-rs/src/compute/pool_cpu/ops/enhance.rs:21,135,169`
+as uncovered empty-buffer and `n == 0` fallbacks. Two supported public
+workflows were added temporarily:
+`PIL.ImageEnhance.Contrast.nuanced.zero-size-cmyk-empty-mean` and
+`PIL.ImageEnhance.Contrast.nuanced.zero-size-l-empty-mean`. Both passed focused
+parity and were selected by the managed ImageEnhance plan.
+
+The correctly attributed managed run
+`8df0becd-2385-42cb-8917-36d95da70b6f` passed all 24 plans in 318.331 seconds
+and ingested snapshot `b7106530-f59b-4d4e-be45-6bce9d8bb449` at commit
+`10073ea8d`. MCP measured zero change from the prior snapshot: 55,801/62,331
+regions (89.524%), 34,684/38,286 lines (90.592%), 5,600/6,736 branches
+(83.135%), and 2,684/3,161 functions (84.910%). Source review kept all three
+regions red. The public lazy zero-area pipeline short-circuits before
+`op_enhance_contrast` executes, so its internal empty fallbacks are not
+reachable through supported public input. The temporary cases were removed;
+no runtime code, outputs, hashes, thresholds, filters, coverage counts, or
+denominators were changed.
+
 ## Accepted input: non-positive `ImageOps.scale` factors
 
 Coverage MCP source review identified `pillow-rs/src/image.rs:283-296` as a
