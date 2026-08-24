@@ -46,6 +46,7 @@ def run_native_cases() -> tuple[int, int, int]:
         ("polygon-horizontal-runs", lambda: _polygon_horizontal()),
         ("polygon-out-of-bounds", lambda: _polygon_oob()),
         ("line-out-of-bounds", lambda: _line_oob()),
+        ("line-i16-canvas", lambda: _i16_line()),
         # Native geometry probes use valid public coordinates that exercise
         # degenerate strokes and checked i32 extents.
         ("line-wide-degenerate", lambda: _wide_degenerate_line()),
@@ -69,6 +70,12 @@ def run_native_cases() -> tuple[int, int, int]:
     def _line_oob() -> None:
         draw = ImageDraw.Draw(Image.new("RGB", (16, 16), 0))
         draw.line([(-4, -4), (20, 20)], fill=255, width=2)
+
+    def _i16_line() -> None:
+        image = Image.new("I;16", (4, 4), 0)
+        draw = ImageDraw.Draw(image)
+        draw.line((0, 0, 3, 3), fill=255)
+        image.tobytes()
 
     def _wide_degenerate_line() -> None:
         image = Image.new("RGB", (4, 4), 0)
