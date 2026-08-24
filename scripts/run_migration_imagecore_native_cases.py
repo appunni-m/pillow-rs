@@ -197,6 +197,8 @@ def run_native_cases() -> tuple[int, int, int]:
         ("thumbnail-int-resample", lambda: _thumbnail_int(pillow_rs.Image.new("RGB", (8, 8)))),
         ("resize-stringified-resample", lambda: _resize_stringified_resample()),
         ("rotate-stringified-resample", lambda: _rotate_stringified_resample()),
+        ("rotate-explicit-none-expand", lambda: _rotate_explicit_none_expand()),
+        ("rotate-truthy-expand-object", lambda: _rotate_truthy_expand_object()),
         ("reduce-bad-factor", lambda: pillow_rs.Image.new("RGB", (8, 8)).reduce((2, 3))),
         ("getdata-single-band", lambda: list(pillow_rs.Image.new("L", (2, 2)).getdata())),
         ("getpalette-default-rawmode", lambda: pillow_rs.Image.new("P", (2, 2)).getpalette()),
@@ -610,6 +612,14 @@ def _rotate_stringified_resample() -> None:
     Image.new("RGB", (4, 4)).rotate(
         90, resample=ResampleName("NOT_A_FILTER"), expand=True
     ).tobytes()
+
+
+def _rotate_explicit_none_expand() -> None:
+    Image.new("RGB", (4, 4)).rotate(45, expand=None).tobytes()
+
+
+def _rotate_truthy_expand_object() -> None:
+    Image.new("RGB", (4, 4)).rotate(45, expand=object()).tobytes()
 
 
 def _imaging_core_one():
