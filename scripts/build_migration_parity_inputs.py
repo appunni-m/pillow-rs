@@ -3144,6 +3144,25 @@ class WorkflowBuilder:
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
             )
+        elif self.edge == "stat-descending" and label == "image":
+            if self.scenario_pixel is None:
+                raise ValueError("stat-descending edge requires a scenario pixel")
+            # Put a larger sample before a later zero so the I/F extrema scan
+            # must lower its initial minimum through the public pixel API.
+            for step_name, xy, value in (
+                ("high", [0, 0], self.scenario_pixel),
+                ("low", [1, 0], 0),
+            ):
+                self.add_step(
+                    "PIL.Image.Image",
+                    "putpixel",
+                    receiver=binding(step_id),
+                    arguments={
+                        "xy": literal(xy),
+                        "value": literal(value),
+                    },
+                    step_id=self.next_step_id(f"setup-stat-descending-{step_name}"),
+                )
         elif self.edge == "nonzero-pixel" and label in {"image", "image1"}:
             if self.scenario_pixel is None:
                 raise ValueError("nonzero-pixel edge requires a scenario pixel")
@@ -13750,6 +13769,28 @@ def build_nuanced_cases(
             "observe_stat_properties": True,
         }
 
+    def stat_descending_coverage_spec() -> dict[str, Any]:
+        """Build one valid I-mode reduction whose first sample is not minimal.
+
+        The regular scalar statistics matrix starts with a zero-filled image
+        and writes one positive sample. That reaches the maximum update in
+        the extrema scan but never the corresponding minimum update. Keep
+        this as ordinary ``Image.new``/``putpixel`` input so the missing branch
+        is proven through the public workflow rather than authored output.
+        """
+
+        return {
+            "surface": "PIL.ImageStat.Stat",
+            "operation": "extrema",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-stat-i-descending-000",
+            "mode": "I",
+            "size": [3, 1],
+            "edge": "stat-descending",
+            "pixel": 1000,
+            "observe_stat_properties": True,
+        }
+
     specs: tuple[dict[str, Any], ...] = (
         # Coverage batch 2026-08-14y: exercise every public ImageStat.Stat
         # property over native one-, two-, three-, and four-band modes. The
@@ -13760,6 +13801,10 @@ def build_nuanced_cases(
         # reducer's equal-extrema and scaled-histogram paths with valid
         # float32 images. No statistic or expected output is authored here.
         *(stat_float_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-24a: make the first I-mode sample larger than
+        # a later sample so ImageStat.Stat's minimum-extrema update is reached
+        # by a supported input workflow.
+        stat_descending_coverage_spec(),
         # Coverage batch 2026-08-14ao: exercise the unmasked public F-mode
         # histogram reducer. The existing mixed analysis matrix masks every
         # F-mode slot, so those valid calls stop at Pillow's wrong-mode guard.
