@@ -940,3 +940,25 @@ failures and ingested snapshot `2c0392cf-be29-47ec-8856-e1e5e04dafd3` in
 The aggregate is now 55,776/62,330 regions (89.485%), 34,650/38,285 lines
 (90.505%), 5,589/6,736 branches (82.972%), and 2,684/3,161 functions
 (84.910%). Free memory stayed between 67% and 68% during the GPU run.
+
+## Accepted input: invalid `Image.merge` band item
+
+Coverage MCP source review identified the public wrapper fallback at
+`pillow-rs-py/src/lib.rs:363`, where a merge band item that is neither an
+image nor `None` is converted into the core invalid-input variant. The new
+case `PIL.Image.merge.nuanced.invalid-band-item-int` uses the supported public
+workflow `Image.merge("L", [1])`; both source and target return the same
+`AttributeError` with no fixture or output divergence.
+
+Focused exact parity passed 1/1. Commit `dc8d382a2` added only the generator
+and generated input manifests; no runtime code, outputs, hashes, thresholds,
+filters, coverage counts, or denominators changed. The corrected managed
+strict CPU/SIMD/GPU Coverage MCP run
+`b2ba6977-2391-41ee-ac3d-98d788b4546d` passed all 24 plans with zero failures
+and ingested snapshot `3994ba1b-9d78-4313-9098-eed7fe9372ea` in 263.317
+seconds. Against snapshot `2c0392cf-be29-47ec-8856-e1e5e04dafd3`, MCP
+measured `+4` covered regions and `+4` covered lines; branch and function
+coverage were unchanged. The aggregate is now 55,780/62,330 regions
+(89.491%), 34,654/38,285 lines (90.516%), 5,589/6,736 branches (82.972%),
+and 2,684/3,161 functions (84.910%). Free memory ranged from 57% to 69%
+during the GPU run and recovered to 64% at completion.
