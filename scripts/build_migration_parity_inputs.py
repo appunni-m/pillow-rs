@@ -14667,6 +14667,30 @@ def build_nuanced_cases(
             }
             for class_name in ("Brightness", "Color", "Contrast", "Sharpness")
         ),
+        # Coverage batch 2026-08-24e: exercise the public empty-image
+        # contrast path.  A zero-area image is valid Pillow input and reaches
+        # both the empty-row guard and the n == 0 mean fallback without a
+        # direct core call.
+        {
+            "surface": "PIL.ImageEnhance",
+            "operation": "Contrast",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size-cmyk-empty-mean",
+            "mode": "CMYK",
+            "edge": "zero-size",
+            "observe_result": "tobytes",
+            "values": {"factor": literal(1.25)},
+        },
+        {
+            "surface": "PIL.ImageEnhance",
+            "operation": "Contrast",
+            "requirement_suffix": "behavior.default",
+            "name": "zero-size-l-empty-mean",
+            "mode": "L",
+            "edge": "zero-size",
+            "observe_result": "tobytes",
+            "values": {"factor": literal(0.75)},
+        },
         # RGBA is a supported ImageEnhance input. Keep the alpha lane in the
         # public corpus so the SIMD implementations exercise their
         # mode-aware alpha-preserving branches through the real wrapper.
