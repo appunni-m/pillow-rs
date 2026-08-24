@@ -1040,3 +1040,23 @@ function coverage was unchanged. The aggregate is now 55,798/62,330 regions
 and 2,684/3,161 functions (84.910%). MCP source review confirms lines 127,
 143, and 156 in the GPU auxiliary-cache guards are all covered. Free memory
 ranged from 66% to 68% during the focused and managed GPU runs.
+
+## Pruned zero-gain candidate: `I;16` to `LA` conversion
+
+Coverage MCP ranked `pillow-rs/src/raster/dynamic.rs:245-251` as a possible
+publicly reachable typed conversion gap. A temporary valid parity case,
+`PIL.Image.Image.convert.nuanced.i16-frombytes-to-la`, used the existing public
+`Image.frombytes("I;16")` input and a public `convert("LA")` call. Focused
+parity passed 1/1, and the managed all-GPU coverage plan selected and passed
+the case.
+
+The managed run `2cd4c9d6-4c05-40cd-a39e-914f201be976` ingested snapshot
+`540ee131-7a24-415f-a27e-2d6d26a27e2c` at commit `315d6a161`. Against snapshot
+`8640e614-6a83-4ca9-a756-f714423c9227`, MCP measured no change in covered
+regions, lines, branches, or functions; `dynamic.rs:245-251` remained red.
+Source tracing explains why: `convert("LA")` queues `PipelineOp::Convert`,
+and the SIMD/CPU convert adapter builds LA from `pil_grayscale` directly. It
+does not call `DynamicImage::to_luma_alpha8`, so the Luma16 arm is not a
+supported public-input route. The temporary case is therefore pruned rather
+than retained as zero-gain coverage debt. No runtime code, outputs, hashes,
+thresholds, filters, coverage counts, or denominators changed.
