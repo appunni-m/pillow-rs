@@ -903,14 +903,6 @@ pub fn blend(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
     }
 }
 
-/// Blend module: identical formula to `blend`.
-/// `out = a * (1.0 - alpha) + b * alpha`; Pillow permits extrapolation.
-/// mode: 0=L, 1=LA, 2=RGB, 3=RGBA
-#[inline]
-pub fn blend_module(pixels: &mut [u32], mode: u32, other: &[u32], alpha: f64) {
-    blend(pixels, mode, other, alpha)
-}
-
 // ── Rank-based window filter operations ──
 
 /// Evaluate one Pillow convolution row in the same contraction order as the
@@ -1465,9 +1457,9 @@ pub fn sharpness(pixels: &mut [u32], w: u32, h: u32, mode: u32, factor_fp: u32) 
     let k_edges = inv_scale; // edges = 1/13
     let k_center = 5.0f32 * inv_scale; // center = 5/13
     let rounding_bias = 0.5f32; // offset=0 => 0.0 + 0.5
-    // Blend weight: factor_fp / 1000. Pillow blends the integer-filtered
-    // samples in double precision and truncates to u8; keeping this separate
-    // from the f32 convolution is required for exact parity at half factors.
+                                // Blend weight: factor_fp / 1000. Pillow blends the integer-filtered
+                                // samples in double precision and truncates to u8; keeping this separate
+                                // from the f32 convolution is required for exact parity at half factors.
     let t = factor_fp as f64 / 1000.0;
     let one_minus_t = 1.0 - t;
 
@@ -2482,14 +2474,14 @@ pub fn crop_border(pixels: &[u32], w: u32, h: u32, mode: u32, border: u32) -> (V
 mod tests {
     #[allow(unused_imports)]
     use super::{
-        add, add_modulo, alpha_composite, autocontrast, blend, blend_module, box_blur, brightness,
+        add, add_modulo, alpha_composite, autocontrast, blend, box_blur, brightness,
         color_saturation, colorize, composite_module, constant, contain, contrast, convert, cover,
         crop, crop_border, darker, difference, duplicate, equalize, eval, expand, filter_3x3,
         filter_5x5, fit, flip, grayscale, hard_light, invert, invert_chops, lighter, logical_and,
         logical_or, logical_xor, max_filter, median_filter, merge, min_filter, mirror, multiply,
-        offset, overlay, pad, paste, put_alpha, put_data, put_pixel, rank_filter,
-        reduce, remap_palette, resize, rotate, scale, screen, sharpness, soft_light, solarize,
-        subtract, subtract_modulo, thumbnail, transform,
+        offset, overlay, pad, paste, put_alpha, put_data, put_pixel, rank_filter, reduce,
+        remap_palette, resize, rotate, scale, screen, sharpness, soft_light, solarize, subtract,
+        subtract_modulo, thumbnail, transform,
     };
 
     /// Helper: create a packed u32 pixel from RGBA bytes.
