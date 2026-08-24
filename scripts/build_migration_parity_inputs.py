@@ -34374,6 +34374,14 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "convert",
+            "requirement_suffix": "mode.la",
+            "name": "i16-frombytes-to-la",
+            "scenario_inline_image": "i16-frombytes",
+            "values": {"mode": literal("LA")},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "convert",
             "requirement_suffix": "mode.rgb",
             "name": "opened-rgba",
             "scenario_asset": "image/rgba-small.png",

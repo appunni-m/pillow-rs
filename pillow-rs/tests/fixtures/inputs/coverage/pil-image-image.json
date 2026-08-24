@@ -5180,6 +5180,7 @@
           "PIL.Image.Image.filter.nuanced.class-gaussian-blur",
           "PIL.Image.Image.convert.nuanced.opened-rgb",
           "PIL.Image.Image.convert.nuanced.i16-frombytes-to-rgba",
+          "PIL.Image.Image.convert.nuanced.i16-frombytes-to-la",
           "PIL.Image.Image.convert.nuanced.opened-rgba",
           "PIL.Image.Image.convert.nuanced.opened-l",
           "PIL.Image.Image.load.nuanced.bmp-rgb-opened",
