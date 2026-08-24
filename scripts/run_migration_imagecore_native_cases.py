@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 
 import pillow_rs
+import pillow_rs._core as _core
 from pillow_rs import Image
 
 
@@ -413,6 +414,9 @@ def run_native_cases() -> tuple[int, int, int]:
         ("backend-disable-cpu", lambda: pillow_rs.disable_backend("cpu")),
         ("backend-unknown", lambda: pillow_rs.enable_backend("NOPE")),
         ("backend-eval-image", lambda: _backend_image()),
+        # Public _core telemetry lifecycle: empty reads cover the no-sample
+        # result, while a materialized resize produces the populated record.
+        ("pipeline-telemetry-lifecycle", lambda: _telemetry_lifecycle()),
         # getbands explicit-mode band names.
         ("getbands-cmyk", lambda: Image.new("CMYK", (2, 2)).getbands()),
         ("getbands-ycbcr", lambda: Image.new("YCbCr", (2, 2)).getbands()),
@@ -504,6 +508,16 @@ def _filter_parametric(image: Image) -> None:
 
 def _thumbnail_int(image: Image) -> None:
     image.thumbnail((4, 4), resample=1)
+
+
+def _telemetry_lifecycle() -> None:
+    _core.take_pipeline_telemetry()
+    _core.set_pipeline_telemetry(True)
+    try:
+        Image.new("L", (4, 4)).resize((2, 2)).tobytes()
+        _core.take_pipeline_telemetry()
+    finally:
+        _core.set_pipeline_telemetry(False)
 
 
 def _rgba_gradient() -> Image:
