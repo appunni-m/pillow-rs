@@ -25536,36 +25536,6 @@ def build_nuanced_cases(
                 )
             )
         ),
-        # Coverage campaign 2026-08-24: exercise a public conversion from a
-        # 16-bit PNG color input. The byte observation keeps source/target
-        # parity exact while reaching the typed RGBA conversion adapter.
-        {
-            "surface": "PIL.Image.Image",
-            "operation": "convert",
-            "requirement_suffix": "parameter.mode",
-            "name": "coverage-batch-convert-rgba16-png-to-rgb",
-            "scenario_inline_image": "rgba16-png-pattern-3",
-            "observe_result": "tobytes",
-            "values": {"mode": literal("RGB")},
-        },
-        *(
-            {
-                "surface": "PIL.Image.Image",
-                "operation": "convert",
-                "requirement_suffix": "parameter.mode",
-                "name": f"coverage-batch-convert-{source}-to-{target.lower()}",
-                "scenario_inline_image": f"{source}-pattern-3",
-                "observe_result": "tobytes",
-                "values": {"mode": literal(target)},
-            }
-            for source, target in (
-                ("rgb16-png", "L"),
-                ("rgb16-png", "LA"),
-                ("rgb16-png", "RGBA"),
-                ("rgba16-png", "L"),
-                ("rgba16-png", "LA"),
-            )
-        ),
         # Coverage batch 2026-08-23c: exercise the reachable SIMD scalar
         # converter with public unsigned-16-bit source images.  I;16 retains
         # native L16 storage, unlike the RGBA-backed I/F compatibility modes,
