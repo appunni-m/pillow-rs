@@ -1620,6 +1620,7 @@
           "PIL.ImageOps.flip.nuanced.simd-rgb-odd-height-valid",
           "PIL.ImageOps.flip.nuanced.materialized-l-odd-height",
           "PIL.ImageOps.flip.nuanced.materialized-la-odd-height",
+          "PIL.ImageOps.flip.nuanced.scalar-p-odd-height",
           "PIL.ImageOps.mirror.nuanced.materialized-rgb",
           "PIL.ImageOps.mirror.nuanced.materialized-rgb-odd-width",
           "PIL.ImageOps.mirror.nuanced.simd-rgb-odd-width-valid",
