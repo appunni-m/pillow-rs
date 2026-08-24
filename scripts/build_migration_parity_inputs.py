@@ -11485,6 +11485,32 @@ def build_nuanced_cases(
             "observe_result": "tobytes",
         }
 
+    def quantize_single_color_spec(pattern: int) -> dict[str, Any]:
+        """Build a non-uniform public input for the one-color early return.
+
+        The regular quantization matrix starts at two colors, so it never
+        reaches the valid ``colors=1`` palette mapping path.  Materializing
+        the result keeps this an input-driven probe rather than a signature-
+        only case.
+        """
+
+        return {
+            "surface": "PIL.Image.Image",
+            "operation": "quantize",
+            "requirement_suffix": "parameter.colors",
+            "name": f"coverage-batch-quantize-single-color-rgb-{pattern}",
+            "mode": "RGB",
+            "size": [8 + pattern % 2, 7],
+            "edge": "quantize-coverage-pattern",
+            "seed": 20260824 + pattern,
+            "values": {
+                "colors": literal(1),
+                "method": literal(0),
+                "kmeans": literal(0),
+            },
+            "observe_result": "tobytes",
+        }
+
     def quantize_octree_sort_spec(pattern: int) -> dict[str, Any]:
         """Build valid FASTOCTREE inputs with distinct fine-bucket counts."""
 
@@ -26603,6 +26629,9 @@ def build_nuanced_cases(
         # Coverage batch 2026-08-14y: exercise valid quantizer distributions
         # across median-cut, MAXCOVERAGE, and FASTOCTREE RGB/RGBA paths.
         *(quantize_coverage_spec(pattern) for pattern in range(100)),
+        # Coverage batch 2026-08-24b: exercise the valid non-uniform
+        # median-cut colors=1 palette-mapping early return.
+        *(quantize_single_color_spec(pattern) for pattern in range(1)),
         # Coverage batch 2026-08-16a: exercise the public FASTOCTREE sorter
         # with distinct fine-bucket frequencies and its insertion fallback.
         *(quantize_octree_sort_spec(pattern) for pattern in range(100)),

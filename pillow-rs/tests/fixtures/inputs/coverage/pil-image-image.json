@@ -3879,6 +3879,7 @@
           "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-distribution-rgba-97",
           "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-distribution-rgba-98",
           "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-distribution-rgba-99",
+          "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-single-color-rgb-0",
           "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-octree-sort-0",
           "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-octree-sort-1",
           "PIL.Image.Image.quantize.nuanced.coverage-batch-quantize-octree-sort-2",
