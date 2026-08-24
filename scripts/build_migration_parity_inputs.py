@@ -30396,6 +30396,7 @@ def build_nuanced_cases(
             "name": "mediancut-zero-size",
             "mode": "RGB",
             "edge": "zero-size",
+            "observe_result": "tobytes",
             "values": {
                 "colors": literal(4),
                 "method": literal(0),
