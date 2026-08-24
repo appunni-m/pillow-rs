@@ -87,7 +87,9 @@ def run_native_cases() -> tuple[int, int, int]:
         ("default-image-constructor", lambda: pillow_rs.Image()),
         (
             "image-enhance-empty-buffer",
-            lambda: ImageEnhance.Brightness(Image.new("L", (0, 0))).enhance(1.0),
+            lambda: ImageEnhance.Brightness(Image.new("L", (0, 0)))
+            .enhance(1.0)
+            .tobytes(),
         ),
         ("new-list-color", lambda: pillow_rs.Image.new("RGB", (4, 4), [255, 0, 0])),
         ("new-bytes-color", lambda: pillow_rs.Image.new("L", (4, 4), b"\x00")),
