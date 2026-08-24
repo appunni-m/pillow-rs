@@ -388,6 +388,16 @@ def run(args: argparse.Namespace) -> int:
             (args.operation is None and not args.case_id)
             or "coverage-font-native" in selected_command_ids
         )
+        # The canonical full lane also includes the maintained image-core
+        # native corpus. These are supported public `pillow_rs` inputs that
+        # have no Pillow parity endpoint, so they must be measured through the
+        # instrumented extension rather than silently omitted from Rust
+        # coverage. Scoped operation/case runs intentionally remain
+        # operation-attributable and do not inherit this supplement.
+        run_imagecore_native = (
+            (args.operation is None and not args.case_id)
+            or "coverage-imagecore-native" in selected_command_ids
+        )
         child_results: list[dict[str, Any]] = []
         python_data_paths: list[Path] = []
         for backend in COVERAGE_BACKENDS:
@@ -433,6 +443,21 @@ def run(args: argparse.Namespace) -> int:
                     [
                         sys.executable,
                         str(ROOT / "scripts" / "run_migration_font_native_cases.py"),
+                    ],
+                    env={
+                        **backend_env,
+                        "RUSTFLAGS": "-Cinstrument-coverage -Zcoverage-options=branch",
+                        "LLVM_PROFILE_FILE": str(args.profile),
+                    },
+                    cwd=ROOT,
+                    check=True,
+                )
+
+            if run_imagecore_native:
+                subprocess.run(
+                    [
+                        sys.executable,
+                        str(ROOT / "scripts" / "run_migration_imagecore_native_cases.py"),
                     ],
                     env={
                         **backend_env,
