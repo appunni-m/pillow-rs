@@ -8,7 +8,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::{Image, preserve_mode};
+use crate::image::{preserve_mode, Image};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -16,7 +16,7 @@ use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, Luma, RgbImage, RgbaImage,
 };
 use std::sync::Arc;
-use wide::{f32x8, i16x8, u8x16, u16x8, u16x16, u32x8};
+use wide::{f32x8, i16x8, u16x16, u16x8, u32x8, u8x16};
 
 // ── Helper: mode string → encoding ─────────────────────────────────────
 
@@ -64,9 +64,9 @@ fn dynimg_mode(img: &DynamicImage) -> u32 {
     match img {
         DynamicImage::ImageLuma8(_) | DynamicImage::ImageLuma16(_) => 0,
         DynamicImage::ImageLumaA8(_) | DynamicImage::ImageLumaA16(_) => 1,
-        DynamicImage::ImageRgb8(_)
-        | DynamicImage::ImageRgb16(_)
-        | DynamicImage::ImageRgb32F(_) => 2,
+        DynamicImage::ImageRgb8(_) | DynamicImage::ImageRgb16(_) | DynamicImage::ImageRgb32F(_) => {
+            2
+        }
         DynamicImage::ImageRgba8(_)
         | DynamicImage::ImageRgba16(_)
         | DynamicImage::ImageRgba32F(_) => 3,
@@ -244,8 +244,7 @@ fn invert_native_bytes(bytes: &mut [u8], channels: usize, invert_alpha: bool) {
     let inactive = u8x16::splat(u8::MAX) - active_vector;
     let mut chunks = bytes.chunks_exact_mut(16);
     for chunk in &mut chunks {
-        let input =
-            <[u8; 16]>::try_from(&*chunk).expect("chunks_exact_mut yields 16-byte chunks");
+        let input = <[u8; 16]>::try_from(&*chunk).expect("chunks_exact_mut yields 16-byte chunks");
         let input = u8x16::new(input);
         let inverted = u8x16::splat(u8::MAX) - input;
         let output = (inverted & active_vector) | (input & inactive);
@@ -1627,21 +1626,20 @@ pub fn simd_solarize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Solarize { threshold } = op {
-        if let Some(result) = native_byte_transform(img, mode, |input| {
-            input
-                .simd_ge(u8x16::splat(*threshold))
-                .select(u8x16::splat(u8::MAX) - input, input)
-        }) {
-            return Ok(result);
-        }
+    let PipelineOp::Solarize { threshold } = op else {
+        return Err(PilError::ValueError("expected Solarize op".into()));
+    };
+    if let Some(result) = native_byte_transform(img, mode, |input| {
+        input
+            .simd_ge(u8x16::splat(*threshold))
+            .select(u8x16::splat(u8::MAX) - input, input)
+    }) {
+        return Ok(result);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Solarize { threshold } = op {
-        super::scalar::solarize(&mut pixels, mode_code, *threshold);
-    }
+    super::scalar::solarize(&mut pixels, mode_code, *threshold);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -1674,23 +1672,24 @@ pub fn simd_brightness(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Brightness { factor } = op {
-        // The packed scalar adapter intentionally quantizes the public factor
-        // to the same fixed-point domain as the SIMD operation.  Build that
-        // exact 256-entry map once and apply it in native L/LA/RGB/RGBA byte
-        // storage; this avoids the full RGBA pack/unpack round trip for the
-        // common image modes.  CMYK remains on the packed path because its K
-        // lane is an active channel rather than alpha.
-        let factor_fp = (*factor * 1000.0) as u32;
-        let lut: Vec<u8> = (0u32..=255)
-            .map(|value| ((value as u64 * factor_fp as u64) / 1000).min(255) as u8)
-            .collect();
-        if let Some(tables) = native_lut_tables(&lut) {
-            if let Some(result) =
-                native_byte_transform(img, mode, |input| native_lut_chunk(input, &tables))
-            {
-                return Ok(result);
-            }
+    let PipelineOp::Brightness { factor } = op else {
+        return Err(PilError::ValueError("expected Brightness op".into()));
+    };
+    // The packed scalar adapter intentionally quantizes the public factor
+    // to the same fixed-point domain as the SIMD operation.  Build that
+    // exact 256-entry map once and apply it in native L/LA/RGB/RGBA byte
+    // storage; this avoids the full RGBA pack/unpack round trip for the
+    // common image modes.  CMYK remains on the packed path because its K
+    // lane is an active channel rather than alpha.
+    let factor_fp = (*factor * 1000.0) as u32;
+    let lut: Vec<u8> = (0u32..=255)
+        .map(|value| ((value as u64 * factor_fp as u64) / 1000).min(255) as u8)
+        .collect();
+    if let Some(tables) = native_lut_tables(&lut) {
+        if let Some(result) =
+            native_byte_transform(img, mode, |input| native_lut_chunk(input, &tables))
+        {
+            return Ok(result);
         }
     }
     let (w, h) = img.dimensions();
@@ -1702,9 +1701,7 @@ pub fn simd_brightness(
         mode_to_u32(img, mode)
     };
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Brightness { factor } = op {
-        super::scalar::brightness(&mut pixels, mode_code, (factor * 1000.0) as u32);
-    }
+    super::scalar::brightness(&mut pixels, mode_code, (factor * 1000.0) as u32);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -1713,20 +1710,19 @@ pub fn simd_contrast(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Contrast { factor } = op else {
+        return Err(PilError::ValueError("expected Contrast op".into()));
+    };
     if mode == Some("CMYK") {
-        if let PipelineOp::Contrast { factor } = op {
-            // The packed SIMD contrast primitive has no CMYK→L midpoint and
-            // cannot represent Pillow's CMYK degenerate K channel.
-            return crate::compute::pool_cpu::ops::enhance::op_enhance_contrast(img, *factor, mode);
-        }
+        // The packed SIMD contrast primitive has no CMYK→L midpoint and
+        // cannot represent Pillow's CMYK degenerate K channel.
+        return crate::compute::pool_cpu::ops::enhance::op_enhance_contrast(img, *factor, mode);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Contrast { factor } = op {
-        let mean = rounded_pil_mean(img)?;
-        super::scalar::contrast(&mut pixels, mode_code, *factor, mean);
-    }
+    let mean = rounded_pil_mean(img)?;
+    super::scalar::contrast(&mut pixels, mode_code, *factor, mean);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -1735,21 +1731,20 @@ pub fn simd_color_saturation(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::ColorSaturation { factor } = op else {
+        return Err(PilError::ValueError("expected ColorSaturation op".into()));
+    };
     if mode == Some("CMYK") {
-        if let PipelineOp::ColorSaturation { factor } = op {
-            // CMYK Color requires Pillow's CMYK→L→CMYK degenerate conversion,
-            // which is outside the RGB/LA packed SIMD saturation domain.
-            return crate::compute::pool_cpu::ops::enhance::op_enhance_color_saturation(
-                img, *factor, mode,
-            );
-        }
+        // CMYK Color requires Pillow's CMYK→L→CMYK degenerate conversion,
+        // which is outside the RGB/LA packed SIMD saturation domain.
+        return crate::compute::pool_cpu::ops::enhance::op_enhance_color_saturation(
+            img, *factor, mode,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::ColorSaturation { factor } = op {
-        super::scalar::color_saturation(&mut pixels, mode_code, (factor * 1000.0) as u32);
-    }
+    super::scalar::color_saturation(&mut pixels, mode_code, (factor * 1000.0) as u32);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -1758,6 +1753,9 @@ pub fn simd_sharpness(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Sharpness { factor } = op else {
+        return Err(PilError::ValueError("expected Sharpness op".into()));
+    };
     let (w, h) = img.dimensions();
     // Sharpness processes CMYK's promoted K byte as a fourth sample. Other
     // packed adapters intentionally keep CMYK in the ordinary RGBA code.
@@ -1767,9 +1765,7 @@ pub fn simd_sharpness(
         mode_to_u32(img, mode)
     };
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Sharpness { factor } = op {
-        super::scalar::sharpness(&mut pixels, w, h, mode_code, (factor * 1000.0) as u32);
-    }
+    super::scalar::sharpness(&mut pixels, w, h, mode_code, (factor * 1000.0) as u32);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -1778,10 +1774,7 @@ pub fn simd_colorize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Colorize {
+    let PipelineOp::Colorize {
         black,
         white,
         mid,
@@ -1789,17 +1782,21 @@ pub fn simd_colorize(
         midpoint,
         whitepoint,
     } = op
-    {
-        let lut = crate::compute::pool_cpu::ops::imageops::colorize_lut(
-            black,
-            white,
-            *mid,
-            *blackpoint,
-            *midpoint,
-            *whitepoint,
-        );
-        super::scalar::colorize(&mut pixels, mode_code, &lut);
-    }
+    else {
+        return Err(PilError::ValueError("expected Colorize op".into()));
+    };
+    let (w, h) = img.dimensions();
+    let mode_code = mode_to_u32(img, mode);
+    let mut pixels = pixels_from_dynimg(img);
+    let lut = crate::compute::pool_cpu::ops::imageops::colorize_lut(
+        black,
+        white,
+        *mid,
+        *blackpoint,
+        *midpoint,
+        *whitepoint,
+    );
+    super::scalar::colorize(&mut pixels, mode_code, &lut);
     // Pillow's ImageOps.colorize always promotes its L input to RGB. Keeping
     // the packed SIMD result as RGBA leaks the implementation storage type
     // into the public result and breaks exact mode/byte parity.
@@ -1811,27 +1808,25 @@ pub fn simd_constant(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Constant { value } = op else {
+        return Err(PilError::ValueError("expected Constant op".into()));
+    };
     let (w, h) = img.dimensions();
     let area = u64::from(w) * u64::from(h);
     if area >= 32 * 32 {
-        if let PipelineOp::Constant { value } = op {
-            // ImageChops.constant ignores the source samples and always returns a
-            // one-band L image. Constructing that native result directly avoids
-            // an unnecessary RGBA expansion and a packed scalar traversal.
-            return Ok(DynamicImage::ImageLuma8(GrayImage::from_pixel(
-                w,
-                h,
-                Luma([*value]),
-            )));
-        }
+        // ImageChops.constant ignores the source samples and always returns a
+        // one-band L image. Constructing that native result directly avoids
+        // an unnecessary RGBA expansion and a packed scalar traversal.
+        return Ok(DynamicImage::ImageLuma8(GrayImage::from_pixel(
+            w,
+            h,
+            Luma([*value]),
+        )));
     }
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Constant { value } = op {
-        let packed =
-            (*value as u32) | ((*value as u32) << 8) | ((*value as u32) << 16) | 0xFF00_0000;
-        super::scalar::constant(&mut pixels, mode_code, packed);
-    }
+    let packed = (*value as u32) | ((*value as u32) << 8) | ((*value as u32) << 16) | 0xFF00_0000;
+    super::scalar::constant(&mut pixels, mode_code, packed);
     // ImageChops.constant always allocates a one-band L image; it does not
     // preserve the source mode.
     dynimg_from_pixel_mode(pixels, w, h, PixelMode::L)
@@ -1842,12 +1837,13 @@ pub fn simd_offset(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Offset { x, y } = op else {
+        return Err(PilError::ValueError("expected Offset op".into()));
+    };
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Offset { x, y } = op {
-        super::scalar::offset(&mut pixels, w, h, mode_code, *x, *y);
-    }
+    super::scalar::offset(&mut pixels, w, h, mode_code, *x, *y);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -1914,32 +1910,30 @@ pub fn simd_autocontrast(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Autocontrast { cutoff, mask } = op else {
+        return Err(PilError::ValueError("expected Autocontrast op".into()));
+    };
     // As with Equalize, keep ordinary RGB in its native byte layout.  The
     // CPU helper is the exact histogram/LUT implementation used by the
     // public operation; only the packed representation is avoided here.
     if matches!(img, DynamicImage::ImageRgb8(_)) && matches!(mode, None | Some("RGB")) {
-        if let PipelineOp::Autocontrast { cutoff, mask } = op {
-            return crate::compute::pool_cpu::ops::imageops::op_autocontrast(
-                img,
-                *cutoff as f64,
-                mask.as_ref(),
-            );
-        }
-        return Err(PilError::ValueError("expected Autocontrast op".into()));
+        return crate::compute::pool_cpu::ops::imageops::op_autocontrast(
+            img,
+            *cutoff as f64,
+            mask.as_ref(),
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Autocontrast { cutoff, mask } = op {
-        if mask.is_some() {
-            return crate::compute::pool_cpu::ops::imageops::op_autocontrast(
-                img,
-                *cutoff as f64,
-                mask.as_ref(),
-            );
-        }
-        super::scalar::autocontrast(&mut pixels, w, h, mode_code, *cutoff as u32);
+    if mask.is_some() {
+        return crate::compute::pool_cpu::ops::imageops::op_autocontrast(
+            img,
+            *cutoff as f64,
+            mask.as_ref(),
+        );
     }
+    super::scalar::autocontrast(&mut pixels, w, h, mode_code, *cutoff as u32);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2228,30 +2222,27 @@ pub fn simd_median_filter(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::MedianFilter { size } = op else {
+        return Err(PilError::ValueError("expected MedianFilter op".into()));
+    };
     // F-mode is already represented as native scalar samples at this
     // boundary.  Packing it through the byte-oriented SIMD adapter would
     // convert the sample domain before the window operation; use the exact
     // shared implementation instead.
     if mode == Some("F") {
-        if let PipelineOp::MedianFilter { size } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_median_filter_with_mode(
-                img, *size, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_median_filter_with_mode(
+            img, *size, mode,
+        );
     }
     if use_native_byte_rank_path(img, mode) {
-        if let PipelineOp::MedianFilter { size } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_median_filter_with_mode(
-                img, *size, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_median_filter_with_mode(
+            img, *size, mode,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::MedianFilter { size } = op {
-        super::scalar::median_filter(&mut pixels, w, h, mode_code, *size);
-    }
+    super::scalar::median_filter(&mut pixels, w, h, mode_code, *size);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2260,26 +2251,23 @@ pub fn simd_max_filter(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::MaxFilter { size } = op else {
+        return Err(PilError::ValueError("expected MaxFilter op".into()));
+    };
     if mode == Some("F") {
-        if let PipelineOp::MaxFilter { size } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_max_filter_with_mode(
-                img, *size, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_max_filter_with_mode(
+            img, *size, mode,
+        );
     }
     if use_native_byte_rank_path(img, mode) {
-        if let PipelineOp::MaxFilter { size } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_max_filter_with_mode(
-                img, *size, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_max_filter_with_mode(
+            img, *size, mode,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::MaxFilter { size } = op {
-        super::scalar::max_filter(&mut pixels, w, h, mode_code, *size);
-    }
+    super::scalar::max_filter(&mut pixels, w, h, mode_code, *size);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2288,26 +2276,23 @@ pub fn simd_min_filter(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::MinFilter { size } = op else {
+        return Err(PilError::ValueError("expected MinFilter op".into()));
+    };
     if mode == Some("F") {
-        if let PipelineOp::MinFilter { size } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_min_filter_with_mode(
-                img, *size, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_min_filter_with_mode(
+            img, *size, mode,
+        );
     }
     if use_native_byte_rank_path(img, mode) {
-        if let PipelineOp::MinFilter { size } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_min_filter_with_mode(
-                img, *size, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_min_filter_with_mode(
+            img, *size, mode,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::MinFilter { size } = op {
-        super::scalar::min_filter(&mut pixels, w, h, mode_code, *size);
-    }
+    super::scalar::min_filter(&mut pixels, w, h, mode_code, *size);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2316,26 +2301,23 @@ pub fn simd_rank_filter(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::RankFilter { size, rank } = op else {
+        return Err(PilError::ValueError("expected RankFilter op".into()));
+    };
     if mode == Some("F") {
-        if let PipelineOp::RankFilter { size, rank } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_rank_filter_with_mode(
-                img, *size, *rank, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_rank_filter_with_mode(
+            img, *size, *rank, mode,
+        );
     }
     if use_native_byte_rank_path(img, mode) {
-        if let PipelineOp::RankFilter { size, rank } = op {
-            return crate::compute::pool_cpu::ops::filter::execute_rank_filter_with_mode(
-                img, *size, *rank, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_rank_filter_with_mode(
+            img, *size, *rank, mode,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::RankFilter { size, rank } = op {
-        super::scalar::rank_filter(&mut pixels, w, h, mode_code, *size, *rank);
-    }
+    super::scalar::rank_filter(&mut pixels, w, h, mode_code, *size, *rank);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2344,105 +2326,73 @@ pub fn simd_filter_3x3(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Filter3x3 {
+        kernel,
+        scale,
+        offset,
+    } = op
+    else {
+        return Err(PilError::ValueError("expected Filter3x3 op".into()));
+    };
     // The packed SIMD representation is not a native I-mode layout: widening
     // signed 32-bit pixels into RGBA words is both slower and needlessly
     // allocates for this exact scalar contract.  Keep the requested SIMD lane
     // honest by using the optimized native I-mode implementation until a
     // signed-lane convolution kernel exists.
     if mode == Some("I") {
-        if let PipelineOp::Filter3x3 {
-            kernel,
-            scale,
-            offset,
-        } = op
-        {
-            return crate::compute::pool_cpu::ops::filter::execute_filter3x3(
-                img, kernel, *scale, *offset, mode,
-            );
-        }
+        return crate::compute::pool_cpu::ops::filter::execute_filter3x3(
+            img, kernel, *scale, *offset, mode,
+        );
     }
     if mode.is_none()
         && matches!(img, DynamicImage::ImageRgba8(_))
         && (img.width() as usize).saturating_mul(img.height() as usize) > 64 * 64
     {
-        if let PipelineOp::Filter3x3 {
-            kernel,
-            scale,
-            offset,
-        } = op
-        {
-            // The native vector path is retained for L/LA/RGB, where the
-            // current release receipt shows a crossover. RGBA 3x3 remains
-            // exact CPU fallback until its four-channel lane earns a win.
-            crate::compute::record_pipeline_backend_fallback(
-                "SIMD 3x3 RGBA: exact CPU crossover fallback",
-            );
-            return crate::compute::pool_cpu::ops::filter::execute_filter3x3(
-                img, kernel, *scale, *offset, mode,
-            );
-        }
+        // The native vector path is retained for L/LA/RGB, where the
+        // current release receipt shows a crossover. RGBA 3x3 remains
+        // exact CPU fallback until its four-channel lane earns a win.
+        crate::compute::record_pipeline_backend_fallback(
+            "SIMD 3x3 RGBA: exact CPU crossover fallback",
+        );
+        return crate::compute::pool_cpu::ops::filter::execute_filter3x3(
+            img, kernel, *scale, *offset, mode,
+        );
     }
     #[cfg(target_arch = "aarch64")]
     if mode.is_none()
         && matches!(img, DynamicImage::ImageLumaA8(_))
         && (img.width() as usize).saturating_mul(img.height() as usize) >= 512 * 512
     {
-        if let PipelineOp::Filter3x3 {
-            kernel,
-            scale,
-            offset,
-        } = op
-        {
-            // The arm64 release crossover matrix is SIMD-positive at 256²,
-            // but the native LA row lane is marginally slower at 512² and
-            // slower again at 1024×768. Keep the exact CPU implementation for
-            // the larger layouts and leave the small-image SIMD path intact.
-            crate::compute::record_pipeline_backend_fallback(
-                "SIMD 3x3 LA: exact CPU crossover fallback",
-            );
-            return crate::compute::pool_cpu::ops::filter::execute_filter3x3(
-                img, kernel, *scale, *offset, mode,
-            );
-        }
+        // The arm64 release crossover matrix is SIMD-positive at 256²,
+        // but the native LA row lane is marginally slower at 512² and
+        // slower again at 1024×768. Keep the exact CPU implementation for
+        // the larger layouts and leave the small-image SIMD path intact.
+        crate::compute::record_pipeline_backend_fallback(
+            "SIMD 3x3 LA: exact CPU crossover fallback",
+        );
+        return crate::compute::pool_cpu::ops::filter::execute_filter3x3(
+            img, kernel, *scale, *offset, mode,
+        );
     }
     if use_native_byte_convolution_path(img, mode) {
-        if let PipelineOp::Filter3x3 {
-            kernel,
-            scale,
-            offset,
-        } = op
-        {
-            let channels = img.color().channel_count() as usize;
-            let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
-            let mut output = img.as_bytes().to_vec();
-            native_filter_3x3_rows(
-                img.as_bytes(),
-                &mut output,
-                img.width() as usize,
-                img.height() as usize,
-                channels,
-                &normalized_kernel,
-                *offset as f32 + 0.5,
-            );
-            return crate::image_utils::raw_bytes_to_image(
-                img.width(),
-                img.height(),
-                output,
-                channels,
-            );
-        }
+        let channels = img.color().channel_count() as usize;
+        let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
+        let mut output = img.as_bytes().to_vec();
+        native_filter_3x3_rows(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+            channels,
+            &normalized_kernel,
+            *offset as f32 + 0.5,
+        );
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Filter3x3 {
-        kernel,
-        scale,
-        offset,
-    } = op
-    {
-        super::scalar::filter_3x3(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
-    }
+    super::scalar::filter_3x3(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2451,59 +2401,41 @@ pub fn simd_filter_5x5(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    // See the 3x3 I-mode path above.  A packed-byte emulation would make the
-    // SIMD request slower than the exact native implementation and would not
-    // constitute signed-lane SIMD acceleration.
-    if mode == Some("I") {
-        if let PipelineOp::Filter5x5 {
-            kernel,
-            scale,
-            offset,
-        } = op
-        {
-            return crate::compute::pool_cpu::ops::filter::execute_filter5x5(
-                img, kernel, *scale, *offset, mode,
-            );
-        }
-    }
-    if use_native_byte_convolution_path(img, mode) {
-        if let PipelineOp::Filter5x5 {
-            kernel,
-            scale,
-            offset,
-        } = op
-        {
-            let channels = img.color().channel_count() as usize;
-            let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
-            let mut output = img.as_bytes().to_vec();
-            native_filter_5x5_rows(
-                img.as_bytes(),
-                &mut output,
-                img.width() as usize,
-                img.height() as usize,
-                channels,
-                &normalized_kernel,
-                *offset as f32 + 0.5,
-            );
-            return crate::image_utils::raw_bytes_to_image(
-                img.width(),
-                img.height(),
-                output,
-                channels,
-            );
-        }
-    }
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Filter5x5 {
+    let PipelineOp::Filter5x5 {
         kernel,
         scale,
         offset,
     } = op
-    {
-        super::scalar::filter_5x5(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
+    else {
+        return Err(PilError::ValueError("expected Filter5x5 op".into()));
+    };
+    // See the 3x3 I-mode path above.  A packed-byte emulation would make the
+    // SIMD request slower than the exact native implementation and would not
+    // constitute signed-lane SIMD acceleration.
+    if mode == Some("I") {
+        return crate::compute::pool_cpu::ops::filter::execute_filter5x5(
+            img, kernel, *scale, *offset, mode,
+        );
     }
+    if use_native_byte_convolution_path(img, mode) {
+        let channels = img.color().channel_count() as usize;
+        let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
+        let mut output = img.as_bytes().to_vec();
+        native_filter_5x5_rows(
+            img.as_bytes(),
+            &mut output,
+            img.width() as usize,
+            img.height() as usize,
+            channels,
+            &normalized_kernel,
+            *offset as f32 + 0.5,
+        );
+        return crate::image_utils::raw_bytes_to_image(img.width(), img.height(), output, channels);
+    }
+    let (w, h) = img.dimensions();
+    let mode_code = mode_to_u32(img, mode);
+    let mut pixels = pixels_from_dynimg(img);
+    super::scalar::filter_5x5(&mut pixels, w, h, mode_code, kernel, *scale, *offset);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -2910,6 +2842,10 @@ pub fn simd_gaussian_blur(
 // Section E: Dual-image per-pixel ops (Add, Subtract, Multiply, ...)
 // ═══════════════════════════════════════════════════════════════════════
 
+// The registry installs each adapter under exactly one PipelineOp variant.
+// These let-else guards document that boundary and keep malformed internal
+// dispatch diagnosable; the mismatch arms are not supported public inputs.
+
 macro_rules! dual_op_adapter {
     ($name:ident, $variant:ident, $scalar_fn:path) => {
         pub fn $name(
@@ -2917,13 +2853,16 @@ macro_rules! dual_op_adapter {
             op: &PipelineOp,
             mode: Option<&str>,
         ) -> Result<DynamicImage, PilError> {
+            let PipelineOp::$variant { other } = op else {
+                return Err(PilError::ValueError(
+                    concat!("expected ", stringify!($variant), " op").into(),
+                ));
+            };
             let (w, h) = img.dimensions();
             let mode_code = mode_to_u32(img, mode);
             let mut pixels = pixels_from_dynimg(img);
-            if let PipelineOp::$variant { other } = op {
-                let other_pixels = pixels_from_arc_for_chops(other, mode)?;
-                $scalar_fn(&mut pixels, mode_code, &other_pixels);
-            }
+            let other_pixels = pixels_from_arc_for_chops(other, mode)?;
+            $scalar_fn(&mut pixels, mode_code, &other_pixels);
             Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
         }
     };
@@ -2936,10 +2875,12 @@ macro_rules! native_dual_op_adapter {
             op: &PipelineOp,
             mode: Option<&str>,
         ) -> Result<DynamicImage, PilError> {
-            if let PipelineOp::$variant { other } = op {
-                return simd_native_chops_or_packed(img, other, mode, $native, $scalar);
-            }
-            Ok(img.clone())
+            let PipelineOp::$variant { other } = op else {
+                return Err(PilError::ValueError(
+                    concat!("expected ", stringify!($variant), " op").into(),
+                ));
+            };
+            simd_native_chops_or_packed(img, other, mode, $native, $scalar)
         }
     };
 }
@@ -2949,16 +2890,16 @@ pub fn simd_multiply(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Multiply { other } = op {
-        return simd_native_chops_or_packed(
-            img,
-            other,
-            mode,
-            |image, operand, current_mode| native_chops_blend(image, operand, current_mode, false),
-            super::scalar::multiply,
-        );
-    }
-    Ok(img.clone())
+    let PipelineOp::Multiply { other } = op else {
+        return Err(PilError::ValueError("expected Multiply op".into()));
+    };
+    simd_native_chops_or_packed(
+        img,
+        other,
+        mode,
+        |image, operand, current_mode| native_chops_blend(image, operand, current_mode, false),
+        super::scalar::multiply,
+    )
 }
 
 pub fn simd_screen(
@@ -2966,16 +2907,16 @@ pub fn simd_screen(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Screen { other } = op {
-        return simd_native_chops_or_packed(
-            img,
-            other,
-            mode,
-            |image, operand, current_mode| native_chops_blend(image, operand, current_mode, true),
-            super::scalar::screen,
-        );
-    }
-    Ok(img.clone())
+    let PipelineOp::Screen { other } = op else {
+        return Err(PilError::ValueError("expected Screen op".into()));
+    };
+    simd_native_chops_or_packed(
+        img,
+        other,
+        mode,
+        |image, operand, current_mode| native_chops_blend(image, operand, current_mode, true),
+        super::scalar::screen,
+    )
 }
 
 native_dual_op_adapter!(
@@ -3035,36 +2976,36 @@ pub fn simd_add(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Add {
+    let PipelineOp::Add {
         other,
         scale,
         offset,
     } = op
-    {
-        let other_img = materialize_chops_operand(other, mode)?;
-        // With Pillow's default parameters the exact scalar formula is
-        // clamp(left + right, 0, 255).  Keep ordinary byte images in their
-        // native interleaved layout so this path avoids the packed RGBA
-        // conversion that otherwise dominates large ImageChops.add calls.
-        if *scale == 1.0 && *offset == 0.0 {
-            if let Some(result) = native_chops_add_clamped(img, &other_img, mode) {
-                return Ok(result);
-            }
+    else {
+        return Err(PilError::ValueError("expected Add op".into()));
+    };
+    let other_img = materialize_chops_operand(other, mode)?;
+    // With Pillow's default parameters the exact scalar formula is
+    // clamp(left + right, 0, 255).  Keep ordinary byte images in their
+    // native interleaved layout so this path avoids the packed RGBA
+    // conversion that otherwise dominates large ImageChops.add calls.
+    if *scale == 1.0 && *offset == 0.0 {
+        if let Some(result) = native_chops_add_clamped(img, &other_img, mode) {
+            return Ok(result);
         }
-        let (w, h) = img.dimensions();
-        let mode_code = mode_to_u32(img, mode);
-        let mut pixels = pixels_from_dynimg(img);
-        let other_pixels = pixels_from_dynimg(&other_img);
-        super::scalar::add(
-            &mut pixels,
-            mode_code,
-            &other_pixels,
-            *scale as f32,
-            *offset as f32,
-        );
-        return Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?));
     }
-    Err(PilError::ValueError("expected Add op".into()))
+    let (w, h) = img.dimensions();
+    let mode_code = mode_to_u32(img, mode);
+    let mut pixels = pixels_from_dynimg(img);
+    let other_pixels = pixels_from_dynimg(&other_img);
+    super::scalar::add(
+        &mut pixels,
+        mode_code,
+        &other_pixels,
+        *scale as f32,
+        *offset as f32,
+    );
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_subtract(
@@ -3072,35 +3013,35 @@ pub fn simd_subtract(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Subtract {
+    let PipelineOp::Subtract {
         other,
         scale,
         offset,
     } = op
-    {
-        let other_img = materialize_chops_operand(other, mode)?;
-        // For the default parameters Pillow's formula is the exact unsigned
-        // saturating subtraction.  As with Add, use native bytes only when
-        // the representation and public mode are an exact match.
-        if *scale == 1.0 && *offset == 0.0 {
-            if let Some(result) = native_chops_subtract_clamped(img, &other_img, mode) {
-                return Ok(result);
-            }
+    else {
+        return Err(PilError::ValueError("expected Subtract op".into()));
+    };
+    let other_img = materialize_chops_operand(other, mode)?;
+    // For the default parameters Pillow's formula is the exact unsigned
+    // saturating subtraction.  As with Add, use native bytes only when
+    // the representation and public mode are an exact match.
+    if *scale == 1.0 && *offset == 0.0 {
+        if let Some(result) = native_chops_subtract_clamped(img, &other_img, mode) {
+            return Ok(result);
         }
-        let (w, h) = img.dimensions();
-        let mode_code = mode_to_u32(img, mode);
-        let mut pixels = pixels_from_dynimg(img);
-        let other_pixels = pixels_from_dynimg(&other_img);
-        super::scalar::subtract(
-            &mut pixels,
-            mode_code,
-            &other_pixels,
-            *scale as f32,
-            *offset as f32,
-        );
-        return Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?));
     }
-    Err(PilError::ValueError("expected Subtract op".into()))
+    let (w, h) = img.dimensions();
+    let mode_code = mode_to_u32(img, mode);
+    let mut pixels = pixels_from_dynimg(img);
+    let other_pixels = pixels_from_dynimg(&other_img);
+    super::scalar::subtract(
+        &mut pixels,
+        mode_code,
+        &other_pixels,
+        *scale as f32,
+        *offset as f32,
+    );
+    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
 pub fn simd_blend_module(
@@ -3108,13 +3049,17 @@ pub fn simd_blend_module(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    // BlendModule and the core blend helper have the same stored-channel
+    // interpolation contract, so the adapter does not retain a second scalar
+    // forwarding wrapper solely for the module-level name.
+    let PipelineOp::BlendModule { other, alpha } = op else {
+        return Err(PilError::ValueError("expected BlendModule op".into()));
+    };
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::BlendModule { other, alpha } = op {
-        let other_pixels = pixels_from_arc(other)?;
-        super::scalar::blend_module(&mut pixels, mode_code, &other_pixels, *alpha);
-    }
+    let other_pixels = pixels_from_arc(other)?;
+    super::scalar::blend(&mut pixels, mode_code, &other_pixels, *alpha);
     Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
 }
 
@@ -3123,45 +3068,45 @@ pub fn simd_composite_module(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::CompositeModule {
+    let PipelineOp::CompositeModule {
         other,
         mask,
         mask_alpha,
     } = op
-    {
-        let other_img = if mode == Some("P") {
-            other.materialize_indices()?
-        } else {
-            other.materialize_for_ops()?
-        };
-        let mask_img = mask.materialize_for_ops()?;
-        let (other_w, other_h) = other_img.dimensions();
-        let (mask_w, mask_h) = mask_img.dimensions();
-        let other_pixels = pixels_from_dynimg(&other_img);
-        let mask_pixels = pixels_from_dynimg(&mask_img);
-        let result = super::scalar::composite_module(
-            &pixels,
-            w,
-            h,
-            mode_code,
-            &other_pixels,
-            other_w,
-            other_h,
-            &mask_pixels,
-            mask_w,
-            mask_h,
-            *mask_alpha,
-        );
-        return Ok(preserve_mode(
-            &other_img,
-            dynimg_from_rgba(result, other_w, other_h)?,
+    else {
+        return Err(PilError::ValueError(
+            "expected CompositeModule op".to_owned(),
         ));
-    }
-    Err(PilError::ValueError(
-        "expected CompositeModule op".to_owned(),
+    };
+    let (w, h) = img.dimensions();
+    let mode_code = mode_to_u32(img, mode);
+    let pixels = pixels_from_dynimg(img);
+    let other_img = if mode == Some("P") {
+        other.materialize_indices()?
+    } else {
+        other.materialize_for_ops()?
+    };
+    let mask_img = mask.materialize_for_ops()?;
+    let (other_w, other_h) = other_img.dimensions();
+    let (mask_w, mask_h) = mask_img.dimensions();
+    let other_pixels = pixels_from_dynimg(&other_img);
+    let mask_pixels = pixels_from_dynimg(&mask_img);
+    let result = super::scalar::composite_module(
+        &pixels,
+        w,
+        h,
+        mode_code,
+        &other_pixels,
+        other_w,
+        other_h,
+        &mask_pixels,
+        mask_w,
+        mask_h,
+        *mask_alpha,
+    );
+    Ok(preserve_mode(
+        &other_img,
+        dynimg_from_rgba(result, other_w, other_h)?,
     ))
 }
 
@@ -3203,35 +3148,33 @@ pub fn simd_resize(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    if let PipelineOp::Resize {
+    let PipelineOp::Resize {
         w: dst_w,
         h: dst_h,
         filter,
     } = op
+    else {
+        return Err(PilError::ValueError("expected Resize op".into()));
+    };
+    let (w, h) = img.dimensions();
+    if uses_native_scalar_mode(img, mode)
+        || !simd_resize_filter_supported(filter)
+        || matches!(filter, ResampleFilter::Bilinear)
+        || matches!(mode, Some("P" | "PA"))
+        || mode == Some("RGBa")
+        || native_byte_layout(img, mode).is_some()
     {
-        if uses_native_scalar_mode(img, mode)
-            || !simd_resize_filter_supported(filter)
-            || matches!(filter, ResampleFilter::Bilinear)
-            || matches!(mode, Some("P" | "PA"))
-            || mode == Some("RGBa")
-            || native_byte_layout(img, mode).is_some()
-        {
-            return crate::compute::pool_cpu::ops::geometry::execute_resize(
-                img, *dst_w, *dst_h, filter, mode,
-            );
-        }
-        let pixels = pixels_from_dynimg(img);
-        let mode_code = dynimg_mode(img);
-        let f = filter_to_u32(filter);
-        let (result, new_w, new_h) =
-            super::scalar::resize(&pixels, w, h, *dst_w, *dst_h, mode_code, f);
-        // The packed RGBA buffer is an internal SIMD representation. Pillow's
-        // resize family preserves the logical source mode at this boundary.
-        Ok(preserve_mode(img, dynimg_from_rgba(result, new_w, new_h)?))
-    } else {
-        Err(PilError::ValueError("expected Resize op".into()))
+        return crate::compute::pool_cpu::ops::geometry::execute_resize(
+            img, *dst_w, *dst_h, filter, mode,
+        );
     }
+    let pixels = pixels_from_dynimg(img);
+    let mode_code = dynimg_mode(img);
+    let f = filter_to_u32(filter);
+    let (result, new_w, new_h) = super::scalar::resize(&pixels, w, h, *dst_w, *dst_h, mode_code, f);
+    // The packed RGBA buffer is an internal SIMD representation. Pillow's
+    // resize family preserves the logical source mode at this boundary.
+    Ok(preserve_mode(img, dynimg_from_rgba(result, new_w, new_h)?))
 }
 
 pub fn simd_thumbnail(
@@ -3239,31 +3182,30 @@ pub fn simd_thumbnail(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    if let PipelineOp::Thumbnail {
+    let PipelineOp::Thumbnail {
         w: dw,
         h: dh,
         filter,
     } = op
-    {
-        if uses_native_scalar_mode(img, mode) || !matches!(filter, ResampleFilter::Nearest) {
-            return crate::compute::pool_cpu::ops::geometry::execute_thumbnail(
-                img, *dw, *dh, filter, mode,
-            );
-        }
-        let pixels = pixels_from_dynimg(img);
-        let mode_code = dynimg_mode(img);
-        let filter_code = if matches!(mode, Some("P" | "PA")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let (result, nw, nh) =
-            super::scalar::thumbnail(&pixels, w, h, mode_code, *dw, *dh, filter_code);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Thumbnail op".into()))
+    else {
+        return Err(PilError::ValueError("expected Thumbnail op".into()));
+    };
+    let (w, h) = img.dimensions();
+    if uses_native_scalar_mode(img, mode) || !matches!(filter, ResampleFilter::Nearest) {
+        return crate::compute::pool_cpu::ops::geometry::execute_thumbnail(
+            img, *dw, *dh, filter, mode,
+        );
     }
+    let pixels = pixels_from_dynimg(img);
+    let mode_code = dynimg_mode(img);
+    let filter_code = if matches!(mode, Some("P" | "PA")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let (result, nw, nh) =
+        super::scalar::thumbnail(&pixels, w, h, mode_code, *dw, *dh, filter_code);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_contain(
@@ -3271,38 +3213,34 @@ pub fn simd_contain(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Contain {
+    let PipelineOp::Contain {
         w: dw,
         h: dh,
         filter,
     } = op
+    else {
+        return Err(PilError::ValueError("expected Contain op".into()));
+    };
+    let (w, h) = img.dimensions();
+    let pixels = pixels_from_dynimg(img);
+    // The packed sizing kernel is still an approximate bilinear path;
+    // native byte layouts have a coefficient-exact CPU implementation.
+    // Keep the SIMD label from changing public pixels until the packed
+    // ImageOps coefficient tables are ported exactly.
+    if uses_native_scalar_mode(img, mode)
+        || native_byte_layout(img, mode).is_some()
+        || !simd_resize_filter_supported(filter)
     {
-        // The packed sizing kernel is still an approximate bilinear path;
-        // native byte layouts have a coefficient-exact CPU implementation.
-        // Keep the SIMD label from changing public pixels until the packed
-        // ImageOps coefficient tables are ported exactly.
-        if uses_native_scalar_mode(img, mode)
-            || native_byte_layout(img, mode).is_some()
-            || !simd_resize_filter_supported(filter)
-        {
-            return crate::compute::pool_cpu::ops::imageops::op_contain(
-                img, *dw, *dh, *filter, mode,
-            );
-        }
-        let mode_code = dynimg_mode(img);
-        let filter_code = if matches!(mode, Some("P" | "PA")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let (result, nw, nh) =
-            super::scalar::contain(&pixels, w, h, mode_code, *dw, *dh, filter_code);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Contain op".into()))
+        return crate::compute::pool_cpu::ops::imageops::op_contain(img, *dw, *dh, *filter, mode);
     }
+    let mode_code = dynimg_mode(img);
+    let filter_code = if matches!(mode, Some("P" | "PA")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let (result, nw, nh) = super::scalar::contain(&pixels, w, h, mode_code, *dw, *dh, filter_code);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_cover(
@@ -3310,34 +3248,32 @@ pub fn simd_cover(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Cover {
+    let PipelineOp::Cover {
         w: dw,
         h: dh,
         filter,
     } = op
+    else {
+        return Err(PilError::ValueError("expected Cover op".into()));
+    };
+    let (w, h) = img.dimensions();
+    let pixels = pixels_from_dynimg(img);
+    // See `simd_contain`: the packed crop/resize approximation is not a
+    // public parity implementation for ordinary native byte images.
+    if uses_native_scalar_mode(img, mode)
+        || native_byte_layout(img, mode).is_some()
+        || !simd_resize_filter_supported(filter)
     {
-        // See `simd_contain`: the packed crop/resize approximation is not a
-        // public parity implementation for ordinary native byte images.
-        if uses_native_scalar_mode(img, mode)
-            || native_byte_layout(img, mode).is_some()
-            || !simd_resize_filter_supported(filter)
-        {
-            return crate::compute::pool_cpu::ops::imageops::op_cover(img, *dw, *dh, *filter, mode);
-        }
-        let mode_code = dynimg_mode(img);
-        let filter_code = if matches!(mode, Some("P" | "PA")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let (result, nw, nh) =
-            super::scalar::cover(&pixels, w, h, mode_code, *dw, *dh, filter_code);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Cover op".into()))
+        return crate::compute::pool_cpu::ops::imageops::op_cover(img, *dw, *dh, *filter, mode);
     }
+    let mode_code = dynimg_mode(img);
+    let filter_code = if matches!(mode, Some("P" | "PA")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let (result, nw, nh) = super::scalar::cover(&pixels, w, h, mode_code, *dw, *dh, filter_code);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_fit(
@@ -3345,9 +3281,7 @@ pub fn simd_fit(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Fit {
+    let PipelineOp::Fit {
         w: dw,
         h: dh,
         filter,
@@ -3355,49 +3289,50 @@ pub fn simd_fit(
         centering,
         ..
     } = op
+    else {
+        return Err(PilError::ValueError("expected Fit op".into()));
+    };
+    let (w, h) = img.dimensions();
+    let pixels = pixels_from_dynimg(img);
+    // RGBa stores premultiplied channels. Keep it on the exact native
+    // implementation instead of treating its packed bytes as straight
+    // RGBA samples in the SIMD fit kernel.
+    if uses_native_scalar_mode(img, mode)
+        || !simd_resize_filter_supported(filter)
+        || mode == Some("RGBa")
+        // The CPU boxed resize premultiplies straight alpha before
+        // filtering and unpremultiplies afterward; the packed SIMD fit
+        // kernel currently samples RGBA/LA channels independently. These
+        // ordinary modes are represented directly by DynamicImage, so
+        // their explicit mode tag is often None.
+        || matches!(mode, Some("RGBA" | "LA"))
+        || matches!(
+            img,
+            DynamicImage::ImageRgba8(_) | DynamicImage::ImageLumaA8(_)
+        )
     {
-        // RGBa stores premultiplied channels. Keep it on the exact native
-        // implementation instead of treating its packed bytes as straight
-        // RGBA samples in the SIMD fit kernel.
-        if uses_native_scalar_mode(img, mode)
-            || !simd_resize_filter_supported(filter)
-            || mode == Some("RGBa")
-            // The CPU boxed resize premultiplies straight alpha before
-            // filtering and unpremultiplies afterward; the packed SIMD fit
-            // kernel currently samples RGBA/LA channels independently. These
-            // ordinary modes are represented directly by DynamicImage, so
-            // their explicit mode tag is often None.
-            || matches!(mode, Some("RGBA" | "LA"))
-            || matches!(
-                img,
-                DynamicImage::ImageRgba8(_) | DynamicImage::ImageLumaA8(_)
-            )
-        {
-            return crate::compute::pool_cpu::ops::imageops::op_fit(
-                img, *dw, *dh, *filter, *bleed, *centering, mode,
-            );
-        }
-        let mode_code = dynimg_mode(img);
-        let filter_code = if matches!(mode, Some("P" | "PA")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let (result, nw, nh) = super::scalar::fit(
-            &pixels,
-            w,
-            h,
-            mode_code,
-            *dw,
-            *dh,
-            *bleed as f32,
-            (centering.0 as f32, centering.1 as f32),
-            filter_code,
+        return crate::compute::pool_cpu::ops::imageops::op_fit(
+            img, *dw, *dh, *filter, *bleed, *centering, mode,
         );
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Fit op".into()))
     }
+    let mode_code = dynimg_mode(img);
+    let filter_code = if matches!(mode, Some("P" | "PA")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let (result, nw, nh) = super::scalar::fit(
+        &pixels,
+        w,
+        h,
+        mode_code,
+        *dw,
+        *dh,
+        *bleed as f32,
+        (centering.0 as f32, centering.1 as f32),
+        filter_code,
+    );
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_scale(
@@ -3405,30 +3340,29 @@ pub fn simd_scale(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Scale { factor, filter } = op else {
+        return Err(PilError::ValueError("expected Scale op".into()));
+    };
     let (w, h) = img.dimensions();
-    if let PipelineOp::Scale { factor, filter } = op {
-        // Native byte layouts already have an exact representation-aware
-        // resize implementation.  Packing them into RGBA before scaling
-        // adds a full-frame conversion and makes the SIMD-labelled route
-        // slower without adding vector work; keep the source layout intact.
-        if uses_native_scalar_mode(img, mode)
-            || !simd_resize_filter_supported(filter)
-            || native_byte_layout(img, mode).is_some()
-        {
-            return crate::compute::pool_cpu::ops::imageops::op_scale(img, *factor, *filter, mode);
-        }
-        let pixels = pixels_from_dynimg(img);
-        let mode_code = dynimg_mode(img);
-        let filter_code = if matches!(mode, Some("P" | "PA")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let (result, nw, nh) = super::scalar::scale(&pixels, w, h, mode_code, *factor, filter_code);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Scale op".into()))
+    // Native byte layouts already have an exact representation-aware
+    // resize implementation.  Packing them into RGBA before scaling
+    // adds a full-frame conversion and makes the SIMD-labelled route
+    // slower without adding vector work; keep the source layout intact.
+    if uses_native_scalar_mode(img, mode)
+        || !simd_resize_filter_supported(filter)
+        || native_byte_layout(img, mode).is_some()
+    {
+        return crate::compute::pool_cpu::ops::imageops::op_scale(img, *factor, *filter, mode);
     }
+    let pixels = pixels_from_dynimg(img);
+    let mode_code = dynimg_mode(img);
+    let filter_code = if matches!(mode, Some("P" | "PA")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let (result, nw, nh) = super::scalar::scale(&pixels, w, h, mode_code, *factor, filter_code);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_pad(
@@ -3436,54 +3370,53 @@ pub fn simd_pad(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Pad {
+    let PipelineOp::Pad {
         w: dw,
         h: dh,
         filter,
         color,
         centering,
     } = op
+    else {
+        return Err(PilError::ValueError("expected Pad op".into()));
+    };
+    let (w, h) = img.dimensions();
+    let mode_code = mode_to_u32(img, mode);
+    let pixels = pixels_from_dynimg(img);
+    // Pad contains the same packed resize approximation; use the exact
+    // native path for ordinary byte layouts until its coefficient tables
+    // are ported to SIMD.
+    if uses_native_scalar_mode(img, mode)
+        || native_byte_layout(img, mode).is_some()
+        || !simd_resize_filter_supported(filter)
     {
-        // Pad contains the same packed resize approximation; use the exact
-        // native path for ordinary byte layouts until its coefficient tables
-        // are ported to SIMD.
-        if uses_native_scalar_mode(img, mode)
-            || native_byte_layout(img, mode).is_some()
-            || !simd_resize_filter_supported(filter)
-        {
-            return crate::compute::pool_cpu::ops::imageops::op_pad(
-                img, *dw, *dh, *filter, *color, *centering, mode,
-            );
-        }
-        let filter_code = if matches!(mode, Some("P" | "PA")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let fill = match color {
-            Some(c) => pack_rgba(*c),
-            None if mode_code == 1 || mode_code == 3 => 0,
-            None => 0xFF00_0000u32,
-        };
-        let (result, nw, nh) = super::scalar::pad(
-            &pixels,
-            w,
-            h,
-            mode_code,
-            *dw,
-            *dh,
-            filter_code,
-            centering.0,
-            centering.1,
-            fill,
+        return crate::compute::pool_cpu::ops::imageops::op_pad(
+            img, *dw, *dh, *filter, *color, *centering, mode,
         );
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Pad op".into()))
     }
+    let filter_code = if matches!(mode, Some("P" | "PA")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let fill = match color {
+        Some(c) => pack_rgba(*c),
+        None if mode_code == 1 || mode_code == 3 => 0,
+        None => 0xFF00_0000u32,
+    };
+    let (result, nw, nh) = super::scalar::pad(
+        &pixels,
+        w,
+        h,
+        mode_code,
+        *dw,
+        *dh,
+        filter_code,
+        centering.0,
+        centering.1,
+        fill,
+    );
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_expand(
@@ -3491,16 +3424,15 @@ pub fn simd_expand(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Expand { border, fill } = op else {
+        return Err(PilError::ValueError("expected Expand op".into()));
+    };
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Expand { border, fill } = op {
-        let fill_rgba = pack_rgba(*fill);
-        let (result, nw, nh) = super::scalar::expand(&pixels, w, h, mode_code, *border, fill_rgba);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Expand op".into()))
-    }
+    let fill_rgba = pack_rgba(*fill);
+    let (result, nw, nh) = super::scalar::expand(&pixels, w, h, mode_code, *border, fill_rgba);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_crop_border(
@@ -3508,6 +3440,9 @@ pub fn simd_crop_border(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::CropBorder { border } = op else {
+        return Err(PilError::ValueError("expected CropBorder op".into()));
+    };
     // CropBorder is a contiguous byte movement, not an arithmetic SIMD
     // workload.  On ordinary native layouts, avoid widening every source
     // pixel to the packed RGBA representation only to copy it back out.  The
@@ -3515,36 +3450,29 @@ pub fn simd_crop_border(
     // the exact public error/zero-sized-border behavior; reusing it here also
     // keeps typed samples out of the lossy RGBA adapter.
     if uses_native_scalar_mode(img, mode) || native_byte_layout(img, mode).is_some() {
-        if let PipelineOp::CropBorder { border } = op {
-            let (w, h) = img.dimensions();
-            // Avoid the packed adapter's representation conversion while
-            // preserving ImageOps.crop's public error text.  The checked
-            // half-size form is equivalent to Pillow's `2 * border > size`
-            // rule without allowing a u32 multiplication to wrap.
-            if *border > w / 2 || *border > h / 2 {
-                return Err(PilError::ValueError(
-                    "Coordinate 'right' is less than 'left'".into(),
-                ));
-            }
-            return crate::compute::pool_cpu::ops::geometry::execute_crop(
-                img,
-                *border,
-                *border,
-                w - *border,
-                h - *border,
-            );
+        let (w, h) = img.dimensions();
+        // Avoid the packed adapter's representation conversion while
+        // preserving ImageOps.crop's public error text.  The checked
+        // half-size form is equivalent to Pillow's `2 * border > size`
+        // rule without allowing a u32 multiplication to wrap.
+        if *border > w / 2 || *border > h / 2 {
+            return Err(PilError::ValueError(
+                "Coordinate 'right' is less than 'left'".into(),
+            ));
         }
-        return Err(PilError::ValueError("expected CropBorder op".into()));
+        return crate::compute::pool_cpu::ops::geometry::execute_crop(
+            img,
+            *border,
+            *border,
+            w - *border,
+            h - *border,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::CropBorder { border } = op {
-        let (result, nw, nh) = super::scalar::crop_border(&pixels, w, h, mode_code, *border);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected CropBorder op".into()))
-    }
+    let (result, nw, nh) = super::scalar::crop_border(&pixels, w, h, mode_code, *border);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_crop(
@@ -3552,6 +3480,15 @@ pub fn simd_crop(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Crop {
+        left,
+        top,
+        right,
+        bottom,
+    } = op
+    else {
+        return Err(PilError::ValueError("expected Crop op".into()));
+    };
     // Crop is a byte movement, not an arithmetic SIMD workload.  The shared
     // native implementation copies rows directly for all ordinary byte
     // layouts (and handles typed samples without widening), whereas the
@@ -3560,35 +3497,16 @@ pub fn simd_crop(
     // both representations; unsupported/typed layouts remain on its own
     // representation-aware path as well.
     if uses_native_scalar_mode(img, mode) || native_byte_layout(img, mode).is_some() {
-        if let PipelineOp::Crop {
-            left,
-            top,
-            right,
-            bottom,
-        } = op
-        {
-            return crate::compute::pool_cpu::ops::geometry::execute_crop(
-                img, *left, *top, *right, *bottom,
-            );
-        }
-        return Err(PilError::ValueError("expected Crop op".into()));
+        return crate::compute::pool_cpu::ops::geometry::execute_crop(
+            img, *left, *top, *right, *bottom,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Crop {
-        left,
-        top,
-        right,
-        bottom,
-    } = op
-    {
-        let (result, nw, nh) =
-            super::scalar::crop(&pixels, w, h, mode_code, *left, *top, *right, *bottom);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Crop op".into()))
-    }
+    let (result, nw, nh) =
+        super::scalar::crop(&pixels, w, h, mode_code, *left, *top, *right, *bottom);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_rotate(
@@ -3596,8 +3514,7 @@ pub fn simd_rotate(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    if let PipelineOp::Rotate {
+    let PipelineOp::Rotate {
         angle,
         expand,
         fill,
@@ -3605,26 +3522,26 @@ pub fn simd_rotate(
         translate,
         nearest,
     } = op
-    {
-        // Bilinear LA/RGBA remains in the packed kernel; it performs the same
-        // premultiplied alpha round-trip as the exact affine path below.
-        if uses_native_scalar_mode(img, mode) || matches!(mode, Some("1" | "P" | "PA" | "RGBa")) {
-            return crate::compute::pool_cpu::ops::geometry::execute_rotate(
-                img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
-            );
-        }
-        let mode_code = mode_to_u32(img, mode);
-        let pixels = pixels_from_dynimg(img);
-        let fill_rgba = match fill {
-            Some(c) => pack_rgba(*c),
-            None => 0u32,
-        };
-        let (result, nw, nh) =
-            super::scalar::rotate(&pixels, w, h, mode_code, *angle, *expand, fill_rgba);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Rotate op".into()))
+    else {
+        return Err(PilError::ValueError("expected Rotate op".into()));
+    };
+    let (w, h) = img.dimensions();
+    // Bilinear LA/RGBA remains in the packed kernel; it performs the same
+    // premultiplied alpha round-trip as the exact affine path below.
+    if uses_native_scalar_mode(img, mode) || matches!(mode, Some("1" | "P" | "PA" | "RGBa")) {
+        return crate::compute::pool_cpu::ops::geometry::execute_rotate(
+            img, *angle, *expand, *fill, *center, *translate, *nearest, mode,
+        );
     }
+    let mode_code = mode_to_u32(img, mode);
+    let pixels = pixels_from_dynimg(img);
+    let fill_rgba = match fill {
+        Some(c) => pack_rgba(*c),
+        None => 0u32,
+    };
+    let (result, nw, nh) =
+        super::scalar::rotate(&pixels, w, h, mode_code, *angle, *expand, fill_rgba);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_reduce(
@@ -3632,29 +3549,22 @@ pub fn simd_reduce(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Reduce { x_factor, y_factor } = op else {
+        return Err(PilError::ValueError("expected Reduce op".into()));
+    };
     // Reduce has the same shape as the CPU's exact native implementation:
     // each output row owns disjoint source blocks and uses Pillow's fixed
     // point rounding, including partial edge blocks and alpha premultiplying.
     // Avoid the packed RGBA adapter for native byte and typed scalar images;
     // there is no vector arithmetic here to justify the representation copy.
     if uses_native_scalar_mode(img, mode) || native_byte_layout(img, mode).is_some() {
-        if let PipelineOp::Reduce { x_factor, y_factor } = op {
-            return crate::compute::pool_cpu::ops::geometry::execute_reduce(
-                img, *x_factor, *y_factor,
-            );
-        }
-        return Err(PilError::ValueError("expected Reduce op".into()));
+        return crate::compute::pool_cpu::ops::geometry::execute_reduce(img, *x_factor, *y_factor);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Reduce { x_factor, y_factor } = op {
-        let (result, nw, nh) =
-            super::scalar::reduce(&pixels, w, h, mode_code, *x_factor, *y_factor);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Reduce op".into()))
-    }
+    let (result, nw, nh) = super::scalar::reduce(&pixels, w, h, mode_code, *x_factor, *y_factor);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 pub fn simd_convert(
@@ -3662,72 +3572,65 @@ pub fn simd_convert(
     op: &PipelineOp,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Convert { mode: cm, .. } = op else {
+        return Err(PilError::ValueError("expected Convert op".into()));
+    };
     let (w, h) = img.dimensions();
-    if let PipelineOp::Convert {
-        mode: cm, ..
-    } = op
+    // The packed SIMD converter only represents byte L/LA/RGB/RGBA/CMYK
+    // samples. Keep scalar-mode and color-space conversions on the shared
+    // pure-Rust converter instead of returning an RGBA-shaped result for a
+    // public HSV, YCbCr, I, F, P, or 1-bit image.
+    let target_mode = match cm {
+        ColorMode::HSV
+        | ColorMode::YCbCr
+        | ColorMode::I
+        | ColorMode::F
+        | ColorMode::P
+        | ColorMode::Mode1 => return crate::compute::pool_cpu::ops::color::op_convert(img, cm),
+        ColorMode::L => 0,
+        ColorMode::LA => 1,
+        ColorMode::RGB => 2,
+        ColorMode::RGBA => 3,
+        ColorMode::CMYK => 4,
+    };
+    if matches!(cm, ColorMode::CMYK)
+        && matches!(
+            img,
+            DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
+        )
     {
-        // The packed SIMD converter only represents byte L/LA/RGB/RGBA/CMYK
-        // samples. Keep scalar-mode and color-space conversions on the shared
-        // pure-Rust converter instead of returning an RGBA-shaped result for a
-        // public HSV, YCbCr, I, F, P, or 1-bit image.
-        let target_mode = match cm {
-            ColorMode::HSV
-            | ColorMode::YCbCr
-            | ColorMode::I
-            | ColorMode::F
-            | ColorMode::P
-            | ColorMode::Mode1 => return crate::compute::pool_cpu::ops::color::op_convert(img, cm),
-            ColorMode::L => 0,
-            ColorMode::LA => 1,
-            ColorMode::RGB => 2,
-            ColorMode::RGBA => 3,
-            ColorMode::CMYK => 4,
-        };
-        if matches!(cm, ColorMode::CMYK)
-            && matches!(
-                img,
-                DynamicImage::ImageLuma8(_) | DynamicImage::ImageLumaA8(_)
-            )
-        {
-            if let Some(result) = native_luma_to_cmyk(img) {
-                return Ok(result);
-            }
+        if let Some(result) = native_luma_to_cmyk(img) {
+            return Ok(result);
         }
-        // For ordinary native byte layouts, the exact converter already
-        // operates on the source representation directly.  Avoid widening
-        // L/LA/RGB/RGBA/CMYK to packed RGBA before a byte-to-byte conversion;
-        // that conversion cost dominates terminal-read pipelines and adds no
-        // architecture-specific SIMD work.
-        // `mode` is the pipeline's destination tag for Convert, so inspect
-        // the concrete source layout without applying that destination tag.
-        if native_byte_layout(img, None).is_some()
-            && matches!(
-                cm,
-                ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
-            )
-        {
-            return crate::compute::pool_cpu::ops::color::op_convert(
-                img,
-                cm,
-            );
-        }
-        let src_mode = dynimg_mode(img);
-        let pixels = pixels_from_dynimg(img);
-        let (result, _nw, _nh) = super::scalar::convert(&pixels, w, h, src_mode, target_mode);
-        // `convert` returns packed RGBA storage for every logical target. The
-        // public result must retain the target mode, not the storage mode.
-        let output_mode = match target_mode {
-            0 => PixelMode::L,
-            1 => PixelMode::LA,
-            2 => PixelMode::RGB,
-            4 => PixelMode::CMYK,
-            _ => PixelMode::RGBA,
-        };
-        dynimg_from_pixel_mode(result, w, h, output_mode)
-    } else {
-        Err(PilError::ValueError("expected Convert op".into()))
     }
+    // For ordinary native byte layouts, the exact converter already
+    // operates on the source representation directly.  Avoid widening
+    // L/LA/RGB/RGBA/CMYK to packed RGBA before a byte-to-byte conversion;
+    // that conversion cost dominates terminal-read pipelines and adds no
+    // architecture-specific SIMD work.
+    // `mode` is the pipeline's destination tag for Convert, so inspect
+    // the concrete source layout without applying that destination tag.
+    if native_byte_layout(img, None).is_some()
+        && matches!(
+            cm,
+            ColorMode::L | ColorMode::LA | ColorMode::RGB | ColorMode::RGBA | ColorMode::CMYK
+        )
+    {
+        return crate::compute::pool_cpu::ops::color::op_convert(img, cm);
+    }
+    let src_mode = dynimg_mode(img);
+    let pixels = pixels_from_dynimg(img);
+    let (result, _nw, _nh) = super::scalar::convert(&pixels, w, h, src_mode, target_mode);
+    // `convert` returns packed RGBA storage for every logical target. The
+    // public result must retain the target mode, not the storage mode.
+    let output_mode = match target_mode {
+        0 => PixelMode::L,
+        1 => PixelMode::LA,
+        2 => PixelMode::RGB,
+        4 => PixelMode::CMYK,
+        _ => PixelMode::RGBA,
+    };
+    dynimg_from_pixel_mode(result, w, h, output_mode)
 }
 
 pub fn simd_remap_palette(
@@ -3735,19 +3638,18 @@ pub fn simd_remap_palette(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::RemapPalette { dest_map } = op else {
+        return Err(PilError::ValueError("expected RemapPalette op".into()));
+    };
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let pixels = pixels_from_dynimg(img);
-    if let PipelineOp::RemapPalette { dest_map } = op {
-        let mut inverse = [0u8; 256];
-        for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
-            inverse[usize::from(old_index)] = new_index as u8;
-        }
-        let result = super::scalar::remap_palette(&pixels, mode_code, &inverse);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, w, h)?))
-    } else {
-        Err(PilError::ValueError("expected RemapPalette op".into()))
+    let mut inverse = [0u8; 256];
+    for (new_index, &old_index) in dest_map.iter().take(256).enumerate() {
+        inverse[usize::from(old_index)] = new_index as u8;
     }
+    let result = super::scalar::remap_palette(&pixels, mode_code, &inverse);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, w, h)?))
 }
 
 pub fn simd_transform(
@@ -3755,8 +3657,7 @@ pub fn simd_transform(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    if let PipelineOp::Transform {
+    let PipelineOp::Transform {
         w: dw,
         h: dh,
         method,
@@ -3766,64 +3667,64 @@ pub fn simd_transform(
         palette_fill,
         ..
     } = op
+    else {
+        return Err(PilError::ValueError("expected Transform op".into()));
+    };
+    let (w, h) = img.dimensions();
+    let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
+    // Keep explicit premultiplied RGBa, non-affine methods, and native
+    // scalar modes on the exact CPU implementation. LA/RGBA are supported
+    // by the SIMD scalar kernel and must not be redirected by storage type.
+    if mode == Some("RGBa")
+        || !matches!(method, TransformMethod::Affine)
+        || uses_native_scalar_mode(img, mode)
     {
-        let resolved_fill = palette_fill.map(|index| (index, 0, 0, 255)).or(*fill);
-        // Keep explicit premultiplied RGBa, non-affine methods, and native
-        // scalar modes on the exact CPU implementation. LA/RGBA are supported
-        // by the SIMD scalar kernel and must not be redirected by storage type.
-        if mode == Some("RGBa")
-            || !matches!(method, TransformMethod::Affine)
-            || uses_native_scalar_mode(img, mode)
-        {
-            return crate::compute::pool_cpu::ops::effects::op_transform(
-                img,
-                *dw,
-                *dh,
-                method,
-                data,
-                filter,
-                resolved_fill,
-                mode,
-            );
-        }
-        let mode_code = transform_mode_to_u32(img, mode);
-        let pixels = pixels_from_dynimg(img);
-        let matrix: [f64; 8] = {
-            let mut arr = [0.0f64; 8];
-            let len = data.len().min(8);
-            arr[..len].copy_from_slice(&data[..len]);
-            arr
-        };
-        // Pillow keeps palette/index images on nearest-neighbor sampling even
-        // when a different public resampling filter is requested. Preserve
-        // the CPU path's mode-specific behavior before entering the packed
-        // SIMD transform kernel; interpolating palette indices would produce
-        // invalid colors rather than a filtered image.
-        let f = if matches!(mode, Some("1" | "P")) {
-            0
-        } else {
-            filter_to_u32(filter)
-        };
-        let fill_rgba = match resolved_fill {
-            Some((r, g, b, a)) => {
-                // The packed kernel always receives RGBA-shaped samples. PIL
-                // stores LA fills as (gray, alpha), so duplicate gray into
-                // the RGB lanes and carry alpha in the packed high byte.
-                let canonical = match mode_code {
-                    0 => (r, r, r, 255),
-                    1 => (r, r, r, g),
-                    _ => (r, g, b, a),
-                };
-                pack_rgba(canonical)
-            }
-            None => 0u32,
-        };
-        let (result, nw, nh) =
-            super::scalar::transform(&pixels, w, h, mode_code, *dw, *dh, &matrix, f, fill_rgba);
-        Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
-    } else {
-        Err(PilError::ValueError("expected Transform op".into()))
+        return crate::compute::pool_cpu::ops::effects::op_transform(
+            img,
+            *dw,
+            *dh,
+            method,
+            data,
+            filter,
+            resolved_fill,
+            mode,
+        );
     }
+    let mode_code = transform_mode_to_u32(img, mode);
+    let pixels = pixels_from_dynimg(img);
+    let matrix: [f64; 8] = {
+        let mut arr = [0.0f64; 8];
+        let len = data.len().min(8);
+        arr[..len].copy_from_slice(&data[..len]);
+        arr
+    };
+    // Pillow keeps palette/index images on nearest-neighbor sampling even
+    // when a different public resampling filter is requested. Preserve
+    // the CPU path's mode-specific behavior before entering the packed
+    // SIMD transform kernel; interpolating palette indices would produce
+    // invalid colors rather than a filtered image.
+    let f = if matches!(mode, Some("1" | "P")) {
+        0
+    } else {
+        filter_to_u32(filter)
+    };
+    let fill_rgba = match resolved_fill {
+        Some((r, g, b, a)) => {
+            // The packed kernel always receives RGBA-shaped samples. PIL
+            // stores LA fills as (gray, alpha), so duplicate gray into
+            // the RGB lanes and carry alpha in the packed high byte.
+            let canonical = match mode_code {
+                0 => (r, r, r, 255),
+                1 => (r, r, r, g),
+                _ => (r, g, b, a),
+            };
+            pack_rgba(canonical)
+        }
+        None => 0u32,
+    };
+    let (result, nw, nh) =
+        super::scalar::transform(&pixels, w, h, mode_code, *dw, *dh, &matrix, f, fill_rgba);
+    Ok(preserve_mode(img, dynimg_from_rgba(result, nw, nh)?))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -3835,16 +3736,17 @@ pub fn simd_put_pixel(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::PutPixel { x, y, color, .. } = op else {
+        return Err(PilError::ValueError("expected PutPixel op".into()));
+    };
     if let Some(result) = native_put_pixel(img, op, mode) {
         return Ok(result);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PutPixel { x, y, color, .. } = op {
-        let packed = pack_rgba(*color);
-        super::scalar::put_pixel(&mut pixels, w, mode_code, *x, *y, packed);
-    }
+    let packed = pack_rgba(*color);
+    super::scalar::put_pixel(&mut pixels, w, mode_code, *x, *y, packed);
     // `PutPixel` is mode-preserving in Pillow. Rebuilding every result as
     // RGBA changes the logical mode of an L/LA/RGB pipeline when no explicit
     // mode tag is present, so a following mode-sensitive operation such as
@@ -3857,13 +3759,13 @@ pub fn simd_put_data(
     op: &PipelineOp,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::PutData { data, mode } = op else {
+        return Err(PilError::ValueError("expected PutData op".into()));
+    };
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PutData { data, mode } = op {
-        super::scalar::put_data(&mut pixels, mode.code(), data);
-        return dynimg_from_pixel_mode(pixels, w, h, *mode);
-    }
-    Err(PilError::ValueError("expected PutData op".into()))
+    super::scalar::put_data(&mut pixels, mode.code(), data);
+    dynimg_from_pixel_mode(pixels, w, h, *mode)
 }
 
 pub fn simd_put_alpha(
@@ -3871,13 +3773,13 @@ pub fn simd_put_alpha(
     op: &PipelineOp,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    let PipelineOp::PutAlpha { alpha, mode } = op else {
+        return Err(PilError::ValueError("expected PutAlpha op".into()));
+    };
     let (w, h) = img.dimensions();
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::PutAlpha { alpha, mode } = op {
-        super::scalar::put_alpha(&mut pixels, mode.code(), *alpha);
-        return dynimg_from_put_alpha(pixels, w, h, *mode);
-    }
-    Err(PilError::ValueError("expected PutAlpha op".into()))
+    super::scalar::put_alpha(&mut pixels, mode.code(), *alpha);
+    dynimg_from_put_alpha(pixels, w, h, *mode)
 }
 
 pub fn simd_eval(
@@ -3885,28 +3787,27 @@ pub fn simd_eval(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if let PipelineOp::Eval { lut } = op {
-        // Public Image.point is represented as Eval after the binding
-        // validates the LUT.  Keep ordinary native L/RGB images in their
-        // byte layout instead of widening them to packed RGBA for a single
-        // lookup-table traversal.  Typed, palette, and alpha-sensitive
-        // layouts retain the exact packed fallback below.
-        if let Some(result) = native_point_lut(img, mode, lut) {
-            return Ok(result);
-        }
+    let PipelineOp::Eval { lut } = op else {
+        return Err(PilError::ValueError("expected Eval op".into()));
+    };
+    // Public Image.point is represented as Eval after the binding
+    // validates the LUT.  Keep ordinary native L/RGB images in their
+    // byte layout instead of widening them to packed RGBA for a single
+    // lookup-table traversal.  Typed, palette, and alpha-sensitive
+    // layouts retain the exact packed fallback below.
+    if let Some(result) = native_point_lut(img, mode, lut) {
+        return Ok(result);
     }
     let (w, h) = img.dimensions();
     let mode_code = mode_to_u32(img, mode);
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Eval { lut } = op {
-        let lut_arr: [u8; 1024] = {
-            let mut arr = [0u8; 1024];
-            let len = lut.len().min(1024);
-            arr[..len].copy_from_slice(&lut[..len]);
-            arr
-        };
-        super::scalar::eval(&mut pixels, mode_code, &lut_arr);
-    }
+    let lut_arr: [u8; 1024] = {
+        let mut arr = [0u8; 1024];
+        let len = lut.len().min(1024);
+        arr[..len].copy_from_slice(&lut[..len]);
+        arr
+    };
+    super::scalar::eval(&mut pixels, mode_code, &lut_arr);
     Ok(crate::image::preserve_mode(
         img,
         dynimg_from_rgba(pixels, w, h)?,
@@ -3918,27 +3819,27 @@ pub fn simd_paste(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    if uses_native_scalar_mode(img, mode) {
-        if let PipelineOp::Paste {
-            source,
-            x,
-            y,
-            mask,
-            mask_alpha,
-            ..
-        } = op
-        {
-            return crate::compute::pool_cpu::ops::effects::op_paste(
-                img,
-                source,
-                i64::from(*x),
-                i64::from(*y),
-                mask,
-                *mask_alpha,
-                mode,
-            );
-        }
+    let PipelineOp::Paste {
+        source,
+        x,
+        y,
+        mask,
+        mask_alpha,
+        ..
+    } = op
+    else {
         return Err(PilError::ValueError("expected Paste op".into()));
+    };
+    if uses_native_scalar_mode(img, mode) {
+        return crate::compute::pool_cpu::ops::effects::op_paste(
+            img,
+            source,
+            i64::from(*x),
+            i64::from(*y),
+            mask,
+            *mask_alpha,
+            mode,
+        );
     }
     let (w, h) = img.dimensions();
     let mode_code = if mode == Some("P") {
@@ -3951,41 +3852,30 @@ pub fn simd_paste(
         dynimg_mode(img)
     };
     let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Paste {
-        source,
-        x,
-        y,
-        w: _,
-        h: _,
-        mask,
-        mask_alpha,
-    } = op
-    {
-        let src_img = if matches!(mode, Some("P" | "PA")) {
-            source.materialize_indices()?
-        } else {
-            arc_to_dynimg(source)?
-        };
-        let (src_w, src_h) = src_img.dimensions();
-        let src_pixels = pixels_from_dynimg(&src_img);
-        let mask_pixels: Option<Vec<u32>> = match mask {
-            Some(m) => Some(pixels_from_arc(m)?),
-            None => None,
-        };
-        super::scalar::paste(
-            &mut pixels,
-            w,
-            h,
-            mode_code,
-            &src_pixels,
-            src_w,
-            src_h,
-            *x,
-            *y,
-            mask_pixels.as_deref(),
-            *mask_alpha,
-        );
-    }
+    let src_img = if matches!(mode, Some("P" | "PA")) {
+        source.materialize_indices()?
+    } else {
+        arc_to_dynimg(source)?
+    };
+    let (src_w, src_h) = src_img.dimensions();
+    let src_pixels = pixels_from_dynimg(&src_img);
+    let mask_pixels: Option<Vec<u32>> = match mask {
+        Some(m) => Some(pixels_from_arc(m)?),
+        None => None,
+    };
+    super::scalar::paste(
+        &mut pixels,
+        w,
+        h,
+        mode_code,
+        &src_pixels,
+        src_w,
+        src_h,
+        *x,
+        *y,
+        mask_pixels.as_deref(),
+        *mask_alpha,
+    );
     Ok(crate::image::preserve_mode(
         img,
         dynimg_from_rgba(pixels, w, h)?,
@@ -4057,61 +3947,61 @@ pub fn simd_merge(
     op: &PipelineOp,
     _mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    let (w, h) = img.dimensions();
-    let mut pixels = pixels_from_dynimg(img);
-    if let PipelineOp::Merge {
+    let PipelineOp::Merge {
         mode: merge_mode,
         bands,
     } = op
-    {
-        // The registry `mode` argument carries the source image's legacy mode
-        // tag and is `None` for ordinary Image.merge calls. The operation's
-        // ColorMode is the authoritative output mode and also determines how
-        // many bands are valid. Using the registry tag here made RGB merges
-        // fall through to the RGBA path and index a fourth (nonexistent) band.
-        let (mode_code, output_mode) = match merge_mode {
-            ColorMode::L => (0, PixelMode::L),
-            ColorMode::LA => (1, PixelMode::LA),
-            ColorMode::RGB => (2, PixelMode::RGB),
-            ColorMode::RGBA => (3, PixelMode::RGBA),
-            // CMYK is stored in the packed four-byte representation used by
-            // the RGBA SIMD lane, but retains its logical mode at the Image
-            // layer through the existing explicit-mode tag.
-            ColorMode::CMYK => (3, PixelMode::CMYK),
-            _ => {
-                return Err(PilError::ValueError(
-                    "SIMD merge: unsupported output mode".to_string(),
-                ));
-            }
-        };
-        // Pillow's ImagingMerge consumes every input as a single-byte band.
-        // The current image is already that raw sample buffer, which matters
-        // when the first band is a P image: materialize_for_ops() would expand
-        // palette index 1 into its visible palette color before the merge.
-        // Later P bands are rejected by the public validation, so only those
-        // remaining inputs need ordinary operation materialization here.
-        let mut band_pixels = vec![pixels.clone()];
-        for band in bands.iter().skip(1) {
-            let band_img = band.materialize_for_ops()?;
-            band_pixels.push(pixels_from_dynimg(&band_img));
+    else {
+        return Err(PilError::ValueError("expected Merge op".to_string()));
+    };
+    let (w, h) = img.dimensions();
+    let mut pixels = pixels_from_dynimg(img);
+    // The registry `mode` argument carries the source image's legacy mode
+    // tag and is `None` for ordinary Image.merge calls. The operation's
+    // ColorMode is the authoritative output mode and also determines how
+    // many bands are valid. Using the registry tag here made RGB merges
+    // fall through to the RGBA path and index a fourth (nonexistent) band.
+    let (mode_code, output_mode) = match merge_mode {
+        ColorMode::L => (0, PixelMode::L),
+        ColorMode::LA => (1, PixelMode::LA),
+        ColorMode::RGB => (2, PixelMode::RGB),
+        ColorMode::RGBA => (3, PixelMode::RGBA),
+        // CMYK is stored in the packed four-byte representation used by
+        // the RGBA SIMD lane, but retains its logical mode at the Image
+        // layer through the existing explicit-mode tag.
+        ColorMode::CMYK => (3, PixelMode::CMYK),
+        _ => {
+            return Err(PilError::ValueError(
+                "SIMD merge: unsupported output mode".to_string(),
+            ));
         }
-        let expected_bands = match mode_code {
-            0 => 1,
-            1 => 2,
-            2 => 3,
-            3 => 4,
-            _ => unreachable!(),
-        };
-        if band_pixels.len() != expected_bands
-            || band_pixels.iter().any(|band| band.len() != pixels.len())
-        {
-            // Match Pillow's ImagingMerge contract and the CPU lane. This is
-            // also the safe boundary before scalar merge indexes each band.
-            return Err(PilError::ValueError("size mismatch".to_string()));
-        }
-        let band_refs: Vec<&[u32]> = band_pixels.iter().map(|v| v.as_slice()).collect();
-        super::scalar::merge(&mut pixels, mode_code, &band_refs);
-        return dynimg_from_pixel_mode(pixels, w, h, output_mode);
+    };
+    // Pillow's ImagingMerge consumes every input as a single-byte band.
+    // The current image is already that raw sample buffer, which matters
+    // when the first band is a P image: materialize_for_ops() would expand
+    // palette index 1 into its visible palette color before the merge.
+    // Later P bands are rejected by the public validation, so only those
+    // remaining inputs need ordinary operation materialization here.
+    let mut band_pixels = vec![pixels.clone()];
+    for band in bands.iter().skip(1) {
+        let band_img = band.materialize_for_ops()?;
+        band_pixels.push(pixels_from_dynimg(&band_img));
     }
-    Err(PilError::ValueError("expected Merge op".to_string()))
+    let expected_bands = match mode_code {
+        0 => 1,
+        1 => 2,
+        2 => 3,
+        3 => 4,
+        _ => unreachable!(),
+    };
+    if band_pixels.len() != expected_bands
+        || band_pixels.iter().any(|band| band.len() != pixels.len())
+    {
+        // Match Pillow's ImagingMerge contract and the CPU lane. This is
+        // also the safe boundary before scalar merge indexes each band.
+        return Err(PilError::ValueError("size mismatch".to_string()));
+    }
+    let band_refs: Vec<&[u32]> = band_pixels.iter().map(|v| v.as_slice()).collect();
+    super::scalar::merge(&mut pixels, mode_code, &band_refs);
+    dynimg_from_pixel_mode(pixels, w, h, output_mode)
 }
