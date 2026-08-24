@@ -33980,6 +33980,16 @@ def build_nuanced_cases(
             "name": "resize-pipeline",
             "chain": "resize-copy",
         },
+        *(
+            {
+                "surface": "PIL.Image.Image",
+                "operation": "copy",
+                "requirement_suffix": "behavior.default",
+                "name": f"typed-{prefix}-copy",
+                "scenario_inline_image": f"{prefix}-pattern-0",
+            }
+            for prefix in ("rgb16-png", "rgba16-png")
+        ),
         {
             "surface": "PIL.Image.Image",
             "operation": "point",
