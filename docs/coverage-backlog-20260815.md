@@ -962,3 +962,30 @@ coverage were unchanged. The aggregate is now 55,780/62,330 regions
 (89.491%), 34,654/38,285 lines (90.516%), 5,589/6,736 branches (82.972%),
 and 2,684/3,161 functions (84.910%). Free memory ranged from 57% to 69%
 during the GPU run and recovered to 64% at completion.
+
+## Accepted input: GPU secondary-image cache budget fallback
+
+Coverage MCP source review ranked the GPU auxiliary-cache guards at
+`pillow-rs/src/compute/pool_gpu/mod.rs:127,143,156` as the highest reachable
+GPU target. Existing public cache workflows reused only small images and
+covered the within-budget side. The new case
+`pipeline-composition.gpu-auxiliary-cache-budget` creates five distinct valid
+2048x2048 `L` images and reuses each through public `ImageChops.multiply` and
+`ImageChops.screen` operations. Their packed representations total 80 MiB,
+so the fifth secondary-image insertion takes the existing bounded fallback.
+
+Focused exact parity passed 1/1 on both the CPU and strict GPU target; the
+observed pixel was `225` on source and target. Commit `f8d4188c8` added only
+the generator and generated input manifests; no runtime code, outputs, hashes,
+thresholds, filters, coverage counts, or denominators changed. The managed
+strict CPU/SIMD/GPU Coverage MCP run
+`00880aea-7161-44f1-bb7c-d8dcf0129cfe` passed all 24 plans with zero failures
+and ingested snapshot `bac8edd2-fbb0-4eb1-a83c-3d5766cb214c` in 269.720
+seconds. Against snapshot `3994ba1b-9d78-4313-9098-eed7fe9372ea`, MCP
+measured `+10` covered regions, `+20` covered lines, and `+5` covered
+branches; function coverage was unchanged. The aggregate is now
+55,790/62,330 regions (89.507%), 34,674/38,285 lines (90.568%),
+5,594/6,736 branches (83.046%), and 2,684/3,161 functions (84.910%). MCP
+source review confirms line 127 is covered; the third-image and LUT fallback
+lines 143 and 156 remain uncovered. Free memory ranged from 57% to 69% during
+the GPU run and was 58% at completion.
