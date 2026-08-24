@@ -56,6 +56,16 @@ class ArrayWithBytes:
         return self._data
 
 
+class ResampleName:
+    """Host object whose string form supplies a public resample name."""
+
+    def __init__(self, name: str):
+        self.name = name
+
+    def __str__(self) -> str:
+        return self.name
+
+
 def run_native_cases() -> tuple[int, int, int]:
     """Run every image-core native probe; returns (passed, skipped, failed)."""
 
@@ -185,6 +195,8 @@ def run_native_cases() -> tuple[int, int, int]:
         ("tobytes-bgr", lambda: Image.new("RGB", (1, 1), (1, 2, 3)).tobytes("raw", "BGR")),
         ("tobytes-bgra", lambda: Image.new("RGBA", (1, 1), (1, 2, 3, 4)).tobytes("raw", "BGRA")),
         ("thumbnail-int-resample", lambda: _thumbnail_int(pillow_rs.Image.new("RGB", (8, 8)))),
+        ("resize-stringified-resample", lambda: _resize_stringified_resample()),
+        ("rotate-stringified-resample", lambda: _rotate_stringified_resample()),
         ("reduce-bad-factor", lambda: pillow_rs.Image.new("RGB", (8, 8)).reduce((2, 3))),
         ("getdata-single-band", lambda: list(pillow_rs.Image.new("L", (2, 2)).getdata())),
         ("getpalette-default-rawmode", lambda: pillow_rs.Image.new("P", (2, 2)).getpalette()),
@@ -586,6 +598,18 @@ def _composite_palette() -> None:
 
 def _materialize_resize(image: Image, resample: int) -> None:
     image.resize((3, 3), resample=resample).tobytes()
+
+
+def _resize_stringified_resample() -> None:
+    Image.new("RGB", (4, 4)).resize(
+        (3, 3), resample=ResampleName("NOT_A_FILTER")
+    ).tobytes()
+
+
+def _rotate_stringified_resample() -> None:
+    Image.new("RGB", (4, 4)).rotate(
+        90, resample=ResampleName("NOT_A_FILTER"), expand=True
+    ).tobytes()
 
 
 def _imaging_core_one():
