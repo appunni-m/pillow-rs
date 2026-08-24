@@ -68,8 +68,6 @@
           "PIL.ImageEnhance.Color.nuanced.mode-cmyk",
           "PIL.ImageEnhance.Contrast.nuanced.mode-cmyk",
           "PIL.ImageEnhance.Sharpness.nuanced.mode-cmyk",
-          "PIL.ImageEnhance.Contrast.nuanced.zero-size-cmyk-empty-mean",
-          "PIL.ImageEnhance.Contrast.nuanced.zero-size-l-empty-mean",
           "PIL.ImageEnhance.Brightness.nuanced.mode-rgba",
           "PIL.ImageEnhance.Color.nuanced.mode-rgba",
           "PIL.ImageEnhance.Contrast.nuanced.mode-rgba",
