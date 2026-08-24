@@ -663,7 +663,13 @@ def _open_unknown_format() -> None:
 
 
 def _transform_affine_default_fill(mode: str) -> None:
-    Image.new(mode, (4, 4), 128).transform((4, 4), 0, [1, 0, 0, 0, 1, 0]).tobytes()
+    color = {
+        "LA": (128, 128),
+        "RGBA": (128, 128, 128, 128),
+    }[mode]
+    Image.new(mode, (4, 4), color).transform(
+        (4, 4), 0, [1, 0, 0, 0, 1, 0]
+    ).tobytes()
 
 
 def _imaging_core_one():
