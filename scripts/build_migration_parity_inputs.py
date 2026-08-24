@@ -7079,7 +7079,8 @@ def pipeline_composition_cases(
     def gpu_lut_cache_budget_case() -> dict[str, Any]:
         """Overflow the public GPU LUT cache after filling image cache.
 
-        Four reused 2048x2048 secondary images fill the bounded cache exactly.
+        Five reused 2048x2048 secondary images fill and overflow the bounded
+        cache.
         Two public point calls then reuse one valid LUT, so its first cache
         insertion takes the existing bounded LUT fallback.
         """
@@ -7089,7 +7090,7 @@ def pipeline_composition_cases(
         steps: list[dict[str, Any]] = [
             new_image("setup-primary", "L", size, 17),
         ]
-        for index in range(4):
+        for index in range(5):
             steps.append(
                 new_image(
                     f"setup-secondary-{index}",
@@ -7100,7 +7101,7 @@ def pipeline_composition_cases(
             )
 
         previous = "setup-primary"
-        for index in range(4):
+        for index in range(5):
             secondary = f"setup-secondary-{index}"
             first_step = f"secondary-{index}-multiply"
             second_step = f"secondary-{index}-screen"
