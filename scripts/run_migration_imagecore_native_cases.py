@@ -85,6 +85,7 @@ def run_native_cases() -> tuple[int, int, int]:
     probes: list[tuple[str, callable]] = [
         # Image constructor variants.
         ("default-image-constructor", lambda: pillow_rs.Image()),
+        ("transpose-from-int-fallback", lambda: pillow_rs.Image.Transpose.from_int(99)),
         (
             "image-enhance-empty-buffer",
             lambda: ImageEnhance.Brightness(Image.new("L", (0, 0)))
