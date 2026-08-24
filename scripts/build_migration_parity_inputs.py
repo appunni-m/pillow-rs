@@ -25731,6 +25731,24 @@ def build_nuanced_cases(
                 "width": literal(1),
             },
         },
+        # Coverage batch 2026-08-24c: exercise the public RGBX mode's default
+        # shape-ink decision.  Pillow accepts a no-color rectangle on RGBX;
+        # observing the receiver keeps this a real input-driven workflow.
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-draw-rectangle-rgbx-default-ink",
+            "mode": "RGBX",
+            "size": [8, 8],
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([1, 1, 6, 6]),
+                "fill": literal(None),
+                "outline": literal(None),
+                "width": literal(1),
+            },
+        },
         *(
             {
                 "surface": "PIL.ImageDraw.ImageDraw",
