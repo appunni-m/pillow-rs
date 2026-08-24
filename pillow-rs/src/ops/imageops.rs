@@ -825,6 +825,14 @@ pub fn scale_with_input(
     factor: f64,
     filter: Option<ResampleInput>,
 ) -> Result<Image, PilError> {
+    // Pillow validates the public factor before constructing the lazy resize:
+    // non-positive values fail at the call site instead of reaching the
+    // dimension planner or being clamped to a 1x1 image by the backend.
+    if !factor.is_finite() || factor <= 0.0 {
+        return Err(PilError::ValueError(
+            "the factor must be greater than 0".to_owned(),
+        ));
+    }
     // The input language records Image.Resampling enum members by name. The
     // Python source side materializes that name as an IntEnum; normalize the
     // equivalent target-facade representation here for this `resample=`

@@ -1351,6 +1351,8 @@
           "PIL.ImageOps.expand.nuanced.coverage-batch-imageops-edge-expand-empty-rgba-7",
           "PIL.ImageOps.scale.nuanced.coverage-batch-imageops-edge-scale-invalid-resample-l-8",
           "PIL.ImageOps.scale.nuanced.coverage-batch-imageops-edge-scale-invalid-resample-rgb-9",
+          "PIL.ImageOps.scale.nuanced.coverage-batch-imageops-edge-scale-negative-factor-rgb-0",
+          "PIL.ImageOps.scale.nuanced.coverage-batch-imageops-edge-scale-negative-factor-l-1",
           "PIL.ImageOps.exif_transpose.nuanced.coverage-batch-exif-truncated-tail-0",
           "PIL.ImageOps.exif_transpose.nuanced.coverage-batch-exif-truncated-tail-1",
           "PIL.ImageOps.exif_transpose.nuanced.coverage-batch-exif-truncated-tail-2",
