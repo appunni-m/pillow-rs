@@ -7131,18 +7131,34 @@ def pipeline_composition_cases(
             )
             previous = second_step
 
-        for index in range(2):
-            point_step = f"cached-point-{index}"
-            steps.append(
-                {
-                    "step_id": point_step,
-                    "surface": "PIL.Image.Image",
-                    "operation": "point",
-                    "receiver": binding(previous),
-                    "arguments": {"lut": lut},
-                }
-            )
-            previous = point_step
+        steps.append(
+            {
+                "step_id": "cached-point-0",
+                "surface": "PIL.Image.Image",
+                "operation": "point",
+                "receiver": binding(previous),
+                "arguments": {"lut": lut},
+            }
+        )
+        steps.append(
+            {
+                "step_id": "lut-separator",
+                "surface": "PIL.ImageOps",
+                "operation": "mirror",
+                "receiver": None,
+                "arguments": {"image": binding("cached-point-0")},
+            }
+        )
+        steps.append(
+            {
+                "step_id": "cached-point-1",
+                "surface": "PIL.Image.Image",
+                "operation": "point",
+                "receiver": binding("lut-separator"),
+                "arguments": {"lut": lut},
+            }
+        )
+        previous = "cached-point-1"
 
         steps.append(
             {
