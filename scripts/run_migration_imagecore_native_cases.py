@@ -262,6 +262,26 @@ def run_native_cases() -> tuple[int, int, int]:
             lambda: pillow_rs.fromarray(ArrayInterface((2, 2), "|u1", (0, False))),
         ),
         # merge validation and success.
+        ("merge-unknown-mode", lambda: pillow_rs.merge("BOGUS", [Image.new("L", (4, 4))])),
+        ("merge-wrong-band-count", lambda: pillow_rs.merge("RGB", [Image.new("L", (4, 4)), Image.new("L", (4, 4))])),
+        (
+            "merge-band-mode-mismatch",
+            lambda: pillow_rs.merge(
+                "RGB",
+                [Image.new("L", (4, 4)), Image.new("L", (4, 4)), Image.new("P", (4, 4))],
+            ),
+        ),
+        (
+            "merge-l-mode-mismatch",
+            lambda: pillow_rs.merge("L", [Image.new("P", (4, 4))]),
+        ),
+        (
+            "merge-size-mismatch",
+            lambda: pillow_rs.merge(
+                "RGB",
+                [Image.new("L", (4, 4)), Image.new("L", (5, 4)), Image.new("L", (4, 4))],
+            ),
+        ),
         ("merge-image-object", lambda: pillow_rs.merge("RGB", Image.new("RGB", (4, 4)))),
         ("merge-bad-type", lambda: pillow_rs.merge("RGB", 5)),
         (

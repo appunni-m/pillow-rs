@@ -1360,3 +1360,19 @@ snapshot `c72b0c8a-97d0-4ab8-b695-d05f0e5e8fff`. Against the preceding accepted
 snapshot, MCP measured `+1` covered region and `+1` covered line; branches and
 functions were unchanged. Source review marks line 30 green. Memory ended at
 67% free; no GPU hang or memory-pressure condition occurred.
+
+## Accepted inputs: `Image.merge` validation edges
+
+Coverage MCP source review identified four reachable public validation paths
+in `pillow-rs/src/ops/module_fns.rs`: unknown mode, wrong band count, band-mode
+mismatch, and size mismatch. The first batch added those input-only probes;
+the standalone native lane passed 236/236 after the follow-up mode-`L` probe.
+Managed run
+`f57df40f-93de-4242-821b-5412428e7fbe` ingested snapshot
+`b0836fbd-d573-4119-99e4-29f4c5eff46a` and measured `+5` regions, `+3` lines,
+and `+2` branches. A follow-up mode-`L` mismatch probe then ran in managed
+run `5379983a-4d3f-441a-b6e5-aea7570bbecc`, ingesting snapshot
+`fc350296-40ba-44d6-90f8-85f16b7bbc0a`; MCP measured `+1` region, `+1` line,
+and `+2` branches. The source review marks the `images do not match` branch
+green. The managed run used 341 seconds and memory recovered to 65% free;
+there was no GPU hang or sustained memory-pressure condition.
