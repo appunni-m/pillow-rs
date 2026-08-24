@@ -25712,6 +25712,25 @@ def build_nuanced_cases(
                 ("RGBA", [211, 37, 89, 173]),
             )
         ),
+        # Coverage batch 2026-08-24b: keep the empty-canvas branch in the
+        # native rectangle helper input-driven.  Pillow accepts a zero-height
+        # image as a valid drawing target; observing the receiver forces the
+        # draw pipeline to materialize without embedding any output.
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "rectangle",
+            "requirement_suffix": "behavior.default",
+            "name": "coverage-batch-draw-rectangle-zero-height",
+            "mode": "L",
+            "size": [8, 0],
+            "observe_receiver": True,
+            "values": {
+                "xy": literal([0, 0, 7, 0]),
+                "fill": literal(255),
+                "outline": literal(127),
+                "width": literal(1),
+            },
+        },
         *(
             {
                 "surface": "PIL.ImageDraw.ImageDraw",
