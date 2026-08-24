@@ -53,6 +53,27 @@ def run_native_cases() -> tuple[int, int, int]:
             "iterator-keyword-image",
             lambda: _drain(ImageSequence.Iterator(im=Image.new("1", (4, 4)))),
         ),
+        # Iterator accepts any seekable image-like object. Exercise the
+        # optional private start-frame protocol and preserve its extraction
+        # errors without reaching into the Rust handle directly.
+        (
+            "iterator-custom-min-frame",
+            lambda: ImageSequence.Iterator(_SeekableWithMinFrame()),
+        ),
+        (
+            "iterator-custom-invalid-min-frame",
+            lambda: _expect_error(
+                lambda: ImageSequence.Iterator(_SeekableWithInvalidMinFrame()),
+                TypeError,
+            ),
+        ),
+        (
+            "iterator-custom-seek-error",
+            lambda: _expect_error(
+                lambda: next(ImageSequence.Iterator(_SeekError())),
+                ValueError,
+            ),
+        ),
         # Single-frame seek succeeds at frame zero and rejects frame one.
         ("seek-frame-zero", lambda: Image.new("L", (4, 4)).seek(0)),
         (
@@ -81,6 +102,27 @@ def _drain(iterator: ImageSequence.Iterator) -> None:
 
 def _iter_self(iterator: ImageSequence.Iterator) -> None:
     assert iter(iterator) is iterator
+
+
+class _SeekableWithMinFrame:
+    _min_frame = 3
+
+    def seek(self, _frame: int) -> None:
+        return None
+
+
+class _SeekableWithInvalidMinFrame:
+    _min_frame = "not-an-integer"
+
+    def seek(self, _frame: int) -> None:
+        return None
+
+
+class _SeekError:
+    _min_frame = 0
+
+    def seek(self, _frame: int) -> None:
+        raise ValueError("seek failed")
 
 
 def _expect_error(call, error_type: type[Exception]) -> None:
