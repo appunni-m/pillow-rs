@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,6 +14,7 @@ from scripts.report_migration_parity_region_coverage import operation_surface_co
 from scripts.run_migration_coverage import (
     coverage_case_failed,
     file_dimensions,
+    scoped_coverage_command,
     scope_coverage_plans,
 )
 from scripts.run_migration_rust_coverage import llvm_shape, merged_file_data
@@ -31,6 +33,7 @@ class MigrationParityEvidenceTests(unittest.TestCase):
                 "plan_id": "image-core",
                 "covers": [
                     "PIL.Image.Image.getbbox.behavior.default",
+                    "PIL.Image.new.behavior.default",
                     "PIL.Image.Image.resize.behavior.default",
                 ],
                 "selectors": {
@@ -43,11 +46,17 @@ class MigrationParityEvidenceTests(unittest.TestCase):
             }
         ]
         cases = {
-            case_id: {"case_id": case_id}
-            for case_id in (
-                "PIL.Image.Image.getbbox.behavior.default",
-                "PIL.Image.Image.resize.behavior.default",
-            )
+            "PIL.Image.Image.getbbox.behavior.default": {
+                "case_id": "PIL.Image.Image.getbbox.behavior.default",
+                "covers": [
+                    "PIL.Image.Image.getbbox.behavior.default",
+                    "PIL.Image.new.behavior.default",
+                ],
+            },
+            "PIL.Image.Image.resize.behavior.default": {
+                "case_id": "PIL.Image.Image.resize.behavior.default",
+                "covers": ["PIL.Image.Image.resize.behavior.default"],
+            },
         }
         scoped, selected = scope_coverage_plans(
             plans, cases, operation="PIL.Image.Image.getbbox"
@@ -63,6 +72,99 @@ class MigrationParityEvidenceTests(unittest.TestCase):
         self.assertEqual(
             scoped[0]["covers"], ["PIL.Image.Image.getbbox.behavior.default"]
         )
+
+    def test_exact_case_scope_keeps_only_selected_case_requirements(self) -> None:
+        selected_case = "PIL.Image.Image.apply_transparency.nuanced.empty-palette"
+        plans = [
+            {
+                "plan_id": "image-core",
+                "covers": [
+                    "PIL.Image.Image.apply_transparency.behavior.default",
+                    "PIL.Image.Image.apply_transparency.mode.p",
+                    "PIL.Image.Image.resize.behavior.default",
+                ],
+                "selectors": {
+                    "parity_case_ids": [
+                        selected_case,
+                        "PIL.Image.Image.resize.behavior.default",
+                    ],
+                    "command_ids": ["coverage-imagecore-native"],
+                },
+            }
+        ]
+        cases = {
+            selected_case: {
+                "case_id": selected_case,
+                "covers": [
+                    "PIL.Image.Image.apply_transparency.behavior.default",
+                    "PIL.Image.Image.apply_transparency.mode.p",
+                ],
+            },
+            "PIL.Image.Image.resize.behavior.default": {
+                "case_id": "PIL.Image.Image.resize.behavior.default",
+                "covers": ["PIL.Image.Image.resize.behavior.default"],
+            },
+        }
+
+        scoped, selected = scope_coverage_plans(
+            plans,
+            cases,
+            case_ids={selected_case},
+        )
+
+        self.assertEqual(selected, {selected_case})
+        self.assertEqual(
+            scoped[0]["selectors"],
+            {"parity_case_ids": [selected_case], "command_ids": []},
+        )
+        self.assertEqual(
+            scoped[0]["covers"],
+            [
+                "PIL.Image.Image.apply_transparency.behavior.default",
+                "PIL.Image.Image.apply_transparency.mode.p",
+            ],
+        )
+
+    def test_scoped_coverage_command_records_incremental_case_ids(self) -> None:
+        command = scoped_coverage_command(
+            {
+                "command_id": "coverage-rust",
+                "argv": ["make", "migration-parity-coverage-rust"],
+                "cwd": ".",
+                "timeout_seconds": 7200,
+            },
+            case_ids=["case.b", "case.a"],
+        )
+        self.assertEqual(
+            command["argv"],
+            [
+                "make",
+                "migration-parity-coverage-rust",
+                "MIGRATION_COVERAGE_CASE_IDS=case.b case.a",
+            ],
+        )
+
+    def test_make_coverage_targets_forward_incremental_case_ids(self) -> None:
+        case_ids = "case.a case.b"
+        for target in (
+            "migration-parity-coverage",
+            "migration-parity-coverage-rust",
+        ):
+            with self.subTest(target=target):
+                completed = subprocess.run(
+                    [
+                        "make",
+                        "-n",
+                        target,
+                        f"MIGRATION_COVERAGE_CASE_IDS={case_ids}",
+                    ],
+                    cwd=ROOT,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn("--case-id 'case.a'", completed.stdout)
+                self.assertIn("--case-id 'case.b'", completed.stdout)
 
     def test_coverage_scope_omits_manifest_not_applicable_operations(self) -> None:
         plans = [

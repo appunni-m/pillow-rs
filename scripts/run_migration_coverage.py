@@ -151,6 +151,24 @@ def scope_coverage_plans(
     if not scoped:
         return plans, selected_ids
 
+    # Case IDs and requirement IDs are separate contract identities. Derive
+    # scoped requirements from each selected case's declared `covers` mapping;
+    # matching them by spelling would overclaim unrelated plan requirements.
+    selected_requirements = (
+        {
+            requirement
+            for case_id in selected_ids
+            for requirement in cases_by_id[case_id]["covers"]
+        }
+        if requested_scope
+        else set()
+    )
+    if operation is not None:
+        selected_requirements = {
+            requirement
+            for requirement in selected_requirements
+            if requirement.startswith(f"{operation}.")
+        }
     scoped_plans: list[dict[str, Any]] = []
     for plan in plans:
         plan_case_ids = [
@@ -171,16 +189,39 @@ def scope_coverage_plans(
             for requirement in plan["covers"]
             if not any(requirement.startswith(prefix) for prefix in excluded_prefixes)
         ]
-        if operation is not None:
+        if requested_scope:
             covers = [
                 requirement
                 for requirement in covers
-                if requirement in selected_ids
-                or requirement.startswith(f"{operation}.")
+                if requirement in selected_requirements
             ]
         scoped_plan["covers"] = covers
         scoped_plans.append(scoped_plan)
     return scoped_plans, selected_ids
+
+
+def scoped_coverage_command(
+    command: dict[str, Any],
+    *,
+    operation: str | None = None,
+    case_ids: list[str] | None = None,
+    exclude_case_ids: list[str] | None = None,
+) -> dict[str, Any]:
+    """Record the effective Make overrides used by a scoped coverage run."""
+
+    scoped = {**command, "argv": list(command["argv"])}
+    if operation:
+        scoped["argv"].append(f"MIGRATION_COVERAGE_OPERATION={operation}")
+    if case_ids:
+        scoped["argv"].append(
+            f"MIGRATION_COVERAGE_CASE_IDS={' '.join(case_ids)}"
+        )
+    if exclude_case_ids:
+        scoped["argv"].append(
+            "MIGRATION_COVERAGE_EXCLUDE_CASE_IDS="
+            + " ".join(exclude_case_ids)
+        )
+    return scoped
 
 
 def coverage_identity(
@@ -559,14 +600,22 @@ def run(args: argparse.Namespace) -> int:
             for case_id in selected_ids
         }
     )
-    command = {
-        "command_id": "coverage",
-        "argv": ([f"MIGRATION_TARGET_BACKEND={TARGET_BACKEND}"] if TARGET_BACKEND != "cpu" else [])
-        + ["make", "migration-parity-coverage"]
-        + ([f"MIGRATION_COVERAGE_OPERATION={args.operation}"] if args.operation else []),
-        "cwd": ".",
-        "timeout_seconds": 3600,
-    }
+    command = scoped_coverage_command(
+        {
+            "command_id": "coverage",
+            "argv": (
+                [f"MIGRATION_TARGET_BACKEND={TARGET_BACKEND}"]
+                if TARGET_BACKEND != "cpu"
+                else []
+            )
+            + ["make", "migration-parity-coverage"],
+            "cwd": ".",
+            "timeout_seconds": 3600,
+        },
+        operation=args.operation,
+        case_ids=args.case_id,
+        exclude_case_ids=args.exclude_case_id,
+    )
     identity = coverage_identity(
         manifest_path,
         input_paths,
