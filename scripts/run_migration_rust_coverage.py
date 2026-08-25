@@ -163,6 +163,7 @@ from run_migration_coverage import (  # noqa: E402
     coverage_not_applicable_operations,
     load_coverage_plans,
     now,
+    scoped_coverage_command,
     scope_coverage_plans,
 )
 from run_migration_parity import (  # noqa: E402
@@ -558,11 +559,12 @@ def run(args: argparse.Namespace) -> int:
             set(plan_paths.values())
             | {case_inputs[case_id] for case_id in selected_ids}
         )
-        command = {
-            **COMMAND,
-            "argv": COMMAND["argv"]
-            + ([f"MIGRATION_COVERAGE_OPERATION={args.operation}"] if args.operation else []),
-        }
+        command = scoped_coverage_command(
+            COMMAND,
+            operation=args.operation,
+            case_ids=args.case_id,
+            exclude_case_ids=args.exclude_case_id,
+        )
         identity = coverage_identity(
             manifest_path,
             input_paths,

@@ -139,6 +139,30 @@ All accepted compatibility runs must:
 7. query uncovered code and use it to drive the next independent oracle input;
 8. compare against a lineage-compatible baseline before claiming progress.
 
+For fast input selection, keep the approved full command unchanged and pass
+exact active parity case IDs through its Make variable boundary. Coverage MCP
+must attach one explicit snapshot from a completed compatible full run:
+
+```json
+{
+  "command_ref": "<approved-full-command-name-or-id>",
+  "arguments": [
+    "MIGRATION_COVERAGE_CASE_IDS=PIL.Image.Image.getbbox.behavior.default PIL.Image.Image.apply_transparency.behavior.default"
+  ],
+  "execution": {"mode": "incremental", "label": "two candidate cases"},
+  "baseline": {"kind": "explicit", "snapshot_id": "<full-run-snapshot-id>"}
+}
+```
+
+The same local contract is
+`make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS='case-a case-b'`.
+An empty case list remains the canonical full lane. A non-empty list runs only
+those indexed workflows, omits coverage-only native supplements, and records
+only requirements attributable to the selected cases. Do not pass raw
+`--case-id` options after the registered Make command; Coverage MCP arguments
+must use the documented Make assignment so they stay inside the existing
+approved command interface.
+
 The Coverage MCP state inspected on 2026-07-24 had 40 managed runs and four
 approved commands, but **zero coverage snapshots**. The existing
 `fixture-coverage-check` validates manifest-to-fixture mapping; it does not

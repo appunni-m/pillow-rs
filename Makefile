@@ -117,6 +117,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
 	@printf "  $(CYAN)make migration-parity-coverage-rust$(NC) Run merged Python+Rust coverage with a temporary instrumented extension\n"
+	@printf "  $(CYAN)make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS='case-a case-b'$(NC) Run exact cases for incremental coverage\n"
 	@printf "  $(CYAN)make migration-parity-operation-coverage MIGRATION_COVERAGE_OPERATION=PIL.Image.Image.getbbox$(NC) Run scoped operation coverage\n"
 	@printf "  $(CYAN)make migration-parity-font-native-coverage$(NC) Run the font-native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-imageops-native-coverage$(NC) Run the image-ops native coverage-only corpus\n"
@@ -356,7 +357,8 @@ migration-parity-coverage: ## Run target coverage from indexed coverage plans
 	$(PYTHON) scripts/run_migration_coverage.py \
 		--output $(MIGRATION_COVERAGE_OUTPUT) \
 		--coverage-report $(MIGRATION_COVERAGE_REPORT) \
-		$(MIGRATION_COVERAGE_EXCLUDE_ARGS); \
+		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
+		$(MIGRATION_COVERAGE_CASE_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py coverage $(MIGRATION_COVERAGE_OUTPUT); \
 	validator=$$?; \
@@ -386,7 +388,8 @@ migration-parity-operation-coverage: ## Run merged coverage for one manifest pub
 		--output $(MIGRATION_OPERATION_COVERAGE_OUTPUT) \
 		--python-report $(MIGRATION_OPERATION_COVERAGE_REPORT) \
 		--llvm-report $(MIGRATION_OPERATION_LLVM_REPORT) \
-		$(MIGRATION_COVERAGE_EXCLUDE_ARGS); \
+		$(MIGRATION_COVERAGE_EXCLUDE_ARGS) \
+		$(MIGRATION_COVERAGE_CASE_ARGS); \
 	status=$$?; \
 	$(PYTHON) scripts/validate_migration_parity_result.py coverage $(MIGRATION_OPERATION_COVERAGE_OUTPUT); \
 	validator=$$?; \
