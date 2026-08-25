@@ -32,8 +32,12 @@ MIGRATION_COVERAGE_REPORT ?= target/coverage/migration-parity-python.json
 MIGRATION_COVERAGE_OPERATION ?=
 MIGRATION_COVERAGE_EXCLUDE_CASE_IDS ?=
 MIGRATION_COVERAGE_EXCLUDE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_EXCLUDE_CASE_IDS),--exclude-case-id '$(case_id)')
+MIGRATION_EMPTY :=
+MIGRATION_SPACE := $(MIGRATION_EMPTY) $(MIGRATION_EMPTY)
+MIGRATION_COMMA := ,
 MIGRATION_COVERAGE_CASE_IDS ?=
-MIGRATION_COVERAGE_CASE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_CASE_IDS),--case-id '$(case_id)')
+MIGRATION_COVERAGE_CASE_ID_LIST := $(strip $(subst $(MIGRATION_COMMA),$(MIGRATION_SPACE),$(MIGRATION_COVERAGE_CASE_IDS)))
+MIGRATION_COVERAGE_CASE_ARGS := $(foreach case_id,$(MIGRATION_COVERAGE_CASE_ID_LIST),--case-id '$(case_id)')
 MIGRATION_ALL_BACKENDS_OUTPUT ?= build/migration-parity/all-backends-test-result.json
 MIGRATION_ALL_BACKENDS_TIMEOUT ?= 7200
 MIGRATION_GPU_FULL ?= 1
@@ -117,7 +121,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
 	@printf "  $(CYAN)make migration-parity-coverage$(NC) Run target coverage from indexed coverage plans\n"
 	@printf "  $(CYAN)make migration-parity-coverage-rust$(NC) Run merged Python+Rust coverage with a temporary instrumented extension\n"
-	@printf "  $(CYAN)make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS='case-a case-b'$(NC) Run exact cases for incremental coverage\n"
+	@printf "  $(CYAN)make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS=case-a,case-b$(NC) Run exact cases for incremental coverage\n"
 	@printf "  $(CYAN)make migration-parity-operation-coverage MIGRATION_COVERAGE_OPERATION=PIL.Image.Image.getbbox$(NC) Run scoped operation coverage\n"
 	@printf "  $(CYAN)make migration-parity-font-native-coverage$(NC) Run the font-native coverage-only corpus\n"
 	@printf "  $(CYAN)make migration-parity-imageops-native-coverage$(NC) Run the image-ops native coverage-only corpus\n"

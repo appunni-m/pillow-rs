@@ -214,7 +214,7 @@ def scoped_coverage_command(
         scoped["argv"].append(f"MIGRATION_COVERAGE_OPERATION={operation}")
     if case_ids:
         scoped["argv"].append(
-            f"MIGRATION_COVERAGE_CASE_IDS={' '.join(case_ids)}"
+            f"MIGRATION_COVERAGE_CASE_IDS={','.join(case_ids)}"
         )
     if exclude_case_ids:
         scoped["argv"].append(
