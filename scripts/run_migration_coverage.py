@@ -72,6 +72,20 @@ def load_coverage_plans(manifest: dict[str, Any]) -> tuple[list[dict[str, Any]],
     return plans, paths
 
 
+def coverage_not_applicable_operations(
+    manifest: dict[str, Any],
+) -> set[tuple[str, str]]:
+    """Return manifest operations excluded from the active coverage lane."""
+
+    return {
+        (surface["id"], operation["id"])
+        for surface in manifest["surfaces"]
+        for operation in surface["operations"]
+        if operation.get("coverage", {}).get("applicability")
+        == "not_applicable"
+    }
+
+
 def scope_coverage_plans(
     plans: list[dict[str, Any]],
     cases_by_id: dict[str, dict[str, Any]],
@@ -79,6 +93,7 @@ def scope_coverage_plans(
     case_ids: set[str] | None = None,
     operation: str | None = None,
     exclude_case_ids: set[str] | None = None,
+    excluded_operations: set[tuple[str, str]] | None = None,
 ) -> tuple[list[dict[str, Any]], set[str]]:
     """Restrict plans to an input-only operation or explicit case selection.
 
@@ -91,10 +106,23 @@ def scope_coverage_plans(
     """
 
     exclude_case_ids = exclude_case_ids or set()
+    excluded_operations = excluded_operations or set()
+    excluded_prefixes = {
+        f"{surface}.{operation}."
+        for surface, operation in excluded_operations
+    }
+
+    def case_is_active(case_id: str) -> bool:
+        case = cases_by_id.get(case_id)
+        if case is None:
+            return True
+        return (case.get("surface"), case.get("operation")) not in excluded_operations
+
     available_ids = {
         case_id
         for plan in plans
         for case_id in plan["selectors"]["parity_case_ids"]
+        if case_is_active(case_id)
     }
     missing_excluded = exclude_case_ids - cases_by_id.keys()
     if missing_excluded:
@@ -107,7 +135,10 @@ def scope_coverage_plans(
             raise ValueError(f"coverage selects missing parity cases: {sorted(missing)[:5]}")
 
     selected_ids = available_ids - exclude_case_ids
-    scoped = operation is not None or case_ids is not None or bool(exclude_case_ids)
+    requested_scope = (
+        operation is not None or case_ids is not None or bool(exclude_case_ids)
+    )
+    scoped = requested_scope or bool(excluded_operations)
     if operation is not None:
         prefix = f"{operation}."
         selected_ids = {case_id for case_id in selected_ids if case_id.startswith(prefix)}
@@ -132,14 +163,22 @@ def scope_coverage_plans(
         scoped_plan = dict(plan)
         selectors = dict(plan["selectors"])
         selectors["parity_case_ids"] = plan_case_ids
-        selectors["command_ids"] = []
+        if requested_scope:
+            selectors["command_ids"] = []
         scoped_plan["selectors"] = selectors
-        scoped_plan["covers"] = [
+        covers = [
             requirement
             for requirement in plan["covers"]
-            if requirement in selected_ids
-            or (operation is not None and requirement.startswith(f"{operation}."))
+            if not any(requirement.startswith(prefix) for prefix in excluded_prefixes)
         ]
+        if operation is not None:
+            covers = [
+                requirement
+                for requirement in covers
+                if requirement in selected_ids
+                or requirement.startswith(f"{operation}.")
+            ]
+        scoped_plan["covers"] = covers
         scoped_plans.append(scoped_plan)
     return scoped_plans, selected_ids
 
@@ -440,6 +479,7 @@ def run(args: argparse.Namespace) -> int:
         case_ids=set(args.case_id) if args.case_id else None,
         operation=args.operation,
         exclude_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
+        excluded_operations=coverage_not_applicable_operations(manifest),
     )
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
     operation_index = build_operation_index(manifest)

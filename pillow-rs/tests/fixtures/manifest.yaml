@@ -11033,11 +11033,8 @@ surfaces:
       target_profiles:
       - python-cpu
     coverage:
-      applicability: required
-      target_profiles:
-      - python-cpu
-      component_ids:
-      - image-core
+      applicability: not_applicable
+      reason: Qt host integration requires an optional Qt binding and is outside the CPU/SIMD/GPU campaign.
     benchmark:
       applicability: required
       target_profiles:
@@ -11116,11 +11113,8 @@ surfaces:
       target_profiles:
       - python-cpu
     coverage:
-      applicability: required
-      target_profiles:
-      - python-cpu
-      component_ids:
-      - image-core
+      applicability: not_applicable
+      reason: Qt host integration requires an optional Qt binding and is outside the CPU/SIMD/GPU campaign.
     benchmark:
       applicability: required
       target_profiles:
