@@ -64,6 +64,56 @@ class MigrationParityEvidenceTests(unittest.TestCase):
             scoped[0]["covers"], ["PIL.Image.Image.getbbox.behavior.default"]
         )
 
+    def test_coverage_scope_omits_manifest_not_applicable_operations(self) -> None:
+        plans = [
+            {
+                "plan_id": "image-core",
+                "covers": [
+                    "PIL.Image.Image.getbbox.behavior.default",
+                    "PIL.Image.Image.toqimage.behavior.default",
+                ],
+                "selectors": {
+                    "parity_case_ids": [
+                        "PIL.Image.Image.getbbox.behavior.default",
+                        "PIL.Image.Image.toqimage.behavior.default",
+                    ],
+                    "command_ids": ["coverage-imagecore-native"],
+                },
+            }
+        ]
+        cases = {
+            "PIL.Image.Image.getbbox.behavior.default": {
+                "case_id": "PIL.Image.Image.getbbox.behavior.default",
+                "surface": "PIL.Image.Image",
+                "operation": "getbbox",
+            },
+            "PIL.Image.Image.toqimage.behavior.default": {
+                "case_id": "PIL.Image.Image.toqimage.behavior.default",
+                "surface": "PIL.Image.Image",
+                "operation": "toqimage",
+            },
+        }
+        scoped, selected = scope_coverage_plans(
+            plans,
+            cases,
+            excluded_operations={("PIL.Image.Image", "toqimage")},
+        )
+        self.assertEqual(
+            selected, {"PIL.Image.Image.getbbox.behavior.default"}
+        )
+        self.assertEqual(
+            scoped[0]["selectors"],
+            {
+                "parity_case_ids": [
+                    "PIL.Image.Image.getbbox.behavior.default"
+                ],
+                "command_ids": ["coverage-imagecore-native"],
+            },
+        )
+        self.assertEqual(
+            scoped[0]["covers"], ["PIL.Image.Image.getbbox.behavior.default"]
+        )
+
     def test_getbbox_surface_evidence_uses_scoped_inputs(self) -> None:
         artifact = {
             "plans": [

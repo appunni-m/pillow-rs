@@ -44,6 +44,21 @@ BENCHMARK_BACKENDS = ("cpu", "simd", "gpu")
 TARGET_ID = "pillow-rs-python"
 ORACLE_ID = "pillow"
 
+# The legacy authority records the Qt-only ImageQt endpoints as ignored for
+# the current coverage campaign. Keep them in the active public inventory so
+# the host-integration surface remains visible, but do not claim that the
+# CPU/SIMD/GPU coverage lane measures them without a Qt host profile.
+COVERAGE_NOT_APPLICABLE_ENDPOINTS: dict[str, str] = {
+    "PIL.Image.Image::toqimage": (
+        "Qt host integration requires an optional Qt binding and is outside "
+        "the CPU/SIMD/GPU campaign."
+    ),
+    "PIL.Image.Image::toqpixmap": (
+        "Qt host integration requires an optional Qt binding and is outside "
+        "the CPU/SIMD/GPU campaign."
+    ),
+}
+
 ALLOWED_VALUE_TYPES = {
     "null",
     "boolean",
@@ -934,6 +949,7 @@ def operation_contract(
         row_map,
         benchmark_applicable=benchmark_applicable,
     )
+    coverage_exclusion_reason = COVERAGE_NOT_APPLICABLE_ENDPOINTS.get(endpoint.id)
     target_path, target = resolve_target(endpoint)
     if (
         target is not None
@@ -985,11 +1001,18 @@ def operation_contract(
             "applicability": "required",
             "target_profiles": [TARGET_PROFILE],
         },
-        "coverage": {
-            "applicability": "required",
-            "target_profiles": [TARGET_PROFILE],
-            "component_ids": [component_for(endpoint)],
-        },
+        "coverage": (
+            {
+                "applicability": "not_applicable",
+                "reason": coverage_exclusion_reason,
+            }
+            if coverage_exclusion_reason is not None
+            else {
+                "applicability": "required",
+                "target_profiles": [TARGET_PROFILE],
+                "component_ids": [component_for(endpoint)],
+            }
+        ),
     }
     if benchmark_applicable:
         contract["benchmark"] = {

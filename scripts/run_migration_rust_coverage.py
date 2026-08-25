@@ -160,6 +160,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from run_migration_coverage import (  # noqa: E402
     build_components,
     coverage_identity,
+    coverage_not_applicable_operations,
     load_coverage_plans,
     now,
     scope_coverage_plans,
@@ -270,6 +271,7 @@ def run(args: argparse.Namespace) -> int:
         case_ids=set(args.case_id) if args.case_id else None,
         operation=args.operation,
         exclude_case_ids=set(args.exclude_case_id) if args.exclude_case_id else None,
+        excluded_operations=coverage_not_applicable_operations(manifest),
     )
     plan_paths = {plan_id: plan_paths[plan_id] for plan_id in (plan["plan_id"] for plan in plans)}
 
