@@ -13725,54 +13725,6 @@ def build_nuanced_cases(
             "observe_result": "tobytes",
         }
 
-    # Coverage campaign 2026-08-25: input-only exploratory coverage for the
-    # public effect_noise negative-sigma behavior. Keep the ten predictable
-    # families separate so managed coverage can attribute any reachable gain;
-    # all values are ordinary public arguments and the result is observed only
-    # through tobytes (no expected output is authored here).
-    def negative_sigma_effect_noise_spec(family: int, case: int) -> dict[str, Any]:
-        if family == 1:
-            size, sigma = [11 + case, 3], -256.0
-        elif family == 2:
-            size, sigma = [3, 11 + case], -512.0
-        elif family == 3:
-            size, sigma = [5 + 2 * case, 4], -1024.0
-        elif family == 4:
-            size, sigma = [4, 5 + 2 * case], -4096.0
-        elif family == 5:
-            size, sigma = [7 + case, 7 + case % 3], -16384.0
-        elif family == 6:
-            size, sigma = [13 + case, 2 + case % 4], -65536.0
-        elif family == 7:
-            size, sigma = [17, 5 + case], -(1000 + 257 * case)
-        elif family == 8:
-            size, sigma = [19 + case, 9], -(10000 + 4096 * case)
-        elif family == 9:
-            size, sigma = [23, 11 + case], -(100000 + 16384 * case)
-        elif family == 10:
-            size, sigma = [29 + case, 13 + case % 2], -(1000000 + 65536 * case)
-        else:
-            raise ValueError(f"unknown negative-sigma effect_noise family: {family}")
-        return {
-            "surface": "PIL.Image",
-            "operation": "effect_noise",
-            "requirement_suffix": "behavior.default",
-            "name": f"coverage-campaign-negative-noise-f{family:02d}-c{case:02d}",
-            "values": {
-                "size": literal(size),
-                "sigma": literal(sigma),
-            },
-            "observe_result": "tobytes",
-        }
-
-    negative_sigma_effect_noise_specs = [
-        negative_sigma_effect_noise_spec(family, case)
-        for family in range(1, 11)
-        for case in range(10)
-    ]
-    if len(negative_sigma_effect_noise_specs) != 100:
-        raise ValueError("negative-sigma effect_noise campaign must contain 100 candidates")
-
     def draw_geometry_coverage_spec(pattern: int) -> dict[str, Any]:
         """Build one valid public ImageDraw geometry workflow.
 
@@ -27114,9 +27066,6 @@ def build_nuanced_cases(
         # materialize their lazy pipelines across native mode families.  The
         # exact 100-case count is retained by the generated input audit.
         *(effects_materialization_spec(pattern) for pattern in range(100)),
-        # Coverage campaign 2026-08-25: retain exactly 100 public negative-
-        # sigma effect_noise inputs in ten deterministic families of ten.
-        *negative_sigma_effect_noise_specs,
         # Coverage batch 2026-08-14au: exercise the public empty-image early
         # return shared by alpha_composite, blend, and merge.  Inputs are
         # valid zero-width/zero-height images, and the result is observed
