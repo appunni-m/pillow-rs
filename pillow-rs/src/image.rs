@@ -541,31 +541,6 @@ pub fn prepare_exif_compat(raw: Option<&[u8]>, loaded_exif: bool) -> ExifCompatF
     }
 }
 
-/// Default palette matching PIL's web/browser palette.
-/// Used for P-mode images without an explicit palette.
-/// Matches PIL's `ImagingPaletteNewBrowser`: 6×6×6 color cube entries at indices 10-225,
-/// with indices 0-9 and 226-255 set to zero.
-pub fn default_palette() -> Vec<u8> {
-    let mut pal = vec![0u8; 768]; // 256 * 3 (RGB)
-    let mut i = 10; // PIL reserves indices 0-9
-    let b_step: [u8; 6] = [0, 51, 102, 153, 204, 255];
-    let g_step: [u8; 6] = [0, 51, 102, 153, 204, 255];
-    let r_step: [u8; 6] = [0, 51, 102, 153, 204, 255];
-    for &b in &b_step {
-        for &g in &g_step {
-            for &r in &r_step {
-                let base = i as usize * 3;
-                pal[base] = r;
-                pal[base + 1] = g;
-                pal[base + 2] = b;
-                i += 1;
-            }
-        }
-    }
-    // Entries 0-9 and 226-255 remain zero (matching PIL behavior)
-    pal
-}
-
 fn clear_palette_info_alpha(info: &mut Option<ImageInfo>) {
     let Some(info) = info.as_mut() else {
         return;
@@ -3995,11 +3970,16 @@ impl Image {
             return Ok(());
         }
 
-        // Pillow's Image.py:apply_transparency starts from getpalette("RGBA")
-        // and overlays the pending info value. That matters after putpalette:
-        // the new palette may have no alpha table even though the source image
-        // still carries an indexed transparency marker.
-        let palette = self.palette().unwrap_or_else(default_palette);
+        // Pillow's Image.py:apply_transparency starts from the palette attached
+        // by the decoder or explicitly installed by putpalette, then overlays
+        // the pending info value. Do not synthesize the WEB palette here: a
+        // missing palette is not a valid public transparency state, and making
+        // one would silently invent colors during a metadata operation.
+        let Some(palette) = self.palette() else {
+            return Ok(());
+        };
+        // The attached palette may have no alpha table even though the source
+        // image still carries an indexed transparency marker.
         let palette_entries = palette.len() / 3;
         let mut palette_alpha = self.palette_alpha().unwrap_or_default();
         palette_alpha.resize(palette_entries, 255);
