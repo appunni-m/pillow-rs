@@ -147,7 +147,7 @@ must attach one explicit snapshot from a completed compatible full run:
 {
   "command_ref": "<approved-full-command-name-or-id>",
   "arguments": [
-    "MIGRATION_COVERAGE_CASE_IDS=PIL.Image.Image.getbbox.behavior.default PIL.Image.Image.apply_transparency.behavior.default"
+    "MIGRATION_COVERAGE_CASE_IDS=PIL.Image.Image.getbbox.behavior.default,PIL.Image.Image.apply_transparency.behavior.default"
   ],
   "execution": {"mode": "incremental", "label": "two candidate cases"},
   "baseline": {"kind": "explicit", "snapshot_id": "<full-run-snapshot-id>"}
@@ -155,7 +155,7 @@ must attach one explicit snapshot from a completed compatible full run:
 ```
 
 The same local contract is
-`make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS='case-a case-b'`.
+`make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS=case-a,case-b`.
 An empty case list remains the canonical full lane. A non-empty list runs only
 those indexed workflows, omits coverage-only native supplements, and records
 only requirements attributable to the selected cases. Do not pass raw

@@ -140,12 +140,12 @@ class MigrationParityEvidenceTests(unittest.TestCase):
             [
                 "make",
                 "migration-parity-coverage-rust",
-                "MIGRATION_COVERAGE_CASE_IDS=case.b case.a",
+                "MIGRATION_COVERAGE_CASE_IDS=case.b,case.a",
             ],
         )
 
     def test_make_coverage_targets_forward_incremental_case_ids(self) -> None:
-        case_ids = "case.a case.b"
+        case_ids = "case.a,case.b"
         for target in (
             "migration-parity-coverage",
             "migration-parity-coverage-rust",
