@@ -362,6 +362,62 @@ where
     eval_replicated_for_image(image, &lut)
 }
 
+/// Applies Pillow's affine callable transform for scalar images.
+///
+/// Pillow does not build a byte LUT for callable `Image.point` calls on
+/// `I`, `I;16*`, or `F` images.  It probes the callable with an affine
+/// transform object, then applies the resulting `value * scale + offset`
+/// expression in the image's native scalar domain.  Keeping this path eager
+/// is intentional: Pillow loads the source before constructing the new image,
+/// and these native scalar buffers are not represented by the byte-oriented
+/// `Eval` pipeline operation.
+pub fn eval_point_transform(image: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if !matches!(
+        mode.as_str(),
+        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+    ) {
+        return Err(PilError::ValueError(
+            "point operation not supported for this mode".to_owned(),
+        ));
+    }
+
+    let mut result = image.materialize()?;
+    match mode.as_str() {
+        "I" => {
+            let pixels = result.as_mut_rgba8().ok_or_else(|| {
+                PilError::InternalError("I image has no four-byte scalar storage".to_owned())
+            })?;
+            for pixel in pixels.pixels_mut() {
+                let value = i32::from_le_bytes(pixel.0);
+                let transformed = (f64::from(value) * scale + offset) as i32;
+                pixel.0 = transformed.to_le_bytes();
+            }
+        }
+        "F" => {
+            let pixels = result.as_mut_rgba8().ok_or_else(|| {
+                PilError::InternalError("F image has no four-byte scalar storage".to_owned())
+            })?;
+            for pixel in pixels.pixels_mut() {
+                let value = f32::from_le_bytes(pixel.0);
+                let transformed = (f64::from(value) * scale + offset) as f32;
+                pixel.0 = transformed.to_le_bytes();
+            }
+        }
+        "I;16" | "I;16L" | "I;16B" | "I;16N" => {
+            let pixels = result.as_mut_luma16().ok_or_else(|| {
+                PilError::InternalError("I;16 image has no 16-bit scalar storage".to_owned())
+            })?;
+            for pixel in pixels.pixels_mut() {
+                pixel.0[0] = (f64::from(pixel.0[0]) * scale + offset) as u16;
+            }
+        }
+        _ => unreachable!("scalar point transform mode was validated above"),
+    }
+
+    Ok(Image::from_dynamic(result, Some(mode)))
+}
+
 /// Validates and applies a pre-expanded Pillow lookup table.
 ///
 /// Pillow requires exactly 256 entries per image band for a non-callable LUT.
@@ -374,12 +430,58 @@ where
 /// or [`PilError::ValueError`] when the table length does not equal
 /// `256 * image_band_count`.
 pub fn eval_validated(image: &Image, lut: &[u8]) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    if matches!(
+        mode.as_str(),
+        "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+    ) {
+        // Pillow routes callable transforms for scalar images through the
+        // affine path, but rejects a byte LUT before entering the Imaging
+        // point kernel. Keep that public error boundary here so a scalar
+        // image cannot reach the byte-oriented executor with a short table.
+        return Err(PilError::ValueError(
+            "point operation not supported for this mode".to_owned(),
+        ));
+    }
     let n_bands = image.getbands()?.len();
     let expected = 256 * n_bands;
     if lut.len() != expected {
         return Err(PilError::ValueError("wrong number of lut entries".into()));
     }
     eval(image, lut)
+}
+
+/// Applies a floating-point LUT to Pillow's byte-valued single-band modes.
+///
+/// Pillow's ``Image.point(lut, "F")`` path is a public mode conversion for
+/// ``1``, ``L``, and ``P`` images. It deliberately preserves fractional LUT
+/// values instead of applying the byte-path rounding step. The existing
+/// ``Eval`` pipeline stores byte samples, so this operation materializes an
+/// explicit ``F`` image with native little-endian ``f32`` samples.
+///
+/// # Errors
+///
+/// Returns [`PilError::ValueError`] when the LUT length or source mode does
+/// not match Pillow's single-band floating-output path.
+pub fn eval_float(image: &Image, lut: &[f64]) -> Result<Image, PilError> {
+    let mode = image.mode()?;
+    let n_bands = image.getbands()?.len();
+    if lut.len() != 256 * n_bands {
+        return Err(PilError::ValueError("wrong number of lut entries".into()));
+    }
+    if !matches!(mode.as_str(), "1" | "L" | "P") {
+        return Err(PilError::ValueError(
+            "point operation not supported for this mode".to_owned(),
+        ));
+    }
+
+    let size = image.size()?;
+    let pixels = image.materialize()?.to_luma8().into_raw();
+    let mut raw = Vec::with_capacity(pixels.len() * std::mem::size_of::<f32>());
+    for sample in pixels {
+        raw.extend_from_slice(&(lut[usize::from(sample)] as f32).to_le_bytes());
+    }
+    Image::frombytes("F", size, &raw)
 }
 
 /// Builds a Pillow point/eval lookup table from a host callback.

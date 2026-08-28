@@ -1704,8 +1704,18 @@ fn quantize_octree_rgba(
     } else {
         CUBE_LEVELS_RGB
     };
-    let fine_bits = [cube_levels[0], cube_levels[1], cube_levels[2], cube_levels[3]];
-    let coarse_bits = [cube_levels[4], cube_levels[5], cube_levels[6], cube_levels[7]];
+    let fine_bits = [
+        cube_levels[0],
+        cube_levels[1],
+        cube_levels[2],
+        cube_levels[3],
+    ];
+    let coarse_bits = [
+        cube_levels[4],
+        cube_levels[5],
+        cube_levels[6],
+        cube_levels[7],
+    ];
     let mut colors = pixels
         .chunks_exact(4)
         .take(dimensions.total_pixels())

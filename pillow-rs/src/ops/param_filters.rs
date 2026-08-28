@@ -92,6 +92,34 @@ fn color3dlut_table_length_error(
     ))
 }
 
+/// Validates the odd square window required by Pillow's rank-family filters.
+///
+/// The Python `MaxFilter`, `MinFilter`, `MedianFilter`, and `RankFilter`
+/// constructors retain the caller's size.  Their native filter call rejects
+/// zero and even sizes; silently rounding those values changes the operation
+/// instead of reporting the same public error.
+fn validate_rank_filter_size(size: u32) -> Result<(), PilError> {
+    if size == 0 || size % 2 == 0 || size.checked_mul(size).is_none() {
+        return Err(PilError::ValueError("bad filter size".into()));
+    }
+    Ok(())
+}
+
+fn gaussian_box_radius(sigma: f32) -> f32 {
+    let sigma = sigma.abs();
+    if sigma == 0.0 {
+        return 0.0;
+    }
+    let passes = 3.0f64;
+    let sigma2 = f64::from(sigma) * f64::from(sigma) / passes;
+    let l_val = ((12.0 * sigma2 + 1.0).sqrt() - 1.0) / 2.0;
+    let l = l_val.floor();
+    let l1 = l + 1.0;
+    let a_num = (2.0 * l + 1.0) * (l * l1 - 3.0 * sigma2);
+    let a_den = 6.0 * (sigma2 - l1 * l1);
+    (l + a_num / a_den) as f32
+}
+
 /// Apply the slice-assignment semantics used by Pillow's Python callbacks.
 ///
 /// Pillow starts with a zero-filled table and assigns each callback result to
@@ -281,6 +309,22 @@ impl Image {
         ))
     }
 
+    /// Applies Gaussian blur with independent horizontal and vertical radii.
+    pub fn gaussian_blur_xy(&self, radius_x: f32, radius_y: f32) -> Result<Image, PilError> {
+        self.validate_filter("GaussianBlur")?;
+        if radius_x == radius_y {
+            return self.gaussian_blur(radius_x);
+        }
+        Ok(Image::push_op(
+            self,
+            PipelineOp::BoxBlurXY {
+                radius_x: gaussian_box_radius(radius_x),
+                radius_y: gaussian_box_radius(radius_y),
+                passes: 3,
+            },
+        ))
+    }
+
     /// Applies box blur with a uniform kernel radius.
     ///
     /// # Errors
@@ -289,10 +333,33 @@ impl Image {
     /// materialization failures.
     pub fn box_blur(&self, radius: f32) -> Result<Image, PilError> {
         self.validate_filter("BoxBlur")?;
+        self.box_blur_xy(radius, radius)
+    }
+
+    /// Applies box blur with independent horizontal and vertical radii.
+    pub fn box_blur_xy(&self, radius_x: f32, radius_y: f32) -> Result<Image, PilError> {
+        self.validate_filter("BoxBlur")?;
+        if !radius_x.is_finite() || !radius_y.is_finite() || radius_x < 0.0 || radius_y < 0.0 {
+            return Err(PilError::ValueError("radius must be >= 0".into()));
+        }
+
+        // Keep the long-standing uniform integer descriptor on the existing
+        // backend path. Fractional and anisotropic forms need the exact
+        // two-radius CPU implementation below.
+        if radius_x == radius_y && radius_x.fract() == 0.0 && radius_x <= u32::MAX as f32 {
+            return Ok(Image::push_op(
+                self,
+                PipelineOp::BoxBlur {
+                    radius: radius_x as u32,
+                },
+            ));
+        }
         Ok(Image::push_op(
             self,
-            PipelineOp::BoxBlur {
-                radius: radius as u32,
+            PipelineOp::BoxBlurXY {
+                radius_x,
+                radius_y,
+                passes: 1,
             },
         ))
     }
@@ -363,22 +430,17 @@ impl Image {
 
     /// Applies a maximum filter over an odd neighborhood.
     ///
-    /// `size` is rounded up to an odd value of at least `3`.
-    ///
     /// # Errors
     ///
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn max_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("MaxFilter")?;
-        // Pillow accepts a one-pixel rank window as an identity filter.
-        let size = if size == 1 { 1 } else { size.max(3) | 1 };
+        validate_rank_filter_size(size)?;
         Ok(Image::push_op(self, PipelineOp::MaxFilter { size }))
     }
 
     /// Applies a minimum filter over an odd neighborhood.
-    ///
-    /// `size` is rounded up to an odd value; `1` is an identity filter.
     ///
     /// # Errors
     ///
@@ -386,20 +448,19 @@ impl Image {
     /// materialization failures.
     pub fn min_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("MinFilter")?;
-        let size = if size == 1 { 1 } else { size.max(3) | 1 };
+        validate_rank_filter_size(size)?;
         Ok(Image::push_op(self, PipelineOp::MinFilter { size }))
     }
 
     /// Applies a median filter over an odd neighborhood.
-    ///
-    /// `size` is rounded up to an odd value; `1` is an identity filter.
     ///
     /// # Errors
     ///
     /// Currently returns `Ok(Image)`; deferred pipeline execution reports later
     /// materialization failures.
     pub fn median_filter(&self, size: u32) -> Result<Image, PilError> {
-        let size = if size == 1 { 1 } else { size.max(3) | 1 };
+        self.validate_filter("MedianFilter")?;
+        validate_rank_filter_size(size)?;
         Ok(Image::push_op(self, PipelineOp::MedianFilter { size }))
     }
 
@@ -422,7 +483,11 @@ impl Image {
     /// reconstruction fails.
     pub fn mode_filter(&self, size: u32) -> Result<Image, PilError> {
         self.validate_filter("Mode")?;
-        let size = if size == 1 { 1 } else { size.max(3) | 1 };
+        // Pillow's modefilter uses `size / 2` as its radius.  Positive even
+        // sizes therefore have the same neighborhood as the next odd size,
+        // while zero and negative Python inputs are identity operations.
+        // Keep zero distinct from the normalized rank-family filters.
+        let size = if size <= 1 { size } else { size | 1 };
 
         // For palette images: extract palette before materialize
         let palette = self.palette();
@@ -496,7 +561,6 @@ impl Image {
     /// Applies a rank filter over an odd neighborhood.
     ///
     /// Each pixel becomes the `rank`-th value after sorting the neighborhood.
-    /// `size` is rounded up to an odd value of at least `3`.
     ///
     /// # Errors
     ///
@@ -504,7 +568,13 @@ impl Image {
     /// materialization failures.
     pub fn rank_filter(&self, size: u32, rank: u32) -> Result<Image, PilError> {
         self.validate_filter("RankFilter")?;
-        let size = if size == 1 { 1 } else { size.max(3) | 1 };
+        validate_rank_filter_size(size)?;
+        let window = size
+            .checked_mul(size)
+            .ok_or_else(|| PilError::ValueError("bad filter size".into()))?;
+        if rank >= window {
+            return Err(PilError::ValueError("bad rank value".into()));
+        }
         Ok(Image::push_op(self, PipelineOp::RankFilter { size, rank }))
     }
 

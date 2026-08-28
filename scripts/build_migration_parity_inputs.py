@@ -852,6 +852,15 @@ def sequence_literal(value: list[Any]) -> dict[str, Any]:
     return literal({"protocol": "sequence", "items": value})
 
 
+def putdata_custom_index_literal(value: int) -> dict[str, Any]:
+    """Build a public scalar with ``__index__`` for putdata parity."""
+
+    return {
+        "protocol": "putdata-custom-index",
+        "value": value,
+    }
+
+
 def list_literal(value: list[Any]) -> dict[str, Any]:
     """Build an exact public list without changing nested tuple semantics."""
 
@@ -1821,6 +1830,8 @@ class WorkflowBuilder:
             requested_mode = "RGBA"
         if self.edge == "mode-mismatch" and label not in {"image", "mask"}:
             requested_mode = "L" if requested_mode != "L" else "RGB"
+        if self.edge == "chops-binary-mode-mismatch":
+            requested_mode = "L" if label == "image1" else "RGB"
         if self.edge == "composite-mode-mismatch":
             if label == "image1":
                 requested_mode = "L"
@@ -2008,6 +2019,23 @@ class WorkflowBuilder:
                     arguments={
                         "mode": literal("RGBa"),
                         "size": literal([1, 1]),
+                        "data": data_descriptor,
+                    },
+                    step_id=self.next_step_id(f"setup-{label}"),
+                )
+            elif self.scenario_inline_image == "modefilter-zero-pattern":
+                data_descriptor = self.inline_bytes(
+                    f"{label}-modefilter-zero-data",
+                    bytes([0, 0, 0, 0, 0, 0, 0, 0, 1]),
+                    "application/octet-stream",
+                )
+                step_id = self.add_step(
+                    "PIL.Image",
+                    "frombytes",
+                    receiver=None,
+                    arguments={
+                        "mode": literal("L"),
+                        "size": literal([3, 3]),
                         "data": data_descriptor,
                     },
                     step_id=self.next_step_id(f"setup-{label}"),
@@ -2909,7 +2937,12 @@ class WorkflowBuilder:
             and label not in {"image", "mask"}
         ):
             size = [8, 8]
-        elif self.edge == "second-smaller-than-first" and label == "im2":
+        elif self.edge == "second-smaller-than-first" and label in {
+            "im2",
+            "image2",
+        }:
+            size = [8, 8]
+        elif self.edge == "chops-binary-size-mismatch" and label == "image2":
             size = [8, 8]
         elif self.edge == "mask-size-mismatch" and label in {"mask", "alpha"}:
             size = [8, 8]
@@ -3143,6 +3176,29 @@ class WorkflowBuilder:
                     "value": literal(pixel_value),
                 },
                 step_id=self.next_step_id("setup-varied-pixel"),
+            )
+        elif self.edge == "stat-mask-nonzero-pixel" and label in {
+            "image",
+            "image-or-list",
+            "mask",
+        }:
+            if label in {"image", "image-or-list"}:
+                if self.scenario_pixel is None:
+                    raise ValueError(
+                        "stat-mask-nonzero-pixel requires an image pixel"
+                    )
+                value = self.scenario_pixel
+            else:
+                value = 255
+            self.add_step(
+                "PIL.Image.Image",
+                "putpixel",
+                receiver=binding(step_id),
+                arguments={
+                    "xy": literal([2, 3]),
+                    "value": literal(value),
+                },
+                step_id=self.next_step_id("setup-stat-mask-pixel"),
             )
         elif self.edge == "stat-descending" and label == "image":
             if self.scenario_pixel is None:
@@ -3538,11 +3594,18 @@ class WorkflowBuilder:
             return binding(iterator)
         if surface == "PIL.ImageStat.Stat":
             image_step = self.ensure_image()
+            stat_arguments: dict[str, dict[str, Any]] = {
+                "image_or_list": binding(image_step)
+            }
+            if self.scenario_mask_mode is not None:
+                stat_arguments["mask"] = binding(
+                    self.ensure_image(mode=self.scenario_mask_mode, label="mask")
+                )
             stat = self.add_step(
                 "PIL.ImageStat",
                 "Stat",
                 receiver=None,
-                arguments={"image_or_list": binding(image_step)},
+                arguments=stat_arguments,
                 step_id=self.next_step_id("setup-stat"),
             )
             return binding(stat)
@@ -3794,9 +3857,20 @@ class WorkflowBuilder:
                     and self.primary_operation == "point"
                     and parameter_id == "lut"
                     and descriptor.get("kind") == "literal"
-                    and descriptor.get("value") == ["clamp-shift-callable"]
+                    and isinstance(descriptor.get("value"), list)
+                    and len(descriptor["value"]) == 1
+                    and descriptor["value"][0]
+                    in {
+                        "clamp-shift-callable",
+                        "point-affine-shift-callable",
+                        "point-affine-scale-callable",
+                        "point-byte-float-callable",
+                    }
                 ):
-                    return self.builtin("lut-callable", "clamp-shift-callable")
+                    callback_name = descriptor["value"][0]
+                    return self.builtin(
+                        f"lut-callable-{slug(callback_name)}", callback_name
+                    )
                 return descriptor
 
         if (
@@ -14415,6 +14489,113 @@ def build_nuanced_cases(
             "surface": "PIL.Image.Image",
             "operation": "point",
             "requirement_suffix": "parameter.lut",
+            "name": "i-affine-callable",
+            "mode": "I",
+            "size": [2, 1],
+            "edge": "uniform-fill",
+            "pixel": 3,
+            "observe_result": "tobytes",
+            "values": {"lut": literal(["point-affine-shift-callable"])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "i16-affine-callable",
+            "mode": "I;16",
+            "size": [2, 1],
+            "edge": "uniform-fill",
+            "pixel": 3,
+            "observe_result": "tobytes",
+            "values": {"lut": literal(["point-affine-shift-callable"])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "f-affine-callable",
+            "mode": "F",
+            "size": [2, 1],
+            "edge": "uniform-fill",
+            "pixel": 3.0,
+            "observe_result": "tobytes",
+            "values": {"lut": literal(["point-affine-scale-callable"])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "l-float-callable",
+            "mode": "L",
+            "size": [2, 1],
+            "edge": "uniform-fill",
+            "pixel": 3,
+            "observe_result": "tobytes",
+            "values": {"lut": literal(["point-byte-float-callable"])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.mode",
+            "name": "l-float-output-mode",
+            "mode": "L",
+            "size": [2, 1],
+            "edge": "uniform-fill",
+            "pixel": 3,
+            "observe_result": "tobytes",
+            "values": {
+                "lut": literal([float(index) + 0.5 for index in range(256)]),
+                "mode": literal("F"),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "f-byte-lut-rejected",
+            "mode": "F",
+            "values": {"lut": literal(list(range(256)))},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "BoxBlur",
+            "requirement_suffix": "parameter.radius",
+            "name": "tuple-radius-l",
+            "mode": "L",
+            "size": [9, 7],
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "observe_result": "tobytes",
+            "values": {"radius": literal([1, 2])},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "BoxBlur",
+            "requirement_suffix": "parameter.radius",
+            "name": "fractional-radius-rgb",
+            "mode": "RGB",
+            "size": [9, 7],
+            "edge": "nonzero-pixel",
+            "pixel": [200, 100, 50],
+            "observe_result": "tobytes",
+            "values": {"radius": literal([1.5, 0.5])},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "GaussianBlur",
+            "requirement_suffix": "parameter.radius",
+            "name": "tuple-radius-l",
+            "mode": "L",
+            "size": [9, 7],
+            "edge": "nonzero-pixel",
+            "pixel": 200,
+            "observe_result": "tobytes",
+            "values": {"radius": literal([1, 2])},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
             "name": "rgb-invalid-lut-length",
             "mode": "RGB",
             "values": {"lut": literal([0])},
@@ -17753,7 +17934,55 @@ def build_nuanced_cases(
             "name": "wide-joint-curve",
             "values": {
                 "xy": literal([[0, 0], [12, 0], [6, 12]]),
-                "width": literal(3),
+                "width": literal(9),
+                "joint": literal("curve"),
+                "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "mid-joint-curve",
+            "values": {
+                "xy": literal([[0, 0], [12, 0], [6, 12]]),
+                "width": literal(5),
+                "joint": literal("curve"),
+                "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "wide-joint-curve-flat-xy",
+            "values": {
+                "xy": literal([0, 0, 12, 0, 6, 12]),
+                "width": literal(9),
+                "joint": literal("curve"),
+                "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "wide-joint-curve-straight",
+            "values": {
+                "xy": literal([[0, 0], [6, 0], [12, 0]]),
+                "width": literal(9),
+                "joint": literal("curve"),
+                "fill": literal([255, 0, 0]),
+            },
+        },
+        {
+            "surface": "PIL.ImageDraw.ImageDraw",
+            "operation": "line",
+            "requirement_suffix": "behavior.default",
+            "name": "wide-joint-curve-flipped",
+            "values": {
+                "xy": literal([[12, 0], [0, 0], [6, 12]]),
+                "width": literal(9),
                 "joint": literal("curve"),
                 "fill": literal([255, 0, 0]),
             },
@@ -19631,6 +19860,36 @@ def build_nuanced_cases(
             "values": {
                 "angle": literal(33.5),
                 "expand": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.angle",
+            "name": "angle-180-fast-path",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "size": [9, 7],
+            "observe_result": "tobytes",
+            "values": {
+                "angle": literal(180),
+                "expand": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.angle",
+            "name": "angle-zero-fast-path",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "size": [9, 7],
+            "observe_result": "tobytes",
+            "values": {
+                "angle": literal(0),
+                "expand": literal(False),
             },
         },
         {
@@ -23394,6 +23653,25 @@ def build_nuanced_cases(
             "values": {"image_or_list": literal([0] * 256)},
         },
         {
+            "surface": "PIL.ImageStat",
+            "operation": "Stat",
+            "requirement_suffix": "behavior.default",
+            "name": "invalid-first-argument",
+            "values": {"image_or_list": literal(1)},
+        },
+        {
+            "surface": "PIL.ImageStat",
+            "operation": "Stat",
+            "requirement_suffix": "parameter.mask",
+            "name": "nonzero-mask",
+            "mode": "RGB",
+            "size": [4, 4],
+            "edge": "stat-mask-nonzero-pixel",
+            "mask_mode": "L",
+            "pixel": [10, 20, 30],
+            "observe_stat_properties": True,
+        },
+        {
             "surface": "PIL.Image.Image",
             "operation": "save",
             "requirement_suffix": "behavior.default",
@@ -27075,6 +27353,23 @@ def build_nuanced_cases(
         # binary early-return path with valid equal zero dimensions. The
         # legacy Blend/Composite dispatch is intentionally not targeted.
         *(chops_empty_dimension_spec(pattern) for pattern in range(103)),
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "add",
+            "requirement_suffix": "behavior.default",
+            "name": "mode-mismatch-l-rgb",
+            "mode": "L",
+            "edge": "chops-binary-mode-mismatch",
+        },
+        {
+            "surface": "PIL.ImageChops",
+            "operation": "blend",
+            "requirement_suffix": "behavior.default",
+            "name": "size-mismatch-l-l",
+            "mode": "L",
+            "edge": "second-smaller-than-first",
+            "values": {"alpha": literal(0.25)},
+        },
         # Coverage batch 2026-08-16a: exercise the packed scalar fallback for
         # valid premultiplied-alpha RGBa dual-image Chops operations. Native
         # byte adapters intentionally handle straight-alpha layouts only.
@@ -32903,6 +33198,33 @@ def build_nuanced_cases(
         {
             "surface": "PIL.Image.Image",
             "operation": "thumbnail",
+            "requirement_suffix": "parameter.reducing-gap",
+            "name": "none-reducing-gap",
+            "mode": "RGB",
+            "edge": "nonzero-pixel",
+            "pixel": [10, 20, 30],
+            "size": [17, 11],
+            "observe_receiver": True,
+            "values": {
+                "size": literal([7, 7]),
+                "reducing_gap": literal(None),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
+            "requirement_suffix": "parameter.reducing-gap",
+            "name": "jpeg-draft-box",
+            "scenario_asset": "image/rgb-small.jpg",
+            "observe_receiver": True,
+            "values": {
+                "size": literal([4, 4]),
+                "reducing_gap": literal(2.0),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "thumbnail",
             "requirement_suffix": "behavior.default",
             "name": "p-forces-nearest",
             "observe_receiver": True,
@@ -36977,6 +37299,96 @@ def build_nuanced_cases(
         },
     )
 
+    # Coverage probes 2026-08-26: exercise invalid values at public boundaries
+    # that the unreachable-surface review identified as earlier validation
+    # points.  These remain input-only parity cases: the oracle and target
+    # must both report the public error, and coverage can show whether any
+    # deeper defensive branch is reached.
+    specs = specs + (
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "point",
+            "requirement_suffix": "parameter.lut",
+            "name": "invalid-lut-length-l",
+            "mode": "L",
+            "values": {"lut": literal([0])},
+        },
+        {
+            "surface": "PIL.Image",
+            "operation": "frombytes",
+            "requirement_suffix": "parameter.data",
+            "name": "short-rgb-buffer",
+            "mode": "RGB",
+            "values": {
+                "size": literal([2, 2]),
+                "data": bytes_literal([1, 2, 3]),
+            },
+        },
+        {
+            "surface": "PIL.ImageEnhance.Sharpness",
+            "operation": "enhance",
+            "requirement_suffix": "parameter.factor",
+            "name": "unsupported-p-mode",
+            "mode": "P",
+            "values": {"factor": literal(1.0)},
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "putdata",
+            "requirement_suffix": "behavior.default",
+            "name": "rgb-custom-index-list",
+            "mode": "RGB",
+            "size": [2, 1],
+            "values": {
+                "data": list_literal(
+                    [
+                        0x00302010,
+                        putdata_custom_index_literal(0x00605040),
+                    ]
+                ),
+            },
+        },
+        {
+            "surface": "PIL.Image.Image",
+            "operation": "rotate",
+            "requirement_suffix": "parameter.angle",
+            "name": "nan-expanded-error",
+            "mode": "RGB",
+            "values": {
+                "angle": literal(float("nan")),
+                "resample": literal(2),
+                "expand": literal(True),
+            },
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.factor",
+            "name": "nan-error",
+            "mode": "RGB",
+            "size": [3, 2],
+            "values": {"factor": literal(float("nan"))},
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.factor",
+            "name": "positive-infinity-error",
+            "mode": "RGB",
+            "size": [3, 2],
+            "values": {"factor": literal(float("inf"))},
+        },
+        {
+            "surface": "PIL.ImageOps",
+            "operation": "scale",
+            "requirement_suffix": "parameter.factor",
+            "name": "rounded-zero-dimension-error",
+            "mode": "RGB",
+            "size": [3, 2],
+            "values": {"factor": literal(0.1)},
+        },
+    )
+
     # Coverage batch 2026-08-11: keep the public CPU image pipeline moving
     # through distinct mode, geometry, resampling, and conversion combinations.
     # These are valid input-only workflows; they reuse existing requirements
@@ -37257,6 +37669,14 @@ def build_nuanced_cases(
             )
             for index, radius in enumerate((0, 1, 2, 4))
         ),
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "BoxBlur",
+            "requirement_suffix": "parameter.radius",
+            "name": "negative-radius-error",
+            "mode": "L",
+            "values": {"radius": literal(-1.0)},
+        },
         *(
             {
                 "surface": "PIL.ImageFilter",
@@ -37277,6 +37697,49 @@ def build_nuanced_cases(
             )
             for size in (1, 3, 5)
         ),
+        # Pillow retains rank-family sizes in the public filter object and
+        # rejects zero/even windows when the image is filtered.  Keep one
+        # input-only case per filter so the validation contract remains
+        # covered instead of allowing the target to normalize the request.
+        *(
+            {
+                "surface": "PIL.ImageFilter",
+                "operation": filter_name,
+                "requirement_suffix": "parameter.size",
+                "name": "coverage-batch-filter-invalid-even-size",
+                "mode": "L",
+                "edge": "nonzero-pixel",
+                "pixel": 180,
+                "values": {"size": literal(2)},
+            }
+            for filter_name in ("MaxFilter", "MinFilter", "MedianFilter")
+        ),
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "RankFilter",
+            "requirement_suffix": "parameter.size",
+            "name": "coverage-batch-filter-invalid-even-size",
+            "mode": "L",
+            "edge": "nonzero-pixel",
+            "pixel": 180,
+            "values": {"size": literal(4), "rank": literal(0)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "RankFilter",
+            "requirement_suffix": "parameter.size",
+            "name": "palette-rejected",
+            "mode": "P",
+            "values": {"size": literal(3), "rank": literal(0)},
+        },
+        {
+            "surface": "PIL.ImageFilter",
+            "operation": "ModeFilter",
+            "requirement_suffix": "parameter.size",
+            "name": "coverage-batch-filter-zero-size-mode",
+            "scenario_inline_image": "modefilter-zero-pattern",
+            "values": {"size": literal(0)},
+        },
         *(
             {
                 "surface": "PIL.ImageFilter",

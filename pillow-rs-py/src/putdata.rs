@@ -105,10 +105,13 @@ fn putdata_bulk(
         }
     }
 
-    // Exact built-in numeric lists and tuples have no user callbacks to
-    // observe between writes. Let Rust normalize them in one operation so the
-    // selected CPU/SIMD backend can process the complete pixel batch.
-    if is_exact_builtin_sequence(data) {
+    // Exact built-in numeric elements have no user callbacks to observe
+    // between writes. Container exactness alone is insufficient: a list can
+    // contain a custom scalar with __index__/__float__, and Pillow processes
+    // that item through the per-pixel path (including partial writes before a
+    // later error). Let Rust normalize only the callback-free subset in one
+    // operation.
+    if is_exact_builtin_numeric_sequence(data) {
         if let Ok(values) = data.extract::<Vec<i64>>() {
             slf.try_borrow_mut()?
                 .inner
@@ -128,8 +131,18 @@ fn putdata_bulk(
     Ok(false)
 }
 
-fn is_exact_builtin_sequence(data: &Bound<'_, PyAny>) -> bool {
-    data.downcast_exact::<PyList>().is_ok() || data.downcast_exact::<PyTuple>().is_ok()
+fn is_exact_builtin_numeric_sequence(data: &Bound<'_, PyAny>) -> bool {
+    let is_number = |item: Bound<'_, PyAny>| {
+        item.downcast_exact::<PyInt>().is_ok()
+            || item.downcast_exact::<pyo3::types::PyFloat>().is_ok()
+    };
+    if let Ok(list) = data.downcast_exact::<PyList>() {
+        return list.iter().all(is_number);
+    }
+    if let Ok(tuple) = data.downcast_exact::<PyTuple>() {
+        return tuple.iter().all(is_number);
+    }
+    false
 }
 
 fn write_item(

@@ -265,6 +265,16 @@ class PublicSequenceValue:
         return self._items[index]
 
 
+class PutDataCustomIndexValue:
+    """Public scalar with ``__index__`` used to test putdata ordering."""
+
+    def __init__(self, value: int):
+        self._value = value
+
+    def __index__(self) -> int:
+        return self._value
+
+
 def decode_numpy_array(value: dict[str, Any]) -> Any:
     """Build a real buffer-backed array for valid ``fromarray`` parity."""
 
@@ -331,6 +341,11 @@ def decode_literal(
             return PublicSequenceValue(
                 tuple(decode_literal(item, side=side) for item in items)
             )
+        if protocol == "putdata-custom-index":
+            value = value.get("value")
+            if not isinstance(value, int) or isinstance(value, bool):
+                raise ValueError("putdata-custom-index requires an integer value")
+            return PutDataCustomIndexValue(value)
         if protocol == "list":
             items = value.get("items")
             if not isinstance(items, list):
@@ -423,6 +438,12 @@ class AssetStore:
             # Return values outside the [0, 255] LUT range so both adapters
             # exercise Pillow's CLIP8 saturation in `_imaging.c::_point`.
             return lambda value: value + 100
+        if name == "point-affine-shift-callable":
+            return lambda value: value + 1
+        if name == "point-affine-scale-callable":
+            return lambda value: value * 0.5
+        if name == "point-byte-float-callable":
+            return lambda value: value + 0.5
         if name == "color3dlut-generate-identity":
             return lambda *values: tuple(values[:3])
         if name == "color3dlut-transform-identity":
@@ -780,6 +801,29 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
             "size": json_safe(getattr(value, "size", None)),
             "bytes": base64.b64encode(raw).decode("ascii"),
         }
+    if shape == "mask_with_offset":
+        mask, offset = value
+        if str(getattr(mask, "mode", "")) == "RGBA":
+            # Pillow's RGBA ImagingCore is iterable as 4-tuples but rejects
+            # ``bytes(core)`` because those tuples are not integers. Preserve
+            # the public pixels as tuples instead of turning a valid color
+            # mask into an empty placeholder.
+            rendered = {
+                "kind": "mask",
+                "mode": "RGBA",
+                "size": json_safe(getattr(mask, "size", None)),
+                "bytes": "",
+                "pixels": [json_safe(item) for item in mask],
+            }
+        else:
+            rendered = serialize_value(
+                mask,
+                "mask",
+                side=side,
+                surface=surface,
+                operation=operation,
+            )
+        return {"mask": rendered, "offset": json_safe(offset)}
     if shape == "bytes":
         if value is None:
             return None
@@ -878,6 +922,8 @@ def run_case(
     telemetry_sink: list[dict[str, int]] | None = None,
     timing_boundary: str = "observed_steps",
     serialize_observations: bool = True,
+    pipeline_execution_api: Any | None = None,
+    pipeline_execution_sink: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     case_started_ns = time.perf_counter_ns()
     step_receipts: list[dict[str, int]] = []
@@ -920,6 +966,12 @@ def run_case(
             value = call_workflow_step(
                 side, step, opdef, bindings, assets
             )
+            if pipeline_execution_api is not None and pipeline_execution_sink is not None:
+                receipt = pipeline_execution_api.take_pipeline_telemetry()
+                if receipt is not None:
+                    receipt["status"] = "completed"
+                    receipt["step_id"] = step_id
+                    pipeline_execution_sink.append(receipt)
             step_elapsed_ns = time.perf_counter_ns() - step_started_ns
             if telemetry_sink is not None:
                 step_receipts.append(
@@ -936,6 +988,12 @@ def run_case(
             bindings[step_id] = value
             step_results[step_id] = {"step_id": step_id, "status": "ok", "_value": value}
         except BaseException as exc:  # public failures are part of the contract
+            if pipeline_execution_api is not None and pipeline_execution_sink is not None:
+                receipt = pipeline_execution_api.take_pipeline_telemetry()
+                if receipt is not None:
+                    receipt["status"] = "completed"
+                    receipt["step_id"] = step_id
+                    pipeline_execution_sink.append(receipt)
             error = normalized_public_error(
                 exc, side=side, step=step, tempdir=tempdir
             )
@@ -1003,7 +1061,19 @@ def run_case(
                 surface=step["surface"],
                 operation=step["operation"],
             )
+            if pipeline_execution_api is not None and pipeline_execution_sink is not None:
+                receipt = pipeline_execution_api.take_pipeline_telemetry()
+                if receipt is not None:
+                    receipt["status"] = "completed"
+                    receipt["step_id"] = observation_id
+                    pipeline_execution_sink.append(receipt)
         except BaseException as exc:  # materialization is a public observation
+            if pipeline_execution_api is not None and pipeline_execution_sink is not None:
+                receipt = pipeline_execution_api.take_pipeline_telemetry()
+                if receipt is not None:
+                    receipt["status"] = "completed"
+                    receipt["step_id"] = observation_id
+                    pipeline_execution_sink.append(receipt)
             observations.append(
                 {
                     "step_id": observation_id,
@@ -1481,6 +1551,143 @@ def write_result(path: Path, result: dict[str, Any]) -> None:
     path.write_text(json.dumps(result, indent=2, sort_keys=False) + "\n", encoding="utf-8")
 
 
+def write_gpu_shader_coverage(
+    path: Path,
+    cases: list[dict[str, Any]],
+    records: list[dict[str, Any]],
+    *,
+    reason: str | None = None,
+) -> None:
+    """Write the target-side WGSL dispatch receipt for one shared corpus.
+
+    The core collector deliberately reports dispatches rather than pretending
+    that GPU execution is equivalent to host-language source coverage. The
+    all-backend campaign adds the checked-in shader inventory and records the
+    still-unmeasured source-line/branch dimensions around this receipt.
+    """
+
+    case_ids = sorted(case["case_id"] for case in cases)
+    digest = hashlib.sha256(("\n".join(case_ids) + "\n").encode()).hexdigest()
+    records = sorted(
+        records,
+        key=lambda item: (str(item.get("shader_file", "")), str(item.get("variant_name", ""))),
+    )
+    measured = bool(records)
+    if reason is None:
+        reason = (
+            "Embedded WGSL shader dispatches were collected from the same public parity corpus."
+            if measured
+            else "No embedded WGSL shader dispatch was observed for the selected corpus."
+        )
+    result = {
+        "schema": "migration-parity/gpu-wgsl-coverage@1",
+        "status": "measured" if measured else "not_measured",
+        "reason": reason,
+        "backend": TARGET_BACKEND,
+        "scope": {
+            "kind": "public-parity-corpus",
+            "selected": len(case_ids),
+            "case_ids_sha256": digest,
+        },
+        "execution": {
+            "shader_variants_executed": len(records),
+            "dispatches": sum(int(item.get("dispatches", 0)) for item in records),
+            "workgroups": sum(int(item.get("workgroups", 0)) for item in records),
+        },
+        "records": records,
+        "source_coverage": {
+            "status": "not_measured",
+            "reason": (
+                "WGSL source line and branch instrumentation is not enabled; this receipt "
+                "only proves runtime shader dispatch."
+            ),
+        },
+    }
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_pipeline_execution_evidence(
+    path: Path,
+    cases: list[dict[str, Any]],
+    identity: dict[str, Any],
+    execution: dict[str, list[dict[str, Any]]],
+) -> None:
+    """Write normal-parity backend receipts without changing parity output.
+
+    A parity pass proves that the serialized public observations agree. It does
+    not prove which lazy image backend produced those observations. This
+    sidecar records completed receipts associated with workflow calls and
+    observations while the ordinary serializer is still enabled, so fallback
+    and dispatch evidence cannot be confused with benchmark-only timing mode.
+    """
+
+    case_ids = sorted(case["case_id"] for case in cases)
+    digest = hashlib.sha256(("\n".join(case_ids) + "\n").encode()).hexdigest()
+    actual_backend_counts: dict[str, int] = {}
+    fallback_reason_counts: dict[str, int] = {}
+    completed_receipts = 0
+    receipt_cases = 0
+    not_recorded_cases = 0
+    for case_id in case_ids:
+        receipts = execution.get(case_id, [])
+        completed = [
+            receipt
+            for receipt in receipts
+            if receipt.get("status") == "completed"
+        ]
+        if not completed:
+            not_recorded_cases += 1
+            continue
+        receipt_cases += 1
+        completed_receipts += len(completed)
+        for receipt in completed:
+            backend = receipt.get("actual_backend")
+            if isinstance(backend, str):
+                actual_backend_counts[backend] = (
+                    actual_backend_counts.get(backend, 0) + 1
+                )
+            reason = receipt.get("fallback_reason")
+            if isinstance(reason, str) and reason:
+                fallback_reason_counts[reason] = (
+                    fallback_reason_counts.get(reason, 0) + 1
+                )
+
+    result = {
+        "schema": "migration-parity/pipeline-execution-evidence@1",
+        "status": "measured",
+        "reason": (
+            "Normal parity workflows collected completed pipeline receipts "
+            "for workflow calls and observations; cases without a receipt did "
+            "not materialize a target image pipeline."
+        ),
+        "identity": {
+            "side": identity.get("side"),
+            "implementation": identity.get("implementation"),
+            "backend": identity.get("backend"),
+            "backend_state": identity.get("backend_state"),
+        },
+        "scope": {
+            "kind": "public-parity-corpus",
+            "selected": len(case_ids),
+            "case_ids_sha256": digest,
+        },
+        "summary": {
+            "selected": len(case_ids),
+            "receipt_cases": receipt_cases,
+            "not_recorded_cases": not_recorded_cases,
+            "completed_receipts": completed_receipts,
+            "actual_backend_counts": dict(sorted(actual_backend_counts.items())),
+            "fallback_reason_counts": dict(sorted(fallback_reason_counts.items())),
+        },
+        "cases": {case_id: execution.get(case_id, []) for case_id in case_ids},
+    }
+    path = path.resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
 def run_resident_case(
     side: str,
     case: dict[str, Any],
@@ -1633,60 +1840,119 @@ def run_side(args: argparse.Namespace) -> int:
     telemetry: dict[str, list[dict[str, int]]] = {}
     execution: dict[str, list[dict[str, Any]]] = {}
     telemetry_api = None
-    if args.timings and args.side == "target":
+    shader_coverage_api = None
+    execution_output = (
+        os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
+        if args.side == "target"
+        else None
+    )
+    if (args.timings or execution_output) and args.side == "target":
         telemetry_api = importlib.import_module("pillow_rs._core")
         telemetry_api.set_pipeline_telemetry(True)
-    with tempfile.TemporaryDirectory(prefix=f"migration-parity-{args.side}-") as temporary:
-        tempdir = Path(temporary)
+    shader_coverage_output = os.environ.get("MIGRATION_GPU_WGSL_COVERAGE_OUTPUT")
+    if args.side == "target" and shader_coverage_output:
+        shader_coverage_api = importlib.import_module("pillow_rs._core")
+        enable_shader_coverage = getattr(
+            shader_coverage_api, "set_gpu_shader_coverage", None
+        )
+        if callable(enable_shader_coverage):
+            enable_shader_coverage(True)
+    with tempfile.TemporaryDirectory(prefix=f"migration-parity-{args.side}-") as run_temporary:
+        run_tempdir = Path(run_temporary)
         for case in cases:
-            sink: list[int] = []
-            phase_sink: list[dict[str, int]] = []
-            execution_sink: list[dict[str, Any]] = []
-            result: dict[str, Any] | None = None
-            if args.lifecycle == "resident":
-                result = run_resident_case(
-                    args.side,
-                    case,
-                    operation_index,
-                    tempdir,
-                    repeat=args.repeat,
-                    timing_steps=set(args.timing_step),
-                    timing_sink=sink,
-                    telemetry_sink=phase_sink,
-                    execution_sink=execution_sink,
-                    timing_boundary=args.timing_boundary,
-                    telemetry_api=telemetry_api,
-                )
-            else:
-                for _ in range(args.repeat):
-                    if telemetry_api is not None:
-                        telemetry_api.take_pipeline_telemetry()
-                    result = run_case(
+            # A parity case is a complete public-input scenario.  Give each
+            # scenario its own temporary namespace so a path written by an
+            # earlier case cannot silently become a later case's input.  The
+            # namespace remains shared across repeats/resident observations of
+            # the same case, preserving within-workflow filesystem behavior.
+            with tempfile.TemporaryDirectory(
+                prefix="case-", dir=run_tempdir
+            ) as temporary:
+                tempdir = Path(temporary)
+                sink: list[int] = []
+                phase_sink: list[dict[str, int]] = []
+                execution_sink: list[dict[str, Any]] = []
+                result: dict[str, Any] | None = None
+                if args.lifecycle == "resident":
+                    result = run_resident_case(
                         args.side,
                         case,
                         operation_index,
                         tempdir,
+                        repeat=args.repeat,
                         timing_steps=set(args.timing_step),
-                        timing_sink=sink if args.timings else None,
-                        telemetry_sink=phase_sink if args.timings else None,
+                        timing_sink=sink,
+                        telemetry_sink=phase_sink,
+                        execution_sink=execution_sink,
                         timing_boundary=args.timing_boundary,
-                        serialize_observations=not args.timings,
+                        telemetry_api=telemetry_api,
                     )
-                    if telemetry_api is not None:
-                        receipt = telemetry_api.take_pipeline_telemetry()
-                        if receipt is None:
-                            execution_sink.append({"status": "not_recorded"})
-                        else:
-                            receipt["status"] = "completed"
-                            execution_sink.append(receipt)
-                    elif args.timings:
-                        execution_sink.append({"status": "not_applicable"})
-            assert result is not None
-            results.append(result)
-            if args.timings:
-                timings[case["case_id"]] = sink
-                telemetry[case["case_id"]] = phase_sink
-                execution[case["case_id"]] = execution_sink
+                else:
+                    for _ in range(args.repeat):
+                        if telemetry_api is not None:
+                            telemetry_api.take_pipeline_telemetry()
+                        result = run_case(
+                            args.side,
+                            case,
+                            operation_index,
+                            tempdir,
+                            timing_steps=set(args.timing_step),
+                            timing_sink=sink if args.timings else None,
+                            telemetry_sink=phase_sink if args.timings else None,
+                            timing_boundary=args.timing_boundary,
+                            serialize_observations=not args.timings,
+                            pipeline_execution_api=(
+                                telemetry_api if execution_output else None
+                            ),
+                            pipeline_execution_sink=(
+                                execution_sink if execution_output else None
+                            ),
+                        )
+                        if telemetry_api is not None:
+                            receipt = telemetry_api.take_pipeline_telemetry()
+                            if receipt is not None:
+                                receipt["status"] = "completed"
+                                execution_sink.append(receipt)
+                            elif not execution_sink:
+                                execution_sink.append({"status": "not_recorded"})
+                        elif args.timings:
+                            execution_sink.append({"status": "not_applicable"})
+                assert result is not None
+                results.append(result)
+                if execution_output or args.timings:
+                    execution[case["case_id"]] = execution_sink
+                if args.timings:
+                    timings[case["case_id"]] = sink
+                    telemetry[case["case_id"]] = phase_sink
+    if shader_coverage_output:
+        records: list[dict[str, Any]] = []
+        reason = None
+        if shader_coverage_api is None:
+            reason = "GPU shader coverage was requested, but the target API was not initialized."
+        else:
+            take_shader_coverage = getattr(
+                shader_coverage_api, "take_gpu_shader_coverage", None
+            )
+            if not callable(take_shader_coverage):
+                reason = (
+                    "The installed target extension does not expose GPU shader coverage; "
+                    "rebuild pillow-rs-py before running this lane."
+                )
+            else:
+                records = list(take_shader_coverage())
+        write_gpu_shader_coverage(
+            Path(shader_coverage_output),
+            cases,
+            records,
+            reason=reason,
+        )
+    if execution_output:
+        write_pipeline_execution_evidence(
+            Path(execution_output),
+            cases,
+            handshake,
+            execution,
+        )
     envelope: dict[str, Any] = {"identity": handshake, "results": results}
     if args.timings:
         envelope["timings_ns"] = timings

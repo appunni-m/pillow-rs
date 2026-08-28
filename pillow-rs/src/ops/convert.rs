@@ -334,13 +334,8 @@ impl Image {
                     } else {
                         color::f_to_l(&img)
                     };
-                    return Image::from_dynamic(luma, None).convert(
-                        mode,
-                        matrix,
-                        dither,
-                        None,
-                        _colors,
-                    );
+                    return Image::from_dynamic(luma, None)
+                        .convert(mode, matrix, dither, None, _colors);
                 }
             };
             return Ok(Image::from_dynamic(result, explicit_mode_for(mode)));
@@ -366,12 +361,8 @@ impl Image {
                     palette.as_deref().unwrap_or_default(),
                 )
             } else {
-                color::convert_from_nonstandard(
-                    effective_src_mode_name,
-                    &img,
-                    palette.as_deref(),
-                )
-                .unwrap_or_else(|| img.to_rgb8().into())
+                color::convert_from_nonstandard(effective_src_mode_name, &img, palette.as_deref())
+                    .unwrap_or_else(|| img.to_rgb8().into())
             };
             let rgb_source = Image::from_dynamic(converted, None);
             return rgb_source.convert(mode, matrix, dither, None, _colors);
@@ -385,6 +376,28 @@ impl Image {
         if mode == "PA" {
             let dither_enum = parse_dither(dither)?;
             return convert_to_palette_alpha(self, effective_src_mode_name, dither_enum);
+        }
+
+        // Pillow routes unsigned 16-bit luma to the grayscale CMYK branch:
+        // C=M=Y=0 and K=255 minus the clipped luma sample. The ordinary
+        // packed converter cannot distinguish this source from RGB storage,
+        // so materialize the native samples before queuing the operation.
+        if mode == "CMYK"
+            && matches!(
+                effective_src_mode_name,
+                "I;16" | "I;16L" | "I;16B" | "I;16N"
+            )
+        {
+            let gray = self.materialize()?.to_luma8();
+            let (width, height) = gray.dimensions();
+            let mut result = crate::raster::RgbaImage::new(width, height);
+            for (output, input) in result.pixels_mut().zip(gray.pixels()) {
+                *output = crate::raster::Rgba([0, 0, 0, 255u8.saturating_sub(input[0])]);
+            }
+            return Ok(Image::from_dynamic(
+                DynamicImage::ImageRgba8(result),
+                explicit_mode_for(mode),
+            ));
         }
 
         let target_is_standard = !is_nonstandard_mode(mode);
@@ -418,9 +431,7 @@ impl Image {
                 // I/F sources return through the scalar dispatch above before
                 // this fallback, so this active path receives RGB-family
                 // representations and applies the RGB inverse directly.
-                DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(
-                    &converted.to_rgb8(),
-                ))
+                DynamicImage::ImageRgba8(crate::color::rgb_to_cmyk_inverse(&converted.to_rgb8()))
             } else if mode == "L" || mode == "LA" {
                 if mode == "L" && src_mode == "YCbCr" {
                     // Pillow's C converter maps YCbCr to L through the Y
@@ -804,14 +815,12 @@ fn convert_to_palette_alpha(
             for (output, input) in rgb.pixels_mut().zip(rgba.pixels()) {
                 *output = crate::raster::Rgb([input[0], input[1], input[2]]);
             }
-            let quantized = Image::from_dynamic(
-                DynamicImage::ImageRgb8(rgb),
-                Some("RGB".to_owned()),
-            )
-            // Image.convert("PA") calls RGB.quantize() without a method;
-            // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
-            // default.  The palette-index order is observable in PA bytes.
-            .quantize(256, 0, None, true, 0)?;
+            let quantized =
+                Image::from_dynamic(DynamicImage::ImageRgb8(rgb), Some("RGB".to_owned()))
+                    // Image.convert("PA") calls RGB.quantize() without a method;
+                    // RGB therefore uses MEDIANCUT (method 0), not RGBA's FASTOCTREE
+                    // default.  The palette-index order is observable in PA bytes.
+                    .quantize(256, 0, None, true, 0)?;
             let index_bytes = quantized.materialize()?.to_luma8().into_raw();
             let palette = quantized.palette();
             let indices = crate::raster::GrayImage::from_raw(width, height, index_bytes)

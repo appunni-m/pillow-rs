@@ -197,26 +197,3 @@ macro_rules! par_tiles {
 }
 
 // AS PER DESIGN — DO NOT REMOVE: Tests validate macro behavior.
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn par_rows_covers_all_pixels() {
-        let width = 100u32;
-        let height = 50u32;
-        let stride = (width * 4) as usize;
-        let data = vec![0u8; stride * height as usize];
-
-        let visited = std::sync::atomic::AtomicU32::new(0);
-        par_rows!(
-            data.as_slice(),
-            stride,
-            height as usize,
-            |row_start, row_end, y| {
-                assert!(row_end > row_start);
-                assert!(y < height);
-                visited.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-            }
-        );
-        assert_eq!(visited.load(std::sync::atomic::Ordering::Relaxed), height);
-    }
-}

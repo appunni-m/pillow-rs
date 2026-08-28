@@ -133,7 +133,7 @@ cd pillow-rs-js && wasm-pack build --target web
 - **10 color modes** — `1`, `L`, `LA`, `P`, `RGB`, `RGBA`, `CMYK`, `YCbCr`, `HSV`, `I`, `F`
 - **7 image formats** — PNG, JPEG, GIF, BMP, TIFF, WEBP, ICO
 - **Per-mode native pixel drawing** — draws directly in the image's native color format, never lossy RGBA round-trips
-- **GPU-ready architecture** — 42 functions have WGSL compute shaders ready (dispatch stubs await wiring)
+- **GPU compute path** — registry-backed WGSL dispatch with CPU fallback and same-input execution evidence
 - **Lazy decoding** — `LazyImage` defers decode until first pixel access, enabling zero-copy format inspection
 - **Single source of truth** — all three targets (Python, Node.js, browser) share the same Rust core
 - **Zero PyO3 overhead in hot paths** — all image logic lives in pure Rust; bindings are ~200 lines of delegation
@@ -142,7 +142,10 @@ cd pillow-rs-js && wasm-pack build --target web
 
 ## API Coverage
 
-> **1,555 total tests** — 1,148 passing (74%), 407 in progress. Coverage computed per Pillow version 12.2.0.
+> The active corpus contains **10,950 public input cases** for Pillow 12.2.0.
+> Every parity case is an input-only comparison against Pillow; there is no
+> separate unit-test suite. Coverage is collected independently for the
+> Python, CPU/SIMD/GPU, and JS/WASM lanes.
 
 | Module | Functions | Status |
 |--------|-----------|--------|
@@ -157,7 +160,12 @@ cd pillow-rs-js && wasm-pack build --target web
 | `ImagePalette` | 4 | getcolor, getdata, tobytes, copy |
 | `ImageStat` | 1 | Stat (mean, median, stddev, extrema, count, sum, sum2) |
 
-Full coverage report: **[docs/COVERAGE.md](docs/COVERAGE.md)** — auto-generated from test runs.
+Full coverage report: **[docs/COVERAGE.md](docs/COVERAGE.md)** — generated from
+the managed parity runs. Use `make test` to run the shared public corpus
+through CPU, SIMD, GPU/WGSL execution, Python, and JS/WASM, then measure the
+same workflows against Pillow's Python source and generate the ordered reverse
+coverage gap manifest at
+`docs/coverage-pillow-missing-feature-manifest.md`.
 
 ---
 
@@ -193,7 +201,14 @@ pillow-rs is **on average 2.2× faster** than Pillow on native CPU across 166 be
 
 ### GPU path (experimental)
 
-GPU compute via **wgpu / WebGPU** with shared WGSL shaders. Shaders exist for 42 functions in `pillow-rs/src/gpu/shaders/`. Dispatch methods currently return descriptive errors — GPU is not yet wired.
+GPU compute via **wgpu / WebGPU** with shared WGSL shaders. The bounded native
+GPU lane is part of `make test`; its execution inventory is written to
+`build/migration-parity/all-backends/gpu-wgsl-coverage.json`. The same public
+corpus also runs through Node WASM and a real browser WASM page, producing
+separate `js-wasm-parity` and `browser-wasm-parity` artifacts. Browser WebGPU
+availability is recorded separately from Pillow shader dispatch. WGSL source
+line and branch coverage remains explicitly unmeasured until an instrumented
+shader build and asynchronous browser GPU API are added.
 
 ```rust
 use pillow_rs::gpu::GpuEngine;
@@ -262,6 +277,12 @@ pub fn execute_batch(
     mode: Option<&str>,
 ) -> Result<DynamicImage>
 ```
+
+When GPU is active and the complete batch is supported, the queued chain is
+uploaded once, recorded as one GPU batch, and read back once at the terminal
+observation. If GPU cannot execute the batch, routing uses the next supported
+backend. SIMD and CPU share host-resident buffers, so a SIMD-to-CPU fallback
+does not require a copy or intermediate materialization.
 
 ### P-mode preservation
 
@@ -352,12 +373,11 @@ log = { version = "0.4", features = ["release_max_level_info"] }
 ```
 manifest.yaml
     │
-    ├──→ scripts/generate_stubs.py      → Rust stub functions in pillow-rs
-    ├──→ scripts/generate_fixtures.py   → Test fixtures (inputs + expected outputs)
-    ├──→ scripts/bench/bench_spec.py    → Benchmark specification (166 functions)
-    ├──→ scripts/coverage/compute_coverage.py → Trust verification per function
-    ├──→ tests/test_parity.py           → Pytest parametrization (1,555 tests)
-    └──→ docs/COVERAGE.md              → Auto-generated coverage report
+    ├──→ scripts/build_migration_parity_inputs.py → public input corpus
+    ├──→ scripts/bench/bench_spec.py             → benchmark specification
+    ├──→ scripts/run_migration_parity.py         → live Pillow comparisons
+    ├──→ scripts/run_migration_*coverage.py      → managed coverage evidence
+    └──→ docs/COVERAGE.md                        → generated coverage report
 ```
 
 ### Why it matters
@@ -411,20 +431,16 @@ Adding a new function is one edit to `manifest.yaml`, then run the generators. T
 │   └── python/pillow_rs/          Pure-delegation Python wrappers
 ├── pillow-rs-js/
 │   ├── src/lib.rs                 wasm-bindgen (all delegation to core)
-│   ├── tests/                     WASM test harness (browser + Node.js)
-│   └── bench_page/                Browser benchmark page
+│   └── scripts/run_parity.mjs     JS/WASM parity adapter
 ├── scripts/
-│   ├── bench/                     Benchmark orchestration (bench_all.sh)
-│   ├── coverage/                  Coverage computation & validation
-│   ├── build_and_test.sh          Build + generate fixtures + run tests
-│   ├── ci_coverage.sh             Full CI pipeline
-│   ├── generate_fixtures.py       Manifest → test fixtures
-│   └── generate_stubs.py          Manifest → Rust stubs
-├── tests/
-│   ├── test_parity.py             PIL parity test suite (1,555 tests)
-│   ├── engine.py                  Test execution engine
-│   ├── conftest.py                Pytest configuration
-│   └── fixtures/                  Test fixtures (inputs + expected outputs)
+│   ├── build_migration_parity_inputs.py  Manifest → public input corpus
+│   ├── run_migration_parity.py           Pillow ↔ Python parity runner
+│   ├── run_all_backend_tests.py          CPU/SIMD/GPU + Python + JS/WASM
+│   ├── run_migration_js_parity.py        JS/WASM parity runner
+│   └── run_migration_*coverage.py        Managed coverage collectors
+├── pillow-rs/tests/fixtures/
+│   ├── manifest.yaml               Fixed public surface and coverage plans
+│   └── inputs/{parity,coverage}/   Input-only parity and coverage workflows
 └── docs/                          Coverage reports + research docs
 ```
 
@@ -441,9 +457,11 @@ Quick reference:
 cd pillow-rs-py && maturin develop --release    # Python
 cd pillow-rs-js && wasm-pack build --target web # WASM
 
-# Test
-python -m pytest tests/ --timeout=300
-cargo test -p pillow-rs
+# Parity
+make migration-parity-test                 # Python facade, live Pillow oracle
+make test-wasm                              # Node WASM + browser WASM, same public inputs
+make migration-parity-test-all-backends    # CPU + SIMD + GPU + Python + Node + browser WASM
+make test                                   # all above + reverse Pillow coverage + ordered gap manifest
 
 # Benchmark (full suite)
 bash scripts/bench/bench_all.sh full
@@ -461,7 +479,7 @@ Contributions are welcome — whether it's fixing PIL parity, adding GPU dispatc
 ### Ways to contribute
 
 - **Fix a failing test** — pick from the 407 xfailed parity tests
-- **Wire a GPU shader** — shaders exist for 42 functions, dispatch stubs await implementation
+- **Wire a GPU shader** — add the registry entry, parity inputs, and WGSL execution evidence
 - **Add a missing format** — extend the codec pipeline with a new image format
 - **Improve documentation** — doc comments, examples, platform-specific guides
 - **Report a bug** — open an issue with a minimal reproduction

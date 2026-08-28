@@ -158,23 +158,25 @@ Common bugs to watch for:
 
 ### Phase 6: Verify Parity
 
-Run tests with the new backend enabled and confirm:
+Run the canonical public-input parity lane with the new backend enabled and
+confirm:
 
 ```bash
-# Single op verification
-python -m pytest tests/test_fixture_parity.py --backend=gpu --timeout=180 -q \
-  -k "invert" --capture=no 2>&1 | grep "\[GPU\]"
+# Single public-input verification
+make migration-parity-test \
+  MIGRATION_PARITY_CASE_IDS='PIL.ImageOps.invert.nuanced.coverage-batch-imageops-scalar-fallback-000'
 
-# Full comparison with CPU baseline
-python -m pytest tests/test_fixture_parity.py --backend=gpu --timeout=300 -q --runxfail
-python -m pytest tests/test_fixture_parity.py --backend=cpu --timeout=300 -q --runxfail
+# Full CPU/SIMD/GPU comparison over the same indexed public inputs
+make migration-parity-test-all-backends
 ```
 
 **Acceptance criteria:**
-- `[GPU]` (or backend-specific) messages appear in test stderr output
-- Pass/fail counts match between new backend and CPU
-- No test regressions (CPU tests remain passing)
-- 0 UNTRACKED tests, 100% TRUSTED functions
+- The all-backends artifact records the GPU smoke gate and full GPU lane
+- CPU, SIMD, and GPU use the same selected public case IDs
+- Parity failures remain visible in the artifact; they are not converted into
+  skips or expected failures
+- No unit-test-only coverage is used; coverage attribution comes from the
+  managed parity inputs and the backend artifacts
 
 ### Phase 7: Commit
 

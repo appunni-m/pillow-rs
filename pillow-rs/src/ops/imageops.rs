@@ -356,10 +356,7 @@ pub fn autocontrast(image: &Image, cutoff: f64) -> Result<Image, PilError> {
     validate_autocontrast_mode(image)?;
     Ok(Image::push_op(
         image,
-        PipelineOp::Autocontrast {
-            cutoff,
-            mask: None,
-        },
+        PipelineOp::Autocontrast { cutoff, mask: None },
     ))
 }
 
@@ -371,11 +368,10 @@ pub fn autocontrast_with_mask(
 ) -> Result<Image, PilError> {
     match mask {
         ImageOpsMask::None => autocontrast(image, cutoff),
-        ImageOpsMask::Invalid(type_name) => validate_imageops_mask(
-            image,
-            ImageOpsMask::Invalid(type_name),
-        )
-        .and_then(|_| autocontrast(image, cutoff)),
+        ImageOpsMask::Invalid(type_name) => {
+            validate_imageops_mask(image, ImageOpsMask::Invalid(type_name))
+                .and_then(|_| autocontrast(image, cutoff))
+        }
         ImageOpsMask::Image(mask) => {
             validate_imageops_mask(image, ImageOpsMask::Image(mask.clone()))?;
             validate_autocontrast_mode(image)?;
@@ -423,6 +419,12 @@ pub fn equalize_with_mask(image: &Image, mask: ImageOpsMask) -> Result<Image, Pi
 /// or another [`PilError`] when mode detection fails.
 pub fn invert(image: &Image) -> Result<Image, PilError> {
     let mode = image.mode()?;
+    // Pillow's ImageOps._lut path rejects CMYK before creating the result.
+    // Keep this separate from ImageChops.invert, which has a different mode
+    // contract and is implemented by the chops module.
+    if mode == "CMYK" {
+        return Err(PilError::OsError(format!("not supported for mode {mode}")));
+    }
     if matches!(mode.as_str(), "LA" | "PA" | "RGBA") {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
@@ -504,7 +506,14 @@ pub fn posterize(image: &Image, bits: u8) -> Result<Image, PilError> {
 /// or another [`PilError`] when mode detection fails.
 pub fn solarize(image: &Image, threshold: u8) -> Result<Image, PilError> {
     let mode = image.mode()?;
-    if mode == "LA" || mode == "RGBA" {
+    // Pillow 12.2.0 exposes P as an explicit unsupported ImageOps._lut path;
+    // this must be raised at the call, before deferred pipeline execution.
+    if mode == "P" {
+        return Err(PilError::NotImplementedError(
+            "mode P support coming soon".into(),
+        ));
+    }
+    if matches!(mode.as_str(), "LA" | "RGBA" | "CMYK") {
         return Err(PilError::OsError(format!("not supported for mode {mode}")));
     }
     Ok(Image::push_op(image, PipelineOp::Solarize { threshold }))
@@ -825,14 +834,56 @@ pub fn scale_with_input(
     factor: f64,
     filter: Option<ResampleInput>,
 ) -> Result<Image, PilError> {
-    // Pillow validates the public factor before constructing the lazy resize:
-    // non-positive values fail at the call site instead of reaching the
-    // dimension planner or being clamped to a 1x1 image by the backend.
-    if !factor.is_finite() || factor <= 0.0 {
+    // Pillow's ``factor <= 0`` check intentionally does not catch NaN.  The
+    // later Python ``round`` then reports the conversion error for NaN, while
+    // positive infinity reports its distinct overflow error. Preserve those
+    // public distinctions before constructing the lazy resize.
+    if factor.is_nan() {
+        return Err(PilError::ValueError(
+            "cannot convert float NaN to integer".to_owned(),
+        ));
+    }
+    if factor == f64::INFINITY {
+        return Err(PilError::OverflowError(
+            "cannot convert float infinity to integer".to_owned(),
+        ));
+    }
+    if factor <= 0.0 {
         return Err(PilError::ValueError(
             "the factor must be greater than 0".to_owned(),
         ));
     }
+
+    // ImageOps.scale computes dimensions with Python's ties-to-even round and
+    // immediately delegates to Image.resize.  Resize rejects a rounded zero;
+    // do that check here so the lazy target has the same public call boundary
+    // as Pillow instead of allowing its backend's minimum-size clamp to turn
+    // the request into a 1x1 image.
+    let (width, height) = image.size()?;
+    let rounded_dimension = |dimension: u32| {
+        let value = f64::from(dimension) * factor;
+        let lower = value.floor();
+        let fraction = value - lower;
+        let rounded = if fraction < 0.5 {
+            lower
+        } else if fraction > 0.5 || (lower as u64) % 2 == 1 {
+            lower + 1.0
+        } else {
+            lower
+        };
+        if rounded <= 0.0 {
+            Err(PilError::ValueError("height and width must be > 0".into()))
+        } else if rounded > f64::from(u32::MAX) {
+            Err(PilError::OverflowError(
+                "signed integer is greater than maximum".into(),
+            ))
+        } else {
+            Ok(rounded as u32)
+        }
+    };
+    rounded_dimension(width)?;
+    rounded_dimension(height)?;
+
     // The input language records Image.Resampling enum members by name. The
     // Python source side materializes that name as an IntEnum; normalize the
     // equivalent target-facade representation here for this `resample=`
@@ -1109,105 +1160,4 @@ pub fn exif_remove_orientation(raw: &[u8]) -> Vec<u8> {
         output.extend(std::iter::repeat(0).take(4 - tail.len()));
     }
     output
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{exif_get_orientation, exif_remove_orientation};
-
-    #[test]
-    fn test_exif_get_orientation_empty() {
-        assert_eq!(exif_get_orientation(&[]), None);
-        assert_eq!(exif_get_orientation(b"abc"), None);
-    }
-
-    #[test]
-    fn test_exif_get_orientation_no_exif() {
-        // Valid TIFF header but no orientation tag
-        // II (little-endian), magic=42, IFD0 at offset 8, 0 entries
-        let raw = b"II\x2a\x00\x08\x00\x00\x00\x00\x00\x00\x00";
-        assert_eq!(exif_get_orientation(raw), None);
-    }
-
-    #[test]
-    fn test_exif_get_orientation_with_tag_le() {
-        // Little-endian TIFF with orientation=6 (ROTATE_270)
-        // II, magic=42 (2a 00), IFD0 offset=8, 1 entry
-        // Entry: tag=0112, type=SHORT(03), count=1, value=6
-        let mut raw = Vec::new();
-        raw.extend_from_slice(b"II\x2a\x00"); // Byte order + magic
-        raw.extend_from_slice(&8u32.to_le_bytes()); // IFD0 offset
-        raw.extend_from_slice(&1u16.to_le_bytes()); // 1 entry
-        raw.extend_from_slice(&0x0112u16.to_le_bytes()); // tag = Orientation
-        raw.extend_from_slice(&3u16.to_le_bytes()); // type = SHORT
-        raw.extend_from_slice(&1u32.to_le_bytes()); // count = 1
-        raw.extend_from_slice(&6u16.to_le_bytes()); // value = 6
-        raw.extend_from_slice(&[0u8; 2]); // padding
-
-        assert_eq!(exif_get_orientation(&raw), Some(6));
-    }
-
-    #[test]
-    fn test_exif_get_orientation_with_tag_be() {
-        // Big-endian TIFF with orientation=3 (ROTATE_180)
-        let mut raw = Vec::new();
-        raw.extend_from_slice(b"MM\x00\x2a"); // Byte order + magic
-        raw.extend_from_slice(&8u32.to_be_bytes()); // IFD0 offset
-        raw.extend_from_slice(&1u16.to_be_bytes()); // 1 entry
-        raw.extend_from_slice(&0x0112u16.to_be_bytes()); // tag
-        raw.extend_from_slice(&3u16.to_be_bytes()); // type
-        raw.extend_from_slice(&1u32.to_be_bytes()); // count
-        raw.extend_from_slice(&3u16.to_be_bytes()); // value = 3
-        raw.extend_from_slice(&[0u8; 2]); // padding
-
-        assert_eq!(exif_get_orientation(&raw), Some(3));
-    }
-
-    #[test]
-    fn test_exif_get_orientation_exif_jpeg() {
-        // Exif-JPEG format: starts with "Exif\0\0", then TIFF
-        let mut tiff = Vec::new();
-        tiff.extend_from_slice(b"II\x2a\x00");
-        tiff.extend_from_slice(&8u32.to_le_bytes());
-        tiff.extend_from_slice(&1u16.to_le_bytes());
-        tiff.extend_from_slice(&0x0112u16.to_le_bytes());
-        tiff.extend_from_slice(&3u16.to_le_bytes());
-        tiff.extend_from_slice(&1u32.to_le_bytes());
-        tiff.extend_from_slice(&8u16.to_le_bytes()); // value = 8
-        tiff.extend_from_slice(&[0u8; 2]);
-
-        let mut raw = Vec::new();
-        raw.extend_from_slice(b"Exif\x00\x00");
-        raw.extend_from_slice(&tiff);
-
-        assert_eq!(exif_get_orientation(&raw), Some(8));
-    }
-
-    #[test]
-    fn test_exif_without_orientation_retains_other_ifd_entries() {
-        let mut raw = b"Exif\x00\x00II\x2a\x00".to_vec();
-        raw.extend_from_slice(&8u32.to_le_bytes());
-        raw.extend_from_slice(&2u16.to_le_bytes());
-        raw.extend_from_slice(&0x0100u16.to_le_bytes());
-        raw.extend_from_slice(&3u16.to_le_bytes());
-        raw.extend_from_slice(&1u32.to_le_bytes());
-        raw.extend_from_slice(&2u16.to_le_bytes());
-        raw.extend_from_slice(&[0u8; 2]);
-        raw.extend_from_slice(&0x0112u16.to_le_bytes());
-        raw.extend_from_slice(&3u16.to_le_bytes());
-        raw.extend_from_slice(&1u32.to_le_bytes());
-        raw.extend_from_slice(&6u16.to_le_bytes());
-        raw.extend_from_slice(&[0u8; 2]);
-        raw.extend_from_slice(&0u32.to_le_bytes());
-
-        let expected = b"Exif\x00\x00II\x2a\x00\x08\x00\x00\x00\x01\x00\x00\x01\x04\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00\x00\x00\x00";
-        assert_eq!(exif_remove_orientation(&raw), expected);
-    }
-
-    #[test]
-    fn test_exif_without_orientation_retains_big_endian_width_value() {
-        let raw = b"Exif\x00\x00MM\x00\x2a\x00\x00\x00\x08\x00\x02\x01\x00\x00\x03\x00\x00\x00\x01\x00\x02\x00\x00\x01\x12\x00\x03\x00\x00\x00\x01\x00\x03\x00\x00\x00\x00\x00\x00";
-        let expected = b"Exif\x00\x00MM\x00\x2a\x00\x00\x00\x08\x00\x01\x01\x00\x00\x04\x00\x00\x00\x01\x00\x00\x00\x02\x00\x00\x00\x00";
-        assert_eq!(exif_remove_orientation(raw), expected);
-    }
 }

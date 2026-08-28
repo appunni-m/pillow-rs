@@ -40,17 +40,15 @@ Read `xfailed_tracker.txt`. Pick the next `[ ]` entry. Mark it `[>]` (in progres
 - Edit the Rust source to match PIL's algorithm exactly
 - Pay attention to: math (float vs int, rounding, truncation), kernel ordering (top-to-bottom vs bottom-to-top), border handling (clamp, skip, copy), color conversion
 
-### 5. Build
+### 5. Build and validate — one public parity input only
 ```bash
-maturin develop --manifest-path pillow-rs-py/Cargo.toml --release 2>&1 | tail -1
-```
-
-### 6. Validate — Single Test Only
-```bash
-PYTHONPATH=/home/appunni/work/pil-wasm:$PYTHONPATH python -m pytest "tests/test_fixture_parity.py::test_fixture_parity[<test_name>]" -v
+make build-dev
+make migration-parity-case \
+  MIGRATION_PARITY_CASE='PIL.Image.Image.point.nuanced.i16-affine-callable'
 ```
 - If PASS: proceed to step 7
-- If XFAIL: debug with inline python3 comparison script, go back to step 2
+- If the case is a parity failure: debug with the corresponding Pillow oracle
+  input and target result, then go back to step 2
 
 ### 7. Mark Fixed
 - Change `[>]` to `[x]` in xfailed_tracker.txt
@@ -63,8 +61,8 @@ If user asked for batch, go back to step 1. Otherwise report completion.
 
 | Action | Command |
 |--------|---------|
-| Pick next test | `grep "^\[ \]" xfailed_tracker.txt \| head -1` |
-| Build | `maturin develop --manifest-path pillow-rs-py/Cargo.toml --release` |
-| Single test | `PYTHONPATH=/home/appunni/work/pil-wasm:\$PYTHONPATH python -m pytest "tests/...::test...[<name>]" -v` |
-| Regen fixture | Use inline python3 -c script to recompute PIL hash |
-| Full suite | `PYTHONPATH=/home/appunni/work/pil-wasm:\$PYTHONPATH python -m pytest tests/test_fixture_parity.py -q --tb=no` |
+| Pick next case | `rg '"status": "pending"' build/migration-parity/` |
+| Build | `make build-dev` |
+| Single case | `make migration-parity-case MIGRATION_PARITY_CASE='<case-id>'` |
+| Filtered parity | `make migration-parity-test MIGRATION_PARITY_CASE_IDS='<case-id>,<case-id>'` |
+| Full campaign | `make migration-parity-test-all-backends` |

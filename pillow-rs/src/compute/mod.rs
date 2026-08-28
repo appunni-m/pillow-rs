@@ -7,9 +7,16 @@
 //!
 //! # Routing Contract
 //!
-//! A pipeline executes on one backend for the whole batch. CPU is always present
-//! and acts as the fallback. GPU and SIMD are selected only when they are active
-//! and every operation in the batch reports support.
+//! A normal materialization selects one backend for the complete operation
+//! batch. CPU is always present and acts as the universal fallback. GPU and
+//! SIMD are selected only when they are active and every operation in the
+//! batch reports support. CPU and SIMD both operate on host-resident image
+//! buffers, so choosing CPU after SIMD does not create a device-copy or
+//! materialization boundary. A GPU batch performs its device transfer once,
+//! records the eligible dispatches, and reads the final result back once.
+//! More granular GPU/host segmentation is a separate planner concern; it must
+//! account for GPU↔host boundaries without treating CPU↔SIMD handoff as a
+//! copy.
 //!
 //! # Adding Operations
 //!
@@ -21,9 +28,9 @@ use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GenericImageView};
 use std::cell::RefCell;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, MutexGuard};
+use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::Instant;
 
 // ── Backend ─────────────────────────────────────────────────────────────────
@@ -106,6 +113,50 @@ impl Backend {
     )> {
         take_pipeline_telemetry()
     }
+
+    /// Enables or disables the bounded GPU shader-dispatch coverage collector.
+    ///
+    /// The collector records which embedded WGSL shader variants actually
+    /// dispatch during a managed parity run. It is disabled by default so
+    /// ordinary image execution does not pay for a process-global map or a
+    /// mutex on every GPU dispatch.
+    pub fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
+        set_gpu_shader_coverage_enabled(enabled)
+    }
+
+    /// Takes and clears the GPU shader-dispatch coverage collected by the
+    /// current process.
+    ///
+    /// This is execution coverage, not WGSL source line or branch coverage.
+    /// The managed runner combines these records with the checked-in shader
+    /// inventory and reports source instrumentation as a separate status.
+    pub fn take_gpu_shader_coverage() -> Vec<GpuShaderDispatchTelemetry> {
+        take_gpu_shader_coverage()
+    }
+}
+
+/// One embedded WGSL shader variant observed at least once by a GPU dispatch.
+///
+/// `shader_file` is the checked-in WGSL asset name. `variant_name` identifies
+/// the public registry key or an internal multi-pass/fusion variant. Keeping
+/// both fields makes the report useful when several dispatch variants share a
+/// source file.
+#[derive(Debug, Clone, Copy)]
+pub struct GpuShaderDispatchTelemetry {
+    /// Public registry key or internal pipeline variant.
+    pub variant_name: &'static str,
+    /// Checked-in WGSL file name.
+    pub shader_file: &'static str,
+    /// Number of dispatch commands encoded for this variant.
+    pub dispatches: u64,
+    /// Total workgroups submitted for this variant.
+    pub workgroups: u64,
+}
+
+#[derive(Debug, Default)]
+struct GpuShaderDispatchCounters {
+    dispatches: u64,
+    workgroups: u64,
 }
 
 /// Resource counters attached to one completed backend execution sample.
@@ -210,6 +261,10 @@ struct PipelineTelemetry {
 }
 
 static PIPELINE_TELEMETRY_ENABLED: AtomicBool = AtomicBool::new(false);
+static GPU_SHADER_COVERAGE_ENABLED: AtomicBool = AtomicBool::new(false);
+static GPU_SHADER_COVERAGE: OnceLock<
+    Mutex<BTreeMap<(&'static str, &'static str), GpuShaderDispatchCounters>>,
+> = OnceLock::new();
 
 thread_local! {
     static LAST_PIPELINE_TELEMETRY: RefCell<Option<PipelineTelemetry>> = const { RefCell::new(None) };
@@ -241,6 +296,57 @@ fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
         reset_pipeline_allocation_telemetry();
     }
     previous
+}
+
+fn set_gpu_shader_coverage_enabled(enabled: bool) -> bool {
+    let previous = GPU_SHADER_COVERAGE_ENABLED.swap(enabled, Ordering::Relaxed);
+    if !enabled {
+        if let Some(coverage) = GPU_SHADER_COVERAGE.get()
+            && let Ok(mut coverage) = coverage.lock()
+        {
+            coverage.clear();
+        }
+    }
+    previous
+}
+
+/// Record one actual GPU dispatch for the managed shader execution report.
+#[cfg(feature = "gpu")]
+pub(crate) fn record_gpu_shader_dispatch(
+    variant_name: &'static str,
+    shader_file: &'static str,
+    workgroups: u64,
+) {
+    if !GPU_SHADER_COVERAGE_ENABLED.load(Ordering::Relaxed) {
+        return;
+    }
+    let coverage = GPU_SHADER_COVERAGE.get_or_init(|| Mutex::new(BTreeMap::new()));
+    let Ok(mut coverage) = coverage.lock() else {
+        return;
+    };
+    let counters = coverage.entry((variant_name, shader_file)).or_default();
+    counters.dispatches = counters.dispatches.saturating_add(1);
+    counters.workgroups = counters.workgroups.saturating_add(workgroups);
+}
+
+fn take_gpu_shader_coverage() -> Vec<GpuShaderDispatchTelemetry> {
+    let Some(coverage) = GPU_SHADER_COVERAGE.get() else {
+        return Vec::new();
+    };
+    let Ok(mut coverage) = coverage.lock() else {
+        return Vec::new();
+    };
+    std::mem::take(&mut *coverage)
+        .into_iter()
+        .map(
+            |((variant_name, shader_file), counters)| GpuShaderDispatchTelemetry {
+                variant_name,
+                shader_file,
+                dispatches: counters.dispatches,
+                workgroups: counters.workgroups,
+            },
+        )
+        .collect()
 }
 
 fn reset_pipeline_allocation_telemetry() {
@@ -390,6 +496,21 @@ fn elapsed_ns(start: Option<Instant>) -> u64 {
         .unwrap_or(0)
 }
 
+// ``std::time::Instant`` is not implemented by the bare wasm32 target used
+// by the browser package.  Backend identity and dispatch receipts remain
+// useful there, so keep telemetry available while reporting zero for its
+// host-clock fields instead of panicking during lazy materialization.
+fn pipeline_timestamp() -> Option<Instant> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        None
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Some(Instant::now())
+    }
+}
+
 // ── BackendImpl trait ──────────────────────────────────────────────────────
 
 /// Implementation contract for a compute backend.
@@ -496,8 +617,6 @@ pub fn active_backends() -> Result<Vec<Backend>, PilError> {
 }
 
 // ── Pool registry ──────────────────────────────────────────────────────────
-
-use std::sync::OnceLock;
 
 fn pools() -> &'static [Box<dyn BackendImpl>] {
     static POOLS: OnceLock<Vec<Box<dyn BackendImpl>>> = OnceLock::new();
@@ -612,12 +731,12 @@ pub(crate) fn prepare_execution(
     requested_backend: Option<Backend>,
 ) -> Result<PreparedExecution, PilError> {
     let timed = pipeline_telemetry_enabled();
-    let route_start = timed.then(Instant::now);
+    let route_start = timed.then(pipeline_timestamp).flatten();
     let (selected_backend, fallback_reason, support_checked) =
         route_decision(ops, requested_backend)?;
     let route_ns = elapsed_ns(route_start);
 
-    let validation_start = timed.then(Instant::now);
+    let validation_start = timed.then(pipeline_timestamp).flatten();
     if !support_checked {
         validate_backend_support(selected_backend, ops)?;
     }
@@ -680,7 +799,7 @@ pub(crate) fn execute_prepared(
         let _ = take_pipeline_dispatch_count();
         let _ = take_pipeline_resize_coeff_cache_stats();
     }
-    let backend_start = timed.then(Instant::now);
+    let backend_start = timed.then(pipeline_timestamp).flatten();
     for pool in pools() {
         if pool.name() == prepared.selected_backend {
             let estimated_dispatch_count = timed.then(|| pool.dispatch_count(ops)).flatten();

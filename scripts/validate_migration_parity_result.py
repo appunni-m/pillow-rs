@@ -363,6 +363,71 @@ def coverage(result: dict[str, Any]) -> None:
 def all_backends(result: dict[str, Any]) -> None:
     """Validate the one-command CPU/SIMD/GPU/Python/JS test evidence."""
 
+    def validate_scope(value: Any, label: str, *, execution: bool) -> None:
+        required = {"kind", "selected", "case_ids_sha256", "filter"}
+        if execution:
+            required |= {"executed", "pending"}
+        if not isinstance(value, dict) or not required.issubset(value):
+            raise ValueError(f"{label}: invalid public parity scope")
+        if value["kind"] != "public-parity-corpus":
+            raise ValueError(f"{label}.kind: unsupported scope")
+        for field in ("selected", "executed", "pending"):
+            if field in value:
+                non_negative_int(value[field], f"{label}.{field}")
+        if execution and value["executed"] + value["pending"] != value["selected"]:
+            raise ValueError(f"{label}: selected must equal executed plus pending")
+        if not re.fullmatch(r"[0-9a-f]{64}", value["case_ids_sha256"]):
+            raise ValueError(f"{label}.case_ids_sha256: expected lowercase sha256")
+        if value["filter"] is not None:
+            id_array(value["filter"], f"{label}.filter")
+        if "selection" in value and value["selection"] not in {
+            "all-public-cases",
+            "explicit-case-filter",
+        }:
+            raise ValueError(f"{label}.selection: unsupported selection mode")
+        if "pending_reasons" in value:
+            if not isinstance(value["pending_reasons"], dict):
+                raise ValueError(f"{label}.pending_reasons: expected object")
+            for reason, count in value["pending_reasons"].items():
+                string(reason, f"{label}.pending_reasons key")
+                non_negative_int(count, f"{label}.pending_reasons[{reason}]")
+        if "preflight" in value:
+            preflight = value["preflight"]
+            if not isinstance(preflight, dict) or set(preflight) != {"unrepresentable", "reasons"}:
+                raise ValueError(f"{label}.preflight: invalid preflight classification")
+            non_negative_int(preflight["unrepresentable"], f"{label}.preflight.unrepresentable")
+            if not isinstance(preflight["reasons"], dict):
+                raise ValueError(f"{label}.preflight.reasons: expected object")
+            reason_total = 0
+            for reason, count in preflight["reasons"].items():
+                string(reason, f"{label}.preflight.reasons key")
+                non_negative_int(count, f"{label}.preflight.reasons[{reason}]")
+                reason_total += count
+            if reason_total != preflight["unrepresentable"]:
+                raise ValueError(f"{label}.preflight: reason counts do not add to unrepresentable")
+        if "diagnostics" in value:
+            diagnostics = value["diagnostics"]
+            required_diagnostics = {
+                "kind",
+                "does_not_filter_or_change_execution",
+                "not_pending",
+                "hints",
+            }
+            if not isinstance(diagnostics, dict) or set(diagnostics) != required_diagnostics:
+                raise ValueError(f"{label}.diagnostics: invalid diagnostic classification")
+            string(diagnostics["kind"], f"{label}.diagnostics.kind")
+            if not diagnostics["does_not_filter_or_change_execution"]:
+                raise ValueError(
+                    f"{label}.diagnostics: execution-affecting diagnostics are not allowed"
+                )
+            if not diagnostics["not_pending"]:
+                raise ValueError(f"{label}.diagnostics: hints cannot be pending")
+            if not isinstance(diagnostics["hints"], dict):
+                raise ValueError(f"{label}.diagnostics.hints: expected object")
+            for reason, count in diagnostics["hints"].items():
+                string(reason, f"{label}.diagnostics.hints key")
+                non_negative_int(count, f"{label}.diagnostics.hints[{reason}]")
+
     exact(
         result,
         {
@@ -371,13 +436,14 @@ def all_backends(result: dict[str, Any]) -> None:
             "started_at",
             "finished_at",
             "revision",
+            "input_scope",
             "gpu_gate",
             "gpu_full_requested",
             "lanes",
         },
         "all_backends",
     )
-    if result["schema"] != "migration-parity/all-backends-test-result@1":
+    if result["schema"] != "migration-parity/all-backends-test-result@2":
         raise ValueError("all_backends.schema: unsupported schema")
     if result["status"] not in {"passed", "passed_with_gpu_skipped", "failed"}:
         raise ValueError("all_backends.status: invalid status")
@@ -385,6 +451,7 @@ def all_backends(result: dict[str, Any]) -> None:
         string(result[field], f"all_backends.{field}")
     if not isinstance(result["gpu_full_requested"], bool):
         raise ValueError("all_backends.gpu_full_requested: expected boolean")
+    validate_scope(result["input_scope"], "all_backends.input_scope", execution=False)
 
     exact(
         result["gpu_gate"],
@@ -402,7 +469,8 @@ def all_backends(result: dict[str, Any]) -> None:
         "parity-simd",
         "parity-gpu-smoke",
         "parity-gpu",
-        "js-wasm-package",
+        "js-wasm-parity",
+        "browser-wasm-parity",
     }
     lane_ids: list[str] = []
     failed_required = False
@@ -422,6 +490,11 @@ def all_backends(result: dict[str, Any]) -> None:
             "timed_out",
             "artifact",
             "summary",
+            "scope",
+            "shader_coverage",
+            "shader_coverage_artifact",
+            "execution_evidence",
+            "capabilities",
             "reason",
             "output_tail",
         }
@@ -432,7 +505,11 @@ def all_backends(result: dict[str, Any]) -> None:
         lane_ids.append(lane["lane_id"])
         if lane["status"] not in {"passed", "failed", "skipped"}:
             raise ValueError(f"{prefix}.status: invalid status")
-        if lane["kind"] not in {"python-py3-parity", "javascript-wasm-package"}:
+        if lane["kind"] not in {
+            "python-py3-parity",
+            "javascript-wasm-parity",
+            "browser-wasm-parity",
+        }:
             raise ValueError(f"{prefix}.kind: invalid kind")
         if lane.get("backend") not in {None, "cpu", "simd", "gpu"}:
             raise ValueError(f"{prefix}.backend: invalid backend")
@@ -450,6 +527,115 @@ def all_backends(result: dict[str, Any]) -> None:
             exact(summary, {"selected", "executed", "passed", "failed", "not_run", "infrastructure_errors"}, f"{prefix}.summary")
             for field, value in summary.items():
                 non_negative_int(value, f"{prefix}.summary.{field}")
+        if "scope" in lane:
+            validate_scope(lane["scope"], f"{prefix}.scope", execution=True)
+        if "shader_coverage" in lane:
+            exact(lane["shader_coverage"], {"status", "reason"}, f"{prefix}.shader_coverage")
+            if lane["shader_coverage"]["status"] not in {"measured", "not_measured"}:
+                raise ValueError(f"{prefix}.shader_coverage.status: invalid status")
+            string(lane["shader_coverage"]["reason"], f"{prefix}.shader_coverage.reason")
+        if "shader_coverage_artifact" in lane:
+            string(
+                lane["shader_coverage_artifact"],
+                f"{prefix}.shader_coverage_artifact",
+            )
+        if "execution_evidence" in lane:
+            evidence = lane["execution_evidence"]
+            if not isinstance(evidence, dict):
+                raise ValueError(f"{prefix}.execution_evidence: expected object")
+            evidence_status = evidence.get("status")
+            if evidence_status not in {"measured", "not_measured"}:
+                raise ValueError(
+                    f"{prefix}.execution_evidence.status: invalid status"
+                )
+            exact(
+                evidence,
+                {"status", "reason", "artifact", "summary"}
+                if evidence_status == "measured"
+                else {"status", "reason", "artifact"},
+                f"{prefix}.execution_evidence",
+            )
+            string(
+                evidence["reason"],
+                f"{prefix}.execution_evidence.reason",
+                allow_empty=True,
+            )
+            string(evidence["artifact"], f"{prefix}.execution_evidence.artifact")
+            if evidence_status == "measured":
+                execution_summary = evidence["summary"]
+                exact(
+                    execution_summary,
+                    {
+                        "selected",
+                        "receipt_cases",
+                        "not_recorded_cases",
+                        "completed_receipts",
+                        "actual_backend_counts",
+                        "fallback_reason_counts",
+                    },
+                    f"{prefix}.execution_evidence.summary",
+                )
+                for field in (
+                    "selected",
+                    "receipt_cases",
+                    "not_recorded_cases",
+                    "completed_receipts",
+                ):
+                    non_negative_int(
+                        execution_summary[field],
+                        f"{prefix}.execution_evidence.summary.{field}",
+                    )
+                for field in ("actual_backend_counts", "fallback_reason_counts"):
+                    counts = execution_summary[field]
+                    if not isinstance(counts, dict):
+                        raise ValueError(
+                            f"{prefix}.execution_evidence.summary.{field}: expected object"
+                        )
+                    for key, count in counts.items():
+                        string(
+                            key,
+                            f"{prefix}.execution_evidence.summary.{field} key",
+                        )
+                        non_negative_int(
+                            count,
+                            f"{prefix}.execution_evidence.summary.{field}[{key}]",
+                        )
+                if (
+                    execution_summary["receipt_cases"]
+                    + execution_summary["not_recorded_cases"]
+                    != execution_summary["selected"]
+                    or sum(execution_summary["actual_backend_counts"].values())
+                    != execution_summary["completed_receipts"]
+                ):
+                    raise ValueError(
+                        f"{prefix}.execution_evidence.summary: inconsistent counts"
+                    )
+        if "capabilities" in lane:
+            capabilities = lane["capabilities"]
+            exact(capabilities, {"webgpu"}, f"{prefix}.capabilities")
+            webgpu = capabilities["webgpu"]
+            if not isinstance(webgpu, dict):
+                raise ValueError(f"{prefix}.capabilities.webgpu: expected object")
+            required_webgpu = {"api", "adapter", "device", "shader_dispatch", "reason"}
+            if not required_webgpu.issubset(webgpu):
+                raise ValueError(
+                    f"{prefix}.capabilities.webgpu: missing required fields"
+                )
+            for field in required_webgpu:
+                string(webgpu[field], f"{prefix}.capabilities.webgpu.{field}")
+            if "adapter_info" in webgpu:
+                exact(
+                    webgpu["adapter_info"],
+                    {"vendor", "architecture", "device", "description"},
+                    f"{prefix}.capabilities.webgpu.adapter_info",
+                )
+                for field, value in webgpu["adapter_info"].items():
+                    string(
+                        value,
+                        f"{prefix}.capabilities.webgpu.adapter_info.{field}",
+                        nullable=True,
+                        allow_empty=True,
+                    )
         if lane["status"] in {"failed", "skipped"}:
             string(lane.get("reason"), f"{prefix}.reason")
         if "output_tail" in lane:
@@ -462,11 +648,31 @@ def all_backends(result: dict[str, Any]) -> None:
             failed_required = True
     unique(lane_ids, "all_backends.lanes")
     if set(lane_ids) != expected_ids:
-        raise ValueError("all_backends.lanes: expected exactly CPU, SIMD, GPU gate/full, and JS lanes")
+        raise ValueError(
+            "all_backends.lanes: expected exactly CPU, SIMD, GPU gate/full, "
+            "Node WASM, and browser WASM parity lanes"
+        )
+    wasm_lanes = {
+        lane["lane_id"]: lane
+        for lane in result["lanes"]
+        if lane["lane_id"] in {"js-wasm-parity", "browser-wasm-parity"}
+    }
+    wasm_digests = {
+        lane.get("scope", {}).get("case_ids_sha256")
+        for lane in wasm_lanes.values()
+        if isinstance(lane.get("scope"), dict)
+    }
+    if len(wasm_digests) > 1:
+        raise ValueError("all_backends: Node and browser WASM lanes used different input scopes")
+    if wasm_digests and wasm_digests != {result["input_scope"]["case_ids_sha256"]}:
+        raise ValueError("all_backends: WASM lane scope does not match the common input scope")
+    browser_lane = wasm_lanes.get("browser-wasm-parity")
+    if browser_lane and browser_lane["status"] == "passed" and "capabilities" not in browser_lane:
+        raise ValueError("all_backends: a passed browser WASM lane must report WebGPU capability")
     if smoke_status != result["gpu_gate"]["status"]:
         raise ValueError("all_backends.gpu_gate.status does not match GPU smoke lane")
-    if smoke_status == "passed" and result["gpu_full_requested"] and full_gpu_status != "passed":
-        raise ValueError("all_backends: a requested full GPU lane must pass after a passed GPU gate")
+    if smoke_status == "passed" and result["gpu_full_requested"] and full_gpu_status == "skipped":
+        raise ValueError("all_backends: a requested full GPU lane must execute after a passed GPU gate")
     if smoke_status == "passed" and not result["gpu_full_requested"] and full_gpu_status != "skipped":
         raise ValueError("all_backends: the non-requested full GPU lane must be recorded as skipped")
     if smoke_status in {"failed", "skipped"} and full_gpu_status != "skipped":

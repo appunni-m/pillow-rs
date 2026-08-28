@@ -1142,23 +1142,52 @@ fn blur_columns(
 /// Uses sliding-window accumulator with fixed-point (24-bit) arithmetic.
 /// Matches PIL order: ALL horizontal passes first, then ALL vertical passes.
 fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicImage, PilError> {
+    pil_box_blur_xy(img, radius, radius, passes)
+}
+
+/// PIL-style box blur with independent horizontal and vertical radii.
+///
+/// Pillow's `ImagingBoxBlur` applies every horizontal pass with `xradius`,
+/// then every vertical pass with `yradius`. Keeping the fixed-point weights
+/// separate is required for `BoxBlur((xradius, yradius))`.
+fn pil_box_blur_xy(
+    img: &DynamicImage,
+    radius_x: f32,
+    radius_y: f32,
+    passes: u32,
+) -> Result<DynamicImage, PilError> {
+    pil_box_blur_xy_impl(img, radius_x, radius_y, passes)
+}
+
+fn pil_box_blur_xy_impl(
+    img: &DynamicImage,
+    radius_x: f32,
+    radius_y: f32,
+    passes: u32,
+) -> Result<DynamicImage, PilError> {
     let channels = img.color().channel_count() as usize;
     let (w_u32, h_u32) = (img.width(), img.height());
-    if w_u32 == 0 || h_u32 == 0 || radius == 0.0 {
+    if w_u32 == 0 || h_u32 == 0 || (radius_x == 0.0 && radius_y == 0.0) {
         return Ok(img.clone());
     }
     let (width, height) = (w_u32 as usize, h_u32 as usize);
 
-    // Integer part of radius (PIL: (int)floatRadius)
-    let integer_radius = radius as i32 as usize;
-    // Number of pixels in the integer window
-    let window_pixels = (2 * integer_radius + 1) as u32;
-    // Fixed-point weight: PIL uses f32 precision for ww computation
-    // (UINT32)((1 << 24) / (floatRadius * 2 + 1)) — all in f32
-    let whole_weight = (BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
-    // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2)
-    let fractional_weight =
-        BOX_BLUR_SCALE.wrapping_sub(window_pixels.wrapping_mul(whole_weight)) / 2;
+    let blur_parameters = |radius: f32| {
+        // Integer part of radius (PIL: (int)floatRadius).
+        let integer_radius = radius as i32 as usize;
+        // Number of pixels in the integer window.
+        let window_pixels = (2 * integer_radius + 1) as u32;
+        // Fixed-point weight: PIL uses f32 precision for ww computation
+        // (UINT32)((1 << 24) / (floatRadius * 2 + 1)) — all in f32.
+        let whole_weight = (BOX_BLUR_SCALE as f32 / (radius * 2.0 + 1.0)) as u32;
+        // Fractional edge weight (PIL: fw = ((1 << 24) - window_pixels * ww) / 2).
+        let fractional_weight =
+            BOX_BLUR_SCALE.wrapping_sub(window_pixels.wrapping_mul(whole_weight)) / 2;
+        (integer_radius, whole_weight, fractional_weight)
+    };
+    let (horizontal_radius, horizontal_weight, horizontal_fractional_weight) =
+        blur_parameters(radius_x);
+    let (vertical_radius, vertical_weight, vertical_fractional_weight) = blur_parameters(radius_y);
 
     let mut work = img.as_bytes().to_vec();
     let mut scratch = CheckedDims::new(w_u32, h_u32, channels as u8)?.alloc_buffer();
@@ -1171,9 +1200,9 @@ fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicI
             width,
             height,
             channels,
-            integer_radius,
-            whole_weight,
-            fractional_weight,
+            horizontal_radius,
+            horizontal_weight,
+            horizontal_fractional_weight,
         );
         std::mem::swap(&mut work, &mut scratch);
     }
@@ -1201,9 +1230,9 @@ fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicI
                     height,
                     width,
                     channels,
-                    integer_radius,
-                    whole_weight,
-                    fractional_weight,
+                    vertical_radius,
+                    vertical_weight,
+                    vertical_fractional_weight,
                 );
                 // The freshly blurred result is in `work`.  Swap only when
                 // another pass still needs to read it; swapping after the
@@ -1224,9 +1253,9 @@ fn pil_box_blur(img: &DynamicImage, radius: f32, passes: u32) -> Result<DynamicI
                 width,
                 height,
                 channels,
-                integer_radius,
-                whole_weight,
-                fractional_weight,
+                vertical_radius,
+                vertical_weight,
+                vertical_fractional_weight,
                 &mut vertical_accumulator,
             );
             std::mem::swap(&mut work, &mut scratch);
@@ -1729,7 +1758,8 @@ pub fn execute_gaussian_blur(img: &DynamicImage, sigma: f32) -> Result<DynamicIm
     // PIL GaussianBlur: 3 passes of BoxBlur with computed fractional radius.
     // Uses the "From Box Blur to Gaussian Blur" algorithm (Gwosdek et al. 2011).
     // PIL's ImagingGaussianBlur uses f32 parameters but f64 in sqrt/promotion.
-    if sigma <= 0.0 {
+    let sigma = sigma.abs();
+    if sigma == 0.0 {
         return Ok(img.clone());
     }
     let passes = 3.0f64;
@@ -1753,6 +1783,19 @@ pub fn execute_box_blur(img: &DynamicImage, radius: u32) -> Result<DynamicImage,
         return Ok(img.clone());
     }
     pil_box_blur(img, radius as f32, 1)
+}
+
+/// Execute a box blur with independent radii and a fixed number of passes.
+pub fn execute_box_blur_xy_with_passes(
+    img: &DynamicImage,
+    radius_x: f32,
+    radius_y: f32,
+    passes: u32,
+) -> Result<DynamicImage, PilError> {
+    if radius_x == 0.0 && radius_y == 0.0 {
+        return Ok(img.clone());
+    }
+    pil_box_blur_xy(img, radius_x, radius_y, passes)
 }
 
 /// Execute a median filter with explicit mode.

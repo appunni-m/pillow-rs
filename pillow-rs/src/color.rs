@@ -301,7 +301,10 @@ fn pil_grayscale_inner(
 ) -> Result<crate::raster::GrayImage, PilError> {
     let rgb = img.to_rgb8();
     let (w, h) = rgb.dimensions();
-    let dims = CheckedDims::new(w, h, 1)?;
+    // Pillow's ImageOps.grayscale preserves valid empty images.  The output
+    // has no samples to allocate or process, so use the explicit empty-image
+    // allowance rather than treating this as an invalid allocation.
+    let dims = CheckedDims::new_allow_empty(w, h, 1)?;
     let rgb_data = rgb.as_raw().as_slice();
 
     // PIL-identical 16-bit fixed-point BT.601:

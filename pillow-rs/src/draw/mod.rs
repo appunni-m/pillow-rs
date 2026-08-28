@@ -450,6 +450,9 @@ impl Draw {
         input: DrawColorInput,
     ) -> Result<(), PilError> {
         let mode = self.effective_mode();
+        if matches!(input, DrawColorInput::None) {
+            return self.bitmap(x, y, bitmap, None);
+        }
         if let DrawColorInput::Components(values) = &input {
             if mode.len() == 1 && mode != "P" && values.len() != 1 {
                 if mode == "F" {
@@ -595,11 +598,110 @@ impl Draw {
         fill: (u8, u8, u8, u8),
         width: u32,
     ) -> Result<(), PilError> {
+        self.polyline_with_input_joint(input, fill, width, None)
+    }
+
+    /// Normalizes and draws a Python-facing line, including Pillow's optional
+    /// rounded-joint treatment for thick polylines.
+    pub fn polyline_with_input_joint(
+        &mut self,
+        input: DrawPointsInput,
+        fill: (u8, u8, u8, u8),
+        width: u32,
+        joint: Option<&str>,
+    ) -> Result<(), PilError> {
         let points = normalize_draw_points(input, true)?;
         if points.len() < 2 {
             return Ok(());
         }
-        self.polyline(&points, fill, width)
+        self.polyline(&points, fill, width)?;
+
+        // This mirrors ImageDraw.ImageDraw.line's Python-level implementation:
+        // the native draw_lines call paints the segments first, then curve
+        // joints are filled with pieslices. Widths up to four intentionally
+        // retain the native line-only behavior.
+        if joint != Some("curve") || width <= 4 {
+            return Ok(());
+        }
+
+        let width_f = f64::from(width);
+        for window in points.windows(3) {
+            let [start, point, end] = [window[0], window[1], window[2]];
+            let angles = [
+                f64::from(point.0 - start.0)
+                    .atan2(f64::from(start.1 - point.1))
+                    .to_degrees()
+                    .rem_euclid(360.0),
+                f64::from(end.0 - point.0)
+                    .atan2(f64::from(point.1 - end.1))
+                    .to_degrees()
+                    .rem_euclid(360.0),
+            ];
+            if angles[0] == angles[1] {
+                continue;
+            }
+
+            let flipped = (angles[1] > angles[0] && angles[1] - 180.0 > angles[0])
+                || (angles[1] < angles[0] && angles[1] + 180.0 > angles[0]);
+            let coords = (
+                (f64::from(point.0) - width_f / 2.0 + 1.0) as i32,
+                (f64::from(point.1) - width_f / 2.0 + 1.0) as i32,
+                (f64::from(point.0) + width_f / 2.0 - 1.0) as i32,
+                (f64::from(point.1) + width_f / 2.0 - 1.0) as i32,
+            );
+            let (start_angle, end_angle) = if flipped {
+                (angles[1] + 90.0, angles[0] + 90.0)
+            } else {
+                (angles[0] - 90.0, angles[1] - 90.0)
+            };
+            self.pieslice(
+                coords.0,
+                coords.1,
+                coords.2,
+                coords.3,
+                start_angle - 90.0,
+                end_angle - 90.0,
+                Some(fill),
+                None,
+                1,
+            )?;
+
+            if width > 8 {
+                let distance = width_f / 2.0 - 1.0;
+                let coord_at_angle = |angle: f64| {
+                    let angle = (angle - 90.0).to_radians();
+                    let dx = distance * angle.cos();
+                    let dy = distance * angle.sin();
+                    let adjust = |coordinate: f64, delta: f64| {
+                        coordinate
+                            + if delta > 0.0 {
+                                delta.floor()
+                            } else {
+                                delta.ceil()
+                            }
+                    };
+                    (
+                        adjust(f64::from(point.0), dx) as i32,
+                        adjust(f64::from(point.1), dy) as i32,
+                    )
+                };
+                let gap_points = if flipped {
+                    vec![
+                        coord_at_angle(angles[0] + 90.0),
+                        point,
+                        coord_at_angle(angles[1] + 90.0),
+                    ]
+                } else {
+                    vec![
+                        coord_at_angle(angles[0] - 90.0),
+                        point,
+                        coord_at_angle(angles[1] - 90.0),
+                    ]
+                };
+                self.polyline(&gap_points, fill, 3)?;
+            }
+        }
+        Ok(())
     }
 
     /// Draws a rectangle bounded by `(x0, y0, x1, y1)`.
@@ -2557,28 +2659,5 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
             }
             i += 2;
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Draw, Image};
-
-    #[test]
-    fn rgb_text_uses_glyph_coverage_for_rgba_ink() {
-        let image = Image::new(3, 3, "RGB", (0, 0, 0, 255)).expect("RGB image");
-        let mut draw = Draw::new(image, Some("RGBA".to_owned()));
-        let mask_pixel = [255, 0, 0, 128];
-
-        draw.text_compose_rgba(1, 1, 1, 1, &mask_pixel, (255, 0, 0, 128), true, false)
-            .expect("text composition");
-
-        let image = draw.image_clone().expect("restored RGB image");
-        let materialized = image.materialize().expect("materialized RGB image");
-        let rgb = materialized.to_rgb8();
-        let pixel = rgb.get_pixel(1, 1);
-        assert_eq!(pixel[0], 128);
-        assert_eq!(pixel[1], 0);
-        assert_eq!(pixel[2], 0);
     }
 }

@@ -10,6 +10,7 @@ an untracked claim.
 
 from __future__ import annotations
 
+import argparse
 import json
 import hashlib
 from pathlib import Path
@@ -85,6 +86,7 @@ RESULT_SHAPES = {
     "bytes",
     "image",
     "mask",
+    "mask_with_offset",
     "encoded_file",
     "metrics",
     "handle",
@@ -985,4 +987,31 @@ def validate_active_tree(manifest_path: Path) -> dict[str, dict[str, Any]]:
     return validate_inputs(manifest, manifest_path.parent)
 
 
+def main() -> int:
+    """Validate the active input tree without importing a test framework."""
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--manifest",
+        type=Path,
+        default=Path(__file__).resolve().parents[1]
+        / "pillow-rs"
+        / "tests"
+        / "fixtures"
+        / "manifest.yaml",
+    )
+    args = parser.parse_args()
+    validate_active_tree(args.manifest.resolve())
+    import yaml
+
+    manifest = yaml.safe_load(args.manifest.resolve().read_text(encoding="utf-8"))
+    counts = {lane: len(manifest["input_index"][lane]) for lane in LANES}
+    print(json.dumps({"manifest": str(args.manifest.resolve()), "documents": counts}, sort_keys=True))
+    return 0
+
+
 __all__ = ["SCHEMA_MANIFEST", "SCHEMA_BY_LANE", "validate_manifest", "validate_inputs", "validate_active_tree"]
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

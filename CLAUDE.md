@@ -213,7 +213,7 @@ Detailed subagent protocol lives in `.claude/skills/freetype-parity`.
 All normal workflows must go through `make`.
 
 - Run `make help` first when you do not know the target name.
-- Do not paste raw `cargo`, `python`, `pytest`, `wasm-pack`, or shell script
+- Do not paste raw `cargo`, `python`, `node`, `wasm-pack`, or shell script
   commands for routine build, test, lint, fixture, benchmark, or CI work.
 - If a repeated workflow has no target, add or extend a Makefile target in the
   same change and document it here. A manual command that is not documented is
@@ -229,10 +229,11 @@ make setup
 make build
 make build-dev
 make build-wasm-release
-make test-core
 make test
 make test-wasm
 make test-all
+make migration-parity-test
+make migration-parity-test-all-backends
 make image-backend-parity-test
 make fixtures
 make fixture-coverage-check

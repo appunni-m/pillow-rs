@@ -256,7 +256,7 @@ Use these slices when improving docs:
 Run these after each documentation slice:
 
 ```bash
-cargo test -p pillow-rs --test imagingft_matrix_tests -- --nocapture
+make migration-parity-test-all-backends
 cargo doc -p pillow-rs --no-deps
 ```
 
@@ -264,7 +264,7 @@ The strict gate is mandatory for documentation work:
 
 ```bash
 RUSTDOCFLAGS="-D warnings" cargo doc -p pillow-rs --no-deps
-cargo test -p pillow-rs --doc
+make migration-parity-test-all-backends
 ```
 
 There must be no `#[allow(missing_docs)]` in `pillow-rs`.

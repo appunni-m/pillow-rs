@@ -18,7 +18,7 @@ class Draw:
         self._image._rust_image = self._draw.image
 
     def line(self, xy, fill=None, width: int = 0, joint: str | None = None):
-        self._draw.line(xy, fill, width)
+        self._draw.line(xy, fill, width, joint)
         self._sync()
 
     def rectangle(self, xy, fill=None, outline=None, width: int = 1):

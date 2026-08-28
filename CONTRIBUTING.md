@@ -46,18 +46,15 @@ sudo apt-get install -y fonts-dejavu-core   # benchmarks only — not needed to 
 ```bash
 pip install pillow-rs[dev]
 # or individually:
-pip install pillow numpy pyyaml pytest pytest-timeout pytest-json-report pytest-benchmark
+pip install pillow==12.2.0 numpy pyyaml coverage
 ```
 
 | Package | Used by | Purpose |
 |---------|---------|---------|
-| `pillow` | tests + benchmarks | PIL reference — every parity test compares RSPIL output against Pillow |
-| `pytest` | tests | Test runner |
-| `pytest-timeout` | tests | Per-test timeout (300s) |
-| `pytest-json-report` | tests + coverage | JSON report consumed by coverage scripts |
-| `pyyaml` | tests + coverage + benchmarks | Parses `manifest.yaml` |
-| `numpy` | tests + benchmarks | Generate array inputs for `fromarray()` parity tests |
-| `pytest-benchmark` | benchmarks | Benchmark fixture |
+| `pillow` | parity + coverage + benchmarks | PIL reference — every parity case compares RSPIL output against Pillow |
+| `coverage` | coverage | Python source coverage collector |
+| `pyyaml` | parity + coverage + benchmarks | Parses `manifest.yaml` |
+| `numpy` | parity + benchmarks | Generate array inputs for `fromarray()` parity cases |
 
 ### Clone and build
 
@@ -71,8 +68,8 @@ cd pillow-rs-py && maturin develop --release
 # WASM — builds pillow-rs + pillow-rs-js in one command
 cd pillow-rs-js && wasm-pack build --target web
 
-# Core tests only — compiles and tests pillow-rs
-cargo test -p pillow-rs
+# Build the pure-Rust core
+make pillow-rs-build
 ```
 
 `maturin develop` and `wasm-pack build` both compile the entire dependency tree. Core gets built automatically — no separate `cargo build` step.
@@ -83,8 +80,8 @@ cargo test -p pillow-rs
 # Quick sanity check
 python -c "from RSPIL import Image; print(Image.new('RGB', (10, 10)))"
 
-# Run all tests
-python -m pytest tests/ -q --timeout=300
+# Run the public parity corpus through every available facade/backend
+make migration-parity-test-all-backends
 ```
 
 ---
@@ -163,12 +160,11 @@ Each mode writes pixels in its native byte layout — 1 byte for L, 3 for RGB, 4
 ```
 manifest.yaml
     │
-    ├──→ scripts/generate_stubs.py        → Rust stubs in pillow-rs/src/ops/
-    ├──→ scripts/generate_fixtures.py     → Test fixtures (inputs + expected outputs)
-    ├──→ scripts/bench/bench_spec.py      → Benchmark specification (166 functions)
-    ├──→ scripts/coverage/compute_coverage.py → Trust verification per function
-    ├──→ tests/test_parity.py             → Pytest parametrization (1,555 tests)
-    └──→ docs/COVERAGE.md                 → Auto-generated coverage report
+    ├──→ scripts/build_migration_parity_inputs.py → public input corpus
+    ├──→ scripts/bench/bench_spec.py             → benchmark specification
+    ├──→ scripts/run_migration_parity.py         → live Pillow comparisons
+    ├──→ scripts/run_migration_*coverage.py      → managed coverage evidence
+    └──→ docs/COVERAGE.md                        → generated coverage report
 ```
 
 ### Adding a new function (step by step)
@@ -209,107 +205,116 @@ manifest.yaml
 
 6. **Register module** — If new ops file: add `pub mod my_module;` to `pillow-rs/src/ops/mod.rs`
 
-7. **Generate fixtures** — `python scripts/generate_fixtures.py` creates test fixtures from manifest
+7. **Generate public inputs** — `make migration-parity-inputs` regenerates the manifest-driven input corpus
 
-8. **Map coverage** — Add entry to `scripts/coverage/coverage_map.json`:
-   ```json
-   "test_parity[Image.my_function__Image_my_function_L_variant1]": ["Image.my_function"]
-   ```
+8. **Map coverage** — Add the corresponding input-only coverage plan and case
+   selector to `pillow-rs/tests/fixtures/inputs/coverage/`.
 
-9. **Run tests and validate coverage**:
+9. **Run parity and validate coverage**:
    ```bash
-   python -m pytest tests/ --json-report --json-report-file=/tmp/report.json
-   python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
+   make migration-parity-test-all-backends
+   make migration-parity-coverage
    ```
 
-### Fixing a failing test (incremental edit)
+### Fixing a failing parity case (incremental edit)
 
-1. Find the failing test in `xfailed_tracker.txt` or pytest output
+1. Find the failing `case_id` in the parity result or Coverage MCP output
 2. Run it in isolation:
    ```bash
-   python -m pytest tests/ -k "test_name_here" -v --tb=long --timeout=300
+   make migration-parity-case MIGRATION_PARITY_CASE="PIL.Image.Image.operation.case"
    ```
 3. Compare RSPIL output vs Pillow output to understand the mismatch
 4. Fix the Rust implementation in `pillow-rs/src/ops/<module>.rs`
-5. Re-run the single test to confirm the fix
-6. Run the full suite to check for regressions:
+5. Re-run the single parity case to confirm the fix
+6. Run the full parity corpus to check for regressions:
    ```bash
-   python -m pytest tests/ -q --timeout=300
+   make migration-parity-test-all-backends
    ```
-7. Update `xfailed_tracker.txt` — mark as `[x]` when fixed
-8. Commit with message: `fix: Image.my_function passes PIL parity for mode X`
+7. Commit with message: `fix: Image.my_function passes PIL parity for mode X`
 
 ---
 
 ## How to Test
 
-### Full suite
+### Full parity campaign
 
 ```bash
-# Build + generate fixtures + run tests (suite0 only, fast path)
-bash scripts/build_and_test.sh
+# Regenerate and validate the manifest-driven public input corpus
+make migration-parity-inputs
+make migration-parity-inputs-check
 
-# With extended suite
-bash scripts/build_and_test.sh 1   # suite0 + suite1
-bash scripts/build_and_test.sh 2   # suite0 + suite2
+# Run the shared public corpus through CPU, SIMD, GPU/WGSL, Python, and JS/WASM,
+# then measure the same workflows against Pillow and order the reverse gaps
+make test
+
+# The target-only combined lane
+make migration-parity-test-all-backends
 ```
 
-### Direct pytest
+### Incremental parity
 
 ```bash
-# All 1,555 tests (~60s)
-python -m pytest tests/ -q --tb=line --timeout=300
+# One public case, without replacing the full-suite artifact
+make migration-parity-case MIGRATION_PARITY_CASE="PIL.Image.Image.copy.behavior.default"
 
-# Single test
-python -m pytest tests/ -k "ImageFilter_BLUR" -v --tb=long --timeout=300
+# A comma-separated filtered parity run
+make migration-parity-test MIGRATION_PARITY_CASE_IDS="case-a,case-b"
 
-# Specific module
-python -m pytest tests/ -k "ImageChops" -q --timeout=300
+# One filter for every lane in `make test`, including reverse Pillow coverage
+make test MIGRATION_TEST_CASE_IDS="case-a,case-b"
 
-# With JSON report (required for coverage)
-python -m pytest tests/ --json-report --json-report-file=/tmp/report.json -q --timeout=300
+# The same filter for the target-only all-backend runner
+make migration-parity-test-all-backends MIGRATION_ALL_BACKENDS_CASE_IDS="case-a,case-b"
 
-# Run only suite0 (fast, core functions)
-python -m pytest tests/ -k "not suite1 and not suite2 and not suite3" -q --timeout=300
+# Coverage uses the indexed plans, not a test-runner JSON report.
+make migration-parity-coverage
+
+# Order Pillow source and public-operation gaps from the latest reverse run.
+make migration-parity-pillow-missing-manifest
 ```
 
-### Rust core tests
+### Parity architecture
 
-```bash
-cargo test -p pillow-rs
-cargo test -p pillow-rs -- --nocapture   # show output
-```
+- **`pillow-rs/tests/fixtures/manifest.yaml`** — Fixed public surface and coverage plans.
+- **`pillow-rs/tests/fixtures/inputs/parity/`** — Input-only public workflows; expected outputs are produced by the live Pillow oracle.
+- **`scripts/run_migration_parity.py`** — Executes the same workflow against Pillow and the Python binding.
+- **`scripts/run_all_backend_tests.py`** — Runs CPU, SIMD, bounded GPU, Python, Node WASM, and browser WASM lanes with one public corpus.
+- **`scripts/run_migration_js_parity.py`** — Sends JS-compatible cases to either the Node or browser WASM adapter and compares them with Pillow.
+- **`scripts/run_migration_pillow_coverage.py`** — Runs that public corpus against Pillow while collecting Python source coverage.
+- **`scripts/report_migration_pillow_missing.py`** — Produces the ordered source and public-feature gap manifest; it is evidence, not a new denominator.
 
-### Test architecture
-
-- **`tests/test_parity.py`** — Single parametrized test file. Fixture data drives 1,555 test cases.
-- **`tests/engine.py`** — Execution engine: creates PIL and RSPIL inputs, runs both, compares results.
-- **`tests/conftest.py`** — Pytest config: manifest loading, backend selection, fixture helpers.
-- **`tests/fixtures/`** — JSON fixtures (not committed). Regenerated by `scripts/generate_fixtures.py`.
-
-Each test:
-1. Creates identical inputs for both PIL (reference) and RSPIL
-2. Runs the same operation on both
-3. Asserts binary-identical output with `assert_images_equal()` or `assert_values_equal()`
+Each parity case creates the same input workflow for Pillow and the selected
+target, then compares the canonical output or error. A case is selected by its
+stable `case_id`, so the same filter can be reused for local, managed, and
+Coverage MCP runs.
 
 ---
 
 ## How to Check Coverage
 
 ```bash
-# 1. Run tests with JSON report
-python -m pytest tests/ --json-report --json-report-file=/tmp/report.json -q --timeout=300
+# Rust + Python coverage through the indexed public plans
+make migration-parity-coverage
 
-# 2. Compute coverage
-python scripts/coverage/compute_coverage.py manifest.yaml /tmp/report.json
+# Pillow source coverage using the exact same public corpus
+make migration-parity-pillow-coverage
 
-# 3. Generate coverage docs
-python scripts/coverage/generate_multi_backend_coverage.py  # → docs/COVERAGE.md
+# Target Rust + Python merged coverage for a filtered case set
+make migration-parity-coverage-rust MIGRATION_COVERAGE_CASE_IDS="case-a,case-b"
 ```
 
-Coverage mapping lives in `scripts/coverage/coverage_map.json`. Every test must have an entry mapping it to its manifest function(s). When you add a test, add it here.
+Coverage mapping lives in the manifest and indexed coverage inputs. Every
+public input case must have a manifest operation and coverage-plan selector.
+Coverage MCP can compare a filtered run with an explicit snapshot baseline;
+the primary incremental number is expected to be the deduplicated union of the
+baseline and the selected increment.
+An observed Coverage MCP 0.15.0 defect currently violates that invariant for
+some filtered LLVM runs; keep the exact reproduction in
+[`docs/coverage-mcp-incremental-union-bug-20260827.md`](docs/coverage-mcp-incremental-union-bug-20260827.md)
+until the dashboard fixes its primary projection.
 
-CI gate (`scripts/ci_coverage.sh`) runs the full pipeline and exits 1 on any coverage gap.
+The CI gate runs the maintained Make targets and rejects invalid or incomplete
+parity/coverage result interfaces.
 
 ---
 
@@ -337,7 +342,7 @@ Output regenerates `BENCHMARKS.md`. The benchmark spec is auto-generated from `m
 |--------|--------|-------------|
 | `native_cpu` | Python + pillow_rs | Native Rust vs Pillow CPU |
 | `wasm_cpu` | Node.js + WASM | WASM in Node.js runtime |
-| `browser_cpu` | Puppeteer + headless Chrome | WASM in browser |
+| `browser_cpu` | Puppeteer + headless Chrome | WASM in browser; same public parity corpus as Node |
 | `native_gpu` | wgpu compute | Native GPU (NYW — not yet wired) |
 | `wasm_gpu` | Node.js + WebGPU | WASM GPU (NYW) |
 | `browser_gpu` | Puppeteer + WebGPU | Browser GPU (NYW) |
@@ -425,8 +430,8 @@ Nightly-only options (`imports_granularity = "Crate"`, `group_imports = "StdExte
 
 - [ ] `cargo fmt --check` passes (no diff)
 - [ ] `cargo clippy --all-targets --all-features -- -A deprecated` passes
-- [ ] `cargo test -p pillow-rs` passes
-- [ ] No `unwrap()` or `expect()` outside `#[cfg(test)]`
+- [ ] `make migration-parity-test-all-backends` passes
+- [ ] No `unwrap()` or `expect()` in runtime code without a documented invariant
 - [ ] `thiserror` for error types, never bare `anyhow` in core
 - [ ] `&str` over `String`, `&[T]` over `Vec<T>` in function parameters
 - [ ] `#[derive(Debug)]` on all public types
@@ -589,11 +594,11 @@ Configuration in `pillow-rs/Cargo.toml`:
 
 - [ ] Bump version in workspace `Cargo.toml`
 - [ ] Update changelog
-- [ ] Run full test suite: `python -m pytest tests/ -q --timeout=300`
+- [ ] Run full parity corpus: `make migration-parity-test-all-backends`
 - [ ] Run clippy: `cargo clippy --all-targets --all-features -- -D warnings`
 - [ ] Regenerate benchmarks: `bash scripts/bench/bench_all.sh incremental`
 - [ ] Regenerate coverage: `python scripts/coverage/generate_multi_backend_coverage.py`
-- [ ] Build and test WASM: `wasm-pack build --target web && node scripts/bench/bench_wasm_cpu.mjs`
+- [ ] Build and run JS/WASM parity: `make test-wasm`
 - [ ] Publish to all three registries
 
 ---

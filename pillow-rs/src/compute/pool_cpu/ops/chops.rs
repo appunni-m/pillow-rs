@@ -168,65 +168,6 @@ fn apply_binary_rows<F>(
     }
 }
 
-fn apply_offset_rows(
-    source: &[u8],
-    output: &mut [u8],
-    width: usize,
-    height: usize,
-    offset_x: i32,
-    offset_y: i32,
-) {
-    let row_stride = width.saturating_mul(4);
-    if width == 0 || height == 0 || row_stride == 0 {
-        return;
-    }
-    let source_x = (-(offset_x as i64)).rem_euclid(width as i64) as usize;
-    let source_y = (-(offset_y as i64)).rem_euclid(height as i64) as usize;
-
-    #[inline]
-    fn apply_row(
-        source: &[u8],
-        output: &mut [u8],
-        width: usize,
-        row_stride: usize,
-        source_x: usize,
-        source_y: usize,
-        destination_y: usize,
-    ) {
-        let source_row = (source_y + destination_y) % (source.len() / row_stride);
-        let source_start = source_row * row_stride;
-        let source_row = &source[source_start..source_start + row_stride];
-        let first_pixels = width - source_x;
-        let first_bytes = first_pixels * 4;
-        output[..first_bytes].copy_from_slice(&source_row[source_x * 4..]);
-        if source_x != 0 {
-            output[first_bytes..].copy_from_slice(&source_row[..source_x * 4]);
-        }
-    }
-
-    #[cfg(feature = "parallel")]
-    if width.saturating_mul(height) >= CHOPS_PARALLEL_PIXEL_THRESHOLD {
-        crate::par_rows_mut!(
-            output,
-            row_stride,
-            height,
-            |_row_start, _row_end, y, row| {
-                apply_row(
-                    source, row, width, row_stride, source_x, source_y, y as usize,
-                );
-            }
-        );
-    } else {
-        for (y, row) in output.chunks_exact_mut(row_stride).take(height).enumerate() {
-            apply_row(source, row, width, row_stride, source_x, source_y, y);
-        }
-    }
-    #[cfg(not(feature = "parallel"))]
-    for (y, row) in output.chunks_exact_mut(row_stride).take(height).enumerate() {
-        apply_row(source, row, width, row_stride, source_x, source_y, y);
-    }
-}
-
 /// Per-channel binary operation.
 fn channel_op_binary(
     img: &DynamicImage,
@@ -470,12 +411,8 @@ pub fn op_chops_constant(img: &DynamicImage, value: u8) -> DynamicImage {
     DynamicImage::ImageLuma8(out)
 }
 
-pub fn op_chops_offset(img: &DynamicImage, x: i32, y: i32) -> DynamicImage {
-    let (w, h) = (img.width(), img.height());
-    let src_rgba = img.to_rgba8();
-    let mut result = RgbaImage::new(w, h);
-    apply_offset_rows(&src_rgba, &mut result, w as usize, h as usize, x, y);
-    preserve_mode(img, DynamicImage::ImageRgba8(result))
+pub fn op_chops_offset(img: &DynamicImage, x: i32, y: i32, mode: Option<&str>) -> DynamicImage {
+    img.offset_with_mode(x, y, mode)
 }
 
 pub fn op_chops_duplicate(img: &DynamicImage) -> DynamicImage {

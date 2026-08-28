@@ -14,6 +14,8 @@ afterwards, so the workspace is not left in an instrumented state.
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
+import fcntl
 import hashlib
 import json
 import os
@@ -61,6 +63,28 @@ COMMAND = {
     "cwd": ".",
     "timeout_seconds": 7200,
 }
+
+
+@contextmanager
+def coverage_run_lock():
+    """Serialize LLVM coverage runs that share the instrumented target tree.
+
+    Coverage MCP may schedule otherwise independent filtered runs at the same
+    time.  The instrumented extension, Cargo target, raw profiles, and
+    temporary Python extension are intentionally shared by this collector, so
+    concurrent runs would delete one another's objects or profiles.  A small
+    advisory lock keeps the reusable build cache while making those runs
+    deterministic.
+    """
+
+    lock_path = ROOT / "target" / ".migration-parity-rust-coverage.lock"
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("w", encoding="utf-8") as handle:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def coverage_build_inputs() -> list[Path]:
@@ -253,7 +277,7 @@ def merged_file_data(
     }
 
 
-def run(args: argparse.Namespace) -> int:
+def run_locked(args: argparse.Namespace) -> int:
     manifest_path = args.manifest.resolve()
     manifest = load_manifest(manifest_path)
     plans, plan_paths = load_coverage_plans(manifest)
@@ -376,7 +400,7 @@ def run(args: argparse.Namespace) -> int:
         # parity facade does not select (getlength, getmask2_with_start,
         # native_getvaraxes, native_getvarnames, native_setvaraxes,
         # native_setvarname, ...) through the maintained input-only corpus.
-        # Keep this in the public Python surface: cargo tests must not inflate
+        # Keep this in the public Python surface: non-parity harnesses must not inflate
         # migration coverage.
         selected_command_ids = {
             command_id
@@ -626,6 +650,11 @@ def run(args: argparse.Namespace) -> int:
         if profile_temp_dir is not None:
             shutil.rmtree(profile_temp_dir, ignore_errors=True)
     return 0
+
+
+def run(args: argparse.Namespace) -> int:
+    with coverage_run_lock():
+        return run_locked(args)
 
 
 def main() -> int:

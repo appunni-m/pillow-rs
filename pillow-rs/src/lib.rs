@@ -284,6 +284,8 @@ pub use crate::ops::module_fns::effect_noise_from_size as image_effect_noise_fro
 pub use crate::ops::module_fns::effect_spread as image_effect_spread;
 pub use crate::ops::module_fns::eval as image_eval;
 pub use crate::ops::module_fns::eval_callable as image_eval_callable;
+pub use crate::ops::module_fns::eval_float as image_eval_float;
+pub use crate::ops::module_fns::eval_point_transform as image_eval_point_transform;
 pub use crate::ops::module_fns::eval_replicated_for_image as image_eval_replicated_for_image;
 pub use crate::ops::module_fns::eval_validated as image_eval_validated;
 pub use crate::ops::module_fns::frombytes as image_frombytes;
@@ -926,8 +928,26 @@ pub fn backend_support_registry() -> Result<BTreeMap<&'static str, BackendSuppor
                 BackendSupportEntry {
                     cpu_fn: entry.cpu_fn.map(|_| ()),
                     simd_fn: entry.simd_fn.map(|_| ()),
-                    gpu_shader: entry.gpu_shader,
-                    gpu_source: entry.gpu_source.map(|_| ()),
+                    gpu_shader: {
+                        #[cfg(feature = "gpu")]
+                        {
+                            entry.gpu_shader
+                        }
+                        #[cfg(not(feature = "gpu"))]
+                        {
+                            None
+                        }
+                    },
+                    gpu_source: {
+                        #[cfg(feature = "gpu")]
+                        {
+                            entry.gpu_source.map(|_| ())
+                        }
+                        #[cfg(not(feature = "gpu"))]
+                        {
+                            None
+                        }
+                    },
                 },
             )
         })
@@ -949,7 +969,15 @@ pub fn backend_simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
 /// Returns whether GPU declares support for a pipeline operation.
 #[cfg(feature = "test-api")]
 pub fn backend_gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    crate::compute::registry::gpu_supports(op)
+    #[cfg(feature = "gpu")]
+    {
+        crate::compute::registry::gpu_supports(op)
+    }
+    #[cfg(not(feature = "gpu"))]
+    {
+        let _ = op;
+        Ok(false)
+    }
 }
 
 /// Returns the backend support matrix as deterministic pretty JSON.

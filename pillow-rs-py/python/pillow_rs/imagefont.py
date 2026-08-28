@@ -53,6 +53,24 @@ class ImagingCore:
     def __bytes__(self):
         return self.tobytes()
 
+    def __iter__(self):
+        # Pillow exposes RGBA ImagingCore masks as a sequence of 4-tuples.
+        # Reuse the public image data view so the wrapper stays a thin facade
+        # over Rust-owned pixels for both scalar and color masks.
+        if self._image is None:
+            return iter(())
+        return iter(self._image.getdata())
+
+    def __len__(self):
+        if self._image is None:
+            return 0
+        return self._image.width * self._image.height
+
+    def __getitem__(self, index):
+        if self._image is None:
+            raise IndexError(index)
+        return self._image.getdata()[index]
+
     def transpose(self, method):
         if self._image is None:
             return ImagingCore(None, self._mode, self._size, self._bytes)

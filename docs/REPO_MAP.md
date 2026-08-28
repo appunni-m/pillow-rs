@@ -273,10 +273,8 @@ generated reports, build outputs, and package installs.
 |   |   |   |   |-- mod.rs
 |   |   |   |   `-- ops/
 |   |   |   |       |-- adapters.rs
-|   |   |   |       |-- arm.rs
 |   |   |   |       |-- mod.rs
-|   |   |   |       |-- scalar.rs
-|   |   |   |       `-- x86.rs
+|   |   |   |       `-- scalar.rs
 |   |   |   `-- registry.rs
 |   |   |-- draw/
 |   |   |   `-- mod.rs

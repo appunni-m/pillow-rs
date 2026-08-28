@@ -6,14 +6,15 @@ version: 0.1.0
 
 # Fix PIL Parity Test
 
-Encode a proven cycle for fixing pillow-rs PIL parity tests: research PIL's actual C/Python source code, implement the exact algorithm in Rust, validate with a single test comparison, then update the tracker and commit.
+Encode a proven cycle for fixing pillow-rs PIL parity cases: research PIL's
+actual C/Python source code, implement the exact algorithm in Rust, validate
+with one stable input comparison, then commit the change.
 
 ## When to Use
 
 - The user asks to "fix more tests", "continue fixing xfailed", or "fix the algorithm"
-- Working through entries in `xfailed_tracker.txt`
-- Any single PIL parity test needs investigation and a Rust-level fix
-- A test produces hash/value mismatches that require algorithmic correction
+- Any single PIL parity case needs investigation and a Rust-level fix
+- A parity case produces hash/value mismatches that require algorithmic correction
 
 ## Core Pattern
 
@@ -39,32 +40,19 @@ To implement the fix:
 
 1. Read the current Rust code in `pillow-rs/src/image.rs` or `pillow-rs/src/ops/*.rs`
 2. Edit to match PIL's algorithm exactly — same math, same rounding, same border handling
-3. Build: `maturin develop --manifest-path pillow-rs-py/Cargo.toml --release`
+3. Build: `make build`
 
 ### Validate Phase
 
 To validate the fix:
 
-1. Run only the single test:
+1. Run only the single public case:
    ```bash
-   PYTHONPATH=/home/appunni/work/pil-wasm:$PYTHONPATH python -m pytest "tests/test_fixture_parity.py::test_fixture_parity[<test_name>]" -v
+   make migration-parity-case MIGRATION_PARITY_CASE="<case_id>"
    ```
-2. If XFAIL: compare RSPIL vs PIL output directly (see `references/debug-patterns.md`)
-3. If fixture hash needs regeneration (PIL algorithm was correct but fixture was stale):
-   ```bash
-   python3 -c "
-   from PIL import Image as PILImage, ImageFilter as PILF
-   import json, hashlib
-   for mode in ['L','RGB']:
-       with open(f'tests/fixtures/<Name>_{mode}.json') as f: fx = json.load(f)
-       raw = bytes.fromhex(fx['input']['bytes'])
-       pil = PILImage.frombytes(mode, (100,100), raw).filter(PILF.<FILTER>)
-       fx['expected']['value'] = hashlib.sha256(pil.tobytes()).hexdigest()
-       with open(f'tests/fixtures/<Name>_{mode}.json', 'w') as f: json.dump(fx, f, indent=2)
-   "
-   ```
-4. Mark test `[x]` in `xfailed_tracker.txt`
-5. Commit: `git add -A && git commit -m "fix: <description>"`
+2. Compare the target and Pillow observations directly (see `references/debug-patterns.md`)
+3. Regenerate inputs only through `make migration-parity-inputs` when the manifest changes
+4. Commit: `git add -A && git commit -m "fix: <description>"`
 
 ## Proven Algorithm Patterns
 
@@ -81,13 +69,13 @@ Reference for algorithms already validated:
 
 | Task | Command |
 |------|---------|
-| Pick next test | Read `xfailed_tracker.txt`, pick `[ ]` entry |
+| Pick next case | Read the parity result or Coverage MCP output for a `case_id` |
 | Research | WebSearch + WebFetch PIL source |
-| Build | `maturin develop --manifest-path pillow-rs-py/Cargo.toml --release` |
-| Single test | `PYTHONPATH=... python -m pytest "tests/...::test...[name]" -v` |
+| Build | `make build` |
+| Single case | `make migration-parity-case MIGRATION_PARITY_CASE="<case_id>"` |
 | Debug diffs | See `references/debug-patterns.md` |
 | Regen fixture | Use inline python3 script above |
-| Full suite | `PYTHONPATH=... python -m pytest tests/test_fixture_parity.py -q --tb=no` |
+| Full parity | `make migration-parity-test-all-backends` |
 
 ## Additional Resources
 
