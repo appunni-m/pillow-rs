@@ -63,6 +63,9 @@ class GaussianBlur:
 
 class BoxBlur:
     def __init__(self, radius=2):
+        xy = radius if isinstance(radius, (tuple, list)) else (radius, radius)
+        if xy[0] < 0 or xy[1] < 0:
+            raise ValueError("radius must be >= 0")
         self.radius = radius
     def _apply(self, rust_image):
         return rust_image.box_blur(self.radius)

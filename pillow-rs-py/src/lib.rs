@@ -7,7 +7,7 @@
 use pillow_rs::Image as RsImage;
 use pillow_rs::PilError;
 use pyo3::ToPyObject;
-use pyo3::exceptions::{PyTypeError, PyUserWarning, PyValueError};
+use pyo3::exceptions::{PyOverflowError, PyTypeError, PyUserWarning, PyValueError};
 use pyo3::prelude::Bound;
 use pyo3::prelude::Py;
 use pyo3::prelude::PyAny;
@@ -49,6 +49,186 @@ pyo3::create_exception!(_core, DecompressionBombError, pyo3::exceptions::PyExcep
 #[pyclass(name = "Image")]
 pub struct PyImage {
     inner: RsImage,
+}
+
+fn filter_size_from_python(size: i64, negative_is_identity: bool) -> PyResult<u32> {
+    if size < 0 {
+        if negative_is_identity {
+            return Ok(0);
+        }
+        return Err(PyValueError::new_err("bad kernel size"));
+    }
+    u32::try_from(size)
+        .map_err(|_| PyOverflowError::new_err("Python int too large to convert to C ssize_t"))
+}
+
+fn filter_rank_from_python(rank: i64) -> PyResult<u32> {
+    if rank < 0 {
+        return Err(PyValueError::new_err("bad rank value"));
+    }
+    u32::try_from(rank)
+        .map_err(|_| PyOverflowError::new_err("Python int too large to convert to C ssize_t"))
+}
+
+fn blur_radius_pair_from_python(
+    radius: Option<&Bound<'_, PyAny>>,
+    default: f64,
+) -> PyResult<(f64, f64)> {
+    match radius {
+        None => Ok((default, default)),
+        Some(value) => {
+            if let Ok(radius) = value.extract::<f64>() {
+                return Ok((radius, radius));
+            }
+            let values = value.extract::<Vec<f64>>().map_err(|_| {
+                PyTypeError::new_err("radius must be a number or a sequence of two numbers")
+            })?;
+            if values.len() != 2 {
+                return Err(PyTypeError::new_err(format!(
+                    "argument 1 must be sequence of length 2, not {}",
+                    values.len()
+                )));
+            }
+            Ok((values[0], values[1]))
+        }
+    }
+}
+
+/// Temporary affine transform object passed to scalar Image.point callables.
+///
+/// Pillow uses this object to recognize expressions such as ``x + 1`` and
+/// ``x * 0.5`` without enumerating a byte lookup table.  It is an adapter
+/// object only; the resulting scale and offset are applied by the Rust core.
+#[pyclass(name = "ImagePointTransform")]
+#[derive(Clone, Copy)]
+pub struct PyPointTransform {
+    scale: f64,
+    offset: f64,
+}
+
+fn point_transform_operand(other: &Bound<'_, PyAny>) -> PyResult<Result<PyPointTransform, f64>> {
+    if let Ok(transform) = other.extract::<PyRef<'_, PyPointTransform>>() {
+        return Ok(Ok(*transform));
+    }
+    if let Ok(value) = other.extract::<f64>() {
+        return Ok(Err(value));
+    }
+    Err(PyTypeError::new_err(
+        "point transform operands must be numeric",
+    ))
+}
+
+/// Probes a callable with Pillow's affine point-transform sentinel.
+///
+/// The callback is intentionally invoked while the GIL is held.  Only the
+/// resulting scalar parameters cross into the Rust core, so the core never
+/// needs to retain or call a Python object.
+fn point_transform_from_python(input: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<(f64, f64)> {
+    let seed = Py::new(
+        py,
+        PyPointTransform {
+            scale: 1.0,
+            offset: 0.0,
+        },
+    )?;
+    let result = input.call1((seed,))?;
+    if let Ok(transform) = result.extract::<PyRef<'_, PyPointTransform>>() {
+        return Ok((transform.scale, transform.offset));
+    }
+    Ok((0.0, result.extract::<f64>()?))
+}
+
+#[pymethods]
+impl PyPointTransform {
+    #[new]
+    fn new(scale: f64, offset: f64) -> Self {
+        Self { scale, offset }
+    }
+
+    fn __neg__(&self) -> Self {
+        Self {
+            scale: -self.scale,
+            offset: -self.offset,
+        }
+    }
+
+    fn __add__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        match point_transform_operand(other)? {
+            Ok(other) => Ok(Self {
+                scale: self.scale + other.scale,
+                offset: self.offset + other.offset,
+            }),
+            Err(value) => Ok(Self {
+                scale: self.scale,
+                offset: self.offset + value,
+            }),
+        }
+    }
+
+    fn __radd__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        self.__add__(other)
+    }
+
+    fn __sub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        match point_transform_operand(other)? {
+            Ok(other) => Ok(Self {
+                scale: self.scale - other.scale,
+                offset: self.offset - other.offset,
+            }),
+            Err(value) => Ok(Self {
+                scale: self.scale,
+                offset: self.offset - value,
+            }),
+        }
+    }
+
+    fn __rsub__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        match point_transform_operand(other)? {
+            Ok(other) => Ok(Self {
+                scale: other.scale - self.scale,
+                offset: other.offset - self.offset,
+            }),
+            Err(value) => Ok(Self {
+                scale: -self.scale,
+                offset: value - self.offset,
+            }),
+        }
+    }
+
+    fn __mul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let value = match point_transform_operand(other)? {
+            Ok(_) => {
+                return Err(PyTypeError::new_err("cannot multiply two point transforms"));
+            }
+            Err(value) => value,
+        };
+        Ok(Self {
+            scale: self.scale * value,
+            offset: self.offset * value,
+        })
+    }
+
+    fn __rmul__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        self.__mul__(other)
+    }
+
+    fn __truediv__(&self, other: &Bound<'_, PyAny>) -> PyResult<Self> {
+        let value = match point_transform_operand(other)? {
+            Ok(_) => {
+                return Err(PyTypeError::new_err("cannot divide by a point transform"));
+            }
+            Err(value) => value,
+        };
+        if value == 0.0 {
+            return Err(pyo3::exceptions::PyZeroDivisionError::new_err(
+                "float division by zero",
+            ));
+        }
+        Ok(Self {
+            scale: self.scale / value,
+            offset: self.offset / value,
+        })
+    }
 }
 
 /// Thin host handle for the Rust-owned ImageSequence iterator state.
@@ -141,6 +321,13 @@ fn map_open_path_error(
             error.raw_os_error().unwrap_or(2),
             "No such file or directory",
             filename,
+        ));
+    }
+    if error.kind() == std::io::ErrorKind::IsADirectory {
+        return pyo3::exceptions::PyIsADirectoryError::new_err((
+            error.raw_os_error().unwrap_or(21),
+            "Is a directory",
+            path.to_string_lossy().to_string(),
         ));
     }
     map_error(error.into())
@@ -594,8 +781,8 @@ impl PyImage {
     ) -> PyResult<Self> {
         let mode = open_mode_input_from_python(mode)?;
         let formats = open_formats_input_from_python(formats)?;
-        let format_names = pillow_rs::validate_python_open_inputs(mode, formats)
-            .map_err(map_error)?;
+        let format_names =
+            pillow_rs::validate_python_open_inputs(mode, formats).map_err(map_error)?;
         let format_refs = format_names
             .as_deref()
             .map(|names| names.iter().map(String::as_str).collect::<Vec<_>>());
@@ -973,9 +1160,10 @@ impl PyImage {
     ) -> PyResult<PyImage> {
         let palette = match palette {
             None => pillow_rs::QuantizePalette::None,
-            Some(value) => image_from_python(value)
-                .map(pillow_rs::QuantizePalette::Image)
-                .unwrap_or(pillow_rs::QuantizePalette::Other),
+            Some(value) => image_from_python(value).map_or(
+                pillow_rs::QuantizePalette::Other,
+                pillow_rs::QuantizePalette::Image,
+            ),
         };
         let rs = py
             .allow_threads(|| {
@@ -1058,10 +1246,22 @@ impl PyImage {
             .map_err(map_error)
     }
 
-    fn gaussian_blur(&self, radius: Option<f64>, py: Python<'_>) -> PyResult<PyImage> {
-        let radius = radius.unwrap_or(2.0) as f32;
+    #[pyo3(signature = (radius=None))]
+    fn gaussian_blur(
+        &self,
+        radius: Option<&Bound<'_, PyAny>>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
+        let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
         let rs = py
-            .allow_threads(|| self.inner.gaussian_blur(radius))
+            .allow_threads(|| {
+                if radius_x == radius_y {
+                    self.inner.gaussian_blur(radius_x as f32)
+                } else {
+                    self.inner
+                        .gaussian_blur_xy(radius_x as f32, radius_y as f32)
+                }
+            })
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
@@ -1082,40 +1282,41 @@ impl PyImage {
         Ok(PyImage { inner: rs })
     }
 
-    fn max_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = size.unwrap_or(3);
+    fn max_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rs = py
             .allow_threads(|| self.inner.max_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn min_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = size.unwrap_or(3);
+    fn min_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rs = py
             .allow_threads(|| self.inner.min_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn median_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = size.unwrap_or(3);
+    fn median_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size.unwrap_or(3), false)?;
         let rs = py
             .allow_threads(|| self.inner.median_filter(size))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn box_blur(&self, radius: Option<f64>, py: Python<'_>) -> PyResult<PyImage> {
-        let radius = radius.unwrap_or(2.0) as f32;
+    #[pyo3(signature = (radius=None))]
+    fn box_blur(&self, radius: Option<&Bound<'_, PyAny>>, py: Python<'_>) -> PyResult<PyImage> {
+        let (radius_x, radius_y) = blur_radius_pair_from_python(radius, 2.0)?;
         let rs = py
-            .allow_threads(|| self.inner.box_blur(radius))
+            .allow_threads(|| self.inner.box_blur_xy(radius_x as f32, radius_y as f32))
             .map_err(map_error)?;
         Ok(PyImage { inner: rs })
     }
 
-    fn mode_filter(&self, size: Option<u32>, py: Python<'_>) -> PyResult<PyImage> {
-        let size = size.unwrap_or(3);
+    fn mode_filter(&self, size: Option<i64>, py: Python<'_>) -> PyResult<PyImage> {
+        let size = filter_size_from_python(size.unwrap_or(3), true)?;
         let rs = py
             .allow_threads(|| self.inner.mode_filter(size))
             .map_err(map_error)?;
@@ -1124,12 +1325,12 @@ impl PyImage {
 
     fn rank_filter(
         &self,
-        size: Option<u32>,
-        rank: Option<u32>,
+        size: Option<i64>,
+        rank: Option<i64>,
         py: Python<'_>,
     ) -> PyResult<PyImage> {
-        let size = size.unwrap_or(3);
-        let rank = rank.unwrap_or(0);
+        let size = filter_size_from_python(size.unwrap_or(3), false)?;
+        let rank = filter_rank_from_python(rank.unwrap_or(0))?;
         let rs = py
             .allow_threads(|| self.inner.rank_filter(size, rank))
             .map_err(map_error)?;
@@ -1190,9 +1391,7 @@ impl PyImage {
         py: Python<'_>,
     ) -> PyResult<PyImage> {
         let factor = reduce_factor_from_python(factor)?;
-        let box_coords = box_coords
-            .map(reduce_box_from_python)
-            .transpose()?;
+        let box_coords = box_coords.map(reduce_box_from_python).transpose()?;
         let rs = py
             .allow_threads(|| self.inner.reduce_public(factor, box_coords))
             .map_err(map_error)?;
@@ -1211,19 +1410,19 @@ impl PyImage {
         let dest = dest.map_or_else(
             || pillow_rs::AlphaCompositeBox::Values(vec![0, 0]),
             |value| {
-                value
-                    .extract::<Vec<i64>>()
-                    .map(pillow_rs::AlphaCompositeBox::Values)
-                    .unwrap_or(pillow_rs::AlphaCompositeBox::Invalid)
+                value.extract::<Vec<i64>>().map_or(
+                    pillow_rs::AlphaCompositeBox::Invalid,
+                    pillow_rs::AlphaCompositeBox::Values,
+                )
             },
         );
         let source_box = source.map_or_else(
             || pillow_rs::AlphaCompositeBox::Values(vec![0, 0]),
             |value| {
-                value
-                    .extract::<Vec<i64>>()
-                    .map(pillow_rs::AlphaCompositeBox::Values)
-                    .unwrap_or(pillow_rs::AlphaCompositeBox::Invalid)
+                value.extract::<Vec<i64>>().map_or(
+                    pillow_rs::AlphaCompositeBox::Invalid,
+                    pillow_rs::AlphaCompositeBox::Values,
+                )
             },
         );
         py.allow_threads(|| {
@@ -1316,19 +1515,59 @@ impl PyImage {
     }
 
     /// Applies a sequence or callable LUT through the Rust-owned public path.
-    fn point(&self, input: &Bound<'_, PyAny>, py: Python<'_>) -> PyResult<PyImage> {
+    #[pyo3(signature = (input, mode=None))]
+    fn point(
+        &self,
+        input: &Bound<'_, PyAny>,
+        mode: Option<&str>,
+        py: Python<'_>,
+    ) -> PyResult<PyImage> {
         let input_kind = if input.is_instance_of::<PyString>() {
             pillow_rs::EvalInputKind::String
         } else {
             pillow_rs::EvalInputKind::Other
         };
         pillow_rs::validate_eval_input(input_kind).map_err(map_error)?;
+        if mode == Some("F") {
+            let source_mode = self.inner.mode().map_err(map_error)?;
+            if matches!(source_mode.as_str(), "1" | "L" | "P") {
+                let lut = if input.is_callable() {
+                    let mut values = Vec::with_capacity(256);
+                    for sample in 0..256u32 {
+                        values.push(input.call1((sample,))?.extract::<f64>()?);
+                    }
+                    values
+                } else {
+                    input.extract::<Vec<f64>>()?
+                };
+                return py
+                    .allow_threads(|| pillow_rs::image_eval_float(&self.inner, &lut))
+                    .map(|i| PyImage { inner: i })
+                    .map_err(map_error);
+            }
+        }
         if input.is_callable() {
+            let mode = self.inner.mode().map_err(map_error)?;
+            if matches!(
+                mode.as_str(),
+                "I" | "I;16" | "I;16L" | "I;16B" | "I;16N" | "F"
+            ) {
+                let (scale, offset) = point_transform_from_python(input, py)?;
+                return py
+                    .allow_threads(|| {
+                        pillow_rs::image_eval_point_transform(&self.inner, scale, offset)
+                    })
+                    .map(|i| PyImage { inner: i })
+                    .map_err(map_error);
+            }
             return pillow_rs::image_eval_callable(&self.inner, |sample| {
                 let result = input.call1((sample,)).map_err(|error| {
                     pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
                 })?;
-                result.extract::<i32>().map_err(|_| {
+                let rounded = result.call_method0("__round__").map_err(|error| {
+                    pillow_rs::PilError::ValueError(format!("LUT function failed: {error}"))
+                })?;
+                rounded.extract::<i32>().map_err(|_| {
                     pillow_rs::PilError::ValueError(
                         "LUT function must return an integer".to_owned(),
                     )
@@ -1743,6 +1982,29 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<PyObject>> {
     Ok(Some(result.into()))
 }
 
+/// Enable or disable the bounded GPU shader-dispatch coverage collector.
+#[pyfunction]
+fn set_gpu_shader_coverage(enabled: bool) -> bool {
+    pillow_rs::Backend::set_gpu_shader_coverage_enabled(enabled)
+}
+
+/// Take the embedded WGSL shader variants that actually dispatched in this
+/// process. This reports shader execution coverage; source line and branch
+/// coverage require a separate WGSL instrumentation pass.
+#[pyfunction]
+fn take_gpu_shader_coverage(py: Python<'_>) -> PyResult<PyObject> {
+    let result = PyList::empty(py);
+    for record in pillow_rs::Backend::take_gpu_shader_coverage() {
+        let item = PyDict::new(py);
+        item.set_item("variant_name", record.variant_name)?;
+        item.set_item("shader_file", record.shader_file)?;
+        item.set_item("dispatches", record.dispatches)?;
+        item.set_item("workgroups", record.workgroups)?;
+        result.append(item)?;
+    }
+    Ok(result.into())
+}
+
 // --- Utility functions (moved from Python to satisfy "thin wrapper" rule) ---
 
 /// Align each scanline to a 4-byte boundary (Qt/BMP compatibility).
@@ -1885,6 +2147,7 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.py().get_type::<DecompressionBombError>(),
     )?;
     m.add_class::<PyImage>()?;
+    m.add_class::<PyPointTransform>()?;
     m.add_class::<PyImageSequenceIterator>()?;
     m.add_class::<PyDraw>()?;
     m.add_class::<PyOutline>()?;
@@ -1965,6 +2228,8 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(backend_enabled, m)?)?;
     m.add_function(wrap_pyfunction!(set_pipeline_telemetry, m)?)?;
     m.add_function(wrap_pyfunction!(take_pipeline_telemetry, m)?)?;
+    m.add_function(wrap_pyfunction!(set_gpu_shader_coverage, m)?)?;
+    m.add_function(wrap_pyfunction!(take_gpu_shader_coverage, m)?)?;
 
     // ImageFilter helper functions
     m.add_function(wrap_pyfunction!(color3dlut_check_size, m)?)?;
@@ -2479,9 +2744,10 @@ impl PyFont {
 
     fn set_variation_by_axes(&mut self, axes: &Bound<'_, PyAny>) -> PyResult<()> {
         let input = if axes.downcast::<PyList>().is_ok() {
-            axes.extract::<Vec<f32>>()
-                .map(pillow_rs::ImageFontVariationAxesInput::Values)
-                .unwrap_or(pillow_rs::ImageFontVariationAxesInput::Invalid)
+            axes.extract::<Vec<f32>>().map_or(
+                pillow_rs::ImageFontVariationAxesInput::Invalid,
+                pillow_rs::ImageFontVariationAxesInput::Values,
+            )
         } else {
             pillow_rs::ImageFontVariationAxesInput::Invalid
         };
@@ -2761,9 +3027,10 @@ fn draw_circle_center_input_from_python(xy: &Bound<'_, PyAny>) -> pillow_rs::Dra
     if xy.extract::<String>().is_ok() {
         return pillow_rs::DrawCircleCenterInput::Text;
     }
-    xy.extract::<Vec<f64>>()
-        .map(pillow_rs::DrawCircleCenterInput::Values)
-        .unwrap_or(pillow_rs::DrawCircleCenterInput::Invalid)
+    xy.extract::<Vec<f64>>().map_or(
+        pillow_rs::DrawCircleCenterInput::Invalid,
+        pillow_rs::DrawCircleCenterInput::Values,
+    )
 }
 
 fn draw_color_input_from_python(
@@ -2808,17 +3075,19 @@ impl PyDraw {
         Ok(PyDraw { draw })
     }
 
+    #[pyo3(signature = (xy, fill=None, width=0, joint=None))]
     fn line(
         &mut self,
         xy: &Bound<'_, PyAny>,
         fill: Option<&Bound<'_, PyAny>>,
         width: Option<u32>,
+        joint: Option<String>,
     ) -> PyResult<()> {
         let color = self.color(fill)?;
         let points = draw_points_input_from_python(xy);
         let w = pillow_rs::normalize_draw_width(width);
         self.draw
-            .polyline_with_input(points, color, w)
+            .polyline_with_input_joint(points, color, w, joint.as_deref())
             .map_err(map_error)
     }
 
@@ -2915,10 +3184,10 @@ impl PyDraw {
         } else {
             pillow_rs::RegularPolygonCircle::Invalid
         };
-        let sides = n_sides
-            .extract::<i64>()
-            .map(pillow_rs::RegularPolygonSides::Value)
-            .unwrap_or(pillow_rs::RegularPolygonSides::Invalid);
+        let sides = n_sides.extract::<i64>().map_or(
+            pillow_rs::RegularPolygonSides::Invalid,
+            pillow_rs::RegularPolygonSides::Value,
+        );
         let fill_color = if let Some(_f) = fill {
             Some(self.color(fill)?)
         } else {
@@ -3980,10 +4249,10 @@ fn palette_getcolor_validate(
     let mut pal = palette;
     let repr = color.repr()?.to_string();
     let input = if color.downcast::<PyTuple>().is_ok() || color.downcast::<PyList>().is_ok() {
-        color
-            .extract::<Vec<u8>>()
-            .map(pillow_rs::PaletteColorInput::Components)
-            .unwrap_or(pillow_rs::PaletteColorInput::Invalid(repr))
+        color.extract::<Vec<u8>>().map_or(
+            pillow_rs::PaletteColorInput::Invalid(repr),
+            pillow_rs::PaletteColorInput::Components,
+        )
     } else {
         pillow_rs::PaletteColorInput::Invalid(repr)
     };

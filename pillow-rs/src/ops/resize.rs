@@ -132,6 +132,17 @@ impl Image {
         // reported at thumbnail(), rather than being delayed until a later
         // observation of the mutated image.
         let source_size = self.materialize()?.dimensions();
+        // Pillow returns before evaluating the aspect-ratio division when
+        // both requested bounds already contain the source. This also covers
+        // empty images: every non-negative bound contains a (0, 0) source,
+        // so thumbnail((0, 2)) is a no-op rather than division by zero.
+        if size.0 >= i64::from(source_size.0)
+            && size.1 >= i64::from(source_size.1)
+            && size.0 >= 0
+            && size.1 >= 0
+        {
+            return Ok(());
+        }
         let dimensions = Self::thumbnail_dimensions(size, source_size)?;
         if dimensions == (0, 0) {
             return Ok(());

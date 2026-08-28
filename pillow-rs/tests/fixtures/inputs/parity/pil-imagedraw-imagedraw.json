@@ -35852,7 +35852,385 @@
             },
             "width": {
               "kind": "literal",
-              "value": 3
+              "value": 9
+            },
+            "joint": {
+              "kind": "literal",
+              "value": "curve"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.line.nuanced.mid-joint-curve",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "line",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.line.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "line",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ],
+                [
+                  6,
+                  12
+                ]
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "width": {
+              "kind": "literal",
+              "value": 5
+            },
+            "joint": {
+              "kind": "literal",
+              "value": "curve"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve-flat-xy",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "line",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.line.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "line",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                0,
+                0,
+                12,
+                0,
+                6,
+                12
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "width": {
+              "kind": "literal",
+              "value": 9
+            },
+            "joint": {
+              "kind": "literal",
+              "value": "curve"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve-straight",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "line",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.line.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "line",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                [
+                  0,
+                  0
+                ],
+                [
+                  6,
+                  0
+                ],
+                [
+                  12,
+                  0
+                ]
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "width": {
+              "kind": "literal",
+              "value": 9
+            },
+            "joint": {
+              "kind": "literal",
+              "value": "curve"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageDraw.ImageDraw.line.nuanced.wide-joint-curve-flipped",
+      "surface": "PIL.ImageDraw.ImageDraw",
+      "operation": "line",
+      "covers": [
+        "PIL.ImageDraw.ImageDraw.line.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-draw-2",
+          "surface": "PIL.ImageDraw",
+          "operation": "Draw",
+          "receiver": null,
+          "arguments": {
+            "im": {
+              "kind": "binding",
+              "step_id": "setup-image-1"
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageDraw.ImageDraw",
+          "operation": "line",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-draw-2"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                [
+                  12,
+                  0
+                ],
+                [
+                  0,
+                  0
+                ],
+                [
+                  6,
+                  12
+                ]
+              ]
+            },
+            "fill": {
+              "kind": "literal",
+              "value": [
+                255,
+                0,
+                0
+              ]
+            },
+            "width": {
+              "kind": "literal",
+              "value": 9
             },
             "joint": {
               "kind": "literal",

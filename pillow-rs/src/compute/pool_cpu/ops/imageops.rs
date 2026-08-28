@@ -202,7 +202,8 @@ pub fn op_autocontrast(
         let low_thresh = (total * cutoff / 100.0) as usize;
         let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
         let lo = histogram_value_at(&histograms[c], low_thresh, 0) as f64;
-        let hi = histogram_value_at(&histograms[c], high_thresh.min(selected_pixels - 1), 255) as f64;
+        let hi =
+            histogram_value_at(&histograms[c], high_thresh.min(selected_pixels - 1), 255) as f64;
         if hi <= lo {
             continue;
         }

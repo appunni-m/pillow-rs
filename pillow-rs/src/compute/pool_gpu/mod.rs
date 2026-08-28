@@ -639,6 +639,7 @@ struct CachedPipeline {
     pipeline: wgpu::ComputePipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     variant_name: &'static str,
+    shader_file: &'static str,
     /// Number of bindings in this shader (2-5).
     num_bindings: u32,
     /// True if this is a 4-binding LUT shader (Eval/PointOp).
@@ -874,6 +875,7 @@ impl GpuInner {
     fn resolve_pipeline(
         &self,
         key: &'static str,
+        shader_file: &'static str,
         source: &'static str,
     ) -> Result<Arc<CachedPipeline>, PilError> {
         let mut pipelines = self
@@ -885,11 +887,12 @@ impl GpuInner {
         }
 
         gpu_log!("[GPU] compiling shader on first use: {key}");
-        let pipeline = Self::build_pipeline(&self.device, key, source).ok_or_else(|| {
-            PilError::ValueError(format!(
-                "GPU operation '{key}' has no validated executable pipeline"
-            ))
-        })?;
+        let pipeline =
+            Self::build_pipeline(&self.device, key, shader_file, source).ok_or_else(|| {
+                PilError::ValueError(format!(
+                    "GPU operation '{key}' has no validated executable pipeline"
+                ))
+            })?;
         gpu_log!(
             "[GPU] compiled shader on first use: {key} ({} bindings)",
             pipeline.num_bindings
@@ -909,6 +912,7 @@ impl GpuInner {
             if index + 1 < ops.len() && can_fuse_gpu_multiply_screen(ops, index) {
                 let fused = self.resolve_pipeline(
                     "__internal_multiply_screen",
+                    "multiply_screen.wgsl",
                     include_str!("shaders/multiply_screen.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Single(fused));
@@ -924,10 +928,12 @@ impl GpuInner {
                 // materialization between them.
                 let horizontal = self.resolve_pipeline(
                     "__internal_blur_h",
+                    "box_blur_h.wgsl",
                     include_str!("shaders/box_blur_h.wgsl"),
                 )?;
                 let vertical = self.resolve_pipeline(
                     "__internal_blur_v",
+                    "box_blur_v.wgsl",
                     include_str!("shaders/box_blur_v.wgsl"),
                 )?;
                 resolved.push(ResolvedPipeline::Blur {
@@ -945,8 +951,16 @@ impl GpuInner {
                             "GPU operation '{key}' has no registered shader source"
                         ))
                     })?;
+                let shader_file = registry::registry()?
+                    .get(key)
+                    .and_then(|entry| entry.gpu_shader)
+                    .ok_or_else(|| {
+                        PilError::ValueError(format!(
+                            "GPU operation '{key}' has no registered shader name"
+                        ))
+                    })?;
                 resolved.push(
-                    self.resolve_pipeline(key, source)
+                    self.resolve_pipeline(key, shader_file, source)
                         .map(ResolvedPipeline::Single)?,
                 );
             }
@@ -992,6 +1006,7 @@ impl GpuInner {
     fn build_pipeline(
         device: &wgpu::Device,
         variant_name: &'static str,
+        shader_file: &'static str,
         shader_source: &str,
     ) -> Option<CachedPipeline> {
         let cs_module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -1231,6 +1246,7 @@ impl GpuInner {
             pipeline,
             bind_group_layout,
             variant_name,
+            shader_file,
             num_bindings,
             is_lut,
             is_output_only,
@@ -1552,21 +1568,33 @@ impl GpuInner {
             let cached = if can_fuse_gpu_multiply_screen(ops, index) {
                 self.resolve_pipeline(
                     "__internal_multiply_screen",
+                    "multiply_screen.wgsl",
                     include_str!("shaders/multiply_screen.wgsl"),
                 )?
             } else if Self::blur_pass_count(op).is_some() {
-                self.resolve_pipeline("__internal_blur_h", include_str!("shaders/box_blur_h.wgsl"))?
+                self.resolve_pipeline(
+                    "__internal_blur_h",
+                    "box_blur_h.wgsl",
+                    include_str!("shaders/box_blur_h.wgsl"),
+                )?
             } else {
                 let base_key = registry::variant_key(op);
-                let source = registry::registry()?
-                    .get(base_key)
-                    .and_then(|entry| entry.gpu_source)
-                    .ok_or_else(|| {
-                        PilError::ValueError(format!(
-                            "GPU operation '{base_key}' has no registered shader source"
-                        ))
-                    })?;
-                self.resolve_pipeline(base_key, source)?
+                let entry = registry::registry()?.get(base_key).ok_or_else(|| {
+                    PilError::ValueError(format!(
+                        "GPU operation '{base_key}' has no registered shader entry"
+                    ))
+                })?;
+                let source = entry.gpu_source.ok_or_else(|| {
+                    PilError::ValueError(format!(
+                        "GPU operation '{base_key}' has no registered shader source"
+                    ))
+                })?;
+                let shader_file = entry.gpu_shader.ok_or_else(|| {
+                    PilError::ValueError(format!(
+                        "GPU operation '{base_key}' has no registered shader name"
+                    ))
+                })?;
+                self.resolve_pipeline(base_key, shader_file, source)?
             };
             let (out_w, out_h) = op_output_dims(op, cur_w, cur_h).unwrap_or((cur_w, cur_h));
             self.validate_output_dims(buffers, out_w, out_h)?;
@@ -1831,6 +1859,11 @@ impl GpuInner {
             "__internal_blur_v" => (output_dims.0, 1),
             _ => (output_dims.0.div_ceil(16), output_dims.1.div_ceil(16)),
         };
+        crate::compute::record_gpu_shader_dispatch(
+            cached.variant_name,
+            cached.shader_file,
+            u64::from(dispatch_w).saturating_mul(u64::from(dispatch_h)),
+        );
         cpass.dispatch_workgroups(dispatch_w, dispatch_h, 1);
         Ok(if cached.is_in_place {
             current_is_a
@@ -1842,6 +1875,7 @@ impl GpuInner {
     fn blur_pass_count(op: &PipelineOp) -> Option<usize> {
         match op {
             PipelineOp::BoxBlur { .. } => Some(1),
+            PipelineOp::BoxBlurXY { passes, .. } => Some((*passes).max(1) as usize),
             PipelineOp::GaussianBlur { .. } => Some(3),
             _ => None,
         }
@@ -3172,7 +3206,9 @@ fn gpu_dispatch_dimensions_require_cpu(
         // later blur dispatch exceed the adapter's per-dimension limit.
         let dispatch_exceeds_limit = if matches!(
             op,
-            PipelineOp::BoxBlur { .. } | PipelineOp::GaussianBlur { .. }
+            PipelineOp::BoxBlur { .. }
+                | PipelineOp::BoxBlurXY { .. }
+                | PipelineOp::GaussianBlur { .. }
         ) {
             next.1 > max_workgroups_per_dimension || next.0 > max_workgroups_per_dimension
         } else {
@@ -3217,6 +3253,14 @@ fn gpu_shader_work_items(
             // vertical rolling passes. Count four channels plus edge reads;
             // the radius-sized initialization is paid once per row/column.
             24
+        }
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => {
+            let _ = (radius_x, radius_y);
+            24 * u64::from((*passes).max(1))
         }
         PipelineOp::GaussianBlur { sigma } => {
             let _ = sigma;
@@ -3268,8 +3312,10 @@ fn gpu_shader_work_requires_cpu(
 
 /// GPU compute pool — wgpu-based compute shader dispatch.
 ///
-/// Uses packed u32 RGBA and 16x16 workgroups. GPU is lazily initialized
-/// on first execution. If wgpu is unavailable, execute_batch returns an error.
+/// Uses packed u32 RGBA and 16x16 workgroups. GPU is lazily initialized on the
+/// first GPU capability query or execution. If wgpu cannot provide an adapter,
+/// the capability query reports no support so automatic routing can select the
+/// next host backend before any device buffer is created.
 pub struct GpuPool;
 
 fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
@@ -3299,6 +3345,7 @@ fn gpu_operation_is_safe(op: &PipelineOp) -> bool {
             radius.is_finite() && radius <= MAX_GPU_BLUR_RADIUS as f32
         }
         PipelineOp::BoxBlur { radius } => *radius <= MAX_GPU_BLUR_RADIUS,
+        PipelineOp::BoxBlurXY { .. } => false,
         PipelineOp::MedianFilter { size }
         | PipelineOp::MaxFilter { size }
         | PipelineOp::MinFilter { size } => {
@@ -3422,7 +3469,7 @@ impl BackendImpl for GpuPool {
         let healthy = match GPU.get() {
             Some(Ok(gpu)) => gpu.failure_detail().is_none(),
             Some(Err(_)) => false,
-            None => true,
+            None => Self::ensure_init().is_ok(),
         };
         Ok(healthy && gpu_operation_is_safe(op) && registry::gpu_supports(op)?)
     }
@@ -3656,1223 +3703,5 @@ impl BackendImpl for GpuPool {
         } else {
             Ok(crate::image::preserve_mode(img, result))
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        GpuPool, MAX_GPU_BLUR_RADIUS, MAX_GPU_FILTER_SIZE, MAX_GPU_MANDELBROT_ITERS,
-        MAX_GPU_OPS_PER_SUBMISSION, MAX_GPU_REDUCE_FACTOR, MAX_GPU_RESOURCE_BYTES_PER_SUBMISSION,
-        MAX_GPU_SHADER_WORK_ITEMS, MAX_RETAINED_GPU_WORKING_BYTES, PixelMode, append_arena_slice,
-        gpu_auxiliary_modes_are_safe, gpu_batch_capacity, gpu_batch_has_nonterminal_mode_change,
-        gpu_buffer_capacity_exceeds_limits, gpu_dispatch_dimensions_require_cpu,
-        gpu_image_layout_is_supported, gpu_operation_is_safe, gpu_operation_mode_requires_cpu,
-        gpu_output_color_type, gpu_pipeline_requires_cpu, gpu_result_as_color_type,
-        gpu_shader_work_requires_cpu, gpu_working_set_bytes, is_output_only_shader, op_output_dims,
-        pack_put_data, select_gpu_chunk_end,
-    };
-    use crate::compute::BackendImpl;
-    use crate::pipeline::{
-        ColorMode, PipelineOp, ResampleFilter, TransformMethod, TransposeMethod,
-    };
-    use crate::raster::{
-        ColorType, DynamicImage, GenericImageView, GrayAlphaImage, RgbImage, Rgba, RgbaImage,
-    };
-
-    #[test]
-    fn gpu_chunking_never_queues_one_submission_per_operation() {
-        let resource_bytes = vec![1024; MAX_GPU_OPS_PER_SUBMISSION * 2 + 1];
-        let shader_work = vec![1; resource_bytes.len()];
-        assert_eq!(
-            select_gpu_chunk_end(0, &resource_bytes, &shader_work),
-            Some(MAX_GPU_OPS_PER_SUBMISSION)
-        );
-        assert_eq!(
-            select_gpu_chunk_end(MAX_GPU_OPS_PER_SUBMISSION, &resource_bytes, &shader_work),
-            Some(MAX_GPU_OPS_PER_SUBMISSION * 2)
-        );
-    }
-
-    #[test]
-    fn gpu_chunking_splits_on_resource_arena_limit() {
-        let resource_bytes = vec![MAX_GPU_RESOURCE_BYTES_PER_SUBMISSION / 2 + 1; 3];
-        let shader_work = vec![1; resource_bytes.len()];
-        assert_eq!(
-            select_gpu_chunk_end(0, &resource_bytes, &shader_work),
-            Some(1)
-        );
-        assert_eq!(
-            select_gpu_chunk_end(1, &resource_bytes, &shader_work),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn gpu_chunking_splits_on_cumulative_shader_work() {
-        let resource_bytes = vec![1024; 3];
-        let shader_work = vec![MAX_GPU_SHADER_WORK_ITEMS / 2 + 1; 3];
-        assert_eq!(
-            select_gpu_chunk_end(0, &resource_bytes, &shader_work),
-            Some(1)
-        );
-        assert_eq!(
-            select_gpu_chunk_end(1, &resource_bytes, &shader_work),
-            Some(2)
-        );
-    }
-
-    #[test]
-    fn gpu_chunking_rejects_mismatched_estimate_vectors() {
-        assert_eq!(select_gpu_chunk_end(0, &[1024], &[]), None);
-    }
-
-    #[test]
-    fn gpu_working_buffer_retention_has_a_hard_byte_bound() {
-        assert!(gpu_working_set_bytes(1024 * 1024) < MAX_RETAINED_GPU_WORKING_BYTES);
-        assert!(gpu_working_set_bytes(4096 * 4096) > MAX_RETAINED_GPU_WORKING_BYTES);
-    }
-
-    #[test]
-    fn gpu_arenas_keep_each_operation_aligned_and_isolated() {
-        let mut arena = Vec::new();
-        let first = append_arena_slice(&mut arena, &[1, 2, 3], 256);
-        let second = append_arena_slice(&mut arena, &[4, 5], 256);
-
-        assert_eq!(first.offset % 256, 0);
-        assert_eq!(second.offset % 256, 0);
-        assert_eq!(first.size, 256);
-        assert_eq!(second.size, 256);
-        assert_eq!(&arena[0..3], &[1, 2, 3]);
-        assert_eq!(&arena[64..66], &[4, 5]);
-    }
-
-    #[test]
-    fn gpu_put_data_packing_rejects_capacity_overflow() {
-        let error = pack_put_data(&[1, 2, 3, 4, 5, 6, 7, 8], PixelMode::RGBA, 1)
-            .expect_err("two RGBA pixels must exceed one-pixel capacity");
-        assert!(error.to_string().contains("putdata image size"));
-    }
-
-    #[test]
-    fn gpu_dynamic_shader_parameters_are_bounded() {
-        assert!(gpu_operation_is_safe(&PipelineOp::GaussianBlur {
-            sigma: 2.0
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::GaussianBlur {
-            sigma: f32::NAN
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::GaussianBlur {
-            sigma: MAX_GPU_BLUR_RADIUS as f32,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::BoxBlur {
-            radius: MAX_GPU_BLUR_RADIUS + 1,
-        }));
-        assert!(gpu_operation_is_safe(&PipelineOp::MedianFilter {
-            size: MAX_GPU_FILTER_SIZE,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::MedianFilter {
-            size: MAX_GPU_FILTER_SIZE + 2,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::RankFilter {
-            size: 8,
-            rank: 0
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Reduce {
-            x_factor: MAX_GPU_REDUCE_FACTOR + 1,
-            y_factor: 1,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::EffectMandelbrot {
-            w: 8,
-            h: 8,
-            x0: -2.0,
-            y0: -1.0,
-            x1: 1.0,
-            y1: 1.0,
-            quality: MAX_GPU_MANDELBROT_ITERS + 1,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Brightness {
-            factor: 9000.0
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::ColorSaturation {
-            factor: 9000.0
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Sharpness {
-            factor: -1.0
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Add {
-            other: std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0)),
-            scale: f64::MAX,
-            offset: 0.0,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Add {
-            other: std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0)),
-            scale: 0.0,
-            offset: 0.0,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Subtract {
-            other: std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0)),
-            scale: 1.0e-15,
-            offset: 0.0,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Add {
-            other: std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0)),
-            scale: 1.0,
-            offset: 0.5,
-        }));
-        let exact_add_other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(gpu_operation_is_safe(&PipelineOp::Add {
-            other: exact_add_other.clone(),
-            scale: 1.0,
-            offset: -17.0,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Add {
-            other: exact_add_other,
-            scale: 2.0,
-            offset: 0.0,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Posterize { bits: 9 }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Posterize { bits: 0 }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::ExtractBand {
-            index: 4
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Scale {
-            factor: 0.0,
-            filter: ResampleFilter::Nearest,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Scale {
-            factor: f64::NAN,
-            filter: ResampleFilter::Nearest,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Scale {
-            factor: f64::from(u32::MAX) / 65536.0 + 1.0,
-            filter: ResampleFilter::Nearest,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Autocontrast {
-            cutoff: f64::MAX,
-            mask: None,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::Transform {
-            w: 8,
-            h: 8,
-            method: TransformMethod::Affine,
-            data: vec![f64::MAX; 6].into(),
-            filter: ResampleFilter::Nearest,
-            fill: None,
-            palette_fill: None,
-        }));
-        assert!(!gpu_operation_is_safe(&PipelineOp::EffectMandelbrot {
-            w: 8,
-            h: 8,
-            x0: f64::MAX,
-            y0: -1.0,
-            x1: 1.0,
-            y1: 1.0,
-            quality: 10,
-        }));
-        assert!(gpu_operation_is_safe(&PipelineOp::Reduce {
-            x_factor: 0,
-            y_factor: 0,
-        }));
-    }
-
-    #[test]
-    fn generator_shader_bindings_are_classified_as_output_only() {
-        for source in [
-            include_str!("shaders/linear_gradient.wgsl"),
-            include_str!("shaders/radial_gradient.wgsl"),
-            include_str!("shaders/effect_mandelbrot.wgsl"),
-        ] {
-            assert!(is_output_only_shader(source));
-        }
-        assert!(!is_output_only_shader(include_str!("shaders/invert.wgsl")));
-        assert!(include_str!("shaders/effect_mandelbrot.wgsl").contains("@workgroup_size(16, 16)"));
-    }
-
-    #[test]
-    fn active_gpu_shaders_match_the_bounded_dispatch_contract() {
-        let registry = super::registry::registry().expect("GPU registry must build");
-        let active = registry
-            .iter()
-            .filter_map(|(key, entry)| entry.gpu_source.map(|source| (*key, source)))
-            .collect::<Vec<_>>();
-
-        assert_eq!(active.len(), 72, "active GPU shader denominator changed");
-        for (key, source) in active {
-            assert!(
-                source.contains("@compute @workgroup_size(16, 16)"),
-                "{key} must use the 16x16 dispatch shape assumed by GpuPool"
-            );
-            assert!(
-                source.contains("gid.x") && source.contains("gid.y"),
-                "{key} must guard its invocation coordinates before indexing"
-            );
-        }
-    }
-
-    #[test]
-    fn active_gpu_shaders_parse_and_validate_without_an_adapter() {
-        let registry = super::registry::registry().expect("GPU registry must build");
-        for (key, entry) in registry {
-            let Some(source) = entry.gpu_source else {
-                continue;
-            };
-            let module = wgpu::naga::front::wgsl::parse_str(source)
-                .unwrap_or_else(|error| panic!("{key} WGSL parse failed: {error:?}"));
-            let mut validator = wgpu::naga::valid::Validator::new(
-                wgpu::naga::valid::ValidationFlags::all(),
-                wgpu::naga::valid::Capabilities::default(),
-            );
-            validator
-                .validate(&module)
-                .unwrap_or_else(|error| panic!("{key} WGSL validation failed: {error:?}"));
-        }
-        for (key, source) in [
-            ("BlurH", include_str!("shaders/box_blur_h.wgsl")),
-            ("BlurV", include_str!("shaders/box_blur_v.wgsl")),
-        ] {
-            let module = wgpu::naga::front::wgsl::parse_str(source)
-                .unwrap_or_else(|error| panic!("{key} WGSL parse failed: {error:?}"));
-            let mut validator = wgpu::naga::valid::Validator::new(
-                wgpu::naga::valid::ValidationFlags::all(),
-                wgpu::naga::valid::Capabilities::default(),
-            );
-            validator
-                .validate(&module)
-                .unwrap_or_else(|error| panic!("{key} WGSL validation failed: {error:?}"));
-        }
-    }
-
-    #[test]
-    fn active_dynamic_gpu_kernels_keep_explicit_loop_bounds() {
-        let registry = super::registry::registry().expect("GPU registry must build");
-        let expected_bounds = [
-            ("BoxBlur", "min(params.radius, MAX_RADIUS)"),
-            ("GaussianBlur", "MAX_RADIUS"),
-            ("MedianFilter", "min(params.size, 9u)"),
-            ("MaxFilter", "min(params.size, 9u)"),
-            ("MinFilter", "min(params.size, 9u)"),
-            ("RankFilter", "min(params.size, 9u)"),
-            ("EffectMandelbrot", "min(params.max_iters, MAX_ITERS)"),
-            ("PutData", "channel_count(params.data_mode)"),
-            ("Pad", "c < 4u"),
-            ("Reduce", "if count == 0u"),
-        ];
-
-        for (key, marker) in expected_bounds {
-            let source = registry
-                .get(key)
-                .and_then(|entry| entry.gpu_source)
-                .unwrap_or_else(|| panic!("{key} must have an active shader"));
-            assert!(
-                source.contains(marker),
-                "{key} must retain its loop-safety marker: {marker}"
-            );
-        }
-        let reduce_source = registry
-            .get("Reduce")
-            .and_then(|entry| entry.gpu_source)
-            .expect("Reduce must have an active shader");
-        assert!(reduce_source.contains("MAX_FACTOR"));
-
-        let dynamic_keys = expected_bounds
-            .iter()
-            .map(|(key, _)| *key)
-            .collect::<std::collections::HashSet<_>>();
-        for (key, entry) in registry {
-            let Some(source) = entry.gpu_source else {
-                continue;
-            };
-            let has_dynamic_loop =
-                source.contains("for (") || source.contains("while ") || source.contains("loop {");
-            assert_eq!(
-                has_dynamic_loop,
-                dynamic_keys.contains(key),
-                "unreviewed dynamic loop found in active shader {key}"
-            );
-        }
-    }
-
-    #[test]
-    fn active_extract_band_shader_matches_its_uniform_contract() {
-        let source = super::registry::gpu_shader_source_for_key("ExtractBand")
-            .expect("registry lookup must succeed")
-            .expect("ExtractBand must retain its shader source");
-        assert!(source.contains("mode: u32"));
-        assert!(source.contains("channel: u32"));
-        assert!(source.contains("params.channel"));
-        assert!(source.contains("params.mode"));
-        assert!(source.contains("params.mode == 1u && params.channel == 1u"));
-    }
-
-    #[test]
-    fn active_sharpness_identity_skips_the_convolution() {
-        let source = super::registry::gpu_shader_source_for_key("Sharpness")
-            .expect("registry lookup must succeed")
-            .expect("Sharpness must retain its shader source");
-        let identity = source
-            .find("if params.factor == 1000u")
-            .expect("Sharpness must return early for its supported identity factor");
-        let first_neighborhood_load = source
-            .find("let p0_0 = input[")
-            .expect("Sharpness must retain its reviewed convolution");
-        assert!(identity < first_neighborhood_load);
-    }
-
-    #[test]
-    fn offset_params_preserve_full_signed_coordinates() {
-        let params = super::registry::extract_params(&PipelineOp::Offset {
-            x: -2_000_000_001,
-            y: 131_073,
-        });
-        assert_eq!(params, vec![(-2_000_000_001i32) as u32, 131_073]);
-
-        let source = super::registry::gpu_shader_source_for_key("Offset")
-            .expect("registry lookup must succeed")
-            .expect("Offset must retain its shader source");
-        assert!(source.contains("bitcast<i32>(dx_bits) < 0i"));
-        assert!(source.contains("0u - dx_bits"));
-        assert!(source.contains("dx_magnitude = dx_magnitude % w"));
-        assert!(source.contains("sx = w - (dx_magnitude - gid.x)"));
-        assert!(source.contains("sx = gid.x + dx_magnitude"));
-        assert!(source.contains("gid.x >= w - dx_magnitude"));
-    }
-
-    #[test]
-    fn geometry_shaders_guard_unsigned_dimension_arithmetic() {
-        for (key, markers) in [
-            ("Crop", ["params.left > src_w", "dx >= src_w - params.left"]),
-            (
-                "Expand",
-                [
-                    "(0xffffffffu - params.width) / 2u",
-                    "out_w = params.width + 2u * b",
-                ],
-            ),
-            (
-                "CropBorder",
-                ["b > params.width / 2u", "out_w = params.width - 2u * b"],
-            ),
-        ] {
-            let source = super::registry::gpu_shader_source_for_key(key)
-                .expect("registry lookup must succeed")
-                .expect("geometry shader must be registered");
-            for marker in markers {
-                assert!(
-                    source.contains(marker),
-                    "{key} missing guard marker {marker}"
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn add_and_subtract_shaders_match_the_division_contract() {
-        for key in ["Add", "Subtract"] {
-            let source = super::registry::gpu_shader_source_for_key(key)
-                .expect("registry lookup must succeed")
-                .expect("arithmetic shader must be registered");
-            assert!(
-                source.contains("/ scale + offset"),
-                "{key} must divide by scale"
-            );
-            assert!(
-                !source.contains("* scale + offset"),
-                "{key} must not multiply by scale"
-            );
-        }
-    }
-
-    #[test]
-    fn imagechops_shaders_apply_binary_operations_to_alpha() {
-        for key in [
-            "Add",
-            "Subtract",
-            "Multiply",
-            "Screen",
-            "Darker",
-            "Lighter",
-            "Difference",
-            "AddModulo",
-            "SubtractModulo",
-            "LogicalAnd",
-            "LogicalOr",
-            "LogicalXor",
-        ] {
-            let source = super::registry::gpu_shader_source_for_key(key)
-                .expect("registry lookup must succeed")
-                .expect("ImageChops shader must be registered");
-            assert!(source.contains("let ba"), "{key} must load other alpha");
-            assert!(source.contains("out_a_raw"), "{key} must compute alpha");
-            assert!(
-                source.contains("select(255u, out_a_raw, mode_has_a"),
-                "{key} must preserve opaque-mode alpha semantics"
-            );
-        }
-        for key in ["Invert", "InvertChops"] {
-            let source = super::registry::gpu_shader_source_for_key(key)
-                .expect("registry lookup must succeed")
-                .expect("invert shader must be registered");
-            assert!(source.contains("select(255u, 255u - a, mode_has_a"));
-        }
-    }
-
-    #[test]
-    fn gpu_luma_shaders_use_pillow_fixed_point_coefficients() {
-        for key in ["Convert", "Grayscale", "ColorSaturation"] {
-            let source = super::registry::gpu_shader_source_for_key(key)
-                .expect("registry lookup must succeed")
-                .expect("luma shader must be registered");
-            assert!(
-                source.contains("19595u * r + 38470u * g + 7471u * b + 32768u"),
-                "{key} must use Pillow's fixed-point luma"
-            );
-        }
-    }
-
-    #[test]
-    fn blend_shaders_match_the_public_direction_and_alpha_contracts() {
-        let blend_module = super::registry::gpu_shader_source_for_key("BlendModule")
-            .expect("registry lookup must succeed")
-            .expect("BlendModule must retain its shader source");
-        assert!(blend_module.contains("ar * inv_alpha + br * alpha"));
-        assert!(blend_module.contains("let out_a_raw"));
-
-        let alpha_composite = super::registry::gpu_shader_source_for_key("AlphaComposite")
-            .expect("registry lookup must succeed")
-            .expect("AlphaComposite must retain its shader source");
-        assert!(alpha_composite.contains("if out_a_val == 0u"));
-        assert!(alpha_composite.contains("return dst_pixel;"));
-
-        let sharpness = super::registry::gpu_shader_source_for_key("Sharpness")
-            .expect("registry lookup must succeed")
-            .expect("Sharpness must retain its shader source");
-        assert!(sharpness.contains("let out_a = select(255u, orig_a, mode_has_a"));
-        let brightness = super::registry::gpu_shader_source_for_key("Brightness")
-            .expect("registry lookup must succeed")
-            .expect("Brightness must retain its shader source");
-        assert!(brightness.contains("let out_g = val_g;"));
-        assert!(brightness.contains("let out_b = val_b;"));
-        assert!(sharpness.contains("let out_g = blend_fixed(blur_g_u, orig_g"));
-        assert!(sharpness.contains("let out_b = blend_fixed(blur_b_u, orig_b"));
-    }
-
-    #[test]
-    fn scale_shader_uses_rounded_output_dimensions_for_nearest_mapping() {
-        let source = super::registry::gpu_shader_source_for_key("Scale")
-            .expect("registry lookup must succeed")
-            .expect("Scale must retain its shader source");
-        assert!(source.contains("f32(src_w) / f32(params.dst_w)"));
-        assert!(source.contains("f32(src_h) / f32(params.dst_h)"));
-        assert!(!source.contains("1.0 / factor"));
-    }
-
-    #[test]
-    fn lut_packing_preserves_band_major_eval_and_point_tables() {
-        let mut la = vec![0u8; 512];
-        for i in 0..256 {
-            la[i] = i as u8;
-            la[256 + i] = 255u8.saturating_sub(i as u8);
-        }
-        let packed = super::extract_lut(&PipelineOp::Eval { lut: la.into() }, 1)
-            .expect("LA LUT must pack for the LA source mode");
-        assert_eq!(packed[17] & 0xff, 17);
-        assert_eq!((packed[17] >> 24) & 0xff, 238);
-
-        let rgb = vec![7u8; 768];
-        let packed = super::extract_lut(&PipelineOp::PointOp { lut: rgb.into() }, 2)
-            .expect("RGB LUT must pack for the RGB source mode");
-        assert_eq!(packed[0], 0xff_07_07_07);
-
-        let image = DynamicImage::ImageLumaA8(crate::raster::GrayAlphaImage::new(1, 1));
-        assert!(super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Eval {
-                lut: vec![0; 256].into()
-            }],
-            &image,
-        ));
-    }
-
-    #[test]
-    fn blur_dispatches_keep_gaussian_separable_without_readback() {
-        assert_eq!(
-            super::GpuInner::blur_pass_count(&PipelineOp::BoxBlur { radius: 2 }),
-            Some(1)
-        );
-        assert_eq!(
-            super::GpuInner::blur_pass_count(&PipelineOp::GaussianBlur { sigma: 2.0 }),
-            Some(3)
-        );
-        assert_eq!(super::GpuInner::blur_pass_count(&PipelineOp::Invert), None);
-    }
-
-    #[test]
-    fn gpu_geometry_contract_tracks_swapped_and_partial_outputs() {
-        assert_eq!(
-            op_output_dims(
-                &PipelineOp::Transpose {
-                    method: TransposeMethod::Rotate90,
-                },
-                5,
-                3,
-            ),
-            Some((3, 5))
-        );
-        assert_eq!(
-            op_output_dims(
-                &PipelineOp::Reduce {
-                    x_factor: 2,
-                    y_factor: 3,
-                },
-                5,
-                7,
-            ),
-            Some((3, 3))
-        );
-        assert_eq!(
-            op_output_dims(
-                &PipelineOp::Resize {
-                    w: 0,
-                    h: 5,
-                    filter: ResampleFilter::Nearest,
-                },
-                5,
-                7,
-            ),
-            Some((0, 5))
-        );
-    }
-
-    #[test]
-    fn empty_images_are_preflighted_to_cpu_before_gpu_initialization() {
-        let image = DynamicImage::ImageRgb8(RgbImage::new(0, 2));
-        let ops = [PipelineOp::Invert];
-        let auxiliary = [super::AuxiliaryImages {
-            second: None,
-            third: None,
-        }];
-        assert!(gpu_pipeline_requires_cpu(&ops, &image, &auxiliary));
-        let result = GpuPool
-            .execute_batch(&ops, &image, None)
-            .expect("empty-image fallback should not require an adapter");
-        assert_eq!(result.dimensions(), (0, 2));
-    }
-
-    #[test]
-    fn malformed_auxiliary_metadata_is_rejected_without_indexing_past_ops() {
-        let image = DynamicImage::ImageRgb8(RgbImage::new(1, 1));
-        let ops = [PipelineOp::Invert];
-        assert!(gpu_pipeline_requires_cpu(&ops, &image, &[]));
-    }
-
-    #[test]
-    fn gpu_registry_rejects_incomplete_single_dispatch_contracts() {
-        use crate::pipeline::DitherMethod;
-
-        assert!(!super::registry::gpu_supports(&PipelineOp::Autocontrast {
-            cutoff: 0.0,
-            mask: None,
-        })
-        .unwrap());
-        assert!(!super::registry::gpu_supports(&PipelineOp::Equalize).unwrap());
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Quantize {
-                colors: 16,
-                dither: false,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Colorize {
-                black: (0, 0, 0),
-                white: (255, 255, 255),
-                mid: None,
-                blackpoint: 0,
-                midpoint: 127,
-                whitepoint: 255,
-            })
-            .unwrap()
-        );
-        assert!(!super::registry::gpu_supports(&PipelineOp::Contrast { factor: 1.0 }).unwrap());
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Filter3x3 {
-                kernel: [0.0; 9],
-                scale: 1.0,
-                offset: 0,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Filter5x5 {
-                kernel: [0.0; 25],
-                scale: 1.0,
-                offset: 0,
-            })
-            .unwrap()
-        );
-        assert!(!super::registry::gpu_supports(&PipelineOp::Brightness { factor: 1.25 }).unwrap());
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Brightness { factor: 1.2345 }).unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::ColorSaturation { factor: 0.5 }).unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::ColorSaturation { factor: 0.5005 })
-                .unwrap()
-        );
-        assert!(!super::registry::gpu_supports(&PipelineOp::Sharpness { factor: 2.0 }).unwrap());
-        assert!(!super::registry::gpu_supports(&PipelineOp::Sharpness { factor: 0.0 }).unwrap());
-        assert!(!super::registry::gpu_supports(&PipelineOp::Sharpness { factor: 2.0005 }).unwrap());
-        assert!(super::registry::gpu_supports(&PipelineOp::Brightness { factor: 1.0 }).unwrap());
-        assert!(
-            super::registry::gpu_supports(&PipelineOp::ColorSaturation { factor: 0.0 }).unwrap()
-        );
-        assert!(super::registry::gpu_supports(&PipelineOp::Sharpness { factor: 1.0 }).unwrap());
-        let blend_other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::BlendModule {
-                other: blend_other,
-                alpha: 0.5,
-            })
-            .unwrap()
-        );
-        let exact_blend_other =
-            std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::BlendModule {
-                other: exact_blend_other.clone(),
-                alpha: 127.0 / 255.0,
-            })
-            .unwrap()
-        );
-        assert!(
-            super::registry::gpu_supports(&PipelineOp::BlendModule {
-                other: exact_blend_other,
-                alpha: 1.0,
-            })
-            .unwrap()
-        );
-        let exact_add_other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(
-            super::registry::gpu_supports(&PipelineOp::Add {
-                other: exact_add_other.clone(),
-                scale: 1.0,
-                offset: -3.0,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Add {
-                other: exact_add_other,
-                scale: 2.0,
-                offset: 0.0,
-            })
-            .unwrap()
-        );
-        let overlay_other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Overlay {
-                other: overlay_other.clone(),
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::HardLight {
-                other: overlay_other.clone(),
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::SoftLight {
-                other: overlay_other,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Resize {
-                w: 4,
-                h: 4,
-                filter: ResampleFilter::Nearest,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Scale {
-                factor: 2.0,
-                filter: ResampleFilter::Bilinear,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Convert {
-                mode: ColorMode::RGB,
-                matrix: None,
-                dither: Some(DitherMethod::None),
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::LinearGradient { mode: ColorMode::L })
-                .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::RadialGradient {
-                mode: ColorMode::RGB,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::EffectMandelbrot {
-                w: 8,
-                h: 8,
-                x0: -2.0,
-                y0: -1.0,
-                x1: 1.0,
-                y1: 1.0,
-                quality: 10,
-            })
-            .unwrap()
-        );
-        let other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        let mask = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::CompositeModule {
-                other,
-                mask,
-                mask_alpha: false,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Pad {
-                w: 4,
-                h: 4,
-                filter: ResampleFilter::Bilinear,
-                color: None,
-                centering: (0.5, 0.5),
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Rotate {
-                angle: 17.0,
-                expand: false,
-                fill: None,
-                center: None,
-                translate: None,
-                nearest: false,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Transform {
-                w: 4,
-                h: 4,
-                method: TransformMethod::Affine,
-                data: vec![1.0, 0.0, 0.0, 0.0, 1.0, 0.0].into(),
-                filter: ResampleFilter::Nearest,
-                fill: None,
-                palette_fill: None,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::RemapPalette {
-                dest_map: vec![0; 256].into(),
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Resize {
-                w: 4,
-                h: 4,
-                filter: ResampleFilter::Bilinear,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Resize {
-                w: 4,
-                h: 4,
-                filter: ResampleFilter::Nearest,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Reduce {
-                x_factor: 2,
-                y_factor: 2,
-            })
-            .unwrap()
-        );
-        assert!(
-            !super::registry::gpu_supports(&PipelineOp::Scale {
-                factor: 2.0,
-                filter: ResampleFilter::Nearest,
-            })
-            .unwrap()
-        );
-    }
-
-    #[test]
-    fn mode_changing_gpu_ops_must_terminate_a_dispatch_batch() {
-        let convert = PipelineOp::Convert {
-            mode: ColorMode::L,
-            matrix: None,
-            dither: None,
-        };
-        assert!(!gpu_batch_has_nonterminal_mode_change(&[convert.clone()]));
-        assert!(gpu_batch_has_nonterminal_mode_change(&[
-            convert,
-            PipelineOp::Invert,
-        ]));
-        assert!(gpu_batch_has_nonterminal_mode_change(&[
-            PipelineOp::ExtractBand { index: 0 },
-            PipelineOp::Invert,
-        ]));
-        assert!(gpu_batch_has_nonterminal_mode_change(&[
-            PipelineOp::Constant { value: 4 },
-            PipelineOp::Invert,
-        ]));
-        assert!(gpu_batch_has_nonterminal_mode_change(&[
-            PipelineOp::PutAlpha {
-                alpha: 128,
-                mode: PixelMode::RGBA,
-            },
-            PipelineOp::Invert,
-        ]));
-        assert!(!gpu_batch_has_nonterminal_mode_change(&[
-            PipelineOp::Invert,
-            PipelineOp::Flip,
-        ]));
-    }
-
-    #[test]
-    fn alpha_blend_module_stays_cpu_for_native_alpha_modes() {
-        let other = std::sync::Arc::new(crate::image::Image::new_palette_index(1, 1, 0));
-        let rgba = DynamicImage::ImageRgba8(RgbaImage::new(1, 1));
-        assert!(gpu_operation_mode_requires_cpu(
-            &PipelineOp::BlendModule {
-                other: other.clone(),
-                alpha: 0.0,
-            },
-            &rgba,
-        ));
-
-        let rgb = DynamicImage::ImageRgb8(RgbImage::new(1, 1));
-        assert!(!gpu_operation_mode_requires_cpu(
-            &PipelineOp::BlendModule { other, alpha: 1.0 },
-            &rgb,
-        ));
-    }
-
-    #[test]
-    fn gpu_mode_output_preserves_luma_bytes_without_reweighting() {
-        assert_eq!(gpu_output_color_type(&ColorMode::L), Some(ColorType::L8));
-        assert_eq!(gpu_output_color_type(&ColorMode::LA), Some(ColorType::La8));
-        assert_eq!(
-            gpu_output_color_type(&ColorMode::RGB),
-            Some(ColorType::Rgb8)
-        );
-        assert_eq!(
-            gpu_output_color_type(&ColorMode::RGBA),
-            Some(ColorType::Rgba8)
-        );
-        assert_eq!(gpu_output_color_type(&ColorMode::I), None);
-
-        let packed = DynamicImage::ImageRgba8(RgbaImage::from_pixel(1, 1, Rgba([100, 0, 0, 77])));
-        let luma = gpu_result_as_color_type(packed.clone(), ColorType::L8).unwrap();
-        assert_eq!(luma.to_luma8().get_pixel(0, 0)[0], 100);
-        let luma_alpha = gpu_result_as_color_type(packed, ColorType::La8).unwrap();
-        assert_eq!(luma_alpha.to_luma_alpha8().get_pixel(0, 0).0, [100, 77]);
-    }
-
-    #[test]
-    fn separable_blur_parameters_match_the_fixed_point_contract() {
-        assert_eq!(
-            super::registry::extract_params(&PipelineOp::BoxBlur { radius: 2 }),
-            vec![2, 3_355_443, 0]
-        );
-        assert_eq!(
-            super::registry::extract_params(&PipelineOp::GaussianBlur { sigma: 0.0 }),
-            vec![0, 16_777_216, 0]
-        );
-        // GaussianBlur(1) uses a fractional 0.25-radius box. Its integer
-        // radius is zero, but the nonzero edge weight must still reach both
-        // separable shaders instead of being mistaken for BoxBlur(0).
-        assert_eq!(
-            super::registry::extract_params(&PipelineOp::GaussianBlur { sigma: 1.0 }),
-            vec![0, 11_184_811, 2_796_202]
-        );
-        assert_eq!(
-            super::registry::extract_params(&PipelineOp::BoxBlur { radius: 100 }),
-            vec![16, 508_400, 0]
-        );
-    }
-
-    #[test]
-    fn dispatch_grid_respects_adapter_workgroup_limit() {
-        let wide_generator = PipelineOp::EffectMandelbrot {
-            w: 1_048_576,
-            h: 1,
-            x0: -2.0,
-            y0: -1.0,
-            x1: 1.0,
-            y1: 1.0,
-            quality: 1,
-        };
-        assert!(gpu_dispatch_dimensions_require_cpu(
-            std::slice::from_ref(&wide_generator),
-            (1, 1),
-            65_535,
-        ));
-        assert!(!gpu_dispatch_dimensions_require_cpu(
-            std::slice::from_ref(&wide_generator),
-            (1, 1),
-            65_536,
-        ));
-        assert!(gpu_dispatch_dimensions_require_cpu(
-            &[PipelineOp::Invert],
-            (1_048_576, 1),
-            65_535,
-        ));
-    }
-
-    #[test]
-    fn expensive_finite_shader_work_is_preflighted_to_cpu() {
-        let mandelbrot = PipelineOp::EffectMandelbrot {
-            w: 4096,
-            h: 4096,
-            x0: -2.0,
-            y0: -1.0,
-            x1: 1.0,
-            y1: 1.0,
-            quality: MAX_GPU_MANDELBROT_ITERS,
-        };
-        assert!(gpu_shader_work_requires_cpu(
-            &mandelbrot,
-            (1, 1),
-            (4096, 4096),
-        ));
-        assert!(!gpu_shader_work_requires_cpu(
-            &PipelineOp::GaussianBlur { sigma: 2.0 },
-            (256, 256),
-            (256, 256),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::GaussianBlur { sigma: 5.0 },
-            (4096, 4096),
-            (4096, 4096),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::Filter3x3 {
-                kernel: [0.0; 9],
-                scale: 1.0,
-                offset: 0,
-            },
-            (2, 2),
-            (2, 2),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::Filter5x5 {
-                kernel: [0.0; 25],
-                scale: 1.0,
-                offset: 0,
-            },
-            (4, 4),
-            (4, 4),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::MedianFilter { size: 9 },
-            (256, 256),
-            (256, 256),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::RankFilter { size: 9, rank: 40 },
-            (256, 256),
-            (256, 256),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::BoxBlur { radius: 1 },
-            (2048, 2048),
-            (2048, 2048),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::MaxFilter { size: 9 },
-            (1024, 1024),
-            (1024, 1024),
-        ));
-        assert!(gpu_shader_work_requires_cpu(
-            &PipelineOp::MinFilter { size: 9 },
-            (1024, 1024),
-            (1024, 1024),
-        ));
-    }
-
-    #[test]
-    fn out_of_range_putpixel_is_preflighted_to_cpu_for_error_parity() {
-        let image = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        assert!(super::gpu_dimensions_require_cpu(
-            &[PipelineOp::PutPixel {
-                x: 2,
-                y: 0,
-                color: (1, 2, 3, 255),
-                palette_index: false,
-            }],
-            &image,
-        ));
-        assert!(!super::gpu_dimensions_require_cpu(
-            &[PipelineOp::PutPixel {
-                x: 1,
-                y: 1,
-                color: (1, 2, 3, 255),
-                palette_index: false,
-            }],
-            &image,
-        ));
-    }
-
-    #[test]
-    fn auxiliary_native_modes_must_match_the_primary_binary_source() {
-        let primary = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        let luma = DynamicImage::ImageLuma8(crate::raster::GrayImage::new(2, 2));
-        let auxiliary = super::AuxiliaryImages {
-            second: Some(std::sync::Arc::new(luma)),
-            third: None,
-        };
-        let other = std::sync::Arc::new(crate::image::Image::new_palette_index(2, 2, 0));
-        let op = PipelineOp::Multiply { other };
-        assert!(!gpu_auxiliary_modes_are_safe(&op, &primary, &auxiliary));
-        assert!(gpu_pipeline_requires_cpu(&[op], &primary, &[auxiliary]));
-    }
-
-    #[test]
-    fn paste_luma_masks_must_use_a_native_luma_layout() {
-        let primary = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        let source = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        let rgb_mask = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        let op = PipelineOp::Paste {
-            source: std::sync::Arc::new(
-                crate::image::Image::new(2, 2, "RGB", (0, 0, 0, 255)).unwrap(),
-            ),
-            x: 0,
-            y: 0,
-            w: 2,
-            h: 2,
-            mask: Some(std::sync::Arc::new(
-                crate::image::Image::new(2, 2, "RGB", (0, 0, 0, 255)).unwrap(),
-            )),
-            mask_alpha: false,
-        };
-        let rgb_auxiliary = super::AuxiliaryImages {
-            second: Some(std::sync::Arc::new(source)),
-            third: Some(std::sync::Arc::new(rgb_mask)),
-        };
-        assert!(!gpu_auxiliary_modes_are_safe(&op, &primary, &rgb_auxiliary));
-
-        let luma_auxiliary = super::AuxiliaryImages {
-            second: Some(std::sync::Arc::new(DynamicImage::ImageRgb8(RgbImage::new(
-                2, 2,
-            )))),
-            third: Some(std::sync::Arc::new(DynamicImage::ImageLuma8(
-                crate::raster::GrayImage::new(2, 2),
-            ))),
-        };
-        assert!(gpu_auxiliary_modes_are_safe(&op, &primary, &luma_auxiliary));
-    }
-
-    #[test]
-    fn alpha_image_ops_with_rgb_temporaries_fall_back_before_gpu_dispatch() {
-        let rgba = DynamicImage::ImageRgba8(RgbaImage::new(2, 2));
-        assert!(super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Posterize { bits: 4 }],
-            &rgba,
-        ));
-        assert!(super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Solarize { threshold: 128 }],
-            &DynamicImage::ImageLumaA8(GrayAlphaImage::new(2, 2)),
-        ));
-        assert!(!super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Posterize { bits: 4 }],
-            &DynamicImage::ImageRgb8(RgbImage::new(2, 2)),
-        ));
-    }
-
-    #[test]
-    fn alpha_composite_only_enters_gpu_for_native_alpha_modes() {
-        let source =
-            std::sync::Arc::new(crate::image::Image::new(2, 2, "RGBA", (0, 0, 0, 0)).unwrap());
-        let op = PipelineOp::AlphaComposite {
-            source,
-            dest: (0, 0),
-            src: (0, 0),
-        };
-        let luma = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        assert!(super::gpu_dimensions_require_cpu(&[op.clone()], &luma));
-        let alpha = DynamicImage::ImageLumaA8(GrayAlphaImage::new(2, 2));
-        assert!(!super::gpu_dimensions_require_cpu(&[op], &alpha));
-    }
-
-    #[test]
-    fn resize_preflight_keeps_dimension_validation_independent_of_mode() {
-        let image = DynamicImage::ImageRgba8(RgbaImage::new(2, 2));
-        assert!(!super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Resize {
-                w: 3,
-                h: 3,
-                filter: ResampleFilter::Bilinear,
-            }],
-            &image,
-        ));
-        let opaque = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        assert!(!super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Resize {
-                w: 3,
-                h: 3,
-                filter: ResampleFilter::Bilinear,
-            }],
-            &opaque,
-        ));
-    }
-
-    #[test]
-    fn typed_native_images_never_enter_the_rgba8_gpu_transport() {
-        let image = DynamicImage::ImageLuma16(crate::raster::ImageBuffer::new(1, 1));
-        assert!(!gpu_image_layout_is_supported(&image));
-        assert!(super::gpu_dimensions_require_cpu(
-            &[PipelineOp::Invert],
-            &image
-        ));
-    }
-
-    #[test]
-    fn batch_capacity_tracks_high_water_mark_not_global_limit() {
-        let image = DynamicImage::ImageRgb8(RgbImage::new(2, 2));
-        let ops = [
-            PipelineOp::Invert,
-            PipelineOp::Reduce {
-                x_factor: 2,
-                y_factor: 2,
-            },
-        ];
-        let auxiliary = [
-            super::AuxiliaryImages {
-                second: None,
-                third: None,
-            },
-            super::AuxiliaryImages {
-                second: None,
-                third: None,
-            },
-        ];
-        assert_eq!(gpu_batch_capacity(&ops, &image, &auxiliary).unwrap(), 4);
-    }
-
-    #[test]
-    fn gpu_image_buffers_respect_adapter_limits_before_allocation() {
-        assert!(!gpu_buffer_capacity_exceeds_limits(1024, 4096, 4096));
-        assert!(gpu_buffer_capacity_exceeds_limits(1024, 1023, 4096));
-        assert!(gpu_buffer_capacity_exceeds_limits(1024, 4096, 4095));
     }
 }

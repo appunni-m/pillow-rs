@@ -8,7 +8,7 @@
 
 use crate::checked_dims::CheckedDims;
 use crate::error::PilError;
-use crate::image::{preserve_mode, Image};
+use crate::image::{Image, preserve_mode};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
@@ -16,7 +16,7 @@ use crate::raster::{
     DynamicImage, GenericImageView, GrayAlphaImage, GrayImage, Luma, RgbImage, RgbaImage,
 };
 use std::sync::Arc;
-use wide::{f32x8, i16x8, u16x16, u16x8, u32x8, u8x16};
+use wide::{f32x8, i16x8, u8x16, u16x8, u16x16, u32x8};
 
 // ── Helper: mode string → encoding ─────────────────────────────────────
 
@@ -1845,11 +1845,7 @@ pub fn simd_offset(
     let PipelineOp::Offset { x, y } = op else {
         return Err(PilError::ValueError("expected Offset op".into()));
     };
-    let (w, h) = img.dimensions();
-    let mode_code = mode_to_u32(img, mode);
-    let mut pixels = pixels_from_dynimg(img);
-    super::scalar::offset(&mut pixels, w, h, mode_code, *x, *y);
-    Ok(preserve_mode(img, dynimg_from_rgba(pixels, w, h)?))
+    Ok(img.offset_with_mode(*x, *y, mode))
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1861,6 +1857,15 @@ pub fn simd_flip(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if uses_native_scalar_mode(img, mode) {
+        // 16-bit and scalar Pillow modes cannot be represented by the SIMD
+        // adapter's packed RGBA8 buffer. Keep the samples native when
+        // applying this geometry-only operation.
+        return crate::compute::pool_cpu::ops::geometry::execute_transpose(
+            img,
+            &TransposeMethod::FlipTopBottom,
+        );
+    }
     // ImageOps.flip is the vertical half of transpose. Reuse the native byte
     // mover so ordinary L/LA/RGB/RGBA images do not pay the packed-RGBA
     // conversion and reconstruction cost used by the scalar fallback.
@@ -1879,6 +1884,14 @@ pub fn simd_mirror(
     _op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if uses_native_scalar_mode(img, mode) {
+        // See simd_flip: a packed RGBA8 round-trip would truncate typed
+        // samples even though the operation itself only moves pixel bytes.
+        return crate::compute::pool_cpu::ops::geometry::execute_transpose(
+            img,
+            &TransposeMethod::FlipLeftRight,
+        );
+    }
     if let Some(result) = native_mirror(img, mode) {
         return Ok(result);
     }
@@ -1924,7 +1937,7 @@ pub fn simd_autocontrast(
     if matches!(img, DynamicImage::ImageRgb8(_)) && matches!(mode, None | Some("RGB")) {
         return crate::compute::pool_cpu::ops::imageops::op_autocontrast(
             img,
-            *cutoff as f64,
+            *cutoff,
             mask.as_ref(),
         );
     }
@@ -1934,7 +1947,7 @@ pub fn simd_autocontrast(
     if mask.is_some() {
         return crate::compute::pool_cpu::ops::imageops::op_autocontrast(
             img,
-            *cutoff as f64,
+            *cutoff,
             mask.as_ref(),
         );
     }
@@ -2785,6 +2798,16 @@ pub fn simd_box_blur(
     op: &PipelineOp,
     mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
+    if let PipelineOp::BoxBlurXY {
+        radius_x,
+        radius_y,
+        passes,
+    } = op
+    {
+        return crate::compute::pool_cpu::ops::filter::execute_box_blur_xy_with_passes(
+            img, *radius_x, *radius_y, *passes,
+        );
+    }
     if let PipelineOp::BoxBlur { radius } = op {
         if let Some(channels) = simd_native_blur_channels(img, mode) {
             let pixel_count = (img.width() as usize).saturating_mul(img.height() as usize);
@@ -2874,7 +2897,7 @@ macro_rules! dual_op_adapter {
 }
 
 macro_rules! native_dual_op_adapter {
-    ($name:ident, $variant:ident, $native:path, $scalar:path) => {
+    ($name:ident, $variant:ident, $native:path, $scalar:path, $cpu:path) => {
         pub fn $name(
             img: &DynamicImage,
             op: &PipelineOp,
@@ -2885,6 +2908,18 @@ macro_rules! native_dual_op_adapter {
                     concat!("expected ", stringify!($variant), " op").into(),
                 ));
             };
+            if mode == Some("CMYK") {
+                // CMYK's fourth byte is K, not alpha. The packed SIMD
+                // representation cannot use the RGBA blend/layout rules for
+                // this mode, so execute the exact native-channel operation
+                // without converting the receiver through RGBA8.
+                crate::compute::record_pipeline_backend_fallback(concat!(
+                    "SIMD ",
+                    stringify!($variant),
+                    ": native CMYK CPU fallback"
+                ));
+                return $cpu(img, other);
+            }
             simd_native_chops_or_packed(img, other, mode, $native, $scalar)
         }
     };
@@ -2898,6 +2933,10 @@ pub fn simd_multiply(
     let PipelineOp::Multiply { other } = op else {
         return Err(PilError::ValueError("expected Multiply op".into()));
     };
+    if mode == Some("CMYK") {
+        crate::compute::record_pipeline_backend_fallback("SIMD Multiply: native CMYK CPU fallback");
+        return crate::compute::pool_cpu::ops::chops::op_chops_multiply(img, other);
+    }
     simd_native_chops_or_packed(
         img,
         other,
@@ -2915,6 +2954,10 @@ pub fn simd_screen(
     let PipelineOp::Screen { other } = op else {
         return Err(PilError::ValueError("expected Screen op".into()));
     };
+    if mode == Some("CMYK") {
+        crate::compute::record_pipeline_backend_fallback("SIMD Screen: native CMYK CPU fallback");
+        return crate::compute::pool_cpu::ops::chops::op_chops_screen(img, other);
+    }
     simd_native_chops_or_packed(
         img,
         other,
@@ -2928,49 +2971,57 @@ native_dual_op_adapter!(
     simd_darker,
     Darker,
     native_chops_darker,
-    super::scalar::darker
+    super::scalar::darker,
+    crate::compute::pool_cpu::ops::chops::op_chops_darker
 );
 native_dual_op_adapter!(
     simd_lighter,
     Lighter,
     native_chops_lighter,
-    super::scalar::lighter
+    super::scalar::lighter,
+    crate::compute::pool_cpu::ops::chops::op_chops_lighter
 );
 native_dual_op_adapter!(
     simd_difference,
     Difference,
     native_chops_difference,
-    super::scalar::difference
+    super::scalar::difference,
+    crate::compute::pool_cpu::ops::chops::op_chops_difference
 );
 native_dual_op_adapter!(
     simd_add_modulo,
     AddModulo,
     native_chops_add_modulo,
-    super::scalar::add_modulo
+    super::scalar::add_modulo,
+    crate::compute::pool_cpu::ops::chops::op_chops_add_modulo
 );
 native_dual_op_adapter!(
     simd_subtract_modulo,
     SubtractModulo,
     native_chops_subtract_modulo,
-    super::scalar::subtract_modulo
+    super::scalar::subtract_modulo,
+    crate::compute::pool_cpu::ops::chops::op_chops_subtract_modulo
 );
 native_dual_op_adapter!(
     simd_logical_and,
     LogicalAnd,
     native_chops_logical_and,
-    super::scalar::logical_and
+    super::scalar::logical_and,
+    crate::compute::pool_cpu::ops::chops::op_chops_logical_and
 );
 native_dual_op_adapter!(
     simd_logical_or,
     LogicalOr,
     native_chops_logical_or,
-    super::scalar::logical_or
+    super::scalar::logical_or,
+    crate::compute::pool_cpu::ops::chops::op_chops_logical_or
 );
 native_dual_op_adapter!(
     simd_logical_xor,
     LogicalXor,
     native_chops_logical_xor,
-    super::scalar::logical_xor
+    super::scalar::logical_xor,
+    crate::compute::pool_cpu::ops::chops::op_chops_logical_xor
 );
 dual_op_adapter!(simd_overlay, Overlay, super::scalar::overlay);
 dual_op_adapter!(simd_hard_light, HardLight, super::scalar::hard_light);
@@ -3460,9 +3511,14 @@ pub fn simd_crop_border(
         // preserving ImageOps.crop's public error text.  The checked
         // half-size form is equivalent to Pillow's `2 * border > size`
         // rule without allowing a u32 multiplication to wrap.
-        if *border > w / 2 || *border > h / 2 {
+        if *border > w / 2 {
             return Err(PilError::ValueError(
                 "Coordinate 'right' is less than 'left'".into(),
+            ));
+        }
+        if *border > h / 2 {
+            return Err(PilError::ValueError(
+                "Coordinate 'lower' is less than 'upper'".into(),
             ));
         }
         return crate::compute::pool_cpu::ops::geometry::execute_crop(

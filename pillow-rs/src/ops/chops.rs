@@ -9,9 +9,42 @@ use crate::error::PilError;
 use crate::image::Image;
 use crate::pipeline::PipelineOp;
 
+fn binary_mode_class(mode: &str) -> Option<u8> {
+    match mode {
+        "1" | "L" | "P" => Some(1),
+        "LA" | "PA" => Some(2),
+        "RGB" | "YCbCr" | "HSV" => Some(3),
+        "RGBA" | "CMYK" | "RGBa" | "RGBX" => Some(4),
+        _ => None,
+    }
+}
+
+/// Validate the native byte-layout compatibility enforced by
+/// `ImagingChops` before it allocates a result image. Modes in the same byte
+/// width family are intentionally compatible (for example `P` with `L` and
+/// `YCbCr` with `RGB`); scalar `I`/`F` and 16-bit modes are rejected by the
+/// underlying byte-oriented Chops entry points.
+fn validate_binary_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
+    let mode1 = image1.mode()?;
+    let mode2 = image2.mode()?;
+    let Some(class1) = binary_mode_class(&mode1) else {
+        return Err(PilError::ValueError("image has wrong mode".into()));
+    };
+    let Some(class2) = binary_mode_class(&mode2) else {
+        return Err(PilError::ValueError("images do not match".into()));
+    };
+    if image1.size()? != image2.size()? || class1 != class2 {
+        return Err(PilError::ValueError("images do not match".into()));
+    }
+    Ok(())
+}
+
 fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilError> {
     if image1.mode()? != "1" || image2.mode()? != "1" {
         return Err(PilError::ValueError("image has wrong mode".into()));
+    }
+    if image1.size()? != image2.size()? {
+        return Err(PilError::ValueError("images do not match".into()));
     }
     Ok(())
 }
@@ -23,6 +56,7 @@ fn validate_logical_operands(image1: &Image, image2: &Image) -> Result<(), PilEr
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn add(image1: &Image, image2: &Image, scale: f64, offset: f64) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Add {
@@ -45,6 +79,7 @@ pub fn subtract(
     scale: f64,
     offset: f64,
 ) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Subtract {
@@ -62,6 +97,7 @@ pub fn subtract(
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Multiply {
@@ -77,6 +113,7 @@ pub fn multiply(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Screen {
@@ -92,6 +129,7 @@ pub fn screen(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Darker {
@@ -107,6 +145,7 @@ pub fn darker(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Lighter {
@@ -122,6 +161,7 @@ pub fn lighter(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Difference {
@@ -137,6 +177,7 @@ pub fn difference(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::Overlay {
@@ -152,6 +193,7 @@ pub fn overlay(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::SoftLight {
@@ -167,6 +209,7 @@ pub fn soft_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn hard_light(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::HardLight {
@@ -274,6 +317,7 @@ pub fn offset_with_default(
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::AddModulo {
@@ -289,6 +333,7 @@ pub fn add_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
 /// Currently returns `Ok(Image)`; size or mode mismatches are reported during
 /// materialization.
 pub fn subtract_modulo(image1: &Image, image2: &Image) -> Result<Image, PilError> {
+    validate_binary_operands(image1, image2)?;
     Ok(Image::push_op(
         image1,
         PipelineOp::SubtractModulo {

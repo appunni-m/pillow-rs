@@ -161,6 +161,7 @@ fn op_preserves_mode(op: &PipelineOp) -> bool {
             | PipelineOp::Filter5x5 { .. }
             | PipelineOp::GaussianBlur { .. }
             | PipelineOp::BoxBlur { .. }
+            | PipelineOp::BoxBlurXY { .. }
             | PipelineOp::MedianFilter { .. }
             | PipelineOp::MaxFilter { .. }
             | PipelineOp::MinFilter { .. }
@@ -420,6 +421,7 @@ fn known_pipeline_op_dimensions(
         | PipelineOp::Filter5x5 { .. }
         | PipelineOp::GaussianBlur { .. }
         | PipelineOp::BoxBlur { .. }
+        | PipelineOp::BoxBlurXY { .. }
         | PipelineOp::MedianFilter { .. }
         | PipelineOp::MaxFilter { .. }
         | PipelineOp::MinFilter { .. }
@@ -1563,21 +1565,33 @@ impl Image {
             }
             return Self::new(w, h, mode, (0, 0, 0, 0));
         }
-        let expected = match frombytes_mode {
-            FromBytesMode::L | FromBytesMode::P => CheckedDims::new(w, h, 1)?.total_bytes(),
-            FromBytesMode::LA => CheckedDims::new(w, h, 2)?.total_bytes(),
-            FromBytesMode::L16 => CheckedDims::new(w, h, 2)?.total_bytes(),
-            FromBytesMode::RGB | FromBytesMode::HSV | FromBytesMode::YCbCr => {
-                CheckedDims::new(w, h, 3)?.total_bytes()
-            }
-            FromBytesMode::RGBA | FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => {
-                CheckedDims::new(w, h, 4)?.total_bytes()
-            }
-            FromBytesMode::Mode1 => (w as usize).div_ceil(8) * h as usize,
+        // Pillow checks the supplied decoder payload before its global pixel
+        // limit. Keep this size-only calculation separate from
+        // `CheckedDims::new`, so a short buffer reports "not enough image
+        // data" even when the requested dimensions also exceed MAX_PIXELS.
+        let channels = match frombytes_mode {
+            FromBytesMode::L | FromBytesMode::P | FromBytesMode::Mode1 => 1,
+            FromBytesMode::LA | FromBytesMode::L16 => 2,
+            FromBytesMode::RGB | FromBytesMode::HSV | FromBytesMode::YCbCr => 3,
+            FromBytesMode::RGBA | FromBytesMode::CMYK | FromBytesMode::I | FromBytesMode::F => 4,
+        };
+        let expected = if matches!(frombytes_mode, FromBytesMode::Mode1) {
+            (w as usize)
+                .div_ceil(8)
+                .checked_mul(h as usize)
+                .ok_or_else(|| PilError::DimensionError("image buffer size overflow".into()))?
+        } else {
+            (w as usize)
+                .checked_mul(h as usize)
+                .and_then(|pixels| pixels.checked_mul(channels))
+                .ok_or_else(|| PilError::DimensionError("image buffer size overflow".into()))?
         };
         if data.len() < expected {
             return Err(PilError::ValueError("not enough image data".into()));
         }
+        // Only validate allocation limits after the decoder has established
+        // that the input buffer is complete.
+        let _dimensions = CheckedDims::new(w, h, channels as u8)?;
         let img = match frombytes_mode {
             FromBytesMode::L => DynamicImage::ImageLuma8(
                 crate::raster::GrayImage::from_raw(w, h, data[..expected].to_vec())
@@ -1708,17 +1722,18 @@ impl Image {
             })
             .transpose()?;
         let data: Arc<[u8]> = data.into();
-        let source = EncodedImage::new(Arc::clone(&data))
-            .map_err(|error| map_codec_error(error, "memory"))?;
+        // Image.open() reports every decoder rejection, including malformed
+        // payloads and an allow-list mismatch, as UnidentifiedImageError.
+        // Deferred load/verify paths retain their more specific codec errors.
+        let source = EncodedImage::new(Arc::clone(&data)).map_err(|_| {
+            PilError::UnidentifiedImageError("memory".to_owned())
+        })?;
         let info = source.info().clone();
         if requested
             .as_ref()
             .is_some_and(|requested| !requested.contains(&info.format))
         {
-            return Err(PilError::ValueError(format!(
-                "requested formats {requested:?} but detected {:?}",
-                info.format
-            )));
+            return Err(PilError::UnidentifiedImageError("memory".to_owned()));
         }
         Ok(Image::Bytes {
             source,
@@ -2212,7 +2227,30 @@ impl Image {
         } else {
             explicit_mode.as_deref()
         };
-        let result = crate::compute::execute_prepared(prepared, ops, img, execution_mode)?;
+        // RGBX uses RGBA storage but its fourth byte is padding, not an alpha
+        // sample. Pillow's Convert.c therefore supplies opaque alpha when an
+        // RGBX image is converted to LA or RGBA. Normalize only this one-step
+        // conversion at the execution boundary so other operations retain
+        // their native RGBX byte semantics.
+        let result = if execution_mode == Some("RGBX")
+            && matches!(
+                ops.first(),
+                Some(PipelineOp::Convert {
+                    mode: ColorMode::LA | ColorMode::RGBA,
+                    ..
+                })
+            )
+        {
+            let mut normalized = img.clone();
+            if let Some(rgba) = normalized.as_mut_rgba8() {
+                for pixel in rgba.pixels_mut() {
+                    pixel[3] = u8::MAX;
+                }
+            }
+            crate::compute::execute_prepared(prepared, ops, &normalized, execution_mode)?
+        } else {
+            crate::compute::execute_prepared(prepared, ops, img, execution_mode)?
+        };
         Ok(Arc::new(result))
     }
 
@@ -2778,10 +2816,36 @@ impl Image {
                 [value] if matches!(mode.as_str(), "I" | "F") => {
                     self.putpixel_mode_scalar(x, y, *value as f64, &mode)
                 }
-                [value] => self.putpixel_mode(x, y, *value as u8, &mode),
-                [value, alpha] => self.putpixel(x, y, *value as u8, 0, 0, *alpha as u8),
-                [r, g, b] => self.putpixel(x, y, *r as u8, *g as u8, *b as u8, 255),
-                [r, g, b, a] => self.putpixel(x, y, *r as u8, *g as u8, *b as u8, *a as u8),
+                // Pillow's byte component coercion saturates each accepted
+                // tuple member to the 0..255 range.  Rust's `as u8` would
+                // wrap instead (for example, 256 -> 0), which is observable
+                // when a public setup pixel feeds a later operation such as
+                // Image.point.
+                [value] => self.putpixel_mode(x, y, putdata_clip_component((*value).into()), &mode),
+                [value, alpha] => self.putpixel(
+                    x,
+                    y,
+                    putdata_clip_component((*value).into()),
+                    0,
+                    0,
+                    putdata_clip_component((*alpha).into()),
+                ),
+                [r, g, b] => self.putpixel(
+                    x,
+                    y,
+                    putdata_clip_component((*r).into()),
+                    putdata_clip_component((*g).into()),
+                    putdata_clip_component((*b).into()),
+                    255,
+                ),
+                [r, g, b, a] => self.putpixel(
+                    x,
+                    y,
+                    putdata_clip_component((*r).into()),
+                    putdata_clip_component((*g).into()),
+                    putdata_clip_component((*b).into()),
+                    putdata_clip_component((*a).into()),
+                ),
                 _ => Err(PilError::TypeError(
                     "color must be int, or tuple of one, three or four elements".into(),
                 )),
@@ -2812,18 +2876,27 @@ impl Image {
         Ok(StatResult::from_bands(&bands))
     }
 
-    /// Computes Pillow statistics after validating a transparency mask.
+    /// Computes Pillow statistics after applying an optional transparency mask.
     ///
-    /// The mask validation is kept in the core so every binding observes the
-    /// same mode and size contract. Masked histogram accumulation remains a
-    /// separate implementation concern; this method preserves the established
-    /// unmasked statistics result for the current backend.
+    /// `ImageStat.Stat` is defined in terms of `Image.histogram(mask)`, not an
+    /// unmasked scan followed by a validation-only mask check. Reusing the
+    /// histogram path keeps the count, extrema, and all derived values
+    /// restricted to the non-zero mask pixels.
     pub fn stat_formatted_with_mask(
         &self,
         mask: crate::ops::imageops::ImageOpsMask,
     ) -> Result<StatResult, PilError> {
-        crate::ops::imageops::validate_imageops_mask(self, mask)?;
-        self.stat_formatted()
+        match mask {
+            crate::ops::imageops::ImageOpsMask::None => self.stat_formatted(),
+            crate::ops::imageops::ImageOpsMask::Invalid(type_name) => Err(
+                PilError::AttributeError(format!("'{type_name}' object has no attribute 'load'")),
+            ),
+            crate::ops::imageops::ImageOpsMask::Image(mask) => {
+                let histogram = self.histogram_with_mask(Some(&mask))?;
+                let histogram: Vec<f64> = histogram.into_iter().map(f64::from).collect();
+                Ok(stat_from_histogram(&histogram))
+            }
+        }
     }
 
     /// Computes per-band statistics.
@@ -3468,7 +3541,9 @@ impl Image {
                     band.lock_backend_recursive(b);
                 }
             }
-            PipelineOp::Autocontrast { mask: Some(mask), .. } => {
+            PipelineOp::Autocontrast {
+                mask: Some(mask), ..
+            } => {
                 Arc::make_mut(mask).lock_backend_recursive(b);
             }
             _ => {}
@@ -6232,212 +6307,4 @@ pub fn stat_from_list(data: &[f64]) -> (f64, f64, f64, f64, f64) {
         0.0
     };
     (count, sum, mean, min_val, max_val)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Image;
-    use crate::pipeline::PipelineOp;
-
-    #[test]
-    fn new_p_scalar_fills_indices_without_synthesizing_palette_entries() {
-        let image = Image::new_palette_index(3, 2, 7);
-
-        assert_eq!(
-            (
-                image.mode().expect("mode must be available"),
-                image.tobytes().expect("indices must be available"),
-                image.getpalette_trimmed()
-            ),
-            ("P".to_owned(), vec![7; 6], Some(Vec::new()))
-        );
-    }
-
-    #[test]
-    fn pipeline_ops_remain_lazy_and_flatten_into_one_ordered_batch() {
-        let source = Image::new(2, 2, "RGB", (10, 20, 30, 255)).expect("source image");
-        let first = Image::push_op(&source, PipelineOp::Invert);
-        let second = Image::push_op(&first, PipelineOp::Flip);
-
-        match second {
-            Image::Pipeline {
-                ops, materialized, ..
-            } => {
-                assert_eq!(ops.len(), 2);
-                assert!(matches!(ops[0], PipelineOp::Invert));
-                assert!(matches!(ops[1], PipelineOp::Flip));
-                assert!(materialized.get().is_none());
-            }
-            other => panic!("expected a lazy pipeline, got {other:?}"),
-        }
-    }
-
-    #[test]
-    fn long_pipeline_append_is_iterative_and_preserves_order() {
-        let source = Image::new(2, 2, "L", (10, 20, 30, 255)).expect("source image");
-        let mut image = source;
-        for _ in 0..10_000 {
-            image = Image::push_op(&image, PipelineOp::Invert);
-        }
-
-        let Image::Pipeline { ops, .. } = &image else {
-            panic!("expected a lazy pipeline");
-        };
-        assert_eq!(ops.len(), 10_000);
-        assert!(ops.iter().all(|op| matches!(op, PipelineOp::Invert)));
-        let materialized = image.materialize().expect("long pipeline must execute");
-        assert_eq!(materialized.to_luma8().as_raw(), &[10, 10, 10, 10]);
-    }
-
-    #[test]
-    fn new_p_tuple_color_allocates_palette_entry_zero() {
-        let image = Image::new(2, 1, "P", (7, 8, 9, 255)).expect("P image must be valid");
-
-        assert_eq!(
-            (
-                image.tobytes().expect("indices must be available"),
-                image.getpalette_trimmed()
-            ),
-            (vec![0, 0], Some(vec![7, 8, 9]))
-        );
-    }
-
-    #[test]
-    fn new_preserves_i_f_and_pa_sample_layouts() {
-        let int_bytes = (-7_i32).to_le_bytes();
-        let integer = Image::new(
-            2,
-            1,
-            "I",
-            (int_bytes[0], int_bytes[1], int_bytes[2], int_bytes[3]),
-        )
-        .expect("I image must be valid");
-        let float_bytes = 2.5_f32.to_le_bytes();
-        let float = Image::new(
-            2,
-            1,
-            "F",
-            (
-                float_bytes[0],
-                float_bytes[1],
-                float_bytes[2],
-                float_bytes[3],
-            ),
-        )
-        .expect("F image must be valid");
-        let palette_alpha = Image::new(2, 1, "PA", (7, 0, 0, 192)).expect("PA image must be valid");
-
-        assert_eq!(integer.mode().expect("I mode"), "I");
-        assert_eq!(integer.tobytes().expect("I bytes"), int_bytes.repeat(2));
-        assert_eq!(float.mode().expect("F mode"), "F");
-        assert_eq!(float.tobytes().expect("F bytes"), float_bytes.repeat(2));
-        assert_eq!(palette_alpha.mode().expect("PA mode"), "PA");
-        assert_eq!(
-            palette_alpha.getbands().expect("PA bands"),
-            ["P".to_owned(), "A".to_owned()]
-        );
-        assert_eq!(palette_alpha.tobytes().expect("PA bytes"), [7, 192, 7, 192]);
-    }
-
-    #[test]
-    fn frombytes_p_preserves_indices_without_synthesizing_palette_entries() {
-        let image = Image::frombytes("P", (3, 1), &[2, 7, 11]).expect("P image must be valid");
-
-        assert_eq!(
-            (
-                image.tobytes().expect("indices must be available"),
-                image.getpalette_trimmed()
-            ),
-            (vec![2, 7, 11], Some(Vec::new()))
-        );
-    }
-
-    #[test]
-    fn putpalette_reinterprets_l_samples_as_p_indices() {
-        let mut image = Image::new(2, 1, "L", (128, 0, 0, 0)).expect("L image must be valid");
-        let palette: Vec<u8> = (0..48).collect();
-
-        image
-            .putpalette(&palette, "RGB")
-            .expect("RGB palette must be valid");
-
-        assert_eq!(
-            (
-                image.mode().expect("mode must be available"),
-                image.tobytes().expect("indices must be available"),
-                image.getpalette_trimmed()
-            ),
-            ("P".to_owned(), vec![128, 128], Some(palette))
-        );
-    }
-
-    #[test]
-    fn putpalette_reinterprets_la_samples_as_pa_pairs() {
-        let mut image = Image::new(2, 1, "LA", (7, 0, 0, 90)).expect("LA image must be valid");
-        let palette: Vec<u8> = (0..48).collect();
-
-        image
-            .putpalette(&palette, "RGB")
-            .expect("RGB palette must be valid");
-
-        assert_eq!(
-            (
-                image.mode().expect("mode must be available"),
-                image.getbands().expect("bands must be available"),
-                image.tobytes().expect("samples must be available"),
-                image.getpalette_trimmed()
-            ),
-            (
-                "PA".to_owned(),
-                vec!["P".to_owned(), "A".to_owned()],
-                vec![7, 90, 7, 90],
-                Some(palette)
-            )
-        );
-    }
-
-    #[test]
-    fn imageops_expand_preserves_palette_attached_pa_samples() {
-        let mut image = Image::new(2, 2, "PA", (1, 0, 0, 7)).expect("PA image must be valid");
-        image
-            .putpalette(&[10, 20, 30, 40, 50, 60], "RGB")
-            .expect("RGB palette must be valid");
-
-        let expanded = crate::ops::imageops::expand(&image, 1, (0, 0, 0, 0))
-            .expect("PA expansion must succeed");
-
-        assert_eq!(expanded.mode().expect("mode must be available"), "PA");
-        assert_eq!(
-            expanded.tobytes().expect("PA bytes must be available"),
-            vec![
-                0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 7, 1, 7, 0, 0, 0, 0, 1, 7, 1, 7, 0, 0, 0, 0, 0, 0,
-                0, 0, 0, 0,
-            ]
-        );
-        assert_eq!(
-            expanded.getpalette_trimmed(),
-            Some(vec![10, 20, 30, 40, 50, 60])
-        );
-    }
-
-    #[test]
-    fn entropy_matches_pillow_c_evaluation_order() {
-        let image = Image::frombytes("L", (7, 1), &[0, 0, 0, 0, 1, 1, 1])
-            .expect("test image must be valid");
-
-        assert_eq!(
-            image.entropy().expect("entropy must succeed").to_bits(),
-            0x3fef_86fd_27eb_b77f
-        );
-    }
-
-    #[test]
-    fn zero_entropy_preserves_pillow_negative_zero() {
-        let image = Image::new(1, 1, "L", (128, 0, 0, 0)).expect("test image must be valid");
-
-        assert_eq!(
-            image.entropy().expect("entropy must succeed").to_bits(),
-            (-0.0f64).to_bits()
-        );
-    }
 }

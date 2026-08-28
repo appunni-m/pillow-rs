@@ -26,7 +26,9 @@
 
 use crate::compute::pool_simd::ops::adapters;
 use crate::error::PilError;
-use crate::pipeline::{ColorMode, PipelineOp, PixelMode, ResampleFilter, TransposeMethod};
+use crate::pipeline::PipelineOp;
+#[cfg(feature = "gpu")]
+use crate::pipeline::{ColorMode, PixelMode, ResampleFilter, TransposeMethod};
 use crate::raster::DynamicImage;
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -48,8 +50,10 @@ pub struct OpEntry {
     /// CPU implementation, present for operations supported by scalar fallback.
     pub cpu_fn: Option<CpuOpFn>,
     /// Embedded WGSL shader file name for GPU execution.
+    #[cfg(feature = "gpu")]
     pub gpu_shader: Option<&'static str>,
     /// Embedded WGSL shader source for GPU execution.
+    #[cfg(feature = "gpu")]
     pub gpu_source: Option<&'static str>,
     /// SIMD implementation, present when a vectorized adapter exists.
     pub simd_fn: Option<SimdOpFn>,
@@ -60,8 +64,23 @@ impl OpEntry {
     pub const fn cpu_only(f: CpuOpFn) -> Self {
         OpEntry {
             cpu_fn: Some(f),
+            simd_fn: None,
+            #[cfg(feature = "gpu")]
             gpu_shader: None,
+            #[cfg(feature = "gpu")]
             gpu_source: None,
+        }
+    }
+
+    /// Creates a registry entry with no executable backend implementation.
+    ///
+    /// This is used for descriptors that are retained only when the optional
+    /// GPU feature is enabled. A no-GPU build keeps the operation key visible
+    /// to the CPU/SIMD registry without embedding shader assets.
+    #[cfg(not(feature = "gpu"))]
+    pub const fn empty() -> Self {
+        OpEntry {
+            cpu_fn: None,
             simd_fn: None,
         }
     }
@@ -70,6 +89,7 @@ impl OpEntry {
 // ── Registration macros — one per backend ────────────────────────────────────────
 
 /// Create an OpEntry with CPU function + GPU shader (wgpu — native + WASM WebGPU).
+#[cfg(feature = "gpu")]
 macro_rules! gpu_entry {
     ($f:expr, $shader:literal) => {
         $crate::compute::registry::OpEntry {
@@ -81,11 +101,20 @@ macro_rules! gpu_entry {
     };
 }
 
+/// Create the CPU-only equivalent when the optional GPU backend is disabled.
+#[cfg(not(feature = "gpu"))]
+macro_rules! gpu_entry {
+    ($f:expr, $shader:literal) => {
+        $crate::compute::registry::OpEntry::cpu_only($f as $crate::compute::registry::CpuOpFn)
+    };
+}
+
 /// Create an OpEntry that retains a shader contract without a CPU executor.
 ///
 /// Some deprecated descriptors remain in the operation metadata so backend
 /// contract tests can inspect their shader sources, while their supported
 /// public constructors materialize eagerly and never dispatch these entries.
+#[cfg(feature = "gpu")]
 macro_rules! gpu_only_entry {
     ($shader:literal) => {
         $crate::compute::registry::OpEntry {
@@ -94,6 +123,14 @@ macro_rules! gpu_only_entry {
             gpu_source: Some(include_str!(concat!("pool_gpu/shaders/", $shader))),
             simd_fn: None,
         }
+    };
+}
+
+/// Omit shader-only descriptors entirely from no-GPU builds.
+#[cfg(not(feature = "gpu"))]
+macro_rules! gpu_only_entry {
+    ($shader:literal) => {
+        $crate::compute::registry::OpEntry::empty()
     };
 }
 
@@ -131,6 +168,7 @@ pub fn variant_key(op: &PipelineOp) -> &'static str {
         PipelineOp::Filter5x5 { .. } => "Filter5x5",
         PipelineOp::GaussianBlur { .. } => "GaussianBlur",
         PipelineOp::BoxBlur { .. } => "BoxBlur",
+        PipelineOp::BoxBlurXY { .. } => "BoxBlur",
         PipelineOp::MedianFilter { .. } => "MedianFilter",
         PipelineOp::MaxFilter { .. } => "MaxFilter",
         PipelineOp::MinFilter { .. } => "MinFilter",
@@ -214,6 +252,7 @@ pub fn cpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 }
 
 /// Returns whether the GPU backend has an implementation for `op`.
+#[cfg(feature = "gpu")]
 pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
     if !gpu_shader_contract_is_supported(op) {
         return Ok(false);
@@ -245,6 +284,7 @@ pub fn gpu_supports(op: &PipelineOp) -> Result<bool, PilError> {
 /// implementation until the shader consumes every public parameter and
 /// preserves the requested output mode. This distinction keeps GPU routing
 /// honest without deleting reviewed shader assets or changing coverage scope.
+#[cfg(feature = "gpu")]
 fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
     match op {
         // PIL resize uses a two-pass, fixed-point coefficient table (and has
@@ -303,6 +343,11 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
         // route Filter3x3/Filter5x5 through the CPU until their arithmetic is
         // represented with a backend-independent fixed-point contract.
         PipelineOp::Filter3x3 { .. } | PipelineOp::Filter5x5 { .. } => false,
+        // BoxBlurXY carries Pillow's tuple/fractional radius contract, which
+        // the integer-radius shader cannot represent. Keep this descriptor
+        // on the exact CPU path; the ordinary integer BoxBlur remains
+        // eligible for the existing backend contract.
+        PipelineOp::BoxBlurXY { .. } => false,
         // These shaders transport factors as fixed-point values while the
         // CPU contract evaluates f64 before truncation. Three-decimal
         // factors can differ by one at an integer boundary, so only the
@@ -396,6 +441,12 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
 
 /// Returns whether the SIMD backend has an implementation for `op`.
 pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
+    // The packed SIMD adapter only implements the established integer-radius
+    // BoxBlur descriptor. Tuple and fractional radii must use the CPU
+    // recurrence so each axis retains Pillow's fixed-point weights.
+    if matches!(op, PipelineOp::BoxBlurXY { .. }) {
+        return Ok(false);
+    }
     if matches!(
         op,
         PipelineOp::Rotate { nearest: true, .. }
@@ -436,17 +487,12 @@ pub fn execute_cpu(
     f(img, op, mode)
 }
 
-/// Returns embedded WGSL source for a registered variant key in tests.
-#[cfg(test)]
-pub(crate) fn gpu_shader_source_for_key(key: &str) -> Result<Option<&'static str>, PilError> {
-    Ok(registry()?.get(key).and_then(|e| e.gpu_source))
-}
-
 /// Extracts GPU shader parameter words from a pipeline operation.
 ///
 /// The returned `Vec<u32>` follows each shader's `Params` struct after the
 /// shared four-word header: `width`, `height`, `pad0`, `pad1`. Operations with
 /// no shader parameter block return an empty vector.
+#[cfg(feature = "gpu")]
 fn separable_box_blur_params(radius: u32) -> [u32; 3] {
     let radius = radius.min(16);
     let window = radius.saturating_mul(2).saturating_add(1);
@@ -458,6 +504,7 @@ fn separable_box_blur_params(radius: u32) -> [u32; 3] {
 /// three-pass Gaussian approximation. The GPU horizontal/vertical kernels
 /// consume these fixed-point words directly, so a Gaussian operation can be
 /// expanded into six ordered dispatches without a CPU readback between them.
+#[cfg(feature = "gpu")]
 pub(crate) fn separable_gaussian_blur_params(sigma: f32) -> [u32; 3] {
     if !sigma.is_finite() || sigma <= 0.0 {
         return separable_box_blur_params(0);
@@ -482,6 +529,7 @@ pub(crate) fn separable_gaussian_blur_params(sigma: f32) -> [u32; 3] {
     [radius_int, weight, edge_weight]
 }
 
+#[cfg(feature = "gpu")]
 pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
     match op {
         // ── No-param ops ──
@@ -578,6 +626,25 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
         // ── BoxBlur: radius ──
         PipelineOp::BoxBlur { radius } => separable_box_blur_params(*radius).to_vec(),
+        // BoxBlurXY is deliberately CPU-only. Keep a deterministic parameter
+        // shape here for GPU contract inspection if a caller constructs the
+        // descriptor directly, while the support gate prevents dispatch.
+        PipelineOp::BoxBlurXY {
+            radius_x,
+            radius_y,
+            passes,
+        } => {
+            let params = [*radius_x, *radius_y]
+                .into_iter()
+                .map(|radius| {
+                    let integer_radius = radius as u32;
+                    separable_box_blur_params(integer_radius)
+                })
+                .flatten()
+                .chain(std::iter::once(*passes))
+                .collect();
+            params
+        }
 
         // ── MedianFilter / MaxFilter / MinFilter: size ──
         PipelineOp::MedianFilter { size }
@@ -858,11 +925,11 @@ pub fn extract_params(op: &PipelineOp) -> Vec<u32> {
 
 fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> {
     use crate::compute::pool_cpu::ops::chops::{
-        op_chops_add, op_chops_add_modulo, op_chops_constant, op_chops_darker,
-        op_chops_difference, op_chops_duplicate, op_chops_hard_light,
-        op_chops_invert, op_chops_lighter, op_chops_logical_and, op_chops_logical_or,
-        op_chops_logical_xor, op_chops_multiply, op_chops_offset, op_chops_overlay,
-        op_chops_screen, op_chops_soft_light, op_chops_subtract, op_chops_subtract_modulo,
+        op_chops_add, op_chops_add_modulo, op_chops_constant, op_chops_darker, op_chops_difference,
+        op_chops_duplicate, op_chops_hard_light, op_chops_invert, op_chops_lighter,
+        op_chops_logical_and, op_chops_logical_or, op_chops_logical_xor, op_chops_multiply,
+        op_chops_offset, op_chops_overlay, op_chops_screen, op_chops_soft_light, op_chops_subtract,
+        op_chops_subtract_modulo,
     };
     use crate::compute::pool_cpu::ops::color::{op_convert, op_extract_band, op_remap_palette};
     use crate::compute::pool_cpu::ops::draw::{
@@ -870,17 +937,17 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         op_draw_pieslice, op_draw_point, op_draw_polygon, op_draw_rectangle, op_draw_rounded_rect,
     };
     use crate::compute::pool_cpu::ops::effects::{
-        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module,
-        op_effect_noise, op_effect_spread, op_eval, op_merge, op_paste, op_put_alpha,
-        op_put_alpha_data, op_put_data, op_put_pixel, op_transform,
+        op_alpha_composite, op_blend_module, op_color3dlut, op_composite_module, op_effect_noise,
+        op_effect_spread, op_eval, op_merge, op_paste, op_put_alpha, op_put_alpha_data,
+        op_put_data, op_put_pixel, op_transform,
     };
     use crate::compute::pool_cpu::ops::enhance::{
         op_enhance_brightness, op_enhance_color_saturation, op_enhance_contrast,
         op_enhance_sharpness,
     };
     use crate::compute::pool_cpu::ops::filter::{
-        execute_box_blur, execute_filter3x3, execute_filter5x5, execute_gaussian_blur,
-        execute_max_filter_with_mode, execute_median_filter_with_mode,
+        execute_box_blur, execute_box_blur_xy_with_passes, execute_filter3x3, execute_filter5x5,
+        execute_gaussian_blur, execute_max_filter_with_mode, execute_median_filter_with_mode,
         execute_min_filter_with_mode, execute_rank_filter_with_mode,
     };
     use crate::compute::pool_cpu::ops::geometry::{
@@ -1115,10 +1182,14 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
              op: &PipelineOp,
              _mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
-                if let PipelineOp::BoxBlur { radius } = op {
-                    execute_box_blur(img, *radius)
-                } else {
-                    Err(PilError::ValueError("expected BoxBlur op".into()))
+                match op {
+                    PipelineOp::BoxBlur { radius } => execute_box_blur(img, *radius),
+                    PipelineOp::BoxBlurXY {
+                        radius_x,
+                        radius_y,
+                        passes,
+                    } => execute_box_blur_xy_with_passes(img, *radius_x, *radius_y, *passes),
+                    _ => Err(PilError::ValueError("expected BoxBlur op".into())),
                 }
             },
             "box_blur.wgsl"
@@ -1706,10 +1777,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Offset { x, y } = op {
-                    Ok(op_chops_offset(img, *x, *y))
+                    Ok(op_chops_offset(img, *x, *y, mode))
                 } else {
                     Err(PilError::ValueError("expected Offset op".into()))
                 }
@@ -2127,16 +2198,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     );
 
     // ── LinearGradient (deprecated shader contract only) ──
-    m.insert(
-        "LinearGradient",
-        gpu_only_entry!("linear_gradient.wgsl"),
-    );
+    m.insert("LinearGradient", gpu_only_entry!("linear_gradient.wgsl"));
 
     // ── RadialGradient (deprecated shader contract only) ──
-    m.insert(
-        "RadialGradient",
-        gpu_only_entry!("radial_gradient.wgsl"),
-    );
+    m.insert("RadialGradient", gpu_only_entry!("radial_gradient.wgsl"));
 
     // ── EffectMandelbrot (deprecated shader contract only) ──
     m.insert(

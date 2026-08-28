@@ -66201,6 +66201,55 @@
       ]
     },
     {
+      "case_id": "PIL.Image.frombytes.nuanced.short-rgb-buffer",
+      "surface": "PIL.Image",
+      "operation": "frombytes",
+      "covers": [
+        "PIL.Image.frombytes.parameter.data"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [
+        {
+          "id": "data-inline",
+          "kind": "inline",
+          "encoding": "base64",
+          "data": "AQID",
+          "sha256": "039058c6f2c0cb492c533b0a4d14ef77cc0f78abccced5287d84a1a2011cfb81",
+          "media_type": "application/octet-stream"
+        }
+      ],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.Image",
+          "operation": "frombytes",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                2,
+                2
+              ]
+            },
+            "data": {
+              "kind": "asset",
+              "asset_id": "data-inline"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "pipeline-composition.linear-gradient-filter-autocontrast",
       "surface": "PIL.Image",
       "operation": "linear_gradient",

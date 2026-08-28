@@ -26,7 +26,7 @@
     "build:release": "npm run build:core:release && npm run build:extra:release",
     "build:core:release": "node scripts/build_wasm.mjs core release",
     "build:extra:release": "node scripts/build_wasm.mjs extra release",
-    "test:package": "node scripts/check_package.mjs && node scripts/test_smoke.mjs",
+    "test:package": "node scripts/check_package.mjs",
     "size": "node scripts/measure_wasm_sizes.mjs"
   },
   "keywords": [

@@ -24107,13 +24107,13 @@ surfaces:
         omission:
           kind: required
       result:
-        shape: bytes
+        shape: sequence
         observations:
         - path: value
           value_types:
-          - bytes
+          - sequence
           comparison:
-            kind: bytes
+            kind: ordered
         error:
           fields:
           - class
@@ -24840,7 +24840,7 @@ surfaces:
           kind: literal
           value: {}
       result:
-        shape: mask
+        shape: mask_with_offset
         observations:
         - path: value
           value_types:

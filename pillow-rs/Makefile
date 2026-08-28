@@ -1,8 +1,8 @@
 # pillow-rs Makefile
 # ================
 # Standalone entry point for build, test, lint, fixture, and parity work.
-# All workflows delegate to Rust/Cargo — no Python or JS dependencies here.
-# Use the workspace root Makefile for Python/WASM test runners.
+# Core build and lint workflows use Rust/Cargo. The canonical parity campaign
+# delegates to the workspace root, which owns the Python and JS/WASM runners.
 
 CARGO := cargo
 PYTHON := python3
@@ -18,9 +18,7 @@ help:
 	@printf "  make build            Build the crate\n"
 	@printf "  make build-release    Build with optimizations\n"
 	@printf "\nTest:\n"
-	@printf "  make test             Run all Rust tests\n"
-	@printf "  make test-core        Run unit tests (src/)\n"
-	@printf "  make test-font-native Run focused fontdone face integration tests\n"
+	@printf "  make test             Run the public migration-parity campaign\n"
 	@printf "  make backend-support-matrix Emit registry-derived backend support JSON\n"
 	@printf "  make migration-parity-test Run canonical live-oracle migration parity\n"
 	@printf "  make migration-parity-coverage Run target coverage from indexed plans\n"
@@ -50,15 +48,8 @@ build-release:
 	$(CARGO) build --release --locked
 
 .PHONY: test
-test: test-core
-
-.PHONY: test-core
-test-core:
-	$(CARGO) test --lib --locked
-
-.PHONY: test-font-native
-test-font-native:
-	$(CARGO) test --test font_native_public_api fontdone_face_capabilities_reach_pillow_core --locked
+test:
+	$(MAKE) -C .. migration-parity-test-all-backends
 
 .PHONY: backend-support-matrix
 backend-support-matrix:

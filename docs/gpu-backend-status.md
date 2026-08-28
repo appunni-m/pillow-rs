@@ -59,6 +59,44 @@ Single WGSL file per op with mode as uniform parameter (not 4 files per mode). E
 - **Dynamic dimension tracking**: `execute_batch_impl` tracks `(cur_w, cur_h)` through size-changing ops (Resize, Crop, Reduce, Scale). Readback uses final dimensions.
 - **gpu_log! macro**: Writes to `/tmp/gpu_debug.log` when `RSPIL_GPU_DEBUG=1` is set. Every pipeline step is logged with immediate flush. This was essential for debugging.
 
+### Same-input GPU/WGSL coverage
+
+`make test` selects one public parity corpus and sends that same case scope
+through the CPU, SIMD, GPU, Python, and JS/WASM lanes. The GPU lanes enable a
+bounded execution collector and write
+`build/migration-parity/all-backends/gpu-wgsl-coverage.json` (plus the smoke
+artifact). The artifact inventories every checked-in WGSL file and records
+which files and registry variants actually dispatched, including dispatch and
+workgroup counts.
+
+This is intentionally execution coverage, not source coverage. WGSL line and
+branch percentages are reported as `not_measured` until an instrumented shader
+build can record branches without changing the normal shader bindings or
+parity outputs. The Node JS/WASM lane also reports shader coverage as
+`not_measured` because the current package is built without the native GPU
+feature and this Node environment does not provide a WebGPU adapter. The same
+corpus now runs in a real browser WASM page as `browser-wasm-parity`; that
+lane records `navigator.gpu`/adapter/device availability separately, but does
+not call a capability probe a Pillow shader dispatch. An instrumented WGSL
+variant and an asynchronous browser GPU API are still required to prove
+browser shader execution.
+
+The execution boundary is also important when interpreting this receipt. A
+lazy pipeline stays queued until its terminal observation. When the complete
+batch is GPU-compatible, the GPU executor uploads the host image once, records
+the whole batch, and performs one final device-to-host readback. If the batch
+cannot run on GPU, routing selects the next supported backend. CPU and SIMD
+share host-resident image buffers, so a SIMD→CPU fallback needs no copy or
+materialization. If a future planner splits a pipeline around a GPU-only
+segment, only the GPU↔host transitions should count as full-frame copy
+boundaries; the shader receipt should continue to report only dispatches that
+actually occurred.
+
+`make migration-parity-test-gpu-strict` is available when a GPU-only
+capability audit is intentional. It keeps strict target locking and is not
+part of `make test`; the normal test must measure parity with the documented
+fallback behavior.
+
 ### Subagent-driven op migration
 
 20+ subagents were dispatched across GPU shader creation and SIMD function writing. Each agent handled 3-5 ops, following a standard pattern. This worked well — 71 SIMD functions and 18 new GPU shaders were written by agents in parallel.
@@ -122,7 +160,11 @@ wgpu supports `Backends::GL` (OpenGL) and `Backends::METAL`. The hang might be V
 
 ### WASM/WebGPU testing
 
-The GPU backend compiles for wasm32 but has never been tested in a browser. Needs async init for `request_adapter` (pollster blocks the browser thread).
+The browser WASM parity lane now exercises the same public workflows through a
+real headless browser. The current package is CPU/fallback-only: the core GPU
+implementation uses synchronous initialization/readback, while browser
+WebGPU requires async initialization and mapping. A browser GPU lane needs an
+async API before it can honestly claim dispatch or WGSL coverage.
 
 ### SIMD intrinsics
 

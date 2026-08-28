@@ -156,6 +156,19 @@ pub enum PipelineOp {
         /// Box blur radius.
         radius: u32,
     },
+    /// Apply box blur with independent horizontal and vertical radii.
+    ///
+    /// The uniform integer form above is retained for the established GPU
+    /// and SIMD contract. Pillow also accepts fractional and two-axis radii;
+    /// those use this exact CPU-compatible descriptor.
+    BoxBlurXY {
+        /// Horizontal box blur radius.
+        radius_x: f32,
+        /// Vertical box blur radius.
+        radius_y: f32,
+        /// Number of horizontal and vertical box passes.
+        passes: u32,
+    },
     /// Apply median filter.
     MedianFilter {
         /// Filter window size.

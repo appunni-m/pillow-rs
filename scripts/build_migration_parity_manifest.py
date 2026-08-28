@@ -105,6 +105,7 @@ COMPONENTS: dict[str, tuple[str, ...]] = {
     "image-filter": (
         "pillow-rs-py/python/pillow_rs/imagefilter.py",
         "pillow-rs/src/ops/filter.rs",
+        "pillow-rs/src/compute/pool_cpu/ops/filter.rs",
         "pillow-rs/src/ops/param_filters.rs",
     ),
     "image-enhance": (
@@ -528,6 +529,8 @@ def result_shape(
             return "scalar", ["string", "null"]
         if endpoint.operation in {"mode"}:
             return "scalar", ["string"]
+        if endpoint.operation == "has_transparency_data":
+            return "scalar", ["boolean"]
         return "scalar", ["integer"]
     if endpoint.kind == "type":
         return "handle", ["handle"]
@@ -536,6 +539,21 @@ def result_shape(
         # Pillow annotates this protocol method with the iterator class name;
         # the parity value is still a public handle, not a sequence to drain.
         return "handle", ["handle"]
+
+    # Pillow's FreeTypeFont.getmask2 returns a two-item tuple containing the
+    # ImagingCore mask and its (x, y) offset.  Treating the whole tuple as a
+    # plain ``mask`` makes the source serializer call ``bytes(tuple)`` and
+    # silently emit an empty placeholder, which prevents a real target mask
+    # from ever comparing equal.  Keep this as a distinct result shape so the
+    # parity contract observes both public values.
+    if endpoint.source_path == "PIL.ImageFont.FreeTypeFont.getmask2":
+        return "mask_with_offset", ["record"]
+
+    # ``get_variation_names`` is a list of byte strings.  The generic
+    # annotation matcher must not mistake the nested ``bytes`` token for a
+    # top-level byte result.
+    if endpoint.source_path == "PIL.ImageFont.FreeTypeFont.get_variation_names":
+        return "sequence", ["sequence"]
 
     annotation = return_annotation_text(signature)
     if "imagingcore" in annotation:
@@ -769,9 +787,17 @@ def operation_requirements(
                 ["parity", "coverage"],
             )
         )
-    for mode in merged_legacy_values(
-        endpoint, row_map, "supported_modes"
+    supported_modes = merged_legacy_values(endpoint, row_map, "supported_modes")
+    if (
+        endpoint.surface == "PIL.ImageEnhance"
+        and endpoint.operation in {"Brightness", "Color", "Contrast", "Sharpness"}
+        and "CMYK" not in supported_modes
     ):
+        # The target and existing parity corpus intentionally retain the
+        # native CMYK enhancement path even though the frozen legacy row did
+        # not enumerate that mode.
+        supported_modes.append("CMYK")
+    for mode in supported_modes:
         requirements.append(
             requirement(
                 f"{prefix}.mode.{slug(str(mode))}",
@@ -779,6 +805,23 @@ def operation_requirements(
                 f"Public behavior for image mode {mode!r}.",
                 ["parity", "coverage"],
             )
+        )
+    if endpoint.source_path == "PIL.Image.Image.histogram":
+        # The target keeps an unsigned-16-bit histogram path that predates the
+        # frozen authority row. Preserve its existing public requirement in
+        # the generated manifest instead of silently dropping its cases.
+        requirements.insert(
+            next(
+                index
+                for index, item in enumerate(requirements)
+                if item["id"] == f"{prefix}.mode.la"
+            ),
+            requirement(
+                f"{prefix}.mode.i16",
+                "mode",
+                "Public behavior for unsigned 16-bit image modes 'I;16*'.",
+                ["parity", "coverage"],
+            ),
         )
     for image_format in merged_legacy_values(
         endpoint, row_map, "supported_formats"
@@ -907,6 +950,20 @@ def operation_contract(
             if parameter["id"] == "palette":
                 # Pillow accepts an explicit None at runtime even though the
                 # annotation documents Palette.WEB as the default sentinel.
+                add_unique(parameter["value_types"], "null")
+    if endpoint.source_path == "PIL.Image.open":
+        # Keep the existing negative parity lane for the public host-type
+        # diagnostic even though the typed source signature is string-only.
+        for parameter in parameters:
+            if parameter["id"] == "mode":
+                if "integer" not in parameter["value_types"]:
+                    parameter["value_types"].insert(0, "integer")
+    if endpoint.source_path == "PIL.Image.Image.rotate":
+        # Pillow accepts an explicit None at this boundary and reports its
+        # normal runtime behavior; retain that input vocabulary in the fixed
+        # contract alongside the enum sentinel.
+        for parameter in parameters:
+            if parameter["id"] == "resample":
                 add_unique(parameter["value_types"], "null")
     if endpoint.source_path == "PIL.Image.Image.reduce":
         # Pillow's factor conversion reports the concrete host type for
@@ -1112,6 +1169,11 @@ def build_manifest() -> dict[str, Any]:
                 ],
             }
         )
+
+    # The input builder emits the cross-surface PipelineOp benchmark document
+    # after the per-surface documents. Keep that maintained artifact in the
+    # generated index so fixture regeneration is an exact check.
+    input_index["benchmark"].append("inputs/benchmark/pipeline-operations.json")
 
     return {
         "schema": "migration-parity/manifest@2",

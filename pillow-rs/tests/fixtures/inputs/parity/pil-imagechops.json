@@ -37339,6 +37339,168 @@
       ]
     },
     {
+      "case_id": "PIL.ImageChops.add.nuanced.mode-mismatch-l-rgb",
+      "surface": "PIL.ImageChops",
+      "operation": "add",
+      "covers": [
+        "PIL.ImageChops.add.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "add",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageChops.blend.nuanced.size-mismatch-l-l",
+      "surface": "PIL.ImageChops",
+      "operation": "blend",
+      "covers": [
+        "PIL.ImageChops.blend.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image1-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                16,
+                16
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-image2-2",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                8,
+                8
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageChops",
+          "operation": "blend",
+          "receiver": null,
+          "arguments": {
+            "image1": {
+              "kind": "binding",
+              "step_id": "setup-image1-1"
+            },
+            "image2": {
+              "kind": "binding",
+              "step_id": "setup-image2-2"
+            },
+            "alpha": {
+              "kind": "literal",
+              "value": 0.25
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
       "case_id": "PIL.ImageChops.multiply.nuanced.coverage-batch-chops-rgba-premultiplied-multiply-0",
       "surface": "PIL.ImageChops",
       "operation": "multiply",

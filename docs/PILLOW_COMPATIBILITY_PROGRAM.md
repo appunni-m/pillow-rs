@@ -887,7 +887,10 @@ coverage artifact:
       using byte-oriented image loading and exact Pillow assertions. Together
       with Python and WASM, this completes the second three-surface seed.
 - [ ] Refactor the Python runner to call only the installed public ABI.
-- [ ] Refactor the Node/WASM runner to consume the complete canonical corpus.
+- [x] Refactor the Node/WASM runner to consume the complete canonical corpus.
+      JS-compatible cases execute through the same shared workflow adapter;
+      unsupported or host-only cases remain selected and are reported with a
+      stable pending reason.
 - [x] Add a reusable strict Node loader for all version-2 input/output fixture
       pairs, pinned Pillow/FreeType versions, exact assertion fields, artifact
       paths, and one-to-one case IDs. This is a corpus-integrity prerequisite,
@@ -954,8 +957,12 @@ artifact:
 - [ ] Delete the legacy flat-fixture assumptions, lossy/float tolerances,
       substring error matching, descriptor-only acceptance, unknown-result
       skips, and unsupported-operation skips from the Node/WASM runner.
-- [ ] Add browser/WASM coverage for browser-specific loading and ABI behavior.
-- [ ] Produce a case-by-surface report with pass, fail, and unsupported counts.
+- [x] Add browser/WASM coverage for browser-specific loading and ABI behavior.
+      `make test-wasm` now sends the same public workflow payload through Node
+      WASM and a real browser WASM page.
+- [x] Produce a case-by-surface report with pass, fail, and unsupported counts.
+      The all-backends receipt records separate Node and browser lanes, their
+      scope digest, pending reasons, and browser WebGPU capability state.
 - [ ] Require every applicable case to execute on all three surfaces.
 - [ ] Prove that expected results always originate from Pillow, never another
       pillow-rs surface.

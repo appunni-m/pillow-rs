@@ -127,7 +127,7 @@ class Image(_PILImageBase):
         RustImage.validate_open_source(fp)
         try:
             rust_image = RustImage.open(fp, mode, formats)
-        except FileNotFoundError:
+        except (FileNotFoundError, IsADirectoryError):
             raise
         except Exception as exc:
             raise UnidentifiedImageError(f"cannot identify image file '{fp}'") from exc
@@ -335,7 +335,7 @@ class Image(_PILImageBase):
 
     def point(self, lut, mode=None):
         """Apply lookup table or function to each pixel."""
-        return Image(self._rust_image.point(lut))
+        return Image(self._rust_image.point(lut, mode))
 
     def effect_spread(self, distance):
         """Simple spread/blur effect."""

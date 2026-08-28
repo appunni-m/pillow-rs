@@ -10,10 +10,7 @@ use crate::raster::GenericImageView;
 
 /// Convert image to a specified color mode.
 /// Matches PIL's Image.convert() behavior exactly.
-pub fn op_convert(
-    img: &DynamicImage,
-    mode: &ColorMode,
-) -> Result<DynamicImage, PilError> {
+pub fn op_convert(img: &DynamicImage, mode: &ColorMode) -> Result<DynamicImage, PilError> {
     match mode {
         ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?)),
         ColorMode::LA => {
@@ -130,9 +127,9 @@ pub fn op_convert(
         // The public conversion path materializes binary and palette targets
         // before queuing a deferred operation. Keep the descriptor variants
         // for registry compatibility, but reject their duplicate CPU kernels.
-        ColorMode::Mode1 | ColorMode::P => Err(
-            PilError::ValueError("deferred conversion mode must be materialized first".into()),
-        ),
+        ColorMode::Mode1 | ColorMode::P => Err(PilError::ValueError(
+            "deferred conversion mode must be materialized first".into(),
+        )),
     }
 }
 

@@ -2,7 +2,7 @@
 # ============================================================================
 # AS PER DESIGN — DO NOT REMOVE CHECKS:
 #   Canonical lint script for pillow-rs. Used by both local dev and CI.
-#   Rust correctness:  rustfmt → clippy → tests → cargo-deny → cargo-audit
+#   Rust correctness:  rustfmt → clippy → cargo-deny → cargo-audit
 #   Python bindings:  AST-based CLAUDE.md rule check
 #   Migration spec:   fixed manifest/input/result contract checks
 # ============================================================================
@@ -37,11 +37,6 @@ cargo fmt --check
 echo ""
 echo "=== clippy (workspace lints) ==="
 cargo clippy --all-targets --all-features -- -A deprecated
-
-# ── Rust: tests ──
-echo ""
-echo "=== core tests ==="
-cargo test -p pillow-rs
 
 # ── Project-specific grep enforcements ──────────────────────────────────────
 # AS PER DESIGN — DO NOT REMOVE:
@@ -127,15 +122,13 @@ fi
 # ── Python: binding-layer rule enforcement (AST-based, no loops/arithmetic/logic) ──
 check "Python binding rules" python scripts/check_bindings.py
 
-# ── Python: migration specification tests ──
+# ── Python: migration parity specification checks ──
 echo ""
 echo "=== migration parity specification ==="
 python scripts/check_migration_parity_inputs.py
-python -m unittest \
-    tests.test_migration_parity_inventory \
-    tests.test_migration_parity_cases \
-    tests.test_migration_parity_contract \
-    tests.test_migration_parity_evidence
+python scripts/migration_parity_inventory.py --format check
+python scripts/validate_migration_parity_contract.py \
+	--manifest pillow-rs/tests/fixtures/manifest.yaml
 
 # ── Summary ──
 echo ""

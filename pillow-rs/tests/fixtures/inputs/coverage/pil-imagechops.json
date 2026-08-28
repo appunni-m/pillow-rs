@@ -516,6 +516,8 @@
           "PIL.ImageChops.add.nuanced.coverage-batch-chops-empty-add-100",
           "PIL.ImageChops.subtract.nuanced.coverage-batch-chops-empty-subtract-101",
           "PIL.ImageChops.overlay.nuanced.coverage-batch-chops-empty-overlay-102",
+          "PIL.ImageChops.add.nuanced.mode-mismatch-l-rgb",
+          "PIL.ImageChops.blend.nuanced.size-mismatch-l-l",
           "PIL.ImageChops.multiply.nuanced.coverage-batch-chops-rgba-premultiplied-multiply-0",
           "PIL.ImageChops.multiply.nuanced.coverage-batch-chops-rgba-premultiplied-multiply-1",
           "PIL.ImageChops.multiply.nuanced.coverage-batch-chops-rgba-premultiplied-multiply-2",

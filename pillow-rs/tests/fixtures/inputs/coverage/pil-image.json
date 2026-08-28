@@ -784,6 +784,7 @@
           "PIL.Image.new.nuanced.zero-width-f",
           "PIL.Image.new.nuanced.zero-height-cmyk",
           "PIL.Image.new.nuanced.zero-width-one",
+          "PIL.Image.frombytes.nuanced.short-rgb-buffer",
           "pipeline-composition.linear-gradient-filter-autocontrast",
           "pipeline-composition.radial-gradient-crop-resize",
           "pipeline-composition.mandelbrot-invert-rotate",

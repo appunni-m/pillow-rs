@@ -125,6 +125,19 @@ CORRECTIONS: tuple[Endpoint, ...] = (
         ),
     ),
     Endpoint(
+        surface="PIL.Image.Image",
+        operation="has_transparency_data",
+        kind="property_get",
+        source_path="PIL.Image.Image.has_transparency_data",
+        classification="endpoint",
+        authority="workflow-correction",
+        legacy_refs=(),
+        correction_reason=(
+            "The target facade exposes this public transparency property, "
+            "which is required to preserve the existing parity workflow."
+        ),
+    ),
+    Endpoint(
         surface="PIL.ImageDraw",
         operation="Outline",
         kind="function",
@@ -547,11 +560,72 @@ def render_ids(endpoints: list[Endpoint]) -> str:
     return "".join(f"{endpoint.id}\n" for endpoint in endpoints)
 
 
+def validate_inventory() -> dict[str, int]:
+    """Run the frozen inventory invariants used to replace unit assertions."""
+
+    endpoints, legacy_rows = derive_inventory()
+    all_endpoints, all_legacy_rows = derive_inventory(include_excluded=True)
+    references = [
+        reference.id
+        for endpoint in all_endpoints
+        for reference in endpoint.legacy_refs
+    ]
+    if all_legacy_rows != EXPECTED_LEGACY_ROWS or len(references) != EXPECTED_LEGACY_ROWS:
+        raise ValueError("legacy rows are not accounted for exactly once")
+    if len(references) != len(set(references)):
+        raise ValueError("legacy references are not unique")
+
+    merged = {
+        endpoint.id: tuple(reference.id for reference in endpoint.legacy_refs)
+        for endpoint in all_endpoints
+        if len(endpoint.legacy_refs) > 1
+    }
+    expected_merged = {
+        "PIL.Image::new": (
+            "Image.class_methods.new",
+            "ImageModule.functions.new",
+        ),
+        "PIL.Image::open": (
+            "Image.class_methods.open",
+            "ImageModule.functions.open",
+        ),
+    }
+    if merged != expected_merged:
+        raise ValueError(f"legacy alias set drifted: observed={merged!r}")
+
+    correction_ids = {endpoint.id for endpoint in CORRECTIONS}
+    for endpoint in CORRECTIONS:
+        if not endpoint.correction_reason or endpoint.legacy_refs:
+            raise ValueError(f"correction {endpoint.id} is not explicit and reasoned")
+    excluded_ids = set(EXCLUDED_ENDPOINTS)
+    if not excluded_ids.issubset({endpoint.id for endpoint in all_endpoints}):
+        raise ValueError("excluded endpoint is absent from the authority expansion")
+    if excluded_ids & {endpoint.id for endpoint in endpoints}:
+        raise ValueError("excluded endpoint leaked into active scope")
+    font_endpoints = [
+        endpoint for endpoint in endpoints if endpoint.source_path.startswith("PIL.ImageFont")
+    ]
+    if not font_endpoints or any(
+        not endpoint.surface.startswith("PIL.ImageFont") for endpoint in font_endpoints
+    ):
+        raise ValueError("font endpoints are not on canonical public surfaces")
+    payload = render_json(endpoints, legacy_rows)
+    if EXPECTED_AUTHORITY_SHA256 not in payload or '"endpoint_count": 209' not in payload:
+        raise ValueError("diagnostic inventory does not record frozen authority metadata")
+    return {
+        "legacy_rows": legacy_rows,
+        "legacy_unique_endpoints": EXPECTED_LEGACY_UNIQUE_ENDPOINTS,
+        "correction_endpoints": len(correction_ids),
+        "excluded_endpoints": len(excluded_ids),
+        "active_endpoints": len(endpoints),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--format",
-        choices=("ids", "json"),
+        choices=("ids", "json", "check"),
         default="ids",
         help="Output canonical IDs or the complete diagnostic inventory.",
     )
@@ -562,6 +636,10 @@ def main() -> None:
         help="Deprecated project-wide authority manifest.",
     )
     args = parser.parse_args()
+
+    if args.format == "check":
+        print(json.dumps(validate_inventory(), sort_keys=True))
+        return
 
     endpoints, legacy_rows = derive_inventory(args.authority.resolve())
     if args.format == "json":

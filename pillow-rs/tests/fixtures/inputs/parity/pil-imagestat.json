@@ -1136,6 +1136,261 @@
         "observe-stddev",
         "observe-extrema"
       ]
+    },
+    {
+      "case_id": "PIL.ImageStat.Stat.nuanced.invalid-first-argument",
+      "surface": "PIL.ImageStat",
+      "operation": "Stat",
+      "covers": [
+        "PIL.ImageStat.Stat.behavior.default"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageStat",
+          "operation": "Stat",
+          "receiver": null,
+          "arguments": {
+            "image_or_list": {
+              "kind": "literal",
+              "value": 1
+            }
+          }
+        }
+      ],
+      "observations": [
+        "call"
+      ]
+    },
+    {
+      "case_id": "PIL.ImageStat.Stat.nuanced.nonzero-mask",
+      "surface": "PIL.ImageStat",
+      "operation": "Stat",
+      "covers": [
+        "PIL.ImageStat.Stat.parameter.mask"
+      ],
+      "target_profiles": [
+        "python-cpu"
+      ],
+      "assets": [],
+      "steps": [
+        {
+          "step_id": "setup-image-or-list-1",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "RGB"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                4
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-stat-mask-pixel-2",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-image-or-list-1"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": [
+                10,
+                20,
+                30
+              ]
+            }
+          }
+        },
+        {
+          "step_id": "setup-mask-3",
+          "surface": "PIL.Image",
+          "operation": "new",
+          "receiver": null,
+          "arguments": {
+            "mode": {
+              "kind": "literal",
+              "value": "L"
+            },
+            "size": {
+              "kind": "literal",
+              "value": [
+                4,
+                4
+              ]
+            },
+            "color": {
+              "kind": "literal",
+              "value": 0
+            }
+          }
+        },
+        {
+          "step_id": "setup-stat-mask-pixel-4",
+          "surface": "PIL.Image.Image",
+          "operation": "putpixel",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "setup-mask-3"
+          },
+          "arguments": {
+            "xy": {
+              "kind": "literal",
+              "value": [
+                2,
+                3
+              ]
+            },
+            "value": {
+              "kind": "literal",
+              "value": 255
+            }
+          }
+        },
+        {
+          "step_id": "call",
+          "surface": "PIL.ImageStat",
+          "operation": "Stat",
+          "receiver": null,
+          "arguments": {
+            "image_or_list": {
+              "kind": "binding",
+              "step_id": "setup-image-or-list-1"
+            },
+            "mask": {
+              "kind": "binding",
+              "step_id": "setup-mask-3"
+            }
+          }
+        },
+        {
+          "step_id": "observe-count",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "count",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-sum2",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "sum2",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-mean",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "mean",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-median",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "median",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-rms",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "rms",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-var",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "var",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-stddev",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "stddev",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        },
+        {
+          "step_id": "observe-extrema",
+          "surface": "PIL.ImageStat.Stat",
+          "operation": "extrema",
+          "receiver": {
+            "kind": "binding",
+            "step_id": "call"
+          },
+          "arguments": {}
+        }
+      ],
+      "observations": [
+        "call",
+        "observe-count",
+        "observe-sum",
+        "observe-sum2",
+        "observe-mean",
+        "observe-median",
+        "observe-rms",
+        "observe-var",
+        "observe-stddev",
+        "observe-extrema"
+      ]
     }
   ]
 }

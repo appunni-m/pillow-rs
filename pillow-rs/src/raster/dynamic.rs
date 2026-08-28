@@ -105,6 +105,79 @@ where
     })
 }
 
+fn offset_image<P>(
+    image: &ImageBuffer<P, Vec<P::Subpixel>>,
+    xoffset: i32,
+    yoffset: i32,
+) -> ImageBuffer<P, Vec<P::Subpixel>>
+where
+    P: Pixel,
+{
+    let (width, height) = image.dimensions();
+    if width == 0 || height == 0 {
+        return ImageBuffer::new(width, height);
+    }
+
+    let source_x = (-(i64::from(xoffset))).rem_euclid(i64::from(width)) as u32;
+    let source_y = (-(i64::from(yoffset))).rem_euclid(i64::from(height)) as u32;
+    ImageBuffer::from_fn(width, height, |x, y| {
+        *image.get_pixel(
+            (x + source_x) % width,
+            (y + source_y) % height,
+        )
+    })
+}
+
+fn offset_luma16(
+    image: &ImageBuffer<Luma<u16>, Vec<u16>>,
+    xoffset: i32,
+    yoffset: i32,
+    mode: Option<&str>,
+) -> ImageBuffer<Luma<u16>, Vec<u16>> {
+    let (width, height) = image.dimensions();
+    if width == 0 || height == 0 {
+        return ImageBuffer::new(width, height);
+    }
+
+    let big_endian = mode == Some("I;16B");
+    let mut source = Vec::with_capacity(image.as_raw().len() * 2);
+    for &sample in image.as_raw() {
+        let bytes = if big_endian {
+            sample.to_be_bytes()
+        } else {
+            sample.to_ne_bytes()
+        };
+        source.extend_from_slice(&bytes);
+    }
+
+    let row_bytes = width as usize * 2;
+    let xshift = (-(i64::from(xoffset))).rem_euclid(i64::from(width)) as usize;
+    let yshift = (-(i64::from(yoffset))).rem_euclid(i64::from(height)) as usize;
+    let mut destination = vec![0_u8; source.len()];
+    for y in 0..height as usize {
+        let source_y = (y + yshift) % height as usize;
+        let source_row = source_y * row_bytes;
+        let destination_row = y * row_bytes;
+        for x in 0..width as usize {
+            let source_x = (x + xshift) % width as usize;
+            destination[destination_row + x] = source[source_row + source_x];
+        }
+    }
+
+    let pixels: Vec<u16> = destination
+        .chunks_exact(2)
+        .map(|bytes| {
+            let bytes = [bytes[0], bytes[1]];
+            if big_endian {
+                u16::from_be_bytes(bytes)
+            } else {
+                u16::from_ne_bytes(bytes)
+            }
+        })
+        .collect();
+    ImageBuffer::from_vec(width, height, pixels).expect("offset preserves the source dimensions")
+}
+
 #[inline]
 fn luma16_to_u8(sample: u16) -> u8 {
     sample.min(u16::from(u8::MAX)) as u8
@@ -186,6 +259,52 @@ impl DynamicImage {
     #[must_use]
     pub fn new_rgba8(w: u32, h: u32) -> DynamicImage {
         DynamicImage::ImageRgba8(ImageBuffer::new(w, h))
+    }
+
+    /// Matches Pillow's `libImaging/Offset.c` dispatch for 16-bit luma.
+    ///
+    /// Pillow exposes I;16 images through the byte-oriented `image8` storage
+    /// branch of this operation, so each coordinate indexes one byte and the
+    /// unwritten half of every output pixel remains zero. Other formats use
+    /// normal pixel-coordinate wrapping.
+    pub(crate) fn offset_with_mode(
+        &self,
+        xoffset: i32,
+        yoffset: i32,
+        mode: Option<&str>,
+    ) -> DynamicImage {
+        match self {
+            DynamicImage::ImageLuma8(image) => {
+                DynamicImage::ImageLuma8(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageLumaA8(image) => {
+                DynamicImage::ImageLumaA8(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageRgb8(image) => {
+                DynamicImage::ImageRgb8(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageRgba8(image) => {
+                DynamicImage::ImageRgba8(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageLuma16(image) => DynamicImage::ImageLuma16(
+                offset_luma16(image, xoffset, yoffset, mode),
+            ),
+            DynamicImage::ImageLumaA16(image) => {
+                DynamicImage::ImageLumaA16(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageRgb16(image) => {
+                DynamicImage::ImageRgb16(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageRgba16(image) => {
+                DynamicImage::ImageRgba16(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageRgb32F(image) => {
+                DynamicImage::ImageRgb32F(offset_image(image, xoffset, yoffset))
+            }
+            DynamicImage::ImageRgba32F(image) => {
+                DynamicImage::ImageRgba32F(offset_image(image, xoffset, yoffset))
+            }
+        }
     }
 
     /// Returns a copy of this image as an RGB image.

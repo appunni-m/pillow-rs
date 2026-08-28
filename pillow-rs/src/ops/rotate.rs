@@ -142,6 +142,19 @@ impl Image {
         translate: RotatePointInput,
         fillcolor: ImageOpsColor,
     ) -> Result<Image, PilError> {
+        let expand_requested = match &expand {
+            RotateExpandInput::Boolean(value) => *value,
+            RotateExpandInput::Integer(value) => *value != 0,
+        };
+        // Pillow calculates the expanded bounds with ``ceil``/``floor``.
+        // Python raises while converting the NaN result when a non-finite
+        // angle is used with expansion; keep the failure at rotate() rather
+        // than queueing a pipeline that later reports a zero-sized image.
+        if expand_requested && !angle.is_finite() {
+            return Err(PilError::ValueError(
+                "cannot convert float NaN to integer".into(),
+            ));
+        }
         let normalized_angle = angle % 360.0;
         let nearest = rotate_uses_nearest(&resample);
         // Pillow skips resampling-name validation only for an exact multiple of
