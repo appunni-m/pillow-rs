@@ -1808,6 +1808,82 @@ pub fn simd_colorize(
     dynimg_from_pixel_mode(pixels, w, h, PixelMode::RGB)
 }
 
+/// Extract one channel from a native 8-bit image without expanding it to
+/// packed RGBA storage.  The public `getchannel` operation is a byte-domain
+/// copy for L/LA/RGB/RGBA (and CMYK, which uses the four-byte RGBA storage in
+/// this crate), so widening it would add a conversion boundary for no gain.
+/// Typed samples are deliberately left on the exact CPU implementation and
+/// recorded as an internal fallback rather than being mislabeled as SIMD.
+pub fn simd_extract_band(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    _mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::ExtractBand { index } = op else {
+        return Err(PilError::ValueError("expected ExtractBand op".into()));
+    };
+
+    let (source, channels) = match img {
+        DynamicImage::ImageLuma8(image) => (image.as_raw().as_slice(), 1usize),
+        DynamicImage::ImageLumaA8(image) => (image.as_raw().as_slice(), 2usize),
+        DynamicImage::ImageRgb8(image) => (image.as_raw().as_slice(), 3usize),
+        DynamicImage::ImageRgba8(image) => (image.as_raw().as_slice(), 4usize),
+        _ => {
+            crate::compute::record_pipeline_backend_fallback(
+                "SIMD ExtractBand: typed sample CPU fallback",
+            );
+            return crate::compute::pool_cpu::ops::color::op_extract_band(img, *index);
+        }
+    };
+
+    let (width, height) = img.dimensions();
+    let pixel_count = (width as usize)
+        .checked_mul(height as usize)
+        .ok_or_else(|| PilError::InternalError("ExtractBand pixel count overflow".into()))?;
+    let source_len = pixel_count
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::InternalError("ExtractBand source length overflow".into()))?;
+    if source.len() != source_len {
+        return Err(PilError::InternalError(
+            "ExtractBand source buffer shape mismatch".into(),
+        ));
+    }
+
+    // `getchannel` validates the public index before queuing the operation.
+    // Keep the CPU operation's defensive clamping for direct internal
+    // PipelineOp callers while using the native storage stride here.
+    let channel = usize::from(*index).min(channels - 1);
+    let mut output = vec![0u8; pixel_count];
+    // One shuffle consumes at most 16 source bytes.  The native layouts have
+    // one to four bytes per pixel, so this processes 16, 8, 5, or 4 pixels
+    // per vector respectively.
+    let pixels_per_vector = 16 / channels;
+    let mut pixel = 0usize;
+    while pixel + pixels_per_vector <= pixel_count {
+        let source_start = pixel * channels;
+        let source_bytes = pixels_per_vector * channels;
+        let mut source_block = [0u8; 16];
+        source_block[..source_bytes]
+            .copy_from_slice(&source[source_start..source_start + source_bytes]);
+        let indices = std::array::from_fn(|lane| {
+            ((lane % pixels_per_vector) * channels + channel) as u8
+        });
+        let extracted = u8x16::new(source_block)
+            .swizzle_relaxed(u8x16::new(indices))
+            .to_array();
+        output[pixel..pixel + pixels_per_vector]
+            .copy_from_slice(&extracted[..pixels_per_vector]);
+        pixel += pixels_per_vector;
+    }
+    for pixel in pixel..pixel_count {
+        output[pixel] = source[pixel * channels + channel];
+    }
+
+    GrayImage::from_raw(width, height, output)
+        .map(DynamicImage::ImageLuma8)
+        .ok_or_else(|| PilError::InternalError("SIMD ExtractBand buffer shape mismatch".into()))
+}
+
 pub fn simd_constant(
     img: &DynamicImage,
     op: &PipelineOp,
