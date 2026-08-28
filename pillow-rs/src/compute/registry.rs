@@ -2179,7 +2179,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         ),
     );
 
-    // ── ExtractBand (CPU-only for now, GPU/SIMD later) ──
+    // ── ExtractBand: native byte-channel copy ──
     m.insert(
         "ExtractBand",
         gpu_entry!(
@@ -2571,6 +2571,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Paste", adapters::simd_paste)?;
     simd_set(m, "AlphaComposite", adapters::simd_alpha_composite)?;
     simd_set(m, "Merge", adapters::simd_merge)?;
+    simd_set(m, "ExtractBand", adapters::simd_extract_band)?;
     // ── Additional SIMD wirings (GPU ops missing SIMD) ──
     simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
     simd_set(m, "BlendModule", adapters::simd_blend_module)?;
