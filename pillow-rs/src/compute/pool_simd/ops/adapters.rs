@@ -485,13 +485,23 @@ fn native_luma16_transpose_layout(img: &DynamicImage, mode: Option<&str>) -> boo
 /// Chops treats every stored byte as an active sample. In particular, the
 /// fourth byte of a CMYK image is K, not alpha, so it must be admitted to the
 /// same four-byte vector kernel as RGBA without going through packed-mode
-/// interpretation.
+/// interpretation. HSV/YCbCr and RGBa/RGBX likewise retain their raw byte
+/// layout at this boundary; ImageChops does not reinterpret those samples as
+/// colors or alpha.
 fn native_chops_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-        DynamicImage::ImageRgb8(_) if matches!(mode, None | Some("RGB")) => Some(3),
-        DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
+        DynamicImage::ImageRgb8(_)
+            if matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")) =>
+        {
+            Some(3)
+        }
+        DynamicImage::ImageRgba8(_)
+            if matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX")) =>
+        {
+            Some(4)
+        }
         _ => None,
     }
 }
@@ -582,6 +592,20 @@ fn has_vectorized_flat_bytes(img: &DynamicImage, channels: usize) -> bool {
         })
 }
 
+/// A zero-pixel native image is a valid Chops data path even though it has no
+/// vector block to execute. Returning its already-typed buffer is the native
+/// no-work equivalent of Pillow's empty output; it must not be reported as a
+/// scalar or arithmetic vector kernel.
+fn has_empty_native_bytes(img: &DynamicImage, channels: usize) -> bool {
+    (img.width() == 0 || img.height() == 0)
+        && img
+            .width()
+            .checked_mul(img.height())
+            .and_then(|pixels| pixels.checked_mul(channels as u32))
+            == Some(0)
+        && img.as_bytes().is_empty()
+}
+
 /// Offset copies wrapped rows through vector loads and lane shuffles. Rows
 /// narrower than one vector can still be batched across row boundaries; the
 /// capability gate therefore requires one complete vector in the image, not
@@ -608,8 +632,8 @@ fn has_vectorized_offset_rows(img: &DynamicImage, channels: usize, xoffset: i32)
 fn has_vectorized_luma16_offset(img: &DynamicImage, mode: Option<&str>) -> bool {
     matches!(img, DynamicImage::ImageLuma16(_))
         && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
-        && img.width() >= 16
-        && img.height() != 0
+        && (has_empty_native_bytes(img, 2)
+            || (img.width() >= 16 && img.height() != 0))
 }
 
 /// Mirror uses one padded vector group for a partial final pixel group, so
@@ -686,11 +710,12 @@ fn has_vectorized_native_identity_copy(img: &DynamicImage, mode: Option<&str>) -
 /// rows still execute a genuine vector data path instead of being needlessly
 /// routed to CPU.
 fn has_affine_vector_rows(img: &DynamicImage, channels: usize) -> bool {
-    img.height() != 0
-        && img
-            .width()
-            .checked_mul(channels as u32)
-            .is_some_and(|row_bytes| row_bytes >= 8)
+    has_empty_native_bytes(img, channels)
+        || (img.height() != 0
+            && img
+                .width()
+                .checked_mul(channels as u32)
+                .is_some_and(|row_bytes| row_bytes >= 8))
 }
 
 /// Multiply and Screen consume eight independent byte samples in an
@@ -3937,9 +3962,11 @@ pub(crate) fn simd_supports_for_image(
     let native_copy = native_copy_layout(img, mode).is_some();
     let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
     let native_chops = native_chops_layout(img, mode)
-        .is_some_and(|channels| has_vectorized_flat_bytes(img, channels));
+        .is_some_and(|channels| has_empty_native_bytes(img, channels)
+            || has_vectorized_flat_bytes(img, channels));
     let lut_chops = native_chops_layout(img, mode)
-        .is_some_and(|channels| has_vectorized_lut_bytes(img, channels));
+        .is_some_and(|channels| has_empty_native_bytes(img, channels)
+            || has_vectorized_lut_bytes(img, channels));
     let blend_chops = native_chops_layout(img, mode)
         .is_some_and(|channels| has_blend_vector_rows(img, channels));
     let affine_chops = native_chops_layout(img, mode)
@@ -3949,7 +3976,8 @@ pub(crate) fn simd_supports_for_image(
         // and explicitly mode-converted images are deliberately rejected
         // until their sample-domain kernels exist.
         PipelineOp::Invert | PipelineOp::InvertChops => native_invert_layout(img, mode)
-            .is_some_and(|channels| has_vectorized_byte_rows(img, channels)),
+            .is_some_and(|channels| has_empty_native_bytes(img, channels)
+                || has_vectorized_byte_rows(img, channels)),
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_image(img, *w, *h, *filter, mode)
         }
@@ -4089,7 +4117,8 @@ pub(crate) fn simd_supports_for_image(
             has_vectorized_luma16_offset(img, mode)
                 || (native_copy
                     && native_copy_layout(img, mode)
-                        .is_some_and(|channels| has_vectorized_offset_rows(img, channels, *x)))
+                        .is_some_and(|channels| has_empty_native_bytes(img, channels)
+                            || has_vectorized_offset_rows(img, channels, *x)))
         }
         PipelineOp::Flip => native_copy_layout(img, mode)
             .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
@@ -4975,12 +5004,23 @@ fn shape_native_chops_channels(shape: SimdImageShape, mode: Option<&str>) -> Opt
     let valid = match shape.layout {
         SimdLayout::Luma8 => matches!(mode, None | Some("1" | "L" | "P")),
         SimdLayout::LumaA8 => matches!(mode, None | Some("LA" | "PA")),
-        SimdLayout::Rgb8 => matches!(mode, None | Some("RGB")),
-        SimdLayout::Rgba8 => matches!(mode, None | Some("RGBA" | "CMYK")),
+        SimdLayout::Rgb8 => matches!(mode, None | Some("RGB" | "HSV" | "YCbCr")),
+        SimdLayout::Rgba8 => {
+            matches!(mode, None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX"))
+        }
         SimdLayout::Luma16 => false,
         SimdLayout::Unsupported => false,
     };
     valid.then_some(channels)
+}
+
+fn shape_has_empty_native_bytes(shape: SimdImageShape, channels: usize) -> bool {
+    (shape.width == 0 || shape.height == 0)
+        && shape
+            .width
+            .checked_mul(shape.height)
+            .and_then(|pixels| pixels.checked_mul(channels as u32))
+            == Some(0)
 }
 
 fn shape_has_vector_rows(shape: SimdImageShape, channels: usize) -> bool {
@@ -5034,8 +5074,8 @@ fn shape_has_vectorized_luma16_offset(
 ) -> bool {
     shape.layout == SimdLayout::Luma16
         && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
-        && shape.width >= 16
-        && shape.height != 0
+        && (shape_has_empty_native_bytes(shape, 2)
+            || (shape.width >= 16 && shape.height != 0))
 }
 
 fn shape_has_vectorized_mirror_rows(shape: SimdImageShape, channels: usize) -> bool {
@@ -5043,11 +5083,12 @@ fn shape_has_vectorized_mirror_rows(shape: SimdImageShape, channels: usize) -> b
 }
 
 fn shape_has_affine_vector_rows(shape: SimdImageShape, channels: usize) -> bool {
-    shape.height != 0
-        && shape
-            .width
-            .checked_mul(channels as u32)
-            .is_some_and(|row_bytes| row_bytes >= 8)
+    shape_has_empty_native_bytes(shape, channels)
+        || (shape.height != 0
+            && shape
+                .width
+                .checked_mul(channels as u32)
+                .is_some_and(|row_bytes| row_bytes >= 8))
 }
 
 fn shape_has_blend_vector_rows(shape: SimdImageShape, channels: usize) -> bool {
@@ -5483,17 +5524,24 @@ fn simd_supports_for_shape(
     let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
     let native_copy = shape_native_copy_channels(shape, mode).is_some();
     let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
-    let native_chops = shape_native_chops_channels(shape, mode)
-        .is_some_and(|channels| shape_has_vectorized_flat_bytes(shape, channels));
-    let lut_chops = shape_native_chops_channels(shape, mode)
-        .is_some_and(|channels| shape_has_vectorized_lut_bytes(shape, channels));
+    let native_chops = shape_native_chops_channels(shape, mode).is_some_and(|channels| {
+        shape_has_empty_native_bytes(shape, channels)
+            || shape_has_vectorized_flat_bytes(shape, channels)
+    });
+    let lut_chops = shape_native_chops_channels(shape, mode).is_some_and(|channels| {
+        shape_has_empty_native_bytes(shape, channels)
+            || shape_has_vectorized_lut_bytes(shape, channels)
+    });
     let blend_chops = shape_native_chops_channels(shape, mode)
         .is_some_and(|channels| shape_has_blend_vector_rows(shape, channels));
     let affine_chops = shape_native_chops_channels(shape, mode)
         .is_some_and(|channels| shape_has_affine_vector_rows(shape, channels));
     match op {
         PipelineOp::Invert | PipelineOp::InvertChops => shape_native_invert_channels(shape, mode)
-            .is_some_and(|channels| shape_has_vector_rows(shape, channels)),
+            .is_some_and(|channels| {
+                shape_has_empty_native_bytes(shape, channels)
+                    || shape_has_vector_rows(shape, channels)
+            }),
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_shape(shape, *w, *h, *filter, mode)
         }
@@ -5616,7 +5664,8 @@ fn simd_supports_for_shape(
         PipelineOp::Offset { x, .. } => {
             shape_has_vectorized_luma16_offset(shape, mode)
                 || shape_native_copy_channels(shape, mode).is_some_and(|channels| {
-                    shape_has_vectorized_offset_rows(shape, channels, *x)
+                    shape_has_empty_native_bytes(shape, channels)
+                        || shape_has_vectorized_offset_rows(shape, channels, *x)
                 })
         }
         PipelineOp::Flip => shape_native_copy_channels(shape, mode)
@@ -6538,6 +6587,10 @@ fn native_invert(
     invert_alpha: bool,
 ) -> Option<DynamicImage> {
     if let Some(channels) = native_invert_layout(img, mode) {
+        if has_empty_native_bytes(img, channels) {
+            crate::compute::record_pipeline_operation_path("native-copy");
+            return Some(img.clone());
+        }
         record_native_row_work(img.width() as usize, img.height() as usize, channels);
     }
     let mut result = img.clone();
@@ -6653,6 +6706,10 @@ fn native_invert_in_place(
     };
     let width = img.width() as usize;
     let height = img.height() as usize;
+    if has_empty_native_bytes(img, channels) {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return true;
+    }
     let Some(bytes) = img.as_bytes_mut() else {
         return false;
     };
@@ -6891,23 +6948,10 @@ pub(crate) fn simd_execute_in_place(
         PipelineOp::Eval { lut } => Ok(native_point_lut_in_place(img, mode, lut)),
         PipelineOp::Multiply { other } => {
             let other = materialize_chops_operand(other, mode)?;
-            let channels = match (&*img, &other) {
-                (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_))
-                    if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
-                (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_))
-                    if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-                (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_))
-                    if matches!(mode, None | Some("RGB")) => Some(3),
-                (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_))
-                    if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
-                _ => None,
-            };
+            let channels = native_chops_pair_channels(&*img, &other, mode);
             let Some(channels) = channels else {
                 return Ok(false);
             };
-            if img.dimensions() != other.dimensions() {
-                return Ok(false);
-            }
             let width = img.width() as usize;
             let height = img.height() as usize;
             let right = other.as_bytes();
@@ -6920,23 +6964,10 @@ pub(crate) fn simd_execute_in_place(
         }
         PipelineOp::Screen { other } => {
             let other = materialize_chops_operand(other, mode)?;
-            let channels = match (&*img, &other) {
-                (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_))
-                    if matches!(mode, None | Some("1" | "L" | "P")) => Some(1),
-                (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_))
-                    if matches!(mode, None | Some("LA" | "PA")) => Some(2),
-                (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_))
-                    if matches!(mode, None | Some("RGB")) => Some(3),
-                (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_))
-                    if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
-                _ => None,
-            };
+            let channels = native_chops_pair_channels(&*img, &other, mode);
             let Some(channels) = channels else {
                 return Ok(false);
             };
-            if img.dimensions() != other.dimensions() {
-                return Ok(false);
-            }
             let width = img.width() as usize;
             let height = img.height() as usize;
             let right = other.as_bytes();
@@ -8154,21 +8185,24 @@ fn native_chops_blend(
     mode: Option<&str>,
     screen: bool,
 ) -> Option<DynamicImage> {
-    if img.dimensions() != other.dimensions() {
+    let channels = native_chops_pair_channels(img, other, mode)?;
+    let Some(expected_len) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return None;
+    };
+    if img.as_bytes().len() != expected_len || other.as_bytes().len() != expected_len {
         return None;
     }
-    let channels = match (img, other) {
-        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_))
-            if matches!(mode, None | Some("1" | "L" | "P")) => 1,
-        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_))
-            if matches!(mode, None | Some("LA" | "PA")) => 2,
-        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_))
-            if matches!(mode, None | Some("RGB")) => 3,
-        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_))
-            if matches!(mode, None | Some("RGBA" | "CMYK")) => 4,
-        _ => return None,
-    };
-    let mut output = vec![0u8; img.as_bytes().len()];
+    if expected_len == 0 {
+        // Pillow returns a typed zero-pixel result without entering the blend
+        // loop. The source clone preserves the logical mode at the pipeline
+        // boundary and records a genuine native no-work path.
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
+    let mut output = vec![0u8; expected_len];
     if !apply_native_blend_rows(
         img.as_bytes(),
         other.as_bytes(),
@@ -8194,8 +8228,8 @@ fn native_chops_blend(
 /// These formulas are lane-local and preserve Pillow's byte semantics exactly:
 /// min/max, absolute difference, modulo add/subtract, and logical operations
 /// do not need the widening and rounding used by multiply/screen. The helper
-/// keeps the scalar tail outside the vector loop and returns `None` for typed
-/// or mode-converted layouts that cannot safely stay in their native bytes.
+/// keeps the scalar tail outside the vector loop and returns `None` when the
+/// logical mode does not match a supported native byte layout.
 fn native_chops_bytewise<F, G>(
     img: &DynamicImage,
     other: &DynamicImage,
@@ -8207,32 +8241,7 @@ where
     F: Fn(u8x16, u8x16) -> u8x16 + Send + Sync,
     G: Fn(u8, u8) -> u8 + Send + Sync,
 {
-    let channels = match (img, other) {
-        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_))
-            if matches!(mode, None | Some("1" | "L" | "P")) =>
-        {
-            1
-        }
-        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_))
-            if matches!(mode, None | Some("LA" | "PA")) =>
-        {
-            2
-        }
-        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_))
-            if matches!(mode, None | Some("RGB")) =>
-        {
-            3
-        }
-        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_))
-            if matches!(mode, None | Some("RGBA" | "CMYK")) =>
-        {
-            4
-        }
-        _ => return None,
-    };
-    if img.dimensions() != other.dimensions() {
-        return None;
-    }
+    let channels = native_chops_pair_channels(img, other, mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
     if left.len() != right.len() || left.len() % channels != 0 {
@@ -8245,7 +8254,17 @@ where
     else {
         return None;
     };
-    if expected_len as usize != left.len() || left.len() < 16 {
+    if expected_len as usize != left.len() {
+        return None;
+    }
+    if left.is_empty() {
+        // Empty Chops is a valid native zero-work operation. Do not pass the
+        // empty buffer through raw image reconstruction, whose normal typed
+        // constructor intentionally requires at least one pixel.
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
+    if left.len() < 16 {
         return None;
     }
 
@@ -8280,20 +8299,10 @@ where
     F: Fn(u8x16, u8x16) -> u8x16,
     G: Fn(u8, u8) -> u8,
 {
-    let channels = match (&*img, other) {
-        (DynamicImage::ImageLuma8(_), DynamicImage::ImageLuma8(_))
-            if matches!(mode, None | Some("1" | "L" | "P")) => 1,
-        (DynamicImage::ImageLumaA8(_), DynamicImage::ImageLumaA8(_))
-            if matches!(mode, None | Some("LA" | "PA")) => 2,
-        (DynamicImage::ImageRgb8(_), DynamicImage::ImageRgb8(_))
-            if matches!(mode, None | Some("RGB")) => 3,
-        (DynamicImage::ImageRgba8(_), DynamicImage::ImageRgba8(_))
-            if matches!(mode, None | Some("RGBA" | "CMYK")) => 4,
-        _ => return false,
+    let channels = match native_chops_pair_channels(&*img, other, mode) {
+        Some(channels) => channels,
+        None => return false,
     };
-    if img.dimensions() != other.dimensions() {
-        return false;
-    }
     let right = other.as_bytes();
     let width = img.width() as usize;
     let height = img.height() as usize;
@@ -8303,10 +8312,14 @@ where
     let Some(left) = img.as_bytes_mut() else {
         return false;
     };
-    if row_stride.checked_mul(height) != Some(left.len())
-        || right.len() != left.len()
-        || left.len() < 16
-    {
+    if row_stride.checked_mul(height) != Some(left.len()) || right.len() != left.len() {
+        return false;
+    }
+    if left.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return true;
+    }
+    if left.len() < 16 {
         return false;
     }
     let vector_len = left.len() / 16 * 16;
@@ -8382,7 +8395,14 @@ fn native_chops_lut_formula(
     let channels = native_chops_pair_channels(img, other, mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    if left.len() != right.len() || left.len() < 8 || left.len() % channels != 0 {
+    if left.len() != right.len() || left.len() % channels != 0 {
+        return None;
+    }
+    if left.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
+    if left.len() < 8 {
         return None;
     }
     let mut output = vec![0u8; left.len()];
@@ -8468,7 +8488,14 @@ fn native_chops_soft_light(
     let channels = native_chops_pair_channels(img, other, mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    if left.len() != right.len() || left.len() < 8 || left.len() % channels != 0 {
+    if left.len() != right.len() || left.len() % channels != 0 {
+        return None;
+    }
+    if left.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
+    if left.len() < 8 {
         return None;
     }
     let mut output = vec![0u8; left.len()];
@@ -8616,7 +8643,8 @@ fn native_chops_pair_channels(
 /// The arithmetic is vectorized in eight exact `f64` lanes because Pillow
 /// evaluates `(left +/- right) / scale + offset` in double precision before
 /// clamping and truncating to a byte. Loads are native interleaved bytes; no
-/// packed RGBA conversion is introduced for RGB, LA, RGBA, or CMYK storage.
+/// packed RGBA conversion is introduced for RGB, LA, RGBA, CMYK, HSV, YCbCr,
+/// RGBa, or RGBX storage.
 fn native_chops_affine(
     img: &DynamicImage,
     other: &DynamicImage,
@@ -8632,15 +8660,19 @@ fn native_chops_affine(
     let width = img.width() as usize;
     let height = img.height() as usize;
     let row_stride = width.checked_mul(channels)?;
-    if row_stride.checked_mul(height) != Some(img.as_bytes().len())
-        || other.as_bytes().len() != img.as_bytes().len()
-        || row_stride < 8
-    {
+    let left = img.as_bytes();
+    let right = other.as_bytes();
+    if row_stride.checked_mul(height) != Some(left.len()) || right.len() != left.len() {
+        return None;
+    }
+    if left.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
+    if row_stride < 8 {
         return None;
     }
 
-    let left = img.as_bytes();
-    let right = other.as_bytes();
     let mut output = vec![0u8; left.len()];
     let vector_blocks = (row_stride / 8).saturating_mul(height);
     let scalar_tail = (row_stride % 8).saturating_mul(height);
@@ -8708,10 +8740,14 @@ fn native_chops_affine_in_place(
     let Some(left) = img.as_bytes_mut() else {
         return false;
     };
-    if row_stride < 8
-        || row_stride.checked_mul(height) != Some(left.len())
-        || right.len() != left.len()
-    {
+    if row_stride.checked_mul(height) != Some(left.len()) || right.len() != left.len() {
+        return false;
+    }
+    if left.is_empty() {
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return true;
+    }
+    if row_stride < 8 {
         return false;
     }
 
@@ -9293,6 +9329,12 @@ fn native_offset_luma16(
         return None;
     }
     let (width, height) = image.dimensions();
+    if width == 0 || height == 0 {
+        return image
+            .as_raw()
+            .is_empty()
+            .then_some((img.clone(), 0, 0));
+    }
     if width < 16 || height == 0 {
         return None;
     }
@@ -9464,7 +9506,7 @@ fn native_offset(
     let channels = native_copy_layout(img, mode)?;
     let (width, height) = img.dimensions();
     if width == 0 || height == 0 {
-        return None;
+        return has_empty_native_bytes(img, channels).then_some((img.clone(), 0, 0));
     }
     let width_usize = usize::try_from(width).ok()?;
     let height_usize = usize::try_from(height).ok()?;
