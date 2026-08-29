@@ -856,9 +856,11 @@ def run(args: argparse.Namespace) -> int:
             )
 
     if source_results:
-        # Keep RNG-consuming workflows in their original relative order and
-        # send them as one batch.  Running them in a separate batch is safe:
-        # the non-random operations between them do not mutate this RNG.
+        # Keep RNG-consuming workflows in their original relative order, but
+        # restart the host for each complete public case.  This preserves the
+        # random sequence within a workflow while preventing an explicitly
+        # unsupported strict-backend operation in one case from changing the
+        # stream observed by a later case.
         stateful_cases = [case for case in cases if uses_process_global_state(case)]
         ordinary_cases = [case for case in cases if not uses_process_global_state(case)]
         for chunk_start in range(0, len(ordinary_cases), args.chunk_size):
@@ -868,7 +870,8 @@ def run(args: argparse.Namespace) -> int:
                 chunk_start,
             )
         if stateful_cases:
-            process_batch(stateful_cases, 0, 0)
+            for case in stateful_cases:
+                process_batch([case], 0, 0)
 
         # Batches above are intentionally scheduled by execution class, but
         # the result contract remains in manifest order.

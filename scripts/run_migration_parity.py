@@ -61,6 +61,24 @@ MAX_GPU_TIMEOUT_SECONDS = 300
 PROCESS_REAP_TIMEOUT_SECONDS = 10
 GIT_COMMAND_TIMEOUT_SECONDS = 10
 
+# These public operations consume process-global random state in Pillow and in
+# the Rust implementation.  A parity case is a standalone public-input
+# scenario, so keep its within-workflow random sequence intact while isolating
+# it from every other case.  This is especially important for strict backend
+# audits: an explicitly unsupported operation must not consume RNG state merely
+# to keep a later case aligned with the oracle.
+PROCESS_GLOBAL_STATE_OPS = {
+    ("PIL.Image", "effect_noise"),
+    ("PIL.Image.Image", "effect_spread"),
+}
+
+
+def uses_process_global_state(case: dict[str, Any]) -> bool:
+    return any(
+        (step["surface"], step["operation"]) in PROCESS_GLOBAL_STATE_OPS
+        for step in case.get("steps", [])
+    )
+
 
 def target_profile_for_backend(backend: str) -> str:
     """Return the manifest profile that identifies one compute backend."""
@@ -1234,11 +1252,13 @@ def side_identity(side: str) -> dict[str, Any]:
     }
 
 
-def run_side_subprocess(
+def _run_side_subprocess_batch(
     side: str,
     manifest_path: Path,
     cases: list[dict[str, Any]],
     timeout_seconds: int,
+    *,
+    environment: dict[str, str | None] | None = None,
 ) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
     payload = json.dumps(cases, separators=(",", ":"))
     command = [
@@ -1250,6 +1270,11 @@ def run_side_subprocess(
         str(manifest_path),
     ]
     env = os.environ.copy()
+    for key, value in (environment or {}).items():
+        if value is None:
+            env.pop(key, None)
+        else:
+            env[key] = value
     target_python = str(ROOT / "pillow-rs-py" / "python")
     env["PYTHONPATH"] = target_python + os.pathsep + env.get("PYTHONPATH", "")
     popen_kwargs: dict[str, Any] = {
@@ -1285,6 +1310,104 @@ def run_side_subprocess(
     if len(by_id) != len(cases) or set(by_id) != {case["case_id"] for case in cases}:
         raise RuntimeError(f"{side} adapter result IDs/count do not match selected cases")
     return result["identity"], by_id
+
+
+def run_side_subprocess(
+    side: str,
+    manifest_path: Path,
+    cases: list[dict[str, Any]],
+    timeout_seconds: int,
+) -> tuple[dict[str, str], dict[str, dict[str, Any]]]:
+    """Run one side while isolating process-global state per public case.
+
+    Ordinary cases remain batched for throughput.  Cases that exercise
+    process-global state run in one fresh adapter process each, preserving the
+    stateful sequence within the workflow but preventing a preceding strict
+    capability rejection from changing the random stream observed by a later
+    case.  Any target-side execution or WGSL receipts are merged back into the
+    caller's requested sidecars so the isolation is invisible to lane scope and
+    telemetry accounting.
+    """
+
+    stateful_cases = [case for case in cases if uses_process_global_state(case)]
+    ordinary_cases = [case for case in cases if not uses_process_global_state(case)]
+    batches = ([ordinary_cases] if ordinary_cases else []) + [
+        [case] for case in stateful_cases
+    ]
+    if len(batches) <= 1:
+        return _run_side_subprocess_batch(
+            side, manifest_path, cases, timeout_seconds
+        )
+
+    final_execution = os.environ.get("MIGRATION_PARITY_EXECUTION_OUTPUT")
+    final_shader_coverage = os.environ.get("MIGRATION_GPU_WGSL_COVERAGE_OUTPUT")
+    execution: dict[str, list[dict[str, Any]]] = {}
+    shader_records: list[dict[str, Any]] = []
+    shader_reason: str | None = None
+    identity: dict[str, str] | None = None
+    results: dict[str, dict[str, Any]] = {}
+
+    with tempfile.TemporaryDirectory(prefix=f"migration-parity-{side}-stateful-") as root:
+        root_path = Path(root)
+        for batch_index, batch in enumerate(batches):
+            overrides: dict[str, str | None] = {}
+            child_execution: Path | None = None
+            child_shader: Path | None = None
+            if final_execution:
+                child_execution = root_path / f"execution-{batch_index}.json"
+                overrides["MIGRATION_PARITY_EXECUTION_OUTPUT"] = str(child_execution)
+            if final_shader_coverage:
+                child_shader = root_path / f"shader-{batch_index}.json"
+                overrides["MIGRATION_GPU_WGSL_COVERAGE_OUTPUT"] = str(child_shader)
+            batch_identity, batch_results = _run_side_subprocess_batch(
+                side,
+                manifest_path,
+                batch,
+                timeout_seconds,
+                environment=overrides,
+            )
+            if identity is None:
+                identity = batch_identity
+            elif batch_identity != identity:
+                raise RuntimeError(f"{side} adapter identity changed between isolated batches")
+            results.update(batch_results)
+
+            if child_execution is not None and child_execution.is_file():
+                document = result_document(child_execution)
+                if isinstance(document, dict):
+                    child_cases = document.get("cases", {})
+                    if isinstance(child_cases, dict):
+                        for case_id, receipts in child_cases.items():
+                            if isinstance(receipts, list):
+                                execution[case_id] = receipts
+            if child_shader is not None and child_shader.is_file():
+                document = result_document(child_shader)
+                if isinstance(document, dict):
+                    child_records = document.get("records", [])
+                    if isinstance(child_records, list):
+                        shader_records.extend(
+                            record for record in child_records if isinstance(record, dict)
+                        )
+                    if isinstance(document.get("reason"), str):
+                        shader_reason = document["reason"]
+
+    if identity is None:
+        raise RuntimeError(f"{side} adapter produced no batch identity")
+    if set(results) != {case["case_id"] for case in cases}:
+        raise RuntimeError(f"{side} isolated adapter result IDs/count do not match selected cases")
+
+    if final_execution:
+        write_pipeline_execution_evidence(
+            Path(final_execution), cases, identity, execution
+        )
+    if final_shader_coverage:
+        write_gpu_shader_coverage(
+            Path(final_shader_coverage),
+            cases,
+            shader_records,
+            reason=shader_reason,
+        )
+    return identity, results
 
 
 def comparison_policy(
