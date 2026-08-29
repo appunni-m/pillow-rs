@@ -7,16 +7,15 @@
 //!
 //! # Routing Contract
 //!
-//! A normal materialization selects one backend for the complete operation
-//! batch. CPU is always present and acts as the universal fallback. GPU and
-//! SIMD are selected only when they are active and every operation in the
-//! batch reports support. CPU and SIMD both operate on host-resident image
-//! buffers, so choosing CPU after SIMD does not create a device-copy or
-//! materialization boundary. A GPU batch performs its device transfer once,
-//! records the eligible dispatches, and reads the final result back once.
-//! More granular GPU/host segmentation is a separate planner concern; it must
-//! account for GPU↔host boundaries without treating CPU↔SIMD handoff as a
-//! copy.
+//! Automatic materialization may execute contiguous operation segments on the
+//! best available backend. CPU is always present and acts as the universal
+//! fallback. GPU and SIMD are selected only when they are active and every
+//! operation in the segment reports contextual support. CPU and SIMD both
+//! operate on host-resident image buffers, so a CPU↔SIMD handoff is a planner
+//! event, not a device copy or a Python-level materialization. A GPU segment
+//! performs its device transfer once, records the eligible dispatches, and
+//! reads the final result back once; GPU/host segmentation must account for
+//! those boundaries separately.
 //!
 //! # Adding Operations
 //!
@@ -26,7 +25,7 @@
 
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
-use crate::raster::{DynamicImage, GenericImageView};
+use crate::raster::DynamicImage;
 use std::cell::RefCell;
 use std::collections::{BTreeMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -114,6 +113,12 @@ impl Backend {
         take_pipeline_telemetry()
     }
 
+    /// Takes operation-level backend-path evidence for the most recent
+    /// managed pipeline sample on this thread.
+    pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
+        take_pipeline_operation_telemetry()
+    }
+
     /// Enables or disables the bounded GPU shader-dispatch coverage collector.
     ///
     /// The collector records which embedded WGSL shader variants actually
@@ -176,7 +181,10 @@ pub struct PipelineResourceTelemetry {
     pub parameter_bytes: u64,
     /// Bytes retained by the reusable GPU working-set pool after completion.
     pub retained_cache_bytes: u64,
-    /// Number of full-frame copy boundaries observed by the backend.
+    /// Number of explicitly recorded full-frame backend/device copies.
+    /// CPU/SIMD output allocation is not inferred as a copy from equal-sized
+    /// buffers; their host handoffs are represented separately by operation
+    /// telemetry.
     pub full_frame_copy_count: u64,
     /// Number of logical mode-widening conversions before backend execution.
     pub mode_conversion_count: u64,
@@ -195,6 +203,40 @@ pub struct PipelineResourceTelemetry {
     pub host_allocation_count: u64,
     /// Sum of checked host pixel-buffer sizes allocated during execution.
     pub host_allocated_bytes: u64,
+}
+
+/// Evidence for one public operation inside a backend execution.
+///
+/// `path` is intentionally a small controlled vocabulary.  `vector` means a
+/// vector kernel processed at least one block; `native-copy` is for bandwidth
+/// operations such as crop; `scalar-control` is the scalar part of a valid
+/// SIMD-capable operation (geometry, validation, or a tail); `cpu` means the
+/// CPU backend produced the operation; and `unsupported` means strict SIMD
+/// rejected it during contextual preflight.
+#[derive(Debug, Clone, Copy)]
+pub struct PipelineOperationTelemetry {
+    /// Registry key for the public pipeline operation.
+    pub operation: &'static str,
+    /// Controlled execution-path classification.
+    pub path: &'static str,
+    /// Number of vector blocks processed by the operation.
+    pub vector_block_count: u64,
+    /// Number of scalar tail elements processed after vector blocks.
+    pub scalar_tail_count: u64,
+    /// Number of logical mode conversions attributable to this operation.
+    pub mode_conversion_count: u64,
+    /// Number of CPU↔SIMD handoffs attributable to this operation.
+    pub handoff_count: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct PipelineOperationSample {
+    operation: &'static str,
+    path: &'static str,
+    vector_block_count: u64,
+    scalar_tail_count: u64,
+    mode_conversion_count: u64,
+    handoff_count: u64,
 }
 
 /// Safe, thread-local allocation counters for checked host pixel buffers.
@@ -237,9 +279,7 @@ pub(crate) fn account_host_buffer_boundary(
     telemetry.peak_live_host_bytes = telemetry
         .peak_live_host_bytes
         .max(before_bytes.saturating_add(after_bytes));
-    if before.dimensions() == after.dimensions() && before_bytes == after_bytes {
-        telemetry.full_frame_copy_count = telemetry.full_frame_copy_count.saturating_add(1);
-    }
+    record_pipeline_operation_mode_conversion(u64::from(before.color() != after.color()));
     if before.color() != after.color() {
         telemetry.mode_conversion_count = telemetry.mode_conversion_count.saturating_add(1);
     }
@@ -273,6 +313,9 @@ thread_local! {
     static LAST_PIPELINE_DISPATCH_COUNT: RefCell<Option<u64>> = const { RefCell::new(None) };
     static LAST_PIPELINE_RESIZE_CACHE_STATS: RefCell<(u64, u64)> = const { RefCell::new((0, 0)) };
     static LAST_PIPELINE_ALLOCATION_TELEMETRY: RefCell<PipelineAllocationTelemetry> = const { RefCell::new(PipelineAllocationTelemetry { allocation_count: 0, allocated_bytes: 0 }) };
+    static LAST_PIPELINE_OPERATION_TELEMETRY: RefCell<Vec<PipelineOperationSample>> = const { RefCell::new(Vec::new()) };
+    static ACTIVE_PIPELINE_OPERATION_TELEMETRY: RefCell<Vec<PipelineOperationSample>> = const { RefCell::new(Vec::new()) };
+    static PENDING_PIPELINE_HANDOFFS: RefCell<u64> = const { RefCell::new(0) };
 }
 
 fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
@@ -292,6 +335,15 @@ fn set_pipeline_telemetry_enabled(enabled: bool) -> bool {
         });
         LAST_PIPELINE_RESIZE_CACHE_STATS.with(|last| {
             *last.borrow_mut() = (0, 0);
+        });
+        LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+            last.borrow_mut().clear();
+        });
+        ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+            active.borrow_mut().clear();
+        });
+        PENDING_PIPELINE_HANDOFFS.with(|pending| {
+            *pending.borrow_mut() = 0;
         });
         reset_pipeline_allocation_telemetry();
     }
@@ -357,6 +409,176 @@ fn reset_pipeline_allocation_telemetry() {
 
 fn take_pipeline_allocation_telemetry() -> PipelineAllocationTelemetry {
     LAST_PIPELINE_ALLOCATION_TELEMETRY.with(|last| std::mem::take(&mut *last.borrow_mut()))
+}
+
+/// Clears operation-level records before a new managed pipeline sample.
+pub(crate) fn reset_pipeline_operation_telemetry() {
+    LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+        last.borrow_mut().clear();
+    });
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        active.borrow_mut().clear();
+    });
+    PENDING_PIPELINE_HANDOFFS.with(|pending| {
+        *pending.borrow_mut() = 0;
+    });
+}
+
+/// Takes operation-level execution evidence collected on this thread.
+pub fn take_pipeline_operation_telemetry() -> Vec<PipelineOperationTelemetry> {
+    LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+        last.borrow_mut()
+            .drain(..)
+            .map(|sample| PipelineOperationTelemetry {
+                operation: sample.operation,
+                path: sample.path,
+                vector_block_count: sample.vector_block_count,
+                scalar_tail_count: sample.scalar_tail_count,
+                mode_conversion_count: sample.mode_conversion_count,
+                handoff_count: sample.handoff_count,
+            })
+            .collect()
+    })
+}
+
+/// Begin evidence collection for one logical operation.
+pub(crate) fn begin_pipeline_operation_telemetry(operation: &'static str) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        active.borrow_mut().push(PipelineOperationSample {
+            operation,
+            // An adapter starts in scalar control until it proves that a
+            // vector block or a native-copy path actually ran.
+            path: "scalar-control",
+            vector_block_count: 0,
+            scalar_tail_count: 0,
+            mode_conversion_count: 0,
+            handoff_count: PENDING_PIPELINE_HANDOFFS.with(|pending| {
+                std::mem::take(&mut *pending.borrow_mut())
+            }),
+        });
+    });
+}
+
+/// Mark the active operation's data path.
+pub(crate) fn record_pipeline_operation_path(path: &'static str) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            sample.path = path;
+        }
+    });
+}
+
+/// Add vector-block evidence to the active operation.
+pub(crate) fn record_pipeline_operation_vector_blocks(count: u64) {
+    if !pipeline_telemetry_enabled() || count == 0 {
+        return;
+    }
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            // A native-copy kernel may use vector loads/stores for bandwidth
+            // without being an arithmetic vector kernel. Preserve that more
+            // specific classification while still promoting ordinary
+            // scalar-control samples to `vector` when their data plane proves
+            // that at least one vector block ran.
+            if sample.path != "native-copy" {
+                sample.path = "vector";
+            }
+            sample.vector_block_count = sample.vector_block_count.saturating_add(count);
+        }
+    });
+}
+
+/// Add scalar-tail evidence to the active operation.
+pub(crate) fn record_pipeline_operation_scalar_tail(count: u64) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            sample.scalar_tail_count = sample.scalar_tail_count.saturating_add(count);
+        }
+    });
+}
+
+/// Add an operation-local mode-conversion count.
+pub(crate) fn record_pipeline_operation_mode_conversion(count: u64) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    let recorded_active = ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        let mut active = active.borrow_mut();
+        if let Some(sample) = active.last_mut() {
+            sample.mode_conversion_count = sample.mode_conversion_count.saturating_add(count);
+            true
+        } else {
+            false
+        }
+    });
+    if !recorded_active {
+        LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+            if let Some(sample) = last.borrow_mut().last_mut() {
+                sample.mode_conversion_count = sample.mode_conversion_count.saturating_add(count);
+            }
+        });
+    }
+}
+
+/// Add an operation-local CPU↔SIMD handoff count.
+pub(crate) fn record_pipeline_operation_handoff(count: u64) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    let recorded_active = ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| {
+        if let Some(sample) = active.borrow_mut().last_mut() {
+            sample.handoff_count = sample.handoff_count.saturating_add(count);
+            true
+        } else {
+            false
+        }
+    });
+    if !recorded_active {
+        PENDING_PIPELINE_HANDOFFS.with(|pending| {
+            let mut pending = pending.borrow_mut();
+            *pending = pending.saturating_add(count);
+        });
+    }
+}
+
+/// Finish evidence collection for one logical operation.
+pub(crate) fn finish_pipeline_operation_telemetry() {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    let Some(sample) = ACTIVE_PIPELINE_OPERATION_TELEMETRY.with(|active| active.borrow_mut().pop())
+    else {
+        return;
+    };
+    LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+        last.borrow_mut().push(sample);
+    });
+}
+
+/// Record an operation rejected before backend execution.
+pub(crate) fn record_pipeline_operation_unsupported(operation: &'static str) {
+    if !pipeline_telemetry_enabled() {
+        return;
+    }
+    LAST_PIPELINE_OPERATION_TELEMETRY.with(|last| {
+        last.borrow_mut().push(PipelineOperationSample {
+            operation,
+            path: "unsupported",
+            vector_block_count: 0,
+            scalar_tail_count: 0,
+            mode_conversion_count: 0,
+            handoff_count: 0,
+        });
+    });
 }
 
 /// Records one checked host pixel-buffer allocation for the active managed
@@ -475,6 +697,7 @@ pub(crate) fn record_pipeline_backend_fallback(reason: impl Into<String>) {
     LAST_PIPELINE_BACKEND_OVERRIDE.with(|last| {
         *last.borrow_mut() = Some((Backend::Cpu, reason.into()));
     });
+    record_pipeline_operation_handoff(1);
 }
 
 fn take_pipeline_backend_override() -> Option<(Backend, String)> {
@@ -525,6 +748,20 @@ pub(crate) trait BackendImpl: Send + Sync {
     fn priority(&self) -> u8; // higher = preferred
     /// Returns whether this backend can execute one pipeline operation.
     fn supports(&self, op: &PipelineOp) -> Result<bool, PilError>;
+    /// Returns whether this backend can execute `op` for this concrete image
+    /// and logical mode.  Operation-only registry support is deliberately not
+    /// enough for backends whose implementation depends on layout, mode, or
+    /// parameters.  Backends that do not have contextual restrictions inherit
+    /// the operation-only answer.
+    fn supports_for_image(
+        &self,
+        op: &PipelineOp,
+        img: &DynamicImage,
+        mode: Option<&str>,
+    ) -> Result<bool, PilError> {
+        let _ = (img, mode);
+        self.supports(op)
+    }
     /// Executes a sequence of operations against one image buffer.
     fn execute_batch(
         &self,
@@ -654,26 +891,14 @@ fn route_decision(
     // serialize unrelated pipeline construction and backend toggles.
     let active_set = active_lock()?.clone();
     let mut fallback_reason = None;
-    // Plain Crop is bandwidth-only and the SIMD adapter uses the same native
-    // row movement as CPU after avoiding packed-RGBA conversion. Without this
-    // guard, automatic priority routing pays an extra adapter boundary for no
-    // kernel benefit on a copy-only Crop batch. CropBorder remains eligible
-    // for SIMD because the measured large native-border path is faster there.
-    // Explicit SIMD requests still go through the real adapter so its parity
-    // contract remains testable; this is only an automatic-routing policy.
-    let avoid_simd_copy_adapter =
-        !ops.is_empty() && ops.iter().all(|op| matches!(op, PipelineOp::Crop { .. }));
     for pool in pools() {
         if active_set.contains(&pool.name()) {
-            if avoid_simd_copy_adapter && pool.name() == Backend::Simd {
-                if fallback_reason.is_none() {
-                    fallback_reason = Some("SIMD Crop delegates to native CPU row movement".into());
-                }
-                continue;
-            }
             let mut supports_all = true;
+            let mut supports_any = false;
             for op in ops {
-                if !pool.supports(op)? {
+                if pool.supports(op)? {
+                    supports_any = true;
+                } else {
                     supports_all = false;
                     if pool.name() != Backend::Cpu && fallback_reason.is_none() {
                         fallback_reason = Some(format!(
@@ -682,8 +907,18 @@ fn route_decision(
                             registry::variant_key(op)
                         ));
                     }
-                    break;
+                    // SIMD can execute a mixed host-resident pipeline. Keep
+                    // scanning its descriptors so an operation after a
+                    // CPU-only boundary can still select the SIMD planner.
+                    // GPU remains an all-operations route and stops at the
+                    // first unsupported descriptor.
+                    if pool.name() != Backend::Simd {
+                        break;
+                    }
                 }
+            }
+            if pool.name() == Backend::Simd && supports_any {
+                return Ok((pool.name(), fallback_reason, true));
             }
             if supports_all {
                 // The support scan above is the validation pass for automatic
@@ -712,6 +947,10 @@ fn backend_label(backend: Backend) -> &'static str {
         Backend::Gpu => "GPU",
         Backend::Simd => "SIMD",
     }
+}
+
+fn is_simd_capability_error(error: &PilError) -> bool {
+    matches!(error, PilError::NotImplementedError(message) if message.starts_with("SIMD "))
 }
 
 #[derive(Debug, Clone)]
@@ -770,6 +1009,13 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
         if pool.supports(op)? {
             continue;
         }
+        if backend == Backend::Simd {
+            let key = registry::variant_key(op);
+            record_pipeline_operation_unsupported(key);
+            return Err(PilError::NotImplementedError(format!(
+                "SIMD does not support {key}"
+            )));
+        }
         let name = match backend {
             Backend::Cpu => "CPU",
             Backend::Gpu => "GPU",
@@ -783,6 +1029,153 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
     Ok(())
 }
 
+fn merge_pipeline_resource_telemetry(
+    total: &mut Option<PipelineResourceTelemetry>,
+    next: Option<PipelineResourceTelemetry>,
+) {
+    let Some(next) = next else {
+        return;
+    };
+    let total = total.get_or_insert_with(PipelineResourceTelemetry::default);
+    total.upload_bytes = total.upload_bytes.saturating_add(next.upload_bytes);
+    total.readback_bytes = total.readback_bytes.saturating_add(next.readback_bytes);
+    total.auxiliary_bytes = total.auxiliary_bytes.saturating_add(next.auxiliary_bytes);
+    total.parameter_bytes = total.parameter_bytes.saturating_add(next.parameter_bytes);
+    total.retained_cache_bytes = total.retained_cache_bytes.max(next.retained_cache_bytes);
+    total.full_frame_copy_count = total
+        .full_frame_copy_count
+        .saturating_add(next.full_frame_copy_count);
+    total.mode_conversion_count = total
+        .mode_conversion_count
+        .saturating_add(next.mode_conversion_count);
+    total.host_buffer_count = total.host_buffer_count.saturating_add(next.host_buffer_count);
+    total.host_buffer_bytes = total.host_buffer_bytes.saturating_add(next.host_buffer_bytes);
+    total.peak_live_host_bytes = total.peak_live_host_bytes.max(next.peak_live_host_bytes);
+    total.fused_operation_count = total
+        .fused_operation_count
+        .saturating_add(next.fused_operation_count);
+    total.host_allocation_count = total
+        .host_allocation_count
+        .saturating_add(next.host_allocation_count);
+    total.host_allocated_bytes = total
+        .host_allocated_bytes
+        .saturating_add(next.host_allocated_bytes);
+}
+
+/// Execute an automatic CPU/SIMD pipeline as contiguous host-resident
+/// segments.
+///
+/// This planner is intentionally conservative about segment extension. A
+/// segment may include only operations that preserve the current concrete
+/// layout; crop, transpose, extraction, alpha promotion, conversion, and
+/// other shape/mode-changing operations end the segment. The next operation
+/// is then checked against the actual owned output, so no backend is entered
+/// with stale capability information and no Python-level materialization is
+/// needed at a CPU↔SIMD boundary.
+fn execute_automatic_simd_segments(
+    ops: &[PipelineOp],
+    img: &DynamicImage,
+    mode: Option<&str>,
+) -> Result<
+    (
+        DynamicImage,
+        Backend,
+        Option<String>,
+        Option<PipelineResourceTelemetry>,
+    ),
+    PilError,
+> {
+    let simd = pools()
+        .iter()
+        .find(|pool| pool.name() == Backend::Simd)
+        .ok_or_else(|| PilError::ValueError("SIMD backend not available".into()))?;
+    let cpu = pools()
+        .iter()
+        .find(|pool| pool.name() == Backend::Cpu)
+        .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
+
+    let mut current: Option<DynamicImage> = None;
+    let mut previous_backend = None;
+    let mut used_simd = false;
+    let mut fallback_reason = None;
+    let mut resources = None;
+    let mut index = 0usize;
+    let mut current_mode = pool_simd::ops::adapters::simd_initial_mode(img, ops, mode);
+
+    while index < ops.len() {
+        let input = current.as_ref().unwrap_or(img);
+        let op_mode = current_mode.as_deref();
+        let backend = if simd.supports_for_image(&ops[index], input, op_mode)? {
+            used_simd = true;
+            Backend::Simd
+        } else {
+            fallback_reason.get_or_insert_with(|| {
+                format!(
+                    "SIMD does not support {} for the current image layout/mode",
+                    registry::variant_key(&ops[index])
+                )
+            });
+            Backend::Cpu
+        };
+
+        let mut end = index + 1;
+        if backend == Backend::Simd {
+            // Every operation in this segment is checked against the same
+            // concrete layout. The last operation may change that layout; it
+            // is included, then the segment ends before the next check.
+            while end < ops.len()
+                && adapters_preserve_native_contract(&ops[end - 1])
+                && simd.supports_for_image(&ops[end], input, op_mode)?
+            {
+                end += 1;
+            }
+        } else {
+            // CPU can absorb adjacent CPU-only work, including draw batches,
+            // as long as the current layout contract remains unchanged. Stop
+            // before an operation that SIMD can execute so the next segment
+            // can return to the vector path without replaying this segment.
+            while end < ops.len()
+                && adapters_preserve_native_contract(&ops[end - 1])
+                && !simd.supports_for_image(&ops[end], input, op_mode)?
+            {
+                if !cpu.supports(&ops[end])? {
+                    break;
+                }
+                end += 1;
+            }
+        }
+
+        if previous_backend.is_some_and(|previous| previous != backend) {
+            record_pipeline_operation_handoff(1);
+        }
+        let pool = if backend == Backend::Simd { simd } else { cpu };
+        let segment_ops = &ops[index..end];
+        let next = pool.execute_batch(segment_ops, input, op_mode)?;
+        merge_pipeline_resource_telemetry(&mut resources, take_pipeline_resource_telemetry());
+        current = Some(next);
+        previous_backend = Some(backend);
+        for op in segment_ops {
+            current_mode = pool_simd::ops::adapters::simd_mode_after_op(op, current_mode.as_deref());
+        }
+        index = end;
+    }
+
+    let result = current.unwrap_or_else(|| img.clone());
+    if let Some(resource) = resources {
+        record_pipeline_resource_telemetry(resource);
+    }
+    let actual_backend = if used_simd {
+        Backend::Simd
+    } else {
+        Backend::Cpu
+    };
+    Ok((result, actual_backend, fallback_reason, resources))
+}
+
+fn adapters_preserve_native_contract(op: &PipelineOp) -> bool {
+    pool_simd::ops::adapters::preserves_native_contract(op)
+}
+
 /// Executes a previously routed and validated pipeline, recording the bounded
 /// backend phase when telemetry is enabled.
 pub(crate) fn execute_prepared(
@@ -794,16 +1187,104 @@ pub(crate) fn execute_prepared(
     let timed = pipeline_telemetry_enabled();
     if timed {
         reset_pipeline_allocation_telemetry();
+        reset_pipeline_operation_telemetry();
         let _ = take_pipeline_resource_telemetry();
         let _ = take_pipeline_backend_override();
         let _ = take_pipeline_dispatch_count();
         let _ = take_pipeline_resize_coeff_cache_stats();
     }
     let backend_start = timed.then(pipeline_timestamp).flatten();
+    if prepared.requested_backend.is_none() && prepared.selected_backend == Backend::Simd {
+        let (result, actual_backend, mixed_reason, mut resource) =
+            execute_automatic_simd_segments(ops, img, mode)?;
+        if timed {
+            let allocation = take_pipeline_allocation_telemetry();
+            if let Some(resource) = resource.as_mut() {
+                resource.host_allocation_count = allocation.allocation_count;
+                resource.host_allocated_bytes = allocation.allocated_bytes;
+            }
+            // The segment executor publishes the aggregate so the ordinary
+            // receipt boundary remains compatible with single-backend runs.
+            let _ = take_pipeline_resource_telemetry();
+            let _ = take_pipeline_backend_override();
+            let _ = take_pipeline_dispatch_count();
+            let (resize_coeff_cache_hits, resize_coeff_cache_misses) =
+                take_pipeline_resize_coeff_cache_stats();
+            record_pipeline_telemetry(PipelineTelemetry {
+                requested_backend: prepared.requested_backend,
+                actual_backend,
+                operation_count: ops.len(),
+                route_ns: prepared.route_ns,
+                validation_ns: prepared.validation_ns,
+                backend_ns: elapsed_ns(backend_start),
+                dispatch_count: None,
+                fallback_reason: mixed_reason.or_else(|| prepared.fallback_reason.clone()),
+                resource,
+                resize_coeff_cache_hits,
+                resize_coeff_cache_misses,
+            });
+        }
+        return Ok(result);
+    }
+    // Registry support is intentionally checked before materialization so a
+    // malformed explicit request fails early.  Contextual SIMD support needs
+    // the concrete image, however: the same operation can be native for one
+    // layout and CPU-only for another.  Automatic routing may recover by
+    // selecting CPU here; an explicit SIMD lock is a strict capability audit
+    // and must report the unsupported contract instead of entering an adapter
+    // that would silently delegate to CPU.
+    let mut effective_backend = prepared.selected_backend;
+    let mut contextual_fallback_reason = prepared.fallback_reason.clone();
+    if prepared.selected_backend == Backend::Simd {
+        if prepared.requested_backend == Some(Backend::Simd) {
+            if let Some(op) = pool_simd::ops::adapters::first_unsupported_simd_op(img, ops, mode) {
+                let key = registry::variant_key(op);
+                record_pipeline_operation_unsupported(key);
+                return Err(PilError::NotImplementedError(format!(
+                    "SIMD does not support {key} for the current image layout/mode"
+                )));
+            }
+        }
+        // Automatic routing is planned operation-by-operation by
+        // `execute_automatic_simd_segments`. Do not reject the whole pipeline
+        // using the final output mode: an earlier operation may still be
+        // native, and the planner tracks each intermediate logical mode.
+    }
     for pool in pools() {
-        if pool.name() == prepared.selected_backend {
+        if pool.name() == effective_backend {
             let estimated_dispatch_count = timed.then(|| pool.dispatch_count(ops)).flatten();
-            return match pool.execute_batch(ops, img, mode) {
+            let execution = match pool.execute_batch(ops, img, mode) {
+                Err(error)
+                    if effective_backend == Backend::Simd
+                        && prepared.requested_backend != Some(Backend::Simd)
+                        && is_simd_capability_error(&error) =>
+                {
+                    // A later operation can change the concrete layout after
+                    // the initial contextual scan. SIMD must not call CPU
+                    // from inside an adapter; retry the original host image
+                    // through the CPU pool instead. Clear partial SIMD
+                    // receipts first so the final sample describes the
+                    // operation that produced the returned pixels.
+                    effective_backend = Backend::Cpu;
+                    contextual_fallback_reason.get_or_insert(error.to_string());
+                    if timed {
+                        reset_pipeline_allocation_telemetry();
+                        reset_pipeline_operation_telemetry();
+                        let _ = take_pipeline_resource_telemetry();
+                        let _ = take_pipeline_backend_override();
+                        let _ = take_pipeline_dispatch_count();
+                        let _ = take_pipeline_resize_coeff_cache_stats();
+                    }
+                    record_pipeline_backend_fallback(error.to_string());
+                    let cpu = pools()
+                        .iter()
+                        .find(|candidate| candidate.name() == Backend::Cpu)
+                        .ok_or_else(|| PilError::ValueError("CPU backend not available".into()))?;
+                    cpu.execute_batch(ops, img, mode)
+                }
+                result => result,
+            };
+            return match execution {
                 Ok(result) => {
                     if timed {
                         let allocation = take_pipeline_allocation_telemetry();
@@ -817,11 +1298,18 @@ pub(crate) fn execute_prepared(
                         let actual_backend = backend_override
                             .as_ref()
                             .map(|(backend, _)| *backend)
-                            .unwrap_or(prepared.selected_backend);
+                            // Contextual support is checked after the source
+                            // image is available.  Automatic SIMD routing can
+                            // therefore downgrade to CPU without an adapter
+                            // override being recorded.  Report the executor
+                            // that actually produced the pixels, not the
+                            // operation-only route selected before
+                            // materialization.
+                            .unwrap_or(effective_backend);
                         let fallback_reason = backend_override
                             .as_ref()
                             .map(|(_, reason)| reason.clone())
-                            .or_else(|| prepared.fallback_reason.clone());
+                            .or_else(|| contextual_fallback_reason.clone());
                         let (resize_coeff_cache_hits, resize_coeff_cache_misses) =
                             take_pipeline_resize_coeff_cache_stats();
                         record_pipeline_telemetry(PipelineTelemetry {
@@ -831,7 +1319,7 @@ pub(crate) fn execute_prepared(
                             route_ns: prepared.route_ns,
                             validation_ns: prepared.validation_ns,
                             backend_ns: elapsed_ns(backend_start),
-                            dispatch_count: (actual_backend == prepared.selected_backend)
+                            dispatch_count: (actual_backend == effective_backend)
                                 .then_some(observed_dispatch_count.or(estimated_dispatch_count))
                                 .flatten(),
                             fallback_reason,

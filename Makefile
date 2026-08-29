@@ -70,6 +70,7 @@ MIGRATION_ALL_BACKENDS_TIMEOUT ?= 7200
 MIGRATION_GPU_FULL ?= 1
 MIGRATION_GPU_FULL_ARG := $(if $(filter 0 false no,$(MIGRATION_GPU_FULL)),--no-gpu-full,--gpu-full)
 MIGRATION_GPU_STRICT_OUTPUT ?= build/migration-parity/gpu-strict-parity-result.json
+MIGRATION_SIMD_STRICT_OUTPUT ?= build/migration-parity/simd-strict-parity-result.json
 MIGRATION_OPERATION_COVERAGE_OUTPUT ?= build/migration-parity/coverage-operation-rust.json
 MIGRATION_OPERATION_COVERAGE_REPORT ?= target/coverage/migration-parity-operation-python.json
 MIGRATION_OPERATION_LLVM_REPORT ?= target/coverage/migration-parity-operation-rust.json
@@ -144,6 +145,7 @@ help: ## Show this help
 	@printf "  $(CYAN)make test-all$(NC)       Run the all-backend public parity campaign\n"
 	@printf "  $(CYAN)make migration-parity-test$(NC) Run the canonical live-oracle migration parity suite\n"
 	@printf "  $(CYAN)make migration-parity-test-gpu-strict$(NC) Audit GPU-only capability coverage (not the normal fallback lane)\n"
+	@printf "  $(CYAN)make migration-parity-test-simd-strict$(NC) Audit SIMD-only capability coverage (not the automatic CPU fallback lane)\n"
 	@printf "  $(CYAN)make migration-parity-case CASE_ID=...$(NC) Run one public parity case for fast iteration\n"
 	@printf "  $(CYAN)make migration-parity-oracle-identity$(NC) Verify the pinned Pillow oracle identity\n"
 	@printf "  $(CYAN)make migration-parity-target-identity$(NC) Verify the public pillow-rs target identity\n"
@@ -284,7 +286,7 @@ build-wasm-release: ## Build WASM package (release)
 build-all: build build-wasm-release ## Build Python + WASM
 
 # ── Test ──────────────────────────────────────────────────────────────────────
-.PHONY: test test-wasm test-all migration-parity-js-gap-report migration-parity-test-all-backends migration-parity-test-gpu-strict
+.PHONY: test test-wasm test-all migration-parity-js-gap-report migration-parity-test-all-backends migration-parity-test-gpu-strict migration-parity-test-simd-strict
 .PHONY: backend-support-matrix
 
 test: migration-parity-fixtures-check ## Run shared target parity, JS/WASM parity, and reverse Pillow coverage
@@ -392,6 +394,12 @@ migration-parity-test-gpu-strict: build-dev ## Audit GPU-only capability coverag
 		MIGRATION_TARGET_BACKEND=gpu \
 		MIGRATION_STRICT_TARGET_BACKEND=1 \
 		MIGRATION_PARITY_OUTPUT="$(MIGRATION_GPU_STRICT_OUTPUT)"
+
+migration-parity-test-simd-strict: build-dev ## Audit SIMD-only capability coverage without CPU fallback
+	$(MAKE) migration-parity-test \
+		MIGRATION_TARGET_BACKEND=simd \
+		MIGRATION_STRICT_TARGET_BACKEND=1 \
+		MIGRATION_PARITY_OUTPUT="$(MIGRATION_SIMD_STRICT_OUTPUT)"
 
 migration-parity-test-all-backends: build-dev ## Build once, then run CPU, SIMD, bounded full GPU, Python, Node WASM, and browser WASM together
 	set +e; \

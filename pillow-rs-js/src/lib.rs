@@ -4776,6 +4776,43 @@ fn pipeline_resource_telemetry_to_js(
     object.into()
 }
 
+fn pipeline_operation_telemetry_to_js(
+    samples: Vec<pillow_rs::PipelineOperationTelemetry>,
+) -> JsValue {
+    let values = js_sys::Array::new();
+    for sample in samples {
+        let value = js_sys::Object::new();
+        set_pipeline_telemetry_field(
+            &value,
+            "operation",
+            &JsValue::from_str(sample.operation),
+        );
+        set_pipeline_telemetry_field(&value, "path", &JsValue::from_str(sample.path));
+        set_pipeline_telemetry_field(
+            &value,
+            "vector_block_count",
+            &JsValue::from_f64(sample.vector_block_count as f64),
+        );
+        set_pipeline_telemetry_field(
+            &value,
+            "scalar_tail_count",
+            &JsValue::from_f64(sample.scalar_tail_count as f64),
+        );
+        set_pipeline_telemetry_field(
+            &value,
+            "mode_conversion_count",
+            &JsValue::from_f64(sample.mode_conversion_count as f64),
+        );
+        set_pipeline_telemetry_field(
+            &value,
+            "handoff_count",
+            &JsValue::from_f64(sample.handoff_count as f64),
+        );
+        values.push(&value);
+    }
+    values.into()
+}
+
 /// Enable bounded WASM image-pipeline execution telemetry for parity evidence.
 #[wasm_bindgen(js_name = "setPipelineTelemetry")]
 pub fn set_pipeline_telemetry(enabled: bool) -> bool {
@@ -4785,6 +4822,7 @@ pub fn set_pipeline_telemetry(enabled: bool) -> bool {
 /// Take the most recent completed WASM image-pipeline receipt, or `null`.
 #[wasm_bindgen(js_name = "takePipelineTelemetry")]
 pub fn take_pipeline_telemetry() -> JsValue {
+    let operation_telemetry = pillow_rs::Backend::take_pipeline_operation_telemetry();
     let Some((
         requested_backend,
         actual_backend,
@@ -4799,7 +4837,13 @@ pub fn take_pipeline_telemetry() -> JsValue {
         resize_coeff_cache_misses,
     )) = pillow_rs::Backend::take_pipeline_telemetry()
     else {
-        return JsValue::NULL;
+        if operation_telemetry.is_empty() {
+            return JsValue::NULL;
+        }
+        let object = js_sys::Object::new();
+        let operation_telemetry = pipeline_operation_telemetry_to_js(operation_telemetry);
+        set_pipeline_telemetry_field(&object, "operation_telemetry", &operation_telemetry);
+        return object.into();
     };
 
     let object = js_sys::Object::new();
@@ -4849,6 +4893,8 @@ pub fn take_pipeline_telemetry() -> JsValue {
         "resize_coeff_cache_misses",
         &JsValue::from_f64(resize_coeff_cache_misses as f64),
     );
+    let operation_telemetry = pipeline_operation_telemetry_to_js(operation_telemetry);
+    set_pipeline_telemetry_field(&object, "operation_telemetry", &operation_telemetry);
     object.into()
 }
 

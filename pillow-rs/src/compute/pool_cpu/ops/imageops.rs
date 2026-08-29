@@ -44,6 +44,151 @@ fn histogram_value_at(histogram: &[usize; 256], index: usize, fallback: u8) -> u
     fallback
 }
 
+/// Build Pillow's per-channel autocontrast lookup table.
+///
+/// Histogram construction and percentile selection are scalar control work;
+/// callers can apply the resulting byte LUT with a backend-specific data
+/// kernel. Keeping this control plane shared prevents the CPU and SIMD paths
+/// from drifting on cutoff rounding, masked selection, or identity channels.
+pub(crate) fn autocontrast_lut(
+    img: &DynamicImage,
+    cutoff: f64,
+    mask: Option<&std::sync::Arc<crate::image::Image>>,
+) -> Result<Vec<u8>, PilError> {
+    let channels = img.color().channel_count() as usize;
+    let (w, h) = (img.width(), img.height());
+    let image_pixels = CheckedDims::new(w, h, 1)?.total_pixels();
+    let mask = mask
+        .map(|mask| mask.materialize_for_ops())
+        .transpose()?
+        .map(|mask| mask.to_luma8());
+    let mut selected_pixels = if mask.is_none() { image_pixels } else { 0 };
+    let raw = img.as_bytes();
+    let stride = w as usize * channels;
+    let mut histograms = [[0usize; 256]; 4];
+
+    for y in 0..h as usize {
+        for x in 0..w as usize {
+            if let Some(mask) = mask.as_ref() {
+                if mask.get_pixel(x as u32, y as u32)[0] == 0 {
+                    continue;
+                }
+                selected_pixels += 1;
+            }
+            let index = y * stride + x * channels;
+            for c in 0..channels {
+                histograms[c][raw[index + c] as usize] += 1;
+            }
+        }
+    }
+
+    let mut lut = vec![0u8; channels * 256];
+    // Pillow's all-zero mask produces an identity LUT rather than dividing by
+    // a zero-sized histogram. Filling identity entries also lets a vector
+    // backend keep its native data path for this valid no-op result.
+    if selected_pixels == 0 {
+        for channel in 0..channels {
+            for value in 0..=u8::MAX {
+                lut[channel * 256 + usize::from(value)] = value;
+            }
+        }
+        return Ok(lut);
+    }
+
+    let total = selected_pixels as f64;
+    for channel in 0..channels {
+        let low_thresh = (total * cutoff / 100.0) as usize;
+        let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
+        let lo = histogram_value_at(&histograms[channel], low_thresh, 0) as f64;
+        let hi = histogram_value_at(
+            &histograms[channel],
+            high_thresh.min(selected_pixels - 1),
+            255,
+        ) as f64;
+        let start = channel * 256;
+        if hi <= lo {
+            for value in 0..=u8::MAX {
+                lut[start + usize::from(value)] = value;
+            }
+            continue;
+        }
+
+        let scale = 255.0 / (hi - lo);
+        let offset = -lo * scale;
+        for value in 0..=u8::MAX {
+            // PIL: int(ix * scale + offset) with clamping to [0,255].
+            let mapped = f64::from(value) * scale + offset;
+            lut[start + usize::from(value)] = if mapped < 0.0 {
+                0
+            } else if mapped > 255.0 {
+                255
+            } else {
+                mapped as u8
+            };
+        }
+    }
+    Ok(lut)
+}
+
+/// Build the per-channel LUT used by Pillow's equalize operation.
+///
+/// Histogram construction is scalar reduction/control work. The returned
+/// native-band table is intentionally separate from applying it so SIMD can
+/// keep the complete pixel pass in its vector LUT data plane.
+pub(crate) fn equalize_lut(img: &DynamicImage, channels: usize) -> Option<Vec<u8>> {
+    if !matches!(channels, 1 | 3) {
+        return None;
+    }
+    let expected_len = (img.width() as usize)
+        .checked_mul(img.height() as usize)?
+        .checked_mul(channels)?;
+    let raw = img.as_bytes();
+    if raw.len() != expected_len {
+        return None;
+    }
+
+    let mut histograms = [[0u32; 256]; 3];
+    for pixel in raw.chunks_exact(channels) {
+        for channel in 0..channels {
+            histograms[channel][usize::from(pixel[channel])] += 1;
+        }
+    }
+
+    let mut lut = vec![0u8; channels * 256];
+    for channel in 0..channels {
+        let start = channel * 256;
+        for value in 0..=u8::MAX {
+            lut[start + usize::from(value)] = value;
+        }
+
+        // PIL equalize: step = (sum(non-zero bins) - last_bin_count) / 255
+        // and lut[i] = floor((step/2 + cumulative_histogram) / step).
+        let mut nonzero_bins = 0usize;
+        let mut last_nonzero_count = 0u32;
+        let mut total = 0u32;
+        for &count in &histograms[channel] {
+            total += count;
+            if count > 0 {
+                nonzero_bins += 1;
+                last_nonzero_count = count;
+            }
+        }
+        if nonzero_bins <= 1 {
+            continue;
+        }
+        let step = (total - last_nonzero_count) / 255;
+        if step == 0 {
+            continue;
+        }
+        let mut n = step / 2;
+        for value in 0..=u8::MAX {
+            lut[start + usize::from(value)] = (n / step).min(255) as u8;
+            n += histograms[channel][usize::from(value)];
+        }
+    }
+    Some(lut)
+}
+
 #[inline]
 fn invert_bytes_serial(bytes: &mut [u8]) {
     for value in bytes {
@@ -57,25 +202,11 @@ fn apply_autocontrast_row(
     raw_start: usize,
     row: &mut [u8],
     channels: usize,
-    scales: &[f64; 4],
-    offsets: &[f64; 4],
-    stretch: &[bool; 4],
+    lut: &[u8],
 ) {
     for (index, output) in row.iter_mut().enumerate() {
         let channel = index % channels;
-        if !stretch[channel] {
-            continue;
-        }
-        // PIL: int(ix * scale + offset) with clamping to [0,255].
-        // Keep the multiplication/addition order explicit.
-        let value = raw[raw_start + index] as f64 * scales[channel] + offsets[channel];
-        *output = if value < 0.0 {
-            0
-        } else if value > 255.0 {
-            255
-        } else {
-            value as u8
-        };
+        *output = lut[channel * 256 + usize::from(raw[raw_start + index])];
     }
 }
 
@@ -162,55 +293,12 @@ pub fn op_autocontrast(
     if w == 0 || h == 0 {
         return Ok(img.clone());
     }
+    #[cfg(feature = "parallel")]
     let image_pixels = CheckedDims::new(w, h, 1)?.total_pixels();
-    let mask = mask
-        .map(|mask| mask.materialize_for_ops())
-        .transpose()?
-        .map(|mask| mask.to_luma8());
-    let mut selected_pixels = if mask.is_none() { image_pixels } else { 0 };
+    let lut = autocontrast_lut(img, cutoff, mask)?;
     let raw = img.as_bytes();
     let mut out = raw.to_vec();
     let stride = w as usize * channels;
-    let mut histograms = [[0usize; 256]; 4];
-    for y in 0..h as usize {
-        for x in 0..w as usize {
-            if let Some(mask) = mask.as_ref() {
-                if mask.get_pixel(x as u32, y as u32)[0] == 0 {
-                    continue;
-                }
-                selected_pixels += 1;
-            }
-            let index = y * stride + x * channels;
-            for c in 0..channels {
-                histograms[c][raw[index + c] as usize] += 1;
-            }
-        }
-    }
-
-    // Pillow's all-zero mask produces an identity LUT rather than dividing by
-    // a zero-sized histogram. The source image is still passed through that
-    // identity LUT, so returning a clone preserves the lazy operation result.
-    if selected_pixels == 0 {
-        return Ok(img.clone());
-    }
-    let total = selected_pixels as f64;
-
-    let mut scales = [0.0f64; 4];
-    let mut offsets = [0.0f64; 4];
-    let mut stretch = [false; 4];
-    for c in 0..channels {
-        let low_thresh = (total * cutoff / 100.0) as usize;
-        let high_thresh = (total * (100.0 - cutoff) / 100.0) as usize;
-        let lo = histogram_value_at(&histograms[c], low_thresh, 0) as f64;
-        let hi =
-            histogram_value_at(&histograms[c], high_thresh.min(selected_pixels - 1), 255) as f64;
-        if hi <= lo {
-            continue;
-        }
-        scales[c] = 255.0 / (hi - lo);
-        offsets[c] = -lo * scales[c];
-        stretch[c] = true;
-    }
 
     #[cfg(feature = "parallel")]
     if image_pixels >= POINT_PARALLEL_PIXEL_THRESHOLD {
@@ -219,7 +307,7 @@ pub fn op_autocontrast(
             stride,
             h as usize,
             |row_start, _row_end, _y, row| {
-                apply_autocontrast_row(raw, row_start, row, channels, &scales, &offsets, &stretch);
+                apply_autocontrast_row(raw, row_start, row, channels, &lut);
             }
         );
     } else {
@@ -230,9 +318,7 @@ pub fn op_autocontrast(
                 row_start,
                 &mut out[row_start..row_start + stride],
                 channels,
-                &scales,
-                &offsets,
-                &stretch,
+                &lut,
             );
         }
     }
@@ -244,9 +330,7 @@ pub fn op_autocontrast(
             row_start,
             &mut out[row_start..row_start + stride],
             channels,
-            &scales,
-            &offsets,
-            &stretch,
+            &lut,
         );
     }
     let result = crate::image_utils::raw_bytes_to_image(w, h, out, channels)?;

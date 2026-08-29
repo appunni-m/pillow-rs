@@ -522,6 +522,21 @@ impl DynamicImage {
         }
     }
 
+    /// Return a mutable view of native image storage when it is byte-addressable.
+    ///
+    /// Compute backends use this only after taking ownership of an intermediate
+    /// pipeline result.  Keeping the method limited to 8-bit rasters prevents a
+    /// byte-oriented SIMD kernel from accidentally reinterpreting typed samples.
+    pub(crate) fn as_bytes_mut(&mut self) -> Option<&mut [u8]> {
+        match self {
+            DynamicImage::ImageLuma8(image) => Some(image.as_mut()),
+            DynamicImage::ImageLumaA8(image) => Some(image.as_mut()),
+            DynamicImage::ImageRgb8(image) => Some(image.as_mut()),
+            DynamicImage::ImageRgba8(image) => Some(image.as_mut()),
+            _ => None,
+        }
+    }
+
     /// Return this image's color type.
     #[must_use]
     pub fn color(&self) -> ColorType {

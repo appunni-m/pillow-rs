@@ -2291,6 +2291,25 @@ pub(crate) fn bresenham_line<C: DrawCanvas>(
     h: u32,
     raw: bool,
 ) {
+    for_each_bresenham_point(x0, y0, x1, y1, |x, y| {
+        plot(canvas, x, y, color, w, h, raw);
+    });
+}
+
+/// Enumerate the complete Pillow Bresenham raster for one line segment.
+///
+/// Geometry consumers such as the SIMD drawing adapter use this callback to
+/// keep the integer control path shared while writing the destination through
+/// their own native data-plane kernel.
+pub(crate) fn for_each_bresenham_point<F>(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    mut visit: F,
+) where
+    F: FnMut(i32, i32),
+{
     // Match Pillow src/libImaging/Draw.c::{line8,line32,line32rgba}.
     // The C primitive omits its final endpoint because draw_lines adds it
     // once after the segment chain; this helper represents one complete
@@ -2316,12 +2335,12 @@ pub(crate) fn bresenham_line<C: DrawCanvas>(
 
     if dx == 0 {
         for _ in 0..dy {
-            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            visit(x as i32, y as i32);
             y += step_y;
         }
     } else if dy == 0 {
         for _ in 0..dx {
-            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            visit(x as i32, y as i32);
             x += step_x;
         }
     } else if dx > dy {
@@ -2330,7 +2349,7 @@ pub(crate) fn bresenham_line<C: DrawCanvas>(
         let mut error = dy - dx;
         dx += dx;
         for _ in 0..steps {
-            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            visit(x as i32, y as i32);
             if error >= 0 {
                 y += step_y;
                 error -= dx;
@@ -2344,7 +2363,7 @@ pub(crate) fn bresenham_line<C: DrawCanvas>(
         let mut error = dx - dy;
         dy += dy;
         for _ in 0..steps {
-            plot(canvas, x as i32, y as i32, color, w, h, raw);
+            visit(x as i32, y as i32);
             if error >= 0 {
                 x += step_x;
                 error -= dy;
@@ -2353,7 +2372,7 @@ pub(crate) fn bresenham_line<C: DrawCanvas>(
             y += step_y;
         }
     }
-    plot(canvas, x1, y1, color, w, h, raw);
+    visit(x1, y1);
 }
 
 /// Plot a single pixel with bounds checking.
@@ -2475,6 +2494,59 @@ pub(crate) fn round_down(f: f64) -> i32 {
     }
 }
 
+/// Construct Pillow's four-edge polygon for a wide line segment.
+///
+/// This is scalar geometry/control-plane work shared by CPU and SIMD.  The
+/// returned polygon is filled by the caller's native data-plane writer.  A
+/// zero-length segment is represented by `None` because Pillow plots that
+/// segment as one point instead of constructing a stroke polygon.
+pub(crate) fn wide_line_polygon_points(
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    width: u32,
+) -> Option<[(i32, i32); 4]> {
+    let delta_x = i64::from(x1) - i64::from(x0);
+    let delta_y = i64::from(y1) - i64::from(y0);
+    if delta_x == 0 && delta_y == 0 {
+        return None;
+    }
+
+    // Pillow src/libImaging/Draw.c::ImagingDrawWideLine constructs an
+    // asymmetric four-edge polygon for even widths. The two rounded ratios
+    // are what keep an even requested width from becoming one pixel too wide.
+    let squared_length = delta_x
+        .saturating_mul(delta_x)
+        .saturating_add(delta_y.saturating_mul(delta_y));
+    let length = (squared_length as f64).sqrt();
+    let half_width = f64::from(width.saturating_sub(1)) / 2.0;
+    let ratio_max = f64::from(round_up(half_width)) / length;
+    let ratio_min = f64::from(round_down(half_width)) / length;
+    let offset_x_min = round_down(ratio_min * delta_y as f64);
+    let offset_x_max = round_down(ratio_max * delta_y as f64);
+    let offset_y_min = round_down(ratio_min * delta_x as f64);
+    let offset_y_max = round_down(ratio_max * delta_x as f64);
+    Some([
+        (
+            x0.saturating_sub(offset_x_min),
+            y0.saturating_add(offset_y_max),
+        ),
+        (
+            x1.saturating_sub(offset_x_min),
+            y1.saturating_add(offset_y_max),
+        ),
+        (
+            x1.saturating_add(offset_x_max),
+            y1.saturating_sub(offset_y_min),
+        ),
+        (
+            x0.saturating_add(offset_x_max),
+            y0.saturating_sub(offset_y_min),
+        ),
+    ])
+}
+
 /// PIL-identical scanline polygon fill.
 ///
 /// Uses PIL's edge-table / scanline algorithm from Draw.c:
@@ -2482,14 +2554,15 @@ pub(crate) fn round_down(f: f64) -> i32 {
 /// 2. For each scanline, compute x-intersections from active edges
 /// 3. Sort intersections and fill between pairs using ROUND_UP/ROUND_DOWN
 /// 4. Horizontal edges drawn directly as filled lines
-pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
-    canvas: &mut C,
+pub(crate) fn for_each_polygon_fill_span<F>(
     points: &[(i32, i32)],
-    color: (u8, u8, u8, u8),
     img_w: u32,
     img_h: u32,
-    _raw: bool,
-) {
+    mut visit: F,
+)
+where
+    F: FnMut(i32, i32, i32),
+{
     let n = points.len();
     if n < 2 {
         return;
@@ -2556,13 +2629,12 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
     // Draw horizontal edges immediately (matching PIL's hline in non-alpha mode)
     let iw = img_w as i32;
     let ih = img_h as i32;
-    let rgba = [color.0, color.1, color.2, color.3];
     for e in &edges {
         if e.ymin == e.ymax && e.ymin >= 0 && e.ymin < ih {
             let x_start = e.xmin.max(0);
             let x_end = e.xmax.min(iw - 1);
-            for x in x_start..=x_end {
-                canvas.put_rgba(x as u32, e.ymin as u32, rgba);
+            if x_start <= x_end {
+                visit(x_start, x_end, e.ymin);
             }
         }
     }
@@ -2653,11 +2725,25 @@ pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
             let x_start = x_start.max(0);
             let x_end = x_end.min(iw - 1);
             if x_start <= x_end {
-                for x in x_start..=x_end {
-                    canvas.put_rgba(x as u32, y as u32, rgba);
-                }
+                visit(x_start, x_end, y);
             }
             i += 2;
         }
     }
+}
+
+pub(crate) fn scanline_polygon_fill<C: DrawCanvas>(
+    canvas: &mut C,
+    points: &[(i32, i32)],
+    color: (u8, u8, u8, u8),
+    img_w: u32,
+    img_h: u32,
+    _raw: bool,
+) {
+    let rgba = [color.0, color.1, color.2, color.3];
+    for_each_polygon_fill_span(points, img_w, img_h, |x_start, x_end, y| {
+        for x in x_start..=x_end {
+            canvas.put_rgba(x as u32, y as u32, rgba);
+        }
+    });
 }

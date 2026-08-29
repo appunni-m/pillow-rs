@@ -2220,37 +2220,41 @@ impl Image {
         // executor boundary. RGBX and RGBa share RGBA storage, but their fourth
         // byte has different Pillow semantics; the pipeline output tag is the
         // destination and cannot stand in for that source tag.
-        let execution_mode = if let Some(mode) = remap_source_mode.as_deref() {
-            Some(mode)
-        } else if ops.len() == 1 && matches!(ops.first(), Some(PipelineOp::Convert { .. })) {
-            source.explicit_mode().or(explicit_mode.as_deref())
-        } else {
-            explicit_mode.as_deref()
-        };
-        // RGBX uses RGBA storage but its fourth byte is padding, not an alpha
-        // sample. Pillow's Convert.c therefore supplies opaque alpha when an
-        // RGBX image is converted to LA or RGBA. Normalize only this one-step
-        // conversion at the execution boundary so other operations retain
-        // their native RGBX byte semantics.
-        let result = if execution_mode == Some("RGBX")
-            && matches!(
-                ops.first(),
-                Some(PipelineOp::Convert {
-                    mode: ColorMode::LA | ColorMode::RGBA,
-                    ..
-                })
-            )
+        let convert_source_mode = if ops.len() == 1
+            && matches!(ops.first(), Some(PipelineOp::Convert { .. }))
         {
-            let mut normalized = img.clone();
-            if let Some(rgba) = normalized.as_mut_rgba8() {
-                for pixel in rgba.pixels_mut() {
-                    pixel[3] = u8::MAX;
-                }
-            }
-            crate::compute::execute_prepared(prepared, ops, &normalized, execution_mode)?
+            // The concrete buffer is still in the source layout when a
+            // one-step conversion begins. In particular, RGB -> CMYK/HSV/
+            // YCbCr carries a nonstandard destination tag on the lazy result,
+            // but preflight and the adapter must inspect the source mode.
+            Some(source.mode()?)
         } else {
-            crate::compute::execute_prepared(prepared, ops, img, execution_mode)?
+            None
         };
+        // Encoded I;16 inputs decode to the generic Luma16 buffer while their
+        // source-only mode remains in the lazy Bytes header. Preserve that
+        // mode at the executor boundary so a strict SIMD resize can select
+        // the native two-byte sample kernel instead of rejecting the image as
+        // an untagged layout.
+        let source_luma16_mode = if remap_source_mode.is_none()
+            && convert_source_mode.is_none()
+            && explicit_mode.is_none()
+            && matches!(img, DynamicImage::ImageLuma16(_))
+        {
+            Some(source.mode()?)
+        } else {
+            None
+        };
+        let execution_mode = remap_source_mode
+            .as_deref()
+            .or(convert_source_mode.as_deref())
+            .or(source_luma16_mode.as_deref())
+            .or(explicit_mode.as_deref());
+        // RGBX uses RGBA storage but its fourth byte is padding, not an alpha
+        // sample. The native SIMD Convert kernel carries that logical source
+        // tag and supplies opaque alpha while gathering; do not normalize the
+        // whole frame here just to rewrite the padding byte.
+        let result = crate::compute::execute_prepared(prepared, ops, img, execution_mode)?;
         Ok(Arc::new(result))
     }
 

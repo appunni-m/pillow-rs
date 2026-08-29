@@ -79,7 +79,10 @@ fn f_kernel_lanczos3(x: f64) -> f64 {
     f_kernel_lanczos(x, 3.0)
 }
 
-fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) {
+/// Returns the scalar kernel and support used to build Pillow-compatible
+/// coefficients. SIMD uses this only for its control-plane coefficient table;
+/// pixel accumulation remains in the SIMD adapter.
+pub(crate) fn resample_kernel(filter: &ResampleFilter) -> (fn(f64) -> f64, f64) {
     match filter {
         ResampleFilter::Nearest => (f_kernel_box, 0.5),
         ResampleFilter::Bilinear => (f_kernel_triangle, 1.0),

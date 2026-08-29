@@ -238,19 +238,44 @@ impl BackendImpl for CpuPool {
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
-        let mut result = img.clone();
+        // Each operation already consumes an immutable input and produces its
+        // own output buffer.  Do not clone the source merely to seed the
+        // backend's accumulator: the first operation can read `img` directly.
+        // The only clone left is the degenerate zero-operation contract at the
+        // end of the loop.
+        let mut result: Option<DynamicImage> = None;
         let mut resources = crate::compute::host_resource_telemetry(img);
         let mut index = 0usize;
         while index < ops.len() {
+            let input = result.as_ref().unwrap_or(img);
             if ops::draw::is_draw_op(&ops[index]) {
                 let mut end = index + 1;
                 while end < ops.len() && ops::draw::is_draw_op(&ops[end]) {
                     end += 1;
                 }
                 if end - index >= 2 {
-                    let next = ops::draw::execute_draw_batch(&result, &ops[index..end], mode)?;
-                    crate::compute::account_host_buffer_boundary(&mut resources, &result, &next);
-                    result = next;
+                    for op in &ops[index..end] {
+                        crate::compute::begin_pipeline_operation_telemetry(
+                            registry::variant_key(op),
+                        );
+                    }
+                    let next = match ops::draw::execute_draw_batch(input, &ops[index..end], mode)
+                    {
+                        Ok(next) => next,
+                        Err(error) => {
+                            for _ in index..end {
+                                crate::compute::record_pipeline_operation_path("cpu");
+                                crate::compute::finish_pipeline_operation_telemetry();
+                            }
+                            return Err(error);
+                        }
+                    };
+                    for _ in index..end {
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                    }
+                    crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+                    result = Some(next);
                     index = end;
                     continue;
                 }
@@ -264,16 +289,22 @@ impl BackendImpl for CpuPool {
                 ) = (&ops[index], &ops[index + 1])
                 {
                     if let Some(fused) =
-                        fused_multiply_screen(&result, first_other, second_other, mode)?
+                        fused_multiply_screen(input, first_other, second_other, mode)?
                     {
+                        crate::compute::begin_pipeline_operation_telemetry("Multiply");
+                        crate::compute::begin_pipeline_operation_telemetry("Screen");
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                        crate::compute::record_pipeline_operation_path("cpu");
+                        crate::compute::finish_pipeline_operation_telemetry();
                         crate::compute::account_host_buffer_boundary(
                             &mut resources,
-                            &result,
+                            input,
                             &fused,
                         );
                         resources.fused_operation_count =
                             resources.fused_operation_count.saturating_add(2);
-                        result = fused;
+                        result = Some(fused);
                         index += 2;
                         continue;
                     }
@@ -284,23 +315,51 @@ impl BackendImpl for CpuPool {
             // layouts, so keep the fusion attempt outside the old
             // `mode.is_none()` gate and let the image/mode check decide
             // whether it is exact.
-            if let Some((consumed, fused)) = fused_point_batch(&ops[index..], &result, mode) {
-                let next = registry::execute_cpu(&fused, &result, mode)?;
-                crate::compute::account_host_buffer_boundary(&mut resources, &result, &next);
+            if let Some((consumed, fused)) = fused_point_batch(&ops[index..], input, mode) {
+                for op in &ops[index..index + consumed] {
+                    crate::compute::begin_pipeline_operation_telemetry(
+                        registry::variant_key(op),
+                    );
+                }
+                let next = match registry::execute_cpu(&fused, input, mode) {
+                    Ok(next) => next,
+                    Err(error) => {
+                        for _ in 0..consumed {
+                            crate::compute::record_pipeline_operation_path("cpu");
+                            crate::compute::finish_pipeline_operation_telemetry();
+                        }
+                        return Err(error);
+                    }
+                };
+                for _ in 0..consumed {
+                    crate::compute::record_pipeline_operation_path("cpu");
+                    crate::compute::finish_pipeline_operation_telemetry();
+                }
+                crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
                 resources.fused_operation_count = resources
                     .fused_operation_count
                     .saturating_add(consumed as u64);
-                result = next;
+                result = Some(next);
                 index += consumed;
                 continue;
             }
             let op = &ops[index];
-            let next = registry::execute_cpu(op, &result, mode)?;
-            crate::compute::account_host_buffer_boundary(&mut resources, &result, &next);
-            result = next;
+            crate::compute::begin_pipeline_operation_telemetry(registry::variant_key(op));
+            let next = match registry::execute_cpu(op, input, mode) {
+                Ok(next) => next,
+                Err(error) => {
+                    crate::compute::record_pipeline_operation_path("cpu");
+                    crate::compute::finish_pipeline_operation_telemetry();
+                    return Err(error);
+                }
+            };
+            crate::compute::record_pipeline_operation_path("cpu");
+            crate::compute::finish_pipeline_operation_telemetry();
+            crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+            result = Some(next);
             index += 1;
         }
         crate::compute::record_pipeline_resource_telemetry(resources);
-        Ok(result)
+        Ok(result.unwrap_or_else(|| img.clone()))
     }
 }

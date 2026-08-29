@@ -6,7 +6,7 @@
 //!
 //! ## Architecture
 //! - Same mode encoding as GPU: 0=L, 1=LA, 2=RGB, 3=RGBA
-//! - Processes RGBA8 packed u32 as 4 independent u8 lanes
+//! - Uses native interleaved byte layouts for admitted operations
 //! - Priority: 50 (above CPU=0, below GPU=100)
 //! - Ops live in `ops/` mirroring `pool_cpu/ops/`
 
@@ -228,6 +228,18 @@ impl BackendImpl for SimdPool {
         registry::simd_supports(op)
     }
 
+    fn supports_for_image(
+        &self,
+        op: &PipelineOp,
+        img: &DynamicImage,
+        mode: Option<&str>,
+    ) -> Result<bool, PilError> {
+        if !self.supports(op)? {
+            return Ok(false);
+        }
+        Ok(ops::adapters::simd_supports_for_image(img, op, mode))
+    }
+
     fn execute_batch(
         &self,
         ops: &[PipelineOp],
@@ -243,11 +255,26 @@ impl BackendImpl for SimdPool {
             op_keys
         );
 
-        let mut current = img.clone();
+        // The first operation can read the materialized source directly.  Do
+        // not clone the full frame merely to seed the accumulator; each
+        // adapter already returns an owned output buffer.  A zero-operation
+        // batch (kept for defensive internal callers) clones only at return.
+        let mut current: Option<DynamicImage> = None;
+        let mut current_mode = ops::adapters::simd_initial_mode(img, ops, mode);
         let mut resources = crate::compute::host_resource_telemetry(img);
         let mut index = 0usize;
         while index < ops.len() {
-            if mode.is_none() {
+            let input = current.as_ref().unwrap_or(img);
+            let current_op = &ops[index];
+            let op_mode = current_mode.as_deref();
+            if !ops::adapters::simd_supports_for_image(input, current_op, op_mode) {
+                let key = registry::variant_key(current_op);
+                crate::compute::record_pipeline_operation_unsupported(key);
+                return Err(PilError::NotImplementedError(format!(
+                    "SIMD does not support {key} for the current image layout/mode"
+                )));
+            }
+            if current_mode.is_none() {
                 if index + 1 < ops.len() {
                     if let (
                         PipelineOp::Multiply { other: first_other },
@@ -256,20 +283,45 @@ impl BackendImpl for SimdPool {
                         },
                     ) = (&ops[index], &ops[index + 1])
                     {
-                        if let Some(fused) = ops::adapters::simd_fused_multiply_screen(
-                            &current,
-                            first_other,
-                            second_other,
-                            mode,
-                        )? {
+                        if !ops::adapters::simd_supports_for_image(
+                            input,
+                            &ops[index + 1],
+                            op_mode,
+                        ) {
+                            let key = registry::variant_key(&ops[index + 1]);
+                            crate::compute::record_pipeline_operation_unsupported(key);
+                            return Err(PilError::NotImplementedError(format!(
+                                "SIMD does not support {key} for the current image layout/mode"
+                            )));
+                        }
+                        if let Some((fused, vector_blocks, scalar_tail)) =
+                            ops::adapters::simd_fused_multiply_screen(
+                                input,
+                                first_other,
+                                second_other,
+                                op_mode,
+                            )?
+                        {
+                            crate::compute::begin_pipeline_operation_telemetry("Multiply");
+                            crate::compute::begin_pipeline_operation_telemetry("Screen");
+                            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+                            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+                            crate::compute::finish_pipeline_operation_telemetry();
+                            crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+                            crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+                            crate::compute::finish_pipeline_operation_telemetry();
                             crate::compute::account_host_buffer_boundary(
                                 &mut resources,
-                                &current,
+                                input,
                                 &fused,
                             );
                             resources.fused_operation_count =
                                 resources.fused_operation_count.saturating_add(2);
-                            current = fused;
+                            current = Some(fused);
+                            current_mode = ops::adapters::simd_mode_after_op(
+                                &ops[index + 1],
+                                op_mode,
+                            );
                             index += 2;
                             continue;
                         }
@@ -285,8 +337,8 @@ impl BackendImpl for SimdPool {
                         let Some(composed) = compose_transpose_methods(
                             &combined,
                             next,
-                            current.width(),
-                            current.height(),
+                            input.width(),
+                            input.height(),
                         ) else {
                             break;
                         };
@@ -294,6 +346,18 @@ impl BackendImpl for SimdPool {
                         consumed += 1;
                     }
                     if consumed > 1 {
+                        if let Some(unsupported) = ops[index..index + consumed]
+                            .iter()
+                            .find(|op| {
+                                !ops::adapters::simd_supports_for_image(input, op, op_mode)
+                            })
+                        {
+                            let key = registry::variant_key(unsupported);
+                            crate::compute::record_pipeline_operation_unsupported(key);
+                            return Err(PilError::NotImplementedError(format!(
+                                "SIMD does not support {key} for the current image layout/mode"
+                            )));
+                        }
                         let fused = PipelineOp::Transpose { method: combined };
                         let key = registry::variant_key(&fused);
                         let entry = registry::registry()?.get(key).ok_or_else(|| {
@@ -302,36 +366,137 @@ impl BackendImpl for SimdPool {
                         let f = entry.simd_fn.ok_or_else(|| {
                             PilError::ValueError(format!("SIMD: no native impl for {}", key))
                         })?;
-                        let next = f(&current, &fused, mode)?;
+                        for op in &ops[index..index + consumed] {
+                            crate::compute::begin_pipeline_operation_telemetry(
+                                registry::variant_key(op),
+                            );
+                        }
+                        let next = match f(input, &fused, op_mode) {
+                            Ok(next) => next,
+                            Err(error) => {
+                                for _ in 0..consumed {
+                                    crate::compute::record_pipeline_operation_path(
+                                        "unsupported",
+                                    );
+                                    crate::compute::finish_pipeline_operation_telemetry();
+                                }
+                                return Err(error);
+                            }
+                        };
+                        for _ in 0..consumed {
+                            crate::compute::record_pipeline_operation_path("native-copy");
+                            crate::compute::finish_pipeline_operation_telemetry();
+                        }
                         crate::compute::account_host_buffer_boundary(
                             &mut resources,
-                            &current,
+                            input,
                             &next,
                         );
                         resources.fused_operation_count = resources
                             .fused_operation_count
                             .saturating_add(consumed as u64);
-                        current = next;
+                        current = Some(next);
+                        current_mode = ops::adapters::simd_mode_after_op(
+                            &ops[index + consumed - 1],
+                            op_mode,
+                        );
                         index += consumed;
                         continue;
                     }
                 }
             }
-            if let Some((consumed, lut)) = fused_point_batch(&ops[index..], &current, mode) {
-                let next =
-                    if let Some(native) = ops::adapters::native_point_lut(&current, mode, &lut) {
-                        native
-                    } else {
-                        let fused = PipelineOp::Eval { lut: lut.into() };
-                        ops::adapters::simd_eval(&current, &fused, mode)?
-                    };
-                crate::compute::account_host_buffer_boundary(&mut resources, &current, &next);
+            if let Some((consumed, lut)) = fused_point_batch(&ops[index..], input, op_mode) {
+                if let Some(unsupported) = ops[index..index + consumed]
+                    .iter()
+                    .find(|op| !ops::adapters::simd_supports_for_image(input, op, op_mode))
+                {
+                    let key = registry::variant_key(unsupported);
+                    crate::compute::record_pipeline_operation_unsupported(key);
+                    return Err(PilError::NotImplementedError(format!(
+                        "SIMD does not support {key} for the current image layout/mode"
+                    )));
+                }
+                for op in &ops[index..index + consumed] {
+                    crate::compute::begin_pipeline_operation_telemetry(
+                        registry::variant_key(op),
+                    );
+                }
+                let next = if let Some(native) =
+                    ops::adapters::native_point_lut(input, op_mode, &lut)
+                {
+                    native
+                } else {
+                    let fused = PipelineOp::Eval { lut: lut.into() };
+                    match ops::adapters::simd_eval(input, &fused, op_mode) {
+                        Ok(next) => next,
+                        Err(error) => {
+                            for _ in 0..consumed {
+                                crate::compute::record_pipeline_operation_path("unsupported");
+                                crate::compute::finish_pipeline_operation_telemetry();
+                            }
+                            return Err(error);
+                        }
+                    }
+                };
+                for _ in 0..consumed {
+                    crate::compute::record_pipeline_operation_path("vector");
+                    crate::compute::finish_pipeline_operation_telemetry();
+                }
+                crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
                 resources.fused_operation_count = resources
                     .fused_operation_count
                     .saturating_add(consumed as u64);
-                current = next;
+                current = Some(next);
+                current_mode = ops::adapters::simd_mode_after_op(
+                    &ops[index + consumed - 1],
+                    op_mode,
+                );
                 index += consumed;
                 continue;
+            }
+            // Once a SIMD segment has produced an owned intermediate, native
+            // byte transforms can reuse that buffer.  The first operation
+            // still reads the caller-owned source immutably; only subsequent
+            // operations enter this path, so public branch semantics remain
+            // unchanged while repeated point/effect work avoids full-frame
+            // clones.
+            let can_reuse = current.as_ref().is_some_and(|input| {
+                ops::adapters::simd_in_place_supported(input, current_op, op_mode)
+            });
+            if can_reuse {
+                let mut owned = current
+                    .take()
+                    .expect("current.is_some() guarantees an owned image");
+                crate::compute::begin_pipeline_operation_telemetry(
+                    registry::variant_key(current_op),
+                );
+                match ops::adapters::simd_execute_in_place(&mut owned, current_op, op_mode) {
+                    Ok(true) => {
+                        crate::compute::finish_pipeline_operation_telemetry();
+                        current = Some(owned);
+                        current_mode = ops::adapters::simd_mode_after_op(current_op, op_mode);
+                        index += 1;
+                        continue;
+                    }
+                    Ok(false) => {
+                        // `simd_in_place_supported` and the executor are a
+                        // single capability contract.  Reaching this arm
+                        // means the implementation failed to honor its own
+                        // preflight, so report unsupported instead of
+                        // silently switching to an allocating/scalar path.
+                        crate::compute::record_pipeline_operation_path("unsupported");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                        return Err(PilError::NotImplementedError(format!(
+                            "SIMD does not support {} for the current image layout/mode",
+                            registry::variant_key(current_op)
+                        )));
+                    }
+                    Err(error) => {
+                        crate::compute::record_pipeline_operation_path("unsupported");
+                        crate::compute::finish_pipeline_operation_telemetry();
+                        return Err(error);
+                    }
+                }
             }
             let op = &ops[index];
             let key = registry::variant_key(op);
@@ -341,15 +506,26 @@ impl BackendImpl for SimdPool {
             let f = entry
                 .simd_fn
                 .ok_or_else(|| PilError::ValueError(format!("SIMD: no native impl for {}", key)))?;
-            let next = f(&current, op, mode)?;
-            crate::compute::account_host_buffer_boundary(&mut resources, &current, &next);
-            current = next;
+            crate::compute::begin_pipeline_operation_telemetry(key);
+            let next = match f(input, op, op_mode) {
+                Ok(next) => next,
+                Err(error) => {
+                    crate::compute::record_pipeline_operation_path("unsupported");
+                    crate::compute::finish_pipeline_operation_telemetry();
+                    return Err(error);
+                }
+            };
+            crate::compute::finish_pipeline_operation_telemetry();
+            crate::compute::account_host_buffer_boundary(&mut resources, input, &next);
+            current = Some(next);
+            current_mode = ops::adapters::simd_mode_after_op(op, op_mode);
             index += 1;
         }
         // Image.merge consumes a P source as a raw one-byte band but creates
         // a new multi-band image. Do not run its RGB/LA/RGBA result through
         // the P-mode normalizer, which is reserved for operations that retain
         // the source palette sample layout.
+        let current = current.unwrap_or_else(|| img.clone());
         let result = if ops.iter().any(|op| matches!(op, PipelineOp::Merge { .. })) {
             Ok(current)
         } else {

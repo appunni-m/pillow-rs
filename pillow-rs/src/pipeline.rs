@@ -955,6 +955,7 @@ impl PixelMode {
     }
 
     /// Stable code shared with scalar and WGSL kernels.
+    #[cfg(feature = "gpu")]
     pub(crate) const fn code(self) -> u32 {
         self as u32
     }

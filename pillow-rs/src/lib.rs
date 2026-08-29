@@ -144,6 +144,7 @@ pub use crate::color::parse_color_str;
 pub use crate::color::parse_color_str_unclamped;
 pub use crate::color::resolve_new_color;
 pub use crate::compute::Backend;
+pub use crate::compute::PipelineOperationTelemetry;
 pub use crate::compute::PipelineResourceTelemetry;
 pub use crate::compute::active_backends;
 pub use crate::compute::available_backends;
