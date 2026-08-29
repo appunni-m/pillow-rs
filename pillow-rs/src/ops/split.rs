@@ -15,9 +15,21 @@ impl Image {
     /// Returns [`PilError`] when materialization is needed to determine band
     /// count and that materialization fails.
     pub fn split(&self) -> Result<Vec<Image>, PilError> {
-        // PIL: P-mode has 1 band → return a copy preserving mode + palette
-        if let Image::Paletted(data) = self {
-            return Ok(vec![Image::Paletted(data.clone())]);
+        // PIL: P-mode has one band, and split() returns a copy preserving the
+        // indexed mode and palette.  Encoded P inputs are still represented as
+        // lazy Image::Bytes until their first operation, so checking only the
+        // concrete Paletted variant would lose the mode and turn the result
+        // into L during the ExtractBand path.
+        if self.has_palette_mode() {
+            let mut band = self.materialized_branch()?;
+            // Pillow-derived images do not retain the source container's
+            // ``format`` field, even when the split band stays indexed.
+            match &mut band {
+                Image::Loaded(data) => data.source_format = None,
+                Image::Paletted(data) => data.source_format = None,
+                _ => {}
+            }
+            return Ok(vec![band]);
         }
 
         // Determine band count from the image
