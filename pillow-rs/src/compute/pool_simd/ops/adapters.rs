@@ -3956,6 +3956,8 @@ pub(crate) fn simd_supports_for_image(
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_image(img, *w, *h, *filter, mode)
         }
+        PipelineOp::Scale { factor, filter } => native_scale_dimensions(img.width(), img.height(), *factor)
+            .is_some_and(|(w, h)| native_resize_supported_for_image(img, w, h, *filter, mode)),
         PipelineOp::Thumbnail { w, h, filter } => {
             native_thumbnail_supported_for_image(img, *w, *h, *filter, mode)
         }
@@ -5237,6 +5239,10 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
             next.width = *w;
             next.height = *h;
         }
+        PipelineOp::Scale { factor, .. } => {
+            (next.width, next.height) =
+                native_scale_dimensions(shape.width, shape.height, *factor)?;
+        }
         PipelineOp::Thumbnail { w, h, .. } => {
             let (output_width, output_height) =
                 native_thumbnail_dimensions(shape.width, shape.height, *w, *h)?;
@@ -5480,6 +5486,8 @@ fn simd_supports_for_shape(
         PipelineOp::Resize { w, h, filter } => {
             native_resize_supported_for_shape(shape, *w, *h, *filter, mode)
         }
+        PipelineOp::Scale { factor, filter } => native_scale_dimensions(shape.width, shape.height, *factor)
+            .is_some_and(|(w, h)| native_resize_supported_for_shape(shape, w, h, *filter, mode)),
         PipelineOp::Thumbnail { w, h, filter } => {
             native_thumbnail_supported_for_shape(shape, *w, *h, *filter, mode)
         }
@@ -15265,6 +15273,23 @@ fn native_pad_bytes(
     Ok(Some((preserve_mode(img, result), vector_blocks, scalar_tail)))
 }
 
+/// Return the dimensions Pillow's scalar `ImageOps.scale` validation computes.
+///
+/// Scale is scalar control work followed by the same native resize data plane
+/// as `Image.resize`.  Keeping the ties-to-even rounding here makes SIMD
+/// preflight agree with the public operation without moving validation into a
+/// CPU adapter.
+fn native_scale_dimensions(source_width: u32, source_height: u32, factor: f64) -> Option<(u32, u32)> {
+    if !factor.is_finite() || factor <= 0.0 {
+        return None;
+    }
+    let round = |dimension: u32| {
+        native_pad_round_dimension(f64::from(dimension) * factor)
+            .filter(|rounded| *rounded > 0)
+    };
+    Some((round(source_width)?, round(source_height)?))
+}
+
 fn native_resize_supported_for_dimensions(
     source_width: u32,
     source_height: u32,
@@ -18235,6 +18260,36 @@ pub fn simd_resize(
             channels,
             premultiplied_alpha,
         ),
+    }
+}
+
+/// Execute `ImageOps.scale` through the native/vectorized resize kernels.
+///
+/// Scale contributes only scalar dimension calculation and capability
+/// preflight.  The pixel data plane is delegated to `simd_resize`, which uses
+/// native-copy, nearest gather, or vectorized convolution paths and never
+/// retries through the CPU adapter.
+pub fn simd_scale(
+    img: &DynamicImage,
+    op: &PipelineOp,
+    mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::Scale { factor, filter } = op else {
+        return Err(PilError::ValueError("expected Scale op".into()));
+    };
+    let (w, h) = native_scale_dimensions(img.width(), img.height(), *factor)
+        .ok_or_else(|| simd_unsupported("Scale"))?;
+    if !native_resize_supported_for_image(img, w, h, *filter, mode) {
+        return Err(simd_unsupported("Scale"));
+    }
+    let resize = PipelineOp::Resize {
+        w,
+        h,
+        filter: *filter,
+    };
+    match simd_resize(img, &resize, mode) {
+        Err(PilError::NotImplementedError(_)) => Err(simd_unsupported("Scale")),
+        result => result,
     }
 }
 

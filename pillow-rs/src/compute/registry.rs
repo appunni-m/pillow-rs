@@ -451,6 +451,7 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
         PipelineOp::Invert
             | PipelineOp::InvertChops
             | PipelineOp::Resize { .. }
+            | PipelineOp::Scale { .. }
             | PipelineOp::Thumbnail { .. }
             | PipelineOp::Contain { .. }
             | PipelineOp::Cover { .. }
@@ -2579,6 +2580,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
     simd_set(m, "Equalize", adapters::simd_equalize)?;
     simd_set(m, "Resize", adapters::simd_resize)?;
+    simd_set(m, "Scale", adapters::simd_scale)?;
     simd_set(m, "Thumbnail", adapters::simd_thumbnail)?;
     simd_set(m, "Contain", adapters::simd_contain)?;
     simd_set(m, "Cover", adapters::simd_cover)?;
