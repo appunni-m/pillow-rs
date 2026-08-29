@@ -1427,7 +1427,7 @@ def run_side_subprocess(
             results.update(batch_results)
 
             if child_execution is not None and child_execution.is_file():
-                document = result_document(child_execution)
+                document = json.loads(child_execution.read_text(encoding="utf-8"))
                 if isinstance(document, dict):
                     child_cases = document.get("cases", {})
                     if isinstance(child_cases, dict):
@@ -1435,7 +1435,7 @@ def run_side_subprocess(
                             if isinstance(receipts, list):
                                 execution[case_id] = receipts
             if child_shader is not None and child_shader.is_file():
-                document = result_document(child_shader)
+                document = json.loads(child_shader.read_text(encoding="utf-8"))
                 if isinstance(document, dict):
                     child_records = document.get("records", [])
                     if isinstance(child_records, list):
