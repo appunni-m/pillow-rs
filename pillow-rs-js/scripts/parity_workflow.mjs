@@ -1880,23 +1880,15 @@ function jsonSafe(value) {
     return null;
 }
 
+function isPublicImage(value) {
+    return value != null
+        && typeof value.toBytes === 'function'
+        && typeof value.size === 'function'
+        && value.mode != null;
+}
+
 function imageValue(value) {
     if (value == null) return null;
-    if (Array.isArray(value)) {
-        // The current manifest declares Image.split as an image-shaped result
-        // even though Pillow returns a tuple of images.  Match the source
-        // serializer's safe empty image record until that contract is widened
-        // to an image sequence.
-        return {
-            kind: 'image',
-            mode: '',
-            size: null,
-            format: null,
-            info: null,
-            palette: null,
-            bytes: '',
-        };
-    }
     const raw = asBytes(value.toBytes());
     const info = typeof value.compatibilityInfo === 'function'
         ? jsonSafe(value.compatibilityInfo())
@@ -1915,6 +1907,22 @@ function imageValue(value) {
     };
 }
 
+function imageSequenceValue(value) {
+    if (!Array.isArray(value)) return imageValue(value);
+    if (value.length === 0 || value.every(isPublicImage)) {
+        // Image.split and Image.get_child_images return a public sequence of
+        // images.  Serialize each image independently; the container has no
+        // toBytes() method and is not itself an image.
+        return value.map(imageValue);
+    }
+    return imageValue(value);
+}
+
+function sequenceValue(value) {
+    if (!Array.isArray(value)) return jsonSafe(value);
+    return value.map((item) => isPublicImage(item) ? imageValue(item) : jsonSafe(item));
+}
+
 function color3dlutValue(value) {
     const size = Array.isArray(value?.size)
         ? value.size
@@ -1929,7 +1937,7 @@ function color3dlutValue(value) {
 
 function serialize(value, shape) {
     if (shape === 'none') return null;
-    if (shape === 'image') return imageValue(value);
+    if (shape === 'image') return imageSequenceValue(value);
     if (shape === 'mask') {
         if (value?.__pillow_rs_getdata__) {
             let raw = new Uint8Array();
@@ -2007,7 +2015,7 @@ function serialize(value, shape) {
         if (typeof value?.toObject === 'function') return jsonSafe(value.toObject());
         return jsonSafe(value);
     }
-    if (shape === 'sequence' || shape === 'ordered' || shape === 'metrics') return jsonSafe(value);
+    if (shape === 'sequence' || shape === 'ordered' || shape === 'metrics') return sequenceValue(value);
     return jsonSafe(value);
 }
 
