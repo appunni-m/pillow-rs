@@ -463,6 +463,15 @@ fn native_copy_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     }
 }
 
+/// Return whether an `I;16*` image can use the transpose byte kernel without
+/// widening its samples into a packed color representation. This is kept
+/// separate from `native_copy_layout`: other memory operations still need
+/// their own two-byte sample contracts.
+fn native_luma16_transpose_layout(img: &DynamicImage, mode: Option<&str>) -> bool {
+    matches!(img, DynamicImage::ImageLuma16(_))
+        && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+}
+
 /// Return the native channel stride for ImageChops operations.
 ///
 /// Chops treats every stored byte as an active sample. In particular, the
@@ -3921,6 +3930,7 @@ pub(crate) fn simd_supports_for_image(
     let native_typed_filter_channels = native_typed_filter_layout(img, mode);
     let native_rotate_channels = native_rotate_layout(img, mode);
     let native_copy = native_copy_layout(img, mode).is_some();
+    let native_luma16_transpose = native_luma16_transpose_layout(img, mode);
     let native_chops = native_chops_layout(img, mode)
         .is_some_and(|channels| has_vectorized_flat_bytes(img, channels));
     let lut_chops = native_chops_layout(img, mode)
@@ -4078,7 +4088,9 @@ pub(crate) fn simd_supports_for_image(
             .is_some_and(|channels| has_nonempty_byte_data(img, channels)),
         PipelineOp::Mirror => native_copy_layout(img, mode)
             .is_some_and(|channels| has_vectorized_mirror_rows(img, channels)),
-        PipelineOp::Transpose { .. } => native_copy && pixel_count != 0,
+        PipelineOp::Transpose { .. } => {
+            (native_copy || native_luma16_transpose) && pixel_count != 0
+        }
         PipelineOp::Crop {
             left,
             top,
@@ -4924,6 +4936,11 @@ fn shape_native_copy_channels(shape: SimdImageShape, mode: Option<&str>) -> Opti
     shape_mode_matches(shape, mode).then_some(channels)
 }
 
+fn shape_luma16_transpose_layout(shape: SimdImageShape, mode: Option<&str>) -> bool {
+    shape.layout == SimdLayout::Luma16
+        && matches!(mode, None | Some("I;16" | "I;16L" | "I;16B" | "I;16N"))
+}
+
 fn shape_native_identity_copy_channels(
     shape: SimdImageShape,
     mode: Option<&str>,
@@ -5439,6 +5456,7 @@ fn simd_supports_for_shape(
     let native_byte_channels = shape_native_byte_channels(shape, mode);
     let native_filter_byte_channels = shape_native_filter_byte_channels(shape, mode);
     let native_copy = shape_native_copy_channels(shape, mode).is_some();
+    let native_luma16_transpose = shape_luma16_transpose_layout(shape, mode);
     let native_chops = shape_native_chops_channels(shape, mode)
         .is_some_and(|channels| shape_has_vectorized_flat_bytes(shape, channels));
     let lut_chops = shape_native_chops_channels(shape, mode)
@@ -5577,7 +5595,9 @@ fn simd_supports_for_shape(
             .is_some_and(|channels| shape_has_nonempty_byte_data(shape, channels)),
         PipelineOp::Mirror => shape_native_copy_channels(shape, mode)
             .is_some_and(|channels| shape_has_vectorized_mirror_rows(shape, channels)),
-        PipelineOp::Transpose { .. } => native_copy && pixel_count != 0,
+        PipelineOp::Transpose { .. } => {
+            (native_copy || native_luma16_transpose) && pixel_count != 0
+        }
         PipelineOp::Crop {
             left,
             top,
@@ -9723,12 +9743,44 @@ fn native_transpose_bytes(
     ))
 }
 
+/// Apply transpose while retaining the native `I;16*` DynamicImage variant.
+///
+/// The shared byte kernel moves complete two-byte samples as opaque groups;
+/// reconstructing `ImageLuma16` only restores the native typed buffer after
+/// the reorder. Endianness is deliberately not changed here: DynamicImage's
+/// `ImageLuma16` storage is host-native, and the public mode boundary handles
+/// the requested `I;16B`/`I;16L` byte order.
+fn native_transpose_luma16(
+    img: &DynamicImage,
+    mode: Option<&str>,
+    method: TransposeMethod,
+) -> Option<(DynamicImage, u64, u64)> {
+    if !native_luma16_transpose_layout(img, mode) {
+        return None;
+    }
+    let (bytes, width, height, vector_blocks, scalar_tail) =
+        native_transpose_bytes(img.as_bytes(), img.width(), img.height(), 2, method)?;
+    let mut chunks = bytes.chunks_exact(2);
+    let samples = chunks
+        .by_ref()
+        .map(|sample| u16::from_ne_bytes([sample[0], sample[1]]))
+        .collect::<Vec<_>>();
+    if !chunks.remainder().is_empty() {
+        return None;
+    }
+    let result = ImageBuffer::<Luma<u16>, Vec<u16>>::from_raw(width, height, samples)?;
+    Some((DynamicImage::ImageLuma16(result), vector_blocks, scalar_tail))
+}
+
 /// Apply transpose while retaining the native 8-bit DynamicImage variant.
 fn native_transpose(
     img: &DynamicImage,
     mode: Option<&str>,
     method: TransposeMethod,
 ) -> Option<(DynamicImage, u64, u64)> {
+    if matches!(img, DynamicImage::ImageLuma16(_)) {
+        return native_transpose_luma16(img, mode, method);
+    }
     let channels = match img {
         DynamicImage::ImageLuma8(_) if matches!(mode, None | Some("1" | "L" | "P")) => 1,
         DynamicImage::ImageLumaA8(_) if matches!(mode, None | Some("LA" | "PA")) => 2,
