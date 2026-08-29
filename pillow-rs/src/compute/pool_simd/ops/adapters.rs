@@ -192,6 +192,30 @@ fn native_merge_channels(mode: &ColorMode) -> Option<usize> {
     }
 }
 
+fn native_merge_band_contract(
+    target_mode: &ColorMode,
+    bands: &[Image],
+    mode: Option<&str>,
+) -> bool {
+    // Pillow preserves the raw palette indices when a P band is first in a
+    // multi-band merge. It is the only non-L band accepted by Image.merge;
+    // later bands must still be L, and a single-band L merge cannot use P.
+    let palette_first = mode == Some("P")
+        && !matches!(target_mode, ColorMode::L | ColorMode::Mode1)
+        && bands
+            .first()
+            .is_some_and(|band| band.mode().ok().is_some_and(|band_mode| band_mode == "P"));
+    if !matches!(mode, None | Some("L")) && !palette_first {
+        return false;
+    }
+    bands.iter().enumerate().all(|(index, band)| {
+        let Ok(band_mode) = band.mode() else {
+            return false;
+        };
+        band_mode == "L" || (palette_first && index == 0 && band_mode == "P")
+    })
+}
+
 fn native_merge_contract_for_image(
     img: &DynamicImage,
     target_mode: &ColorMode,
@@ -199,21 +223,20 @@ fn native_merge_contract_for_image(
     mode: Option<&str>,
 ) -> Option<(usize, usize)> {
     let channels = native_merge_channels(target_mode)?;
-    if !matches!(mode, None | Some("L"))
-        || !matches!(img, DynamicImage::ImageLuma8(_))
-        || bands.len() != channels
-    {
+    if !matches!(img, DynamicImage::ImageLuma8(_)) || bands.len() != channels {
+        return None;
+    }
+    if !native_merge_band_contract(target_mode, bands, mode) {
         return None;
     }
     let pixels = (img.width() as usize).checked_mul(img.height() as usize)?;
-    let output_len = pixels.checked_mul(channels)?;
-    if pixels == 0 || output_len < 16 || img.as_bytes().len() != pixels {
+    if pixels.checked_mul(channels).is_none() || img.as_bytes().len() != pixels {
         return None;
     }
-    if !bands.iter().all(|band| {
-        band.mode().ok().is_some_and(|band_mode| band_mode == "L")
-            && band.size().ok() == Some(img.dimensions())
-    }) {
+    if !bands
+        .iter()
+        .all(|band| band.size().ok() == Some(img.dimensions()))
+    {
         return None;
     }
     Some((channels, pixels))
@@ -226,21 +249,20 @@ fn native_merge_contract_for_shape(
     mode: Option<&str>,
 ) -> Option<(usize, usize)> {
     let channels = native_merge_channels(target_mode)?;
-    if !matches!(mode, None | Some("L"))
-        || shape.layout != SimdLayout::Luma8
-        || bands.len() != channels
-    {
+    if shape.layout != SimdLayout::Luma8 || bands.len() != channels {
+        return None;
+    }
+    if !native_merge_band_contract(target_mode, bands, mode) {
         return None;
     }
     let pixels = (shape.width as usize).checked_mul(shape.height as usize)?;
-    let output_len = pixels.checked_mul(channels)?;
-    if pixels == 0 || output_len < 16 {
+    if pixels.checked_mul(channels).is_none() {
         return None;
     }
-    if !bands.iter().all(|band| {
-        band.mode().ok().is_some_and(|band_mode| band_mode == "L")
-            && band.size().ok() == Some((shape.width, shape.height))
-    }) {
+    if !bands
+        .iter()
+        .all(|band| band.size().ok() == Some((shape.width, shape.height)))
+    {
         return None;
     }
     Some((channels, pixels))
@@ -455,6 +477,64 @@ fn native_chops_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> 
         DynamicImage::ImageRgba8(_) if matches!(mode, None | Some("RGBA" | "CMYK")) => Some(4),
         _ => None,
     }
+}
+
+/// Return the native byte count for one of Pillow's `Image.blend` mode
+/// families. Unlike ImageChops, module-level blend accepts the three-byte
+/// HSV/YCbCr family and the four-byte RGBa/RGBX family as raw native samples.
+fn native_module_blend_mode_channels(mode: &str) -> Option<usize> {
+    match mode {
+        "L" => Some(1),
+        "LA" => Some(2),
+        "RGB" | "HSV" | "YCbCr" => Some(3),
+        "RGBA" | "CMYK" | "RGBa" | "RGBX" => Some(4),
+        _ => None,
+    }
+}
+
+/// Validate a concrete image against the logical mode supplied at an
+/// operation boundary and return its native interleaved byte count.
+fn native_module_blend_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
+    let channels = match mode {
+        Some(mode) => native_module_blend_mode_channels(mode)?,
+        None => match img {
+            DynamicImage::ImageLuma8(_) => 1,
+            DynamicImage::ImageLumaA8(_) => 2,
+            DynamicImage::ImageRgb8(_) => 3,
+            DynamicImage::ImageRgba8(_) => 4,
+            _ => return None,
+        },
+    };
+    match (img, channels) {
+        (DynamicImage::ImageLuma8(_), 1)
+        | (DynamicImage::ImageLumaA8(_), 2)
+        | (DynamicImage::ImageRgb8(_), 3)
+        | (DynamicImage::ImageRgba8(_), 4) => Some(channels),
+        _ => None,
+    }
+}
+
+fn native_module_blend_pair_channels(
+    img: &DynamicImage,
+    other: &DynamicImage,
+    mode: Option<&str>,
+    other_mode: Option<&str>,
+) -> Option<usize> {
+    let channels = native_module_blend_layout(img, mode)?;
+    (native_module_blend_layout(other, other_mode) == Some(channels)
+        && img.dimensions() == other.dimensions())
+    .then_some(channels)
+}
+
+fn native_module_blend_data_supported(img: &DynamicImage, channels: usize) -> bool {
+    let Some(expected_len) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return false;
+    };
+    let actual_len = img.as_bytes().len();
+    actual_len == expected_len && (actual_len == 0 || actual_len >= 8)
 }
 
 /// Return whether a row-oriented byte kernel has at least one complete
@@ -795,6 +875,32 @@ fn simd_chops_operands_supported(
     logical_byte_channels(&other_mode)
         .is_some_and(|other_channels| channels == other_channels)
         && img.dimensions() == other_size
+}
+
+/// Check the module-level blend contract without materializing the secondary
+/// image. Pillow validates the mode family and dimensions before touching
+/// pixels; only a non-empty byte buffer needs the SIMD block-size gate.
+fn simd_module_blend_supported(
+    img: &DynamicImage,
+    other: &Image,
+    mode: Option<&str>,
+    alpha: f64,
+) -> bool {
+    if !alpha.is_finite() {
+        return false;
+    }
+    let Some(channels) = native_module_blend_layout(img, mode) else {
+        return false;
+    };
+    let Ok(other_mode) = other.mode() else {
+        return false;
+    };
+    if native_module_blend_mode_channels(&other_mode) != Some(channels)
+        || other.size().ok() != Some(img.dimensions())
+    {
+        return false;
+    }
+    native_module_blend_data_supported(img, channels)
 }
 
 #[derive(Clone, Copy)]
@@ -4304,9 +4410,7 @@ pub(crate) fn simd_supports_for_image(
             native_merge_contract_for_image(img, target_mode, bands, mode).is_some()
         }
         PipelineOp::BlendModule { other, alpha } => {
-            alpha.is_finite()
-                && lut_chops
-                && simd_chops_operands_supported(img, other, mode)
+            simd_module_blend_supported(img, other, mode, *alpha)
         }
         // All-channel Chops kernels use native bytes, including CMYK's K
         // sample. Add/Subtract use the same native bytes for both their
@@ -4939,6 +5043,48 @@ fn shape_preserves_chops_operands(
         channels == other_channels
             && (shape.width, shape.height) == other_size
     })
+}
+
+fn shape_native_module_blend_channels(
+    shape: SimdImageShape,
+    mode: Option<&str>,
+) -> Option<usize> {
+    match (shape.layout, mode) {
+        (SimdLayout::Luma8, None | Some("L")) => Some(1),
+        (SimdLayout::LumaA8, None | Some("LA")) => Some(2),
+        (SimdLayout::Rgb8, None | Some("RGB" | "HSV" | "YCbCr")) => Some(3),
+        (SimdLayout::Rgba8, None | Some("RGBA" | "CMYK" | "RGBa" | "RGBX")) => Some(4),
+        _ => None,
+    }
+}
+
+fn shape_module_blend_supported(
+    shape: SimdImageShape,
+    other: &Arc<Image>,
+    mode: Option<&str>,
+    alpha: f64,
+) -> bool {
+    if !alpha.is_finite() {
+        return false;
+    }
+    let Some(channels) = shape_native_module_blend_channels(shape, mode) else {
+        return false;
+    };
+    let Ok(other_mode) = other.mode() else {
+        return false;
+    };
+    if native_module_blend_mode_channels(&other_mode) != Some(channels)
+        || other.size().ok() != Some((shape.width, shape.height))
+    {
+        return false;
+    }
+    let Some(total_bytes) = (shape.width as usize)
+        .checked_mul(shape.height as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return false;
+    };
+    total_bytes == 0 || total_bytes >= 8
 }
 
 fn shape_put_alpha_supported(
@@ -5775,9 +5921,7 @@ fn simd_supports_for_shape(
             native_merge_contract_for_shape(shape, target_mode, bands, mode).is_some()
         }
         PipelineOp::BlendModule { other, alpha } => {
-            alpha.is_finite()
-                && lut_chops
-                && shape_preserves_chops_operands(shape, other, mode)
+            shape_module_blend_supported(shape, other, mode, *alpha)
         }
         PipelineOp::Multiply { other } | PipelineOp::Screen { other } => {
             blend_chops && shape_preserves_chops_operands(shape, other, mode)
@@ -8315,12 +8459,32 @@ fn native_module_blend(
     img: &DynamicImage,
     other: &DynamicImage,
     mode: Option<&str>,
+    other_mode: Option<&str>,
     alpha: f64,
 ) -> Option<DynamicImage> {
-    let channels = native_chops_pair_channels(img, other, mode)?;
+    let channels = native_module_blend_pair_channels(img, other, mode, other_mode)?;
     let left = img.as_bytes();
     let right = other.as_bytes();
-    if left.len() != right.len() || left.len() < 8 || left.len() % channels != 0 {
+    let Some(expected_len) = (img.width() as usize)
+        .checked_mul(img.height() as usize)
+        .and_then(|pixels| pixels.checked_mul(channels))
+    else {
+        return None;
+    };
+    if left.len() != right.len()
+        || left.len() != expected_len
+        || left.len() % channels != 0
+    {
+        return None;
+    }
+    if left.is_empty() {
+        // Pillow returns a correctly typed zero-pixel image without entering
+        // its arithmetic loop. Keep this a native-copy receipt; non-empty
+        // inputs remain subject to the real eight-byte vector path below.
+        crate::compute::record_pipeline_operation_path("native-copy");
+        return Some(img.clone());
+    }
+    if left.len() < 8 {
         return None;
     }
     let mut output = vec![0u8; left.len()];
@@ -18571,10 +18735,10 @@ pub fn simd_blend_module(
     if !alpha.is_finite() {
         return Err(simd_unsupported("BlendModule"));
     }
+    let other_mode = other.mode()?;
     let other_img = materialize_chops_operand(other, mode)?;
-    native_module_blend(img, &other_img, mode, *alpha).ok_or_else(|| {
-        simd_unsupported("BlendModule")
-    })
+    native_module_blend(img, &other_img, mode, Some(&other_mode), *alpha)
+        .ok_or_else(|| simd_unsupported("BlendModule"))
 }
 
 native_dual_op_adapter!(
@@ -18962,7 +19126,8 @@ fn native_merge_bytes(
         }
     }
     let scalar_tail = ((pixels - pixel) * channels) as u64;
-    let result = crate::image_utils::raw_bytes_to_image(width, height, output, channels)?;
+    let result =
+        crate::image_utils::raw_bytes_to_image_allow_empty(width, height, output, channels)?;
     Ok(Some((result, vector_blocks, scalar_tail)))
 }
 

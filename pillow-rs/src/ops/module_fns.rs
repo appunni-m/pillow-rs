@@ -203,11 +203,36 @@ pub fn merge_inputs(mode: &str, bands: &[MergeInput]) -> Result<Image, PilError>
 ///
 /// # Errors
 ///
-/// Returns [`PilError::ValueError`] when image dimensions differ, or another
-/// [`PilError`] when size lookup fails.
+/// Returns [`PilError::ValueError`] when modes or image dimensions differ, or
+/// another [`PilError`] when metadata lookup fails.
 pub fn blend(image1: &Image, image2: &Image, alpha: f64) -> Result<Image, PilError> {
-    if image1.mode()? == "P" || image2.mode()? == "P" {
-        return Err(PilError::ValueError("image has wrong mode".into()));
+    let mode1 = image1.mode()?;
+    let mode2 = image2.mode()?;
+    let compatible = match mode1.as_str() {
+        "L" => mode2 == "L",
+        "LA" => mode2 == "LA",
+        "RGB" | "HSV" | "YCbCr" => matches!(mode2.as_str(), "RGB" | "HSV" | "YCbCr"),
+        "RGBA" | "CMYK" | "RGBa" | "RGBX" => {
+            matches!(mode2.as_str(), "RGBA" | "CMYK" | "RGBa" | "RGBX")
+        }
+        _ => false,
+    };
+    if !compatible {
+        // Pillow reports unsupported first-image modes (and indexed/1-bit
+        // second images) as ``image has wrong mode``. Other type-family
+        // mismatches are reported as ``images do not match``.
+        let wrong_mode = !matches!(
+            mode1.as_str(),
+            "L" | "LA" | "RGB" | "HSV" | "YCbCr" | "RGBA" | "CMYK" | "RGBa" | "RGBX"
+        ) || matches!(mode2.as_str(), "1" | "P" | "PA");
+        return Err(PilError::ValueError(
+            if wrong_mode {
+                "image has wrong mode"
+            } else {
+                "images do not match"
+            }
+            .into(),
+        ));
     }
     let (w1, h1) = image1.size()?;
     let (w2, h2) = image2.size()?;
