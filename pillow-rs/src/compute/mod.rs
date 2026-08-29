@@ -1098,11 +1098,12 @@ pub fn validate_backend_support(backend: Backend, ops: &[PipelineOp]) -> Result<
         if pool.supports(op)? {
             continue;
         }
-        if backend == Backend::Simd {
+        if matches!(backend, Backend::Simd | Backend::Gpu) {
             let key = registry::variant_key(op);
             record_pipeline_operation_unsupported(key);
             return Err(PilError::NotImplementedError(format!(
-                "SIMD does not support {key}"
+                "{} does not support {key}",
+                backend_label(backend)
             )));
         }
         let name = match backend {
