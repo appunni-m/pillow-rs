@@ -94,13 +94,21 @@ fn native_typed_filter_layout(img: &DynamicImage, mode: Option<&str>) -> Option<
 }
 
 /// Return the native byte layout accepted by rotation. Indexed images remain
-/// raw sample planes during Pillow rotation: `P` is one-byte nearest data and
-/// `PA` is a two-byte index/alpha plane. They must not use the broader
-/// arithmetic helper because `PA` alpha is not premultiplied.
+/// raw sample planes during Pillow rotation: `1`/`P` are one-byte nearest
+/// data and `PA` is a two-byte index/alpha plane. CMYK, RGBa, and RGBX also
+/// remain raw four-byte samples; only straight-alpha `LA`/`RGBA` gets
+/// alpha-aware interpolation. These modes must not use the narrower
+/// ordinary-byte helper just because their storage is backed by the same Rust
+/// image type.
 fn native_rotate_layout(img: &DynamicImage, mode: Option<&str>) -> Option<usize> {
     match img {
-        DynamicImage::ImageLuma8(_) if mode == Some("P") => Some(1),
+        DynamicImage::ImageLuma8(_) if matches!(mode, Some("1" | "P")) => Some(1),
         DynamicImage::ImageLumaA8(_) if mode == Some("PA") => Some(2),
+        DynamicImage::ImageRgba8(_)
+            if matches!(mode, Some("CMYK" | "RGBa" | "RGBX")) =>
+        {
+            Some(4)
+        }
         _ => native_byte_layout(img, mode),
     }
 }
@@ -4758,8 +4766,9 @@ fn shape_native_float_rank_supported(
 
 fn shape_native_rotate_channels(shape: SimdImageShape, mode: Option<&str>) -> Option<usize> {
     match (shape.layout, mode) {
-        (SimdLayout::Luma8, Some("P")) => Some(1),
+        (SimdLayout::Luma8, Some("1" | "P")) => Some(1),
         (SimdLayout::LumaA8, Some("PA")) => Some(2),
+        (SimdLayout::Rgba8, Some("CMYK" | "RGBa" | "RGBX")) => Some(4),
         _ => shape_native_byte_channels(shape, mode),
     }
 }
@@ -19872,9 +19881,12 @@ fn simd_bilinear_rotate_native(
     }
     let fill = fill.unwrap_or((0, 0, 0, 0));
     let pa_mode = mode == Some("PA");
-    let alpha_channel = match channels {
-        2 if !pa_mode => Some(1),
-        4 => Some(3),
+    // Pillow's rotate/transform path treats RGBa as already-premultiplied
+    // stored samples and RGBX/CMYK as raw four-byte planes. Only RGBA has a
+    // straight-alpha channel that needs premultiply/interpolate/unpremultiply.
+    let alpha_channel = match (channels, mode) {
+        (2, _) if !pa_mode => Some(1),
+        (4, None | Some("RGBA")) => Some(3),
         _ => None,
     };
     let mut output = vec![0u8; destination_len];
