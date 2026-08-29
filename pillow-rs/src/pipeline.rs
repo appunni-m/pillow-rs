@@ -581,8 +581,8 @@ pub enum PipelineOp {
     /// Legacy deferred linear-gradient descriptor.
     ///
     /// The public module constructor materializes the gradient eagerly. This
-    /// deprecated descriptor is retained for operation metadata and shader
-    /// contract inspection only; it has no registered executor.
+    /// deprecated descriptor remains available for operation metadata and can
+    /// use the native SIMD generator when explicitly executed by a pipeline.
     #[deprecated(note = "legacy deferred gradient; use the public linear_gradient constructor")]
     LinearGradient {
         /// Output mode.

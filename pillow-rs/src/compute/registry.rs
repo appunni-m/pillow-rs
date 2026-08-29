@@ -491,6 +491,7 @@ pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
             | PipelineOp::MinFilter { .. }
             | PipelineOp::MedianFilter { .. }
             | PipelineOp::RankFilter { .. }
+            | PipelineOp::LinearGradient { .. }
             | PipelineOp::EffectNoise { .. }
             | PipelineOp::EffectSpread { .. }
             | PipelineOp::Color3DLut { .. }
@@ -2270,7 +2271,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         ),
     );
 
-    // ── LinearGradient (deprecated shader contract only) ──
+    // ── LinearGradient (native SIMD generator + retained shader contract) ──
     m.insert("LinearGradient", gpu_only_entry!("linear_gradient.wgsl"));
 
     // ── RadialGradient (deprecated shader contract only) ──
@@ -2589,6 +2590,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Pad", adapters::simd_pad)?;
     simd_set(m, "Convert", adapters::simd_convert)?;
     simd_set(m, "Reduce", adapters::simd_reduce)?;
+    simd_set(m, "LinearGradient", adapters::simd_linear_gradient)?;
     simd_set(m, "EffectNoise", adapters::simd_effect_noise)?;
     simd_set(m, "EffectSpread", adapters::simd_effect_spread)?;
     simd_set(m, "Color3DLut", adapters::simd_color3dlut)?;
