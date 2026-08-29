@@ -696,6 +696,17 @@ def call_workflow_step(
         , side=side
     )
     operation = step["operation"]
+    if side == "target" and STRICT_TARGET_BACKEND and lock_backend:
+        # Strict capability audits must lock every image participating in a
+        # workflow before Python enters the public operation.  Locking only
+        # ``tobytes`` misses static functions (for example ImageChops) and
+        # non-byte observations (for example Image.size), allowing their
+        # lazy inputs to be evaluated by automatic CPU segmentation first.
+        lock_target_image_pipeline(receiver)
+        for value in positional:
+            lock_target_workflow_value(value)
+        for value in keywords.values():
+            lock_target_workflow_value(value)
     if opdef["kind"] == "property_get":
         if receiver is None:
             raise TypeError(f"property {operation} requires a receiver")
@@ -713,14 +724,6 @@ def call_workflow_step(
         # result contract while invoking the receiver's actual public bytes
         # protocol on both oracle and target.
         return bytes(receiver)
-    if (
-        side == "target"
-        and STRICT_TARGET_BACKEND
-        and lock_backend
-        and operation == "tobytes"
-        and receiver is not None
-    ):
-        receiver = lock_target_image_pipeline(receiver)
     if receiver is not None:
         callable_value = getattr(receiver, operation)
     else:
@@ -752,6 +755,20 @@ def lock_target_image_pipeline(value: Any) -> Any:
     if callable(lock):
         value._rust_image = lock()
     return value
+
+
+def lock_target_workflow_value(value: Any) -> None:
+    """Lock target images nested in public workflow argument containers."""
+
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            lock_target_workflow_value(item)
+        return
+    if isinstance(value, dict):
+        for item in value.values():
+            lock_target_workflow_value(item)
+        return
+    lock_target_image_pipeline(value)
 
 
 def _metadata(value: Any, name: str) -> Any:
