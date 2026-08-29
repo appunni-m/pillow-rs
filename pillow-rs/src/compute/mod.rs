@@ -769,6 +769,18 @@ pub(crate) trait BackendImpl: Send + Sync {
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError>;
+    /// Executes a sequence without allowing the backend to recover through a
+    /// different implementation.  Explicit backend locks use this boundary
+    /// for capability audits; automatic routing continues to use
+    /// [`Self::execute_batch`] and may select the CPU fallback.
+    fn execute_batch_strict(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+    ) -> Result<DynamicImage, PilError> {
+        self.execute_batch(ops, img, mode)
+    }
     /// Returns a backend-native dispatch count when it can be reported without
     /// estimating or instrumenting the backend. Most backends currently do not
     /// expose this distinction, so the default is `None`.
@@ -1330,7 +1342,11 @@ pub(crate) fn execute_prepared(
     for pool in pools() {
         if pool.name() == effective_backend {
             let estimated_dispatch_count = timed.then(|| pool.dispatch_count(ops)).flatten();
-            let execution = match pool.execute_batch(ops, img, mode) {
+            let execution = match if prepared.requested_backend == Some(Backend::Gpu) {
+                pool.execute_batch_strict(ops, img, mode)
+            } else {
+                pool.execute_batch(ops, img, mode)
+            } {
                 Err(error)
                     if effective_backend == Backend::Simd
                         && prepared.requested_backend != Some(Backend::Simd)

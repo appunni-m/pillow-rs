@@ -3480,6 +3480,50 @@ impl BackendImpl for GpuPool {
         img: &DynamicImage,
         mode: Option<&str>,
     ) -> Result<DynamicImage, PilError> {
+        self.execute_batch_with_policy(ops, img, mode, true)
+    }
+
+    fn execute_batch_strict(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+    ) -> Result<DynamicImage, PilError> {
+        self.execute_batch_with_policy(ops, img, mode, false)
+    }
+}
+
+impl GpuPool {
+    fn preflight_failure(
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+        allow_cpu_fallback: bool,
+        reason: &str,
+    ) -> Result<DynamicImage, PilError> {
+        if allow_cpu_fallback {
+            crate::compute::record_pipeline_backend_fallback(reason);
+            let cpu = crate::compute::CpuPool;
+            return cpu.execute_batch(ops, img, mode);
+        }
+
+        let operation = ops
+            .first()
+            .map(registry::variant_key)
+            .unwrap_or("unknown");
+        crate::compute::record_pipeline_operation_unsupported(operation);
+        Err(PilError::NotImplementedError(format!(
+            "GPU does not support {operation}: {reason}"
+        )))
+    }
+
+    fn execute_batch_with_policy(
+        &self,
+        ops: &[PipelineOp],
+        img: &DynamicImage,
+        mode: Option<&str>,
+        allow_cpu_fallback: bool,
+    ) -> Result<DynamicImage, PilError> {
         if ops.is_empty() {
             return Ok(img.clone());
         }
@@ -3506,11 +3550,13 @@ impl BackendImpl for GpuPool {
         // silently interpreting those samples as RGBA.
         if mode.is_some_and(|mode| !matches!(mode, "L" | "LA" | "RGB" | "RGBA")) {
             gpu_log!("[GPU] dispatch preflight routed batch to CPU: unsupported logical mode");
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: unsupported logical mode",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "unsupported logical mode",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
 
         // The uniform mode word describes the source layout for the whole
@@ -3523,36 +3569,52 @@ impl BackendImpl for GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: mode-changing op is not terminal"
             );
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: non-terminal mode change",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "non-terminal mode change",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
 
         if !gpu_image_layout_is_supported(img) {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsupported native pixel layout"
             );
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: unsupported native pixel layout",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "unsupported native pixel layout",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
 
         for op in ops {
             if !registry::gpu_supports(op)? {
-                return Err(PilError::ValueError(format!(
-                    "GPU operation '{}' has no valid single-dispatch shader contract",
-                    registry::variant_key(op)
-                )));
+                return Self::preflight_failure(
+                    ops,
+                    img,
+                    mode,
+                    allow_cpu_fallback,
+                    "no valid single-dispatch shader contract",
+                );
             }
         }
 
         // Keep this guard at execution time as well as in `supports`: explicit
         // backend selection and future callers must not bypass shader bounds.
-        validate_gpu_operations(ops)?;
+        if let Err(error) = validate_gpu_operations(ops) {
+            let reason = error.to_string();
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                &reason,
+            );
+        }
 
         // Check the primary image and every declared output before resolving
         // nested images. An empty/oversized outer image must not initialize a
@@ -3562,11 +3624,13 @@ impl BackendImpl for GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsafe primary image dimensions"
             );
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: unsafe primary image dimensions",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "unsafe primary image dimensions",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
 
         // Resolve every nested image before starting GPU work. A nested
@@ -3582,11 +3646,13 @@ impl BackendImpl for GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: unsafe or incomplete image dimensions"
             );
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: unsafe or incomplete image dimensions",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "unsafe or incomplete image dimensions",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
 
         let gpu = Self::ensure_init()?;
@@ -3597,11 +3663,13 @@ impl BackendImpl for GpuPool {
             gpu.device.limits().max_compute_workgroups_per_dimension,
         ) {
             gpu_log!("[GPU] dispatch preflight routed batch to CPU: adapter workgroup limit");
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: adapter workgroup limit",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "adapter workgroup limit",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
         let capacity = gpu_batch_capacity(ops, img, &auxiliary_images)?;
         let limits = gpu.device.limits();
@@ -3613,11 +3681,13 @@ impl BackendImpl for GpuPool {
             gpu_log!(
                 "[GPU] dispatch preflight routed batch to CPU: image buffer exceeds adapter limits"
             );
-            crate::compute::record_pipeline_backend_fallback(
-                "GPU preflight: image buffer exceeds adapter limits",
+            return Self::preflight_failure(
+                ops,
+                img,
+                mode,
+                allow_cpu_fallback,
+                "image buffer exceeds adapter limits",
             );
-            let cpu = crate::compute::CpuPool;
-            return cpu.execute_batch(ops, img, mode);
         }
         let mut buffers = gpu.acquire_buffers(capacity)?;
         let rgba = img.to_rgba8();
