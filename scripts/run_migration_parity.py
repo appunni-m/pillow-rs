@@ -1849,6 +1849,14 @@ def write_pipeline_execution_evidence(
                 actual_backend_counts[backend] = (
                     actual_backend_counts.get(backend, 0) + 1
                 )
+            else:
+                # Some public operations currently emit operation-level
+                # telemetry without a complete backend sample (for example,
+                # a validation error after the operation path is classified).
+                # Keep the receipt counted without inventing an executor.
+                actual_backend_counts["unattributed"] = (
+                    actual_backend_counts.get("unattributed", 0) + 1
+                )
             reason = receipt.get("fallback_reason")
             if isinstance(reason, str) and reason:
                 fallback_reason_counts[reason] = (

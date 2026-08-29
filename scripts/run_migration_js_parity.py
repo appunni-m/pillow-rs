@@ -693,6 +693,13 @@ def execution_evidence_document(
                 actual_backend_counts[backend] = (
                     actual_backend_counts.get(backend, 0) + 1
                 )
+            else:
+                # Operation-only telemetry is still useful, but it does not
+                # prove which backend produced pixels. Count it explicitly
+                # instead of dropping it or guessing CPU/SIMD.
+                actual_backend_counts["unattributed"] = (
+                    actual_backend_counts.get("unattributed", 0) + 1
+                )
             reason = receipt.get("fallback_reason")
             if isinstance(reason, str) and reason:
                 fallback_reason_counts[reason] = (
