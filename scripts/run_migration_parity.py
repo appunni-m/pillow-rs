@@ -777,6 +777,13 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
         try:
             raw = bytes(value.tobytes())
         except Exception:
+            # A strict backend audit must preserve an explicit capability
+            # failure as a public observation error.  Replacing the failed
+            # materialization with empty bytes turns an unsupported SIMD
+            # operation into a misleading image-byte mismatch and makes the
+            # strict receipt impossible to classify.
+            if side == "target" and STRICT_TARGET_BACKEND:
+                raise
             raw = b""
         return {
             "kind": "image",

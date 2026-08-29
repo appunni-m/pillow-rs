@@ -1066,7 +1066,10 @@ impl PyImage {
     /// benchmarking CPU fallback. Ordinary multi-backend routing is unchanged.
     fn lock_active_backend(&self) -> PyResult<PyImage> {
         let active = pillow_rs::active_backends().map_err(map_error)?;
-        let inner = if active.len() == 1 {
+        let already_locked = active
+            .first()
+            .is_some_and(|backend| self.inner.backend() == Some(*backend));
+        let inner = if active.len() == 1 && !already_locked {
             self.inner.clone().use_backend(active[0])
         } else {
             self.inner.clone()
@@ -1926,8 +1929,27 @@ fn set_pipeline_telemetry(enabled: bool) -> bool {
 
 /// Take the most recent completed image-pipeline telemetry sample for this
 /// thread, or return ``None`` when no sample is available.
+fn pipeline_operation_telemetry_to_py(
+    py: Python<'_>,
+    samples: Vec<pillow_rs::PipelineOperationTelemetry>,
+) -> PyResult<PyObject> {
+    let values = PyList::empty(py);
+    for sample in samples {
+        let value = PyDict::new(py);
+        value.set_item("operation", sample.operation)?;
+        value.set_item("path", sample.path)?;
+        value.set_item("vector_block_count", sample.vector_block_count)?;
+        value.set_item("scalar_tail_count", sample.scalar_tail_count)?;
+        value.set_item("mode_conversion_count", sample.mode_conversion_count)?;
+        value.set_item("handoff_count", sample.handoff_count)?;
+        values.append(value)?;
+    }
+    Ok(values.into())
+}
+
 #[pyfunction]
 fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<PyObject>> {
+    let operation_telemetry = pillow_rs::Backend::take_pipeline_operation_telemetry();
     let Some((
         requested_backend,
         actual_backend,
@@ -1942,7 +1964,15 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<PyObject>> {
         resize_coeff_cache_misses,
     )) = pillow_rs::Backend::take_pipeline_telemetry()
     else {
-        return Ok(None);
+        if operation_telemetry.is_empty() {
+            return Ok(None);
+        }
+        let result = PyDict::new(py);
+        result.set_item(
+            "operation_telemetry",
+            pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
+        )?;
+        return Ok(Some(result.into()));
     };
 
     let result = PyDict::new(py);
@@ -1962,6 +1992,10 @@ fn take_pipeline_telemetry(py: Python<'_>) -> PyResult<Option<PyObject>> {
     result.set_item("fallback_reason", fallback_reason)?;
     result.set_item("resize_coeff_cache_hits", resize_coeff_cache_hits)?;
     result.set_item("resize_coeff_cache_misses", resize_coeff_cache_misses)?;
+    result.set_item(
+        "operation_telemetry",
+        pipeline_operation_telemetry_to_py(py, operation_telemetry)?,
+    )?;
     if let Some(resource) = resource {
         let resource_dict = PyDict::new(py);
         resource_dict.set_item("upload_bytes", resource.upload_bytes)?;

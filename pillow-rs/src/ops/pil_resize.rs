@@ -76,7 +76,10 @@ fn kernel_lanczos3(x: f64) -> f64 {
 }
 
 /// Choose kernel function and support based on filter type.
-fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f64) {
+/// Returns the kernel and support used by the generic scalar resampler.
+/// Backend adapters use this only to build the same scalar coefficient table;
+/// pixel accumulation remains in the selected backend.
+pub(crate) fn filter_from_resample(filter: ResampleFilter) -> (fn(f64) -> f64, f64) {
     match filter {
         ResampleFilter::Nearest => (kernel_box, 0.5),
         ResampleFilter::Bilinear => (kernel_triangle, 1.0),
@@ -159,7 +162,7 @@ fn pil_resize_luma16_nearest(
 /// buffers, but the C implementation reads and writes their two bytes using
 /// the mode-dependent `bigendian` flag.  Keep that ABI-visible behavior at the
 /// core boundary instead of feeding a 16-bit buffer into the u8 resampler.
-fn luma16_resample_big_endian(mode: Option<&str>) -> bool {
+pub(crate) fn luma16_resample_big_endian(mode: Option<&str>) -> bool {
     match mode {
         // Pillow's Resample.c deliberately selects the big-endian branch for
         // I;16N.  On little-endian hosts this is observable as the historical
@@ -170,7 +173,7 @@ fn luma16_resample_big_endian(mode: Option<&str>) -> bool {
     }
 }
 
-fn luma16_resample_read(sample: u16, big_endian: bool) -> u16 {
+pub(crate) fn luma16_resample_read(sample: u16, big_endian: bool) -> u16 {
     let native_bytes = sample.to_ne_bytes();
     if big_endian {
         u16::from_be_bytes(native_bytes)
@@ -183,7 +186,7 @@ fn clip_u8(value: i64) -> u8 {
     value.clamp(0, 255) as u8
 }
 
-fn luma16_resample_write(value: f64, big_endian: bool) -> u16 {
+pub(crate) fn luma16_resample_write(value: f64, big_endian: bool) -> u16 {
     let rounded = round_up(value) as i64;
     // Resample.c writes each byte through CLIP8 rather than clipping the
     // complete 16-bit result.  Keeping the byte-level operation matters for
@@ -680,6 +683,57 @@ pub(crate) fn precompute_coeffs_f64(
     cached_filter_coeffs_f64(in_size, out_size, kernel, support)
 }
 
+/// Precompute double-precision coefficients for a resize with a fractional
+/// source box. Pillow receives these boundaries as `float` before computing
+/// the f64 kernel centers, just as it does for the byte boxed-resample path.
+pub(crate) fn precompute_coeffs_f64_boxed(
+    out_size: u32,
+    in_size: u32,
+    box_start: f64,
+    box_end: f64,
+    filter: ResampleFilter,
+) -> FilterCoeffsF64 {
+    let (kernel, support) = filter_from_resample(filter);
+    let box_start = box_start as f32 as f64;
+    let box_end = box_end as f32 as f64;
+    let scale = (box_end as f32 - box_start as f32) as f64 / f64::from(out_size);
+    let filterscale = scale.max(1.0);
+    let src_support = support * filterscale;
+    let source_size = i64::from(in_size);
+    let mut xmin = Vec::with_capacity(out_size as usize);
+    let mut count = Vec::with_capacity(out_size as usize);
+    let mut weights = Vec::with_capacity(out_size as usize);
+    for output in 0..out_size as usize {
+        let center = box_start + (output as f64 + 0.5) * scale;
+        let mut x0 = (center - src_support + 0.5).trunc() as i64;
+        let mut x1 = (center + src_support + 0.5).trunc() as i64;
+        x0 = x0.max(0);
+        x1 = x1.min(source_size);
+        let sample_count = (x1 - x0).max(0) as usize;
+        xmin.push(x0);
+        count.push(sample_count);
+        let mut row_weights = Vec::with_capacity(sample_count);
+        let mut sum = 0.0;
+        let ss = 1.0 / filterscale;
+        for tap in 0..sample_count {
+            let value = kernel((x0 as f64 + tap as f64 + 0.5 - center) * ss);
+            row_weights.push(value);
+            sum += value;
+        }
+        if sum != 0.0 {
+            for value in &mut row_weights {
+                *value /= sum;
+            }
+        }
+        weights.push(row_weights);
+    }
+    FilterCoeffsF64 {
+        xmin,
+        count,
+        weights,
+    }
+}
+
 pub(crate) fn precompute_coeffs(
     out_size: u32,
     in_size: u32,
@@ -773,6 +827,22 @@ pub(crate) fn precompute_coeffs_boxed(
         offsets,
         weights,
     }
+}
+
+/// Precompute box-resize coefficients for a public resampling filter.
+///
+/// The SIMD adapter uses the same Pillow-compatible coefficient builder as
+/// the scalar resampler; keeping kernel selection here prevents a second
+/// boxed-filter implementation from drifting at fixed-point boundaries.
+pub(crate) fn precompute_coeffs_boxed_for_filter(
+    out_size: u32,
+    in_size: u32,
+    box_start: f64,
+    box_end: f64,
+    filter: ResampleFilter,
+) -> FilterCoeffs {
+    let (kernel, support) = filter_from_resample(filter);
+    precompute_coeffs_boxed(out_size, in_size, box_start, box_end, kernel, support)
 }
 
 /// Internal implementation with explicit scale, called by pil_resize (double scale).
@@ -1684,6 +1754,120 @@ pub fn pil_resize(
     pil_preserve_mode(orig_img, result)
 }
 
+/// Resize an F-mode image through a fractional source box.
+///
+/// F samples are IEEE-754 values packed four bytes at a time.  They must be
+/// decoded before resampling; treating the bytes as four independent image
+/// channels is not Pillow-compatible.  The intermediate remains f32, while
+/// each separable accumulation follows Pillow's f64-kernel/f32-store order.
+fn pil_resize_f_boxed(
+    img: &DynamicImage,
+    dst_w: u32,
+    dst_h: u32,
+    box_left: f64,
+    box_top: f64,
+    box_right: f64,
+    box_bottom: f64,
+    filter: ResampleFilter,
+) -> DynamicImage {
+    let rgba = img.to_rgba8();
+    let (source_width, source_height) = rgba.dimensions();
+    let output_len = (dst_w as usize)
+        .checked_mul(dst_h as usize)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .unwrap_or(0);
+    if dst_w == 0 || dst_h == 0 || source_width == 0 || source_height == 0 {
+        return DynamicImage::ImageRgba8(crate::raster::RgbaImage::from_raw(
+            dst_w,
+            dst_h,
+            vec![0; output_len],
+        )
+        .unwrap_or_else(|| crate::raster::RgbaImage::new(dst_w, dst_h)));
+    }
+    let source: Vec<f32> = rgba
+        .as_raw()
+        .chunks_exact(4)
+        .map(|sample| f32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]))
+        .collect();
+    let box_left = box_left as f32 as f64;
+    let box_top = box_top as f32 as f64;
+    let box_right = box_right as f32 as f64;
+    let box_bottom = box_bottom as f32 as f64;
+
+    if matches!(filter, ResampleFilter::Nearest) {
+        let scale_x = (box_right as f32 - box_left as f32) as f64 / f64::from(dst_w);
+        let scale_y = (box_bottom as f32 - box_top as f32) as f64 / f64::from(dst_h);
+        let last_x = i64::from(source_width - 1);
+        let last_y = i64::from(source_height - 1);
+        let mut output = Vec::with_capacity(output_len);
+        for dy in 0..dst_h {
+            let source_y = (box_top + (f64::from(dy) + 0.5) * scale_y).floor() as i64;
+            let source_y = source_y.clamp(0, last_y) as usize;
+            for dx in 0..dst_w {
+                let source_x =
+                    (box_left + (f64::from(dx) + 0.5) * scale_x).floor() as i64;
+                let source_x = source_x.clamp(0, last_x) as usize;
+                output.extend_from_slice(
+                    &source[(source_y * source_width as usize + source_x)..][..1]
+                        .first()
+                        .copied()
+                        .unwrap_or(0.0)
+                        .to_le_bytes(),
+                );
+            }
+        }
+        return raw_to_dynamic(&output, dst_w, dst_h, 4);
+    }
+
+    let horizontal = precompute_coeffs_f64_boxed(
+        dst_w,
+        source_width,
+        box_left,
+        box_right,
+        filter,
+    );
+    let vertical = precompute_coeffs_f64_boxed(
+        dst_h,
+        source_height,
+        box_top,
+        box_bottom,
+        filter,
+    );
+    let mut intermediate = vec![0.0f32; source_height as usize * dst_w as usize];
+    for source_y in 0..source_height as usize {
+        let source_start = source_y * source_width as usize;
+        let intermediate_start = source_y * dst_w as usize;
+        for output_x in 0..dst_w as usize {
+            let x0 = horizontal.xmin[output_x];
+            let mut sum = 0.0;
+            for (tap, &weight) in horizontal.weights[output_x].iter().enumerate() {
+                let source_x = (x0 + tap as i64) as usize;
+                sum += weight * f64::from(source[source_start + source_x]);
+            }
+            intermediate[intermediate_start + output_x] = if sum == 0.0 { 0.0 } else { sum as f32 };
+        }
+    }
+
+    let mut output_floats = vec![0.0f32; dst_w as usize * dst_h as usize];
+    for output_y in 0..dst_h as usize {
+        let y0 = vertical.xmin[output_y];
+        for output_x in 0..dst_w as usize {
+            let mut sum = 0.0;
+            for (tap, &weight) in vertical.weights[output_y].iter().enumerate() {
+                let source_y = (y0 + tap as i64) as usize;
+                sum += weight * f64::from(intermediate[source_y * dst_w as usize + output_x]);
+            }
+            output_floats[output_y * dst_w as usize + output_x] =
+                if sum == 0.0 { 0.0 } else { sum as f32 };
+        }
+    }
+    let output: Vec<u8> = output_floats
+        .into_iter()
+        .flat_map(f32::to_le_bytes)
+        .collect();
+    raw_to_dynamic(&output, dst_w, dst_h, 4)
+}
+
 /// Box-based resize: maps source region [box_left, box_right] × [box_top, box_bottom]
 /// to the output (dst_w, dst_h). All box coordinates are in source pixel coordinates.
 pub fn pil_resize_boxed(
@@ -1698,6 +1882,18 @@ pub fn pil_resize_boxed(
     explicit_mode: Option<&str>,
 ) -> DynamicImage {
     let orig_img = img;
+    if explicit_mode == Some("F") && matches!(img, DynamicImage::ImageRgba8(_)) {
+        return pil_resize_f_boxed(
+            img,
+            dst_w,
+            dst_h,
+            box_left,
+            box_top,
+            box_right,
+            box_bottom,
+            filter,
+        );
+    }
     let is_cmyk = explicit_mode == Some("CMYK");
     let is_fi = explicit_mode == Some("F") || explicit_mode == Some("I");
     let needs_alpha = !is_cmyk

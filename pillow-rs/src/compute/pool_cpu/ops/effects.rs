@@ -57,7 +57,7 @@ fn blend_row(first: &[u8], second: &[u8], output: &mut [u8], alpha: f64) {
 // the oracle without runtime FFI, while retaining the shared state and call
 // consumption that the public APIs expose.
 
-struct DarwinRand {
+pub(crate) struct DarwinRand {
     state: u32,
 }
 
@@ -68,7 +68,7 @@ impl Default for DarwinRand {
 }
 
 impl DarwinRand {
-    fn next(&mut self) -> u32 {
+    pub(crate) fn next(&mut self) -> u32 {
         const MULTIPLIER: u64 = 16_807;
         const MODULUS: u64 = 2_147_483_647;
 
@@ -81,6 +81,16 @@ static PROCESS_RNG: OnceLock<Mutex<DarwinRand>> = OnceLock::new();
 
 fn process_rng() -> &'static Mutex<DarwinRand> {
     PROCESS_RNG.get_or_init(|| Mutex::new(DarwinRand::default()))
+}
+
+/// Run a backend's scalar RNG control section while preserving Pillow's
+/// process-global random stream. Pixel consumers may batch the values into a
+/// native vector kernel without taking a separate or reordered RNG stream.
+pub(crate) fn with_process_rng<T>(f: impl FnOnce(&mut DarwinRand) -> T) -> Result<T, PilError> {
+    let mut rng = process_rng()
+        .lock()
+        .map_err(|_| PilError::InternalError("effect RNG lock poisoned".into()))?;
+    Ok(f(&mut rng))
 }
 
 // ── EffectSpread ──
@@ -344,6 +354,41 @@ pub fn op_paste(
 
 // ── AlphaComposite ──
 
+#[inline]
+fn alpha_composite_div255(value: u32) -> u32 {
+    // Pillow's ImagingUtils.h SHIFTFORDIV255 macro. AlphaComposite.c relies
+    // on this fixed-point division rather than real-number rounding.
+    ((value >> 8) + value) >> 8
+}
+
+#[inline]
+fn alpha_composite_channel(
+    source: u32,
+    destination: u32,
+    source_alpha: u32,
+    destination_alpha: u32,
+) -> u8 {
+    if source_alpha == 0 {
+        return destination.min(255) as u8;
+    }
+    let blend = destination_alpha * (255 - source_alpha);
+    let out_alpha_255 = source_alpha * 255 + blend;
+    let coefficient_source = source_alpha * 255 * 255 * (1 << 7) / out_alpha_255;
+    let coefficient_destination = (255 << 7) - coefficient_source;
+    let blended = source * coefficient_source + destination * coefficient_destination;
+    (alpha_composite_div255(blended + (0x80 << 7)) >> 7).min(255) as u8
+}
+
+#[inline]
+fn alpha_composite_alpha(source_alpha: u32, destination_alpha: u32) -> u8 {
+    if source_alpha == 0 {
+        return destination_alpha.min(255) as u8;
+    }
+    let blend = destination_alpha * (255 - source_alpha);
+    let out_alpha_255 = source_alpha * 255 + blend;
+    alpha_composite_div255(out_alpha_255 + 0x80).min(255) as u8
+}
+
 pub fn op_alpha_composite(
     img: &DynamicImage,
     source: &Arc<Image>,
@@ -366,18 +411,15 @@ pub fn op_alpha_composite(
             let source_start = row_index * source_stride;
             let source_row = &source[source_start..source_start + width * 2];
             for (sp, dp) in source_row.chunks_exact(2).zip(row.chunks_exact_mut(2)) {
-                let sa = sp[1] as f64 / 255.0;
-                let da = dp[1] as f64 / 255.0;
-                let out_a = sa + da * (1.0 - sa);
-                if out_a <= 0.0 {
-                    continue;
-                }
-                let l = ((sp[0] as f64 * sa + dp[0] as f64 * da * (1.0 - sa)) / out_a)
-                    .round()
-                    .clamp(0.0, 255.0) as u8;
-                let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-                dp[0] = l;
-                dp[1] = a;
+                let source_alpha = u32::from(sp[1]);
+                let destination_alpha = u32::from(dp[1]);
+                dp[0] = alpha_composite_channel(
+                    u32::from(sp[0]),
+                    u32::from(dp[0]),
+                    source_alpha,
+                    destination_alpha,
+                );
+                dp[1] = alpha_composite_alpha(source_alpha, destination_alpha);
             }
         });
         return Ok(DynamicImage::ImageLumaA8(dest_la));
@@ -394,26 +436,27 @@ pub fn op_alpha_composite(
         let source_start = row_index * source_stride;
         let source_row = &source[source_start..source_start + width * 4];
         for (sp, dp) in source_row.chunks_exact(4).zip(row.chunks_exact_mut(4)) {
-            let sa = sp[3] as f64 / 255.0;
-            let da = dp[3] as f64 / 255.0;
-            let out_a = sa + da * (1.0 - sa);
-            if out_a <= 0.0 {
-                continue;
-            }
-            let r = ((sp[0] as f64 * sa + dp[0] as f64 * da * (1.0 - sa)) / out_a)
-                .round()
-                .clamp(0.0, 255.0) as u8;
-            let g = ((sp[1] as f64 * sa + dp[1] as f64 * da * (1.0 - sa)) / out_a)
-                .round()
-                .clamp(0.0, 255.0) as u8;
-            let b = ((sp[2] as f64 * sa + dp[2] as f64 * da * (1.0 - sa)) / out_a)
-                .round()
-                .clamp(0.0, 255.0) as u8;
-            let a = (out_a * 255.0).round().clamp(0.0, 255.0) as u8;
-            dp[0] = r;
-            dp[1] = g;
-            dp[2] = b;
-            dp[3] = a;
+            let source_alpha = u32::from(sp[3]);
+            let destination_alpha = u32::from(dp[3]);
+            dp[0] = alpha_composite_channel(
+                u32::from(sp[0]),
+                u32::from(dp[0]),
+                source_alpha,
+                destination_alpha,
+            );
+            dp[1] = alpha_composite_channel(
+                u32::from(sp[1]),
+                u32::from(dp[1]),
+                source_alpha,
+                destination_alpha,
+            );
+            dp[2] = alpha_composite_channel(
+                u32::from(sp[2]),
+                u32::from(dp[2]),
+                source_alpha,
+                destination_alpha,
+            );
+            dp[3] = alpha_composite_alpha(source_alpha, destination_alpha);
         }
     });
     Ok(DynamicImage::ImageRgba8(dest_rgba))

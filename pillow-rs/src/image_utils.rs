@@ -34,8 +34,33 @@ use crate::error::PilError;
 pub(crate) fn raw_bytes_to_image(
     width: u32,
     height: u32,
+    data: Vec<u8>,
+    channels: usize,
+) -> Result<DynamicImage, PilError> {
+    raw_bytes_to_image_with_empty(width, height, data, channels, false)
+}
+
+/// Converts raw pixel bytes into a [`DynamicImage`] when Pillow permits one
+/// or both output dimensions to be zero.
+///
+/// Ordinary image allocations continue to use the non-empty entry point;
+/// this explicit boundary is for operations such as an exactly half-sized
+/// `ImageOps.crop` that return an empty image.
+pub(crate) fn raw_bytes_to_image_allow_empty(
+    width: u32,
+    height: u32,
+    data: Vec<u8>,
+    channels: usize,
+) -> Result<DynamicImage, PilError> {
+    raw_bytes_to_image_with_empty(width, height, data, channels, true)
+}
+
+fn raw_bytes_to_image_with_empty(
+    width: u32,
+    height: u32,
     mut data: Vec<u8>,
     channels: usize,
+    allow_empty: bool,
 ) -> Result<DynamicImage, PilError> {
     if !(1..=4).contains(&channels) {
         return Err(PilError::ValueError(format!(
@@ -43,7 +68,11 @@ pub(crate) fn raw_bytes_to_image(
         )));
     }
 
-    let dims = CheckedDims::new(width, height, channels as u8)?;
+    let dims = if allow_empty {
+        CheckedDims::new_allow_empty(width, height, channels as u8)?
+    } else {
+        CheckedDims::new(width, height, channels as u8)?
+    };
 
     if data.len() < dims.total_bytes() {
         return Err(PilError::ValueError(format!(

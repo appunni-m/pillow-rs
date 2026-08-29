@@ -441,24 +441,94 @@ fn gpu_shader_contract_is_supported(op: &PipelineOp) -> bool {
 
 /// Returns whether the SIMD backend has an implementation for `op`.
 pub fn simd_supports(op: &PipelineOp) -> Result<bool, PilError> {
-    // The packed SIMD adapter only implements the established integer-radius
-    // BoxBlur descriptor. Tuple and fractional radii must use the CPU
-    // recurrence so each axis retains Pillow's fixed-point weights.
-    if matches!(op, PipelineOp::BoxBlurXY { .. }) {
-        return Ok(false);
-    }
-    if matches!(
+    // Keep this operation-level answer deliberately narrow.  A registered
+    // adapter may still exist as a workbench for a future kernel, but it is
+    // not a SIMD capability until its data plane is vectorized.  Contextual
+    // support below then applies the image layout, logical mode, dimensions,
+    // and secondary-operand checks.
+    let native_operation = matches!(
         op,
-        PipelineOp::Rotate { nearest: true, .. }
-            | PipelineOp::Rotate {
-                center: Some(_),
-                ..
-            }
-            | PipelineOp::Rotate {
-                translate: Some(_),
-                ..
-            }
-    ) {
+        PipelineOp::Invert
+            | PipelineOp::InvertChops
+            | PipelineOp::Resize { .. }
+            | PipelineOp::Thumbnail { .. }
+            | PipelineOp::Contain { .. }
+            | PipelineOp::Cover { .. }
+            | PipelineOp::Fit { .. }
+            | PipelineOp::Transform { .. }
+            | PipelineOp::Pad { .. }
+            | PipelineOp::Convert { .. }
+            | PipelineOp::Reduce { .. }
+            | PipelineOp::Solarize { .. }
+            | PipelineOp::Posterize { .. }
+            | PipelineOp::Grayscale
+            | PipelineOp::Colorize { .. }
+            | PipelineOp::Brightness { .. }
+            | PipelineOp::Contrast { .. }
+            | PipelineOp::ColorSaturation { .. }
+            | PipelineOp::Sharpness { .. }
+            | PipelineOp::Autocontrast { .. }
+            | PipelineOp::Equalize
+            | PipelineOp::Eval { .. }
+            | PipelineOp::PutData { .. }
+            | PipelineOp::ExtractBand { .. }
+            | PipelineOp::Offset { .. }
+            | PipelineOp::Flip
+            | PipelineOp::Mirror
+            | PipelineOp::Transpose { .. }
+            | PipelineOp::Crop { .. }
+            | PipelineOp::CropBorder { .. }
+            | PipelineOp::Expand { .. }
+            | PipelineOp::Constant { .. }
+            | PipelineOp::Duplicate
+            | PipelineOp::Filter3x3 { .. }
+            | PipelineOp::Filter5x5 { .. }
+            | PipelineOp::BoxBlur { .. }
+            | PipelineOp::BoxBlurXY { .. }
+            | PipelineOp::GaussianBlur { .. }
+            | PipelineOp::MaxFilter { .. }
+            | PipelineOp::MinFilter { .. }
+            | PipelineOp::MedianFilter { .. }
+            | PipelineOp::RankFilter { .. }
+            | PipelineOp::EffectNoise { .. }
+            | PipelineOp::EffectSpread { .. }
+            | PipelineOp::Color3DLut { .. }
+            | PipelineOp::Rotate { .. }
+            | PipelineOp::PutAlpha { .. }
+            | PipelineOp::PutAlphaData { .. }
+            | PipelineOp::PutPixel { .. }
+            | PipelineOp::DrawLine { .. }
+            | PipelineOp::DrawPoint { .. }
+            | PipelineOp::DrawRectangle { .. }
+            | PipelineOp::DrawRoundedRect { .. }
+            | PipelineOp::DrawPolygon { .. }
+            | PipelineOp::DrawEllipse { .. }
+            | PipelineOp::DrawCircle { .. }
+            | PipelineOp::DrawArc { .. }
+            | PipelineOp::DrawChord { .. }
+            | PipelineOp::DrawPieslice { .. }
+            | PipelineOp::AlphaComposite { .. }
+            | PipelineOp::Paste { .. }
+            | PipelineOp::Merge { .. }
+            | PipelineOp::BlendModule { .. }
+            | PipelineOp::CompositeModule { .. }
+            | PipelineOp::Multiply { .. }
+            | PipelineOp::Screen { .. }
+            | PipelineOp::Darker { .. }
+            | PipelineOp::Lighter { .. }
+            | PipelineOp::Difference { .. }
+            | PipelineOp::Overlay { .. }
+            | PipelineOp::HardLight { .. }
+            | PipelineOp::SoftLight { .. }
+            | PipelineOp::AddModulo { .. }
+            | PipelineOp::SubtractModulo { .. }
+            | PipelineOp::LogicalAnd { .. }
+            | PipelineOp::LogicalOr { .. }
+            | PipelineOp::LogicalXor { .. }
+            | PipelineOp::Add { .. }
+            | PipelineOp::Subtract { .. }
+    );
+    if !native_operation {
         return Ok(false);
     }
     Ok(registry()?
@@ -1891,7 +1961,8 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     // Pillow 12.2.0 libImaging/Effects.c:117-159 consumes process-global
     // rand() sequentially and performs collision-prone scatter writes. The
     // former per-pixel SIMD LCG and GPU hash/gather paths were different
-    // algorithms, so EffectSpread is deliberately registered on CPU only.
+    // algorithms, so the general scatter contract is deliberately registered
+    // on CPU; SIMD adds only the exact distance<=1 identity contract below.
     m.insert(
         "EffectSpread",
         OpEntry::cpu_only(
@@ -2017,9 +2088,10 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     m.insert(
         "EffectNoise",
         // Pillow's effect consumes one sequential libc RNG stream with a
-        // rejection loop and returns a new L image. The per-pixel GPU/SIMD
-        // implementations used independent hashes and preserved the input
-        // mode, so advertising those paths returned non-Pillow results.
+        // rejection loop and returns a new L image. SIMD owns the scalar RNG
+        // control sequence but vectorizes the per-sample affine/clamp data
+        // plane; GPU remains unsupported because it cannot reproduce the
+        // process-global stream deterministically.
         OpEntry::cpu_only(
             |img: &DynamicImage,
              op: &PipelineOp,
@@ -2475,8 +2547,9 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     });
 
     // ── SIMD registrations ───────────────────────────────────────────
-    // Register SIMD-accelerated functions for all backed scalar ops.
-    // The simd_fn slot is added alongside existing cpu_fn + gpu_shader.
+    // Attach simd_fn only for adapters whose hot data plane is admitted by
+    // simd_supports. Legacy scalar wrappers remain CPU-only and are not
+    // exposed as SIMD registrations.
 
     fn simd_set(
         entries: &mut HashMap<&'static str, OpEntry>,
@@ -2490,43 +2563,48 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         Ok(())
     }
 
-    // Section A: Simple single-image ops
+    // Section A: Simple single-image ops with native SIMD data planes.
     simd_set(m, "Invert", adapters::simd_invert)?;
-    simd_set(m, "Grayscale", adapters::simd_grayscale)?;
-    simd_set(m, "Duplicate", adapters::simd_duplicate)?;
     simd_set(m, "InvertChops", adapters::simd_invert_chops)?;
 
-    // Section B: Single-image with params
+    // Section B: Single-image byte transforms.
     simd_set(m, "Solarize", adapters::simd_solarize)?;
     simd_set(m, "Posterize", adapters::simd_posterize)?;
+    simd_set(m, "Grayscale", adapters::simd_grayscale)?;
+    simd_set(m, "Colorize", adapters::simd_colorize)?;
     simd_set(m, "Brightness", adapters::simd_brightness)?;
     simd_set(m, "Contrast", adapters::simd_contrast)?;
     simd_set(m, "ColorSaturation", adapters::simd_color_saturation)?;
     simd_set(m, "Sharpness", adapters::simd_sharpness)?;
-    simd_set(m, "Colorize", adapters::simd_colorize)?;
-    simd_set(m, "Constant", adapters::simd_constant)?;
+    simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
+    simd_set(m, "Equalize", adapters::simd_equalize)?;
+    simd_set(m, "Resize", adapters::simd_resize)?;
+    simd_set(m, "Thumbnail", adapters::simd_thumbnail)?;
+    simd_set(m, "Contain", adapters::simd_contain)?;
+    simd_set(m, "Cover", adapters::simd_cover)?;
+    simd_set(m, "Fit", adapters::simd_fit)?;
+    simd_set(m, "Transform", adapters::simd_transform)?;
+    simd_set(m, "Pad", adapters::simd_pad)?;
+    simd_set(m, "Convert", adapters::simd_convert)?;
+    simd_set(m, "Reduce", adapters::simd_reduce)?;
+    simd_set(m, "EffectNoise", adapters::simd_effect_noise)?;
+    simd_set(m, "EffectSpread", adapters::simd_effect_spread)?;
+    simd_set(m, "Color3DLut", adapters::simd_color3dlut)?;
     simd_set(m, "Offset", adapters::simd_offset)?;
 
-    // Section C: Spatial single-image
+    // Section C: Spatial native-copy operations.
     simd_set(m, "Flip", adapters::simd_flip)?;
     simd_set(m, "Mirror", adapters::simd_mirror)?;
-    simd_set(m, "Equalize", adapters::simd_equalize)?;
-    simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
-    // Section D: Filter/window ops
-    simd_set(m, "MedianFilter", adapters::simd_median_filter)?;
-    simd_set(m, "MaxFilter", adapters::simd_max_filter)?;
-    simd_set(m, "MinFilter", adapters::simd_min_filter)?;
-    simd_set(m, "RankFilter", adapters::simd_rank_filter)?;
     simd_set(m, "Filter3x3", adapters::simd_filter_3x3)?;
     simd_set(m, "Filter5x5", adapters::simd_filter_5x5)?;
+    simd_set(m, "MaxFilter", adapters::simd_max_filter)?;
+    simd_set(m, "MinFilter", adapters::simd_min_filter)?;
+    simd_set(m, "MedianFilter", adapters::simd_median_filter)?;
+    simd_set(m, "RankFilter", adapters::simd_rank_filter)?;
     simd_set(m, "BoxBlur", adapters::simd_box_blur)?;
     simd_set(m, "GaussianBlur", adapters::simd_gaussian_blur)?;
-    // These legacy variants are retained for the core/GPU pipeline ABI, but
-    // current public constructors use the exact quantizer, module-based
-    // blend/composite, and Eval paths. Keep them on the safe CPU fallback rather
-    // than advertising unreachable SIMD adapters in the backend registry.
 
-    // Section E: Dual-image per-pixel ops
+    // Section D: Dual-image native-byte kernels.
     simd_set(m, "Add", adapters::simd_add)?;
     simd_set(m, "Subtract", adapters::simd_subtract)?;
     simd_set(m, "Multiply", adapters::simd_multiply)?;
@@ -2534,53 +2612,43 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
     simd_set(m, "Darker", adapters::simd_darker)?;
     simd_set(m, "Lighter", adapters::simd_lighter)?;
     simd_set(m, "Difference", adapters::simd_difference)?;
+    simd_set(m, "Overlay", adapters::simd_overlay)?;
+    simd_set(m, "HardLight", adapters::simd_hard_light)?;
+    simd_set(m, "SoftLight", adapters::simd_soft_light)?;
     simd_set(m, "AddModulo", adapters::simd_add_modulo)?;
     simd_set(m, "SubtractModulo", adapters::simd_subtract_modulo)?;
     simd_set(m, "LogicalAnd", adapters::simd_logical_and)?;
     simd_set(m, "LogicalOr", adapters::simd_logical_or)?;
     simd_set(m, "LogicalXor", adapters::simd_logical_xor)?;
-    simd_set(m, "Overlay", adapters::simd_overlay)?;
-    simd_set(m, "HardLight", adapters::simd_hard_light)?;
-    simd_set(m, "SoftLight", adapters::simd_soft_light)?;
-    simd_set(m, "BlendModule", adapters::simd_blend_module)?;
-    simd_set(m, "CompositeModule", adapters::simd_composite_module)?;
 
-    // Section F: Ops that change dimensions
+    // Section E: Native-copy and channel operations.
     simd_set(m, "Transpose", adapters::simd_transpose)?;
-    simd_set(m, "Resize", adapters::simd_resize)?;
-    simd_set(m, "Thumbnail", adapters::simd_thumbnail)?;
-    simd_set(m, "Contain", adapters::simd_contain)?;
-    simd_set(m, "Cover", adapters::simd_cover)?;
-    simd_set(m, "Fit", adapters::simd_fit)?;
-    simd_set(m, "Scale", adapters::simd_scale)?;
-    simd_set(m, "Pad", adapters::simd_pad)?;
-    simd_set(m, "Expand", adapters::simd_expand)?;
     simd_set(m, "CropBorder", adapters::simd_crop_border)?;
     simd_set(m, "Crop", adapters::simd_crop)?;
+    simd_set(m, "Expand", adapters::simd_expand)?;
+    simd_set(m, "Constant", adapters::simd_constant)?;
+    simd_set(m, "Duplicate", adapters::simd_duplicate)?;
     simd_set(m, "Rotate", adapters::simd_rotate)?;
-    simd_set(m, "Reduce", adapters::simd_reduce)?;
-    simd_set(m, "Convert", adapters::simd_convert)?;
-    simd_set(m, "RemapPalette", adapters::simd_remap_palette)?;
-    simd_set(m, "Transform", adapters::simd_transform)?;
-
-    // Section G: Special/mutating ops
-    simd_set(m, "PutPixel", adapters::simd_put_pixel)?;
-    simd_set(m, "PutData", adapters::simd_put_data)?;
     simd_set(m, "PutAlpha", adapters::simd_put_alpha)?;
+    simd_set(m, "PutAlphaData", adapters::simd_put_alpha_data)?;
+    simd_set(m, "PutPixel", adapters::simd_put_pixel)?;
+    simd_set(m, "DrawLine", adapters::simd_draw_line)?;
+    simd_set(m, "DrawPoint", adapters::simd_draw_point)?;
+    simd_set(m, "DrawRectangle", adapters::simd_draw_rectangle)?;
+    simd_set(m, "DrawRoundedRect", adapters::simd_draw_rounded_rect)?;
+    simd_set(m, "DrawPolygon", adapters::simd_draw_polygon)?;
+    simd_set(m, "DrawEllipse", adapters::simd_draw_ellipse)?;
+    simd_set(m, "DrawCircle", adapters::simd_draw_circle)?;
+    simd_set(m, "DrawArc", adapters::simd_draw_arc)?;
+    simd_set(m, "DrawChord", adapters::simd_draw_chord)?;
+    simd_set(m, "DrawPieslice", adapters::simd_draw_pieslice)?;
     simd_set(m, "Eval", adapters::simd_eval)?;
+    simd_set(m, "PutData", adapters::simd_put_data)?;
     simd_set(m, "Paste", adapters::simd_paste)?;
-    simd_set(m, "AlphaComposite", adapters::simd_alpha_composite)?;
     simd_set(m, "Merge", adapters::simd_merge)?;
-    simd_set(m, "ExtractBand", adapters::simd_extract_band)?;
-    // ── Additional SIMD wirings (GPU ops missing SIMD) ──
-    simd_set(m, "Autocontrast", adapters::simd_autocontrast)?;
     simd_set(m, "BlendModule", adapters::simd_blend_module)?;
     simd_set(m, "CompositeModule", adapters::simd_composite_module)?;
-    simd_set(m, "ColorSaturation", adapters::simd_color_saturation)?;
-    simd_set(m, "GaussianBlur", adapters::simd_gaussian_blur)?;
-    simd_set(m, "InvertChops", adapters::simd_invert_chops)?;
-    simd_set(m, "MedianFilter", adapters::simd_median_filter)?;
-    simd_set(m, "RemapPalette", adapters::simd_remap_palette)?;
-    simd_set(m, "SubtractModulo", adapters::simd_subtract_modulo)?;
+    simd_set(m, "AlphaComposite", adapters::simd_alpha_composite)?;
+    simd_set(m, "ExtractBand", adapters::simd_extract_band)?;
     Ok(())
 }

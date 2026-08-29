@@ -40,33 +40,29 @@ fn alpha_composite_pixel(src_pixel: u32, dst_pixel: u32, mode: u32) -> u32 {
     let db = (dst_pixel >> 16u) & 0xffu;
     let da = (dst_pixel >> 24u) & 0xffu;
 
-    // Porter-Duff Over with the same rational arithmetic as the CPU's f64
-    // implementation. Multiply numerator and denominator by 255 first so
-    // the color path does not double-round the destination contribution.
-    let inv_sa = 255u - sa;
-    let alpha_den = sa * 255u + da * inv_sa;
-    let out_a_val = (alpha_den + 127u) / 255u;
-
-    // The CPU implementation leaves a fully transparent destination pixel
-    // untouched when both source and destination alpha are zero. In
-    // particular, RGB bytes under alpha=0 are observable in the raw image;
-    // returning zero here would silently erase them.
-    if out_a_val == 0u {
+    // Pillow's libImaging/AlphaComposite.c uses a 7-bit fixed-point
+    // coefficient path. Keep this shader byte-for-byte aligned with that
+    // contract instead of substituting ideal real-number Porter-Duff math.
+    // AlphaComposite.c also copies the destination when source alpha is zero;
+    // RGB bytes under transparent pixels are observable through tobytes().
+    if sa == 0u {
         return dst_pixel;
     }
+    let inv_sa = 255u - sa;
+    let blend = da * inv_sa;
+    let outa255 = sa * 255u + blend;
+    let coef1 = sa * 255u * 255u * (1u << 7u) / outa255;
+    let coef2 = (255u << 7u) - coef1;
 
-    var out_r: u32 = 0u;
-    var out_g: u32 = 0u;
-    var out_b: u32 = 0u;
+    let round_bias = 0x80u << 7u;
 
-    if out_a_val > 0u {
-        let r_num = sr * sa * 255u + dr * da * inv_sa;
-        let g_num = sg * sa * 255u + dg * da * inv_sa;
-        let b_num = sb * sa * 255u + db * da * inv_sa;
-        out_r = (r_num + alpha_den / 2u) / alpha_den;
-        out_g = (g_num + alpha_den / 2u) / alpha_den;
-        out_b = (b_num + alpha_den / 2u) / alpha_den;
-    }
+    let r_tmp = sr * coef1 + dr * coef2 + round_bias;
+    let g_tmp = sg * coef1 + dg * coef2 + round_bias;
+    let b_tmp = sb * coef1 + db * coef2 + round_bias;
+    let out_r = (((r_tmp >> 8u) + r_tmp) >> 8u) >> 7u;
+    let out_g = (((g_tmp >> 8u) + g_tmp) >> 8u) >> 7u;
+    let out_b = (((b_tmp >> 8u) + b_tmp) >> 8u) >> 7u;
+    let out_a_val = ((((outa255 + 0x80u) >> 8u) + (outa255 + 0x80u)) >> 8u);
 
     // Mode-aware channel selection
     let final_g = select(dg, out_g, mode_has_g(mode));

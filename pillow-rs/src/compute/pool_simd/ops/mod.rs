@@ -5,4 +5,10 @@
 //! `scalar` is always compiled as the reference + fallback.
 
 pub(crate) mod adapters;
-mod scalar; // always available — reference implementation // SIMD → registry adapter wrappers
+// Packed scalar helpers are retained for adapters that are not admitted by
+// `simd_supports_for_image` yet. The contextual gate routes those public
+// inputs to CPU before execution; they are not a hidden SIMD fallback. Keep
+// the module available while each unsupported family is replaced by a native
+// vector kernel or removed.
+#[allow(dead_code)]
+mod scalar;

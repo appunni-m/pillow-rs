@@ -8,7 +8,9 @@
 //! the Luma8 index buffer and writes palette index values directly, matching
 //! PIL's behavior (fill colors use their R channel as the palette index).
 
-use crate::draw::{DrawCanvas, bresenham_line, plot, round_down, round_up, scanline_polygon_fill};
+use crate::draw::{
+    DrawCanvas, bresenham_line, plot, scanline_polygon_fill, wide_line_polygon_points,
+};
 use crate::error::PilError;
 use crate::pipeline::PipelineOp;
 use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
@@ -129,45 +131,10 @@ fn draw_line_on_canvas<C: DrawCanvas>(
         return;
     }
 
-    let delta_x = i64::from(x1) - i64::from(x0);
-    let delta_y = i64::from(y1) - i64::from(y0);
-    if delta_x == 0 && delta_y == 0 {
+    let Some(points) = wide_line_polygon_points(x0, y0, x1, y1, width) else {
         plot(canvas, x0, y0, fill, w, h, false);
         return;
-    }
-
-    // Pillow src/libImaging/Draw.c::ImagingDrawWideLine constructs an
-    // asymmetric four-edge polygon for even widths. The two rounded ratios
-    // are what keep an even requested width from becoming one pixel too wide.
-    let squared_length = delta_x
-        .saturating_mul(delta_x)
-        .saturating_add(delta_y.saturating_mul(delta_y));
-    let length = (squared_length as f64).sqrt();
-    let half_width = f64::from(width.saturating_sub(1)) / 2.0;
-    let ratio_max = f64::from(round_up(half_width)) / length;
-    let ratio_min = f64::from(round_down(half_width)) / length;
-    let offset_x_min = round_down(ratio_min * delta_y as f64);
-    let offset_x_max = round_down(ratio_max * delta_y as f64);
-    let offset_y_min = round_down(ratio_min * delta_x as f64);
-    let offset_y_max = round_down(ratio_max * delta_x as f64);
-    let points = [
-        (
-            x0.saturating_sub(offset_x_min),
-            y0.saturating_add(offset_y_max),
-        ),
-        (
-            x1.saturating_sub(offset_x_min),
-            y1.saturating_add(offset_y_max),
-        ),
-        (
-            x1.saturating_add(offset_x_max),
-            y1.saturating_sub(offset_y_min),
-        ),
-        (
-            x0.saturating_add(offset_x_max),
-            y0.saturating_sub(offset_y_min),
-        ),
-    ];
+    };
     scanline_polygon_fill(canvas, &points, fill, w, h, false);
 }
 
@@ -502,15 +469,23 @@ fn draw_hline<C: DrawCanvas>(canvas: &mut C, x0: i32, y: i32, x1: i32, color: (u
     }
 }
 
-fn draw_ellipse_segments<C: DrawCanvas>(
-    canvas: &mut C,
+/// Enumerate Pillow's ellipse scan-conversion spans without writing pixels.
+///
+/// The state machine is scalar geometry/control-plane work.  Backends may
+/// consume the inclusive native-coordinate spans with their own data-plane
+/// kernel; in particular, the SIMD adapter uses this helper only to produce
+/// spans and performs every destination write itself.
+pub(crate) fn for_each_ellipse_span<F>(
     x0: i32,
     y0: i32,
     x1: i32,
     y1: i32,
     width: i32,
-    color: (u8, u8, u8, u8),
-) {
+    mut visit: F,
+)
+where
+    F: FnMut(i32, i32, i32),
+{
     let Some(a) = x1.checked_sub(x0) else {
         return;
     };
@@ -526,14 +501,26 @@ fn draw_ellipse_segments<C: DrawCanvas>(
             (i64::from(origin) + (i64::from(offset) + i64::from(diameter)) / 2)
                 .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
         };
-        draw_hline(
-            canvas,
+        visit(
             map_coordinate(x0, segment_x0, a),
             map_coordinate(y0, segment_y, b),
             map_coordinate(x0, segment_x1, a),
-            color,
         );
     }
+}
+
+fn draw_ellipse_segments<C: DrawCanvas>(
+    canvas: &mut C,
+    x0: i32,
+    y0: i32,
+    x1: i32,
+    y1: i32,
+    width: i32,
+    color: (u8, u8, u8, u8),
+) {
+    for_each_ellipse_span(x0, y0, x1, y1, width, |span_x0, span_y, span_x1| {
+        draw_hline(canvas, span_x0, span_y, span_x1, color);
+    });
 }
 
 /// Draw an ellipse using Pillow 12.2's `ellipse_state` scan conversion.
@@ -753,7 +740,7 @@ fn clip_intervals(node: Option<&ClipNode>, mut x0: i32, y: i32, mut x1: i32) -> 
     }
 }
 
-struct ClipEllipseState {
+pub(crate) struct ClipEllipseState {
     ellipse: EllipseState,
     root: Option<ClipNode>,
     buffer: std::collections::VecDeque<(i32, i32, i32)>,
@@ -779,7 +766,7 @@ impl ClipEllipseState {
     }
 }
 
-fn normalize_angles(mut start: f32, mut end: f32) -> (f32, f32) {
+pub(crate) fn normalize_angles(mut start: f32, mut end: f32) -> (f32, f32) {
     if end - start >= 360.0 {
         return (0.0, 360.0);
     }
@@ -809,7 +796,7 @@ fn or(left: ClipNode, right: ClipNode) -> ClipNode {
     ClipNode::Or(Box::new(left), Box::new(right))
 }
 
-fn arc_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+pub(crate) fn arc_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
     if a < b {
         let mut state = arc_clip_state(b, a, width, 90.0 - end, 90.0 - start);
         state.ellipse = EllipseState::new(a, b, width);
@@ -887,7 +874,7 @@ fn arc_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllip
     ClipEllipseState::new(EllipseState::new(a, b, width), root)
 }
 
-fn chord_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+pub(crate) fn chord_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
     let start = f64::from(start).to_radians();
     let end = f64::from(end).to_radians();
     let start_x = f64::from(a) * start.cos();
@@ -903,7 +890,13 @@ fn chord_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEll
     )
 }
 
-fn chord_line_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+pub(crate) fn chord_line_clip_state(
+    a: i32,
+    b: i32,
+    width: i32,
+    start: f32,
+    end: f32,
+) -> ClipEllipseState {
     let start = f64::from(start).to_radians();
     let end = f64::from(end).to_radians();
     let start_x = f64::from(a) * start.cos();
@@ -923,7 +916,7 @@ fn chord_line_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> Cl
     )
 }
 
-fn pie_side_clip_state(a: i32, b: i32, width: i32, angle: f32) -> ClipEllipseState {
+pub(crate) fn pie_side_clip_state(a: i32, b: i32, width: i32, angle: f32) -> ClipEllipseState {
     let angle = f64::from(angle).to_radians();
     let x = f64::from(a) * angle.cos();
     let y = f64::from(b) * angle.sin();
@@ -939,7 +932,7 @@ fn pie_side_clip_state(a: i32, b: i32, width: i32, angle: f32) -> ClipEllipseSta
     )
 }
 
-fn pie_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
+pub(crate) fn pie_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllipseState {
     let start_radians = f64::from(start).to_radians();
     let end_radians = f64::from(end).to_radians();
     let start_x = f64::from(a) * start_radians.cos();
@@ -962,28 +955,42 @@ fn pie_clip_state(a: i32, b: i32, width: i32, start: f32, end: f32) -> ClipEllip
     ClipEllipseState::new(EllipseState::new(a, b, width), Some(root))
 }
 
+pub(crate) fn for_each_clipped_ellipse_span<F>(
+    x0: i32,
+    y0: i32,
+    a: i32,
+    b: i32,
+    mut state: ClipEllipseState,
+    mut visit: F,
+)
+where
+    F: FnMut(i32, i32, i32),
+{
+    while let Some((segment_x0, segment_y, segment_x1)) = state.next() {
+        let map_coordinate = |origin: i32, offset: i32, diameter: i32| {
+            (i64::from(origin) + (i64::from(offset) + i64::from(diameter)) / 2)
+                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
+        };
+        visit(
+            map_coordinate(x0, segment_x0, a),
+            map_coordinate(y0, segment_y, b),
+            map_coordinate(x0, segment_x1, a),
+        );
+    }
+}
+
 fn draw_clipped_ellipse<C: DrawCanvas>(
     canvas: &mut C,
     x0: i32,
     y0: i32,
     a: i32,
     b: i32,
-    mut state: ClipEllipseState,
+    state: ClipEllipseState,
     color: (u8, u8, u8, u8),
 ) {
-    while let Some((segment_x0, segment_y, segment_x1)) = state.next() {
-        let map_coordinate = |origin: i32, offset: i32, diameter: i32| {
-            (i64::from(origin) + (i64::from(offset) + i64::from(diameter)) / 2)
-                .clamp(i64::from(i32::MIN), i64::from(i32::MAX)) as i32
-        };
-        draw_hline(
-            canvas,
-            map_coordinate(x0, segment_x0, a),
-            map_coordinate(y0, segment_y, b),
-            map_coordinate(x0, segment_x1, a),
-            color,
-        );
-    }
+    for_each_clipped_ellipse_span(x0, y0, a, b, state, |span_x0, span_y, span_x1| {
+        draw_hline(canvas, span_x0, span_y, span_x1, color);
+    });
 }
 
 fn draw_arc_on_canvas<C: DrawCanvas>(
