@@ -3357,9 +3357,6 @@ fn simd_draw_polygon_native(
             if width == 1 {
                 for_each_bresenham_point(x0, y0, x1, y1, |x, y| {
                     if first_error.is_none()
-                        && mask
-                            .get(&y)
-                            .is_some_and(|row| row.iter().any(|&(left, right)| x >= left && x <= right))
                         && let Err(error) = writer.write(x, y, x, outline)
                     {
                         first_error = Some(error);
