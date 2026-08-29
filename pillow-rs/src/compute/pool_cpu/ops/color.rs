@@ -10,7 +10,16 @@ use crate::raster::GenericImageView;
 
 /// Convert image to a specified color mode.
 /// Matches PIL's Image.convert() behavior exactly.
-pub fn op_convert(img: &DynamicImage, mode: &ColorMode) -> Result<DynamicImage, PilError> {
+///
+/// `source_mode` is needed because Pillow's `RGBX` layout shares the native
+/// four-byte RGBA storage with `RGBA`, but its fourth byte is padding rather
+/// than an alpha sample. The image buffer alone cannot distinguish those two
+/// public modes at this executor boundary.
+pub fn op_convert(
+    img: &DynamicImage,
+    mode: &ColorMode,
+    source_mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
     match mode {
         ColorMode::L => Ok(DynamicImage::ImageLuma8(pil_grayscale(img)?)),
         ColorMode::LA => {
@@ -19,7 +28,9 @@ pub fn op_convert(img: &DynamicImage, mode: &ColorMode) -> Result<DynamicImage, 
             let mut ga = crate::raster::GrayAlphaImage::new(w, h);
             // Pillow's convert.c carries the source alpha through an RGBA
             // to LA conversion. Non-RGBA source layouts use opaque alpha.
-            let source_alpha = if matches!(img.color(), crate::raster::ColorType::Rgba8) {
+            let source_alpha = if matches!(img.color(), crate::raster::ColorType::Rgba8)
+                && source_mode != Some("RGBX")
+            {
                 Some(
                     img.as_bytes()
                         .chunks_exact(4)
@@ -40,7 +51,17 @@ pub fn op_convert(img: &DynamicImage, mode: &ColorMode) -> Result<DynamicImage, 
             Ok(DynamicImage::ImageLumaA8(ga))
         }
         ColorMode::RGB => Ok(DynamicImage::ImageRgb8(img.to_rgb8())),
-        ColorMode::RGBA => Ok(DynamicImage::ImageRgba8(img.to_rgba8())),
+        ColorMode::RGBA => {
+            let mut rgba = img.to_rgba8();
+            if source_mode == Some("RGBX") {
+                // Pillow treats RGBX's fourth byte as padding on conversion;
+                // RGBA output receives a newly supplied opaque alpha band.
+                for pixel in rgba.pixels_mut() {
+                    pixel[3] = 255;
+                }
+            }
+            Ok(DynamicImage::ImageRgba8(rgba))
+        }
         ColorMode::I => {
             // RGB-family sources use the deferred exact converter for I.
             // CMYK/I/F source normalization is handled by Image::convert
