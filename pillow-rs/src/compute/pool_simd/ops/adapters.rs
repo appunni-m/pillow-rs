@@ -4243,6 +4243,10 @@ pub(crate) fn simd_supports_for_image(
                 && img.height() != 0
                 && (img.width() as usize).saturating_mul(img.height() as usize) != 0
         }
+        PipelineOp::LinearGradient { mode } => matches!(
+            mode,
+            ColorMode::Mode1 | ColorMode::L | ColorMode::P | ColorMode::I | ColorMode::F
+        ),
         PipelineOp::EffectSpread { distance } => {
             (*distance <= 1 || (img.width() == 1 && img.height() == 1))
                 && native_copy_layout(img, mode).is_some_and(|channels| {
@@ -5200,6 +5204,15 @@ fn shape_after_simd_op(shape: SimdImageShape, op: &PipelineOp) -> Option<SimdIma
             next.width = shape.width.checked_add(twice)?;
             next.height = shape.height.checked_add(twice)?;
         }
+        PipelineOp::LinearGradient { mode } => {
+            next.width = 256;
+            next.height = 256;
+            next.layout = match mode {
+                ColorMode::Mode1 | ColorMode::L | ColorMode::P => SimdLayout::Luma8,
+                ColorMode::I | ColorMode::F => SimdLayout::Rgba8,
+                _ => SimdLayout::Unsupported,
+            };
+        }
         PipelineOp::Constant { .. } => next.layout = SimdLayout::Luma8,
         PipelineOp::Grayscale => next.layout = SimdLayout::Luma8,
         PipelineOp::Colorize { .. } => next.layout = SimdLayout::Rgb8,
@@ -5368,6 +5381,7 @@ fn operation_target_mode(op: &PipelineOp) -> Option<&'static str> {
             mode: target_mode,
             ..
         } => Some(pixel_mode_name(*target_mode)),
+        PipelineOp::LinearGradient { mode } => Some(color_mode_name(mode)),
         PipelineOp::Grayscale | PipelineOp::EffectNoise { .. } => Some("L"),
         PipelineOp::Colorize { .. } => Some("RGB"),
         PipelineOp::Constant { .. } => Some("L"),
@@ -5775,6 +5789,10 @@ fn simd_supports_for_shape(
                 && shape.height != 0
                 && (shape.width as usize).saturating_mul(shape.height as usize) != 0
         }
+        PipelineOp::LinearGradient { mode } => matches!(
+            mode,
+            ColorMode::Mode1 | ColorMode::L | ColorMode::P | ColorMode::I | ColorMode::F
+        ),
         PipelineOp::EffectSpread { distance } => {
             (*distance <= 1 || (shape.width == 1 && shape.height == 1))
                 && shape_native_identity_copy_channels(shape, mode).is_some_and(|channels| {
@@ -10937,6 +10955,82 @@ pub fn simd_mirror(
         return Ok(result);
     }
     Err(simd_unsupported("Mirror"))
+}
+
+/// Generate a linear gradient through native vector stores.
+///
+/// The public `Image.linear_gradient` constructor is eager, so it does not
+/// enter the ordinary `PipelineOp` dispatcher.  Its data contract is still a
+/// straightforward row fill: every pixel in row `y` carries the scalar value
+/// `y`, with the mode-specific sample width retained in the native bytes.  A
+/// `u8x16` store is therefore the complete data plane for all supported modes;
+/// only the row value and its four-byte encoding are scalar control work.
+pub(crate) fn simd_linear_gradient_generate(mode: &str) -> Result<DynamicImage, PilError> {
+    let channels = match mode {
+        "1" | "L" | "P" => 1,
+        "I" | "F" => 4,
+        _ => return Err(simd_unsupported("LinearGradient")),
+    };
+    let row_bytes = 256usize
+        .checked_mul(channels)
+        .ok_or_else(|| PilError::ValueError("SIMD LinearGradient row length overflow".into()))?;
+    let output_len = row_bytes
+        .checked_mul(256)
+        .ok_or_else(|| PilError::ValueError("SIMD LinearGradient output length overflow".into()))?;
+    let mut output = vec![0u8; output_len];
+    let mut vector_blocks = 0u64;
+    let mut scalar_tail = 0u64;
+
+    for (y, row) in output.chunks_exact_mut(row_bytes).enumerate() {
+        let block = match mode {
+            "I" => {
+                let bytes = (y as i32).to_le_bytes();
+                u8x16::new([
+                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[0], bytes[1], bytes[2], bytes[3],
+                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[0], bytes[1], bytes[2], bytes[3],
+                ])
+            }
+            "F" => {
+                let bytes = (y as f32).to_le_bytes();
+                u8x16::new([
+                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[0], bytes[1], bytes[2], bytes[3],
+                    bytes[0], bytes[1], bytes[2], bytes[3], bytes[0], bytes[1], bytes[2], bytes[3],
+                ])
+            }
+            "1" if y != 0 => u8x16::splat(0xff),
+            _ => u8x16::splat(y as u8),
+        };
+        let block = block.to_array();
+        let vector_len = row.len() / 16 * 16;
+        for chunk in row[..vector_len].chunks_exact_mut(16) {
+            chunk.copy_from_slice(&block);
+            vector_blocks = vector_blocks.saturating_add(1);
+        }
+        let tail = row.len() - vector_len;
+        if tail != 0 {
+            row[vector_len..].copy_from_slice(&block[..tail]);
+            vector_blocks = vector_blocks.saturating_add(1);
+            scalar_tail = scalar_tail.saturating_add(tail as u64);
+        }
+    }
+
+    crate::compute::record_pipeline_operation_path("vector");
+    crate::compute::record_pipeline_operation_vector_blocks(vector_blocks);
+    crate::compute::record_pipeline_operation_scalar_tail(scalar_tail);
+    crate::image_utils::raw_bytes_to_image(256, 256, output, channels)
+}
+
+/// Execute the retained deferred `LinearGradient` descriptor through the same
+/// native generator used by the eager public constructor.
+pub fn simd_linear_gradient(
+    _img: &DynamicImage,
+    op: &PipelineOp,
+    _mode: Option<&str>,
+) -> Result<DynamicImage, PilError> {
+    let PipelineOp::LinearGradient { mode } = op else {
+        return Err(PilError::ValueError("expected LinearGradient op".into()));
+    };
+    simd_linear_gradient_generate(color_mode_name(mode))
 }
 
 /// Generate Pillow's deterministic effect-noise stream with scalar RNG and

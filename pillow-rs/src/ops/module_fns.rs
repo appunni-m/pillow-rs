@@ -567,6 +567,9 @@ pub fn effect_spread(image: &Image, distance: u32) -> Result<Image, PilError> {
 /// [`PilError`] when raw image construction fails.
 pub fn linear_gradient(mode: &str) -> Result<Image, PilError> {
     let gradient_mode = parse_gradient_mode(mode)?;
+    if let Some(image) = crate::compute::try_simd_linear_gradient(mode)? {
+        return Ok(Image::from_generated_dynamic(image, mode));
+    }
     let (bytes_per_pixel, row_bytes) = match gradient_mode {
         GradientMode::Byte => (1, 256),
         GradientMode::One => (1, 256usize.div_ceil(8)),
