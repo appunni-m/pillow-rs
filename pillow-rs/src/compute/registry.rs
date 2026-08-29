@@ -1152,7 +1152,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
         gpu_entry!(
             |img: &DynamicImage,
              op: &PipelineOp,
-             _mode: Option<&str>|
+             source_mode: Option<&str>|
              -> Result<DynamicImage, PilError> {
                 if let PipelineOp::Convert {
                     mode: cm,
@@ -1160,7 +1160,7 @@ fn register_all(m: &mut HashMap<&'static str, OpEntry>) -> Result<(), PilError> 
                     dither: _,
                 } = op
                 {
-                    op_convert(img, cm)
+                    op_convert(img, cm, source_mode)
                 } else {
                     Err(PilError::ValueError("expected Convert op".into()))
                 }
