@@ -796,39 +796,83 @@ def _metadata(value: Any, name: str) -> Any:
         return None
 
 
+def _is_public_image(value: Any) -> bool:
+    """Return whether a value exposes the public image record interface."""
+
+    return (
+        value is not None
+        and callable(getattr(value, "tobytes", None))
+        and hasattr(value, "mode")
+        and hasattr(value, "size")
+    )
+
+
+def _serialize_image_record(
+    value: Any,
+    *,
+    side: str,
+    surface: str,
+    operation: str,
+) -> dict[str, Any] | None:
+    """Serialize one public image, including strict backend materialization."""
+
+    if value is None:
+        # Pillow's nullable image results (for example
+        # `ImageOps.exif_transpose` with `in_place=True`) serialize as
+        # null; the comparison policy still applies to non-null values.
+        return None
+    if side == "target" and STRICT_TARGET_BACKEND:
+        value = lock_target_image_pipeline(value)
+    try:
+        raw = bytes(value.tobytes())
+    except Exception:
+        # A strict backend audit must preserve an explicit capability
+        # failure as a public observation error.  Replacing the failed
+        # materialization with empty bytes turns an unsupported SIMD
+        # operation into a misleading image-byte mismatch and makes the
+        # strict receipt impossible to classify.
+        if side == "target" and STRICT_TARGET_BACKEND:
+            raise
+        raw = b""
+    return {
+        "kind": "image",
+        "mode": str(getattr(value, "mode", "")),
+        "size": json_safe(getattr(value, "size", None)),
+        "format": _metadata(value, "format"),
+        "info": _metadata(value, "info"),
+        "palette": _metadata(value, "palette"),
+        "bytes": base64.b64encode(raw).decode("ascii"),
+    }
+
+
 def serialize_value(value: Any, shape: str, *, side: str, surface: str, operation: str) -> Any:
     """Serialize the declared public result shape, never an implementation repr."""
 
     if shape == "none":
         return None
     if shape == "image":
-        if value is None:
-            # Pillow's nullable image results (for example
-            # `ImageOps.exif_transpose` with `in_place=True`) serialize as
-            # null; the comparison policy still applies to non-null values.
-            return None
-        if side == "target" and STRICT_TARGET_BACKEND:
-            value = lock_target_image_pipeline(value)
-        try:
-            raw = bytes(value.tobytes())
-        except Exception:
-            # A strict backend audit must preserve an explicit capability
-            # failure as a public observation error.  Replacing the failed
-            # materialization with empty bytes turns an unsupported SIMD
-            # operation into a misleading image-byte mismatch and makes the
-            # strict receipt impossible to classify.
-            if side == "target" and STRICT_TARGET_BACKEND:
-                raise
-            raw = b""
-        return {
-            "kind": "image",
-            "mode": str(getattr(value, "mode", "")),
-            "size": json_safe(getattr(value, "size", None)),
-            "format": _metadata(value, "format"),
-            "info": _metadata(value, "info"),
-            "palette": _metadata(value, "palette"),
-            "bytes": base64.b64encode(raw).decode("ascii"),
-        }
+        if isinstance(value, (list, tuple)) and (
+            not value or all(_is_public_image(item) for item in value)
+        ):
+            # Image.split and Image.get_child_images return public sequences
+            # of images.  Serialize each member independently; the sequence
+            # itself has no tobytes() method and must never be materialized as
+            # one image or forced through the strict backend lock.
+            return [
+                _serialize_image_record(
+                    item,
+                    side=side,
+                    surface=surface,
+                    operation=operation,
+                )
+                for item in value
+            ]
+        return _serialize_image_record(
+            value,
+            side=side,
+            surface=surface,
+            operation=operation,
+        )
     if shape == "mask":
         try:
             raw = bytes(value)
@@ -892,7 +936,17 @@ def serialize_value(value: Any, shape: str, *, side: str, surface: str, operatio
         if isinstance(value, (str, bytes, bytearray)):
             return json_safe(value)
         try:
-            return [json_safe(item) for item in value]
+            return [
+                _serialize_image_record(
+                    item,
+                    side=side,
+                    surface=surface,
+                    operation=operation,
+                )
+                if _is_public_image(item)
+                else json_safe(item)
+                for item in value
+            ]
         except TypeError:
             return json_safe(value)
     if shape in {"mapping", "record"}:
