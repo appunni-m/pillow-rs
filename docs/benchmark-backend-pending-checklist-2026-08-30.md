@@ -1,7 +1,12 @@
-# Active benchmark/backend checklist
+# Exhaustive benchmark/backend row register
 
-This is the short, current checklist for the exhaustive benchmark goal. The
-parity gate is green; only the guarded performance comparison remains open.
+Use the focused execution queue in
+[`benchmark-backend-pending-now-2026-08-31.md`](benchmark-backend-pending-now-2026-08-31.md)
+for the current work order. This file retains the exact row inventory and
+receipts for auditability.
+
+The parity gate is green; only the guarded performance comparison remains
+open. Use the focused checklist linked above for the execution order.
 
 ## Current state
 
