@@ -830,6 +830,54 @@ pub fn op_composite_module(
 
 // ── Eval ──
 
+/// Apply a byte LUT directly in the image's native storage layout.
+///
+/// The generic Eval implementation widens multi-band images to RGBA before
+/// applying the table.  That preserves mode semantics, but a fused point
+/// chain already carries one table per native band, so widening creates an
+/// avoidable second full-frame buffer and conversion.  Keep this fast path
+/// limited to the four native byte layouts and exact table lengths; all typed,
+/// palette, and malformed descriptors retain the established implementation.
+fn eval_native_byte_lut(img: &DynamicImage, lut: &[u8]) -> Option<DynamicImage> {
+    match img {
+        DynamicImage::ImageLuma8(gray) if lut.len() == 256 => {
+            let mut output = gray.clone();
+            for value in output.as_mut() {
+                *value = lut[usize::from(*value)];
+            }
+            Some(DynamicImage::ImageLuma8(output))
+        }
+        DynamicImage::ImageLumaA8(la) if lut.len() == 512 => {
+            let mut output = la.clone();
+            for pixel in output.as_mut().chunks_exact_mut(2) {
+                pixel[0] = lut[usize::from(pixel[0])];
+                pixel[1] = lut[256 + usize::from(pixel[1])];
+            }
+            Some(DynamicImage::ImageLumaA8(output))
+        }
+        DynamicImage::ImageRgb8(rgb) if lut.len() == 768 => {
+            let mut output = rgb.clone();
+            for pixel in output.as_mut().chunks_exact_mut(3) {
+                pixel[0] = lut[usize::from(pixel[0])];
+                pixel[1] = lut[256 + usize::from(pixel[1])];
+                pixel[2] = lut[512 + usize::from(pixel[2])];
+            }
+            Some(DynamicImage::ImageRgb8(output))
+        }
+        DynamicImage::ImageRgba8(rgba) if lut.len() == 1024 => {
+            let mut output = rgba.clone();
+            for pixel in output.as_mut().chunks_exact_mut(4) {
+                pixel[0] = lut[usize::from(pixel[0])];
+                pixel[1] = lut[256 + usize::from(pixel[1])];
+                pixel[2] = lut[512 + usize::from(pixel[2])];
+                pixel[3] = lut[768 + usize::from(pixel[3])];
+            }
+            Some(DynamicImage::ImageRgba8(output))
+        }
+        _ => None,
+    }
+}
+
 pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError> {
     let n_bands = match img.color() {
         crate::raster::ColorType::L8 | crate::raster::ColorType::L16 => 1,
@@ -842,6 +890,9 @@ pub fn op_eval(img: &DynamicImage, lut: &[u8]) -> Result<DynamicImage, PilError>
     // malformed Eval descriptor is outside the supported public input
     // boundary, so the executor does not duplicate that validation.
     let band_luts: Vec<&[u8]> = (0..n_bands).map(|b| &lut[b * 256..(b + 1) * 256]).collect();
+    if let Some(output) = eval_native_byte_lut(img, lut) {
+        return Ok(output);
+    }
     // For single-channel images (mode "1", "L", "P"), operate on Luma8 directly
     // to avoid precision loss through RGBA round-trip.
     if n_bands == 1 {
