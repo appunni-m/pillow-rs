@@ -18,6 +18,8 @@ use crate::ops::pil_resize::{FilterCoeffs, precompute_coeffs};
 use crate::pipeline::{
     ColorMode, PipelineOp, PixelMode, ResampleFilter, TransformMethod, TransposeMethod,
 };
+#[cfg(target_endian = "little")]
+use crate::raster::RgbImage;
 use crate::raster::{DynamicImage, GenericImageView, ImageBuffer, Luma, RgbaImage};
 use std::collections::HashMap;
 use std::num::NonZeroU64;
@@ -408,6 +410,44 @@ impl BufferPool {
         Ok(())
     }
 
+    #[cfg(target_endian = "little")]
+    fn upload_rgb(&self, queue: &wgpu::Queue, rgb: &RgbImage) -> Result<(), PilError> {
+        let (w, h) = rgb.dimensions();
+        let pixel_count = CheckedDims::new(w, h, 1)?.total_pixels();
+        if pixel_count > self.capacity as usize {
+            return Err(PilError::ValueError(format!(
+                "GPU buffer capacity {} < image size {}",
+                self.capacity, pixel_count
+            )));
+        }
+        let byte_count = CheckedDims::new(w, h, 4)?.total_bytes();
+        let byte_count = u64::try_from(byte_count)
+            .map_err(|_| PilError::InternalError("GPU RGB upload size overflow".into()))?;
+        let Some(size) = NonZeroU64::new(byte_count) else {
+            return Ok(());
+        };
+        let mut upload = queue
+            .write_buffer_with(&self.buf_a, 0, size)
+            .ok_or_else(|| PilError::InternalError("GPU RGB staging allocation failed".into()))?;
+        expand_rgb_into_rgba(rgb.as_raw(), &mut upload)?;
+        drop(upload);
+        Ok(())
+    }
+
+    fn upload_standard_image(
+        &self,
+        queue: &wgpu::Queue,
+        image: &DynamicImage,
+    ) -> Result<(), PilError> {
+        #[cfg(target_endian = "little")]
+        if let DynamicImage::ImageRgb8(rgb) = image {
+            return self.upload_rgb(queue, rgb);
+        }
+
+        let rgba = image.to_rgba8();
+        self.upload_rgba(queue, &rgba)
+    }
+
     /// Upload an `I;16*` image as one zero-extended sample per packed storage
     /// word. The admitted GPU operations for this representation only move
     /// complete words, so no shader is allowed to interpret the sample as
@@ -482,6 +522,31 @@ fn gpu_working_set_bytes(capacity: u32) -> u64 {
         .saturating_add(2 * std::mem::size_of::<u32>() as u64)
         .saturating_add(256 * std::mem::size_of::<u32>() as u64)
         .saturating_add(GPU_HISTOGRAM_BYTES as u64)
+}
+
+#[cfg(target_endian = "little")]
+fn expand_rgb_into_rgba(rgb: &[u8], rgba: &mut [u8]) -> Result<(), PilError> {
+    if !rgb.len().is_multiple_of(3) {
+        return Err(PilError::InternalError(
+            "GPU RGB source has a partial pixel".into(),
+        ));
+    }
+    let expected = rgb
+        .len()
+        .checked_div(3)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .ok_or_else(|| PilError::InternalError("GPU RGB upload size overflow".into()))?;
+    if rgba.len() != expected {
+        return Err(PilError::InternalError(format!(
+            "GPU RGB staging length {} does not match expected {expected}",
+            rgba.len()
+        )));
+    }
+
+    for (source, target) in rgb.chunks_exact(3).zip(rgba.chunks_exact_mut(4)) {
+        target.copy_from_slice(&[source[0], source[1], source[2], u8::MAX]);
+    }
+    Ok(())
 }
 
 /// Pack an RGBA image into the storage representation used by the shaders.
@@ -7053,8 +7118,7 @@ impl GpuPool {
             };
             buffers.upload_luma16_numeric(&gpu.queue, image)?;
         } else {
-            let rgba = img.to_rgba8();
-            buffers.upload_rgba(&gpu.queue, &rgba)?;
+            buffers.upload_standard_image(&gpu.queue, img)?;
         }
         gpu_log!("[GPU] step=upload done native_luma16={native_luma16}");
         gpu_log!("[GPU] step=execute_batch_impl start");
@@ -7162,5 +7226,42 @@ impl GpuPool {
         } else {
             Ok(crate::image::preserve_mode(img, result))
         }
+    }
+}
+
+#[cfg(all(test, target_endian = "little"))]
+mod tests {
+    use super::expand_rgb_into_rgba;
+    use crate::raster::{DynamicImage, RgbImage};
+
+    #[test]
+    fn rgb_staging_expansion_matches_dynamic_image_conversion() {
+        let cases = [
+            (0, 0, Vec::new()),
+            (1, 1, vec![0, 127, 255]),
+            (2, 1, vec![0, 0, 0, 255, 255, 255]),
+            (
+                3,
+                2,
+                vec![
+                    1, 2, 3, 4, 5, 6, 7, 8, 9, 240, 241, 242, 253, 254, 255, 0, 0, 0,
+                ],
+            ),
+        ];
+
+        for (width, height, source) in cases {
+            let image = RgbImage::from_raw(width, height, source.clone()).unwrap();
+            let expected = DynamicImage::ImageRgb8(image).to_rgba8().into_raw();
+            let mut actual = vec![0; expected.len()];
+            expand_rgb_into_rgba(&source, &mut actual).unwrap();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn rgb_staging_expansion_rejects_invalid_lengths() {
+        assert!(expand_rgb_into_rgba(&[1, 2], &mut [0; 4]).is_err());
+        assert!(expand_rgb_into_rgba(&[1, 2, 3], &mut [0; 3]).is_err());
+        assert!(expand_rgb_into_rgba(&[1, 2, 3], &mut [0; 8]).is_err());
     }
 }
