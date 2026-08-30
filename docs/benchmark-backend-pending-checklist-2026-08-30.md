@@ -13,9 +13,8 @@ work.
 - [ ] **Recompute the budget after each accepted optimization.** Keep the
   latest benchmark, comparison, and hash in this checklist so the count is
   reproducible and historical timing snapshots do not become the work list.
-- [ ] **Deliver the committed evidence.** Push the source and documentation
-  commits after the final review; leave unrelated generated/user files
-  unstaged.
+- [x] **Deliver the committed evidence.** Source and documentation commits are
+  pushed to `origin/main`; unrelated generated/user files remain unstaged.
 
 ## Closed in this pass
 
