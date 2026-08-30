@@ -69,11 +69,29 @@ const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 /// Poll with a short bounded backoff so the library remains responsive while
 /// retaining a finite failure path for a wedged native device or driver.
 const GPU_READBACK_TIMEOUT: Duration = Duration::from_secs(30);
+/// Small transfers commonly complete before the native scheduler's 1 ms
+/// timer granularity. Give only those reads a bounded low-latency poll window;
+/// large transfers retain the conservative backoff used for sustained work.
+const GPU_FAST_POLL_MAX_READBACK_BYTES: u64 = 64 * 1024;
+const GPU_POLL_FAST_BACKOFF: Duration = Duration::from_micros(50);
+const GPU_POLL_FAST_RETRIES: usize = 8;
 const GPU_POLL_BACKOFF: Duration = Duration::from_millis(1);
 
-fn readback_poll_backoff(now: Instant, deadline: Instant) -> Option<Duration> {
+fn readback_poll_backoff(
+    fast_polling: bool,
+    empty_polls: usize,
+    now: Instant,
+    deadline: Instant,
+) -> Option<Duration> {
     let remaining = deadline.saturating_duration_since(now);
-    (!remaining.is_zero()).then(|| GPU_POLL_BACKOFF.min(remaining))
+    (!remaining.is_zero()).then(|| {
+        let backoff = if fast_polling && empty_polls <= GPU_POLL_FAST_RETRIES {
+            GPU_POLL_FAST_BACKOFF
+        } else {
+            GPU_POLL_BACKOFF
+        };
+        backoff.min(remaining)
+    })
 }
 
 #[derive(Clone, Copy)]
@@ -3119,6 +3137,8 @@ impl GpuInner {
             let _ = tx.send(r);
         });
         let deadline = Instant::now() + GPU_READBACK_TIMEOUT;
+        let fast_polling = size <= GPU_FAST_POLL_MAX_READBACK_BYTES;
+        let mut empty_polls = 0usize;
         loop {
             self.poll_device("GPU readback")?;
             match rx.try_recv() {
@@ -3134,7 +3154,10 @@ impl GpuInner {
                     ));
                 }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {
-                    if let Some(backoff) = readback_poll_backoff(Instant::now(), deadline) {
+                    empty_polls = empty_polls.saturating_add(1);
+                    if let Some(backoff) =
+                        readback_poll_backoff(fast_polling, empty_polls, Instant::now(), deadline)
+                    {
                         std::thread::sleep(backoff);
                         continue;
                     }
@@ -7258,7 +7281,10 @@ impl GpuPool {
 mod tests {
     #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
-    use super::{GPU_POLL_BACKOFF, gpu_byte_point_mode_allowed, readback_poll_backoff};
+    use super::{
+        GPU_POLL_BACKOFF, GPU_POLL_FAST_BACKOFF, GPU_POLL_FAST_RETRIES,
+        gpu_byte_point_mode_allowed, readback_poll_backoff,
+    };
     use crate::raster::{DynamicImage, GrayAlphaImage, GrayImage, RgbImage, RgbaImage};
     use std::time::{Duration, Instant};
 
@@ -7299,18 +7325,31 @@ mod tests {
     fn readback_poll_backoff_is_bounded_by_interval_and_deadline() {
         let now = Instant::now();
         assert_eq!(
-            readback_poll_backoff(now, now + Duration::from_millis(2)),
+            readback_poll_backoff(true, 1, now, now + Duration::from_millis(2)),
+            Some(GPU_POLL_FAST_BACKOFF)
+        );
+        assert_eq!(
+            readback_poll_backoff(
+                true,
+                GPU_POLL_FAST_RETRIES + 1,
+                now,
+                now + Duration::from_millis(2)
+            ),
             Some(GPU_POLL_BACKOFF)
         );
 
         let final_backoff = Duration::from_micros(250);
         assert_eq!(
-            readback_poll_backoff(now, now + final_backoff),
+            readback_poll_backoff(false, 1, now, now + Duration::from_millis(2)),
+            Some(GPU_POLL_BACKOFF)
+        );
+        assert_eq!(
+            readback_poll_backoff(false, GPU_POLL_FAST_RETRIES + 1, now, now + final_backoff),
             Some(final_backoff)
         );
-        assert_eq!(readback_poll_backoff(now, now), None);
+        assert_eq!(readback_poll_backoff(true, 1, now, now), None);
         assert_eq!(
-            readback_poll_backoff(now + Duration::from_nanos(1), now),
+            readback_poll_backoff(true, 1, now + Duration::from_nanos(1), now),
             None
         );
     }
