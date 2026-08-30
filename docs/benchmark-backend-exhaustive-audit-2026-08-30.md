@@ -2585,11 +2585,11 @@ results preserve their native representation directly.  This is explicit
 parity control, not a public operation-level skip or capability result.
 The normal GPU lane still exposes host-controlled samples in its receipt
 telemetry.  In the current all-backends artifact, 14,584 receipts are actual
-GPU and 467 are CPU semantic-control receipts; the fallback taxonomy contains
-244 exact host-control, 127 logical-mode, 57 unsafe-primary-dimension, one
-unsafe-incomplete-dimension, two bounded-transform, one registry-transform,
+GPU and 467 are CPU semantic-control receipts; the routing taxonomy contains
+244 exact host-control, 127 logical-mode control, 57 unsafe-primary-dimension,
+one unsafe-incomplete-dimension, two bounded-transform, one registry-transform,
 and 35 contrast-midpoint receipts.  These are routing facts for performance
-accounting, not claims that Pillow operations are unsupported or parity-exempt.
+accounting, not operation exclusions or parity exemptions.
 The strict lane is the parity authority and has no failed operation: every
 public case receives an exact value/error result.
 
@@ -2598,8 +2598,9 @@ public case receives an exact value/error result.
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release run
-is `final-standard-after-latest.json` (744 selected/measured, zero
-not-run), so the following figures supersede the earlier row-kernel snapshot:
+is `final-standard-after-budget-probes-repeat.json` (744 selected/measured,
+zero not-run), so the following figures supersede the earlier row-kernel
+snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
   the benchmark report persists every per-workload median, p95, actual backend,
@@ -2607,8 +2608,8 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   snapshot and are not reused as current measurements.
 - Native GPU geometry has removed the previous standard Rotate/Thumbnail
   failures.  The remaining standard GPU semantic-control rows are Fit and
-  typed F/I resize chains; they are parity-correct and intentionally excluded
-  from native-GPU speed claims until their typed/fractional kernels are exact.
+  typed F/I resize chains; they are parity-correct and remain out of native-GPU
+  speed claims until their typed/fractional kernels are exact.
 - The large-candidate GPU speed gate remains open: transfer/readback and
   dispatch overhead still dominate the current 1024² warm/cold profiles.  This
   is a performance finding, not a parity failure.
@@ -2622,10 +2623,12 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
   as the repository root; the latest post-probe comparison is recorded in
-  `pipeline-budget-check-after-latest.json` and reports **139** guarded
-  violations (18 GPU, 52 CPU, 40 SIMD, 29 Pillow) without weakening the gate.
-  Earlier same-day snapshots reported 577 and 312, demonstrating host timing
-  noise; this remains open performance evidence rather than a closure claim.
+  `pipeline-budget-check-after-budget-probes-repeat.json` and reports **70**
+  guarded violations (7 GPU, 19 CPU, 20 SIMD, 24 Pillow) without weakening the
+  gate.  The immediately preceding same-source run reported 238 (4 GPU, 95
+  CPU, 55 SIMD, 84 Pillow); earlier same-day snapshots reported 577 and 312.
+  The spread is retained as host timing-variance evidence, and the speed gate
+  remains open rather than being closed on a favorable sample.
   These are performance regressions against the older benchmark lineage, not
   parity failures or public-operation exclusions.
 - The SIMD native-byte convolution kernels now group adjacent two- and
@@ -2684,23 +2687,51 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
 - The SIMD Reduce threshold is feature-gated for wasm builds.  `make
   build-wasm-core` and the committed all-backends run both pass; this fix is
   `3669db981`.
+- CPU fused point evaluation now applies complete byte LUTs directly in native
+  L/LA/RGB/RGBA storage instead of widening to RGBA and converting back.  The
+  paired `pipeline-chain.point-fusion.la-002` CPU median improved 27.09%
+  (0.591584 ms to 0.431458 ms), with six actual-CPU receipts and strict point
+  parity 6/6.  The integrated commit is `5f2647e87`.
+- SIMD Max/Min and Box/Gaussian neighborhood kernels now scan small native-byte
+  images for uniformity and return an exact native copy when every tuple is
+  constant.  Two independent paired repeats improved the selected MaxFilter
+  and GaussianBlur targets by 83.94–97.32% at the backend boundary; every run
+  was actual SIMD, focused strict parity passed 6/6, and full strict parity
+  passed 10,952/10,952.  The integrated commit is `e43298e5b`.
+- GPU readbacks up to 64 KiB now use eight bounded 50 µs polls before the
+  existing 1 ms backoff.  Two paired actual-Metal repeats improved the selected
+  crop targets by 60–86% with unchanged timeout/device-loss semantics; strict
+  GPU parity passed 2/2.  The integrated commit is `a9aee75eb`.
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-latest.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-budget-probes-repeat.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `300c4dc3597b7034317a7d3f68e5335986083df1ec98b242f5d30a4d9df621fe`).
+  `fbb44f4b5418f7485f733ce250abacd3dac660ce67a583895ded45c8ec4f3ffc`).
+- Benchmark parity sidecar:
+  `build/migration-parity/final-standard-after-budget-probes-repeat-parity.json`,
+  202/202 (SHA-256
+  `8d377ca7d332030fa70b450bdbb1711a1d3f1873a60cebe2f56a2e44a62c7e6b`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-latest.json`.
+  `build/migration-parity/pipeline-performance-report-after-budget-probes-repeat.json`
+  (SHA-256
+  `e10b0d56e847f7b55149569861767fd8e8da4ee7680ca95bbbec23733634b8ae`).
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-latest.json`
-  and `build/migration-parity/pipeline-roadmap-status-after-latest.json`.
-- Current guarded budget comparison: `build/migration-parity/pipeline-budget-check-after-latest.json`,
-  139 violations (SHA-256
-  `21bc30a5c6cecfc28f1e6b6e40f7410dd40a4685e02111a4acd2f3bbaefcbec0`).
-- Full live-oracle parity: `build/migration-parity/all-backends-after-latest.json`,
-  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 (SHA-256
-  `138b37213c107a4d8149ae13a3f58dc5c0f0064a08c28ce4f650f391cde7fe94`).
+  `build/migration-parity/pipeline-benchmark-coverage-after-budget-probes-repeat.json`
+  (SHA-256
+  `b466f4fe4387f1fc33e996281fb3947af26c338403e315fc68f89facbceec7f2`) and
+  `build/migration-parity/pipeline-roadmap-status-after-budget-probes-repeat.json`
+  (SHA-256
+  `b47be66c44f915171d26c6dd18ffecc844c2f2a61086d054c2ea5cd31e4afd59`).
+- Current guarded budget comparison:
+  `build/migration-parity/pipeline-budget-check-after-budget-probes-repeat.json`,
+  70 violations (19 CPU, 20 SIMD, 24 Pillow, 7 GPU; SHA-256
+  `21b5d0f80049c7ed8154646d37c009de44eb7d4ca05375b54ec70a61866f6f2b`).
+- Full live-oracle parity:
+  `build/migration-parity/all-backends-after-budget-probes.json`,
+  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 and GPU smoke
+  passed 1/1 (SHA-256
+  `f3588a552bdffadb1f69b910873ecf9c565c3dfd3911a8fd2a7d4ade4832c6bd`).
 - Strict SIMD parity: `/tmp/simd-equalize-identity-full-strict.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `d7a0b2529a338f3ca67fae5b8f2811705073ad3f76f884600282f877ffd4e6f1`).
@@ -2710,8 +2741,10 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
 - Normal GPU parity is included in the current all-backends run; its public
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
-- Combined all-backends gate: `build/migration-parity/all-backends-after-latest.json`,
-  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952.
+- Combined all-backends gate:
+  `build/migration-parity/all-backends-after-budget-probes.json`,
+  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 and GPU smoke
+  passed 1/1.
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission
   constrained) and emits the repository's existing warning set but no errors.
