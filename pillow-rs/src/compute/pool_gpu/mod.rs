@@ -66,9 +66,15 @@ const MAX_GPU_SCALE_FIXED_POINT: f64 = u32::MAX as f64;
 // carries the full f64 contract without rounding differences.
 
 /// `Maintain::Wait` can wait forever when a native device or driver wedges.
-/// Poll in short intervals so the library has a bounded failure path.
+/// Poll with a short bounded backoff so the library remains responsive while
+/// retaining a finite failure path for a wedged native device or driver.
 const GPU_READBACK_TIMEOUT: Duration = Duration::from_secs(30);
-const GPU_POLL_INTERVAL: Duration = Duration::from_millis(5);
+const GPU_POLL_BACKOFF: Duration = Duration::from_millis(1);
+
+fn readback_poll_backoff(now: Instant, deadline: Instant) -> Option<Duration> {
+    let remaining = deadline.saturating_duration_since(now);
+    (!remaining.is_zero()).then(|| GPU_POLL_BACKOFF.min(remaining))
+}
 
 #[derive(Clone, Copy)]
 struct BufferRange {
@@ -3115,20 +3121,23 @@ impl GpuInner {
         let deadline = Instant::now() + GPU_READBACK_TIMEOUT;
         loop {
             self.poll_device("GPU readback")?;
-            match rx.recv_timeout(GPU_POLL_INTERVAL) {
+            match rx.try_recv() {
                 Ok(Ok(())) => break,
                 Ok(Err(error)) => {
                     return Err(PilError::ValueError(format!(
                         "GPU readback map_async failed: {error:?}"
                     )));
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
                     return Err(PilError::ValueError(
                         "GPU readback channel closed before completion".into(),
                     ));
                 }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) if Instant::now() < deadline => {}
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                Err(std::sync::mpsc::TryRecvError::Empty) => {
+                    if let Some(backoff) = readback_poll_backoff(Instant::now(), deadline) {
+                        std::thread::sleep(backoff);
+                        continue;
+                    }
                     let detail = self
                         .failure_detail()
                         .unwrap_or_else(|| "device did not complete the submission".into());
@@ -7229,11 +7238,16 @@ impl GpuPool {
     }
 }
 
-#[cfg(all(test, target_endian = "little"))]
+#[cfg(test)]
 mod tests {
+    #[cfg(target_endian = "little")]
     use super::expand_rgb_into_rgba;
+    use super::{GPU_POLL_BACKOFF, readback_poll_backoff};
+    #[cfg(target_endian = "little")]
     use crate::raster::{DynamicImage, RgbImage};
+    use std::time::{Duration, Instant};
 
+    #[cfg(target_endian = "little")]
     #[test]
     fn rgb_staging_expansion_matches_dynamic_image_conversion() {
         let cases = [
@@ -7258,10 +7272,31 @@ mod tests {
         }
     }
 
+    #[cfg(target_endian = "little")]
     #[test]
     fn rgb_staging_expansion_rejects_invalid_lengths() {
         assert!(expand_rgb_into_rgba(&[1, 2], &mut [0; 4]).is_err());
         assert!(expand_rgb_into_rgba(&[1, 2, 3], &mut [0; 3]).is_err());
         assert!(expand_rgb_into_rgba(&[1, 2, 3], &mut [0; 8]).is_err());
+    }
+
+    #[test]
+    fn readback_poll_backoff_is_bounded_by_interval_and_deadline() {
+        let now = Instant::now();
+        assert_eq!(
+            readback_poll_backoff(now, now + Duration::from_millis(2)),
+            Some(GPU_POLL_BACKOFF)
+        );
+
+        let final_backoff = Duration::from_micros(250);
+        assert_eq!(
+            readback_poll_backoff(now, now + final_backoff),
+            Some(final_backoff)
+        );
+        assert_eq!(readback_poll_backoff(now, now), None);
+        assert_eq!(
+            readback_poll_backoff(now + Duration::from_nanos(1), now),
+            None
+        );
     }
 }
