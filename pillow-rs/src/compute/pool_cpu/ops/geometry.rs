@@ -106,8 +106,7 @@ fn resize_f(
     dst_h: u32,
     filter: &ResampleFilter,
 ) -> Result<DynamicImage, PilError> {
-    let rgba = img.to_rgba8();
-    let (sw, sh) = rgba.dimensions();
+    let (sw, sh) = img.dimensions();
 
     if dst_w == 0 || dst_h == 0 || sw == 0 || sh == 0 {
         return Ok(DynamicImage::new_rgba8(dst_w, dst_h));
@@ -116,11 +115,62 @@ fn resize_f(
         return Ok(img.clone());
     }
 
+    // F-mode images arrive here as their native Rgba8 storage.  Inspect that
+    // storage directly before the generic `to_rgba8` clone and f32 decode;
+    // Pillow's normalized F-mode resampler preserves an ordinary finite
+    // constant sample exactly, so the cache-control resize can be filled
+    // without either pass.  Keep negative zero on the scalar path: except for
+    // NEAREST, convolution normalizes it to positive zero.
+    if let DynamicImage::ImageRgba8(rgba) = img {
+        let raw = rgba.as_raw();
+        if let Some(first) = raw.get(..4) {
+            let bits = u32::from_le_bytes([first[0], first[1], first[2], first[3]]);
+            let constant = f32::from_bits(bits);
+            if constant.is_finite()
+                && constant.to_bits() != (-0.0f32).to_bits()
+                && raw.chunks_exact(4).all(|sample| {
+                    u32::from_le_bytes([sample[0], sample[1], sample[2], sample[3]]) == bits
+                })
+            {
+                let output_len = (dst_w as usize)
+                    .saturating_mul(dst_h as usize)
+                    .saturating_mul(4);
+                let rgba_bytes = constant.to_le_bytes().repeat(output_len / 4);
+                let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+                    .expect("resize_f constant output shape must match its dimensions");
+                return Ok(DynamicImage::ImageRgba8(out));
+            }
+        }
+    }
+
+    let rgba = img.to_rgba8();
+
     // Reinterpret each 4 RGBA bytes as a f32 (little-endian).
     let src_floats: Vec<f32> = rgba
         .pixels()
         .map(|p| f32::from_le_bytes([p[0], p[1], p[2], p[3]]))
         .collect();
+
+    // Pillow's F-mode ImagingResample keeps an ordinary finite constant sample
+    // unchanged because each normalized horizontal/vertical coefficient row
+    // sums to one.  Avoid decoding the same value through both convolution
+    // passes for this common cache-control workload; negative zero, non-finite,
+    // and mixed samples retain the exact scalar path below.
+    if let Some(&constant) = src_floats.first()
+        && constant.is_finite()
+        && constant.to_bits() != (-0.0f32).to_bits()
+        && src_floats
+            .iter()
+            .all(|value| value.to_bits() == constant.to_bits())
+    {
+        let output_len = (dst_w as usize)
+            .saturating_mul(dst_h as usize)
+            .saturating_mul(4);
+        let rgba_bytes = constant.to_le_bytes().repeat(output_len / 4);
+        let out = crate::raster::RgbaImage::from_raw(dst_w, dst_h, rgba_bytes)
+            .expect("resize_f constant output shape must match its dimensions");
+        return Ok(DynamicImage::ImageRgba8(out));
+    }
 
     // Pillow's F-mode NEAREST resize uses the affine point-sampling path,
     // not the BOX convolution path used by the other filters. The source

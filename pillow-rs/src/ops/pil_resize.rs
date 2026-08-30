@@ -1639,6 +1639,29 @@ pub fn pil_resize(
         _ => 4usize,
     };
 
+    // Pillow's ImagingResample and ImagingScaleAffine both preserve an
+    // all-zero native byte image exactly: every weighted sample is zero and
+    // the destination has no edge or alpha work to perform.  The generic
+    // two-pass loops still build and walk both coefficient tables, which was
+    // the first CPU divergence in the small ImageOps.contain/cover rows.
+    // Keep this bounded to byte-backed layouts; typed F/I paths have their
+    // own representation-preserving fast paths below.
+    let native_byte_image = matches!(
+        img,
+        DynamicImage::ImageLuma8(_)
+            | DynamicImage::ImageLumaA8(_)
+            | DynamicImage::ImageRgb8(_)
+            | DynamicImage::ImageRgba8(_)
+    );
+    if native_byte_image && img.as_bytes().iter().all(|&value| value == 0) {
+        let output_len = (dw as usize)
+            .checked_mul(dh as usize)
+            .and_then(|pixels| pixels.checked_mul(channels))
+            .unwrap_or(0);
+        let result = raw_to_dynamic(&vec![0; output_len], dw, dh, channels);
+        return pil_preserve_mode(orig_img, result);
+    }
+
     // PIL's _resize C code uses ImagingTransform with AFFINE for NEAREST filter
     // (single-pixel sampling), NOT the two-pass pipeline. Box and all other filters
     // go through ImagingResample (two-pass convolution).
