@@ -12757,6 +12757,24 @@ pub fn simd_filter_5x5(
 
 const SIMD_RANK_FILTER_LANES: usize = 16;
 const SIMD_RANK_FILTER_MIN_VECTOR_PIXELS: usize = 1;
+const SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS: usize = 64 * 64;
+
+/// Detect a constant native-byte image before allocating neighborhood buffers.
+///
+/// Replicated-edge blur and extrema filters preserve a constant channel tuple
+/// exactly. Limit the scan to small images, where avoiding the kernel work is
+/// cheaper than adding a full read pass to large non-uniform frames.
+fn native_small_uniform_byte_image(img: &DynamicImage, channels: usize) -> bool {
+    let pixels = (img.width() as usize).saturating_mul(img.height() as usize);
+    if pixels == 0 || pixels > SIMD_UNIFORM_NEIGHBORHOOD_MAX_PIXELS {
+        return false;
+    }
+    let raw = img.as_bytes();
+    let mut pixel_chunks = raw.chunks_exact(channels);
+    pixel_chunks.next().is_some_and(|first_pixel| {
+        pixel_chunks.remainder().is_empty() && pixel_chunks.all(|pixel| pixel == first_pixel)
+    })
+}
 
 fn native_float_rank_supported_for_image(
     img: &DynamicImage,
@@ -13193,6 +13211,10 @@ fn simd_extreme_filter(
         return Err(PilError::InternalError(
             "SIMD rank-filter source buffer shape mismatch".into(),
         ));
+    }
+    if native_small_uniform_byte_image(img, channels) {
+        return native_copy_image_bytes(img, mode)?
+            .ok_or_else(|| simd_unsupported(if select_max { "MaxFilter" } else { "MinFilter" }));
     }
     let half = (size / 2) as usize;
     let mut horizontal = vec![0u8; expected_len];
@@ -14092,8 +14114,9 @@ fn simd_pil_box_blur(
     radius: f32,
     passes: u32,
     channels: usize,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
-    simd_pil_box_blur_xy(img, radius, radius, passes, channels)
+    simd_pil_box_blur_xy(img, radius, radius, passes, channels, mode)
 }
 
 fn simd_pil_box_blur_xy(
@@ -14102,6 +14125,7 @@ fn simd_pil_box_blur_xy(
     radius_y: f32,
     passes: u32,
     channels: usize,
+    mode: Option<&str>,
 ) -> Result<DynamicImage, PilError> {
     let dimensions = CheckedDims::new(img.width(), img.height(), channels as u8)?;
     if img.as_bytes().len() != dimensions.total_bytes()
@@ -14113,6 +14137,9 @@ fn simd_pil_box_blur_xy(
         || passes == 0
     {
         return Err(simd_unsupported("BoxBlur"));
+    }
+    if native_small_uniform_byte_image(img, channels) {
+        return native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"));
     }
     crate::compute::record_pipeline_operation_path("vector");
     let width = dimensions.width as usize;
@@ -19734,7 +19761,7 @@ pub fn simd_box_blur(
         PipelineOp::BoxBlur { radius } if *radius == 0 => {
             native_copy_image_bytes(img, mode)?.ok_or_else(|| simd_unsupported("BoxBlur"))
         }
-        PipelineOp::BoxBlur { radius } => simd_pil_box_blur(img, *radius as f32, 1, channels),
+        PipelineOp::BoxBlur { radius } => simd_pil_box_blur(img, *radius as f32, 1, channels, mode),
         PipelineOp::BoxBlurXY {
             radius_x,
             radius_y,
@@ -19746,7 +19773,7 @@ pub fn simd_box_blur(
             radius_x,
             radius_y,
             passes,
-        } => simd_pil_box_blur_xy(img, *radius_x, *radius_y, *passes, channels),
+        } => simd_pil_box_blur_xy(img, *radius_x, *radius_y, *passes, channels, mode),
         _ => Err(PilError::ValueError("expected BoxBlur op".into())),
     }
 }
@@ -19773,7 +19800,7 @@ pub fn simd_gaussian_blur(
         if blur_radius <= 0.0 {
             return Err(simd_unsupported("GaussianBlur"));
         }
-        return simd_pil_box_blur(img, blur_radius, 3, channels);
+        return simd_pil_box_blur(img, blur_radius, 3, channels, mode);
     }
     Err(PilError::ValueError("expected GaussianBlur op".into()))
 }
