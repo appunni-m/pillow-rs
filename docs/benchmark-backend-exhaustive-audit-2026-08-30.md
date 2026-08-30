@@ -2524,8 +2524,9 @@ workstream.
   CPU, SIMD, and GPU, with workload correctness **744 `pass` / 0 failures**.
   The strict GPU parity lane independently executes **10,952/10,952** cases
   with zero failed, not-run, or infrastructure-error records.  The strict
-  result is from `/private/tmp/gpu-strict-native-geometry-final.json` after the
-  native affine-rotation and Thumbnail planner fixes.
+  result is from `/private/tmp/gpu-strict-after-readback.json` after the native
+  affine-rotation, Thumbnail planner, and readback-polling fixes (SHA-256
+  `ac332a1390f7752098fbd5c85789207cb93f2da0ace53c45990b42addf6b042c`).
 - The four standard subject completion sets are now identical: each contains
   all 744 workload IDs with terminal `completed` status.  Native-receipt
   applicability is reported separately: the current artifact records 501
@@ -2597,7 +2598,7 @@ public case receives an exact value/error result.
 Using the same equal-ID, actual-backend receipt predicates as the baseline
 gates, the final standard artifact proves complete correctness coverage but
 still does not prove the requested speed contract.  The current release run
-is `final-standard-after-convolution-load.json` (744 selected/measured, zero
+is `final-standard-after-gpu-readback.json` (744 selected/measured, zero
 not-run), so the following figures supersede the earlier row-kernel snapshot:
 
 - The equal actual-receipt cohorts must be recomputed from the new artifact;
@@ -2620,13 +2621,13 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   is 0 passed, 0 failed, and 0 not-proven; that is absence of a configured
   budget, not evidence that the speed gates passed.  The maintained budget
   target now requires an explicit baseline instead of treating an empty path
-  as the repository root; the fresh post-optimization comparison is recorded
-  in `pipeline-budget-check-after-convolution-load.json` and reports **577**
-  guarded violations without weakening the gate.  Same-day reruns are noisy
-  (an intermediate run reported 303), so this remains open performance
-  evidence rather than a closure claim.  These are performance regressions
-  against the older benchmark lineage, not parity failures or unsupported
-  public operations.
+  as the repository root; the latest post-readback comparison is recorded in
+  `pipeline-budget-check-after-gpu-readback.json` and reports **247** guarded
+  violations (12 GPU, 93 CPU, 79 SIMD, 63 Pillow) without weakening the gate.
+  Earlier same-day snapshots reported 577 and 312, demonstrating host timing
+  noise; this remains open performance evidence rather than a closure claim.
+  These are performance regressions against the older benchmark lineage, not
+  parity failures or public-operation exclusions.
 - The SIMD native-byte convolution kernels now group adjacent two- and
   four-channel pixels into contiguous byte loads before the exact `f32x8`
   middle-first FMA sequence; the grouped 5×5 path streams those vectors
@@ -2649,30 +2650,44 @@ not-run), so the following figures supersede the earlier row-kernel snapshot:
   actual-GPU probe passed 1/1 and the helper tests passed 2/2.  The full
   post-integration all-backends receipt still must be regenerated before this
   optimization can be folded into the aggregate performance comparison.
+- The GPU readback loop now polls the device, checks the completion channel, and
+  uses a bounded 1 ms backoff instead of sleeping for 5 ms between polls.  On
+  actual Metal this reduced the RGB crop backend median by 66.51% (7.411000 to
+  2.481792 ms) and kept GaussianBlur+Invert within the paired no-regression
+  check; 300/300 receipts were actual GPU with no fallback.  The strict
+  Gaussian probe passed 1/1 and the focused pool tests passed 3/3.  This is a
+  readback scheduling improvement; it changes no pixels, dispatches, or
+  fallback semantics.
 
 ### 31.5 Reproducible final artifacts
 
-- Standard benchmark: `build/migration-parity/final-standard-after-convolution-load.json`,
+- Standard benchmark: `build/migration-parity/final-standard-after-gpu-readback.json`,
   744/744 workloads measured and parity-passing (SHA-256
-  `32dddfee698762325c2ab12b1c6cf1008dcf7ed933f64d74beae3ec6cc50c5bc`).
+  `c54198ca909a32e0e24ed7bc0229dbee6b8788f6527fd2bbd690ed2674a80a7b`).
 - Current performance report:
-  `build/migration-parity/pipeline-performance-report-after-convolution-load.json`.
+  `build/migration-parity/pipeline-performance-report-after-gpu-readback.json`.
 - Current benchmark coverage and roadmap receipts:
-  `build/migration-parity/pipeline-benchmark-coverage-after-convolution-load.json`
-  and `build/migration-parity/pipeline-roadmap-status-after-convolution-load.json`.
+  `build/migration-parity/pipeline-benchmark-coverage-after-gpu-readback.json`
+  and `build/migration-parity/pipeline-roadmap-status-after-gpu-readback.json`.
+- Current guarded budget comparison: `build/migration-parity/pipeline-budget-check-after-gpu-readback.json`,
+  247 violations (SHA-256
+  `ca7ddf0c4d48b0a0da6222e048d96344fc2e841fa5a963b9e57889b4d405fbd4`).
 - Full live-oracle parity: `build/migration-parity/all-backends-after-convolution-load.json`,
   CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 (SHA-256
   `ce7f2ddaae1b20518ecf4292eb40062faf4d0cb0662ffe3eac517ce88a077096`).
 - Strict SIMD parity: `/private/tmp/simd-strict-conv-direct.json`,
   10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
   (SHA-256 `a7bcb3590f0a94f0113f13cc37165beade030ab56395e8b5201a3ac65a1f5fc2`).
-- Strict GPU parity: `/private/tmp/gpu-strict-native-geometry-final.json`,
-  10,952/10,952 passed with zero failed/not-run/infrastructure-error cases.
+- Strict GPU parity: `/private/tmp/gpu-strict-after-readback.json`,
+  10,952/10,952 passed with zero failed/not-run/infrastructure-error cases
+  (SHA-256 `ac332a1390f7752098fbd5c85789207cb93f2da0ace53c45990b42addf6b042c`).
 - Normal GPU parity is included in the current all-backends run; its public
   result is 10,952/10,952 passed after promoting the exact geometry
   host-control path.
 - Combined all-backends gate: `build/migration-parity/all-backends-after-convolution-load.json`,
-  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952.
+  CPU/SIMD/GPU/Node/browser lanes all passed 10,952/10,952 before the
+  readback-only change; regenerate this receipt after the latest commit for
+  final delivery.
 - `make fmt` and `make migration-parity-fixtures-check` pass.  Clippy passes
   with `RUSTC_WRAPPER=` (the default local sccache wrapper is permission
   constrained) and emits the repository's existing warning set but no errors.
