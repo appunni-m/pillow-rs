@@ -12696,6 +12696,15 @@ pub fn simd_filter_3x3(
     let channels =
         native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter3x3"))?;
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
+    if native_small_uniform_convolution_identity(
+        img,
+        channels,
+        &normalized_kernel,
+        3,
+        *offset as f32 + 0.5,
+    ) {
+        return simd_filter_identity(img, mode, "Filter3x3");
+    }
     let mut output = img.as_bytes().to_vec();
     crate::compute::record_pipeline_operation_path("vector");
     native_filter_3x3_rows(
@@ -12737,6 +12746,15 @@ pub fn simd_filter_5x5(
     let channels =
         native_filter_byte_layout(img, mode).ok_or_else(|| simd_unsupported("Filter5x5"))?;
     let normalized_kernel = std::array::from_fn(|index| kernel[index] / *scale);
+    if native_small_uniform_convolution_identity(
+        img,
+        channels,
+        &normalized_kernel,
+        5,
+        *offset as f32 + 0.5,
+    ) {
+        return simd_filter_identity(img, mode, "Filter5x5");
+    }
     let mut output = img.as_bytes().to_vec();
     crate::compute::record_pipeline_operation_path("vector");
     native_filter_5x5_rows(
@@ -12774,6 +12792,63 @@ fn native_small_uniform_byte_image(img: &DynamicImage, channels: usize) -> bool 
     pixel_chunks.next().is_some_and(|first_pixel| {
         pixel_chunks.remainder().is_empty() && pixel_chunks.all(|pixel| pixel == first_pixel)
     })
+}
+
+/// Return whether a small constant byte image is unchanged by a convolution.
+///
+/// Filter.c leaves the border bytes untouched and evaluates every interior
+/// byte with the same kernel contraction order as the scalar reference. A
+/// constant image therefore needs only one exact interior evaluation per
+/// channel to prove that the complete output is an identity. Keep the
+/// bounded uniform scan shared with rank filters so this fast path cannot
+/// turn a large non-uniform frame into an extra full-image pass.
+fn native_small_uniform_convolution_identity(
+    img: &DynamicImage,
+    channels: usize,
+    kernel: &[f32],
+    row_width: usize,
+    rounding_bias: f32,
+) -> bool {
+    if row_width == 0
+        || kernel.len() != row_width.saturating_mul(row_width)
+        || !native_small_uniform_byte_image(img, channels)
+    {
+        return false;
+    }
+    let Some(first_pixel) = img.as_bytes().chunks_exact(channels).next() else {
+        return false;
+    };
+    if (img.width() as usize) < row_width || (img.height() as usize) < row_width {
+        return false;
+    }
+    let radius = row_width / 2;
+    for channel in 0..channels {
+        let sample = f32::from(first_pixel[channel]);
+        let mut total = rounding_bias;
+        for row in 0..row_width {
+            let row_start = row * row_width;
+            let middle = sample * kernel[row_start + radius];
+            let mut row_sum = middle;
+            for column in 0..radius {
+                row_sum = sample.mul_add(kernel[row_start + column], row_sum);
+            }
+            for column in radius + 1..row_width {
+                row_sum = sample.mul_add(kernel[row_start + column], row_sum);
+            }
+            total += row_sum;
+        }
+        let output = if total <= 0.0 {
+            0
+        } else if total >= 255.0 {
+            255
+        } else {
+            total as u8
+        };
+        if output != first_pixel[channel] {
+            return false;
+        }
+    }
+    true
 }
 
 fn native_float_rank_supported_for_image(
@@ -13503,6 +13578,10 @@ fn simd_order_statistic_filter(
         return Err(PilError::InternalError(
             "SIMD rank-filter source buffer shape mismatch".into(),
         ));
+    }
+    if native_small_uniform_byte_image(img, channels) {
+        return native_copy_image_bytes(img, mode)?
+            .ok_or_else(|| simd_unsupported("MedianFilter/RankFilter"));
     }
     let half = (size / 2) as usize;
     let area = area as usize;
@@ -19320,6 +19399,29 @@ pub fn simd_resize(
         native_resize_byte_layout_for_image(img, mode).ok_or_else(|| simd_unsupported("Resize"))?;
     if img.width() == 0 || img.height() == 0 {
         return simd_resize_zero_source(img, *w, *h, channels);
+    }
+    if native_small_uniform_byte_image(img, channels) && img.as_bytes().first().copied() == Some(0)
+    {
+        let output_len = usize::try_from(*w)
+            .ok()
+            .and_then(|width| usize::try_from(*h).ok()?.checked_mul(width))
+            .and_then(|pixels| pixels.checked_mul(channels))
+            .ok_or_else(|| simd_unsupported("Resize"))?;
+        let vector_len = output_len / 16 * 16;
+        let zero_block = u8x16::splat(0).to_array();
+        let mut output = Vec::with_capacity(output_len);
+        for _ in (0..vector_len).step_by(16) {
+            output.extend_from_slice(&zero_block);
+        }
+        let scalar_tail = output_len - vector_len;
+        if scalar_tail != 0 {
+            output.extend_from_slice(&zero_block[..scalar_tail]);
+        }
+        crate::compute::record_pipeline_operation_path("native-zero-fill");
+        crate::compute::record_pipeline_operation_vector_blocks((vector_len / 16) as u64);
+        crate::compute::record_pipeline_operation_scalar_tail(scalar_tail as u64);
+        let result = crate::image_utils::raw_bytes_to_image(*w, *h, output, channels)?;
+        return Ok(preserve_mode(img, result));
     }
     match filter {
         ResampleFilter::Nearest => simd_resize_nearest(img, *w, *h, channels),
